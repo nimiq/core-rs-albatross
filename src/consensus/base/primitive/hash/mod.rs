@@ -1,6 +1,8 @@
+extern crate hex;
+
 use std::fmt;
 use std::str;
-use {ToHex, FromHex, FromHexError};
+use self::hex::{FromHex,FromHexError};
 
 pub trait Hasher {
     type Output;
@@ -27,7 +29,7 @@ macro_rules! implement_hash {
 
 		impl fmt::Display for $name {
 			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-				return f.write_str(&self.0.to_hex());
+				return f.write_str(&hex::encode(&self.0));
 			}
 		}
 
@@ -55,11 +57,11 @@ macro_rules! implement_hash {
 			type Err = FromHexError;
 
 			fn from_str(s: &str) -> Result<Self, Self::Err> {
-				let vec = s.from_hex()?;
+				let vec = Vec::from_hex(s)?;
 				if vec.len() == $len {
                     return Ok($name::from(&vec[..]));
 				} else {
-				    return Err(FromHexError);
+				    return Err(FromHexError::InvalidStringLength);
 				}
 			}
 		}

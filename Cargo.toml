@@ -4,3 +4,4 @@ version = "0.0.1"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 
 [dependencies]
+hex = "0.3.2"
