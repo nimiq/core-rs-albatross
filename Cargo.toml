@@ -1,5 +1,5 @@
 [package]
-name = "core-rs"
+name = "core_rs"
 version = "0.0.1"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 

@@ -25,7 +25,7 @@ pub trait Hash {
 macro_rules! implement_hash {
 	($name: ident, $len: expr) => {
 		#[repr(C)]
-		#[derive(Default,Clone,PartialEq,PartialOrd,Eq,Ord)]
+		#[derive(Default,Clone,PartialEq,PartialOrd,Eq,Ord,Debug)]
 		pub struct $name([u8; $len]);
 
 		impl $name {
@@ -117,7 +117,7 @@ impl Hasher for Blake2bHasher {
 }
 
 const ARGON2D_LENGTH : usize = 32;
-const ARGON2_SALT : &'static str = "nimiqrocks!";
+const NIMIQ_ARGON2_SALT: &'static str = "nimiqrocks!";
 const DEFAULT_ARGON2_COST : u32 = 512;
 implement_hash!(Argon2dHash, ARGON2D_LENGTH);
 pub struct Argon2dHasher(Argon2, Vec<u8>);
@@ -129,7 +129,7 @@ impl Argon2dHasher {
 
     fn hash(&self, bytes: &[u8]) -> Argon2dHash {
         let mut out = [0u8; ARGON2D_LENGTH];
-        self.0.hash(&mut out, bytes, ARGON2_SALT.as_bytes(), &[0u8; 0], &[0u8; 0]);
+        self.0.hash(&mut out, bytes, NIMIQ_ARGON2_SALT.as_bytes(), &[0u8; 0], &[0u8; 0]);
         return Argon2dHash::from(out);
     }
 }
