@@ -1,0 +1,6 @@
+[package]
+name = "core-rs"
+version = "0.0.1"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+
+[dependencies]
