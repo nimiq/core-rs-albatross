@@ -1,0 +1,21 @@
+[[package]]
+name = "gcc"
+version = "0.3.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "libargon2-sys"
+version = "0.1.0"
+dependencies = [
+ "gcc 0.3.54 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.42 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "libc"
+version = "0.2.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[metadata]
+"checksum gcc 0.3.54 (registry+https://github.com/rust-lang/crates.io-index)" = "5e33ec290da0d127825013597dbdfc28bee4964690c7ce1166cbc2a7bd08b1bb"
+"checksum libc 0.2.42 (registry+https://github.com/rust-lang/crates.io-index)" = "b685088df2b950fccadf07a7187c8ef846a959c142338a48f9dc0b94517eb5f1"

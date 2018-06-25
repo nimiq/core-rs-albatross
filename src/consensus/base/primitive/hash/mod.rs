@@ -1,13 +1,13 @@
 extern crate hex;
 extern crate blake2_rfc;
-extern crate argon2rs;
+extern crate libargon2_sys;
 extern crate sha2;
 
 use std::fmt;
 use std::str;
 use self::hex::{FromHex,FromHexError};
 use self::blake2_rfc::blake2b::Blake2b;
-use self::argon2rs::Argon2;
+use self::libargon2_sys::argon2d_hash;
 use self::sha2::{Sha256,Digest};
 
 pub trait Hasher {
@@ -120,25 +120,28 @@ const ARGON2D_LENGTH : usize = 32;
 const NIMIQ_ARGON2_SALT: &'static str = "nimiqrocks!";
 const DEFAULT_ARGON2_COST : u32 = 512;
 implement_hash!(Argon2dHash, ARGON2D_LENGTH);
-pub struct Argon2dHasher(Argon2, Vec<u8>);
-pub type Argon2dParamErr = argon2rs::ParamErr;
+pub struct Argon2dHasher {
+    buf: Vec<u8>,
+    passes: u32,
+    lanes: u32,
+    kib: u32
+}
 
 impl Argon2dHasher {
-    pub fn new(passes: u32, lanes: u32, kib: u32) -> Result<Self, Argon2dParamErr> {
-        let mut h = Argon2::new(passes, lanes, kib, argon2rs::Variant::Argon2d)?;
-        return Ok(Argon2dHasher(h, vec![]));
+    pub fn new(passes: u32, lanes: u32, kib: u32) -> Self {
+        return Argon2dHasher { buf: vec![], passes, lanes, kib };
     }
 
-    fn hash(&self, bytes: &[u8]) -> Argon2dHash {
+    fn hash(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {
         let mut out = [0u8; ARGON2D_LENGTH];
-        self.0.hash(&mut out, bytes, NIMIQ_ARGON2_SALT.as_bytes(), &[], &[]);
+        argon2d_hash(self.passes, self.kib, self.lanes,bytes, salt, &mut out, 0);
         return Argon2dHash::from(out);
     }
 }
 
 impl Default for Argon2dHasher {
     fn default() -> Self {
-        return Argon2dHasher::new(1, 1, DEFAULT_ARGON2_COST).unwrap();
+        return Argon2dHasher::new(1, 1, DEFAULT_ARGON2_COST);
     }
 }
 
@@ -146,16 +149,16 @@ impl Hasher for Argon2dHasher {
     type Output = Argon2dHash;
 
     fn finish(self) -> Argon2dHash {
-        return self.hash(self.1.as_slice());
+        return self.hash(self.buf.as_slice(), NIMIQ_ARGON2_SALT.as_bytes());
     }
 
     fn write(&mut self, bytes: &[u8]) -> &mut Argon2dHasher {
-        self.1.extend(bytes);
+        self.buf.extend(bytes);
         return self;
     }
 
     fn digest(self, bytes: &[u8]) -> Argon2dHash {
-        return self.hash(bytes);
+        return self.hash(bytes, NIMIQ_ARGON2_SALT.as_bytes());
     }
 }
 
