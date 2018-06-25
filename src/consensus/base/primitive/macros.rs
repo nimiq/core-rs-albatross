@@ -13,8 +13,8 @@ macro_rules! create_typed_array {
             }
         }
 
-        impl fmt::Display for $name {
-			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        impl ::std::fmt::Display for $name {
+			fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 				return f.write_str(&hex::encode(&self.0));
 			}
 		}
@@ -35,7 +35,7 @@ macro_rules! create_typed_array {
             pub fn len() -> usize { $len }
         }
 
-        impl str::FromStr for $name {
+        impl ::std::str::FromStr for $name {
 			type Err = FromHexError;
 
 			fn from_str(s: &str) -> Result<Self, Self::Err> {

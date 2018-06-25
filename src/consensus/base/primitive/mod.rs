@@ -7,7 +7,6 @@ pub mod crypto;
 pub mod hash;
 
 use std::fmt;
-use std::str;
 use std::convert::From;
 use self::hex::{FromHex,FromHexError};
 use self::hash::Blake2bHash;

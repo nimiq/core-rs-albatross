@@ -7,6 +7,8 @@ authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 hex = "0.3.2"
 blake2-rfc = "0.2.18"
 sha2 = "0.7.1"
+ed25519-dalek = "0.6.2"
+rand = "0.4.2"
 libargon2-sys = { path = "libargon2-sys" }
 
 [workspace]

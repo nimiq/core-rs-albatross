@@ -3,7 +3,6 @@ extern crate blake2_rfc;
 extern crate libargon2_sys;
 extern crate sha2;
 
-use std::fmt;
 use std::str;
 use self::hex::{FromHex,FromHexError};
 use self::blake2_rfc::blake2b::Blake2b;
