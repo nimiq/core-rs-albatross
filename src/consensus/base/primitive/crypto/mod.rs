@@ -11,6 +11,10 @@ pub struct Signature { sig: ed25519_dalek::Signature }
 impl PublicKey {
     pub const SIZE: usize = 32;
 
+    pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
+        return signature_verify(signature, self, data);
+    }
+
     pub fn sum(public_keys: Vec<PublicKey>) -> Self {
         unimplemented!()
     }
@@ -54,6 +58,10 @@ impl KeyPair {
         let key_pair = ed25519_dalek::Keypair::generate::<sha2::Sha512>(&mut cspring);
         return KeyPair { key_pair: key_pair };
     }
+
+    pub fn sign(&self, data: &[u8]) -> Signature {
+        return signature_create(self, data);
+    }
 }
 
 impl Signature {
@@ -70,11 +78,11 @@ impl PartialEq for Signature {
     }
 }
 
-pub fn signature_create(key_pair: &KeyPair, data: &[u8]) -> Signature {
+fn signature_create(key_pair: &KeyPair, data: &[u8]) -> Signature {
     let ext_signature = key_pair.key_pair.sign::<sha2::Sha512>(data);
     return Signature { sig: ext_signature };
 }
 
-pub fn signature_verify(signature: &Signature, public_key: &PublicKey, data: &[u8]) -> bool {
+fn signature_verify(signature: &Signature, public_key: &PublicKey, data: &[u8]) -> bool {
     return public_key.as_dalek().verify::<sha2::Sha512>(data, signature.as_dalek());
 }

@@ -6,7 +6,7 @@ pub mod hash;
 
 use std::convert::From;
 use hex::{FromHex,FromHexError};
-use self::hash::Blake2bHash;
+use self::hash::{Blake2bHash, Blake2bHasher, Hasher};
 use self::crypto::PublicKey;
 
 create_typed_array!(Address, u8, 20);
@@ -21,7 +21,8 @@ impl From<Blake2bHash> for Address {
 
 impl From<PublicKey> for Address {
     fn from(public_key: PublicKey) -> Self {
-        unimplemented!();
+        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
+        return Address::from(hash);
     }
 }
 
@@ -34,11 +35,8 @@ impl From<Blake2bHash> for PeerId {
 
 impl From<PublicKey> for PeerId {
     fn from(public_key: PublicKey) -> Self {
-//        let mut blake2b_hasher = hash::Blake2bHasher;
-//        blake2b_hasher.write(public_key.into()[0..32]);
-//        let hash: [u8; 32] = blake2b_hasher.finish().into();
-        let hash: [u8; 32] = [0; 32];
-        return PeerId::from(&hash[0..PeerId::len()]);
+        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
+        return PeerId::from(hash);
     }
 }
 
