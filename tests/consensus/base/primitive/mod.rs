@@ -1,1 +1,2 @@
+mod crypto;
 mod hash;

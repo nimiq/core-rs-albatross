@@ -56,11 +56,21 @@ impl KeyPair {
     pub fn generate() -> Self {
         let mut cspring: OsRng = OsRng::new().unwrap();
         let key_pair = ed25519_dalek::Keypair::generate::<sha2::Sha512>(&mut cspring);
-        return KeyPair { key_pair: key_pair };
+        return KeyPair { key_pair };
     }
 
     pub fn sign(&self, data: &[u8]) -> Signature {
         return signature_create(self, data);
+    }
+
+    pub fn public(&self) -> PublicKey {
+        let cloned_key = ed25519_dalek::PublicKey::from_bytes(self.key_pair.public.as_bytes()).unwrap();
+        return PublicKey { key: cloned_key};
+    }
+
+    pub fn private(&self) -> PrivateKey {
+        let cloned_key = ed25519_dalek::SecretKey::from_bytes(self.key_pair.secret.as_bytes()).unwrap();
+        return PrivateKey { key: cloned_key};
     }
 }
 
