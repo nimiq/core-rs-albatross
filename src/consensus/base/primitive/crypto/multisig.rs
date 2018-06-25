@@ -16,45 +16,7 @@ use std::borrow::Borrow;
 pub struct RandomSecret(Scalar);
 #[derive(PartialEq,Eq)]
 pub struct Commitment(EdwardsPoint);
-
-impl<'a, 'b> Add<&'b Commitment> for &'a Commitment {
-    type Output = Commitment;
-    fn add(self, other: &'b Commitment) -> Commitment {
-        Commitment(self.0 + other.0)
-    }
-}
-impl<'b> Add<&'b Commitment> for Commitment {
-    type Output = Commitment;
-    fn add(self, rhs: &'b Commitment) -> Commitment {
-        &self + rhs
-    }
-}
-
-impl<'a> Add<Commitment> for &'a Commitment {
-    type Output = Commitment;
-    fn add(self, rhs: Commitment) -> Commitment {
-        self + &rhs
-    }
-}
-
-impl Add<Commitment> for Commitment {
-    type Output = Commitment;
-    fn add(self, rhs: Commitment) -> Commitment {
-        &self + &rhs
-    }
-}
-
-impl<T> Sum<T> for Commitment
-    where
-        T: Borrow<Commitment>
-{
-    fn sum<I>(iter: I) -> Self
-        where
-            I: Iterator<Item = T>
-    {
-        Commitment(iter.fold(EdwardsPoint::identity(), |acc, item| acc + item.borrow().0))
-    }
-}
+implement_simple_add_sum_traits!(Commitment, EdwardsPoint::identity());
 
 #[derive(Debug, Clone)]
 pub struct InvalidScalarError;
@@ -111,7 +73,8 @@ impl CommitmentPair {
 }
 
 #[derive(PartialEq,Eq)]
-pub struct PartialSignature ([u8; 32]);
+pub struct PartialSignature (Scalar);
+implement_simple_add_sum_traits!(PartialSignature, Scalar::zero());
 
 pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
     if public_keys.len() != commitments.len() {
@@ -128,11 +91,23 @@ pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<Public
     let public_keys_hash = hash_public_keys(public_keys);
     // And delinearize them.
     let delinearized_pk_sum: EdwardsPoint = public_keys.iter().map(|public_key| { delinearize_public_key(public_key, &public_keys_hash) }).sum();
+    let delinearized_private_key: Scalar = delinearize_private_key(key_pair, &public_keys_hash);
 
     // Aggregate commitments.
     let aggregated_commitment: Commitment = commitments.iter().sum();
 
-    unimplemented!();
+    // Compute H(commitment || public key || message).
+    let mut h: sha2::Sha512 = sha2::Sha512::default();
+    let mut hram:  [u8; 64] = [0u8; 64];
+
+    h.input(aggregated_commitment.0.compress().as_bytes());
+    h.input(delinearized_pk_sum.compress().as_bytes());
+    h.input(data);
+    hram.copy_from_slice(h.result().as_slice());
+    let s = Scalar::from_bytes_mod_order_wide(&hram);
+    let partial_signature: Scalar = s * delinearized_private_key + secret.0;
+    let ed_public_key = ::ed25519_dalek::PublicKey::from_bytes(delinearized_pk_sum.compress().as_bytes()).unwrap();
+    return (PartialSignature(partial_signature), PublicKey { key: ed_public_key }, aggregated_commitment);
 }
 
 fn hash_public_keys(public_keys: &Vec<PublicKey>) -> [u8; 64] {
