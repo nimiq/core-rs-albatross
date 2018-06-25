@@ -7,6 +7,8 @@ use self::rand::{OsRng, Rng};
 use self::sha2::Digest;
 use self::curve25519_dalek::scalar::Scalar;
 use self::curve25519_dalek::edwards::EdwardsPoint;
+use std::ops::Add;
+use std::ops::AddAssign;
 
 create_typed_array!(PublicKey, u8, 32);
 create_typed_array!(PrivateKey, u8, 32);
@@ -77,6 +79,33 @@ pub fn signature_verify(signature: Signature, public_key: PublicKey, data: &[u8]
 pub struct RandomSecret(Scalar);
 #[derive(PartialEq,Eq)]
 pub struct Commitment(EdwardsPoint);
+
+impl<'a, 'b> Add<&'b Commitment> for &'a Commitment {
+    type Output = Commitment;
+    fn add(self, other: &'b Commitment) -> Commitment {
+        Commitment(self.0 + other.0)
+    }
+}
+impl<'b> Add<&'b Commitment> for Commitment {
+    type Output = Commitment;
+    fn add(self, rhs: &'b Commitment) -> Commitment {
+        &self + rhs
+    }
+}
+
+impl<'a> Add<Commitment> for &'a Commitment {
+    type Output = Commitment;
+    fn add(self, rhs: Commitment) -> Commitment {
+        self + &rhs
+    }
+}
+
+impl Add<Commitment> for Commitment {
+    type Output = Commitment;
+    fn add(self, rhs: Commitment) -> Commitment {
+        &self + &rhs
+    }
+}
 
 #[derive(PartialEq,Eq)]
 pub struct CommitmentPair {
