@@ -3,7 +3,9 @@ pub mod multisig;
 use ed25519_dalek;
 use sha2;
 use rand::OsRng;
+use std::cmp::Ordering;
 
+#[derive(Eq, PartialEq)]
 pub struct PublicKey { key: ed25519_dalek::PublicKey }
 pub struct PrivateKey { key: ed25519_dalek::SecretKey }
 pub struct Signature { sig: ed25519_dalek::Signature }
@@ -24,6 +26,18 @@ impl PublicKey {
 
     #[inline]
     pub fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::PublicKey { &self.key }
+}
+
+impl Ord for PublicKey {
+    fn cmp(&self, other: &PublicKey) -> Ordering {
+        return self.key.as_bytes().cmp(other.key.as_bytes());
+    }
+}
+
+impl PartialOrd for PublicKey {
+    fn partial_cmp(&self, other: &PublicKey) -> Option<Ordering> {
+        return Some(self.cmp(other));
+    }
 }
 
 impl<'a> From<&'a PrivateKey> for PublicKey {

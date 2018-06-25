@@ -1,13 +1,16 @@
 use rand::{OsRng, Rng};
 use sha2::{self,Digest};
 use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::edwards::EdwardsPoint;
+use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
 use curve25519_dalek::constants;
+use curve25519_dalek::traits::Identity;
 use std::ops::Add;
 use std::ops::AddAssign;
 use std::fmt;
 use std::error;
 use super::{KeyPair,PublicKey};
+use std::iter::Sum;
+use std::borrow::Borrow;
 
 #[derive(PartialEq,Eq)]
 pub struct RandomSecret(Scalar);
@@ -38,6 +41,18 @@ impl Add<Commitment> for Commitment {
     type Output = Commitment;
     fn add(self, rhs: Commitment) -> Commitment {
         &self + &rhs
+    }
+}
+
+impl<T> Sum<T> for Commitment
+    where
+        T: Borrow<Commitment>
+{
+    fn sum<I>(iter: I) -> Self
+        where
+            I: Iterator<Item = T>
+    {
+        Commitment(iter.fold(EdwardsPoint::identity(), |acc, item| acc + item.borrow().0))
     }
 }
 
@@ -98,7 +113,7 @@ impl CommitmentPair {
 #[derive(PartialEq,Eq)]
 pub struct PartialSignature ([u8; 32]);
 
-pub fn partial_signature_create<Key: Into<KeyPair>>(key: &Key, public_keys: &Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
+pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
     if public_keys.len() != commitments.len() {
         panic!("Number of public keys and commitments must be the same.");
     }
@@ -106,5 +121,72 @@ pub fn partial_signature_create<Key: Into<KeyPair>>(key: &Key, public_keys: &Vec
         panic!("Number of public keys and commitments must be greater than 0.");
     }
 
+    // Sort public keys.
+    public_keys.sort();
+
+    // Hash public keys.
+    let public_keys_hash = hash_public_keys(public_keys);
+    // And delinearize them.
+    let delinearized_pk_sum: EdwardsPoint = public_keys.iter().map(|public_key| { delinearize_public_key(public_key, &public_keys_hash) }).sum();
+
+    // Aggregate commitments.
+    let aggregated_commitment: Commitment = commitments.iter().sum();
+
     unimplemented!();
+}
+
+fn hash_public_keys(public_keys: &Vec<PublicKey>) -> [u8; 64] {
+    let mut aggregated_public_key: Option<PublicKey> = None;
+    // 1. Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
+    let mut h: sha2::Sha512 = sha2::Sha512::default();
+    let mut public_keys_hash: [u8; 64] = [0u8; 64];
+    for public_key in public_keys {
+        h.input(public_key.as_bytes());
+    }
+    public_keys_hash.copy_from_slice(h.result().as_slice());
+    return public_keys_hash;
+}
+
+impl PublicKey {
+    fn to_edwards_point(&self) -> Option<EdwardsPoint> {
+        let mut bits: [u8; 32] = [0u8; 32];
+        bits.copy_from_slice(&self.as_bytes()[..32]);
+
+        let compressed = CompressedEdwardsY(bits);
+        return compressed.decompress();
+    }
+}
+
+fn delinearize_public_key(public_key: &PublicKey, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
+    // Compute H(C||P).
+    let mut h: sha2::Sha512 = sha2::Sha512::default();
+    let mut hash: [u8; 64] = [0u8; 64];
+
+    h.input(public_keys_hash);
+    h.input(public_key.as_bytes());
+    hash.copy_from_slice(h.result().as_slice());
+    let s = Scalar::from_bytes_mod_order_wide(&hash);
+
+    // Should always work, since we come from a valid public key.
+    let p = public_key.to_edwards_point().unwrap();
+    // Compute H(C||P)*P.
+    return s * p;
+}
+
+fn delinearize_private_key(key_pair: &KeyPair, public_keys_hash: &[u8; 64]) -> Scalar {
+    // Compute H(C||P).
+    let mut h: sha2::Sha512 = sha2::Sha512::default();
+    let mut hash: [u8; 64] = [0u8; 64];
+
+    h.input(public_keys_hash);
+    h.input(key_pair.public().key.as_bytes());
+    hash.copy_from_slice(h.result().as_slice());
+    let s = Scalar::from_bytes_mod_order_wide(&hash);
+
+    // Expand the private key.
+    let expanded_private_key = key_pair.private().key.expand::<sha2::Sha512>();
+    let sk = Scalar::from_bytes_mod_order_wide(&expanded_private_key.to_bytes());
+
+    // Compute H(C||P)*sk
+    return s * sk;
 }
