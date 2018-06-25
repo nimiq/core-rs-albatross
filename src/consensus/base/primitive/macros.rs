@@ -26,6 +26,7 @@ macro_rules! create_typed_array {
         }
 
         impl $name {
+            pub const SIZE: usize = $len;
             pub fn len() -> usize { $len }
         }
     };
