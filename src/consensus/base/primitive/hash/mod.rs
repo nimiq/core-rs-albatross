@@ -121,22 +121,24 @@ const NIMIQ_ARGON2_SALT: &'static str = "nimiqrocks!";
 const DEFAULT_ARGON2_COST : u32 = 512;
 implement_hash!(Argon2dHash, ARGON2D_LENGTH);
 pub struct Argon2dHasher(Argon2, Vec<u8>);
+pub type Argon2dParamErr = argon2rs::ParamErr;
 
 impl Argon2dHasher {
-    pub fn new(passes: u32, lanes: u32, kib: u32) -> Self {
-        return Argon2dHasher(Argon2::new(passes, lanes, kib, argon2rs::Variant::Argon2d).unwrap(), vec![]);
+    pub fn new(passes: u32, lanes: u32, kib: u32) -> Result<Self, Argon2dParamErr> {
+        let mut h = Argon2::new(passes, lanes, kib, argon2rs::Variant::Argon2d)?;
+        return Ok(Argon2dHasher(h, vec![]));
     }
 
     fn hash(&self, bytes: &[u8]) -> Argon2dHash {
         let mut out = [0u8; ARGON2D_LENGTH];
-        self.0.hash(&mut out, bytes, NIMIQ_ARGON2_SALT.as_bytes(), &[0u8; 0], &[0u8; 0]);
+        self.0.hash(&mut out, bytes, NIMIQ_ARGON2_SALT.as_bytes(), &[], &[]);
         return Argon2dHash::from(out);
     }
 }
 
 impl Default for Argon2dHasher {
     fn default() -> Self {
-        return Argon2dHasher::new(1, 1, DEFAULT_ARGON2_COST);
+        return Argon2dHasher::new(1, 1, DEFAULT_ARGON2_COST).unwrap();
     }
 }
 
