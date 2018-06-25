@@ -1,3 +1,5 @@
+mod multisig;
+
 use core_rs::consensus::base::primitive::crypto::{PrivateKey,PublicKey,Signature,KeyPair};
 
 #[test]

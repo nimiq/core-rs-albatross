@@ -17,10 +17,6 @@ impl PublicKey {
         return signature_verify(signature, self, data);
     }
 
-    pub fn sum(public_keys: Vec<PublicKey>) -> Self {
-        unimplemented!()
-    }
-
     #[inline]
     pub fn as_bytes<'a>(&'a self) -> &'a [u8; PublicKey::SIZE] { self.key.as_bytes() }
 

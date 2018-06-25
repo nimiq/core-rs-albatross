@@ -8,15 +8,29 @@ use std::ops::Add;
 use std::ops::AddAssign;
 use std::fmt;
 use std::error;
-use super::{KeyPair,PublicKey};
+use super::{KeyPair,PublicKey,Signature};
 use std::iter::Sum;
 use std::borrow::Borrow;
 
 #[derive(PartialEq,Eq)]
 pub struct RandomSecret(Scalar);
+
+impl RandomSecret {
+    pub const SIZE: usize = 32;
+}
+
 #[derive(PartialEq,Eq)]
 pub struct Commitment(EdwardsPoint);
 implement_simple_add_sum_traits!(Commitment, EdwardsPoint::identity());
+
+impl Commitment {
+    pub const SIZE: usize = 32;
+
+    #[inline]
+    pub fn to_bytes(&self) -> [u8; Commitment::SIZE] {
+        self.0.compress().to_bytes()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct InvalidScalarError;
@@ -47,18 +61,14 @@ impl CommitmentPair {
     pub fn generate() -> Result<CommitmentPair, InvalidScalarError> {
         // Create random 32 bytes.
         let mut cspring: OsRng = OsRng::new().unwrap();
-        let mut randomness: [u8; 32] = [0u8; 32];
+        let mut randomness: [u8; RandomSecret::SIZE] = [0u8; RandomSecret::SIZE];
         cspring.fill_bytes(&mut randomness);
 
         // Decompress the 32 byte cryptographically secure random data to 64 byte.
         let mut h: sha2::Sha512 = sha2::Sha512::default();
-        let mut hash:  [u8; 64] = [0u8; 64];
 
         h.input(&randomness);
-        hash.copy_from_slice(h.result().as_slice());
-
-        // Reduce to valid scalar.
-        let scalar = Scalar::from_bytes_mod_order_wide(&hash);
+        let scalar = Scalar::from_hash::<sha2::Sha512>(h);
         if scalar == Scalar::zero() || scalar == Scalar::one() {
             return Err(InvalidScalarError);
         }
@@ -75,6 +85,13 @@ impl CommitmentPair {
 #[derive(PartialEq,Eq)]
 pub struct PartialSignature (Scalar);
 implement_simple_add_sum_traits!(PartialSignature, Scalar::zero());
+
+impl PartialSignature {
+    pub const SIZE: usize = 32;
+
+    #[inline]
+    pub fn as_bytes<'a>(&'a self) -> &'a [u8; PartialSignature::SIZE] { self.0.as_bytes() }
+}
 
 pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
     if public_keys.len() != commitments.len() {
@@ -98,13 +115,11 @@ pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<Public
 
     // Compute H(commitment || public key || message).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
-    let mut hram:  [u8; 64] = [0u8; 64];
 
     h.input(aggregated_commitment.0.compress().as_bytes());
     h.input(delinearized_pk_sum.compress().as_bytes());
     h.input(data);
-    hram.copy_from_slice(h.result().as_slice());
-    let s = Scalar::from_bytes_mod_order_wide(&hram);
+    let s = Scalar::from_hash::<sha2::Sha512>(h);
     let partial_signature: Scalar = s * delinearized_private_key + secret.0;
     let ed_public_key = ::ed25519_dalek::PublicKey::from_bytes(delinearized_pk_sum.compress().as_bytes()).unwrap();
     return (PartialSignature(partial_signature), PublicKey { key: ed_public_key }, aggregated_commitment);
@@ -124,8 +139,8 @@ fn hash_public_keys(public_keys: &Vec<PublicKey>) -> [u8; 64] {
 
 impl PublicKey {
     fn to_edwards_point(&self) -> Option<EdwardsPoint> {
-        let mut bits: [u8; 32] = [0u8; 32];
-        bits.copy_from_slice(&self.as_bytes()[..32]);
+        let mut bits: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
+        bits.copy_from_slice(&self.as_bytes()[..PublicKey::SIZE]);
 
         let compressed = CompressedEdwardsY(bits);
         return compressed.decompress();
@@ -135,12 +150,10 @@ impl PublicKey {
 fn delinearize_public_key(public_key: &PublicKey, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
     // Compute H(C||P).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
-    let mut hash: [u8; 64] = [0u8; 64];
 
     h.input(public_keys_hash);
     h.input(public_key.as_bytes());
-    hash.copy_from_slice(h.result().as_slice());
-    let s = Scalar::from_bytes_mod_order_wide(&hash);
+    let s = Scalar::from_hash::<sha2::Sha512>(h);
 
     // Should always work, since we come from a valid public key.
     let p = public_key.to_edwards_point().unwrap();
@@ -151,17 +164,24 @@ fn delinearize_public_key(public_key: &PublicKey, public_keys_hash: &[u8; 64]) -
 fn delinearize_private_key(key_pair: &KeyPair, public_keys_hash: &[u8; 64]) -> Scalar {
     // Compute H(C||P).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
-    let mut hash: [u8; 64] = [0u8; 64];
 
     h.input(public_keys_hash);
-    h.input(key_pair.public().key.as_bytes());
-    hash.copy_from_slice(h.result().as_slice());
-    let s = Scalar::from_bytes_mod_order_wide(&hash);
+    h.input(key_pair.public().as_bytes());
+    let s = Scalar::from_hash::<sha2::Sha512>(h);
 
     // Expand the private key.
-    let expanded_private_key = key_pair.private().key.expand::<sha2::Sha512>();
+    let expanded_private_key = key_pair.private().as_dalek().expand::<sha2::Sha512>();
     let sk = Scalar::from_bytes_mod_order_wide(&expanded_private_key.to_bytes());
 
     // Compute H(C||P)*sk
     return s * sk;
+}
+
+impl Signature {
+    pub fn from_multisig(aggregated_signature: PartialSignature, aggregated_commitment: &Commitment) -> Signature {
+        let mut signature: [u8; Signature::SIZE] = [0u8; Signature::SIZE];
+        signature[..Commitment::SIZE].copy_from_slice(&aggregated_commitment.to_bytes());
+        signature[Commitment::SIZE..].copy_from_slice(aggregated_signature.as_bytes());
+        unimplemented!()
+    }
 }
