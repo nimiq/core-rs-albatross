@@ -13,6 +13,11 @@ pub struct Signature { sig: ed25519_dalek::Signature }
 impl PublicKey {
     pub const SIZE: usize = 32;
 
+    pub fn derive(private_key: &PrivateKey) -> Self {
+        let dalek_pub_key = ed25519_dalek::PublicKey::from_secret::<sha2::Sha512>(private_key.as_dalek());
+        return PublicKey { key: dalek_pub_key };
+    }
+
     pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
         return signature_verify(signature, self, data);
     }
@@ -81,13 +86,18 @@ impl KeyPair {
         return KeyPair { key_pair };
     }
 
+    pub fn from_private_public(private_key: &PrivateKey, public_key: &PublicKey) -> Self {
+        let cloned_priv = ed25519_dalek::SecretKey::from_bytes(private_key.as_bytes()).unwrap();
+        let dalek_keypair = ed25519_dalek::Keypair { secret: cloned_priv, public: public_key.as_dalek().clone() };
+        return KeyPair { key_pair: dalek_keypair };
+    }
+
     pub fn sign(&self, data: &[u8]) -> Signature {
         return signature_create(self, data);
     }
 
     pub fn public(&self) -> PublicKey {
-        let cloned_key = ed25519_dalek::PublicKey::from_bytes(self.key_pair.public.as_bytes()).unwrap();
-        return PublicKey { key: cloned_key};
+        return PublicKey { key: self.key_pair.public.clone()};
     }
 
     pub fn private(&self) -> PrivateKey {
