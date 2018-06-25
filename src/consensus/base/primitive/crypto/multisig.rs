@@ -12,14 +12,18 @@ use super::{KeyPair,PublicKey,Signature};
 use std::iter::Sum;
 use std::borrow::Borrow;
 
-#[derive(PartialEq,Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct RandomSecret(Scalar);
 
 impl RandomSecret {
     pub const SIZE: usize = 32;
+
+    pub fn from_bytes(bytes: [u8; RandomSecret::SIZE]) -> Self {
+        return RandomSecret(Scalar::from_bytes_mod_order(bytes));
+    }
 }
 
-#[derive(PartialEq,Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Commitment(EdwardsPoint);
 implement_simple_add_sum_traits!(Commitment, EdwardsPoint::identity());
 
@@ -29,6 +33,14 @@ impl Commitment {
     #[inline]
     pub fn to_bytes(&self) -> [u8; Commitment::SIZE] {
         self.0.compress().to_bytes()
+    }
+
+    pub fn from_bytes(bytes: [u8; Commitment::SIZE]) -> Option<Self> {
+        let compressed = CompressedEdwardsY(bytes);
+        return match compressed.decompress() {
+            None => None,
+            Some(e) => Some(Commitment(e)),
+        };
     }
 }
 
@@ -51,7 +63,7 @@ impl error::Error for InvalidScalarError {
     }
 }
 
-#[derive(PartialEq,Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct CommitmentPair {
     random_secret: RandomSecret,
     commitment: Commitment
@@ -82,7 +94,7 @@ impl CommitmentPair {
     }
 }
 
-#[derive(PartialEq,Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct PartialSignature (Scalar);
 implement_simple_add_sum_traits!(PartialSignature, Scalar::zero());
 
@@ -91,6 +103,10 @@ impl PartialSignature {
 
     #[inline]
     pub fn as_bytes<'a>(&'a self) -> &'a [u8; PartialSignature::SIZE] { self.0.as_bytes() }
+
+    pub fn from_bytes(bytes: [u8; PartialSignature::SIZE]) -> Self {
+        return PartialSignature(Scalar::from_bytes_mod_order(bytes));
+    }
 }
 
 pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
@@ -182,6 +198,6 @@ impl Signature {
         let mut signature: [u8; Signature::SIZE] = [0u8; Signature::SIZE];
         signature[..Commitment::SIZE].copy_from_slice(&aggregated_commitment.to_bytes());
         signature[Commitment::SIZE..].copy_from_slice(aggregated_signature.as_bytes());
-        unimplemented!()
+        return Signature::from_bytes(signature);
     }
 }

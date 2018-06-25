@@ -5,7 +5,7 @@ use sha2;
 use rand::OsRng;
 use std::cmp::Ordering;
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 pub struct PublicKey { key: ed25519_dalek::PublicKey }
 pub struct PrivateKey { key: ed25519_dalek::SecretKey }
 pub struct Signature { sig: ed25519_dalek::Signature }
