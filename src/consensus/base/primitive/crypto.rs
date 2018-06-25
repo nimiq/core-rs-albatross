@@ -104,8 +104,8 @@ impl CommitmentPair {
             return None;
         }
 
-        // Compute the point [secret]B. Let the string R be the encoding of this point.
-        let commitment = scalar * curve25519_dalek::constants::ED25519_BASEPOINT_POINT;
+        // Compute the point [scalar]B.
+        let commitment: EdwardsPoint = &scalar * &curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
 
         let rs = RandomSecret(scalar);
         let ct = Commitment(commitment);
