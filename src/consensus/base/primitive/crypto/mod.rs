@@ -1,10 +1,8 @@
 pub mod multisig;
 
-extern crate ed25519_dalek;
-extern crate rand;
-extern crate sha2;
-
-use self::rand::OsRng;
+use ed25519_dalek;
+use sha2;
+use rand::OsRng;
 
 pub struct PublicKey { key: ed25519_dalek::PublicKey }
 pub struct PrivateKey { key: ed25519_dalek::SecretKey }

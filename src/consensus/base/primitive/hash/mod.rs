@@ -1,12 +1,8 @@
-extern crate blake2_rfc;
-extern crate libargon2_sys;
-extern crate sha2;
-
 use std::str;
 use hex::{FromHex,FromHexError};
-use self::blake2_rfc::blake2b::Blake2b;
-use self::libargon2_sys::argon2d_hash;
-use self::sha2::{Sha256,Digest};
+use blake2_rfc::blake2b::Blake2b;
+use libargon2_sys::argon2d_hash;
+use sha2::{Sha256,Digest};
 
 pub trait Hasher {
     type Output;
