@@ -3,6 +3,8 @@
 
 create_typed_array!(PublicKey, u8, 32);
 create_typed_array!(PrivateKey, u8, 32);
+create_typed_array!(Commitment, u8, 32);
+create_typed_array!(RandomSecret, u8, 32);
 
 impl PublicKey {
     pub fn derive<'a>(private_key: &PrivateKey) -> &'a Self {
@@ -61,4 +63,10 @@ impl Signature {
 
 pub fn signature_verify(signature: Signature, public_key: PublicKey, data: &[u8]) -> bool {
     unimplemented!()
+}
+
+#[derive(PartialEq,Eq)]
+pub struct CommitmentPair<'a> {
+    random_secret: &'a RandomSecret,
+    commitment: &'a Commitment
 }

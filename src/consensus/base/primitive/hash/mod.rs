@@ -54,6 +54,7 @@ macro_rules! implement_hash {
 
 		impl<'a> From<&'a [u8]> for $name {
 			fn from(slice: &[u8]) -> Self {
+			    assert!(slice.len() == $len, "Tried to create instance with slice of wrong length");
 				let mut inner = [0u8; $len];
 				inner[..].clone_from_slice(&slice[0..$len]);
 				return $name(inner);
