@@ -21,6 +21,10 @@ impl PublicKey {
         unimplemented!()
     }
 
+    pub fn from_bytes(bytes: [u8; PublicKey::SIZE]) -> Self {
+        return PublicKey { key: ed25519_dalek::PublicKey::from_bytes(&bytes).unwrap() };
+    }
+
     #[inline]
     pub fn as_bytes<'a>(&'a self) -> &'a [u8; PublicKey::SIZE] { self.key.as_bytes() }
 
@@ -53,6 +57,10 @@ impl PrivateKey {
     pub fn generate() -> Self {
         let mut cspring: OsRng = OsRng::new().unwrap();
         return PrivateKey { key: ed25519_dalek::SecretKey::generate(&mut cspring) };
+    }
+
+    pub fn from_bytes(bytes: [u8; PrivateKey::SIZE]) -> Self {
+        return PrivateKey { key: ed25519_dalek::SecretKey::from_bytes(&bytes).unwrap() };
     }
 
     #[inline]
@@ -90,6 +98,10 @@ impl KeyPair {
 
 impl Signature {
     pub const SIZE: usize = 64;
+
+    pub fn from_bytes(bytes: [u8; Signature::SIZE]) -> Self {
+        return Signature { sig: ed25519_dalek::Signature::from_bytes(&bytes).unwrap() };
+    }
 
     #[inline]
     pub fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::Signature { &self.sig }
