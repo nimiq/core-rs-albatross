@@ -56,15 +56,15 @@ fn verify_rfc8032_test_vectors() {
     for test_case in &TEST_CASES {
         let mut private_key_bytes : [u8; PrivateKey::SIZE] = [0; PrivateKey::SIZE];
         private_key_bytes.clone_from_slice(&::hex::decode(test_case.private).unwrap()[0..]);
-        let private_key = PrivateKey::from_bytes(private_key_bytes);
+        let private_key = PrivateKey::from(&private_key_bytes);
 
         let mut public_key_bytes : [u8; PublicKey::SIZE] = [0; PublicKey::SIZE];
         public_key_bytes.clone_from_slice(&::hex::decode(test_case.public).unwrap()[0..]);
-        let public_key = PublicKey::from_bytes(public_key_bytes);
+        let public_key = PublicKey::from(&public_key_bytes);
 
         let mut sig_key_bytes : [u8; Signature::SIZE] = [0; Signature::SIZE];
         sig_key_bytes.clone_from_slice(&::hex::decode(test_case.sig).unwrap()[0..]);
-        let signature = Signature::from_bytes(sig_key_bytes);
+        let signature = Signature::from(&sig_key_bytes);
 
         let data = &::hex::decode(test_case.msg).unwrap()[0..];
 
