@@ -1,6 +1,7 @@
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
-        #[derive(PartialEq,Eq)]
+        #[repr(C)]
+		#[derive(Default,Clone,PartialEq,PartialOrd,Eq,Ord,Debug)]
         pub struct $name ([$t; $len]);
 
         impl<'a> From<&'a [$t]> for $name {
@@ -11,6 +12,12 @@ macro_rules! create_typed_array {
                 return $name(a);
             }
         }
+
+        impl fmt::Display for $name {
+			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+				return f.write_str(&hex::encode(&self.0));
+			}
+		}
 
         impl From<[$t; $len]> for $name {
             fn from(arr: [$t; $len]) -> Self {
@@ -27,5 +34,24 @@ macro_rules! create_typed_array {
         impl $name {
             pub fn len() -> usize { $len }
         }
+
+        impl str::FromStr for $name {
+			type Err = FromHexError;
+
+			fn from_str(s: &str) -> Result<Self, Self::Err> {
+				let vec = Vec::from_hex(s)?;
+				if vec.len() == $len {
+                    return Ok($name::from(&vec[..]));
+				} else {
+				    return Err(FromHexError::InvalidStringLength);
+				}
+			}
+		}
+
+		impl From<&'static str> for $name {
+			fn from(s: &'static str) -> Self {
+				return s.parse().unwrap();
+			}
+		}
     };
 }

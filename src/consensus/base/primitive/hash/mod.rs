@@ -22,68 +22,8 @@ pub trait Hash {
     fn hash<H>(&self, state: &mut H) where H: Hasher;
 }
 
-macro_rules! implement_hash {
-	($name: ident, $len: expr) => {
-		#[repr(C)]
-		#[derive(Default,Clone,PartialEq,PartialOrd,Eq,Ord,Debug)]
-		pub struct $name([u8; $len]);
-
-		impl $name {
-		    pub fn len() -> usize {
-				return $len;
-			}
-		}
-
-		impl fmt::Display for $name {
-			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-				return f.write_str(&hex::encode(&self.0));
-			}
-		}
-
-		impl From<[u8; $len]> for $name {
-			fn from(h: [u8; $len]) -> Self {
-				return $name(h);
-			}
-		}
-
-		impl From<$name> for [u8; $len] {
-			fn from(h: $name) -> Self {
-				return h.0;
-			}
-		}
-
-		impl<'a> From<&'a [u8]> for $name {
-			fn from(slice: &[u8]) -> Self {
-			    assert!(slice.len() == $len, "Tried to create instance with slice of wrong length");
-				let mut inner = [0u8; $len];
-				inner[..].clone_from_slice(&slice[0..$len]);
-				return $name(inner);
-			}
-		}
-
-		impl str::FromStr for $name {
-			type Err = FromHexError;
-
-			fn from_str(s: &str) -> Result<Self, Self::Err> {
-				let vec = Vec::from_hex(s)?;
-				if vec.len() == $len {
-                    return Ok($name::from(&vec[..]));
-				} else {
-				    return Err(FromHexError::InvalidStringLength);
-				}
-			}
-		}
-
-		impl From<&'static str> for $name {
-			fn from(s: &'static str) -> Self {
-				return s.parse().unwrap();
-			}
-		}
-	}
-}
-
 const BLAKE2B_LENGTH : usize = 32;
-implement_hash!(Blake2bHash, BLAKE2B_LENGTH);
+create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
 pub struct Blake2bHasher(Blake2b);
 
 impl Blake2bHasher {
@@ -120,7 +60,7 @@ impl Hasher for Blake2bHasher {
 const ARGON2D_LENGTH : usize = 32;
 const NIMIQ_ARGON2_SALT: &'static str = "nimiqrocks!";
 const DEFAULT_ARGON2_COST : u32 = 512;
-implement_hash!(Argon2dHash, ARGON2D_LENGTH);
+create_typed_array!(Argon2dHash, u8, ARGON2D_LENGTH);
 pub struct Argon2dHasher {
     buf: Vec<u8>,
     passes: u32,
@@ -164,7 +104,7 @@ impl Hasher for Argon2dHasher {
 }
 
 const SHA256_LENGTH : usize = 32;
-implement_hash!(Sha256Hash, SHA256_LENGTH);
+create_typed_array!(Sha256Hash, u8, SHA256_LENGTH);
 pub struct Sha256Hasher(Sha256);
 
 impl Sha256Hasher {

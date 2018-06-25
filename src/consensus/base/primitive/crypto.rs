@@ -1,3 +1,7 @@
+use std::fmt;
+use std::str;
+use super::hex::{FromHex,FromHexError};
+use super::hex;
 //#[derive(PartialEq,Eq)]
 //pub struct PublicKey ([u8; 32]);
 
