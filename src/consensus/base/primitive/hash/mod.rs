@@ -1,10 +1,9 @@
-extern crate hex;
 extern crate blake2_rfc;
 extern crate libargon2_sys;
 extern crate sha2;
 
 use std::str;
-use self::hex::{FromHex,FromHexError};
+use hex::{FromHex,FromHexError};
 use self::blake2_rfc::blake2b::Blake2b;
 use self::libargon2_sys::argon2d_hash;
 use self::sha2::{Sha256,Digest};
@@ -23,6 +22,7 @@ pub trait Hash {
 
 const BLAKE2B_LENGTH : usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
+add_hex_io_fns!(Blake2bHash, BLAKE2B_LENGTH);
 pub struct Blake2bHasher(Blake2b);
 
 impl Blake2bHasher {
@@ -60,6 +60,7 @@ const ARGON2D_LENGTH : usize = 32;
 const NIMIQ_ARGON2_SALT: &'static str = "nimiqrocks!";
 const DEFAULT_ARGON2_COST : u32 = 512;
 create_typed_array!(Argon2dHash, u8, ARGON2D_LENGTH);
+add_hex_io_fns!(Argon2dHash, ARGON2D_LENGTH);
 pub struct Argon2dHasher {
     buf: Vec<u8>,
     passes: u32,
@@ -104,6 +105,7 @@ impl Hasher for Argon2dHasher {
 
 const SHA256_LENGTH : usize = 32;
 create_typed_array!(Sha256Hash, u8, SHA256_LENGTH);
+add_hex_io_fns!(Sha256Hash, SHA256_LENGTH);
 pub struct Sha256Hasher(Sha256);
 
 impl Sha256Hasher {

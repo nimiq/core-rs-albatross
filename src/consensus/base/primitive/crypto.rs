@@ -2,8 +2,6 @@ extern crate ed25519_dalek;
 extern crate rand;
 extern crate sha2;
 
-use super::hex::{FromHex,FromHexError};
-use super::hex;
 use self::rand::OsRng;
 
 create_typed_array!(PublicKey, u8, 32);

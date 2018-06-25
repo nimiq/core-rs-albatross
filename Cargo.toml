@@ -3,6 +3,10 @@ name = "core-rs"
 version = "0.0.1"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 
+[[bin]]
+name = "lib"
+path = "src/lib.rs"
+
 [dependencies]
 hex = "0.3.2"
 blake2-rfc = "0.2.18"

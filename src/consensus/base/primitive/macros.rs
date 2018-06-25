@@ -13,12 +13,6 @@ macro_rules! create_typed_array {
             }
         }
 
-        impl ::std::fmt::Display for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                return f.write_str(&hex::encode(&self.0));
-            }
-        }
-
         impl From<[$t; $len]> for $name {
             fn from(arr: [$t; $len]) -> Self {
                 return $name(arr);
@@ -34,16 +28,27 @@ macro_rules! create_typed_array {
         impl $name {
             pub fn len() -> usize { $len }
         }
+    };
+}
+
+macro_rules! add_hex_io_fns {
+    ($name: ident, $len: expr) => {
+
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                return f.write_str(&::hex::encode(&self.0));
+            }
+        }
 
         impl ::std::str::FromStr for $name {
-            type Err = FromHexError;
+            type Err = ::hex::FromHexError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let vec = Vec::from_hex(s)?;
                 if vec.len() == $len {
                     return Ok($name::from(&vec[..]));
                 } else {
-                    return Err(FromHexError::InvalidStringLength);
+                    return Err(::hex::FromHexError::InvalidStringLength);
                 }
             }
         }
