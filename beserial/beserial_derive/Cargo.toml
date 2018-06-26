@@ -1,0 +1,11 @@
+[package]
+name = "beserial_derive"
+version = "0.1.0"
+authors = ["Marvin W <git@larma.de>"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "0.11.11"
+quote = "0.3.15"
