@@ -4,7 +4,7 @@ use blake2_rfc::blake2b::Blake2b;
 use libargon2_sys::argon2d_hash;
 use sha2::{Sha256,Digest};
 
-pub trait Hasher {
+pub trait Hasher: Default {
     type Output;
 
     fn finish(self) -> Self::Output;
@@ -12,13 +12,14 @@ pub trait Hasher {
     fn digest(self, bytes: &[u8]) -> Self::Output;
 }
 
-pub trait Hash {
-    fn hash<H>(&self, state: &mut H) where H: Hasher;
+pub trait Hash<H: Hasher> {
+    fn hash(&self, state: &mut H);
 }
 
 const BLAKE2B_LENGTH : usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
-add_hex_io_fns!(Blake2bHash, BLAKE2B_LENGTH);
+add_hex_io_fns_typed_arr!(Blake2bHash, BLAKE2B_LENGTH);
+add_hash_trait_typed_arr!(Blake2bHash);
 pub struct Blake2bHasher(Blake2b);
 
 impl Blake2bHasher {
@@ -56,7 +57,8 @@ const ARGON2D_LENGTH : usize = 32;
 const NIMIQ_ARGON2_SALT: &'static str = "nimiqrocks!";
 const DEFAULT_ARGON2_COST : u32 = 512;
 create_typed_array!(Argon2dHash, u8, ARGON2D_LENGTH);
-add_hex_io_fns!(Argon2dHash, ARGON2D_LENGTH);
+add_hex_io_fns_typed_arr!(Argon2dHash, ARGON2D_LENGTH);
+add_hash_trait_typed_arr!(Argon2dHash);
 pub struct Argon2dHasher {
     buf: Vec<u8>,
     passes: u32,
@@ -101,7 +103,8 @@ impl Hasher for Argon2dHasher {
 
 const SHA256_LENGTH : usize = 32;
 create_typed_array!(Sha256Hash, u8, SHA256_LENGTH);
-add_hex_io_fns!(Sha256Hash, SHA256_LENGTH);
+add_hex_io_fns_typed_arr!(Sha256Hash, SHA256_LENGTH);
+add_hash_trait_typed_arr!(Sha256Hash);
 pub struct Sha256Hasher(Sha256);
 
 impl Sha256Hasher {

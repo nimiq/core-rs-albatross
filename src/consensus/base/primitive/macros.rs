@@ -51,9 +51,8 @@ macro_rules! create_typed_array {
     };
 }
 
-macro_rules! add_hex_io_fns {
+macro_rules! add_hex_io_fns_typed_arr {
     ($name: ident, $len: expr) => {
-
         impl ::std::fmt::Display for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                 return f.write_str(&::hex::encode(&self.0));
@@ -78,6 +77,17 @@ macro_rules! add_hex_io_fns {
                 return s.parse().unwrap();
             }
         }
+    };
+}
+
+macro_rules! add_hash_trait_typed_arr {
+    ($name: ident) => {
+        impl<H> Hash<H> for $name where H: Hasher {
+            fn hash(&self, state: &mut H) {
+                state.write(&self.0);
+            }
+        }
+
     };
 }
 

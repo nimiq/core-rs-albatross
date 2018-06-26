@@ -10,6 +10,7 @@ extern crate rand;
 extern crate sha2;
 
 pub mod consensus;
+pub mod utils;
 
 fn main() {
     println!("Hello, world!");
