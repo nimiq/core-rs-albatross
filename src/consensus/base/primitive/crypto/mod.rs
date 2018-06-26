@@ -22,7 +22,7 @@ impl PublicKey {
     pub fn as_bytes<'a>(&'a self) -> &'a [u8; PublicKey::SIZE] { self.key.as_bytes() }
 
     #[inline]
-    pub (crate)  fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::PublicKey { &self.key }
+    pub (crate) fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::PublicKey { &self.key }
 }
 
 impl Ord for PublicKey {
