@@ -12,7 +12,7 @@ use super::{KeyPair,PublicKey,Signature};
 use std::iter::Sum;
 use std::borrow::Borrow;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct RandomSecret(Scalar);
 
 impl RandomSecret {
@@ -25,7 +25,7 @@ impl From<[u8; RandomSecret::SIZE]> for RandomSecret {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Commitment(EdwardsPoint);
 implement_simple_add_sum_traits!(Commitment, EdwardsPoint::identity());
 
@@ -78,6 +78,12 @@ pub struct CommitmentPair {
 }
 
 impl CommitmentPair {
+    pub fn new(random_secret: &RandomSecret, commitment: &Commitment) -> Self {
+        let cloned_secret = random_secret.clone();
+        let cloned_commitment = commitment.clone();
+        return CommitmentPair { random_secret: cloned_secret, commitment: cloned_commitment };
+    }
+
     pub fn generate() -> Result<CommitmentPair, InvalidScalarError> {
         // Create random 32 bytes.
         let mut cspring: OsRng = OsRng::new().unwrap();
@@ -100,6 +106,11 @@ impl CommitmentPair {
         let ct = Commitment(commitment);
         return Ok(CommitmentPair { random_secret: rs, commitment: ct });
     }
+
+    #[inline]
+    pub fn random_secret(&self) -> &RandomSecret { &self.random_secret }
+    #[inline]
+    pub fn commitment(&self) -> &Commitment { &self.commitment }
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -108,6 +119,13 @@ implement_simple_add_sum_traits!(PartialSignature, Scalar::zero());
 
 impl PartialSignature {
     pub const SIZE: usize = 32;
+
+    pub fn to_signature(&self, aggregated_commitment: &Commitment) -> Signature {
+        let mut signature: [u8; Signature::SIZE] = [0u8; Signature::SIZE];
+        signature[..Commitment::SIZE].copy_from_slice(&aggregated_commitment.to_bytes());
+        signature[Commitment::SIZE..].copy_from_slice(self.as_bytes());
+        return Signature::from(&signature);
+    }
 
     #[inline]
     pub fn as_bytes<'a>(&'a self) -> &'a [u8; PartialSignature::SIZE] { self.0.as_bytes() }
@@ -119,7 +137,13 @@ impl From<[u8; PartialSignature::SIZE]> for PartialSignature {
     }
 }
 
-pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
+impl KeyPair {
+    pub fn partial_sign(&self, public_keys: &Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
+        partial_signature_create(self, public_keys, secret, commitments, data)
+    }
+}
+
+fn partial_signature_create(key_pair: &KeyPair, public_keys: &Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
     if public_keys.len() != commitments.len() {
         panic!("Number of public keys and commitments must be the same.");
     }
@@ -128,7 +152,7 @@ pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<Public
     }
 
     // Sort public keys.
-    public_keys.sort();
+    // public_keys.sort();
 
     // Hash public keys.
     let public_keys_hash = hash_public_keys(public_keys);
@@ -214,13 +238,4 @@ fn delinearize_private_key(key_pair: &KeyPair, public_keys_hash: &[u8; 64]) -> S
 
     // Compute H(C||P)*sk
     return s * sk;
-}
-
-impl Signature {
-    pub fn from_multisig(aggregated_signature: &PartialSignature, aggregated_commitment: &Commitment) -> Signature {
-        let mut signature: [u8; Signature::SIZE] = [0u8; Signature::SIZE];
-        signature[..Commitment::SIZE].copy_from_slice(&aggregated_commitment.to_bytes());
-        signature[Commitment::SIZE..].copy_from_slice(aggregated_signature.as_bytes());
-        return Signature::from(&signature);
-    }
 }

@@ -22,7 +22,7 @@ impl PublicKey {
     pub fn as_bytes<'a>(&'a self) -> &'a [u8; PublicKey::SIZE] { self.key.as_bytes() }
 
     #[inline]
-    pub fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::PublicKey { &self.key }
+    pub (crate)  fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::PublicKey { &self.key }
 }
 
 impl Ord for PublicKey {
@@ -68,7 +68,7 @@ impl PrivateKey {
     pub fn as_bytes<'a>(&'a self) -> &'a [u8; PrivateKey::SIZE] { self.key.as_bytes() }
 
     #[inline]
-    pub fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::SecretKey { &self.key }
+    pub (crate) fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::SecretKey { &self.key }
 }
 
 impl<'a> From<&'a [u8; PrivateKey::SIZE]> for PrivateKey {
@@ -110,7 +110,7 @@ impl KeyPair {
 
     pub fn private(&self) -> PrivateKey {
         let cloned_key = ed25519_dalek::SecretKey::from_bytes(self.key_pair.secret.as_bytes()).unwrap();
-        return PrivateKey { key: cloned_key};
+        return PrivateKey { key: cloned_key };
     }
 }
 
@@ -129,7 +129,7 @@ impl Signature {
     pub fn to_bytes(&self) -> [u8; Signature::SIZE] { self.sig.to_bytes() }
 
     #[inline]
-    pub fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::Signature { &self.sig }
+    pub (crate) fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::Signature { &self.sig }
 }
 
 impl Eq for Signature { }

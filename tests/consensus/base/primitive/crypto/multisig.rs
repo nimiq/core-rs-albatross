@@ -239,7 +239,7 @@ fn it_can_finalize_signatures() {
     for vector in VECTORS.iter() {
         let test = TestVector::from_str(vector);
 
-        let signature: Signature = Signature::from_multisig(&test.agg_signature, &test.agg_commitment);
+        let signature: Signature = test.agg_signature.to_signature(&test.agg_commitment);
         assert_eq!(signature, test.signature);
     }
 }
@@ -254,7 +254,6 @@ fn it_can_aggregate_partial_signatures() {
     }
 }
 
-/* TODO
 #[test]
 fn it_can_create_partial_signatures() {
     for vector in VECTORS.iter() {
@@ -263,14 +262,45 @@ fn it_can_create_partial_signatures() {
         for i in 0..test.priv_keys.len() {
             let mut public_keys: Vec<PublicKey> = test.pub_keys.to_vec();
             let key_pair= KeyPair::from(&test.priv_keys[i]);
-            let (partial_signature, agg_public_key, agg_commitment) = partial_signature_create(&key_pair, &mut public_keys, &test.secrets[i], &test.commitments, &test.message.as_slice());
+            let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(&public_keys, &test.secrets[i], &test.commitments, &test.message.as_slice());
             assert_eq!(agg_public_key, test.agg_pub_key);
             assert_eq!(agg_commitment, test.agg_commitment);
             assert_eq!(partial_signature, test.partial_signatures[i]);
         }
     }
 }
-*/
+
+#[test]
+fn it_sign_and_verify_multisigs() {
+    for vector in VECTORS.iter() {
+        let test = TestVector::from_str(vector);
+
+        let mut signatures: Vec<PartialSignature> = vec![];
+        let mut aggregated_public_key: Option<PublicKey> = None;
+        let mut aggregated_commitment: Option<Commitment> = None;
+
+        for i in 0..test.priv_keys.len() {
+            let cp = CommitmentPair::new(&test.secrets[i], &test.commitments[i]);
+            let key_pair= KeyPair::from(&test.priv_keys[i]);
+
+            let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(&test.pub_keys, cp.random_secret(), &test.commitments, &test.message.as_slice());
+
+            aggregated_public_key = match aggregated_public_key {
+                None => Some(agg_public_key),
+                Some(pk) => { assert_eq!(pk, agg_public_key); Some(pk) },
+            };
+            aggregated_commitment = match aggregated_commitment {
+                None => Some(agg_commitment),
+                Some(com) => { assert_eq!(com, agg_commitment); Some(com) },
+            };
+            signatures.push(partial_signature);
+        }
+
+        let partial_signature: PartialSignature = signatures.iter().sum();
+        let final_signature: Signature = partial_signature.to_signature(&aggregated_commitment.unwrap());
+        assert_eq!(aggregated_public_key.unwrap().verify(&final_signature, &test.message.as_slice()), true);
+    }
+}
 
 /* Unit Tests
 #[test]
