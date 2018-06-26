@@ -17,8 +17,10 @@ pub struct RandomSecret(Scalar);
 
 impl RandomSecret {
     pub const SIZE: usize = 32;
+}
 
-    pub fn from_bytes(bytes: [u8; RandomSecret::SIZE]) -> Self {
+impl From<[u8; RandomSecret::SIZE]> for RandomSecret {
+    fn from(bytes: [u8; RandomSecret::SIZE]) -> Self {
         return RandomSecret(Scalar::from_bytes_mod_order(bytes));
     }
 }
@@ -41,6 +43,12 @@ impl Commitment {
             None => None,
             Some(e) => Some(Commitment(e)),
         };
+    }
+}
+
+impl From<[u8; Commitment::SIZE]> for Commitment {
+    fn from(bytes: [u8; Commitment::SIZE]) -> Self {
+        return Commitment::from_bytes(bytes).unwrap();
     }
 }
 
@@ -103,8 +111,10 @@ impl PartialSignature {
 
     #[inline]
     pub fn as_bytes<'a>(&'a self) -> &'a [u8; PartialSignature::SIZE] { self.0.as_bytes() }
+}
 
-    pub fn from_bytes(bytes: [u8; PartialSignature::SIZE]) -> Self {
+impl From<[u8; PartialSignature::SIZE]> for PartialSignature {
+    fn from(bytes: [u8; PartialSignature::SIZE]) -> Self {
         return PartialSignature(Scalar::from_bytes_mod_order(bytes));
     }
 }
@@ -137,8 +147,9 @@ pub fn partial_signature_create(key_pair: &KeyPair, public_keys: &mut Vec<Public
     h.input(data);
     let s = Scalar::from_hash::<sha2::Sha512>(h);
     let partial_signature: Scalar = s * delinearized_private_key + secret.0;
-    let ed_public_key = ::ed25519_dalek::PublicKey::from_bytes(delinearized_pk_sum.compress().as_bytes()).unwrap();
-    return (PartialSignature(partial_signature), PublicKey { key: ed_public_key }, aggregated_commitment);
+    let mut public_key_bytes : [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
+    public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
+    return (PartialSignature(partial_signature), PublicKey::from(public_key_bytes), aggregated_commitment);
 }
 
 fn hash_public_keys(public_keys: &Vec<PublicKey>) -> [u8; 64] {
@@ -177,6 +188,18 @@ fn delinearize_public_key(public_key: &PublicKey, public_keys_hash: &[u8; 64]) -
     return s * p;
 }
 
+trait ToScalar {
+    fn to_scalar(&self) -> Scalar;
+}
+
+impl ToScalar for ::ed25519_dalek::ExpandedSecretKey {
+    fn to_scalar(&self) -> Scalar {
+        let mut bytes: [u8; 32] = [0u8; 32];
+        bytes.copy_from_slice(&self.to_bytes()[..32]);
+        return Scalar::from_bytes_mod_order(bytes);
+    }
+}
+
 fn delinearize_private_key(key_pair: &KeyPair, public_keys_hash: &[u8; 64]) -> Scalar {
     // Compute H(C||P).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
@@ -187,17 +210,17 @@ fn delinearize_private_key(key_pair: &KeyPair, public_keys_hash: &[u8; 64]) -> S
 
     // Expand the private key.
     let expanded_private_key = key_pair.private().as_dalek().expand::<sha2::Sha512>();
-    let sk = Scalar::from_bytes_mod_order_wide(&expanded_private_key.to_bytes());
+    let sk = expanded_private_key.to_scalar();
 
     // Compute H(C||P)*sk
     return s * sk;
 }
 
 impl Signature {
-    pub fn from_multisig(aggregated_signature: PartialSignature, aggregated_commitment: &Commitment) -> Signature {
+    pub fn from_multisig(aggregated_signature: &PartialSignature, aggregated_commitment: &Commitment) -> Signature {
         let mut signature: [u8; Signature::SIZE] = [0u8; Signature::SIZE];
         signature[..Commitment::SIZE].copy_from_slice(&aggregated_commitment.to_bytes());
         signature[Commitment::SIZE..].copy_from_slice(aggregated_signature.as_bytes());
-        return Signature::from_bytes(signature);
+        return Signature::from(&signature);
     }
 }

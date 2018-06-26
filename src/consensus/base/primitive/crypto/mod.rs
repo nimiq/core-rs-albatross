@@ -5,9 +5,10 @@ use sha2;
 use rand::OsRng;
 use std::cmp::Ordering;
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub struct PublicKey { key: ed25519_dalek::PublicKey }
 pub struct PrivateKey { key: ed25519_dalek::SecretKey }
+#[derive(Debug)]
 pub struct Signature { sig: ed25519_dalek::Signature }
 
 impl PublicKey {
@@ -49,6 +50,12 @@ impl<'a> From<&'a [u8; PublicKey::SIZE]> for PublicKey {
     }
 }
 
+impl From<[u8; PublicKey::SIZE]> for PublicKey {
+    fn from(bytes: [u8; PublicKey::SIZE]) -> Self {
+        return PublicKey::from(&bytes);
+    }
+}
+
 impl PrivateKey {
     pub const SIZE: usize = 32;
 
@@ -67,6 +74,12 @@ impl PrivateKey {
 impl<'a> From<&'a [u8; PrivateKey::SIZE]> for PrivateKey {
     fn from(bytes: &'a [u8; PublicKey::SIZE]) -> Self {
         return PrivateKey { key: ed25519_dalek::SecretKey::from_bytes(bytes).unwrap() };
+    }
+}
+
+impl From<[u8; PrivateKey::SIZE]> for PrivateKey {
+    fn from(bytes: [u8; PrivateKey::SIZE]) -> Self {
+        return PrivateKey::from(&bytes);
     }
 }
 
@@ -129,6 +142,12 @@ impl PartialEq for Signature {
 impl<'a> From<&'a [u8; Signature::SIZE]> for Signature {
     fn from(bytes: &'a [u8; Signature::SIZE]) -> Self {
         return Signature { sig: ed25519_dalek::Signature::from_bytes(bytes).unwrap() };
+    }
+}
+
+impl From<[u8; Signature::SIZE]> for Signature {
+    fn from(bytes: [u8; Signature::SIZE]) -> Self {
+        return Signature::from(&bytes);
     }
 }
 
