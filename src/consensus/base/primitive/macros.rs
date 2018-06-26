@@ -87,7 +87,16 @@ macro_rules! add_hash_trait_typed_arr {
                 state.write(&self.0);
             }
         }
+    };
+}
 
+macro_rules! add_hash_trait_arr {
+    ($t: ty) => {
+        impl<H> Hash<H> for $t where H: Hasher {
+            fn hash(&self, state: &mut H) {
+                state.write(&self[..]);
+            }
+        }
     };
 }
 

@@ -10,10 +10,24 @@ pub trait Hasher: Default {
     fn finish(self) -> Self::Output;
     fn write(&mut self, bytes: &[u8]) -> &mut Self;
     fn digest(self, bytes: &[u8]) -> Self::Output;
+
+    fn hash(&mut self, h: &Hash<Self>) -> &mut Self {
+        h.hash(self);
+        return self;
+    }
+
+    fn chain(mut self, h: &Hash<Self>) -> Self {
+        self.hash(h);
+        return self;
+    }
 }
 
 pub trait Hash<H: Hasher> {
     fn hash(&self, state: &mut H);
+}
+
+pub trait HashOutput {
+    type Hasher: Hasher;
 }
 
 const BLAKE2B_LENGTH : usize = 32;
@@ -21,6 +35,9 @@ create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2bHash, BLAKE2B_LENGTH);
 add_hash_trait_typed_arr!(Blake2bHash);
 pub struct Blake2bHasher(Blake2b);
+impl HashOutput for Blake2bHash {
+    type Hasher = Blake2bHasher;
+}
 
 impl Blake2bHasher {
     pub fn new() -> Self {
@@ -65,13 +82,16 @@ pub struct Argon2dHasher {
     lanes: u32,
     kib: u32
 }
+impl HashOutput for Argon2dHash {
+    type Hasher = Argon2dHasher;
+}
 
 impl Argon2dHasher {
     pub fn new(passes: u32, lanes: u32, kib: u32) -> Self {
         return Argon2dHasher { buf: vec![], passes, lanes, kib };
     }
 
-    fn hash(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {
+    fn hash_bytes(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {
         let mut out = [0u8; ARGON2D_LENGTH];
         argon2d_hash(self.passes, self.kib, self.lanes,bytes, salt, &mut out, 0);
         return Argon2dHash::from(out);
@@ -88,7 +108,7 @@ impl Hasher for Argon2dHasher {
     type Output = Argon2dHash;
 
     fn finish(self) -> Argon2dHash {
-        return self.hash(self.buf.as_slice(), NIMIQ_ARGON2_SALT.as_bytes());
+        return self.hash_bytes(self.buf.as_slice(), NIMIQ_ARGON2_SALT.as_bytes());
     }
 
     fn write(&mut self, bytes: &[u8]) -> &mut Argon2dHasher {
@@ -97,7 +117,7 @@ impl Hasher for Argon2dHasher {
     }
 
     fn digest(self, bytes: &[u8]) -> Argon2dHash {
-        return self.hash(bytes, NIMIQ_ARGON2_SALT.as_bytes());
+        return self.hash_bytes(bytes, NIMIQ_ARGON2_SALT.as_bytes());
     }
 }
 
@@ -106,6 +126,9 @@ create_typed_array!(Sha256Hash, u8, SHA256_LENGTH);
 add_hex_io_fns_typed_arr!(Sha256Hash, SHA256_LENGTH);
 add_hash_trait_typed_arr!(Sha256Hash);
 pub struct Sha256Hasher(Sha256);
+impl HashOutput for Sha256Hash {
+    type Hasher = Sha256Hasher;
+}
 
 impl Sha256Hasher {
     pub fn new() -> Self {
@@ -135,5 +158,14 @@ impl Hasher for Sha256Hasher {
     fn digest(mut self, bytes: &[u8]) -> Sha256Hash {
         self.write(bytes);
         return self.finish();
+    }
+}
+
+add_hash_trait_arr!([u8; 32]);
+add_hash_trait_arr!([u8; 64]);
+add_hash_trait_arr!([u8]);
+impl<'a, H> Hash<H> for &'a str where H: Hasher {
+    fn hash(&self, state: &mut H) {
+        state.write(self.as_bytes());
     }
 }

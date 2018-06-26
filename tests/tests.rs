@@ -6,3 +6,4 @@ extern crate hex;
 extern crate sha2;
 
 mod consensus;
+mod utils;
