@@ -197,11 +197,11 @@ impl KeyPair {
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
         h.input(public_keys_hash);
-        h.input(self.key_pair.public.as_bytes());
+        h.input(self.0.public.as_bytes());
         let s = Scalar::from_hash::<sha2::Sha512>(h);
 
         // Expand the private key.
-        let expanded_private_key = self.key_pair.secret.expand::<sha2::Sha512>();
+        let expanded_private_key = self.0.secret.expand::<sha2::Sha512>();
         let sk = expanded_private_key.to_scalar();
 
         // Compute H(C||P)*sk

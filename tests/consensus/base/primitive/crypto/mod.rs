@@ -70,6 +70,13 @@ fn verify_rfc8032_test_vectors() {
 
         let data = &::hex::decode(test_case.msg).unwrap()[0..];
 
-        assert_eq!(true, public_key.verify(&signature, data));
+        let derived_public_key = PublicKey::from(&private_key);
+        let key_pair = KeyPair::new(&private_key, &public_key);
+
+        let computed_signature = key_pair.sign(data);
+
+        assert!(derived_public_key == public_key);
+        assert!(computed_signature == signature);
+        assert!(public_key.verify(&signature, data));
     }
 }
