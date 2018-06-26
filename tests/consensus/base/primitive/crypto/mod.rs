@@ -7,7 +7,7 @@ fn verify_created_signature() {
     let key_pair = KeyPair::generate();
     let data = b"test";
     let signature = key_pair.sign(data);
-    let valid = key_pair.public().verify(&signature, data);
+    let valid = key_pair.public.verify(&signature, data);
     assert_eq!(true, valid);
 }
 
@@ -15,7 +15,7 @@ fn verify_created_signature() {
 fn falsify_wrong_signature() {
     let key_pair = KeyPair::generate();
     let signature = key_pair.sign(b"test");
-    let valid = key_pair.public().verify(&signature, b"test2");
+    let valid = key_pair.public.verify(&signature, b"test2");
     assert_eq!(false, valid);
 }
 
@@ -71,11 +71,13 @@ fn verify_rfc8032_test_vectors() {
         let data = &::hex::decode(test_case.msg).unwrap()[0..];
 
         let derived_public_key = PublicKey::from(&private_key);
-        let key_pair = KeyPair::new(&private_key, &public_key);
+
+        assert!(derived_public_key == public_key);
+
+        let key_pair = KeyPair { private: private_key, public: public_key };
 
         let computed_signature = key_pair.sign(data);
 
-        assert!(derived_public_key == public_key);
         assert!(computed_signature == signature);
         assert!(public_key.verify(&signature, data));
     }

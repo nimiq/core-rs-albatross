@@ -163,7 +163,7 @@ impl KeyPair {
         if public_keys.len() == 0 {
             panic!("Number of public keys and commitments must be greater than 0.");
         }
-        if !public_keys.contains(&self.public()) {
+        if !public_keys.contains(&self.public) {
             panic!("Public keys must contain own key.")
         }
 
@@ -197,11 +197,11 @@ impl KeyPair {
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
         h.input(public_keys_hash);
-        h.input(self.0.public.as_bytes());
+        h.input(self.public.as_dalek().as_bytes());
         let s = Scalar::from_hash::<sha2::Sha512>(h);
 
         // Expand the private key.
-        let expanded_private_key = self.0.secret.expand::<sha2::Sha512>();
+        let expanded_private_key = self.private.as_dalek().expand::<sha2::Sha512>();
         let sk = expanded_private_key.to_scalar();
 
         // Compute H(C||P)*sk

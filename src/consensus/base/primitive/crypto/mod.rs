@@ -10,7 +10,10 @@ pub struct PublicKey(ed25519_dalek::PublicKey);
 pub struct PrivateKey(ed25519_dalek::SecretKey);
 #[derive(Debug)]
 pub struct Signature(ed25519_dalek::Signature);
-pub struct KeyPair(ed25519_dalek::Keypair);
+pub struct KeyPair {
+    pub public: PublicKey,
+    pub private: PrivateKey
+}
 
 impl PublicKey {
     pub const SIZE: usize = 32;
@@ -84,39 +87,31 @@ impl From<[u8; PrivateKey::SIZE]> for PrivateKey {
     }
 }
 
-impl KeyPair {
-    pub fn new(private_key: &PrivateKey, public_key: &PublicKey) -> Self {
-        let cloned_priv = ed25519_dalek::SecretKey::from_bytes(private_key.as_bytes()).unwrap();
-        let dalek_keypair = ed25519_dalek::Keypair { secret: cloned_priv, public: public_key.as_dalek().clone() };
-        return KeyPair(dalek_keypair);
-    }
-
-    pub fn generate() -> Self {
-        let mut cspring: OsRng = OsRng::new().unwrap();
-        let key_pair = ed25519_dalek::Keypair::generate::<sha2::Sha512>(&mut cspring);
-        return KeyPair(key_pair);
-    }
-
-    pub fn sign(&self, data: &[u8]) -> Signature {
-        let ext_signature = self.0.sign::<sha2::Sha512>(data);
-        return Signature(ext_signature);
-    }
-
-    pub fn public(&self) -> PublicKey {
-        return PublicKey(self.0.public.clone());
-    }
-
-    pub fn private(&self) -> PrivateKey {
-        let cloned_key = ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap();
-        return PrivateKey(cloned_key);
+impl Clone for PrivateKey {
+    fn clone(&self) -> Self {
+        let cloned_dalek = ed25519_dalek::SecretKey::from_bytes(self.0.as_bytes()).unwrap();
+        return PrivateKey(cloned_dalek);
     }
 }
 
-impl<'a> From<&'a PrivateKey> for KeyPair {
-    fn from(private_key: &PrivateKey) -> Self {
-        let public_key = PublicKey::from(private_key);
-        let cloned_priv = ed25519_dalek::SecretKey::from_bytes(private_key.as_bytes()).unwrap();
-        return KeyPair(ed25519_dalek::Keypair { secret: cloned_priv, public: public_key.0 } );
+impl KeyPair {
+    pub fn generate() -> Self {
+        let mut cspring: OsRng = OsRng::new().unwrap();
+        let key_pair = ed25519_dalek::Keypair::generate::<sha2::Sha512>(&mut cspring);
+        let priv_key = PrivateKey(key_pair.secret);
+        let pub_key = PublicKey(key_pair.public);
+        return KeyPair { private: priv_key, public: pub_key };
+    }
+
+    pub fn sign(&self, data: &[u8]) -> Signature {
+        let ext_signature = self.private.0.expand::<sha2::Sha512>().sign::<sha2::Sha512>(data, &self.public.0);
+        return Signature(ext_signature);
+    }
+}
+
+impl From<PrivateKey> for KeyPair {
+    fn from(private_key: PrivateKey) -> Self {
+        return KeyPair { public: PublicKey::from(&private_key), private: private_key };
     }
 }
 
@@ -147,8 +142,4 @@ impl From<[u8; Signature::SIZE]> for Signature {
     fn from(bytes: [u8; Signature::SIZE]) -> Self {
         return Signature::from(&bytes);
     }
-}
-
-fn clone_dalek_sec_key() {
-
 }

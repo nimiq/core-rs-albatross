@@ -261,7 +261,7 @@ fn it_can_create_partial_signatures() {
 
         for i in 0..test.priv_keys.len() {
             let mut public_keys: Vec<PublicKey> = test.pub_keys.to_vec();
-            let key_pair= KeyPair::from(&test.priv_keys[i]);
+            let key_pair= KeyPair::from(test.priv_keys[i].clone());
             let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(&public_keys, &test.secrets[i], &test.commitments, &test.message.as_slice());
             assert_eq!(agg_public_key, test.agg_pub_key);
             assert_eq!(agg_commitment, test.agg_commitment);
@@ -281,7 +281,7 @@ fn it_sign_and_verify_multisigs() {
 
         for i in 0..test.priv_keys.len() {
             let cp = CommitmentPair::new(&test.secrets[i], &test.commitments[i]);
-            let key_pair= KeyPair::from(&test.priv_keys[i]);
+            let key_pair= KeyPair::from(test.priv_keys[i].clone());
 
             let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(&test.pub_keys, cp.random_secret(), &test.commitments, &test.message.as_slice());
 
