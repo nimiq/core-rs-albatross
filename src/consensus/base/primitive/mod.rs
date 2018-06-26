@@ -19,8 +19,8 @@ impl From<Blake2bHash> for Address {
     }
 }
 
-impl From<PublicKey> for Address {
-    fn from(public_key: PublicKey) -> Self {
+impl<'a> From<&'a PublicKey> for Address {
+    fn from(public_key: &'a PublicKey) -> Self {
         let hash = Blake2bHasher::default().digest(public_key.as_bytes());
         return Address::from(hash);
     }
@@ -33,8 +33,8 @@ impl From<Blake2bHash> for PeerId {
     }
 }
 
-impl From<PublicKey> for PeerId {
-    fn from(public_key: PublicKey) -> Self {
+impl<'a> From<&'a PublicKey> for PeerId {
+    fn from(public_key: &'a PublicKey) -> Self {
         let hash = Blake2bHasher::default().digest(public_key.as_bytes());
         return PeerId::from(hash);
     }

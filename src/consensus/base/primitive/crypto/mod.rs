@@ -1,9 +1,12 @@
 pub mod multisig;
 
-use ed25519_dalek;
-use sha2;
-use rand::OsRng;
 use std::cmp::Ordering;
+use std::io;
+
+use ed25519_dalek;
+use rand::OsRng;
+use beserial::{Serialize,Deserialize,ReadBytesExt,WriteBytesExt};
+use sha2;
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub struct PublicKey(ed25519_dalek::PublicKey);
@@ -57,6 +60,25 @@ impl<'a> From<&'a [u8; PublicKey::SIZE]> for PublicKey {
 impl From<[u8; PublicKey::SIZE]> for PublicKey {
     fn from(bytes: [u8; PublicKey::SIZE]) -> Self {
         return PublicKey::from(&bytes);
+    }
+}
+
+impl Deserialize for PublicKey {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let mut buf = [0u8; PublicKey::SIZE];
+        reader.read_exact(&mut buf)?;
+        return Ok(PublicKey::from(&buf));
+    }
+}
+
+impl Serialize for PublicKey {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+        writer.write(self.as_bytes())?;
+        return Ok(self.serialized_size());
+    }
+
+    fn serialized_size(&self) -> usize {
+        return PublicKey::SIZE;
     }
 }
 
@@ -141,5 +163,24 @@ impl<'a> From<&'a [u8; Signature::SIZE]> for Signature {
 impl From<[u8; Signature::SIZE]> for Signature {
     fn from(bytes: [u8; Signature::SIZE]) -> Self {
         return Signature::from(&bytes);
+    }
+}
+
+impl Deserialize for Signature {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let mut buf = [0u8; Signature::SIZE];
+        reader.read_exact(&mut buf)?;
+        return Ok(Signature::from(&buf));
+    }
+}
+
+impl Serialize for Signature {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+        writer.write(&self.to_bytes())?;
+        return Ok(self.serialized_size());
+    }
+
+    fn serialized_size(&self) -> usize {
+        return Signature::SIZE;
     }
 }
