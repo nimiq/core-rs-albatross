@@ -5,7 +5,37 @@ extern crate quote;
 
 use proc_macro::TokenStream;
 
-#[proc_macro_derive(Serialize)]
+// This will return a tuple once we have more options
+fn parse_field_attribs(field: &syn::Field) -> Option<&syn::Ident> {
+    let mut len_type = Option::None;
+    for attr in &field.attrs {
+        if let syn::MetaItem::List(ref attr_ident, ref nesteds) = attr.value {
+            if attr_ident == "beserial" {
+                for nested in nesteds {
+                    if let syn::NestedMetaItem::MetaItem(ref item) = nested {
+                        if let syn::MetaItem::List(ref attr_ident, ref nesteds) = item {
+                            if attr_ident == "len_type" {
+                                for nested in nesteds {
+                                    if let syn::NestedMetaItem::MetaItem(ref item) = nested {
+                                        if let syn::MetaItem::Word(value) = item {
+                                            if value != "u8" && value != "u16" && value != "u32" {
+                                                panic!("beserial(len_type) must be one of u8, u16 and u32");
+                                            }
+                                            len_type = Option::Some(value);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return len_type;
+}
+
+#[proc_macro_derive(Serialize, attributes(beserial))]
 pub fn derive_serialize(input: TokenStream) -> TokenStream {
     let s = input.to_string();
     let ast = syn::parse_derive_input(&s).unwrap();
@@ -35,27 +65,45 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
 
             let ty = enum_type.expect(format!("Serialize can not be derived for enum {} without repr(u*) or repr(i*)", name).as_str());
 
-            serialize_body.append(quote! { size += (*self as #ty).serialize(writer)?; });
-            serialized_size_body.append(quote! { size += (0 as #ty).serialized_size(); });
+            serialize_body.append(quote! { size += Serialize::serialize(&(*self as #ty), writer)?; });
+            serialized_size_body.append(quote! { size += Serialize::serialized_size(&(0 as #ty)); });
         },
         syn::Body::Struct(ref variant) => {
             match variant {
                 syn::VariantData::Struct(ref fields) => {
                     for field in fields {
+                        let len_type = parse_field_attribs(&field);
                         match field.ident {
                             None => panic!(),
                             Some(ref ident) => {
-                                serialize_body.append(quote! { size += self.#ident.serialize(writer)?; }.as_str());
-                                serialized_size_body.append(quote! { size += self.#ident.serialized_size(); }.as_str());
+                                match len_type {
+                                    Some(ty) => {
+                                        serialize_body.append(quote! { size += SerializeWithLength::serialize::<#ty, W>(&self.#ident, writer)?; }.as_str());
+                                        serialized_size_body.append(quote! { size += SerializeWithLength::serialized_size::<#ty>(&self.#ident); }.as_str());
+                                    },
+                                    None => {
+                                        serialize_body.append(quote! { size += Serialize::serialize(&self.#ident, writer)?; }.as_str());
+                                        serialized_size_body.append(quote! { size += Serialize::serialized_size(&self.#ident); }.as_str());
+                                    }
+                                }
                             }
                         }
                     }
                 },
                 syn::VariantData::Tuple(ref fields) => {
                     let mut i = 0;
-                    for _ in fields {
-                        serialize_body.append(quote! { size += self.#i.serialize(writer)?; }.as_str());
-                        serialized_size_body.append(quote! { size += self.#i.serialized_size(); }.as_str());
+                    for field in fields {
+                        let len_type = parse_field_attribs(&field);
+                        match len_type {
+                            Some(ty) => {
+                                serialize_body.append(quote! { size += SerializeWithLength::serialize::<#ty, W>(&self.#i, writer)?; }.as_str());
+                                serialized_size_body.append(quote! { size += SerializeWithLength::serialized_size::<#ty>(&self.#i); }.as_str());
+                            },
+                            None => {
+                                serialize_body.append(quote! { size += Serialize::serialize(&self.#i, writer)?; }.as_str());
+                                serialized_size_body.append(quote! { size += Serialize::serialized_size(&self.#i); }.as_str());
+                            }
+                        }
                     }
                 },
                 syn::VariantData::Unit => panic!("Serialize can not be derived for unit struct {}", name)
@@ -64,7 +112,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
     };
 
     quote! {
-        impl #impl_generics ::beserial::Serialize for #name #ty_generics #where_clause {
+        impl #impl_generics Serialize for #name #ty_generics #where_clause {
             fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> ::std::io::Result<usize> {
                 let mut size = 0;
                 #serialize_body
@@ -79,7 +127,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
     }
 }
 
-#[proc_macro_derive(Deserialize)]
+#[proc_macro_derive(Deserialize, attributes(beserial))]
 pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     let s = input.to_string();
     let ast = syn::parse_derive_input(&s).unwrap();
@@ -131,7 +179,15 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                         match field.ident {
                             None => panic!(),
                             Some(ref ident) => {
-                                deserialize_body.append(quote! { #ident: Deserialize::deserialize(reader)?, }.as_str());
+                                let len_type = parse_field_attribs(&field);
+                                match len_type {
+                                    Some(ty) => {
+                                        deserialize_body.append(quote! { #ident: DeserializeWithLength::deserialize::<#ty,R>(reader)?, }.as_str())
+                                    },
+                                    None => {
+                                        deserialize_body.append(quote! { #ident: Deserialize::deserialize(reader)?, }.as_str())
+                                    }
+                                }
                             }
                         }
                     }
@@ -141,8 +197,14 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                     deserialize_body.append("return Ok ( ");
                     deserialize_body.append(name);
                     deserialize_body.append("(");
-                    for _ in fields {
-                        deserialize_body.append(quote! { Deserialize::deserialize(reader)?, }.as_str());
+                    for field in fields {
+                        let len_type = parse_field_attribs(&field);
+                        match len_type {
+                            Some(ty) =>
+                                deserialize_body.append(quote! { DeserializeWithLength::deserialize::<#ty,R>(reader)?, }.as_str()),
+                            None =>
+                                deserialize_body.append(quote! { Deserialize::deserialize(reader)?, }.as_str())
+                        }
                     }
                     deserialize_body.append(") ) ;");
                 },
@@ -152,7 +214,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
     };
 
     quote! {
-        impl #impl_generics ::beserial::Deserialize for #name #ty_generics #where_clause {
+        impl #impl_generics Deserialize for #name #ty_generics #where_clause {
             fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> ::std::io::Result<Self> {
                 #deserialize_body
             }

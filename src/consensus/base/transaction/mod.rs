@@ -1,6 +1,6 @@
 use std::io;
 
-use beserial::{Serialize, Serialize8, Deserialize, Deserialize16, ReadBytesExt, WriteBytesExt};
+use beserial::{Serialize, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
 use super::account::AccountType;
 use super::primitive::Address;
 use super::primitive::crypto::{PublicKey,Signature};
@@ -24,17 +24,11 @@ impl Serialize for MerklePathNode {
     }
 }
 
-pub struct MerklePath(Vec<MerklePathNode>);
-
-impl Serialize for MerklePath {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
-        return self.0.serialize8(writer);
-    }
-
-    fn serialized_size(&self) -> usize {
-        return self.0.serialize8d_size();
-    }
-}
+#[derive(Serialize)]
+pub struct MerklePath(
+    #[beserial(len_type(u8))]
+    Vec<MerklePathNode>
+);
 
 #[derive(Serialize)]
 pub struct SignatureProof<'a> {
@@ -69,6 +63,17 @@ pub struct Transaction {
     pub proof: Vec<u8>
 }
 
+impl Serialize for Transaction {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+        unimplemented!()
+    }
+
+    fn serialized_size(&self) -> usize {
+        unimplemented!()
+    }
+}
+
+
 impl Deserialize for Transaction {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
         let transaction_type: TransactionType = Deserialize::deserialize(reader)?;
@@ -91,7 +96,7 @@ impl Deserialize for Transaction {
             },
             TransactionType::Extended => {
                 Transaction {
-                    data: Deserialize16::deserialize16(reader)?,
+                    data: DeserializeWithLength::deserialize::<u16, R>(reader)?,
                     sender: Deserialize::deserialize(reader)?,
                     sender_type: Deserialize::deserialize(reader)?,
                     recipient: Deserialize::deserialize(reader)?,
@@ -101,7 +106,7 @@ impl Deserialize for Transaction {
                     validity_start_height: Deserialize::deserialize(reader)?,
                     network_id: Deserialize::deserialize(reader)?,
                     flags: Deserialize::deserialize(reader)?,
-                    proof: Deserialize16::deserialize16(reader)?,
+                    proof: DeserializeWithLength::deserialize::<u16, R>(reader)?,
                 }
             }
         });

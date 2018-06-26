@@ -1,4 +1,5 @@
 extern crate byteorder;
+extern crate num;
 
 use std::io::{Read,Write,Result};
 pub use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt, ByteOrder};
@@ -66,46 +67,38 @@ primitive_serialize!(u64, 8, read_u64, write_u64);
 
 // Vectors
 
-pub trait Deserialize8: Sized {
-    fn deserialize8<R: ReadBytesExt>(reader: &mut R) -> Result<Self>;
+pub trait DeserializeWithLength: Sized {
+    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self>;
 }
 
-pub trait Serialize8 {
-    fn serialize8<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize>;
-    fn serialize8d_size(&self) -> usize;
+pub trait SerializeWithLength {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize>;
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize;
 }
 
-pub trait Serialize16 {
-    fn serialize16<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize>;
-    fn serialize16d_size(&self) -> usize;
-}
-
-pub trait Deserialize16: Sized {
-    fn deserialize16<R: ReadBytesExt>(reader: &mut R) -> Result<Self>;
-}
-
-impl<T: Deserialize> Deserialize16 for Vec<T> {
-    fn deserialize16<R: ReadBytesExt>(reader: &mut R) -> Result<Self> {
-        let len: u16 = Deserialize::deserialize(reader)?;
-        let mut v = Vec::with_capacity(len as usize);
-        for x in 0..len {
+impl<T: Deserialize> DeserializeWithLength for Vec<T> {
+    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self> {
+        let len: D = Deserialize::deserialize(reader)?;
+        let len_u = len.to_usize().unwrap();
+        let mut v = Vec::with_capacity(len_u);
+        for x in 0..len_u {
             v.push(T::deserialize(reader)?);
         }
         return Ok(v);
     }
 }
 
-impl<T: Serialize> Serialize8 for Vec<T> {
-    fn serialize8<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize> {
-        let mut size = (self.len() as u8).serialize(writer)?;
+impl<T: Serialize> SerializeWithLength for Vec<T> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize> {
+        let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
         for t in self {
             size += t.serialize(writer)?;
         }
         return Ok(size);
     }
 
-    fn serialize8d_size(&self) -> usize {
-        let mut size = 1;
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        let mut size = S::from_usize(self.len()).unwrap().serialized_size();
         for t in self {
             size += t.serialized_size();
         }
@@ -113,11 +106,14 @@ impl<T: Serialize> Serialize8 for Vec<T> {
     }
 }
 
-/*impl Deserialize16 for Vec<u8> {
-    fn deserialize_u16<R: ReadBytesExt>(reader: &mut R) -> Result<Self> {
-        let len: u16 = Deserialize::deserialize(reader)?;
-        let mut v = Vec::with_capacity(len as usize);
-        reader.read_exact(&mut v)?;
-        return Ok(v);
+// References
+
+impl<'a, T: Serialize> Serialize for &'a T {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize> {
+        return Serialize::serialize(*self, writer);
     }
-}*/
+
+    fn serialized_size(&self) -> usize {
+        return Serialize::serialized_size(*self);
+    }
+}
