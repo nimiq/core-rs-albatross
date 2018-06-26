@@ -12,7 +12,7 @@ use super::{KeyPair,PublicKey,Signature};
 use std::iter::Sum;
 use std::borrow::Borrow;
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct RandomSecret(Scalar);
 
 impl RandomSecret {
@@ -31,7 +31,7 @@ impl<'a> From<&'a [u8; RandomSecret::SIZE]> for RandomSecret {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct Commitment(EdwardsPoint);
 implement_simple_add_sum_traits!(Commitment, EdwardsPoint::identity());
 
@@ -64,7 +64,7 @@ impl<'a> From<&'a [u8; Commitment::SIZE]> for Commitment {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct InvalidScalarError;
 
 impl fmt::Display for InvalidScalarError {
@@ -83,7 +83,7 @@ impl error::Error for InvalidScalarError {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct CommitmentPair {
     random_secret: RandomSecret,
     commitment: Commitment
@@ -125,7 +125,7 @@ impl CommitmentPair {
     pub fn commitment(&self) -> &Commitment { &self.commitment }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct PartialSignature (Scalar);
 implement_simple_add_sum_traits!(PartialSignature, Scalar::zero());
 
