@@ -80,16 +80,6 @@ macro_rules! add_hex_io_fns_typed_arr {
     };
 }
 
-macro_rules! add_hash_trait_typed_arr {
-    ($name: ident) => {
-        impl<H> Hash<H> for $name where H: Hasher {
-            fn hash(&self, state: &mut H) {
-                state.write(&self.0);
-            }
-        }
-    };
-}
-
 macro_rules! add_hash_trait_arr {
     ($t: ty) => {
         impl<H> Hash<H> for $t where H: Hasher {

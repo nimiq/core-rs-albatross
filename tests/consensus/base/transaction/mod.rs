@@ -10,7 +10,7 @@ fn it_can_deserialize_extended_transaction() {
 
     let v: Vec<u8> = hex::decode(TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert_eq!(t.data, vec![]);
+    assert_eq!(t.data, Vec::new());
     assert_eq!(t.sender, Address::from(&hex::decode("4a88aaad038f9b8248865c4b9249efc554960e16").unwrap()[..]));
     assert_eq!(t.sender_type, AccountType::Basic);
     assert_eq!(t.recipient, Address::from(&hex::decode("ad25610feb43d75307763d3f010822a757027429").unwrap()[..]));
@@ -29,7 +29,7 @@ fn it_can_deserialize_basic_transaction() {
 
     let v: Vec<u8> = hex::decode(TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert_eq!(t.data, vec![]);
+    assert_eq!(t.data, Vec::new());
     assert_eq!(t.sender, Address::from(&hex::decode("b02b9d9fcfa1a60dabe65165ded66a26983404dc").unwrap()[..]));
     assert_eq!(t.sender_type, AccountType::Basic);
     assert_eq!(t.recipient, Address::from(&hex::decode("754d1260f15bea0e8fb07ab18f45301483599e34").unwrap()[..]));

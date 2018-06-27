@@ -5,7 +5,6 @@ pub mod crypto;
 pub mod hash;
 
 use std::convert::From;
-use hex::{FromHex,FromHexError};
 use self::hash::{Blake2bHash, Blake2bHasher, Hasher};
 use self::crypto::PublicKey;
 

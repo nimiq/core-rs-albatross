@@ -2,9 +2,7 @@ use core_rs::consensus::base::primitive::crypto::{PrivateKey,PublicKey,Signature
 use core_rs::consensus::base::primitive::crypto::multisig::{RandomSecret,Commitment,PartialSignature};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
-use curve25519_dalek::traits::Identity;
 use hex;
-use std::cmp::Ordering;
 use core_rs::consensus::base::primitive::crypto::multisig::*;
 use ::sha2::Digest;
 
@@ -275,7 +273,7 @@ fn it_sign_and_verify_multisigs() {
     for vector in VECTORS.iter() {
         let test = TestVector::from_str(vector);
 
-        let mut signatures: Vec<PartialSignature> = vec![];
+        let mut signatures: Vec<PartialSignature> = Vec::new();
         let mut aggregated_public_key: Option<PublicKey> = None;
         let mut aggregated_commitment: Option<Commitment> = None;
 

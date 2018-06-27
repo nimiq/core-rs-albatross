@@ -1,5 +1,5 @@
 use std::str;
-use hex::{FromHex,FromHexError};
+use hex::{FromHex};
 use blake2_rfc::blake2b::Blake2b;
 use libargon2_sys::argon2d_hash;
 use sha2::{Sha256,Digest};
@@ -32,8 +32,8 @@ pub trait Hash<H: Hasher> {
     }
 }
 
-pub trait HashOutput: PartialEq + Eq {
-    type Builder: Hasher;
+pub trait HashOutput: PartialEq + Eq + Clone {
+    type Builder: Hasher<Output=Self>;
 
     fn as_bytes<'a>(&'a self) -> &'a [u8];
 }
@@ -108,7 +108,7 @@ impl HashOutput for Argon2dHash {
 
 impl Argon2dHasher {
     pub fn new(passes: u32, lanes: u32, kib: u32) -> Self {
-        return Argon2dHasher { buf: vec![], passes, lanes, kib };
+        return Argon2dHasher { buf: Vec::new(), passes, lanes, kib };
     }
 
     fn hash_bytes(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {

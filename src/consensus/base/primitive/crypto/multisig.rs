@@ -5,7 +5,6 @@ use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
 use curve25519_dalek::constants;
 use curve25519_dalek::traits::Identity;
 use std::ops::Add;
-use std::ops::AddAssign;
 use std::fmt;
 use std::error;
 use super::{KeyPair,PublicKey,Signature};
@@ -234,7 +233,6 @@ impl PublicKey {
 }
 
 fn hash_public_keys(public_keys: &Vec<PublicKey>) -> [u8; 64] {
-    let mut aggregated_public_key: Option<PublicKey> = None;
     // 1. Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
     let mut public_keys_hash: [u8; 64] = [0u8; 64];

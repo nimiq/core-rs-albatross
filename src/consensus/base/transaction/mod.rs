@@ -41,7 +41,7 @@ impl<'a> SignatureProof<'a> {
     fn from(public_key: &'a PublicKey, signature: Signature) -> Self {
         return SignatureProof {
             public_key,
-            merkle_path: MerklePath(vec![]),
+            merkle_path: MerklePath(Vec::new()),
             signature
         };
     }
