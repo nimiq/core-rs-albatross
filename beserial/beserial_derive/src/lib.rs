@@ -6,33 +6,44 @@ extern crate quote;
 use proc_macro::TokenStream;
 
 // This will return a tuple once we have more options
-fn parse_field_attribs(field: &syn::Field) -> Option<&syn::Ident> {
+fn parse_field_attribs(field: &syn::Field) -> (Option<&syn::Ident>, bool) {
     let mut len_type = Option::None;
+    let mut skip = false;
     for attr in &field.attrs {
         if let syn::MetaItem::List(ref attr_ident, ref nesteds) = attr.value {
             if attr_ident == "beserial" {
                 for nested in nesteds {
                     if let syn::NestedMetaItem::MetaItem(ref item) = nested {
-                        if let syn::MetaItem::List(ref attr_ident, ref nesteds) = item {
-                            if attr_ident == "len_type" {
-                                for nested in nesteds {
-                                    if let syn::NestedMetaItem::MetaItem(ref item) = nested {
-                                        if let syn::MetaItem::Word(value) = item {
-                                            if value != "u8" && value != "u16" && value != "u32" {
-                                                panic!("beserial(len_type) must be one of u8, u16 and u32");
+                        match item {
+                            syn::MetaItem::List(ref attr_ident, ref nesteds) => {
+                                if attr_ident == "len_type" {
+                                    for nested in nesteds {
+                                        if let syn::NestedMetaItem::MetaItem(ref item) = nested {
+                                            if let syn::MetaItem::Word(value) = item {
+                                                if value != "u8" && value != "u16" && value != "u32" {
+                                                    panic!("beserial(len_type) must be one of [u8, u16, u32], but was {}", value);
+                                                }
+                                                len_type = Option::Some(value);
                                             }
-                                            len_type = Option::Some(value);
                                         }
                                     }
                                 }
-                            }
+                            },
+                            syn::MetaItem::Word(ref attr_ident) => {
+                                if attr_ident == "skip" {
+                                    skip = true;
+                                } else {
+                                    panic!("unknown flag for beserial: {}", attr_ident)
+                                }
+                            },
+                            _ => panic!("unknown attribute for beserial: {:?}", item)
                         }
                     }
                 }
             }
         }
     }
-    return len_type;
+    return (len_type, skip);
 }
 
 #[proc_macro_derive(Serialize, attributes(beserial))]
@@ -72,7 +83,8 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
             match variant {
                 syn::VariantData::Struct(ref fields) => {
                     for field in fields {
-                        let len_type = parse_field_attribs(&field);
+                        let (len_type, skip) = parse_field_attribs(&field);
+                        if skip { continue };
                         match field.ident {
                             None => panic!(),
                             Some(ref ident) => {
@@ -93,7 +105,8 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
                 syn::VariantData::Tuple(ref fields) => {
                     let mut i = 0;
                     for field in fields {
-                        let len_type = parse_field_attribs(&field);
+                        let (len_type, skip) = parse_field_attribs(&field);
+                        if skip { continue };
                         match len_type {
                             Some(ty) => {
                                 serialize_body.append(quote! { size += SerializeWithLength::serialize::<#ty, W>(&self.#i, writer)?; }.as_str());
@@ -179,7 +192,8 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                         match field.ident {
                             None => panic!(),
                             Some(ref ident) => {
-                                let len_type = parse_field_attribs(&field);
+                                let (len_type, skip) = parse_field_attribs(&field);
+                                if skip { continue };
                                 match len_type {
                                     Some(ty) => {
                                         deserialize_body.append(quote! { #ident: DeserializeWithLength::deserialize::<#ty,R>(reader)?, }.as_str())
@@ -198,7 +212,8 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                     deserialize_body.append(name);
                     deserialize_body.append("(");
                     for field in fields {
-                        let len_type = parse_field_attribs(&field);
+                        let (len_type, skip) = parse_field_attribs(&field);
+                        if skip { continue };
                         match len_type {
                             Some(ty) =>
                                 deserialize_body.append(quote! { DeserializeWithLength::deserialize::<#ty,R>(reader)?, }.as_str()),

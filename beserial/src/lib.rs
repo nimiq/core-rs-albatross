@@ -117,3 +117,35 @@ impl<'a, T: Serialize> Serialize for &'a T {
         return Serialize::serialized_size(*self);
     }
 }
+
+impl<T: Deserialize> Deserialize for Option<T> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self> {
+        let is_present: u8 = Deserialize::deserialize(reader)?;
+        return match is_present {
+            0 => Ok(Option::None),
+            1 => Ok(Option::Some(Deserialize::deserialize(reader)?)),
+            _ => Err(std::io::Error::from(std::io::ErrorKind::InvalidInput))
+        };
+    }
+}
+
+impl<T: Serialize> Serialize for Option<T> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize> {
+        return match self {
+            Option::Some(one) => {
+                1u8.serialize(writer)?;
+                one.serialize(writer)
+            },
+            Option::None => {
+                0u8.serialize(writer)
+            }
+        }
+    }
+
+    fn serialized_size(&self) -> usize {
+        return match self {
+            Option::Some(one) => 1 + Serialize::serialized_size(one),
+            Option::None => 1
+        }
+    }
+}
