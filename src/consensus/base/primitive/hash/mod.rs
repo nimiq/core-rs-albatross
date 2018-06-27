@@ -3,9 +3,10 @@ use hex::{FromHex,FromHexError};
 use blake2_rfc::blake2b::Blake2b;
 use libargon2_sys::argon2d_hash;
 use sha2::{Sha256,Digest};
+use beserial::{Serialize, Deserialize};
 
 pub trait Hasher: Default {
-    type Output;
+    type Output: HashOutput + Hash<Self>;
 
     fn finish(self) -> Self::Output;
     fn write(&mut self, bytes: &[u8]) -> &mut Self;
@@ -24,19 +25,35 @@ pub trait Hasher: Default {
 
 pub trait Hash<H: Hasher> {
     fn hash(&self, state: &mut H);
+    fn hash_and_finish(&self) -> H::Output {
+        let mut h = H::default();
+        self.hash(&mut h);
+        return h.finish();
+    }
 }
 
-pub trait HashOutput {
-    type Hasher: Hasher;
+pub trait HashOutput: PartialEq + Eq {
+    type Builder: Hasher;
+
+    fn as_bytes<'a>(&'a self) -> &'a [u8];
+}
+
+impl<H> Hash<H::Builder> for H where H: HashOutput {
+    fn hash(&self, state: &mut H::Builder) {
+        state.write(self.as_bytes());
+    }
 }
 
 const BLAKE2B_LENGTH : usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2bHash, BLAKE2B_LENGTH);
-add_hash_trait_typed_arr!(Blake2bHash);
 pub struct Blake2bHasher(Blake2b);
 impl HashOutput for Blake2bHash {
-    type Hasher = Blake2bHasher;
+    type Builder = Blake2bHasher;
+
+    fn as_bytes<'a>(&'a self) -> &[u8] {
+        return &self.0;
+    }
 }
 
 impl Blake2bHasher {
@@ -75,7 +92,6 @@ const NIMIQ_ARGON2_SALT: &'static str = "nimiqrocks!";
 const DEFAULT_ARGON2_COST : u32 = 512;
 create_typed_array!(Argon2dHash, u8, ARGON2D_LENGTH);
 add_hex_io_fns_typed_arr!(Argon2dHash, ARGON2D_LENGTH);
-add_hash_trait_typed_arr!(Argon2dHash);
 pub struct Argon2dHasher {
     buf: Vec<u8>,
     passes: u32,
@@ -83,7 +99,11 @@ pub struct Argon2dHasher {
     kib: u32
 }
 impl HashOutput for Argon2dHash {
-    type Hasher = Argon2dHasher;
+    type Builder = Argon2dHasher;
+
+    fn as_bytes<'a>(&'a self) -> &[u8] {
+        return &self.0;
+    }
 }
 
 impl Argon2dHasher {
@@ -124,10 +144,13 @@ impl Hasher for Argon2dHasher {
 const SHA256_LENGTH : usize = 32;
 create_typed_array!(Sha256Hash, u8, SHA256_LENGTH);
 add_hex_io_fns_typed_arr!(Sha256Hash, SHA256_LENGTH);
-add_hash_trait_typed_arr!(Sha256Hash);
 pub struct Sha256Hasher(Sha256);
 impl HashOutput for Sha256Hash {
-    type Hasher = Sha256Hasher;
+    type Builder = Sha256Hasher;
+
+    fn as_bytes<'a>(&'a self) -> &[u8] {
+        return &self.0;
+    }
 }
 
 impl Sha256Hasher {
