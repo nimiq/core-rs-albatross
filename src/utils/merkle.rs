@@ -1,3 +1,6 @@
+extern crate bit_vec;
+
+use self::bit_vec::BitVec;
 use consensus::base::primitive::hash::Hash;
 use consensus::base::primitive::hash::Hasher;
 use beserial::{Serialize, Deserialize};
@@ -95,6 +98,18 @@ impl<H> MerklePath<H> where H: HashOutput {
     pub fn len(&self) -> usize {
         return self.nodes.len();
     }
+
+    // Compress "left" field of every node in the MerklePath to a bit vector.
+    fn compress(&self) -> BitVec {
+        let mut left_bits = BitVec::with_capacity(self.len());
+        for (i, node) in self.nodes.iter().enumerate() {
+            if node.left {
+                left_bits.set(i, true);
+            }
+        }
+        return left_bits;
+    }
+
 }
 
 #[derive(Debug)]
