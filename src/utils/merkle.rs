@@ -3,12 +3,13 @@ extern crate bit_vec;
 use self::bit_vec::BitVec;
 use consensus::base::primitive::hash::Hash;
 use consensus::base::primitive::hash::Hasher;
-use beserial::{Serialize, Deserialize};
-use consensus::base::primitive::hash::HashOutput;
+use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
+use consensus::base::primitive::hash::{HashOutput, Blake2bHash};
 use std::cmp::Ordering;
 use std::error;
 use std::fmt;
 use std::borrow::Cow;
+use std::io;
 
 pub fn compute_root<D: Hasher, T: Hash<D>>(values: &Vec<T>) -> D::Output where D::Output: Hash<D> {
     return compute_root_from_slice(values.as_slice());
@@ -34,12 +35,18 @@ pub fn compute_root_from_slice<D: Hasher, T: Hash<D>>(values: &[T]) -> D::Output
     return hasher.finish();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct MerklePath<H: HashOutput> {
     nodes: Vec<MerklePathNode<H>>
 }
 
 impl<H> MerklePath<H> where H: HashOutput {
+    pub fn empty() -> Self {
+        return MerklePath {
+            nodes: Vec::new()
+        };
+    }
+
     pub fn new<D: Hasher<Output=H>, T: Hash<D>>(values: &Vec<T>, leaf_value: &T) -> MerklePath<D::Output> where D::Output: Hash<D> {
         let leaf_hash = D::default().chain(leaf_value).finish();
         let mut path: Vec<MerklePathNode<D::Output>> = Vec::new();
@@ -101,7 +108,7 @@ impl<H> MerklePath<H> where H: HashOutput {
 
     // Compress "left" field of every node in the MerklePath to a bit vector.
     fn compress(&self) -> BitVec {
-        let mut left_bits = BitVec::with_capacity(self.len());
+        let mut left_bits = BitVec::from_elem(self.len(), false);
         for (i, node) in self.nodes.iter().enumerate() {
             if node.left {
                 left_bits.set(i, true);
@@ -112,13 +119,60 @@ impl<H> MerklePath<H> where H: HashOutput {
 
 }
 
-#[derive(Debug)]
+impl<H: HashOutput> Serialize for MerklePath<H> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+        let mut size: usize = 0;
+        size += Serialize::serialize(&(self.nodes.len() as u8), writer)?;
+        let compressed = self.compress();
+        size += writer.write(compressed.to_bytes().as_slice())?;
+
+        for node in self.nodes.iter() {
+            size += Serialize::serialize(&node.hash, writer)?;
+        }
+        return Ok(size);
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = /*count*/ 1;
+        size += (self.nodes.len() + 7) / 8; // For rounding up: (num + divisor - 1) / divisor
+        size += self.nodes.iter().fold(0, |acc, node| acc + Serialize::serialized_size(&node.hash));
+        return size;
+    }
+}
+
+impl<H: HashOutput> Deserialize for  MerklePath<H> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let count: u8 = Deserialize::deserialize(reader)?;
+
+        let left_bits_size = (count + 7) / 8; // For rounding up: (num + divisor - 1) / divisor
+        let mut left_bits: Vec<u8> = vec![0; left_bits_size as usize];
+        reader.read_exact(left_bits.as_mut_slice())?;
+        let left_bits = BitVec::from_bytes(&left_bits);
+
+        let mut nodes: Vec<MerklePathNode<H>> = Vec::new();
+        for i in 0..count {
+            if let Some(left) = left_bits.get(i as usize) {
+                nodes.push(MerklePathNode {
+                    left,
+                    hash: Deserialize::deserialize(reader)?
+                });
+            } else {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "failed to read left bits"));
+            }
+        }
+        return Ok(MerklePath { nodes });
+    }
+}
+
+pub type Blake2bMerklePath = MerklePath<Blake2bHash>;
+
+#[derive(Debug, Eq, PartialEq)]
 struct MerklePathNode<H: HashOutput> {
     hash: H,
     left: bool
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct MerkleProof<H: HashOutput> {
     nodes: Vec<H>,
     operations: Vec<MerkleProofOperation>
@@ -276,7 +330,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 enum MerkleProofOperation {
     ConsumeProof,
     ConsumeInput,

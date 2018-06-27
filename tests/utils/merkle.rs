@@ -1,5 +1,6 @@
 use core_rs::utils::merkle::{compute_root, compute_root_from_slice, MerklePath, MerkleProof};
 use core_rs::consensus::base::primitive::hash::{Hasher, Blake2bHasher, Blake2bHash};
+use beserial::{Serialize, Deserialize};
 
 const VALUE: &'static str = "merkletree";
 
@@ -150,6 +151,25 @@ fn it_correctly_computes_more_complex_paths() {
     let proof = MerklePath::new::<Blake2bHasher, &str>(&values, &values[5]);
     assert_eq!(proof.len(), 3);
     assert_eq!(proof.compute_root(&values[5]), root);
+}
+
+#[test]
+fn it_correctly_serializes_and_deserializes_path() {
+    let values = vec!["1", "2", "3", "4", "5", "6", "7"];
+    /*
+     const proof = MerklePath.compute(values, values[6]);
+        const serialization = proof.serialize();
+        expect(serialization.byteLength).toBe(proof.serializedSize);
+        const proof2 = MerklePath.unserialize(serialization);
+        expect(proof.equals(proof)).toBe(true);
+        expect(proof.equals(proof2)).toBe(true);
+     */
+    let proof = MerklePath::new::<Blake2bHasher, &str>(&values, &values[6]);
+    let mut serialization: Vec<u8> = Vec::with_capacity(proof.serialized_size());
+    let size = proof.serialize(&mut serialization).unwrap();
+    assert_eq!(size, proof.serialized_size());
+    let proof2: MerklePath<Blake2bHash> = Deserialize::deserialize(&mut &serialization[..]).unwrap();
+    assert_eq!(proof, proof2);
 }
 
 #[test]

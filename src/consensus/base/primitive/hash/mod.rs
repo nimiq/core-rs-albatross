@@ -32,7 +32,7 @@ pub trait Hash<H: Hasher> {
     }
 }
 
-pub trait HashOutput: PartialEq + Eq + Clone {
+pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize {
     type Builder: Hasher<Output=Self>;
 
     fn as_bytes<'a>(&'a self) -> &'a [u8];

@@ -4,6 +4,7 @@ use beserial::{Serialize, SerializeWithLength, Deserialize, DeserializeWithLengt
 use super::account::AccountType;
 use super::primitive::Address;
 use super::primitive::crypto::{PublicKey,Signature};
+use utils::merkle::Blake2bMerklePath;
 
 #[derive(Clone,Copy,PartialEq,PartialOrd,Eq,Ord,Debug,Serialize,Deserialize)]
 #[repr(u8)]
@@ -12,28 +13,10 @@ pub enum TransactionType {
     Extended = 1
 }
 
-pub struct MerklePathNode {}
-
-impl Serialize for MerklePathNode {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
-        unimplemented!()
-    }
-
-    fn serialized_size(&self) -> usize {
-        unimplemented!()
-    }
-}
-
-#[derive(Serialize)]
-pub struct MerklePath(
-    #[beserial(len_type(u8))]
-    Vec<MerklePathNode>
-);
-
 #[derive(Serialize)]
 pub struct SignatureProof<'a> {
     public_key: &'a PublicKey,
-    merkle_path: MerklePath,
+    merkle_path: Blake2bMerklePath,
     signature: Signature
 }
 
@@ -41,7 +24,7 @@ impl<'a> SignatureProof<'a> {
     fn from(public_key: &'a PublicKey, signature: Signature) -> Self {
         return SignatureProof {
             public_key,
-            merkle_path: MerklePath(Vec::new()),
+            merkle_path: Blake2bMerklePath::empty(),
             signature
         };
     }
