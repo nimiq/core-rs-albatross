@@ -9,7 +9,11 @@ extern crate libargon2_sys;
 extern crate rand;
 extern crate sha2;
 
+#[macro_use]
+pub mod macros;
+
 pub mod consensus;
+pub mod network;
 pub mod utils;
 
 fn main() {
