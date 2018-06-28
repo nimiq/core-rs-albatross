@@ -1,5 +1,4 @@
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
-use beserial_derive;
 use consensus::base::account::PrunedAccount;
 use consensus::base::primitive::Address;
 use consensus::base::primitive::hash::Blake2bHash;
@@ -85,7 +84,7 @@ impl BlockInterlink {
                 hash = &self.0[i];
                 compressed.push(self.0[i].clone());
             } else {
-                repeat_bits[(i / 8) as usize] |= (0x80 >> (i % 8));
+                repeat_bits[(i / 8) as usize] |= 0x80 >> (i % 8);
             }
         };
 

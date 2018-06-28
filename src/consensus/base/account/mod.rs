@@ -1,7 +1,6 @@
 pub mod tree;
 
 use beserial::{Serialize, Deserialize};
-use beserial_derive;
 use consensus::base::primitive::Address;
 
 #[derive(Clone,Copy,PartialEq,PartialOrd,Eq,Ord,Debug,Serialize,Deserialize)]
