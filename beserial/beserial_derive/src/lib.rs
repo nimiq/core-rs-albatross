@@ -1,5 +1,4 @@
 #![recursion_limit = "128"]
-#![feature(try_from)]
 
 extern crate proc_macro;
 #[macro_use]
@@ -201,43 +200,26 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
             let mut num = syn::ConstExpr::Lit(syn::Lit::from(0));
             for variant in variants {
                 let ident = &variant.ident;
-                num = variant.discriminant.clone().unwrap_or_else(|| if let syn::ConstExpr::Lit(syn::Lit::Int(i, _)) = num { syn::ConstExpr::Lit(syn::Lit::from(i + 1)) } else { panic!("undiscriminated enum value following non-literal discriminant") });
+                num = variant.discriminant.clone().unwrap_or_else(|| if let syn::ConstExpr::Lit(syn::Lit::Int(i, _)) = num { syn::ConstExpr::Lit(syn::Lit::Int(i + 1, syn::IntTy::Unsuffixed)) } else { panic!("undiscriminated enum value following non-literal discriminant") });
                 num_cases.append(quote! { #num => Ok(#name::#ident), });
-            }
-
-            additional_impl = quote! {
-                impl ::std::convert::TryFrom<#ty> for #name {
-                    type Error = ::std::io::Error;
-                    fn try_from(num: #ty) -> Result<Self, Self::Error> {
-                        let u = ::beserial::ToPrimitive::to_u64(&num).ok_or_else(|| ::std::io::Error::from(::std::io::ErrorKind::InvalidInput))?;
-                        return match u {
-                            #num_cases
-                            _ => Err(::std::io::Error::from(::std::io::ErrorKind::InvalidInput))
-                        };
-                    }
-                }
-            };
-
-            if uvar {
-                additional_impl.append(quote! {
-                    impl ::std::convert::TryFrom<::beserial::uvar> for #name {
-                        type Error = ::std::io::Error;
-                        fn try_from(num: ::beserial::uvar) -> Result<Self, Self::Error> {
-                            return ::std::convert::TryFrom::<#ty>::try_from(num.into());
-                        }
-                    }
-                });
             }
 
             if uvar {
                 deserialize_body = quote! {
-                    let num: uvar = Deserialize::deserialize(reader)?;
-                    return ::std::convert::TryFrom::try_from(num);
+                    let u: uvar = Deserialize::deserialize(reader)?;
+                    let num: u64 = u.into();
+                    return match num {
+                        #num_cases
+                        _ => Err(::std::io::Error::from(::std::io::ErrorKind::InvalidInput))
+                    };
                 };
             } else {
                 deserialize_body = quote! {
                     let num: #ty = Deserialize::deserialize(reader)?;
-                    return ::std::convert::TryFrom::try_from(num);
+                    return match num {
+                        #num_cases
+                        _ => Err(::std::io::Error::from(::std::io::ErrorKind::InvalidInput))
+                    };
                 };
             }
         }

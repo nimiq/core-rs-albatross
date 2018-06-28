@@ -4,9 +4,9 @@ extern crate num;
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 pub use num::ToPrimitive;
 use std::io::{Read, Result, Write};
-pub use uvar_type::uvar;
+pub use types::uvar;
 
-mod uvar_type;
+mod types;
 
 // Base traits
 
@@ -160,7 +160,7 @@ impl<T: Serialize> Serialize for Option<T> {
         return match self {
             Option::Some(one) => {
                 1u8.serialize(writer)?;
-                one.serialize(writer)
+                Ok(one.serialize(writer)? + 1)
             }
             Option::None => {
                 0u8.serialize(writer)
