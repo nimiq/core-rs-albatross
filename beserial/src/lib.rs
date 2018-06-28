@@ -12,6 +12,10 @@ mod types;
 
 pub trait Deserialize: Sized {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self>;
+
+    fn deserialize_from_vec(v: &Vec<u8>) -> Result<Self> {
+        return Self::deserialize(&mut &v[..]);
+    }
 }
 
 pub trait Serialize {
@@ -73,7 +77,7 @@ primitive_serialize!(u64, 8, read_u64, write_u64);
 
 impl DeserializeWithLength for String {
     fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self> {
-        let vec : Vec<u8> = DeserializeWithLength::deserialize::<D, R>(reader)?;
+        let vec: Vec<u8> = DeserializeWithLength::deserialize::<D, R>(reader)?;
         match String::from_utf8(vec) {
             Ok(s) => return Ok(s),
             Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e))

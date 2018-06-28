@@ -56,7 +56,7 @@ impl BlockInterlink {
     pub fn deserialize<R: ReadBytesExt>(reader: &mut R, prev_hash: &Blake2bHash) -> io::Result<Self> {
         let count: u8 = Deserialize::deserialize(reader)?;
         let repeat_bits_size = if count > 0 { (count - 1) / 8 + 1 } else { 0 };
-        let mut repeat_bits = Vec::with_capacity(repeat_bits_size as usize);
+        let mut repeat_bits = vec![0u8; repeat_bits_size as usize];
         reader.read_exact(&mut repeat_bits[..])?;
 
         let mut hash: Option<Blake2bHash> = Option::None;
@@ -81,7 +81,7 @@ impl BlockInterlink {
         let mut compressed = vec![];
 
         for i in 0..self.0.len() {
-            if &self.0[i] != prev_hash {
+            if &self.0[i] != hash {
                 hash = &self.0[i];
                 compressed.push(self.0[i].clone());
             } else {
