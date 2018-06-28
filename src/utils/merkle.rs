@@ -3,7 +3,7 @@ extern crate bit_vec;
 use self::bit_vec::BitVec;
 use consensus::base::primitive::hash::Hash;
 use consensus::base::primitive::hash::Hasher;
-use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
+use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt, SerializeWithLength, DeserializeWithLength};
 use consensus::base::primitive::hash::{HashOutput, Blake2bHash};
 use std::cmp::Ordering;
 use std::error;
@@ -148,7 +148,7 @@ impl<H: HashOutput> Deserialize for  MerklePath<H> {
         reader.read_exact(left_bits.as_mut_slice())?;
         let left_bits = BitVec::from_bytes(&left_bits);
 
-        let mut nodes: Vec<MerklePathNode<H>> = Vec::new();
+        let mut nodes: Vec<MerklePathNode<H>> = Vec::with_capacity(count as usize);
         for i in 0..count {
             if let Some(left) = left_bits.get(i as usize) {
                 nodes.push(MerklePathNode {
@@ -334,22 +334,68 @@ impl<H> MerkleProof<H> where H: HashOutput {
         // hence the .len() * 2 in the capacity of the BitVec.
         let mut operations_bits = BitVec::from_elem(self.operations.len() * 2, false);
         for (i, operation) in self.operations.iter().enumerate() {
-            match operation {
-                ConsumeProof => {
-                    operations_bits.set(i, false);
-                    operations_bits.set(i+1, false);
+            match *operation {
+                MerkleProofOperation::ConsumeProof => {
+                    operations_bits.set(i * 2, false);
+                    operations_bits.set(i * 2 + 1, false);
                 }
-                ConsumeInput => {
-                    operations_bits.set(i, false);
-                    operations_bits.set(i+1, true);
+                MerkleProofOperation::ConsumeInput => {
+                    operations_bits.set(i * 2, false);
+                    operations_bits.set(i * 2 + 1, true);
                 }
-                Hash => {
-                    operations_bits.set(i, true);
-                    operations_bits.set(i+1, false);
+                MerkleProofOperation::Hash => {
+                    operations_bits.set(i * 2, true);
+                    operations_bits.set(i * 2 + 1, false);
                 }
             }
         }
         return operations_bits;
+    }
+}
+
+impl<H: HashOutput> Serialize for MerkleProof<H> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+        let mut size: usize = 0;
+        size += Serialize::serialize(&(self.operations.len() as u16), writer)?;
+        let compressed = self.compress();
+        size += writer.write(compressed.to_bytes().as_slice())?;
+
+        size += SerializeWithLength::serialize::<u16, W>(&self.nodes, writer)?;
+        return Ok(size);
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = /*operations*/ 2;
+        size += (self.operations.len() + 3) / 4; // For rounding up: (num + divisor - 1) / divisor
+        size += SerializeWithLength::serialized_size::<u16>(&self.nodes);
+        return size;
+    }
+}
+
+impl<H: HashOutput> Deserialize for  MerkleProof<H> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let count: u16 = Deserialize::deserialize(reader)?;
+
+        let operations_size = (count + 3) / 4; // For rounding up: (num + divisor - 1) / divisor
+        let mut operation_bits: Vec<u8> = vec![0; operations_size as usize];
+        reader.read_exact(operation_bits.as_mut_slice())?;
+        let operation_bits = BitVec::from_bytes(&operation_bits);
+
+        let mut operations: Vec<MerkleProofOperation> = Vec::with_capacity(count as usize);
+        for i in 0..(count as usize) {
+            let op = match (operation_bits.get(i * 2), operation_bits.get(i * 2 + 1)) {
+                (Some(false), Some(false)) => MerkleProofOperation::ConsumeProof,
+                (Some(false), Some(true)) => MerkleProofOperation::ConsumeInput,
+                (Some(true), Some(false)) => MerkleProofOperation::Hash,
+                _ => { return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "invalid operation in bitvector")); },
+            };
+            operations.push(op);
+        }
+
+        return Ok(MerkleProof {
+            operations,
+            nodes: DeserializeWithLength::deserialize::<u16, R>(reader)?,
+        });
     }
 }
 

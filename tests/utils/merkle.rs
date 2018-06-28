@@ -156,14 +156,7 @@ fn it_correctly_computes_more_complex_paths() {
 #[test]
 fn it_correctly_serializes_and_deserializes_path() {
     let values = vec!["1", "2", "3", "4", "5", "6", "7"];
-    /*
-     const proof = MerklePath.compute(values, values[6]);
-        const serialization = proof.serialize();
-        expect(serialization.byteLength).toBe(proof.serializedSize);
-        const proof2 = MerklePath.unserialize(serialization);
-        expect(proof.equals(proof)).toBe(true);
-        expect(proof.equals(proof2)).toBe(true);
-     */
+
     let proof = MerklePath::new::<Blake2bHasher, &str>(&values, &values[6]);
     let mut serialization: Vec<u8> = Vec::with_capacity(proof.serialized_size());
     let size = proof.serialize(&mut serialization).unwrap();
@@ -446,4 +439,16 @@ fn it_correctly_discards_invalid_proofs() {
     assert_ne!(proof_root.unwrap(), root);
 
     assert!(proof.compute_root::<&str>(&[]).is_err());
+}
+
+#[test]
+fn it_correctly_serializes_and_deserializes_proof() {
+    let values = vec!["1", "2", "3", "5", "7", "8", "9"];
+
+    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values, &[values[2], values[6]]);
+    let mut serialization: Vec<u8> = Vec::with_capacity(proof.serialized_size());
+    let size = proof.serialize(&mut serialization).unwrap();
+    assert_eq!(size, proof.serialized_size());
+    let proof2: MerkleProof<Blake2bHash> = Deserialize::deserialize(&mut &serialization[..]).unwrap();
+    assert_eq!(proof, proof2);
 }
