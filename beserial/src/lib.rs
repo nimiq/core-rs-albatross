@@ -69,6 +69,28 @@ primitive_serialize!(u16, 2, read_u16, write_u16);
 primitive_serialize!(u32, 4, read_u32, write_u32);
 primitive_serialize!(u64, 8, read_u64, write_u64);
 
+// String
+
+impl DeserializeWithLength for String {
+    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self> {
+        let vec : Vec<u8> = DeserializeWithLength::deserialize::<D, R>(reader)?;
+        match String::from_utf8(vec) {
+            Ok(s) => return Ok(s),
+            Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        };
+    }
+}
+
+impl SerializeWithLength for String {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize> {
+        return self.as_bytes().to_vec().serialize::<S, W>(writer);
+    }
+
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        return self.as_bytes().to_vec().serialized_size::<S>();
+    }
+}
+
 // Vectors
 
 pub trait DeserializeWithLength: Sized {
