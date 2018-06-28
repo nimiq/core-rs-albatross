@@ -116,7 +116,6 @@ impl<H> MerklePath<H> where H: HashOutput {
         }
         return left_bits;
     }
-
 }
 
 impl<H: HashOutput> Serialize for MerklePath<H> {
@@ -327,6 +326,30 @@ impl<H> MerkleProof<H> where H: HashOutput {
     #[inline]
     pub fn len(&self) -> usize {
         return self.nodes.len();
+    }
+
+    // Compress Vector of MerkleProofOperation's in the MerkleProof to a bit vector.
+    fn compress(&self) -> BitVec {
+        // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them,
+        // hence the .len() * 2 in the capacity of the BitVec.
+        let mut operations_bits = BitVec::from_elem(self.operations.len() * 2, false);
+        for (i, operation) in self.operations.iter().enumerate() {
+            match operation {
+                ConsumeProof => {
+                    operations_bits.set(i, false);
+                    operations_bits.set(i+1, false);
+                }
+                ConsumeInput => {
+                    operations_bits.set(i, false);
+                    operations_bits.set(i+1, true);
+                }
+                Hash => {
+                    operations_bits.set(i, true);
+                    operations_bits.set(i+1, false);
+                }
+            }
+        }
+        return operations_bits;
     }
 }
 
