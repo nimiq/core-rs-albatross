@@ -46,7 +46,9 @@ macro_rules! create_typed_array {
 
         impl $name {
             pub const SIZE: usize = $len;
+            #[inline]
             pub fn len() -> usize { $len }
+            pub fn as_bytes(&self) -> &[$t] { &self.0 }
         }
     };
 }
