@@ -1,8 +1,12 @@
 extern crate byteorder;
 extern crate num;
 
-use std::io::{Read,Write,Result};
-pub use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt, ByteOrder};
+pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
+pub use num::ToPrimitive;
+use std::io::{Read, Result, Write};
+pub use uvar_type::uvar;
+
+mod uvar_type;
 
 // Base traits
 
@@ -135,17 +139,17 @@ impl<T: Serialize> Serialize for Option<T> {
             Option::Some(one) => {
                 1u8.serialize(writer)?;
                 one.serialize(writer)
-            },
+            }
             Option::None => {
                 0u8.serialize(writer)
             }
-        }
+        };
     }
 
     fn serialized_size(&self) -> usize {
         return match self {
             Option::Some(one) => 1 + Serialize::serialized_size(one),
             Option::None => 1
-        }
+        };
     }
 }
