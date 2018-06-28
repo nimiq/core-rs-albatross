@@ -155,11 +155,13 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
 
     quote! {
         impl #impl_generics Serialize for #name #ty_generics #where_clause {
+            #[allow(unused_mut,unused_variables)]
             fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> ::std::io::Result<usize> {
                 let mut size = 0;
                 #serialize_body
                 return Ok(size);
             }
+            #[allow(unused_mut,unused_variables)]
             fn serialized_size(&self) -> usize {
                 let mut size = 0;
                 #serialized_size_body
@@ -292,6 +294,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
     quote! {
         #additional_impl
         impl #impl_generics Deserialize for #name #ty_generics #where_clause {
+            #[allow(unused_mut,unused_variables)]
             fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> ::std::io::Result<Self> {
                 #deserialize_body
             }

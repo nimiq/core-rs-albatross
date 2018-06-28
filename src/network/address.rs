@@ -1,4 +1,4 @@
-use beserial::{Serialize, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
+use beserial::{Deserialize, ReadBytesExt, Serialize, WriteBytesExt};
 use std::io;
 
 create_typed_array!(PeerId, u8, 16);
@@ -7,7 +7,7 @@ pub enum PeerAddress {
     WssPeerAddress,
     RtcPeerAddress,
     WsPeerAddress,
-    DumbPeerAddress
+    DumbPeerAddress,
 }
 
 impl Serialize for PeerAddress {
@@ -29,7 +29,7 @@ impl Deserialize for PeerAddress {
 pub struct WssPeerAddress {
     services: u32,
     timestamp: u64,
-    net_address: NetAddress
+    net_address: NetAddress,
 }
 
 create_typed_array!(IPv4Address, u8, 4);
@@ -39,7 +39,7 @@ pub enum NetAddress {
     IPv4(IPv4Address),
     IPv6(IPv6Address),
     Unspecified,
-    Unknown
+    Unknown,
 }
 
 impl Deserialize for NetAddress {
@@ -49,14 +49,14 @@ impl Deserialize for NetAddress {
             0 => {
                 let addr: IPv4Address = Deserialize::deserialize(reader)?;
                 return Ok(NetAddress::IPv4(addr));
-            },
+            }
             1 => {
                 let addr: IPv6Address = Deserialize::deserialize(reader)?;
                 return Ok(NetAddress::IPv6(addr));
-            },
-            2 => { return Ok(NetAddress::Unspecified); },
-            3 => { return Ok(NetAddress::Unknown); },
-            _ => { return Err(io::Error::new(io::ErrorKind::InvalidData, "Non-existing NetAddress type")) }
+            }
+            2 => { return Ok(NetAddress::Unspecified); }
+            3 => { return Ok(NetAddress::Unknown); }
+            _ => { return Err(io::Error::new(io::ErrorKind::InvalidData, "Non-existing NetAddress type")); }
         };
     }
 }

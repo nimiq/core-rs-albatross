@@ -1,23 +1,22 @@
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
 use std::io;
-
-use beserial::{Serialize, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
 use super::account::AccountType;
 use super::primitive::Address;
-use super::primitive::crypto::{PublicKey,Signature};
+use super::primitive::crypto::{PublicKey, Signature};
 use utils::merkle::Blake2bMerklePath;
 
-#[derive(Clone,Copy,PartialEq,PartialOrd,Eq,Ord,Debug,Serialize,Deserialize)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum TransactionType {
     Basic = 0,
-    Extended = 1
+    Extended = 1,
 }
 
 #[derive(Serialize)]
 pub struct SignatureProof<'a> {
     public_key: &'a PublicKey,
     merkle_path: Blake2bMerklePath,
-    signature: Signature
+    signature: Signature,
 }
 
 impl<'a> SignatureProof<'a> {
@@ -25,12 +24,12 @@ impl<'a> SignatureProof<'a> {
         return SignatureProof {
             public_key,
             merkle_path: Blake2bMerklePath::empty(),
-            signature
+            signature,
         };
     }
 }
 
-#[derive(Clone,PartialEq,PartialOrd,Eq,Ord,Debug)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 #[repr(C)]
 pub struct Transaction {
     pub data: Vec<u8>,
@@ -43,7 +42,7 @@ pub struct Transaction {
     pub validity_start_height: u32,
     pub network_id: u8,
     pub flags: u8,
-    pub proof: Vec<u8>
+    pub proof: Vec<u8>,
 }
 
 impl Serialize for Transaction {
@@ -74,9 +73,9 @@ impl Deserialize for Transaction {
                     validity_start_height: Deserialize::deserialize(reader)?,
                     network_id: Deserialize::deserialize(reader)?,
                     flags: 0,
-                    proof: SignatureProof::from(&sender_public_key, Deserialize::deserialize(reader)?).serialize_to_vec()
+                    proof: SignatureProof::from(&sender_public_key, Deserialize::deserialize(reader)?).serialize_to_vec(),
                 }
-            },
+            }
             TransactionType::Extended => {
                 Transaction {
                     data: DeserializeWithLength::deserialize::<u16, R>(reader)?,

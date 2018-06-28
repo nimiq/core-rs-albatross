@@ -1,14 +1,14 @@
-use beserial::{Serialize, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
-use std::io;
-use consensus::base::{Subscription};
-use consensus::base::account::tree::{AccountsProof};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
+use consensus::base::Subscription;
+use consensus::base::account::tree::AccountsProof;
 use consensus::base::block::{Block, BlockHeader};
-use consensus::base::transaction::{Transaction};
 use consensus::base::primitive::crypto::{PublicKey, Signature};
 use consensus::base::primitive::hash::Blake2bHash;
-use network::address::{PeerAddress, PeerId};
+use consensus::base::transaction::Transaction;
+use network::address::PeerAddress;
+use std::io;
 
-#[derive(Clone,Copy,Debug,Eq,PartialEq,Ord,PartialOrd,Serialize,Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u8)]
 enum MessageType {
     Version = 0,
@@ -47,7 +47,7 @@ enum MessageType {
     GetHead = 60,
     Head = 61,
 
-    VerAck = 90
+    VerAck = 90,
 }
 
 enum Message {
@@ -69,7 +69,7 @@ enum Message {
     Ping(/*nonce*/ u32),
     Pong(/*nonce*/ u32),
 
-    VerAck(VerAckMessage)
+    VerAck(VerAckMessage),
 }
 
 const MAGIC: u32 = 0x42042042;
@@ -85,7 +85,7 @@ impl Deserialize for Message {
         let message: Message = match ty {
             ty if ty == MessageType::Version as u8 => {
                 Message::Version(Deserialize::deserialize(reader)?)
-            },
+            }
             _ => {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid message type"));
             }
@@ -94,51 +94,51 @@ impl Deserialize for Message {
     }
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct VersionMessage {
     version: u32,
     peer_address: PeerAddress,
     genesis_hash: Blake2bHash,
     head_hash: Blake2bHash,
-    challenge_nonce: u32
+    challenge_nonce: u32,
 }
 
-#[derive(Clone,Copy,Debug,Eq,PartialEq,Ord,PartialOrd,Serialize,Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u32)]
 enum InvVectorType {
     Error = 0,
     Transaction = 1,
-    Block = 2
+    Block = 2,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct InvVector {
     ty: InvVectorType,
-    hash: Blake2bHash
+    hash: Blake2bHash,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct TxMessage {
     transaction: Transaction,
-    accounts_proof: Option<AccountsProof>
+    accounts_proof: Option<AccountsProof>,
 }
 
-#[derive(Clone,Copy,Debug,Eq,PartialEq,Ord,PartialOrd,Serialize,Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u8)]
 enum GetBlocksDirection {
     Forward = 0,
-    Backward = 1
+    Backward = 1,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct GetBlocksMessage {
     #[beserial(len_type(u16))]
     locators: Vec<Blake2bHash>,
     max_inv_size: u16,
-    direction: GetBlocksDirection
+    direction: GetBlocksDirection,
 }
 
-#[derive(Clone,Copy,Debug,Eq,PartialEq,Ord,PartialOrd,Serialize,Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u8)]
 enum RejectMessageCode {
     Malformed = 0x01,
@@ -146,38 +146,39 @@ enum RejectMessageCode {
     Obsolete = 0x11,
     Double = 0x12,
     Dust = 0x41,
-    InsufficientFee = 0x42
+    InsufficientFee = 0x42,
 }
 
 struct RejectMessage {
     message_type: MessageType,
     code: RejectMessageCode,
-    reason: String, // TODO
+    reason: String,
+    // TODO
 //    #[beserial(len_type(u16))]
-    extra_data: Vec<u8>
+    extra_data: Vec<u8>,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct AddrMessage {
     #[beserial(len_type(u16))]
     addresses: Vec<PeerAddress>
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct AccountsProofMessage {
     block_hash: Blake2bHash,
-    accounts_proof: Option<AccountsProof>
+    accounts_proof: Option<AccountsProof>,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct GetAddrMessage {
     protocol_mask: u8,
     service_mask: u32,
-    max_results: u16 // TODO this is optional right now but is always set
+    max_results: u16, // TODO this is optional right now but is always set
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct VerAckMessage {
     public_key: PublicKey,
-    signature: Signature
+    signature: Signature,
 }
