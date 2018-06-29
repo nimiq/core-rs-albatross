@@ -31,8 +31,8 @@ pub trait SerializeContent {
 }
 
 pub trait Hash: SerializeContent {
-    fn hash<H: Hasher>(&self) -> H::Output  {
-        let mut h = H::default();
+    fn hash<H: HashOutput>(&self) -> H  {
+        let mut h = H::Builder::default();
         self.serialize_content(&mut h).unwrap();
         return h.finish();
     }

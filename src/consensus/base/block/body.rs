@@ -19,15 +19,14 @@ pub struct BlockBody {
     pub pruned_accounts: Vec<PrunedAccount>,
 }
 
-/*impl<W: io::Write> SerializeContent<W> for BlockBody {
-    fn serialize_content(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+impl SerializeContent for BlockBody {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
 }
 
 impl BlockBody {
-    fn hash<H: Hasher>(&self) -> Blake2bHash {
-        let vec: Vec<&Hash<H>> = Vec::with_capacity(2 + self.transactions.len() + self.pruned_accounts.len());
-        vec.push(&self.miner);
-        vec.push(&self.extra_data);
-        return merkle::compute_root_ref::<Blake2bHasher, Hash<H>>(&vec);
+    fn hash<H: Hasher>(&self) -> H::Output {
+        let mut vec: Vec<H::Output> = Vec::with_capacity(2 + self.transactions.len() + self.pruned_accounts.len());
+        vec.push(self.miner.hash());
+        return merkle::compute_root::<H, H::Output>(&vec);
     }
-}*/
+}
