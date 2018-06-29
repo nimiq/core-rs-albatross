@@ -118,8 +118,8 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
                             Some(ref ident) => {
                                 match len_type {
                                     Some(ty) => {
-                                        serialize_body.append(quote! { size += SerializeWithLength::serialize::<#ty, W>(&self.#ident, writer)?; }.as_str());
-                                        serialized_size_body.append(quote! { size += SerializeWithLength::serialized_size::<#ty>(&self.#ident); }.as_str());
+                                        serialize_body.append(quote! { size += ::beserial::SerializeWithLength::serialize::<#ty, W>(&self.#ident, writer)?; }.as_str());
+                                        serialized_size_body.append(quote! { size += ::beserial::SerializeWithLength::serialized_size::<#ty>(&self.#ident); }.as_str());
                                     }
                                     None => {
                                         serialize_body.append(quote! { size += Serialize::serialize(&self.#ident, writer)?; }.as_str());
@@ -137,8 +137,8 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
                         if skip { continue; };
                         match len_type {
                             Some(ty) => {
-                                serialize_body.append(quote! { size += SerializeWithLength::serialize::<#ty, W>(&self.#i, writer)?; }.as_str());
-                                serialized_size_body.append(quote! { size += SerializeWithLength::serialized_size::<#ty>(&self.#i); }.as_str());
+                                serialize_body.append(quote! { size += ::beserial::SerializeWithLength::serialize::<#ty, W>(&self.#i, writer)?; }.as_str());
+                                serialized_size_body.append(quote! { size += ::beserial::SerializeWithLength::serialized_size::<#ty>(&self.#i); }.as_str());
                             }
                             None => {
                                 serialize_body.append(quote! { size += Serialize::serialize(&self.#i, writer)?; }.as_str());
@@ -235,7 +235,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                                 if skip { continue; };
                                 match len_type {
                                     Some(ty) => {
-                                        field_cases.append(quote! { #ident: DeserializeWithLength::deserialize::<#ty,R>(reader)?, })
+                                        field_cases.append(quote! { #ident: ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, })
                                     }
                                     None => {
                                         field_cases.append(quote! { #ident: Deserialize::deserialize(reader)?, })
@@ -257,7 +257,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                         if skip { continue; };
                         match len_type {
                             Some(ty) =>
-                                field_cases.append(quote! { DeserializeWithLength::deserialize::<#ty,R>(reader)?, }),
+                                field_cases.append(quote! { ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, }),
                             None =>
                                 field_cases.append(quote! { Deserialize::deserialize(reader)?, })
                         }

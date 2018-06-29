@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use core_rs::consensus::base::block::*;
 use core_rs::consensus::base::primitive::Address;
-use core_rs::consensus::base::primitive::hash::Blake2bHash;
+use core_rs::consensus::base::primitive::hash::{Blake2bHash, Blake2bHasher, Hash, HashOutput};
 use hex;
 
 const MAINNET_GENESIS_HEADER: &str = "0001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c1f010000000000015ad23a98000219d9";
@@ -32,6 +32,12 @@ fn it_can_serialize_genesis_header() {
     let size = bh.serialize(&mut v2).unwrap();
     assert_eq!(size, bh.serialized_size());
     assert_eq!(hex::encode(v2), MAINNET_GENESIS_HEADER);
+}
+
+#[test]
+fn it_can_calculate_genesis_header_hash() {
+    let header = BlockHeader::deserialize_from_vec(&hex::decode(MAINNET_GENESIS_HEADER).unwrap()).unwrap();
+    assert_eq!(Hash::<Blake2bHasher>::hash_and_finish(&header).as_bytes(), &hex::decode("264AAF8A4F9828A76C550635DA078EB466306A189FCC03710BEE9F649C869D12").unwrap()[..]);
 }
 
 #[test]
