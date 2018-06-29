@@ -7,7 +7,7 @@ use beserial::{Serialize, Deserialize};
 use std::io;
 
 pub trait Hasher: Default + io::Write {
-    type Output: HashOutput + Hash<Self> + Sized;
+    type Output: HashOutput;
 
     fn finish(self) -> Self::Output;
     fn digest(mut self, bytes: &[u8]) -> Self::Output {
@@ -15,44 +15,44 @@ pub trait Hasher: Default + io::Write {
         return self.finish();
     }
 
-    fn hash(&mut self, h: &Hash<Self>) -> &mut Self {
+    fn hash<T: SerializeContent>(&mut self, h: &T) -> &mut Self {
         h.serialize_content(self).unwrap();
         return self;
     }
 
-    fn chain(mut self, h: &Hash<Self>) -> Self {
+    fn chain<T: SerializeContent>(mut self, h: &T) -> Self {
         self.hash(h);
         return self;
     }
 }
 
-pub trait SerializeContent<W: io::Write> {
-    fn serialize_content(&self, state: &mut W) -> io::Result<usize>;
+pub trait SerializeContent {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize>;
 }
 
-pub trait Hash<H: Hasher>: SerializeContent<H> {
-    fn hash(&self) -> H::Output  {
+pub trait Hash: SerializeContent {
+    fn hash<H: Hasher>(&self) -> H::Output  {
         let mut h = H::default();
         self.serialize_content(&mut h).unwrap();
         return h.finish();
     }
 }
 
-pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize {
+pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize + Sized + SerializeContent {
     type Builder: Hasher<Output=Self>;
 
     fn as_bytes<'a>(&'a self) -> &'a [u8];
     fn len() -> usize;
 }
 
-impl<H, W> SerializeContent<W> for H where H: HashOutput, W: io::Write {
-    fn serialize_content(&self, state: &mut W) -> io::Result<usize> {
-        state.write(self.as_bytes())?;
+impl<H> SerializeContent for H where H: HashOutput {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        writer.write(self.as_bytes())?;
         return Ok(Self::len());
     }
 }
 
-impl<H> Hash<H::Builder> for H where H: HashOutput {}
+impl<H> Hash for H where H: HashOutput {}
 
 const BLAKE2B_LENGTH : usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
@@ -204,11 +204,12 @@ impl Hasher for Sha256Hasher {
 add_hash_trait_arr!([u8; 32]);
 add_hash_trait_arr!([u8; 64]);
 add_hash_trait_arr!([u8]);
-impl<'a, W> SerializeContent<W> for &'a str where W: io::Write {
-    fn serialize_content(&self, state: &mut W) -> io::Result<usize> {
+add_hash_trait_arr!(Vec<u8>);
+impl<'a> SerializeContent for &'a str {
+    fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
         state.write(self.as_bytes())?;
         return Ok(self.len())
     }
 }
 
-impl<'a, H> Hash<H> for &'a str where H: Hasher {}
+impl<'a> Hash for &'a str {}

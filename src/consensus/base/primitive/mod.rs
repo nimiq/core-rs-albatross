@@ -1,14 +1,16 @@
+use self::crypto::PublicKey;
+use self::hash::{Blake2bHash, Blake2bHasher, Hash, Hasher, SerializeContent};
+use std::convert::From;
+use std::io;
+
 #[macro_use]
 pub mod macros;
 
 pub mod crypto;
 pub mod hash;
 
-use std::convert::From;
-use self::hash::{Blake2bHash, Blake2bHasher, Hasher};
-use self::crypto::PublicKey;
-
 create_typed_array!(Address, u8, 20);
+hash_typed_array!(Address);
 
 impl From<Blake2bHash> for Address {
     fn from(hash: Blake2bHash) -> Self {

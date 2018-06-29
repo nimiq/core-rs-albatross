@@ -30,12 +30,8 @@ impl From<u32> for TargetCompact {
     }
 }
 
-impl<W> SerializeContent<W> for BlockHeader where W: io::Write {
-    fn serialize_content(&self, state: &mut W) -> io::Result<usize> {
-        let serialized = &self.serialize_to_vec()[..];
-        state.write(&serialized)?;
-        return Ok(serialized.len());
-    }
+impl SerializeContent for BlockHeader {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
 }
 
-impl<H> Hash<H> for BlockHeader where H: Hasher {}
+impl Hash for BlockHeader {}

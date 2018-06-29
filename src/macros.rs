@@ -50,3 +50,16 @@ macro_rules! create_typed_array {
         }
     };
 }
+
+macro_rules! hash_typed_array {
+    ($name: ident) => {
+        impl SerializeContent for $name {
+            fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
+                state.write(&self.0[..])?;
+                return Ok(Self::SIZE);
+            }
+        }
+
+        impl Hash for $name {}
+    };
+}
