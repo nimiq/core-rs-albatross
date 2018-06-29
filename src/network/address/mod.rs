@@ -4,7 +4,7 @@ mod peer_address;
 pub use self::net_address::*;
 pub use self::peer_address::*;
 
-use consensus::base::primitive::crypto::{PublicKey, Signature};
+use consensus::base::primitive::crypto::{PublicKey};
 use consensus::base::primitive::hash::{Blake2bHash, Blake2bHasher, Hasher};
 
 create_typed_array!(PeerId, u8, 16);

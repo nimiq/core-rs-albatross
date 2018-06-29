@@ -1,6 +1,5 @@
 use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
 use std::io;
-use std::vec::Vec;
 
 create_typed_array!(IPv4Address, u8, 4);
 create_typed_array!(IPv6Address, u8, 16);

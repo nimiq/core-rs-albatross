@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::io;
 
 use ed25519_dalek;

@@ -3,7 +3,6 @@ use consensus::base::primitive::crypto::{PublicKey, Signature};
 use network::Protocol;
 use network::address::{NetAddress, PeerId};
 use std::io;
-use std::fmt;
 use std::vec::Vec;
 
 pub enum PeerAddressType {

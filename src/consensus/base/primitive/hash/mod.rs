@@ -4,16 +4,19 @@ use blake2_rfc::blake2b::Blake2b;
 use libargon2_sys::argon2d_hash;
 use sha2::{Sha256,Digest};
 use beserial::{Serialize, Deserialize};
+use std::io;
 
-pub trait Hasher: Default {
-    type Output: HashOutput + Hash<Self>;
+pub trait Hasher: Default + io::Write {
+    type Output: HashOutput + Hash<Self> + Sized;
 
     fn finish(self) -> Self::Output;
-    fn write(&mut self, bytes: &[u8]) -> &mut Self;
-    fn digest(self, bytes: &[u8]) -> Self::Output;
+    fn digest(mut self, bytes: &[u8]) -> Self::Output {
+        self.write(bytes).unwrap();
+        return self.finish();
+    }
 
     fn hash(&mut self, h: &Hash<Self>) -> &mut Self {
-        h.hash(self);
+        h.serialize_content(self).unwrap();
         return self;
     }
 
@@ -23,11 +26,14 @@ pub trait Hasher: Default {
     }
 }
 
-pub trait Hash<H: Hasher> {
-    fn hash(&self, state: &mut H);
-    fn hash_and_finish(&self) -> H::Output {
+pub trait SerializeContent<W: io::Write> {
+    fn serialize_content(&self, state: &mut W) -> io::Result<usize>;
+}
+
+pub trait Hash<H: Hasher>: SerializeContent<H> {
+    fn hash(&self) -> H::Output  {
         let mut h = H::default();
-        self.hash(&mut h);
+        self.serialize_content(&mut h).unwrap();
         return h.finish();
     }
 }
@@ -36,13 +42,17 @@ pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize {
     type Builder: Hasher<Output=Self>;
 
     fn as_bytes<'a>(&'a self) -> &'a [u8];
+    fn len() -> usize;
 }
 
-impl<H> Hash<H::Builder> for H where H: HashOutput {
-    fn hash(&self, state: &mut H::Builder) {
-        state.write(self.as_bytes());
+impl<H, W> SerializeContent<W> for H where H: HashOutput, W: io::Write {
+    fn serialize_content(&self, state: &mut W) -> io::Result<usize> {
+        state.write(self.as_bytes())?;
+        return Ok(Self::len());
     }
 }
+
+impl<H> Hash<H::Builder> for H where H: HashOutput {}
 
 const BLAKE2B_LENGTH : usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
@@ -54,6 +64,7 @@ impl HashOutput for Blake2bHash {
     fn as_bytes<'a>(&'a self) -> &[u8] {
         return &self.0;
     }
+    fn len() -> usize { BLAKE2B_LENGTH }
 }
 
 impl Blake2bHasher {
@@ -68,22 +79,23 @@ impl Default for Blake2bHasher {
     }
 }
 
+impl io::Write for Blake2bHasher {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.update(buf);
+        return Ok(buf.len());
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        return Ok(());
+    }
+}
+
 impl Hasher for Blake2bHasher {
     type Output = Blake2bHash;
 
     fn finish(self) -> Blake2bHash {
         let result = self.0.finalize();
         return Blake2bHash::from(result.as_bytes());
-    }
-
-    fn write(&mut self, bytes: &[u8]) -> &mut Blake2bHasher {
-        self.0.update(bytes);
-        return self;
-    }
-
-    fn digest(mut self, bytes: &[u8]) -> Blake2bHash {
-        self.write(bytes);
-        return self.finish();
     }
 }
 
@@ -104,6 +116,7 @@ impl HashOutput for Argon2dHash {
     fn as_bytes<'a>(&'a self) -> &[u8] {
         return &self.0;
     }
+    fn len() -> usize { ARGON2D_LENGTH }
 }
 
 impl Argon2dHasher {
@@ -124,20 +137,22 @@ impl Default for Argon2dHasher {
     }
 }
 
+impl io::Write for Argon2dHasher {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.buf.extend(buf);
+        return Ok(buf.len());
+    }
+
+    fn flush(&mut self) -> Result<(), io::Error> {
+        return Ok(());
+    }
+}
+
 impl Hasher for Argon2dHasher {
     type Output = Argon2dHash;
 
     fn finish(self) -> Argon2dHash {
         return self.hash_bytes(self.buf.as_slice(), NIMIQ_ARGON2_SALT.as_bytes());
-    }
-
-    fn write(&mut self, bytes: &[u8]) -> &mut Argon2dHasher {
-        self.buf.extend(bytes);
-        return self;
-    }
-
-    fn digest(self, bytes: &[u8]) -> Argon2dHash {
-        return self.hash_bytes(bytes, NIMIQ_ARGON2_SALT.as_bytes());
     }
 }
 
@@ -151,6 +166,7 @@ impl HashOutput for Sha256Hash {
     fn as_bytes<'a>(&'a self) -> &[u8] {
         return &self.0;
     }
+    fn len() -> usize { SHA256_LENGTH }
 }
 
 impl Sha256Hasher {
@@ -165,6 +181,17 @@ impl Default for Sha256Hasher {
     }
 }
 
+impl io::Write for Sha256Hasher {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.input(buf);
+        return Ok(buf.len());
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        return Ok(());
+    }
+}
+
 impl Hasher for Sha256Hasher {
     type Output = Sha256Hash;
 
@@ -172,23 +199,16 @@ impl Hasher for Sha256Hasher {
         let result = self.0.result();
         return Sha256Hash::from(result.as_slice());
     }
-
-    fn write(&mut self, bytes: &[u8]) -> &mut Sha256Hasher {
-        self.0.input(bytes);
-        return self;
-    }
-
-    fn digest(mut self, bytes: &[u8]) -> Sha256Hash {
-        self.write(bytes);
-        return self.finish();
-    }
 }
 
 add_hash_trait_arr!([u8; 32]);
 add_hash_trait_arr!([u8; 64]);
 add_hash_trait_arr!([u8]);
-impl<'a, H> Hash<H> for &'a str where H: Hasher {
-    fn hash(&self, state: &mut H) {
-        state.write(self.as_bytes());
+impl<'a, W> SerializeContent<W> for &'a str where W: io::Write {
+    fn serialize_content(&self, state: &mut W) -> io::Result<usize> {
+        state.write(self.as_bytes())?;
+        return Ok(self.len())
     }
 }
+
+impl<'a, H> Hash<H> for &'a str where H: Hasher {}

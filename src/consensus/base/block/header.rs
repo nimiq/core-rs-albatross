@@ -1,5 +1,6 @@
 use beserial::{Deserialize, Serialize};
-use consensus::base::primitive::hash::{Argon2dHasher, Blake2bHash, Blake2bHasher, Hash, Hasher};
+use consensus::base::primitive::hash::{Blake2bHash, Hash, Hasher, SerializeContent};
+use std::io;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct TargetCompact(u32);
@@ -29,14 +30,12 @@ impl From<u32> for TargetCompact {
     }
 }
 
-impl Hash<Blake2bHasher> for BlockHeader {
-    fn hash(&self, state: &mut Blake2bHasher) {
-        state.write(&self.serialize_to_vec()[..]);
+impl<W> SerializeContent<W> for BlockHeader where W: io::Write {
+    fn serialize_content(&self, state: &mut W) -> io::Result<usize> {
+        let serialized = &self.serialize_to_vec()[..];
+        state.write(&serialized)?;
+        return Ok(serialized.len());
     }
 }
 
-impl Hash<Argon2dHasher> for BlockHeader {
-    fn hash(&self, state: &mut Argon2dHasher) {
-        state.write(&self.serialize_to_vec()[..]);
-    }
-}
+impl<H> Hash<H> for BlockHeader where H: Hasher {}

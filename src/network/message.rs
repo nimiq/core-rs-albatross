@@ -1,4 +1,4 @@
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
+use beserial::{Deserialize, ReadBytesExt, Serialize};
 use consensus::base::Subscription;
 use consensus::base::account::tree::AccountsProof;
 use consensus::base::block::{Block, BlockHeader};

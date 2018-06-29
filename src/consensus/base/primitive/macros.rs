@@ -29,11 +29,14 @@ macro_rules! add_hex_io_fns_typed_arr {
 
 macro_rules! add_hash_trait_arr {
     ($t: ty) => {
-        impl<H> Hash<H> for $t where H: Hasher {
-            fn hash(&self, state: &mut H) {
-                state.write(&self[..]);
+        impl<W> SerializeContent<W> for $t where W: io::Write {
+            fn serialize_content(&self, state: &mut W) -> io::Result<usize> {
+                state.write(&self[..])?;
+                return Ok(self.len());
             }
         }
+
+        impl<H> Hash<H> for $t where H: Hasher {}
     };
 }
 

@@ -19,7 +19,7 @@ pub fn compute_root_from_slice<D: Hasher, T: Hash<D>>(values: &[T]) -> D::Output
     let mut hasher = D::default();
     match values.len() {
         0 => {
-            hasher.write(&[]);
+            hasher.write(&[]).unwrap();
         },
         1 => {
             hasher.hash(&values[0]);
@@ -59,7 +59,7 @@ impl<H> MerklePath<H> where H: HashOutput {
         let mut contains_leaf = false;
         match values.len() {
             0 => {
-                hasher.write(&[]);
+                hasher.write(&[]).unwrap();
             },
             1 => {
                 hasher.hash(&values[0]);
@@ -230,7 +230,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
         let mut hasher = D::default();
         match values.len() {
             0 => {
-                hasher.write(&[]);
+                hasher.write(&[]).unwrap();
                 let hash = hasher.finish();
                 path.push(hash.clone());
                 operations.push(MerkleProofOperation::ConsumeProof);

@@ -37,7 +37,7 @@ fn it_can_serialize_genesis_header() {
 #[test]
 fn it_can_calculate_genesis_header_hash() {
     let header = BlockHeader::deserialize_from_vec(&hex::decode(MAINNET_GENESIS_HEADER).unwrap()).unwrap();
-    assert_eq!(Hash::<Blake2bHasher>::hash_and_finish(&header).as_bytes(), &hex::decode("264AAF8A4F9828A76C550635DA078EB466306A189FCC03710BEE9F649C869D12").unwrap()[..]);
+    assert_eq!(Hash::<Blake2bHasher>::hash(&header).as_bytes(), &hex::decode("264AAF8A4F9828A76C550635DA078EB466306A189FCC03710BEE9F649C869D12").unwrap()[..]);
 }
 
 #[test]
