@@ -104,6 +104,11 @@ pub trait DeserializeWithLength: Sized {
 pub trait SerializeWithLength {
     fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize>;
     fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize;
+    fn serialize_to_vec<S: Serialize + num::FromPrimitive>(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(self.serialized_size::<S>());
+        self.serialize::<S, Vec<u8>>(&mut v).unwrap();
+        return v;
+    }
 }
 
 impl<T: Deserialize> DeserializeWithLength for Vec<T> {
