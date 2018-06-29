@@ -1,5 +1,5 @@
 use rand::{OsRng, Rng};
-use sha2::{self,Digest};
+use sha2::{self, Digest};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
 use curve25519_dalek::constants;
@@ -7,7 +7,7 @@ use curve25519_dalek::traits::Identity;
 use std::ops::Add;
 use std::fmt;
 use std::error;
-use super::{KeyPair,PublicKey,Signature};
+use super::{KeyPair, PublicKey, Signature};
 use std::iter::Sum;
 use std::borrow::Borrow;
 
@@ -85,7 +85,7 @@ impl error::Error for InvalidScalarError {
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct CommitmentPair {
     random_secret: RandomSecret,
-    commitment: Commitment
+    commitment: Commitment,
 }
 
 impl CommitmentPair {
@@ -125,7 +125,7 @@ impl CommitmentPair {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub struct PartialSignature (Scalar);
+pub struct PartialSignature(Scalar);
 implement_simple_add_sum_traits!(PartialSignature, Scalar::zero());
 
 impl PartialSignature {
@@ -186,7 +186,7 @@ impl KeyPair {
         h.input(data);
         let s = Scalar::from_hash::<sha2::Sha512>(h);
         let partial_signature: Scalar = s * delinearized_private_key + secret.0;
-        let mut public_key_bytes : [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
+        let mut public_key_bytes: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
         public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
         return (PartialSignature(partial_signature), PublicKey::from(public_key_bytes), aggregated_commitment);
     }
