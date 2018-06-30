@@ -183,7 +183,6 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
     let deserialize_body;
-    let mut additional_impl = quote::Tokens::new();
 
     match ast.body {
         syn::Body::Enum(ref variants) => {
@@ -274,7 +273,6 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
     };
 
     quote! {
-        #additional_impl
         impl #impl_generics Deserialize for #name #ty_generics #where_clause {
             #[allow(unused_mut,unused_variables)]
             fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> ::std::io::Result<Self> {

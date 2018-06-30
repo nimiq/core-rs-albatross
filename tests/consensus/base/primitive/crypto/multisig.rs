@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use core_rs::consensus::base::primitive::crypto::{PrivateKey,PublicKey,Signature,KeyPair};
 use core_rs::consensus::base::primitive::crypto::multisig::{RandomSecret,Commitment,PartialSignature};
 use curve25519_dalek::scalar::Scalar;

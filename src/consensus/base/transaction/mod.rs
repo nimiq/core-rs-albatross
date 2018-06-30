@@ -1,8 +1,9 @@
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
+use consensus::base::account::AccountType;
+use consensus::base::primitive::Address;
+use consensus::base::primitive::crypto::{PublicKey, Signature};
+use consensus::base::primitive::hash::{Hash, SerializeContent};
 use std::io;
-use super::account::AccountType;
-use super::primitive::Address;
-use super::primitive::crypto::{PublicKey, Signature};
 use utils::merkle::Blake2bMerklePath;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -168,3 +169,22 @@ impl Deserialize for Transaction {
         }
     }
 }
+
+impl SerializeContent for Transaction {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        let mut size = 0;
+        size += SerializeWithLength::serialized_size::<u16>(&self.data);
+        size += Serialize::serialized_size(&self.sender);
+        size += Serialize::serialized_size(&self.sender_type);
+        size += Serialize::serialized_size(&self.recipient);
+        size += Serialize::serialized_size(&self.recipient_type);
+        size += Serialize::serialized_size(&self.value);
+        size += Serialize::serialized_size(&self.fee);
+        size += Serialize::serialized_size(&self.validity_start_height);
+        size += Serialize::serialized_size(&self.network_id);
+        size += Serialize::serialized_size(&self.flags);
+        return Ok(size);
+    }
+}
+
+impl Hash for Transaction {}

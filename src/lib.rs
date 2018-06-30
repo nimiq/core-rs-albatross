@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 extern crate beserial;
 #[macro_use]
 extern crate beserial_derive;

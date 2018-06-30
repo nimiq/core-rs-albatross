@@ -5,6 +5,7 @@ use libargon2_sys::argon2d_hash;
 use sha2::{Sha256,Digest};
 use beserial::{Serialize, Deserialize};
 use std::io;
+use std::fmt::Debug;
 
 pub trait Hasher: Default + io::Write {
     type Output: HashOutput;
@@ -38,7 +39,7 @@ pub trait Hash: SerializeContent {
     }
 }
 
-pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize + Sized + SerializeContent {
+pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize + Sized + SerializeContent + Debug {
     type Builder: Hasher<Output=Self>;
 
     fn as_bytes<'a>(&'a self) -> &'a [u8];

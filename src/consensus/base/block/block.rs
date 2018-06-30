@@ -1,8 +1,8 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize, WriteBytesExt};
+use beserial::{Deserialize, ReadBytesExt, Serialize};
 use std::io;
 use super::{BlockBody, BlockHeader, BlockInterlink};
 
-#[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize)]
 pub struct Block {
     pub header: BlockHeader,
     pub interlink: BlockInterlink,
@@ -18,23 +18,5 @@ impl Deserialize for Block {
             interlink,
             body: Deserialize::deserialize(reader)?,
         });
-    }
-}
-
-impl Serialize for Block {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
-        let mut size = 0;
-        size += Serialize::serialize(&self.header, writer)?;
-        size += self.interlink.serialize(writer, &self.header.prev_hash)?;
-        size += Serialize::serialize(&self.body, writer)?;
-        return Ok(size);
-    }
-
-    fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        size += Serialize::serialized_size(&self.header);
-        size += self.interlink.serialized_size(&self.header.prev_hash);
-        size += Serialize::serialized_size(&self.body);
-        return size;
     }
 }

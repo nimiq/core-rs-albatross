@@ -3,7 +3,7 @@ extern crate num;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 pub use num::ToPrimitive;
-use std::io::{Read, Result, Write};
+use std::io::Result;
 pub use types::uvar;
 
 mod types;
@@ -116,7 +116,7 @@ impl<T: Deserialize> DeserializeWithLength for Vec<T> {
         let len: D = Deserialize::deserialize(reader)?;
         let len_u = len.to_usize().unwrap();
         let mut v = Vec::with_capacity(len_u);
-        for x in 0..len_u {
+        for _ in 0..len_u {
             v.push(T::deserialize(reader)?);
         }
         return Ok(v);

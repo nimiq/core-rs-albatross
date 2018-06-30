@@ -1,12 +1,10 @@
 use beserial::{Deserialize, Serialize};
 use consensus::base::account::PrunedAccount;
 use consensus::base::primitive::Address;
-use consensus::base::primitive::hash::{Hash, Hasher, SerializeContent};
+use consensus::base::primitive::hash::{Hash, HashOutput, SerializeContent};
 use consensus::base::transaction::Transaction;
-use utils::merkle;
 use std::io;
-use consensus::base::primitive::hash::Blake2bHash;
-use consensus::base::primitive::hash::Blake2bHasher;
+use utils::merkle;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BlockBody {
@@ -23,10 +21,17 @@ impl SerializeContent for BlockBody {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
 }
 
-impl BlockBody {
-    fn hash<H: Hasher>(&self) -> H::Output {
-        let mut vec: Vec<H::Output> = Vec::with_capacity(2 + self.transactions.len() + self.pruned_accounts.len());
+impl Hash for BlockBody {
+    fn hash<H: HashOutput>(&self) -> H {
+        let mut vec: Vec<H> = Vec::with_capacity(2 + self.transactions.len() + self.pruned_accounts.len());
         vec.push(self.miner.hash());
-        return merkle::compute_root::<H, H::Output>(&vec);
+        vec.push(self.extra_data.hash());
+        for t in &self.transactions {
+            vec.push(t.hash());
+        }
+        for p in &self.pruned_accounts {
+            vec.push(p.hash());
+        }
+        return merkle::compute_root_from_hashes::<H>(&vec);
     }
 }

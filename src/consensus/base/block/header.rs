@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use consensus::base::primitive::hash::{Blake2bHash, Hash, Hasher, SerializeContent};
+use consensus::base::primitive::hash::{Blake2bHash, Hash, SerializeContent};
 use std::io;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
