@@ -208,23 +208,28 @@ impl Deserialize for AddressNibbles {
     }
 }
 
-#[test]
-fn it_can_convert_and_access_nibbles() {
-    let address = Address::from(hex::decode("cfb98637bcae43c13323eaa1731ced2b716962fd").unwrap().as_slice());
-    let an = AddressNibbles::from(&address);
-    assert_eq!(an.bytes, address.as_bytes());
-    assert_eq!(an.get(0), Some(12));
-    assert_eq!(an.get(1), Some(15));
-    assert_eq!(an.get(2), Some(11));
-    assert_eq!(an.get(3), Some(9));
-    assert_eq!(an.to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn it_can_convert_and_access_nibbles() {
+        let address = Address::from(hex::decode("cfb98637bcae43c13323eaa1731ced2b716962fd").unwrap().as_slice());
+        let an = AddressNibbles::from(&address);
+        assert_eq!(an.bytes, address.as_bytes());
+        assert_eq!(an.get(0), Some(12));
+        assert_eq!(an.get(1), Some(15));
+        assert_eq!(an.get(2), Some(11));
+        assert_eq!(an.get(3), Some(9));
+        assert_eq!(an.to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
 
-    let an2: AddressNibbles = "cfb".parse().unwrap();
-    assert_eq!(an2.get(3), None);
-    assert_eq!(an2.get(4), None);
-    assert_ne!(an, an2);
-    assert!(an2.is_prefix_of(&an));
-    assert!(!an.is_prefix_of(&an2));
-    assert_eq!(an2.to_string(), "cfb");
-    assert_eq!((&an2 + &an2).to_string(), "cfbcfb");
+        let an2: AddressNibbles = "cfb".parse().unwrap();
+        assert_eq!(an2.get(3), None);
+        assert_eq!(an2.get(4), None);
+        assert_ne!(an, an2);
+        assert!(an2.is_prefix_of(&an));
+        assert!(!an.is_prefix_of(&an2));
+        assert_eq!(an2.to_string(), "cfb");
+        assert_eq!((&an2 + &an2).to_string(), "cfbcfb");
+    }
 }
