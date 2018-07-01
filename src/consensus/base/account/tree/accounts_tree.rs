@@ -161,8 +161,8 @@ impl AccountsTree {
         return None;
     }
 
-    pub fn root(&self) -> Option<Blake2bHash> {
-        let node = self.store.get_root()?;
-        return Some(node.hash());
+    pub fn root(&self) -> Blake2bHash {
+        let node = self.store.get_root().unwrap();
+        return node.hash();
     }
 }

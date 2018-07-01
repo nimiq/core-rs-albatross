@@ -66,3 +66,129 @@ fn it_can_put_and_get_multiple_balances() {
     assert!(account3a.is_some());
     assert_eq!(account3a.unwrap(), account3);
 }
+
+#[test]
+fn it_is_invariant_to_history() {
+    let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
+    let account1 = Account::Basic(BasicAccount { balance: 5 });
+    let account2 = Account::Basic(BasicAccount { balance: 55 });
+
+    let mut tree = AccountsTree::new_volatile();
+
+    tree.put(&address1, account1.clone());
+    let root_hash1 = tree.root();
+
+    tree.put(&address1, account2.clone());
+    let root_hash2 = tree.root();
+    assert_ne!(root_hash1, root_hash2);
+
+    tree.put(&address1, account1.clone());
+    let root_hash3 = tree.root();
+    assert_eq!(root_hash1, root_hash3);
+}
+
+#[test]
+fn it_is_invariant_to_insertion_order() {
+    let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
+    let account1 = Account::Basic(BasicAccount { balance: 5 });
+    let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
+    let account2 = Account::Basic(BasicAccount { balance: 55 });
+    let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
+    let account3 = Account::Basic(BasicAccount { balance: 55555555 });
+
+    let empty_account = Account::Basic(BasicAccount { balance: 0 });
+
+    let mut tree = AccountsTree::new_volatile();
+
+    // Order 1
+    tree.put(&address1, account1.clone());
+    tree.put(&address2, account2.clone());
+    tree.put(&address3, account3.clone());
+    let root_hash1 = tree.root();
+
+    // Reset
+    tree.put(&address1, empty_account.clone());
+    tree.put(&address2, empty_account.clone());
+    tree.put(&address3, empty_account.clone());
+
+    // Order 2
+    tree.put(&address1, account1.clone());
+    tree.put(&address3, account3.clone());
+    tree.put(&address2, account2.clone());
+    let root_hash2 = tree.root();
+
+    // Reset
+    tree.put(&address1, empty_account.clone());
+    tree.put(&address2, empty_account.clone());
+    tree.put(&address3, empty_account.clone());
+
+    // Order 3
+    tree.put(&address2, account2.clone());
+    tree.put(&address1, account1.clone());
+    tree.put(&address3, account3.clone());
+    let root_hash3 = tree.root();
+
+    // Reset
+    tree.put(&address1, empty_account.clone());
+    tree.put(&address2, empty_account.clone());
+    tree.put(&address3, empty_account.clone());
+
+    // Order 4
+    tree.put(&address2, account2.clone());
+    tree.put(&address3, account3.clone());
+    tree.put(&address1, account1.clone());
+    let root_hash4 = tree.root();
+
+    // Reset
+    tree.put(&address1, empty_account.clone());
+    tree.put(&address2, empty_account.clone());
+    tree.put(&address3, empty_account.clone());
+
+    // Order 5
+    tree.put(&address3, account3.clone());
+    tree.put(&address1, account1.clone());
+    tree.put(&address2, account2.clone());
+    let root_hash5 = tree.root();
+
+    // Reset
+    tree.put(&address1, empty_account.clone());
+    tree.put(&address2, empty_account.clone());
+    tree.put(&address3, empty_account.clone());
+
+    // Order 6
+    tree.put(&address3, account3.clone());
+    tree.put(&address2, account2.clone());
+    tree.put(&address1, account1.clone());
+    let root_hash6 = tree.root();
+
+    assert_eq!(root_hash1, root_hash2);
+    assert_eq!(root_hash1, root_hash3);
+    assert_eq!(root_hash1, root_hash4);
+    assert_eq!(root_hash1, root_hash5);
+    assert_eq!(root_hash1, root_hash6);
+}
+
+#[test]
+fn it_can_merge_nodes_while_pruning() {
+    let address1 = Address::from(&hex::decode("0102030405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
+    let account1 = Account::Basic(BasicAccount { balance: 5 });
+    let address2 = Address::from(&hex::decode("0103030405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
+    let account2 = Account::Basic(BasicAccount { balance: 55 });
+    let address3 = Address::from(&hex::decode("0103040405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
+    let account3 = Account::Basic(BasicAccount { balance: 55555555 });
+
+    let empty_account = Account::Basic(BasicAccount { balance: 0 });
+
+    let mut tree = AccountsTree::new_volatile();
+
+    tree.put(&address1, account1.clone());
+    let root_hash1 = tree.root();
+
+    tree.put(&address2, account2.clone());
+    tree.put(&address3, account3.clone());
+    tree.put(&address2, empty_account.clone());
+    tree.put(&address3, empty_account.clone());
+
+    let root_hash2 = tree.root();
+    assert_eq!(root_hash1, root_hash2);
+}
