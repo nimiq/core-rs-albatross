@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use super::{AddressNibbles, AccountsTreeNode};
 
-pub (in super) struct AccountsTreeStore {
+#[derive(Debug)]
+pub (in super) struct VolatileAccountsTreeStore {
     store: HashMap<AddressNibbles, AccountsTreeNode>
 }
 
-impl AccountsTreeStore {
+impl VolatileAccountsTreeStore {
     pub (in super) fn new() -> Self {
-        return AccountsTreeStore {
+        return VolatileAccountsTreeStore {
             store: HashMap::new()
         };
     }

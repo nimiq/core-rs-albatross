@@ -60,23 +60,58 @@ impl AddressNibbles {
     pub (in super) fn common_prefix(&self, other: &AddressNibbles) -> AddressNibbles {
         let min_len = cmp::min(self.len(), other.len());
         let byte_len = min_len / 2;
-        let mut i = byte_len;
+
+        let mut first_difference_nibble = min_len;
         for j in 0..byte_len {
             if self.bytes[j] != other.bytes[j] {
-                i = j + 1;
+                first_difference_nibble = if self.get(j * 2) != other.get(j * 2) { j * 2 } else { j * 2 + 1};
                 break;
             }
         }
-        // We checked full bytes, so convert i from bytes to nibbles.
-        i *= 2;
-        // Check first half of last byte if necessary (all bytes where the same and there is a nibble left).
-        if i == byte_len * 2 && min_len % 2 == 1 && self.get(min_len - 1) == other.get(min_len - 1) {
-            i += 1;
+
+        return self.slice(0, first_difference_nibble);
+    }
+
+    pub (in super) fn slice(&self, start: usize, end: usize) -> AddressNibbles {
+        if start >= self.len() || end <= start {
+            return AddressNibbles::empty();
+        }
+        let end = cmp::min(end, self.len());
+
+        let byte_start = start / 2;
+        let byte_end = end / 2;
+        // Easy case, starts at the beginning of a byte.
+        let mut new_bytes = if start % 2 == 0 {
+                self.bytes[byte_start..byte_end].to_vec()
+            } else {
+                let mut new_bytes: Vec<u8> = Vec::new();
+                let mut current_byte = (self.bytes[byte_start] & 0xf) << 4; // Right nibble.
+                for i in (byte_start + 1)..byte_end {
+                    let tmp_byte = self.bytes[i];
+                    let left_nibble = (tmp_byte >> 4) & 0xf;
+                    new_bytes.push(current_byte | left_nibble);
+                    current_byte = (tmp_byte & 0xf) << 4;
+                }
+                new_bytes.push(current_byte);
+                new_bytes
+            };
+        if end % 2 == 1 {
+            let last_nibble = self.bytes[byte_end] & 0xf0;
+            if start % 2 == 0 {
+                new_bytes.push(last_nibble);
+            } else {
+                let last_byte = new_bytes.pop().unwrap();
+                new_bytes.push(last_byte | (last_nibble >> 4));
+            }
         }
         return AddressNibbles {
-            bytes: self.bytes[..i].to_vec(),
-            length: i as u8,
+            bytes: new_bytes,
+            length: (end - start) as u8,
         };
+    }
+
+    pub (in super) fn suffix(&self, start: u8) -> AddressNibbles {
+        return self.slice(start as usize, self.len());
     }
 }
 
@@ -223,6 +258,21 @@ mod tests {
         assert_eq!(an.get(3), Some(9));
         assert_eq!(an.to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
 
+        // Test slicing
+        assert_eq!(an.slice(0, 2).to_string(), "cf");
+        assert_eq!(an.slice(0, 3).to_string(), "cfb");
+        assert_eq!(an.slice(1, 3).to_string(), "fb");
+        assert_eq!(an.slice(0, 41).to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(an.slice(1, 40).to_string(), "fb98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(an.slice(2, 1).to_string(), "");
+        assert_eq!(an.slice(42, 43).to_string(), "");
+
+        // Test suffixes
+        assert_eq!(an.suffix(0).to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(an.suffix(1).to_string(), "fb98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(an.suffix(2).to_string(), "b98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(an.suffix(40).to_string(), "");
+
         let an2: AddressNibbles = "cfb".parse().unwrap();
         assert_eq!(an2.get(3), None);
         assert_eq!(an2.get(4), None);
@@ -231,5 +281,10 @@ mod tests {
         assert!(!an.is_prefix_of(&an2));
         assert_eq!(an2.to_string(), "cfb");
         assert_eq!((&an2 + &an2).to_string(), "cfbcfb");
+
+        let an1: AddressNibbles = "1000000000000000000000000000000000000000".parse().unwrap();
+        let an2: AddressNibbles = "1200000000000000000000000000000000000000".parse().unwrap();
+        assert_eq!(an1.common_prefix(&an2), an2.common_prefix(&an1));
+        assert_eq!(an1.common_prefix(&an2).to_string(), "1");
     }
 }

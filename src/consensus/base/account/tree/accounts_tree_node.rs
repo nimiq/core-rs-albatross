@@ -100,12 +100,13 @@ impl AccountsTreeNode {
 
     #[inline]
     pub (in super) fn get_child_index(&self, prefix: &AddressNibbles) -> Option<usize> {
-        assert!(self.prefix().is_prefix_of(prefix), "Prefix is not a child of the current node");
+        assert!(self.prefix().is_prefix_of(prefix), "prefix is not a child of the current node");
         return prefix.get(self.prefix().len());
     }
 
-    pub (in super) fn with_child(mut self, suffix: AddressNibbles, hash: Blake2bHash) -> Option<Self> {
-        let mut child_index = self.get_child_index(&suffix)?;
+    pub (in super) fn with_child(mut self, prefix: &AddressNibbles, hash: Blake2bHash) -> Option<Self> {
+        let child_index = self.get_child_index(&prefix)?;
+        let suffix = prefix.suffix(self.prefix().len() as u8);
         match self {
             AccountsTreeNode::TerminalNode { .. } => { return None; },
             AccountsTreeNode::BranchNode { ref mut children, .. } => {
@@ -117,7 +118,7 @@ impl AccountsTreeNode {
     }
 
     pub (in super) fn without_child(mut self, suffix: AddressNibbles) -> Option<Self> {
-        let mut child_index = self.get_child_index(&suffix)?;
+        let child_index = self.get_child_index(&suffix)?;
         match self {
             AccountsTreeNode::TerminalNode { .. } => { return None; },
             AccountsTreeNode::BranchNode { ref mut children, .. } => {
@@ -128,9 +129,9 @@ impl AccountsTreeNode {
     }
 
     pub (in super) fn with_account(mut self, new_account: Account) -> Option<Self> {
-        match self {
-            AccountsTreeNode::TerminalNode { mut account, .. } => {
-                account = new_account;
+        match &mut self {
+            AccountsTreeNode::TerminalNode { ref mut account, .. } => {
+                *account = new_account;
             },
             AccountsTreeNode::BranchNode { .. } => { return None; },
         };

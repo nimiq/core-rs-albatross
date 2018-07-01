@@ -6,9 +6,9 @@ pub mod vesting_contract;
 use beserial::{Deserialize, Serialize, WriteBytesExt, ReadBytesExt};
 use consensus::base::primitive::Address;
 use consensus::base::primitive::hash::{Hash, SerializeContent};
-use self::basic_account::BasicAccount;
-use self::htlc_contract::HashedTimeLockedContract;
-use self::vesting_contract::VestingContract;
+pub use self::basic_account::BasicAccount;
+pub use self::htlc_contract::HashedTimeLockedContract;
+pub use self::vesting_contract::VestingContract;
 use std::io;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -40,6 +40,14 @@ impl Account {
             Account::Basic(_) => AccountType::Basic,
             Account::Vesting(_) => AccountType::Vesting,
             Account::HTLC(_) => AccountType::HTLC,
+        };
+    }
+
+    pub fn balance(&self) -> u64 {
+        return match *self {
+            Account::Basic(ref account) => account.balance,
+            Account::Vesting(ref account) => account.balance,
+            Account::HTLC(ref account) => account.balance,
         };
     }
 }

@@ -1,13 +1,14 @@
-use super::{AccountsTreeStore, AccountsTreeNode, AddressNibbles, NO_CHILDREN};
+use super::{VolatileAccountsTreeStore, AccountsTreeNode, AddressNibbles, NO_CHILDREN};
 use super::super::{Address, Account};
 use consensus::base::primitive::hash::{Hash, Blake2bHash};
 
-pub (in ::consensus::base) struct AccountsTree {
-    store: AccountsTreeStore
+#[derive(Debug)]
+pub struct AccountsTree {
+    store: VolatileAccountsTreeStore
 }
 
 impl AccountsTree {
-    fn new(store: AccountsTreeStore) -> Self {
+    fn new(store: VolatileAccountsTreeStore) -> Self {
         let mut tree = AccountsTree { store };
         if tree.store.get_root().is_none() {
             let root = AddressNibbles::empty();
@@ -16,12 +17,16 @@ impl AccountsTree {
         return tree;
     }
 
-    fn put(&mut self, address: &Address, account: Account) {
+    pub fn new_volatile() -> Self {
+        return Self::new(VolatileAccountsTreeStore::new());
+    }
+
+    pub fn put(&mut self, address: &Address, account: Account) {
         self.put_batch(address, account);
         self.finalize_batch();
     }
 
-    fn put_batch(&mut self, address: &Address, account: Account) {
+    pub fn put_batch(&mut self, address: &Address, account: Account) {
         if account.is_initial() && self.get(address).is_none() {
             return;
         }
@@ -34,6 +39,7 @@ impl AccountsTree {
     fn insert_batch(&mut self, node_prefix: AddressNibbles, prefix: AddressNibbles, account: Account, mut root_path: Vec<AccountsTreeNode>) {
         // Find common prefix between node and new address.
         let common_prefix = node_prefix.common_prefix(&prefix);
+        println!("Common Prefix between {} and {}: {}", node_prefix.to_string(), prefix.to_string(), common_prefix.to_string());
 
         // If the node prefix does not fully match the new address, split the node.
         if common_prefix.len() != node_prefix.len() {
@@ -43,8 +49,8 @@ impl AccountsTree {
 
             // Insert the new parent node.
             let new_parent = AccountsTreeNode::new_branch(common_prefix, NO_CHILDREN)
-                .with_child(node_prefix, Blake2bHash::default()).unwrap()
-                .with_child(new_child.prefix().clone(), Blake2bHash::default()).unwrap();
+                .with_child(&node_prefix, Blake2bHash::default()).unwrap()
+                .with_child(new_child.prefix(), Blake2bHash::default()).unwrap();
             self.store.put(&new_parent);
 
             return self.update_keys_batch(new_parent.prefix().clone(), root_path);
@@ -82,7 +88,7 @@ impl AccountsTree {
         // If no matching child exists, add a new child account node to the current node.
         let child = AccountsTreeNode::new_terminal(prefix, account);
         self.store.put(&child);
-        let node = node.with_child(child.prefix().clone(), Blake2bHash::default()).unwrap();
+        let node = node.with_child(child.prefix(), Blake2bHash::default()).unwrap();
         self.store.put(&node);
 
         return self.update_keys_batch(node_prefix, root_path);
@@ -121,13 +127,13 @@ impl AccountsTree {
         // immediate predecessor of the node specified by 'prefix'.
         let mut tmp_prefix = prefix;
         while let Some(node) = root_path.pop() {
-            let node = node.with_child(tmp_prefix, Blake2bHash::default()).unwrap();
+            let node = node.with_child(&tmp_prefix, Blake2bHash::default()).unwrap();
             self.store.put(&node);
-            tmp_prefix = node.prefix().clone();
+            tmp_prefix = node.prefix().clone(); // TODO: can we get rid of the clone here?
         }
     }
 
-    fn finalize_batch(&mut self) {
+    pub fn finalize_batch(&mut self) {
         self.update_hashes(&AddressNibbles::empty());
     }
 
@@ -148,14 +154,14 @@ impl AccountsTree {
         return node.hash();
     }
 
-    fn get(&self, address: &Address) -> Option<Account> {
+    pub fn get(&self, address: &Address) -> Option<Account> {
         if let AccountsTreeNode::TerminalNode { account, .. } = self.store.get(&AddressNibbles::from(address))? {
             return Some(account);
         }
         return None;
     }
 
-    fn root(&self) -> Option<Blake2bHash> {
+    pub fn root(&self) -> Option<Blake2bHash> {
         let node = self.store.get_root()?;
         return Some(node.hash());
     }
