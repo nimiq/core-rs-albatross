@@ -23,7 +23,6 @@ impl PeerAddressType {
     }
 }
 
-#[derive(Serialize, Deserialize)]
 pub struct PeerAddress {
     ty: PeerAddressType,
     services: u32,
@@ -32,6 +31,35 @@ pub struct PeerAddress {
     public_key: Option<PublicKey>,
     distance: u8,
     signature: Signature,
+}
+
+impl Serialize for PeerAddress {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
+        unimplemented!()
+    }
+
+    fn serialized_size(&self) -> usize {
+        unimplemented!()
+    }
+}
+
+impl Deserialize for PeerAddress {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, io::Error> {
+        let protocol: Protocol = Deserialize::deserialize(reader)?;
+        let services: u32 = Deserialize::deserialize(reader)?;
+        let timestamp: u64 = Deserialize::deserialize(reader)?;
+        let net_address: NetAddress = Deserialize::deserialize(reader)?;
+        let public_key: PublicKey = Deserialize::deserialize(reader)?;
+        let distance: u8 = Deserialize::deserialize(reader)?;
+        let signature: Signature = Deserialize::deserialize(reader)?;
+        let type_special: PeerAddressType = match protocol {
+            Protocol::Dumb => PeerAddressType::Dumb,
+            Protocol::Ws => PeerAddressType::Ws(DeserializeWithLength::deserialize::<u16, R>(reader)?, Deserialize::deserialize(reader)?),
+            Protocol::Wss => PeerAddressType::Wss(DeserializeWithLength::deserialize::<u16, R>(reader)?, Deserialize::deserialize(reader)?),
+            Protocol::Rtc => PeerAddressType::Rtc
+        };
+        return Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key: Some(public_key), distance, signature});
+    }
 }
 
 impl PeerAddress {

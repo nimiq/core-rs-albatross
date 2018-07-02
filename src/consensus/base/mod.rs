@@ -6,4 +6,12 @@ pub mod transaction;
 use beserial::{Serialize, Deserialize};
 
 #[derive(Serialize,Deserialize)]
-pub struct Subscription { }
+pub struct Subscription {
+}
+
+pub enum SubscriptionType {
+    None = 0,
+    Any = 1,
+    Addresses = 2,
+    MinFee = 3
+}
