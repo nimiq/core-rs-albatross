@@ -1,5 +1,5 @@
-use core_rs::consensus::base::primitive::hash::{Blake2bHash, Hash};
-use core_rs::consensus::networks::*;
+use nimiq::consensus::base::primitive::hash::{Blake2bHash, Hash};
+use nimiq::consensus::networks::*;
 use hex;
 
 #[test]

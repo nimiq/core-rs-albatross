@@ -1,6 +1,6 @@
-use core_rs::consensus::base::account::tree::AccountsTree;
-use core_rs::consensus::base::account::{Account, BasicAccount};
-use core_rs::consensus::base::primitive::Address;
+use nimiq::consensus::base::account::tree::AccountsTree;
+use nimiq::consensus::base::account::{Account, BasicAccount};
+use nimiq::consensus::base::primitive::Address;
 use hex;
 
 #[test]

@@ -1,4 +1,4 @@
-use core_rs::consensus::base::block::*;
+use nimiq::consensus::base::block::*;
 
 #[test]
 fn it_correctly_calculates_target_from_compact() {

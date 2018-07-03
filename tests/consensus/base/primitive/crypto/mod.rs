@@ -1,6 +1,6 @@
 mod multisig;
 
-use core_rs::consensus::base::primitive::crypto::{PrivateKey,PublicKey,Signature,KeyPair};
+use nimiq::consensus::base::primitive::crypto::{PrivateKey,PublicKey,Signature,KeyPair};
 
 #[test]
 fn verify_created_signature() {

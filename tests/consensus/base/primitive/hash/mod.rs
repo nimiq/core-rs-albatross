@@ -1,4 +1,4 @@
-use core_rs::consensus::base::primitive::hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash};
+use nimiq::consensus::base::primitive::hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash};
 use std::io::Write;
 
 #[test]

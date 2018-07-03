@@ -1,4 +1,4 @@
-use core_rs::utils::crc::Crc32Computer;
+use nimiq::utils::crc::Crc32Computer;
 
 #[test]
 fn compute_crc32() {

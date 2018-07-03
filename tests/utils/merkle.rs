@@ -1,5 +1,5 @@
-use core_rs::utils::merkle::{compute_root_from_content, compute_root_from_content_slice, MerklePath, MerkleProof};
-use core_rs::consensus::base::primitive::hash::{Hasher, Blake2bHasher, Blake2bHash};
+use nimiq::utils::merkle::{compute_root_from_content, compute_root_from_content_slice, MerklePath, MerkleProof};
+use nimiq::consensus::base::primitive::hash::{Hasher, Blake2bHasher, Blake2bHash};
 use beserial::{Serialize, Deserialize};
 
 const VALUE: &'static str = "merkletree";

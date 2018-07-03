@@ -1,5 +1,5 @@
 use beserial::{Deserialize};
-use core_rs::network::message::*;
+use nimiq::network::message::*;
 
 #[test]
 fn parse_version_message() {

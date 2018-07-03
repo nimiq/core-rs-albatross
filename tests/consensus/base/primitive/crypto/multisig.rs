@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
-use core_rs::consensus::base::primitive::crypto::{PrivateKey,PublicKey,Signature,KeyPair};
-use core_rs::consensus::base::primitive::crypto::multisig::{RandomSecret,Commitment,PartialSignature};
+use nimiq::consensus::base::primitive::crypto::{PrivateKey,PublicKey,Signature,KeyPair};
+use nimiq::consensus::base::primitive::crypto::multisig::{RandomSecret,Commitment,PartialSignature};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
 use hex;
-use core_rs::consensus::base::primitive::crypto::multisig::*;
+use nimiq::consensus::base::primitive::crypto::multisig::*;
 use ::sha2::Digest;
 
 struct StrTestVector {
