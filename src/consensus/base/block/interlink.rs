@@ -1,5 +1,6 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, WriteBytesExt};
-use consensus::base::primitive::hash::{Blake2bHash, Hash, HashOutput, SerializeContent};
+use consensus::base::primitive::hash::{Blake2bHash, Hash};
+use consensus::networks::{get_network_info, NetworkId};
 use std::io;
 use utils::merkle;
 
@@ -11,9 +12,7 @@ pub struct BlockInterlink {
 }
 
 impl BlockInterlink {
-    pub fn len(&self) -> usize {
-        return self.hashes.len();
-    }
+    pub fn len(&self) -> usize { return self.hashes.len(); }
 
     fn compress(hashes: &Vec<Blake2bHash>, prev_hash: &Blake2bHash) -> (Vec<u8>, Vec<Blake2bHash>) {
         let repeat_bits_size = if hashes.len() > 0 { (hashes.len() - 1) / 8 + 1 } else { 0 };
@@ -29,7 +28,7 @@ impl BlockInterlink {
             } else {
                 repeat_bits[(i / 8) as usize] |= 0x80 >> (i % 8);
             }
-        };
+        }
 
         return (repeat_bits, compressed);
     }
@@ -82,20 +81,15 @@ impl Serialize for BlockInterlink {
     }
 }
 
-impl SerializeContent for BlockInterlink {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
-        unimplemented!();
-    }
-}
-
-impl Hash for BlockInterlink {
-    fn hash<H: HashOutput>(&self) -> H {
-        let mut vec: Vec<H> = Vec::with_capacity(2 + self.compressed.len());
+impl BlockInterlink {
+    pub(super) fn hash(&self, network_id: NetworkId) -> Blake2bHash {
+        let network_info = get_network_info(network_id).unwrap();
+        let mut vec: Vec<Blake2bHash> = Vec::with_capacity(2 + self.compressed.len());
         vec.push(self.repeat_bits.hash());
-        // TODO vec.push(GENESIS_HASH);
+        vec.push(network_info.genesis_block.header.hash());
         for h in &self.compressed {
-            vec.push(h.hash());
+            vec.push(h.clone());
         }
-        return merkle::compute_root_from_hashes::<H>(&vec);
+        return merkle::compute_root_from_hashes::<Blake2bHash>(&vec);
     }
 }

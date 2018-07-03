@@ -3,7 +3,8 @@ use consensus::base::account::PrunedAccount;
 use consensus::base::primitive::Address;
 use consensus::base::primitive::hash::{Hash, HashOutput, SerializeContent};
 use consensus::base::transaction::Transaction;
-use std::io;
+use consensus::networks::NetworkId;
+use std::{cmp::Ordering, io};
 use utils::merkle;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -33,5 +34,51 @@ impl Hash for BlockBody {
             vec.push(p.hash());
         }
         return merkle::compute_root_from_hashes::<H>(&vec);
+    }
+}
+
+#[allow(unreachable_code)]
+impl BlockBody {
+    pub(super) fn verify(&self, network_id: NetworkId) -> bool {
+        let mut previous_tx: Option<&Transaction> = None;
+        for tx in &self.transactions {
+            // Ensure transactions are ordered and unique.
+            if let Some(previous) = previous_tx {
+                match previous.cmp_block_order(tx) {
+                    Ordering::Equal => {
+                        warn!("Invalid block - duplicate transaction");
+                        return false;
+                    }
+                    Ordering::Greater => {
+                        warn!("Invalid block - transactions not ordered");
+                        return false;
+                    }
+                    _ => (),
+                }
+            }
+            previous_tx = Some(tx);
+
+            // Check that all transactions are valid.
+            if !tx.verify() {
+                warn!("Invalid block - invalid transaction");
+                return false;
+            }
+
+            // Check that all transactions belong to this network
+            if tx.network_id != network_id {
+                return false;
+            }
+        }
+
+        for acc in &self.pruned_accounts {
+            // Ensure pruned accounts are ordered and unique.
+            unimplemented!();
+
+            // Check that pruned accounts are actually supposed to be pruned
+            unimplemented!();
+        }
+
+        // Everything checks out.
+        return true;
     }
 }

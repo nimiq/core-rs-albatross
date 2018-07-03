@@ -1,6 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use core_rs::consensus::base::block::*;
-use core_rs::consensus::base::primitive::hash::{Argon2dHash, Blake2bHash, Hash, HashOutput};
+use core_rs::consensus::base::primitive::hash::{Argon2dHash, Blake2bHash, Hash};
 use hex;
 
 const MAINNET_GENESIS_HEADER: &str = "0001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c1f010000000000015ad23a98000219d9";
@@ -41,3 +41,10 @@ fn it_can_calculate_genesis_header_pow() {
     let header = BlockHeader::deserialize_from_vec(&hex::decode(MAINNET_GENESIS_HEADER).unwrap()).unwrap();
     assert_eq!(Hash::hash::<Argon2dHash>(&header).as_bytes(), &hex::decode("000087dccfcb8625a84c821887c5c515f92f5078501bf49369f8993657cdc034").unwrap()[..]);
 }
+
+// #[test]
+// fn it_can_verify_proof_of_work() {
+// let header = BlockHeader::deserialize_from_vec(&hex::decode(MAINNET_GENESIS_HEADER).unwrap()).unwrap();
+// assert!(header.verify_proof_of_work());
+// }
+//

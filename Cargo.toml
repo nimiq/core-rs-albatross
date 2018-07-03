@@ -3,9 +3,7 @@ name = "core-rs"
 version = "0.0.1"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 
-[[bin]]
-name = "lib"
-path = "src/lib.rs"
+[lib]
 
 [dependencies]
 beserial = { path = "beserial" }
@@ -15,9 +13,15 @@ blake2-rfc = "0.2.18"
 curve25519-dalek = "0.18"
 ed25519-dalek = "0.6.2"
 hex = "0.3.2"
+lazy_static = "1.0"
 libargon2-sys = { path = "libargon2-sys" }
+log = "0.4.3"
 rand = "0.4.2"
 sha2 = "0.7.1"
+
+[dev-dependencies]
+pretty_env_logger = "0.2.3"
+
 
 [workspace]
 members = [

@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use core_rs::consensus::base::block::*;
-use core_rs::consensus::base::primitive::Address;
-use core_rs::consensus::base::primitive::hash::Blake2bHash;
+use core_rs::consensus::base::primitive::{hash::Blake2bHash, Address};
+use core_rs::consensus::networks::NetworkId;
 use hex;
 
 const MAINNET_GENESIS_BLOCK: &str = "0001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c1f010000000000015ad23a98000219d900010000000000000000000000000000000000000000836c6f766520616920616d6f72206d6f68616262617420687562756e2063696e7461206c7975626f76206268616c616261736120616d6f7572206b61756e6120706927617261206c696562652065736871207570656e646f207072656d6120616d6f7265206b61747265736e616e20736172616e6720616e7075207072656d612079657500000000";
@@ -16,14 +16,17 @@ fn it_can_deserialzie_genesis_block() {
     assert_eq!(block.header.interlink_hash, Blake2bHash::from("0000000000000000000000000000000000000000000000000000000000000000"));
     assert_eq!(block.header.body_hash, Blake2bHash::from("7cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a"));
     assert_eq!(block.header.accounts_hash, Blake2bHash::from("1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c"));
-    assert_eq!(block.header.n_bits, 520159232.into());
+    assert_eq!(block.header.n_bits, 0x1f010000.into());
     assert_eq!(block.header.height, 1);
     assert_eq!(block.header.timestamp, 1523727000);
     assert_eq!(block.header.nonce, 137689);
     assert_eq!(block.interlink.len(), 0);
     if let Option::Some(ref body) = block.body {
         assert_eq!(body.miner, Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]));
-        assert_eq!(body.extra_data, "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".as_bytes().to_vec());
+        assert_eq!(
+            body.extra_data,
+            "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".as_bytes().to_vec()
+        );
         assert_eq!(body.transactions.len(), 0);
         assert_eq!(body.pruned_accounts.len(), 0);
     } else {
@@ -83,4 +86,18 @@ fn it_can_serialize_block_108273() {
     let size = block.serialize(&mut v2).unwrap();
     assert_eq!(size, block.serialized_size());
     assert_eq!(hex::encode(v2), BLOCK_108273);
+}
+
+#[test]
+fn it_can_verify_genesis_block() {
+    let v: Vec<u8> = hex::decode(MAINNET_GENESIS_BLOCK).unwrap();
+    let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
+    assert!(block.verify(1530218988, NetworkId::Main));
+}
+
+#[test]
+fn it_can_verify_block_108273() {
+    let v: Vec<u8> = hex::decode(BLOCK_108273).unwrap();
+    let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
+    assert!(block.verify(1530218999, NetworkId::Main));
 }

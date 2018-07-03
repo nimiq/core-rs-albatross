@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use core_rs::consensus::base::block::*;
 use core_rs::consensus::base::primitive::Address;
-use core_rs::consensus::base::primitive::hash::{Hash, Blake2bHash, HashOutput};
+use core_rs::consensus::base::primitive::hash::{Blake2bHash, Hash};
 use hex;
 
 const MAINNET_GENESIS_BODY: &str = "0000000000000000000000000000000000000000836c6f766520616920616d6f72206d6f68616262617420687562756e2063696e7461206c7975626f76206268616c616261736120616d6f7572206b61756e6120706927617261206c696562652065736871207570656e646f207072656d6120616d6f7265206b61747265736e616e20736172616e6720616e7075207072656d612079657500000000";

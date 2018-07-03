@@ -3,6 +3,8 @@ use consensus::base::account::AccountType;
 use consensus::base::primitive::Address;
 use consensus::base::primitive::crypto::{PublicKey, Signature};
 use consensus::base::primitive::hash::{Hash, SerializeContent};
+use consensus::networks::NetworkId;
+use std::cmp::{Ord, Ordering};
 use std::io;
 use utils::merkle::Blake2bMerklePath;
 
@@ -41,7 +43,7 @@ pub struct Transaction {
     pub value: u64,
     pub fee: u64,
     pub validity_start_height: u32,
-    pub network_id: u8,
+    pub network_id: NetworkId,
     pub flags: u8,
     pub proof: Vec<u8>,
 }
@@ -49,16 +51,46 @@ pub struct Transaction {
 impl Transaction {
     fn transaction_type(&self) -> TransactionType {
         if let Result::Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
-            if self.sender_type == AccountType::Basic &&
-                self.recipient_type == AccountType::Basic &&
-                self.data.len() == 0 &&
-                self.flags == 0 &&
-                self.sender == Address::from(&signature_proof.public_key) &&
-                signature_proof.merkle_path.len() == 0 {
+            if self.sender_type == AccountType::Basic && self.recipient_type == AccountType::Basic && self.data.len() == 0 && self.flags == 0 && self.sender == Address::from(&signature_proof.public_key) && signature_proof.merkle_path.len() == 0 {
                 return TransactionType::Basic;
             }
         }
         return TransactionType::Extended;
+    }
+
+    pub fn cmp_block_order(&self, tx: &Transaction) -> Ordering {
+        return Ordering::Equal
+            .then_with(|| self.recipient.cmp(&tx.recipient))
+            .then_with(|| self.validity_start_height.cmp(&tx.validity_start_height))
+            .then_with(|| self.fee.cmp(&tx.fee))
+            .then_with(|| self.value.cmp(&tx.value))
+            .then_with(|| self.sender.cmp(&tx.sender))
+            .then_with(|| self.recipient_type.cmp(&tx.recipient_type))
+            .then_with(|| self.sender_type.cmp(&tx.sender_type))
+            .then_with(|| self.flags.cmp(&tx.flags));
+    }
+
+    pub fn verify(&self) -> bool {
+        // Check that sender != recipient.
+        if self.recipient == self.sender {
+            return false;
+        }
+
+        // Verify value and fee don't overflow
+        let (sum, overflow) = self.value.overflowing_add(self.fee);
+        if overflow
+            // || sum > MAX_SUPPLY
+            {
+                return false;
+            }
+
+        // Check account types valid
+        // TODO
+
+        // Verify transaction validity for account types
+        // TODO
+
+        return true;
     }
 }
 
@@ -130,7 +162,6 @@ impl Serialize for Transaction {
     }
 }
 
-
 impl Deserialize for Transaction {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
         let transaction_type: TransactionType = Deserialize::deserialize(reader)?;
@@ -173,16 +204,16 @@ impl Deserialize for Transaction {
 impl SerializeContent for Transaction {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         let mut size = 0;
-        size += SerializeWithLength::serialized_size::<u16>(&self.data);
-        size += Serialize::serialized_size(&self.sender);
-        size += Serialize::serialized_size(&self.sender_type);
-        size += Serialize::serialized_size(&self.recipient);
-        size += Serialize::serialized_size(&self.recipient_type);
-        size += Serialize::serialized_size(&self.value);
-        size += Serialize::serialized_size(&self.fee);
-        size += Serialize::serialized_size(&self.validity_start_height);
-        size += Serialize::serialized_size(&self.network_id);
-        size += Serialize::serialized_size(&self.flags);
+        size += SerializeWithLength::serialize::<u16, W>(&self.data, writer)?;
+        size += Serialize::serialize(&self.sender, writer)?;
+        size += Serialize::serialize(&self.sender_type, writer)?;
+        size += Serialize::serialize(&self.recipient, writer)?;
+        size += Serialize::serialize(&self.recipient_type, writer)?;
+        size += Serialize::serialize(&self.value, writer)?;
+        size += Serialize::serialize(&self.fee, writer)?;
+        size += Serialize::serialize(&self.validity_start_height, writer)?;
+        size += Serialize::serialize(&self.network_id, writer)?;
+        size += Serialize::serialize(&self.flags, writer)?;
         return Ok(size);
     }
 }

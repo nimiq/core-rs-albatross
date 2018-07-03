@@ -1,9 +1,7 @@
 use beserial::{Deserialize, Serialize};
-use consensus::base::primitive::hash::{Blake2bHash, Hash, SerializeContent};
+use consensus::base::block::{Target, TargetCompact};
+use consensus::base::primitive::hash::{Argon2dHash, Blake2bHash, Hash, SerializeContent};
 use std::io;
-
-#[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
-pub struct TargetCompact(u32);
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BlockHeader {
@@ -18,20 +16,16 @@ pub struct BlockHeader {
     pub nonce: u32,
 }
 
-impl From<TargetCompact> for u32 {
-    fn from(t: TargetCompact) -> Self {
-        return t.0;
-    }
-}
-
-impl From<u32> for TargetCompact {
-    fn from(u: u32) -> Self {
-        return TargetCompact(u);
-    }
-}
-
 impl SerializeContent for BlockHeader {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
 }
 
 impl Hash for BlockHeader {}
+
+impl BlockHeader {
+    pub(super) fn verify_proof_of_work(&self) -> bool {
+        let pow: Argon2dHash = self.hash();
+        let target: Target = self.n_bits.into();
+        return target.is_reached_by(&pow);
+    }
+}

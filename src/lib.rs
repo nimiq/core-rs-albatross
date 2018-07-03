@@ -8,7 +8,11 @@ extern crate blake2_rfc;
 extern crate curve25519_dalek;
 extern crate ed25519_dalek;
 extern crate hex;
+#[macro_use]
+extern crate lazy_static;
 extern crate libargon2_sys;
+#[macro_use]
+extern crate log;
 extern crate rand;
 extern crate sha2;
 
