@@ -7,7 +7,7 @@ use beserial::{Serialize, Deserialize};
 
 use self::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
 use self::address_nibbles::AddressNibbles;
-use self::accounts_tree_store::VolatileAccountsTreeStore;
+use self::accounts_tree_store::{VolatileAccountsTreeStore, AccountsTreeStore};
 pub use self::accounts_tree::AccountsTree;
 
 #[derive(Serialize,Deserialize)]

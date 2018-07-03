@@ -15,6 +15,7 @@ extern crate libargon2_sys;
 extern crate log;
 extern crate rand;
 extern crate sha2;
+extern crate lmdb_zero;
 
 #[macro_use]
 pub mod macros;

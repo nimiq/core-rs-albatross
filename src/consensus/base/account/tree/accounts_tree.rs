@@ -1,14 +1,14 @@
-use super::{VolatileAccountsTreeStore, AccountsTreeNode, AddressNibbles, NO_CHILDREN};
+use super::{AccountsTreeStore, AccountsTreeNode, AddressNibbles, NO_CHILDREN, VolatileAccountsTreeStore};
 use super::super::{Address, Account};
 use consensus::base::primitive::hash::{Hash, Blake2bHash};
 
 #[derive(Debug)]
 pub struct AccountsTree {
-    store: VolatileAccountsTreeStore
+    store: Box<AccountsTreeStore>
 }
 
 impl AccountsTree {
-    fn new(store: VolatileAccountsTreeStore) -> Self {
+    fn new(store: Box<AccountsTreeStore>) -> Self {
         let mut tree = AccountsTree { store };
         if tree.store.get_root().is_none() {
             let root = AddressNibbles::empty();
@@ -18,7 +18,7 @@ impl AccountsTree {
     }
 
     pub fn new_volatile() -> Self {
-        return Self::new(VolatileAccountsTreeStore::new());
+        return Self::new(Box::new(VolatileAccountsTreeStore::new()));
     }
 
     pub fn put(&mut self, address: &Address, account: Account) {
