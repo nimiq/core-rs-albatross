@@ -68,6 +68,47 @@ impl VolatileEnvironment {
             db_name: name
         };
     }
+
+    fn commit_change_set(&self, mut change_set: ChangeSet) {
+        // Take lock first, update all changesets and block reads in the meanwhile.
+        let mut env = self.env.write().unwrap();
+        let mut read_txns = self.read_txns.lock().unwrap();
+
+        // Cleanup read_txns first.
+        read_txns.retain(|change_set| change_set.upgrade().is_some());
+
+        // Update main store.
+        for (db_name, mut removals) in change_set.removals.drain() {
+            let mut parent_db = env.get_mut(&db_name).unwrap();
+            for key in removals.drain() {
+                let result = parent_db.remove(&key);
+
+                // Update read-only transactions.
+                if let Some(old_value) = result {
+                    // Now iterate over read_txns.
+                    for txn in read_txns.iter() {
+                        let change_set = txn.upgrade().unwrap();
+                        let mut change_set = change_set.lock().unwrap();
+                        change_set.invert_remove(&db_name, &key, &old_value);
+                    }
+                }
+            }
+        }
+
+        for (db_name, mut changes) in change_set.changes.drain() {
+            let mut parent_db = env.get_mut(&db_name).unwrap();
+            for (key, value) in changes.drain() {
+                let old_value = parent_db.insert(key.clone(), value);
+
+                // Update read-only transactions.
+                for txn in read_txns.iter() {
+                    let change_set = txn.upgrade().unwrap();
+                    let mut change_set = change_set.lock().unwrap();
+                    change_set.invert_put(&db_name, &key, &old_value);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -197,45 +238,8 @@ impl<'env> VolatileWriteTransaction<'env> {
         }
     }
 
-    pub(in super) fn commit(mut self) {
-        // Take lock first, update all changesets and block reads in the meanwhile.
-        let mut env = self.env.env.write().unwrap();
-        let mut read_txns = self.env.read_txns.lock().unwrap();
-
-        // Cleanup read_txns first.
-        read_txns.retain(|change_set| change_set.upgrade().is_some());
-
-        // Update main store.
-        for (db_name, mut removals) in self.change_set.removals.drain() {
-            let mut parent_db = env.get_mut(&db_name).unwrap();
-            for key in removals.drain() {
-                let result = parent_db.remove(&key);
-
-                // Update read-only transactions.
-                if let Some(old_value) = result {
-                    // Now iterate over read_txns.
-                    for txn in read_txns.iter() {
-                        let change_set = txn.upgrade().unwrap();
-                        let mut change_set = change_set.lock().unwrap();
-                        change_set.invert_remove(&db_name, &key, &old_value);
-                    }
-                }
-            }
-        }
-
-        for (db_name, mut changes) in self.change_set.changes.drain() {
-            let mut parent_db = env.get_mut(&db_name).unwrap();
-            for (key, value) in changes.drain() {
-                let old_value = parent_db.insert(key.clone(), value);
-
-                // Update read-only transactions.
-                for txn in read_txns.iter() {
-                    let change_set = txn.upgrade().unwrap();
-                    let mut change_set = change_set.lock().unwrap();
-                    change_set.invert_put(&db_name, &key, &old_value);
-                }
-            }
-        }
+    pub(in super) fn commit(self) {
+        self.env.commit_change_set(self.change_set);
     }
 }
 
