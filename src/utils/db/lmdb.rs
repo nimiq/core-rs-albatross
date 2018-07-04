@@ -5,6 +5,7 @@ use fs2;
 use rand::distributions::{IndependentSample, Range};
 use rand;
 use std::cmp;
+use lmdb_zero;
 
 #[derive(Debug)]
 pub struct LmdbEnvironment {
@@ -12,13 +13,13 @@ pub struct LmdbEnvironment {
 }
 
 impl LmdbEnvironment {
-    pub fn new(path: &str, size: usize, max_dbs: u32) -> Environment {
+    pub fn new(path: &str, size: usize, max_dbs: u32, flags: lmdb_zero::open::Flags) -> Environment {
         fs::create_dir_all(path).unwrap();
 
         let mut env = lmdb_zero::EnvBuilder::new().unwrap();
         env.set_maxdbs(max_dbs).unwrap();
         let env = unsafe {
-            env.open(path, lmdb_zero::open::Flags::empty(), 0o600).unwrap()
+            env.open(path, flags, 0o600).unwrap()
         };
 
         let info = env.info().unwrap();
@@ -183,7 +184,7 @@ mod tests {
 
     #[test]
     fn it_can_save_basic_objects() {
-        let env = LmdbEnvironment::new("./test", 10485760, 1);
+        let env = LmdbEnvironment::new("./test", 0, 1, lmdb_zero::open::Flags::empty());
         {
             let db = env.open_database("test".to_string());
 
@@ -230,6 +231,39 @@ mod tests {
             // Check aborted transaction.
             let tx = ReadTransaction::new(&env);
             assert!(tx.get::<str, String>(&db, "test").is_none());
+        }
+
+        env.drop_database().unwrap();
+    }
+
+    #[test]
+    fn isolation_test() {
+        let env = LmdbEnvironment::new("./test2", 0, 1, lmdb_zero::open::NOTLS);
+        {
+            let db = env.open_database("test".to_string());
+
+            // Read non-existent value.
+            let tx = ReadTransaction::new(&env);
+            assert!(tx.get::<str, String>(&db, "test").is_none());
+
+            // WriteTransaction.
+            let mut txw = WriteTransaction::new(&env);
+            assert!(txw.get::<str, String>(&db, "test").is_none());
+            txw.put(&db, "test", "one");
+            assert_eq!(txw.get::<str, String>(&db, "test"), Some("one".to_string()));
+
+            // ReadTransaction should still have the old state.
+            assert!(tx.get::<str, String>(&db, "test").is_none());
+
+            // Commit WriteTransaction.
+            txw.commit();
+
+            // ReadTransaction should still have the old state.
+            assert!(tx.get::<str, String>(&db, "test").is_none());
+
+            // Have a new ReadTransaction read the new state.
+            let tx2 = ReadTransaction::new(&env);
+            assert_eq!(tx2.get::<str, String>(&db, "test"), Some("one".to_string()));
         }
 
         env.drop_database().unwrap();
