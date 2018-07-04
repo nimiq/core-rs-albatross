@@ -1,5 +1,5 @@
 use self::crypto::PublicKey;
-use self::hash::{Blake2bHash, Blake2bHasher, Hash, Hasher, SerializeContent};
+use self::hash::{Blake2bHash, Blake2bHasher, Hasher, SerializeContent};
 use std::convert::From;
 use std::io;
 

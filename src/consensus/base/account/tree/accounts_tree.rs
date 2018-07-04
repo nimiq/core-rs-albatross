@@ -1,7 +1,7 @@
 use super::{AccountsTreeNode, AddressNibbles, NO_CHILDREN};
 use super::super::{Address, Account};
 use consensus::base::primitive::hash::{Hash, Blake2bHash};
-use utils::db::{Database, Transaction, WriteTransaction, Environment, ReadTransaction};
+use utils::db::{Database, Transaction, WriteTransaction, Environment};
 
 #[derive(Debug)]
 pub struct AccountsTree<'env> {
@@ -13,7 +13,7 @@ impl<'env> AccountsTree<'env> {
 
     pub fn new(env: &'env Environment) -> Self {
         let db = env.open_database(Self::DB_NAME.to_string());
-        let mut tree = AccountsTree { db };
+        let tree = AccountsTree { db };
 
         let mut txn = WriteTransaction::new(env);
         if tree.get_root(&txn).is_none() {

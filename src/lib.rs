@@ -4,6 +4,8 @@
 extern crate beserial;
 #[macro_use]
 extern crate beserial_derive;
+#[macro_use]
+extern crate bitflags;
 extern crate blake2_rfc;
 extern crate curve25519_dalek;
 extern crate ed25519_dalek;

@@ -2,7 +2,7 @@ use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, Seri
 use consensus::base::account::AccountType;
 use consensus::base::primitive::Address;
 use consensus::base::primitive::crypto::{PublicKey, Signature};
-use consensus::base::primitive::hash::{Hash, SerializeContent};
+use consensus::base::primitive::hash::{Hash, SerializeContent, Blake2bHash};
 use consensus::networks::NetworkId;
 use std::cmp::{Ord, Ordering};
 use std::io;
@@ -13,6 +13,13 @@ use utils::merkle::Blake2bMerklePath;
 pub enum TransactionType {
     Basic = 0,
     Extended = 1,
+}
+
+bitflags! {
+    #[derive(Default, Serialize, Deserialize)]
+    pub struct TransactionFlags: u8 {
+        const CONTRACT_CREATION = 0b1;
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -44,14 +51,35 @@ pub struct Transaction {
     pub fee: u64,
     pub validity_start_height: u32,
     pub network_id: NetworkId,
-    pub flags: u8,
+    pub flags: TransactionFlags,
     pub proof: Vec<u8>,
 }
 
 impl Transaction {
+    pub fn new_basic(sender: Address, recipient: Address, value: u64, fee: u64, validity_start_height: u32, network_id: NetworkId) -> Self {
+        return Transaction {
+            data: Vec::new(),
+            sender,
+            sender_type: AccountType::Basic,
+            recipient,
+            recipient_type: AccountType::Basic,
+            value,
+            fee,
+            validity_start_height,
+            network_id,
+            flags: TransactionFlags::empty(),
+            proof: Vec::new()
+        };
+    }
+
     fn transaction_type(&self) -> TransactionType {
         if let Result::Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
-            if self.sender_type == AccountType::Basic && self.recipient_type == AccountType::Basic && self.data.len() == 0 && self.flags == 0 && self.sender == Address::from(&signature_proof.public_key) && signature_proof.merkle_path.len() == 0 {
+            if self.sender_type == AccountType::Basic &&
+                self.recipient_type == AccountType::Basic &&
+                self.data.len() == 0 &&
+                self.flags.is_empty() &&
+                self.sender == Address::from(&signature_proof.public_key) &&
+                signature_proof.merkle_path.len() == 0 {
                 return TransactionType::Basic;
             }
         }
@@ -91,6 +119,13 @@ impl Transaction {
         // TODO
 
         return true;
+    }
+
+    pub fn contract_creation_address(&self) -> Address {
+        let mut tx = self.clone();
+        tx.recipient = Address::from([0u8; Address::SIZE]);
+        let hash: Blake2bHash = tx.hash();
+        return Address::from(hash);
     }
 }
 
@@ -178,7 +213,7 @@ impl Deserialize for Transaction {
                     fee: Deserialize::deserialize(reader)?,
                     validity_start_height: Deserialize::deserialize(reader)?,
                     network_id: Deserialize::deserialize(reader)?,
-                    flags: 0,
+                    flags: TransactionFlags::empty(),
                     proof: SignatureProof::from(sender_public_key.clone(), Deserialize::deserialize(reader)?).serialize_to_vec(),
                 });
             }

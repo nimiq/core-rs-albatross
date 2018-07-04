@@ -209,7 +209,7 @@ impl Serialize for Message {
             v[checksum_start + i] = v_crc[checksum_start + i];
         }
 
-        writer.write(v.as_slice());
+        writer.write(v.as_slice())?;
         return Ok(size);
     }
 

@@ -64,7 +64,7 @@ impl Block {
 
     fn verify_interlink(&self, network_id: NetworkId) -> bool {
         // Skip check for genesis block due to the cyclic dependency (since the interlink hash contains the genesis block hash).
-        if self.header.height == 1 && self.header.interlink_hash == Blake2bHash::from([0u8; 32]) {
+        if self.header.height == 1 && self.header.interlink_hash == Blake2bHash::from([0u8; Blake2bHash::SIZE]) {
             return true;
         }
 

@@ -1,7 +1,7 @@
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
         #[repr(C)]
-        #[derive(Default,Clone,PartialEq,PartialOrd,Eq,Ord,Debug)]
+        #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
         pub struct $name ([$t; $len]);
 
         impl<'a> From<&'a [$t]> for $name {
@@ -62,6 +62,6 @@ macro_rules! hash_typed_array {
             }
         }
 
-        impl Hash for $name {}
+        impl ::consensus::base::primitive::hash::Hash for $name {}
     };
 }
