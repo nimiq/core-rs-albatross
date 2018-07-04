@@ -5,6 +5,7 @@ use consensus::base::primitive::hash::{Hash, Blake2bHash, SerializeContent};
 use std::io;
 use std::iter;
 use std::slice;
+use utils::db::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
 pub (in super) struct AccountsTreeNodeChild {
@@ -222,6 +223,23 @@ impl Deserialize for AccountsTreeNode {
 
 impl SerializeContent for AccountsTreeNode {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+}
+
+impl IntoDatabaseValue for AccountsTreeNode {
+    fn database_byte_size(&self) -> usize {
+        return self.serialized_size();
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl FromDatabaseValue for AccountsTreeNode {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+        let mut cursor = io::Cursor::new(bytes);
+        return Deserialize::deserialize(&mut cursor);
+    }
 }
 
 impl Hash for AccountsTreeNode {}

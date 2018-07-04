@@ -82,8 +82,6 @@ impl<'env> Transaction<'env> {
             Transaction::PersistentWrite(ref txn) => { return txn.get(db.persistent().unwrap(), key); }
         }
     }
-
-    pub fn close(self) {}
 }
 
 #[derive(Debug)]
@@ -101,9 +99,7 @@ impl<'env> ReadTransaction<'env> {
         return self.0.get(db, key);
     }
 
-    pub fn close(self) {
-        self.0.close();
-    }
+    pub fn close(self) {}
 }
 
 impl<'env> Deref for ReadTransaction<'env> {
@@ -153,9 +149,7 @@ impl<'env> WriteTransaction<'env> {
         }
     }
 
-    pub fn abort(self) {
-        self.0.close();
-    }
+    pub fn abort(self) {}
 }
 
 impl<'env> Deref for WriteTransaction<'env> {
