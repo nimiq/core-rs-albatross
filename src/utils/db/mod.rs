@@ -4,6 +4,7 @@ pub mod volatile;
 use lmdb_zero;
 use std::io;
 use std::borrow::Cow;
+use std::ops::Deref;
 
 pub trait IntoDatabaseValue {
     fn database_byte_size(&self) -> usize;
@@ -65,23 +66,20 @@ impl<'env> Database<'env> {
 }
 
 #[derive(Debug)]
-pub enum ReadTransaction<'env> {
-    Volatile(volatile::VolatileReadTransaction<'env>),
-    Persistent(lmdb::LmdbReadTransaction<'env>),
+pub enum Transaction<'env> {
+    VolatileRead(volatile::VolatileReadTransaction<'env>),
+    VolatileWrite(volatile::VolatileWriteTransaction<'env>),
+    PersistentRead(lmdb::LmdbReadTransaction<'env>),
+    PersistentWrite(lmdb::LmdbWriteTransaction<'env>),
 }
 
-impl<'env> ReadTransaction<'env> {
-    pub fn new(env: &'env Environment) -> Self {
-        match *env {
-            Environment::Volatile(ref env) => { return ReadTransaction::Volatile(volatile::VolatileReadTransaction::new(env)); }
-            Environment::Persistent(ref env) => { return ReadTransaction::Persistent(lmdb::LmdbReadTransaction::new(env)); }
-        }
-    }
-
+impl<'env> Transaction<'env> {
     pub fn get<K, V>(&self, db: &Database, key: &K) -> Option<V> where K: AsDatabaseKey + ?Sized, V: FromDatabaseValue {
         match *self {
-            ReadTransaction::Volatile(ref txn) => { return txn.get(db.volatile().unwrap(), key); }
-            ReadTransaction::Persistent(ref txn) => { return txn.get(db.persistent().unwrap(), key); }
+            Transaction::VolatileRead(ref txn) => { return txn.get(db.volatile().unwrap(), key); }
+            Transaction::VolatileWrite(ref txn) => { return txn.get(db.volatile().unwrap(), key); }
+            Transaction::PersistentRead(ref txn) => { return txn.get(db.persistent().unwrap(), key); }
+            Transaction::PersistentWrite(ref txn) => { return txn.get(db.persistent().unwrap(), key); }
         }
     }
 
@@ -89,48 +87,83 @@ impl<'env> ReadTransaction<'env> {
 }
 
 #[derive(Debug)]
-pub enum WriteTransaction<'env> {
-    Volatile(volatile::VolatileWriteTransaction<'env>),
-    Persistent(lmdb::LmdbWriteTransaction<'env>),
-}
+pub struct ReadTransaction<'env>(Transaction<'env>);
 
-impl<'env> WriteTransaction<'env> {
+impl<'env> ReadTransaction<'env> {
     pub fn new(env: &'env Environment) -> Self {
         match *env {
-            Environment::Volatile(ref env) => { return WriteTransaction::Volatile(volatile::VolatileWriteTransaction::new(env)); }
-            Environment::Persistent(ref env) => { return WriteTransaction::Persistent(lmdb::LmdbWriteTransaction::new(env)); }
+            Environment::Volatile(ref env) => { return ReadTransaction(Transaction::VolatileRead(volatile::VolatileReadTransaction::new(env))); }
+            Environment::Persistent(ref env) => { return ReadTransaction(Transaction::PersistentRead(lmdb::LmdbReadTransaction::new(env))); }
         }
     }
 
     pub fn get<K, V>(&self, db: &Database, key: &K) -> Option<V> where K: AsDatabaseKey + ?Sized, V: FromDatabaseValue {
-        match *self {
-            WriteTransaction::Volatile(ref txn) => { return txn.get(db.volatile().unwrap(), key); }
-            WriteTransaction::Persistent(ref txn) => { return txn.get(db.persistent().unwrap(), key); }
+        return self.0.get(db, key);
+    }
+
+    pub fn close(self) {
+        self.0.close();
+    }
+}
+
+impl<'env> Deref for ReadTransaction<'env> {
+    type Target = Transaction<'env>;
+
+    fn deref(&self) -> &Transaction<'env> {
+        return &self.0;
+    }
+}
+
+#[derive(Debug)]
+pub struct WriteTransaction<'env>(Transaction<'env>);
+
+impl<'env> WriteTransaction<'env> {
+    pub fn new(env: &'env Environment) -> Self {
+        match *env {
+            Environment::Volatile(ref env) => { return WriteTransaction(Transaction::VolatileWrite(volatile::VolatileWriteTransaction::new(env))); }
+            Environment::Persistent(ref env) => { return WriteTransaction(Transaction::PersistentWrite(lmdb::LmdbWriteTransaction::new(env))); }
         }
     }
 
+    pub fn get<K, V>(&self, db: &Database, key: &K) -> Option<V> where K: AsDatabaseKey + ?Sized, V: FromDatabaseValue {
+        return self.0.get(db, key);
+    }
+
     pub fn put<K, V>(&mut self, db: &Database, key: &K, value: &V) where K: AsDatabaseKey + ?Sized, V: IntoDatabaseValue + ?Sized {
-        match *self {
-            WriteTransaction::Volatile(ref mut txn) => { return txn.put(db.volatile().unwrap(), key, value); }
-            WriteTransaction::Persistent(ref mut txn) => { return txn.put(db.persistent().unwrap(), key, value); }
+        match self.0 {
+            Transaction::VolatileWrite(ref mut txn) => { return txn.put(db.volatile().unwrap(), key, value); }
+            Transaction::PersistentWrite(ref mut txn) => { return txn.put(db.persistent().unwrap(), key, value); }
+            _ => { unreachable!(); }
         }
     }
 
     pub fn remove<K>(&mut self, db: &Database, key: &K) where K: AsDatabaseKey + ?Sized {
-        match *self {
-            WriteTransaction::Volatile(ref mut txn) => { return txn.remove(db.volatile().unwrap(), key); }
-            WriteTransaction::Persistent(ref mut txn) => { return txn.remove(db.persistent().unwrap(), key); }
+        match self.0 {
+            Transaction::VolatileWrite(ref mut txn) => { return txn.remove(db.volatile().unwrap(), key); }
+            Transaction::PersistentWrite(ref mut txn) => { return txn.remove(db.persistent().unwrap(), key); }
+            _ => { unreachable!(); }
         }
     }
 
     pub fn commit(self) {
-        match self {
-            WriteTransaction::Volatile(txn) => { return txn.commit(); }
-            WriteTransaction::Persistent(txn) => { return txn.commit(); }
+        match self.0 {
+            Transaction::VolatileWrite(txn) => { return txn.commit(); }
+            Transaction::PersistentWrite(txn) => { return txn.commit(); }
+            _ => { unreachable!(); }
         }
     }
 
-    pub fn abort(self) {}
+    pub fn abort(self) {
+        self.0.close();
+    }
+}
+
+impl<'env> Deref for WriteTransaction<'env> {
+    type Target = Transaction<'env>;
+
+    fn deref(&self) -> &Transaction<'env> {
+        return &self.0;
+    }
 }
 
 impl IntoDatabaseValue for [u8] {
