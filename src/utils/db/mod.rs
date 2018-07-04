@@ -149,12 +149,6 @@ impl FromDatabaseValue for Vec<u8> {
     }
 }
 
-//impl AsDatabaseKey for [u8] {
-//    fn as_database_bytes(&self) -> Cow<[u8]> {
-//        return Cow::Borrowed(self);
-//    }
-//}
-
 impl IntoDatabaseValue for str {
     fn database_byte_size(&self) -> usize {
         return self.len();
@@ -172,23 +166,9 @@ impl FromDatabaseValue for String {
     }
 }
 
-impl AsDatabaseKey for str {
+impl<T> AsDatabaseKey for T
+    where T: lmdb_zero::traits::AsLmdbBytes + ?Sized {
     fn as_database_bytes(&self) -> Cow<[u8]> {
-        return Cow::Borrowed(self.as_bytes());
+        return Cow::Borrowed(self.as_lmdb_bytes());
     }
 }
-
-//impl<T> AsDatabaseKey for T
-//    where T: lmdb_zero::traits::AsLmdbBytes {
-//    fn as_database_bytes(&self) -> Cow<[u8]> {
-//        return Cow::Borrowed(self.as_lmdb_bytes());
-//    }
-//}
-
-//impl<'a, T> AsDatabaseKey for &'a T
-//    where T: AsDatabaseKey {
-//    fn as_database_bytes(&'a self) -> Cow<[u8]> {
-//        return self.as_database_bytes();
-//    }
-//}
-

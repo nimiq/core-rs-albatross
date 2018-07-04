@@ -16,6 +16,7 @@ extern crate log;
 extern crate rand;
 extern crate sha2;
 extern crate lmdb_zero;
+extern crate fs2;
 
 #[macro_use]
 pub mod macros;
