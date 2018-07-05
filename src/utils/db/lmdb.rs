@@ -6,10 +6,13 @@ use rand::distributions::{IndependentSample, Range};
 use rand;
 use std::cmp;
 use lmdb_zero;
+use parking_lot;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct LmdbEnvironment {
     env: lmdb_zero::Environment,
+    creation_gate: parking_lot::RwLock<()>,
 }
 
 impl LmdbEnvironment {
@@ -31,7 +34,7 @@ impl LmdbEnvironment {
             info!("LMDB memory map size: {}", cur_mapsize);
         }
 
-        let lmdb = LmdbEnvironment { env };
+        let lmdb = LmdbEnvironment { env, creation_gate: parking_lot::RwLock::new(()) };
         if lmdb.need_resize(0) {
             info!("LMDB memory needs to be resized.");
             lmdb.do_resize(0);
@@ -41,6 +44,8 @@ impl LmdbEnvironment {
     }
 
     pub(in super) fn open_database<'env>(&'env self, name: String) -> LmdbDatabase<'env> {
+        // This is an implicit transaction, so take the lock first.
+        let guard = self.creation_gate.read();
         return LmdbDatabase { db: lmdb_zero::Database::open(&self.env, Some(&name), &lmdb_zero::DatabaseOptions::new(lmdb_zero::db::CREATE)).unwrap() };
     }
 
@@ -53,7 +58,9 @@ impl LmdbEnvironment {
     }
 
     pub fn do_resize(&self, increase_size: usize) {
-        let add_size: usize = cmp::max(1 << 30, increase_size); // TODO: use increase_size
+        // Lock creation of new transactions until resize is finished.
+        let guard = self.creation_gate.write();
+        let add_size: usize = cmp::max(1 << 30, increase_size);
 
         let available_space = fs2::available_space(self.path().as_ref());
         match available_space {
@@ -121,14 +128,16 @@ pub struct LmdbDatabase<'env> {
     db: lmdb_zero::Database<'env>,
 }
 
-#[derive(Debug)]
 pub struct LmdbReadTransaction<'env> {
     txn: lmdb_zero::ReadTransaction<'env>,
+    guard: parking_lot::RwLockReadGuard<'env, ()>,
 }
 
 impl<'env> LmdbReadTransaction<'env> {
     pub(in super) fn new(env: &'env LmdbEnvironment) -> Self {
-        return LmdbReadTransaction { txn: lmdb_zero::ReadTransaction::new(&env.env).unwrap() };
+        // This is an implicit transaction, so take the lock first.
+        let guard = env.creation_gate.read();
+        return LmdbReadTransaction { txn: lmdb_zero::ReadTransaction::new(&env.env).unwrap(), guard };
     }
 
     pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseKey + ?Sized, V: FromDatabaseValue {
@@ -138,9 +147,15 @@ impl<'env> LmdbReadTransaction<'env> {
     }
 }
 
-#[derive(Debug)]
+impl<'env> fmt::Debug for LmdbReadTransaction<'env> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "LmdbReadTransaction {{ txn: {:?} }}", self.txn)
+    }
+}
+
 pub struct LmdbWriteTransaction<'env> {
     txn: lmdb_zero::WriteTransaction<'env>,
+    guard: parking_lot::RwLockReadGuard<'env, ()>,
 }
 
 impl<'env> LmdbWriteTransaction<'env> {
@@ -149,7 +164,8 @@ impl<'env> LmdbWriteTransaction<'env> {
         if env.need_resize(0) {
             env.do_resize(0);
         }
-        return LmdbWriteTransaction { txn: lmdb_zero::WriteTransaction::new(&env.env).unwrap() };
+        let guard = env.creation_gate.read();
+        return LmdbWriteTransaction { txn: lmdb_zero::WriteTransaction::new(&env.env).unwrap(), guard };
     }
 
     pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseKey + ?Sized, V: FromDatabaseValue {
@@ -175,6 +191,12 @@ impl<'env> LmdbWriteTransaction<'env> {
 
     pub(in super) fn commit(self) {
         self.txn.commit().unwrap();
+    }
+}
+
+impl<'env> fmt::Debug for LmdbWriteTransaction<'env> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "LmdbWriteTransaction {{ txn: {:?} }}", self.txn)
     }
 }
 

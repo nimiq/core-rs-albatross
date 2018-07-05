@@ -44,6 +44,8 @@ impl ChangeSet {
 #[derive(Debug)]
 pub struct VolatileEnvironment {
     env: RwLock<HashMap<String, HashMap<Vec<u8>, Vec<u8>>>>,
+    // TODO: we have one changeset per read-only txn, which potentially means we have unnecessary copies
+    // it would be better to have one shared changeset per 'state'
     read_txns: Mutex<Vec<Weak<Mutex<ChangeSet>>>>,
 }
 

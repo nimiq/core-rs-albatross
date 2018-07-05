@@ -27,6 +27,7 @@ rand = "0.4.2"
 sha2 = "0.7.1"
 lmdb-zero = "0.4.4"
 fs2 = "0.4.3"
+parking_lot = "0.6"
 
 [dev-dependencies]
 pretty_env_logger = "0.2.3"

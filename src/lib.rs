@@ -17,6 +17,7 @@ extern crate rand;
 extern crate sha2;
 extern crate lmdb_zero;
 extern crate fs2;
+extern crate parking_lot;
 
 #[macro_use]
 pub mod macros;
