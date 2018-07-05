@@ -4,6 +4,7 @@ use consensus::base::primitive::Address;
 use consensus::base::primitive::hash::Blake2bHash;
 use consensus::base::transaction::{Transaction, TransactionFlags};
 use consensus::networks::NetworkId;
+use consensus::policy;
 use std::collections::HashMap;
 use super::tree::AccountsTree;
 use utils::db;
@@ -119,7 +120,7 @@ impl<'env> Accounts<'env> {
         let coinbase_tx = Transaction::new_basic(
             Address::from([0u8; Address::SIZE]),
             body.miner.clone(),
-            fees + 42, // TODO + block reward
+            fees + policy::block_reward_at(block_height),
             0,
             block_height,
             NetworkId::Main, // XXX ignored

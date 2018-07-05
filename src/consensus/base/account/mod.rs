@@ -221,4 +221,3 @@ impl Hash for PrunedAccount {}
 
 #[derive(Debug, Clone)]
 pub struct AccountError(String);
-
