@@ -1,5 +1,6 @@
 pub mod address;
 pub mod message;
+pub mod websocket;
 
 use beserial::{Serialize, Deserialize};
 

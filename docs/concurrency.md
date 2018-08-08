@@ -36,3 +36,4 @@ https://www.reddit.com/r/rust/comments/8x0mkc/how_does_mio_and_tokio_work/
 https://www.reddit.com/r/rust/comments/7klghl/tokio_internals_understanding_rusts_asynchronous/
 https://cafbit.com/post/tokio_internals/
 https://users.rust-lang.org/t/returning-server-handle-to-consumers-tokio/19105
+https://www.reddit.com/r/rust/comments/8qi0cx/advice_on_choosing_between_mio_and_tokio/
