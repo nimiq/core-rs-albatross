@@ -24,14 +24,12 @@ extern crate tungstenite;
 use beserial::Deserialize;
 use byteorder::{BigEndian, ByteOrder};
 use futures::prelude::*;
-use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use nimiq::network::message::Message as NimiqMessage;
 use tungstenite::protocol::Message as WebSocketMessage;
 
 use tungstenite::error::Error as WsError;
-use futures::future::ok;
 
 pub trait IntoData {
     fn into_data(self) -> Vec<u8>;
@@ -48,20 +46,20 @@ pub enum NimiqMessageStreamError {
     TagMismatch,
 }
 
-pub struct NimiqMessageStream<S: Stream + Sink> {
+pub struct NimiqMessageStream<S: Stream + Sink>
+where S::Item: IntoData
+{
     ws_socket: S,
-    first_message: bool,
-    receiving_tag: u8,
     processing_tag: u8,
     buf: Vec<S::Item>,
 }
 
-impl<S: Stream + Sink> NimiqMessageStream<S> {
+impl<S: Stream + Sink> NimiqMessageStream<S>
+where S::Item: IntoData
+{
     fn new(ws_socket: S) -> Self {
         return NimiqMessageStream {
             ws_socket,
-            first_message: true,
-            receiving_tag: 0,
             processing_tag: 0,
             buf: Vec::with_capacity(64), // 1/10th of the max number of messages we would ever need to store
         };
@@ -69,6 +67,7 @@ impl<S: Stream + Sink> NimiqMessageStream<S> {
 }
 
 impl<S: Stream + Sink> Stream for NimiqMessageStream<S>
+where S::Item: IntoData
 {
     type Item = NimiqMessage;
     type Error = NimiqMessageStreamError;
@@ -148,11 +147,15 @@ impl<S: Stream + Sink> Stream for NimiqMessageStream<S>
 
 /// Future returned from nimiq_connect_async() which will resolve
 /// once the tokio-tungstenite connection is established.
-pub struct ConnectAsync<S: Stream + Sink, E> {
+pub struct ConnectAsync<S: Stream + Sink, E>
+where S::Item: IntoData
+{
     inner: Box<Future<Item = S, Error = E> + Send>,
 }
 
-impl<S: Stream + Sink, E> Future for ConnectAsync<S, E> {
+impl<S: Stream + Sink, E> Future for ConnectAsync<S, E>
+where S::Item: IntoData
+{
     type Item = NimiqMessageStream<S>;
     type Error = E;
 
@@ -176,7 +179,7 @@ pub fn nimiq_connect_async(url: url::Url)
 fn main() {
     let test: ConnectAsync<WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>, WsError> = nimiq_connect_async(url::Url::parse("ws://127.0.0.1:8080").unwrap());
     let test = test.and_then(|msg_stream| {
-        let process_message = msg_stream.for_each(|msg| {
+        let process_message = msg_stream.for_each(|_| {
             println!("Got message!");
             Ok(())
         });
