@@ -1,26 +1,12 @@
-// extern crate tokio;
-// extern crate tokio_tls;
-// extern crate url;
-
-// #[macro_use]
-// extern crate futures;
-
 extern crate url;
-// extern crate bytes;
+extern crate tokio;
+extern crate nimiq;
+extern crate futures;
 extern crate beserial;
 extern crate byteorder;
-extern crate futures;
-extern crate nimiq;
-extern crate tokio;
-extern crate tokio_tungstenite;
 extern crate tungstenite;
+extern crate tokio_tungstenite;
 
-// use tokio_tls::*;
-// use tokio::io;
-// use tokio::net::*;
-// use tokio::prelude::*;
-
-// use bytes::{BufMut, Bytes, BytesMut};
 use beserial::Deserialize;
 use byteorder::{BigEndian, ByteOrder};
 use futures::prelude::*;
