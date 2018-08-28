@@ -1,9 +1,9 @@
 extern crate gcc;
 
 fn main() {
-    let target = std::env::var("TARGET").unwrap();
+//    let target = std::env::var("TARGET").unwrap();
 
-    let mut config = gcc::Config::new();
+    let mut config = gcc::Build::new();
     config.file("native/argon2.c")
         .file("native/core.c")
         .file("native/encoding.c")

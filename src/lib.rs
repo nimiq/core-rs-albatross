@@ -21,6 +21,13 @@ extern crate lmdb_zero;
 extern crate fs2;
 extern crate parking_lot;
 
+extern crate url;
+extern crate byteorder;
+extern crate futures;
+extern crate tokio;
+extern crate tokio_tungstenite;
+extern crate tungstenite;
+
 #[macro_use]
 pub mod macros;
 
