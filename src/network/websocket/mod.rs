@@ -1,14 +1,12 @@
 use beserial::Deserialize;
 use byteorder::{BigEndian, ByteOrder};
 use futures::prelude::*;
-use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use network::message::Message as NimiqMessage;
 use tungstenite::protocol::Message as WebSocketMessage;
 
 use tungstenite::error::Error as WsError;
-use futures::future::ok;
 use url::Url;
 use tokio::net::TcpStream;
 use tokio_tungstenite::connect_async;
@@ -45,6 +43,21 @@ impl<S: Stream + Sink> NimiqMessageStream<S>
             processing_tag: 0,
             buf: Vec::with_capacity(64), // 1/10th of the max number of messages we would ever need to store
         };
+    }
+}
+
+impl<S: Stream + Sink> Sink for NimiqMessageStream<S>
+    where S::Item: IntoData
+{
+    type SinkItem = NimiqMessage;
+    type SinkError = NimiqMessageStreamError;
+
+    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        unimplemented!();
+    }
+
+    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+        unimplemented!();
     }
 }
 
