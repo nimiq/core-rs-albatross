@@ -36,12 +36,13 @@ impl<S: Stream + Sink + Send + Sync> PeerChannel<S>
     pub fn run(&self) {
 //        let (sink, stream) = self.stream.split();
 
-        let process_message = self.stream.for_each(move |msg| {
-            self.session.on_message(msg);
-            Ok(())
-        });
-        let process_message = process_message.then(|_| Ok(()));
+        // let process_message = self.stream.for_each(move |msg| {
+        //     self.session.on_message(msg);
+        //     Ok(())
+        // });
+        // let process_message = process_message.then(|_| Ok(()));
 
-        run(process_message.map(|_| ()).map_err(|_| ()));
+        // run(process_message.map(|_| ()).map_err(|_| ()));
+        unimplemented!();
     }
 }

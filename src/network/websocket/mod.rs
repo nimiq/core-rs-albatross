@@ -1,4 +1,4 @@
-use beserial::Deserialize;
+use beserial::{Deserialize, Serialize};
 use byteorder::{BigEndian, ByteOrder};
 use futures::prelude::*;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
@@ -10,6 +10,8 @@ use tungstenite::error::Error as WsError;
 use url::Url;
 use tokio::net::TcpStream;
 use tokio_tungstenite::connect_async;
+use std::io;
+use std;
 
 pub trait IntoData {
     fn into_data(self) -> Vec<u8>;
@@ -22,15 +24,17 @@ impl IntoData for WebSocketMessage {
 }
 
 pub enum NimiqMessageStreamError {
-    WebSocketError,
+    WebSocketError(WsError),
     TagMismatch,
 }
 
+const MAX_CHUNK_SIZE: usize = 1024 * 16; // 16 kb
 pub struct NimiqMessageStream<S: Stream + Sink>
     where S::Item: IntoData
 {
     ws_socket: S,
     processing_tag: u8,
+    sending_tag: u8,
     buf: Vec<S::Item>,
 }
 
@@ -41,28 +45,74 @@ impl<S: Stream + Sink> NimiqMessageStream<S>
         return NimiqMessageStream {
             ws_socket,
             processing_tag: 0,
+            sending_tag: 0,
             buf: Vec::with_capacity(64), // 1/10th of the max number of messages we would ever need to store
         };
     }
 }
 
-impl<S: Stream + Sink> Sink for NimiqMessageStream<S>
-    where S::Item: IntoData
+impl Sink for NimiqMessageStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
 {
     type SinkItem = NimiqMessage;
     type SinkError = NimiqMessageStreamError;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        unimplemented!();
+        // Save and increment tag. (TODO: what about locking?)
+        let tag = self.sending_tag;
+        self.sending_tag = self.sending_tag.wrapping_add(1);
+
+        let msg = item.serialize_to_vec();
+
+        // Send chunks to underlying layer.
+        let mut remaining = msg.len();
+        let mut chunk;
+        while remaining > 0 {
+            let mut buffer;
+            if remaining + /*tag*/ 1 >= MAX_CHUNK_SIZE {
+                buffer = Vec::with_capacity(MAX_CHUNK_SIZE + /*tag*/ 1);
+                buffer.push(tag);
+                chunk = &msg[msg.len() - remaining..MAX_CHUNK_SIZE - 1];
+            } else {
+                buffer = Vec::with_capacity(remaining + /*tag*/ 1);
+                buffer.push(tag);
+                chunk = &msg[msg.len() - remaining..remaining];
+            }
+
+            buffer.extend(chunk);
+
+            match self.ws_socket.start_send(WebSocketMessage::binary(buffer)) {
+                Ok(state) => match state {
+                    AsyncSink::Ready => (),
+                    // We started to send some chunks, but now the queue is full:
+                    AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(item)),
+                },
+                Err(error) => return Err(NimiqMessageStreamError::WebSocketError(error)),
+            };
+
+            remaining -= chunk.len();
+        }
+        // We didn't exit previously, so everything worked out.
+        Ok(AsyncSink::Ready)
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        unimplemented!();
+        match self.ws_socket.poll_complete() {
+            Ok(async) => Ok(async),
+            Err(error) => Err(NimiqMessageStreamError::WebSocketError(error)),
+        }
+    }
+
+    fn close(&mut self) -> Poll<(), Self::SinkError> {
+        match self.ws_socket.close() {
+            Ok(async) => Ok(async),
+            Err(error) => Err(NimiqMessageStreamError::WebSocketError(error)),
+        }
     }
 }
 
-impl<S: Stream + Sink> Stream for NimiqMessageStream<S>
-    where S::Item: IntoData
+impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
+    where S::Item: IntoData,
+    S::Error: std::fmt::Debug
 {
     type Item = NimiqMessage;
     type Error = NimiqMessageStreamError;
@@ -70,7 +120,7 @@ impl<S: Stream + Sink> Stream for NimiqMessageStream<S>
     // FIXME: This implementation is inefficient as it tries to construct the nimiq message
     // everytime, it should cache the work already done and just do new work on each iteration
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        const MAX_CHUNK_SIZE: usize = 1024 * 16; // 16 kb
+        println!("Starting `poll()`");
 
         // First, lets get as many WebSocket messages as available and store them in the buffer
         loop {
@@ -78,13 +128,18 @@ impl<S: Stream + Sink> Stream for NimiqMessageStream<S>
                 Ok(Async::Ready(Some(m))) => self.buf.push(m),
                 Ok(Async::Ready(None)) => return Ok(Async::Ready(None)), // FIXME: first flush our buffer and _then_ signal that there will be no more messages available
                 Ok(Async::NotReady) => break,
-                Err(_) => return Err(NimiqMessageStreamError::WebSocketError),
+                Err(e) => {
+                    println!("Error condition: {:?}", e);
+                    return Err(NimiqMessageStreamError::WebSocketError(e))
+                    },
             }
         }
+        println!("made it after the polling of tungstenite");
 
         // If there are no web socket messages in the buffer, signal that we don't have anything yet
         // (i.e. we would need to block waiting, which is a no no in an async function)
         if self.buf.len() == 0 {
+            println!("There are no ws msgs yet, poll later");
             return Ok(Async::NotReady);
         }
 
@@ -95,6 +150,7 @@ impl<S: Stream + Sink> Stream for NimiqMessageStream<S>
 
         // Make sure the tag is the one we expect
         if self.processing_tag != ws_message.remove(0) {
+            println!("Tag mismatch!");
             return Err(NimiqMessageStreamError::TagMismatch);
         }
 
@@ -110,6 +166,8 @@ impl<S: Stream + Sink> Stream for NimiqMessageStream<S>
 
         // We have enough ws messages to create a nimiq message
         if msg_length < ((1 + self.buf.len()) * (MAX_CHUNK_SIZE + 1)) {
+            println!("We have enough ws msgs to create a Nimiq msg!");
+
             let mut binary_data = ws_message.clone(); // FIXME: clone is slow, fix the problem by figuring out how to do line 94 & 95 without borrow
             let mut remaining_length = msg_length - binary_data.len();
 
@@ -135,8 +193,11 @@ impl<S: Stream + Sink> Stream for NimiqMessageStream<S>
             self.processing_tag += 1;
             return Ok(Async::Ready(Some(nimiq_message)));
         } else {
+            println!("We don't have enough ws msgs yet, poll again later");
             return Ok(Async::NotReady);
         }
+        println!("This is the end");
+
     }
 }
 
@@ -164,9 +225,14 @@ impl<S: Stream + Sink, E> Future for ConnectAsync<S, E>
 
 /// Connect to a given URL.
 pub fn nimiq_connect_async(url: Url)
-                           -> ConnectAsync<WebSocketStream<MaybeTlsStream<TcpStream>>, WsError>
+                           -> ConnectAsync<WebSocketStream<MaybeTlsStream<TcpStream>>, io::Error>
 {
-    let connect = Box::new(connect_async(url).map(|(ws,_)| ws));
+    let connect = Box::new(
+        connect_async(url).map(|(ws,_)| ws).map_err(|e| {
+            println!("Error during the websocket handshake occurred: {}", e);
+            io::Error::new(io::ErrorKind::Other, e)
+        })
+    );
 
     ConnectAsync {inner: connect}
 }
