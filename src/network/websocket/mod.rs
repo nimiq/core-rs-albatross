@@ -54,7 +54,7 @@ impl<S: Stream + Sink> NimiqMessageStream<S>
 impl Sink for NimiqMessageStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
 {
     type SinkItem = NimiqMessage;
-    type SinkError = NimiqMessageStreamError;
+    type SinkError = ();
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
         // Save and increment tag. (TODO: what about locking?)
@@ -86,7 +86,7 @@ impl Sink for NimiqMessageStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
                     // We started to send some chunks, but now the queue is full:
                     AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(item)),
                 },
-                Err(error) => return Err(NimiqMessageStreamError::WebSocketError(error)),
+                Err(error) => return Err(()),
             };
 
             remaining -= chunk.len();
@@ -98,14 +98,14 @@ impl Sink for NimiqMessageStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
         match self.ws_socket.poll_complete() {
             Ok(async) => Ok(async),
-            Err(error) => Err(NimiqMessageStreamError::WebSocketError(error)),
+            Err(error) => Err(()),
         }
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
         match self.ws_socket.close() {
             Ok(async) => Ok(async),
-            Err(error) => Err(NimiqMessageStreamError::WebSocketError(error)),
+            Err(error) => Err(()),
         }
     }
 }
@@ -120,7 +120,7 @@ impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
     // FIXME: This implementation is inefficient as it tries to construct the nimiq message
     // everytime, it should cache the work already done and just do new work on each iteration
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        println!("Starting `poll()`");
+        // println!("Starting `poll()`");
 
         // First, lets get as many WebSocket messages as available and store them in the buffer
         loop {
@@ -134,7 +134,7 @@ impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
                     },
             }
         }
-        println!("made it after the polling of tungstenite");
+        // println!("made it after the polling of tungstenite");
 
         // If there are no web socket messages in the buffer, signal that we don't have anything yet
         // (i.e. we would need to block waiting, which is a no no in an async function)
@@ -168,7 +168,7 @@ impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
 
         // We have enough ws messages to create a nimiq message
         if msg_length < ((1 + self.buf.len()) * (MAX_CHUNK_SIZE + 1)) {
-            println!("We have enough ws msgs to create a Nimiq msg!");
+            // println!("We have enough ws msgs to create a Nimiq msg!");
 
             let mut binary_data = ws_message.clone(); // FIXME: clone is slow, fix the problem by figuring out how to do line 94 & 95 without borrow
             let mut remaining_length = msg_length - binary_data.len();
@@ -198,8 +198,6 @@ impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
             println!("We don't have enough ws msgs yet, poll again later");
             return Ok(Async::NotReady);
         }
-        println!("This is the end");
-
     }
 }
 

@@ -24,11 +24,13 @@ fn main() {
             let mut tag: u8 = 0;
             while MSGS.len() > tag as usize {
                 let msg = format!("{:02x}{}", tag, &MSGS[tag as usize]);
-                println!("msg: {}", msg);
+                // println!("msg: {}", msg);
                 let msg = hex_to_vec(msg);
                 let msg = tungstenite::Message::binary(msg);
                 websocket.write_message(msg).unwrap();
                 tag += 1;
+                let rx_msg = websocket.read_message();
+                println!("Got message type: {:?}", rx_msg);
             }
             websocket.close(None).expect("Problem when closing websocket");
         });
