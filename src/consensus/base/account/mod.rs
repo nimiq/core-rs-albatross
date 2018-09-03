@@ -23,7 +23,7 @@ pub enum AccountType {
     HTLC = 2,
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum Account {
     Basic(BasicAccount),
     Vesting(VestingContract),

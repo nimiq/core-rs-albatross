@@ -166,7 +166,7 @@ impl<'env> Accounts<'env> {
     fn prune_accounts(&self, txn: &mut WriteTransaction, body: &BlockBody) -> Result<(), AccountError> {
         let mut pruned_accounts: HashMap<Address, Account> = HashMap::new();
         for pruned_account in &body.pruned_accounts {
-            pruned_accounts.insert(pruned_account.address.clone(), pruned_account.account);
+            pruned_accounts.insert(pruned_account.address.clone(), pruned_account.account.clone());
         }
 
         for transaction in &body.transactions {
@@ -196,7 +196,7 @@ impl<'env> Accounts<'env> {
 
     fn restore_accounts(&self, txn: &mut WriteTransaction, body: &BlockBody) -> Result<(), AccountError> {
         for pruned_account in &body.pruned_accounts {
-            self.tree.put_batch(txn, &pruned_account.address, pruned_account.account);
+            self.tree.put_batch(txn, &pruned_account.address, pruned_account.account.clone());
         }
         return Ok(());
     }

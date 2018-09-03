@@ -2,12 +2,16 @@ use beserial::{Serialize, Deserialize};
 use consensus::base::transaction::Transaction;
 use super::{Account, AccountError};
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct HashedTimeLockedContract {
     pub balance: u64
 }
 
 impl HashedTimeLockedContract {
+    pub fn create(balance: u64, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+        unimplemented!();
+    }
+
     pub fn verify_incoming_transaction(transaction: &Transaction, block_height: u32) -> bool {
         // The contract creation transaction is the only valid incoming transaction.
         return transaction.recipient == transaction.contract_creation_address();
@@ -15,10 +19,6 @@ impl HashedTimeLockedContract {
 
     pub fn verify_outgoing_transaction(transaction: &Transaction, block_height: u32) -> bool {
         // TODO verify signature
-        unimplemented!();
-    }
-
-    pub fn create(balance: u64, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         unimplemented!();
     }
 

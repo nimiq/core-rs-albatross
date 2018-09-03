@@ -3,7 +3,7 @@ use super::AccountError;
 use super::super::transaction::Transaction;
 use consensus::base::account::Account;
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BasicAccount {
     pub balance: u64
 }
