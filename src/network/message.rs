@@ -76,7 +76,7 @@ pub enum Message {
 }
 
 impl Message {
-    fn ty(&self) -> MessageType {
+    pub fn ty(&self) -> MessageType {
         match self {
             Message::Version(_) => MessageType::Version,
             Message::Inv(_) => MessageType::Inv,

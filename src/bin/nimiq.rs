@@ -23,8 +23,8 @@ use nimiq::network::websocket::nimiq_connect_async;
 fn main() {
     let test: ConnectAsync<WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>, io::Error> = nimiq_connect_async(url::Url::parse("ws://127.0.0.1:8080").unwrap());
     let test = test.and_then(|msg_stream| {
-        let process_message = msg_stream.for_each(|_| {
-            println!("Got message!");
+        let process_message = msg_stream.for_each(|msg| {
+            println!("Got message type: {:?}", msg.ty());
             Ok(())
         });
         process_message.then(|_| Ok(()))

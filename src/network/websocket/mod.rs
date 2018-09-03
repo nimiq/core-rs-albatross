@@ -130,7 +130,7 @@ impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
                 Ok(Async::NotReady) => break,
                 Err(e) => {
                     println!("Error condition: {:?}", e);
-                    return Err(NimiqMessageStreamError::WebSocketError(e))
+                    return Err(NimiqMessageStreamError::WebSocketError(e)) // FIXME: first flush our buffer and _then_ signal that there was an error
                     },
             }
         }
@@ -149,7 +149,9 @@ impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
         let mut ws_message = self.buf.remove(0).into_data();
 
         // Make sure the tag is the one we expect
-        if self.processing_tag != ws_message.remove(0) {
+        let foo = ws_message.remove(0);
+        println!("tag: {}, foo.tag: {}", self.processing_tag, foo);
+        if self.processing_tag != foo {
             println!("Tag mismatch!");
             return Err(NimiqMessageStreamError::TagMismatch);
         }
