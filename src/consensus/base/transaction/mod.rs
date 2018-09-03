@@ -43,6 +43,13 @@ impl SignatureProof {
         return Address::from(merkle_root);
     }
 
+    pub fn is_signed_by(&self, address: &Address) -> bool {
+        return self.compute_signer() == *address;
+    }
+
+    pub fn verify(&self, data: &[u8]) -> bool {
+        return self.public_key.verify(&self.signature, data);
+    }
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
@@ -105,12 +112,19 @@ impl Transaction {
     }
 
     pub fn verify(&self) -> bool {
+        // TODO Check network id.
+
         // Check that sender != recipient.
         if self.recipient == self.sender {
             return false;
         }
 
-        // Verify value and fee don't overflow
+        // Check that value > 0.
+        if self.value == 0 {
+            return false;
+        }
+
+        // Check that value + fee doesn't overflow.
         let (sum, overflow) = self.value.overflowing_add(self.fee);
         if overflow
             // || sum > MAX_SUPPLY
@@ -118,11 +132,15 @@ impl Transaction {
                 return false;
             }
 
-        // Check account types valid
-        // TODO
+        // TODO Check account types valid?
 
-        // Verify transaction validity for account types
-        if !Account::verify_outgoing_transaction(self, -1) {
+        // Check transaction validity for sender account.
+        if !Account::verify_outgoing_transaction(&self) {
+            return false;
+        }
+
+        // Check transaction validity for recipient account.
+        if !Account::verify_incoming_transaction(&self) {
             return false;
         }
 

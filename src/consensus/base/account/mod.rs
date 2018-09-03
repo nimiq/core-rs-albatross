@@ -45,19 +45,19 @@ impl Account {
         };
     }
 
-    pub fn verify_incoming_transaction(account_type: AccountType, transaction: &Transaction, block_height: u32) -> bool {
-        return match account_type {
-            AccountType::Basic => BasicAccount::verify_incoming_transaction(transaction, block_height),
-            AccountType::Vesting => VestingContract::verify_incoming_transaction(transaction, block_height),
-            AccountType::HTLC => HashedTimeLockedContract::verify_incoming_transaction(transaction, block_height)
+    pub fn verify_incoming_transaction(transaction: &Transaction) -> bool {
+        return match transaction.recipient_type {
+            AccountType::Basic => BasicAccount::verify_incoming_transaction(transaction),
+            AccountType::Vesting => VestingContract::verify_incoming_transaction(transaction),
+            AccountType::HTLC => HashedTimeLockedContract::verify_incoming_transaction(transaction)
         }
     }
 
-    pub fn verify_outgoing_transaction(transaction: &Transaction, block_height: u32) -> bool {
+    pub fn verify_outgoing_transaction(transaction: &Transaction) -> bool {
         return match transaction.sender_type {
-            AccountType::Basic => BasicAccount::verify_outgoing_transaction(transaction, block_height),
-            AccountType::Vesting => VestingContract::verify_outgoing_transaction(transaction, block_height),
-            AccountType::HTLC => HashedTimeLockedContract::verify_outgoing_transaction(transaction, block_height)
+            AccountType::Basic => BasicAccount::verify_outgoing_transaction(transaction),
+            AccountType::Vesting => VestingContract::verify_outgoing_transaction(transaction),
+            AccountType::HTLC => HashedTimeLockedContract::verify_outgoing_transaction(transaction)
         }
     }
 

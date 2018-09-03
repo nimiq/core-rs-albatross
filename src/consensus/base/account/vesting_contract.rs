@@ -17,14 +17,14 @@ pub struct VestingContract {
 impl VestingContract {
     pub fn create(balance: u64, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         return match VestingContract::create_from_transaction(balance, transaction) {
-            Ok(contract) => Ok(contract),
+            Ok(account) => Ok(account),
             Err(_) => Err(AccountError("Failed to create vesting contract".to_string()))
         };
     }
 
     fn create_from_transaction(balance: u64, transaction: &Transaction) -> io::Result<Self> {
         let reader = &mut &transaction.data[..];
-        let owner = Address::deserialize(reader)?;
+        let owner = Deserialize::deserialize(reader)?;
 
         if transaction.data.len() == Address::SIZE + 4 {
             // Only block number: vest full amount at that block
@@ -54,7 +54,7 @@ impl VestingContract {
         return VestingContract { balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount };
     }
 
-    pub fn verify_incoming_transaction(transaction: &Transaction, block_height: u32) -> bool {
+    pub fn verify_incoming_transaction(transaction: &Transaction) -> bool {
         // The contract creation transaction is the only valid incoming transaction.
         if transaction.recipient != transaction.contract_creation_address() {
             return false;
@@ -65,10 +65,12 @@ impl VestingContract {
         return allowed_sizes.contains(&transaction.data.len());
     }
 
-    pub fn verify_outgoing_transaction(transaction: &Transaction, block_height: u32) -> bool {
-        let proof_buf = &mut &transaction.proof[..];
-        let signature_proof: SignatureProof = match Deserialize::deserialize(proof_buf) { Ok(v) => v, Err(e) => return false };
-        return signature_proof.public_key.verify(&signature_proof.signature, transaction.serialize_content().as_slice());
+    pub fn verify_outgoing_transaction(transaction: &Transaction) -> bool {
+        let signature_proof: SignatureProof = match Deserialize::deserialize(&mut &transaction.proof[..]) {
+            Ok(v) => v,
+            Err(e) => return false
+        };
+        return signature_proof.verify(transaction.serialize_content().as_slice());
     }
 
     fn with_balance(&self, balance: u64) -> Self {
@@ -92,9 +94,21 @@ impl VestingContract {
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         let balance: u64 = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
+
+        // Check vesting min cap.
         if balance < self.min_cap(block_height) {
             return Err(AccountError("Insufficient funds available".to_string()));
         }
+
+        // Check transaction signer is contract owner.
+        let signature_proof: SignatureProof = match Deserialize::deserialize(&mut &transaction.proof[..]) {
+            Ok(v) => v,
+            Err(e) => return Err(AccountError("Invalid proof".to_string()))
+        };
+        if !signature_proof.is_signed_by(&self.owner) {
+            return Err(AccountError("Invalid signer".to_string()));
+        }
+
         return Ok(self.with_balance(balance));
     }
 
