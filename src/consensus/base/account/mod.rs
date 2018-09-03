@@ -53,8 +53,8 @@ impl Account {
         }
     }
 
-    pub fn verify_outgoing_transaction(account_type: AccountType, transaction: &Transaction, block_height: u32) -> bool {
-        return match account_type {
+    pub fn verify_outgoing_transaction(transaction: &Transaction, block_height: u32) -> bool {
+        return match transaction.sender_type {
             AccountType::Basic => BasicAccount::verify_outgoing_transaction(transaction, block_height),
             AccountType::Vesting => VestingContract::verify_outgoing_transaction(transaction, block_height),
             AccountType::HTLC => HashedTimeLockedContract::verify_outgoing_transaction(transaction, block_height)

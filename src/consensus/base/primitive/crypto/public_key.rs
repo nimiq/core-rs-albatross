@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
 use std::io;
+use sha2;
 
 use ed25519_dalek;
 use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
-use sha2;
+use consensus::base::primitive::hash::{Hash, SerializeContent};
 
 use consensus::base::primitive::crypto::{PrivateKey, Signature};
 
@@ -73,3 +74,10 @@ impl Serialize for PublicKey {
         return PublicKey::SIZE;
     }
 }
+
+impl SerializeContent for PublicKey {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+}
+
+impl Hash for PublicKey { }
+

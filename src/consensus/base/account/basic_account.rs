@@ -2,6 +2,7 @@ use beserial::{Serialize, Deserialize};
 use super::AccountError;
 use super::super::transaction::Transaction;
 use consensus::base::account::Account;
+use consensus::base::transaction::SignatureProof;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BasicAccount {
@@ -14,8 +15,12 @@ impl BasicAccount {
     }
 
     pub fn verify_outgoing_transaction(transaction: &Transaction, block_height: u32) -> bool {
-        // TODO verify signature
-        unimplemented!();
+        let proof_buf = &mut &transaction.proof[..];
+        let signature_proof: SignatureProof = match Deserialize::deserialize(proof_buf) { Ok(v) => v, Err(e) => return false };
+        if signature_proof.compute_signer() != transaction.sender {
+            return false;
+        }
+        return signature_proof.public_key.verify(&signature_proof.signature, transaction.serialize_content().as_slice());
     }
 
     pub fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {

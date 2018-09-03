@@ -1,6 +1,6 @@
 use beserial::{Serialize, Deserialize};
 use consensus::base::primitive::Address;
-use consensus::base::transaction::Transaction;
+use consensus::base::transaction::{Transaction, SignatureProof};
 use super::{Account, AccountError};
 use std::io;
 
@@ -66,8 +66,9 @@ impl VestingContract {
     }
 
     pub fn verify_outgoing_transaction(transaction: &Transaction, block_height: u32) -> bool {
-        // TODO verify signature
-        unimplemented!();
+        let proof_buf = &mut &transaction.proof[..];
+        let signature_proof: SignatureProof = match Deserialize::deserialize(proof_buf) { Ok(v) => v, Err(e) => return false };
+        return signature_proof.public_key.verify(&signature_proof.signature, transaction.serialize_content().as_slice());
     }
 
     fn with_balance(&self, balance: u64) -> Self {

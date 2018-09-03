@@ -1,5 +1,5 @@
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
-use consensus::base::account::AccountType;
+use consensus::base::account::{Account, AccountType};
 use consensus::base::primitive::Address;
 use consensus::base::primitive::crypto::{PublicKey, Signature};
 use consensus::base::primitive::hash::{Hash, SerializeContent, Blake2bHash};
@@ -37,6 +37,12 @@ impl SignatureProof {
             signature,
         };
     }
+
+    pub fn compute_signer(&self) -> Address {
+        let merkle_root = self.merkle_path.compute_root(&self.public_key);
+        return Address::from(merkle_root);
+    }
+
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
@@ -116,7 +122,9 @@ impl Transaction {
         // TODO
 
         // Verify transaction validity for account types
-        // TODO
+        if !Account::verify_outgoing_transaction(self, -1) {
+            return false;
+        }
 
         return true;
     }
@@ -127,6 +135,21 @@ impl Transaction {
         let hash: Blake2bHash = tx.hash();
         return Address::from(hash);
     }
+
+    pub fn serialize_content(&self) -> Vec<u8> {
+        let mut res: Vec<u8> = self.data.serialize_to_vec::<u16>();
+        res.append(&mut self.sender.serialize_to_vec());
+        res.append(&mut self.sender_type.serialize_to_vec());
+        res.append(&mut self.recipient.serialize_to_vec());
+        res.append(&mut self.recipient_type.serialize_to_vec());
+        res.append(&mut self.value.serialize_to_vec());
+        res.append(&mut self.fee.serialize_to_vec());
+        res.append(&mut self.validity_start_height.serialize_to_vec());
+        res.append(&mut self.network_id.serialize_to_vec());
+        res.append(&mut self.flags.serialize_to_vec());
+        return res;
+    }
+
 }
 
 impl Serialize for Transaction {
