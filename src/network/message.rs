@@ -206,7 +206,7 @@ impl Serialize for Message {
         let mut v_crc = Vec::with_capacity(4);
         let crc32 = Crc32Computer::default().update(v.as_slice()).result().serialize(&mut v_crc);
         for i in 0..4 {
-            v[checksum_start + i] = v_crc[checksum_start + i];
+            v[checksum_start + i] = v_crc[i];
         }
 
         writer.write(v.as_slice())?;
