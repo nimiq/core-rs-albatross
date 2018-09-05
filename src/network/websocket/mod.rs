@@ -13,6 +13,8 @@ use tokio_tungstenite::connect_async;
 use std::io;
 use std;
 
+type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
+
 pub trait IntoData {
     fn into_data(self) -> Vec<u8>;
 }
@@ -29,21 +31,19 @@ pub enum NimiqMessageStreamError {
 }
 
 const MAX_CHUNK_SIZE: usize = 1024 * 16; // 16 kb
-pub struct NimiqMessageStream<S: Stream + Sink>
-    where S::Item: IntoData
+pub struct NimiqMessageStream
 {
-    ws_socket: S,
+    inner: WebSocketLayer,
     processing_tag: u8,
     sending_tag: u8,
-    buf: Vec<S::Item>,
+    buf: Vec<WebSocketMessage>,
 }
 
-impl<S: Stream + Sink> NimiqMessageStream<S>
-    where S::Item: IntoData
+impl NimiqMessageStream
 {
-    fn new(ws_socket: S) -> Self {
+    fn new(ws_socket: WebSocketLayer) -> Self {
         return NimiqMessageStream {
-            ws_socket,
+            inner: ws_socket,
             processing_tag: 0,
             sending_tag: 0,
             buf: Vec::with_capacity(64), // 1/10th of the max number of messages we would ever need to store
@@ -51,7 +51,7 @@ impl<S: Stream + Sink> NimiqMessageStream<S>
     }
 }
 
-impl Sink for NimiqMessageStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
+impl Sink for NimiqMessageStream
 {
     type SinkItem = NimiqMessage;
     type SinkError = ();
@@ -80,7 +80,7 @@ impl Sink for NimiqMessageStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
 
             buffer.extend(chunk);
 
-            match self.ws_socket.start_send(WebSocketMessage::binary(buffer)) {
+            match self.inner.start_send(WebSocketMessage::binary(buffer)) {
                 Ok(state) => match state {
                     AsyncSink::Ready => (),
                     // We started to send some chunks, but now the queue is full:
@@ -96,23 +96,21 @@ impl Sink for NimiqMessageStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        match self.ws_socket.poll_complete() {
+        match self.inner.poll_complete() {
             Ok(async) => Ok(async),
             Err(error) => Err(()),
         }
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
-        match self.ws_socket.close() {
+        match self.inner.close() {
             Ok(async) => Ok(async),
             Err(error) => Err(()),
         }
     }
 }
 
-impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
-    where S::Item: IntoData,
-    S::Error: std::fmt::Debug
+impl Stream for NimiqMessageStream
 {
     type Item = NimiqMessage;
     type Error = NimiqMessageStreamError;
@@ -124,7 +122,7 @@ impl<S: Stream<Error=WsError> + Sink> Stream for NimiqMessageStream<S>
 
         // First, lets get as many WebSocket messages as available and store them in the buffer
         loop {
-            match self.ws_socket.poll() {
+            match self.inner.poll() {
                 Ok(Async::Ready(Some(m))) => self.buf.push(m),
                 Ok(Async::Ready(None)) => return Ok(Async::Ready(None)), // FIXME: first flush our buffer and _then_ signal that there will be no more messages available
                 Ok(Async::NotReady) => break,
@@ -209,10 +207,9 @@ pub struct ConnectAsync<S: Stream + Sink, E>
     inner: Box<Future<Item = S, Error = E> + Send>,
 }
 
-impl<S: Stream + Sink, E> Future for ConnectAsync<S, E>
-    where S::Item: IntoData
+impl<E> Future for ConnectAsync<WebSocketLayer, E>
 {
-    type Item = NimiqMessageStream<S>;
+    type Item = NimiqMessageStream;
     type Error = E;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {

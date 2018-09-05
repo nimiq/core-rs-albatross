@@ -3,6 +3,7 @@ use tokio::prelude::{Stream,Sink};
 use network::message::Message;
 use network::websocket::IntoData;
 use futures::prelude::*;
+use tokio::prelude::stream::{SplitStream,SplitSink};
 use tokio::run;
 
 pub struct Session {}
@@ -15,21 +16,21 @@ impl Session {
 
 pub struct PeerInfo {}
 
-pub struct PeerChannel<S: Stream + Sink + Send + Sync>
-    where S::Item: IntoData + Send + Sync {
-    stream: NimiqMessageStream<S>,
-    session: Session,
-    peerInfo: PeerInfo,
+pub struct PeerSink {
+    
 }
 
-impl<S: Stream + Sink + Send + Sync> PeerChannel<S>
-    where S::Item: IntoData + Send + Sync {
-    pub fn new(stream: NimiqMessageStream<S>, peerInfo: PeerInfo) -> PeerChannel<S> {
+pub struct PeerStream {
+    stream: SplitStream<NimiqMessageStream>,
+    session: Session,
+}
+
+impl PeerStream {
+    pub fn new(stream: SplitStream<NimiqMessageStream>) -> PeerStream {
         let session = Session {};
-        PeerChannel {
+        PeerStream {
             stream,
             session,
-            peerInfo
         }
     }
 
