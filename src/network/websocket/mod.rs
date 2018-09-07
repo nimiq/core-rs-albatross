@@ -239,6 +239,14 @@ pub struct SharedNimiqMessageStream {
     inner: MultiLock<NimiqMessageStream>,
 }
 
+impl From<NimiqMessageStream> for SharedNimiqMessageStream {
+    fn from(stream: NimiqMessageStream) -> Self {
+        SharedNimiqMessageStream {
+            inner: MultiLock::new(stream),
+        }
+    }
+}
+
 impl Clone for SharedNimiqMessageStream {
     #[inline]
     fn clone(&self) -> Self {

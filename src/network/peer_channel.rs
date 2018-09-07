@@ -8,6 +8,7 @@ use tokio::run;
 use futures::sync::mpsc::*;
 use futures::stream::Forward;
 use network::websocket::NimiqMessageStreamError;
+use network::websocket::SharedNimiqMessageStream;
 
 pub struct Session {}
 
@@ -44,12 +45,12 @@ impl Clone for PeerSink {
 }
 
 pub struct PeerStream {
-    stream: SplitStream<NimiqMessageStream>,
+    stream: SharedNimiqMessageStream,
     session: Session,
 }
 
 impl PeerStream {
-    pub fn new(stream: SplitStream<NimiqMessageStream>) -> Self {
+    pub fn new(stream: SharedNimiqMessageStream) -> Self {
         let session = Session {};
         PeerStream {
             stream,
@@ -74,18 +75,18 @@ impl PeerStream {
 pub struct Network {
     peer_stream: PeerStream,
     peer_sink: PeerSink,
-    forward_future: Forward<UnboundedReceiver<Message>, SplitSink<NimiqMessageStream>>
+    forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>
 }
 
 impl Network {
     pub fn new(stream: NimiqMessageStream) -> Self {
-        let (sink, stream) = stream.split();
+        let shared_stream: SharedNimiqMessageStream = stream.into();
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
 
-        let forward_future = rx.forward(sink);
+        let forward_future = rx.forward(shared_stream.clone());
 
         Network {
-            peer_stream: PeerStream::new(stream),
+            peer_stream: PeerStream::new(shared_stream),
             peer_sink: PeerSink::new(tx),
             forward_future
         }
