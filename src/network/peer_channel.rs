@@ -6,6 +6,8 @@ use futures::prelude::*;
 use tokio::prelude::stream::{SplitStream,SplitSink};
 use tokio::run;
 use futures::sync::mpsc::*;
+use futures::stream::Forward;
+use network::websocket::NimiqMessageStreamError;
 
 pub struct Session {}
 
@@ -55,20 +57,23 @@ impl PeerStream {
         }
     }
 
-    pub fn run(&self) {
-//        let process_message = self.stream.for_each(move |msg| {
-//             self.session.on_message(msg);
-//             Ok(())
-//         });
+    pub fn run(self) -> impl Future<Item=(), Error=NimiqMessageStreamError> {
+        let stream = self.stream;
+        let session = self.session;
 
-        // run(process_message.map(|_| ()).map_err(|_| ()));
-        unimplemented!();
+        let process_message = stream.for_each(move |msg| {
+             session.on_message(msg);
+             Ok(())
+        });
+
+        process_message
     }
 }
 
 pub struct Network {
     peer_stream: PeerStream,
     peer_sink: PeerSink,
+    forward_future: Forward<UnboundedReceiver<Message>, SplitSink<NimiqMessageStream>>
 }
 
 impl Network {
@@ -76,12 +81,19 @@ impl Network {
         let (sink, stream) = stream.split();
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
 
-        // TODO: returned future is discarded right now...
-        rx.forward(sink);
+        let forward_future = rx.forward(sink);
 
         Network {
             peer_stream: PeerStream::new(stream),
             peer_sink: PeerSink::new(tx),
+            forward_future
         }
+    }
+
+    pub fn run(self) -> impl Future<Item=(), Error=()> {
+        let forward_future = self.forward_future;
+        let stream = self.peer_stream;
+        let pair = forward_future.join(stream.run().map_err(|_| ())); // TODO: throwing away error info here
+        pair.map(|_| ())
     }
 }
