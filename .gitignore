@@ -3,3 +3,4 @@
 **/*.rs.bk
 /.idea
 *.iml
+.DS_Store

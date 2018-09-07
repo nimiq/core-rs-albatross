@@ -62,8 +62,9 @@ impl PeerStream {
         let session = self.session;
 
         let process_message = stream.for_each(move |msg| {
-             session.on_message(msg);
-             Ok(())
+            // TODO: should we spawn a new task on tokio here already?
+            session.on_message(msg);
+            Ok(())
         });
 
         process_message

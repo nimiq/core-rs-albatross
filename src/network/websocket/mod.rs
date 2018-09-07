@@ -12,6 +12,7 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::connect_async;
 use std::io;
 use std;
+use utils::locking::MultiLock;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -232,4 +233,57 @@ pub fn nimiq_connect_async(url: Url)
     );
 
     ConnectAsync {inner: connect}
+}
+
+pub struct SharedNimiqMessageStream {
+    inner: MultiLock<NimiqMessageStream>,
+}
+
+impl Clone for SharedNimiqMessageStream {
+    #[inline]
+    fn clone(&self) -> Self {
+        SharedNimiqMessageStream {
+            inner: self.inner.clone()
+        }
+    }
+}
+
+impl Stream for SharedNimiqMessageStream {
+    type Item = NimiqMessage;
+    type Error = NimiqMessageStreamError;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        match self.inner.poll_lock() {
+            Async::Ready(mut inner) => inner.poll(),
+            Async::NotReady => Ok(Async::NotReady),
+        }
+    }
+}
+
+impl Sink for SharedNimiqMessageStream {
+    type SinkItem = NimiqMessage;
+    type SinkError = ();
+
+    fn start_send(&mut self, item: Self::SinkItem)
+                  -> StartSend<Self::SinkItem, Self::SinkError>
+    {
+        match self.inner.poll_lock() {
+            Async::Ready(mut inner) => inner.start_send(item),
+            Async::NotReady => Ok(AsyncSink::NotReady(item)),
+        }
+    }
+
+    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+        match self.inner.poll_lock() {
+            Async::Ready(mut inner) => inner.poll_complete(),
+            Async::NotReady => Ok(Async::NotReady),
+        }
+    }
+
+    fn close(&mut self) -> Poll<(), Self::SinkError> {
+        match self.inner.poll_lock() {
+            Async::Ready(mut inner) => inner.close(),
+            Async::NotReady => Ok(Async::NotReady),
+        }
+    }
 }
