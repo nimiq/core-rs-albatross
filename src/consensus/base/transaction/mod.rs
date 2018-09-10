@@ -7,6 +7,7 @@ use consensus::networks::NetworkId;
 use std::cmp::{Ord, Ordering};
 use std::io;
 use utils::merkle::Blake2bMerklePath;
+use consensus::base::primitive::coin::Coin;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -60,8 +61,8 @@ pub struct Transaction {
     pub sender_type: AccountType,
     pub recipient: Address,
     pub recipient_type: AccountType,
-    pub value: u64,
-    pub fee: u64,
+    pub value: Coin,
+    pub fee: Coin,
     pub validity_start_height: u32,
     pub network_id: NetworkId,
     pub flags: TransactionFlags,
@@ -69,7 +70,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn new_basic(sender: Address, recipient: Address, value: u64, fee: u64, validity_start_height: u32, network_id: NetworkId) -> Self {
+    pub fn new_basic(sender: Address, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
         return Transaction {
             data: Vec::new(),
             sender,
@@ -120,17 +121,15 @@ impl Transaction {
         }
 
         // Check that value > 0.
-        if self.value == 0 {
+        if self.value == Coin::ZERO {
             return false;
         }
 
         // Check that value + fee doesn't overflow.
-        let (sum, overflow) = self.value.overflowing_add(self.fee);
-        if overflow
-            // || sum > MAX_SUPPLY
-            {
-                return false;
-            }
+        // TODO also check max supply?
+        if let None = self.value + self.fee {
+            return false;
+        }
 
         // TODO Check account types valid?
 

@@ -5,16 +5,17 @@ use consensus::base::transaction::SignatureProof;
 use consensus::base::primitive::Address;
 use consensus::base::primitive::hash::{Hasher, Blake2bHash, Blake2bHasher, HashAlgorithm};
 use std::io;
+use consensus::base::primitive::coin::Coin;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct HashedTimeLockedContract {
-    pub balance: u64,
+    pub balance: Coin,
     pub sender: Address,
     pub recipient: Address,
     pub hash_root: Blake2bHash, // TODO add support for other hash algorithms
     pub hash_count: u8,
     pub timeout: u32,
-    pub total_amount: u64
+    pub total_amount: Coin
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -26,14 +27,14 @@ pub enum ProofType {
 }
 
 impl HashedTimeLockedContract {
-    pub fn create(balance: u64, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         return match HashedTimeLockedContract::create_from_transaction(balance, transaction) {
             Ok(account) => Ok(account),
             Err(_) => Err(AccountError("Failed to create HTLC".to_string()))
         };
     }
 
-    fn create_from_transaction(balance: u64, transaction: &Transaction) -> io::Result<Self> {
+    fn create_from_transaction(balance: Coin, transaction: &Transaction) -> io::Result<Self> {
         let reader = &mut &transaction.data[..];
 
         let sender: Address = Deserialize::deserialize(reader)?;
@@ -42,7 +43,7 @@ impl HashedTimeLockedContract {
         let hash_root = Deserialize::deserialize(reader)?;
         let hash_count = Deserialize::deserialize(reader)?;
         let timeout = Deserialize::deserialize(reader)?;
-        let total_amount = Deserialize::deserialize(reader)?;
+        let total_amount: Coin = Deserialize::deserialize(reader)?;
 
         if hash_count == 0 {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid hash_count"));
@@ -51,7 +52,7 @@ impl HashedTimeLockedContract {
         return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_root, hash_count, timeout, total_amount));
     }
 
-    fn new(balance: u64, sender: Address, recipient: Address, hash_root: Blake2bHash, hash_count: u8, timeout: u32, total_amount: u64) -> Self {
+    fn new(balance: Coin, sender: Address, recipient: Address, hash_root: Blake2bHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
         return HashedTimeLockedContract { balance, sender, recipient, hash_root, hash_count, timeout, total_amount };
     }
 
@@ -119,7 +120,7 @@ impl HashedTimeLockedContract {
         };
     }
 
-    fn with_balance(&self, balance: u64) -> Self {
+    fn with_balance(&self, balance: Coin) -> Self {
         return HashedTimeLockedContract {
             balance,
             sender: self.sender.clone(),
@@ -140,7 +141,7 @@ impl HashedTimeLockedContract {
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: u64 = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_sub(self.balance, (transaction.value + transaction.fee).unwrap())?;
 
         let verify = || -> io::Result<bool> {
             let proof_buf = &mut &transaction.proof[..];
@@ -171,8 +172,8 @@ impl HashedTimeLockedContract {
 
                     // Check min cap.
                     let cap_ratio = 1f64 - (hash_depth as f64 / self.hash_count as f64);
-                    let min_cap = (cap_ratio * self.total_amount as f64).floor().max(0f64) as u64;
-                    return Ok(balance >= min_cap);
+                    let min_cap = (cap_ratio * self.total_amount.0 as f64).floor().max(0f64) as u64;
+                    return Ok(balance >= Coin(min_cap));
                 },
                 ProofType::EarlyResolve => {
                     let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
@@ -195,7 +196,7 @@ impl HashedTimeLockedContract {
     }
 
     pub fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: u64 = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_add(self.balance, (transaction.value + transaction.fee).unwrap())?;
         return Ok(self.with_balance(balance));
     }
 }

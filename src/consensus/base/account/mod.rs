@@ -14,6 +14,7 @@ pub use self::basic_account::BasicAccount;
 pub use self::htlc_contract::HashedTimeLockedContract;
 pub use self::vesting_contract::VestingContract;
 pub use self::accounts::Accounts;
+use consensus::base::primitive::coin::Coin;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -31,13 +32,13 @@ pub enum Account {
 }
 
 impl Account {
-    const INITIAL: Account = Account::Basic(BasicAccount { balance: 0 });
+    const INITIAL: Account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 
-    pub fn new_basic(balance: u64) -> Account {
+    pub fn new_basic(balance: Coin) -> Account {
         return Account::Basic(BasicAccount { balance });
     }
 
-    pub fn new_contract(account_type: AccountType, balance: u64, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    pub fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         return match account_type {
             AccountType::Basic => Err(AccountError("Invalid contract type".to_string())),
             AccountType::Vesting => Ok(Account::Vesting(VestingContract::create(balance, transaction, block_height)?)),
@@ -81,7 +82,7 @@ impl Account {
         // Check account balance.
         // !!! This assumes that transaction.value + transaction.fee does not overflow. !!!
         let balance = self.balance();
-        if balance < transaction.value + transaction.fee {
+        if balance < (transaction.value + transaction.fee).unwrap() {
             return Err(AccountError("Insufficient funds".to_string()));
         }
 
@@ -108,7 +109,7 @@ impl Account {
         };
     }
 
-    pub fn balance(&self) -> u64 {
+    pub fn balance(&self) -> Coin {
         return match *self {
             Account::Basic(ref account) => account.balance,
             Account::Vesting(ref account) => account.balance,
@@ -117,30 +118,29 @@ impl Account {
     }
 
     pub fn is_initial(&self) -> bool {
-        if let Account::Basic(ref account) = *self {
-            return account.balance == 0;
-        } else {
-            return false;
-        }
+        return match *self {
+            Account::Basic(ref account) => account.balance == Coin::ZERO,
+            _ => false
+        };
     }
 
     pub fn is_to_be_pruned(&self) -> bool {
         return match *self {
             Account::Basic(_) => false,
-            Account::Vesting(ref account) => account.balance == 0,
-            Account::HTLC(ref account) => account.balance == 0
+            Account::Vesting(ref account) => account.balance == Coin::ZERO,
+            Account::HTLC(ref account) => account.balance == Coin::ZERO
         };
     }
 
-    pub fn balance_add(balance: u64, value: u64) -> Result<u64, AccountError> {
-        return match balance.checked_add(value) {
+    pub fn balance_add(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
+        return match balance + value {
             Some(result) => Ok(result),
             None => Err(AccountError("Balance overflow (add)".to_string()))
         };
     }
 
-    pub fn balance_sub(balance: u64, value: u64) -> Result<u64, AccountError> {
-        return match balance.checked_sub(value) {
+    pub fn balance_sub(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
+        return match balance - value {
             Some(result) => Ok(result),
             None => Err(AccountError("Balance overflow (sub)".to_string()))
         };

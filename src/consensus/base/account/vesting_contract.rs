@@ -3,26 +3,27 @@ use consensus::base::primitive::Address;
 use consensus::base::transaction::{Transaction, SignatureProof};
 use super::{Account, AccountError};
 use std::io;
+use consensus::base::primitive::coin::Coin;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct VestingContract {
-    pub balance: u64,
+    pub balance: Coin,
     pub owner: Address,
     pub vesting_start: u32,
     pub vesting_step_blocks: u32,
-    pub vesting_step_amount: u64,
-    pub vesting_total_amount: u64
+    pub vesting_step_amount: Coin,
+    pub vesting_total_amount: Coin
 }
 
 impl VestingContract {
-    pub fn create(balance: u64, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         return match VestingContract::create_from_transaction(balance, transaction) {
             Ok(account) => Ok(account),
             Err(_) => Err(AccountError("Failed to create vesting contract".to_string()))
         };
     }
 
-    fn create_from_transaction(balance: u64, transaction: &Transaction) -> io::Result<Self> {
+    fn create_from_transaction(balance: Coin, transaction: &Transaction) -> io::Result<Self> {
         let reader = &mut &transaction.data[..];
         let owner = Deserialize::deserialize(reader)?;
 
@@ -50,7 +51,7 @@ impl VestingContract {
         }
     }
 
-    fn new(balance: u64, owner: Address, vesting_start: u32, vesting_step_blocks: u32, vesting_step_amount: u64, vesting_total_amount: u64) -> Self {
+    fn new(balance: Coin, owner: Address, vesting_start: u32, vesting_step_blocks: u32, vesting_step_amount: Coin, vesting_total_amount: Coin) -> Self {
         return VestingContract { balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount };
     }
 
@@ -73,7 +74,7 @@ impl VestingContract {
         return signature_proof.verify(transaction.serialize_content().as_slice());
     }
 
-    fn with_balance(&self, balance: u64) -> Self {
+    fn with_balance(&self, balance: Coin) -> Self {
         return VestingContract {
             balance,
             owner: self.owner.clone(),
@@ -93,7 +94,7 @@ impl VestingContract {
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: u64 = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_sub(self.balance, (transaction.value + transaction.fee).unwrap())?;
 
         // Check vesting min cap.
         if balance < self.min_cap(block_height) {
@@ -113,17 +114,17 @@ impl VestingContract {
     }
 
     pub fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: u64 = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_add(self.balance, (transaction.value + transaction.fee).unwrap())?;
         return Ok(self.with_balance(balance));
     }
 
-    pub fn min_cap(&self, block_height: u32) -> u64 {
-        return if self.vesting_step_blocks > 0 && self.vesting_step_amount > 0 {
+    pub fn min_cap(&self, block_height: u32) -> Coin {
+        return if self.vesting_step_blocks > 0 && self.vesting_step_amount > Coin::ZERO {
             let steps = ((block_height - self.vesting_start) as f64 / self.vesting_step_blocks as f64).floor();
-            let min_cap = self.vesting_total_amount as f64 - steps * self.vesting_step_amount as f64;
-            min_cap.max(0f64) as u64
+            let min_cap = self.vesting_total_amount.0 as f64 - steps * self.vesting_step_amount.0 as f64;
+            Coin(min_cap.max(0f64) as u64)
         } else {
-            0u64
+            Coin::ZERO
         };
     }
 }

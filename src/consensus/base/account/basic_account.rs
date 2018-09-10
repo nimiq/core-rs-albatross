@@ -3,10 +3,11 @@ use super::AccountError;
 use super::super::transaction::Transaction;
 use consensus::base::account::Account;
 use consensus::base::transaction::SignatureProof;
+use consensus::base::primitive::coin::Coin;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BasicAccount {
-    pub balance: u64
+    pub balance: Coin
 }
 
 impl BasicAccount {
@@ -24,22 +25,22 @@ impl BasicAccount {
     }
 
     pub fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: u64 = Account::balance_add(self.balance, transaction.value)?;
+        let balance: Coin = Account::balance_add(self.balance, transaction.value)?;
         return Ok(BasicAccount { balance });
     }
 
     pub fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: u64 = Account::balance_sub(self.balance, transaction.value)?;
+        let balance: Coin = Account::balance_sub(self.balance, transaction.value)?;
         return Ok(BasicAccount { balance });
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: u64 = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_sub(self.balance, (transaction.value + transaction.fee).unwrap())?;
         return Ok(BasicAccount { balance });
     }
 
     pub fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: u64 = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_add(self.balance, (transaction.value + transaction.fee).unwrap())?;
         return Ok(BasicAccount { balance });
     }
 }

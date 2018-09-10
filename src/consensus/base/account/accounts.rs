@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use super::tree::AccountsTree;
 use utils::db;
 use utils::db::{Environment, ReadTransaction, WriteTransaction};
+use consensus::base::primitive::coin::Coin;
 
 #[derive(Debug)]
 pub struct Accounts<'env> {
@@ -111,17 +112,17 @@ impl<'env> Accounts<'env> {
         where F: Fn(Account, &Transaction, u32) -> Result<Account, AccountError> {
 
         // Sum up transaction fees.
-        let mut fees = 0;
+        let mut fees = policy::block_reward_at(block_height);
         for tx in &body.transactions {
-            fees += tx.fee;
+            fees = Account::balance_add(fees, tx.fee)?;
         }
 
         // "Coinbase" transaction.
         let coinbase_tx = Transaction::new_basic(
             Address::from([0u8; Address::SIZE]),
             body.miner.clone(),
-            fees + policy::block_reward_at(block_height),
-            0,
+            fees,
+            Coin::ZERO,
             block_height,
             NetworkId::Main, // XXX ignored
         );

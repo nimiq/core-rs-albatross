@@ -1,6 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use nimiq::consensus::base::account::AccountType;
 use nimiq::consensus::base::primitive::Address;
+use nimiq::consensus::base::primitive::coin::Coin;
 use nimiq::consensus::base::transaction::*;
 use nimiq::consensus::networks::NetworkId;
 use hex;
@@ -17,8 +18,8 @@ fn it_can_deserialize_extended_transaction() {
     assert_eq!(t.sender_type, AccountType::Basic);
     assert_eq!(t.recipient, Address::from(&hex::decode("ad25610feb43d75307763d3f010822a757027429").unwrap()[..]));
     assert_eq!(t.recipient_type, AccountType::Basic);
-    assert_eq!(t.value, 8000000000000);
-    assert_eq!(t.fee, 0);
+    assert_eq!(t.value, Coin(8000000000000));
+    assert_eq!(t.fee, Coin::ZERO);
     assert_eq!(t.validity_start_height, 79555);
     assert_eq!(t.network_id, NetworkId::Main);
     assert_eq!(t.flags, TransactionFlags::empty());
@@ -44,8 +45,8 @@ fn it_can_deserialize_basic_transaction() {
     assert_eq!(t.sender_type, AccountType::Basic);
     assert_eq!(t.recipient, Address::from(&hex::decode("754d1260f15bea0e8fb07ab18f45301483599e34").unwrap()[..]));
     assert_eq!(t.recipient_type, AccountType::Basic);
-    assert_eq!(t.value, 50000);
-    assert_eq!(t.fee, 138);
+    assert_eq!(t.value, Coin(50000));
+    assert_eq!(t.fee, Coin(138));
     assert_eq!(t.validity_start_height, 104000);
     assert_eq!(t.network_id, NetworkId::Dev);
     assert_eq!(t.flags, TransactionFlags::empty());

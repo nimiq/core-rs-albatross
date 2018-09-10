@@ -1,4 +1,6 @@
-pub fn block_reward_at(block_height: u32) -> u64 {
+use consensus::base::primitive::coin::Coin;
+
+pub fn block_reward_at(block_height: u32) -> Coin {
     // TODO
-    return 42;
+    return Coin(42);
 }
