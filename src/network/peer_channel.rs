@@ -1,10 +1,7 @@
 use network::websocket::NimiqMessageStream;
 use tokio::prelude::{Stream,Sink};
 use network::message::Message;
-use network::websocket::IntoData;
 use futures::prelude::*;
-use tokio::prelude::stream::{SplitStream,SplitSink};
-use tokio::run;
 use futures::sync::mpsc::*;
 use futures::stream::Forward;
 use network::websocket::NimiqMessageStreamError;
@@ -58,12 +55,11 @@ impl PeerStream {
         }
     }
 
-    pub fn run(self) -> impl Future<Item=(), Error=NimiqMessageStreamError> {
+    pub fn process_stream(self) -> impl Future<Item=(), Error=NimiqMessageStreamError> {
         let stream = self.stream;
         let session = self.session;
 
         let process_message = stream.for_each(move |msg| {
-            // TODO: should we spawn a new task on tokio here already?
             session.on_message(msg);
             Ok(())
         });
@@ -72,30 +68,38 @@ impl PeerStream {
     }
 }
 
-pub struct Network {
-    peer_stream: PeerStream,
+pub struct PeerConnection {
+    peer_stream: Option<PeerStream>,
     peer_sink: PeerSink,
-    forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>
+    stream: SharedNimiqMessageStream,
+    forward_future: Option<Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>>
 }
 
-impl Network {
+impl PeerConnection {
     pub fn new(stream: NimiqMessageStream) -> Self {
         let shared_stream: SharedNimiqMessageStream = stream.into();
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
 
-        let forward_future = rx.forward(shared_stream.clone());
+        let forward_future = Some(rx.forward(shared_stream.clone()));
 
-        Network {
-            peer_stream: PeerStream::new(shared_stream),
+        PeerConnection {
+            peer_stream: Some(PeerStream::new(shared_stream.clone())),
             peer_sink: PeerSink::new(tx),
-            forward_future
+            stream: shared_stream,
+            forward_future,
         }
     }
 
-    pub fn run(self) -> impl Future<Item=(), Error=()> {
-        let forward_future = self.forward_future;
-        let stream = self.peer_stream;
-        let pair = forward_future.join(stream.run().map_err(|_| ())); // TODO: throwing away error info here
+    pub fn process_connection(&mut self) -> impl Future<Item=(), Error=()> {
+        assert!(self.forward_future.is_some() && self.peer_stream.is_some(), "Process connection can only be called once!");
+
+        let forward_future = self.forward_future.take().unwrap();
+        let stream = self.peer_stream.take().unwrap();
+        let pair = forward_future.join(stream.process_stream().map_err(|_| ())); // TODO: throwing away error info here
         pair.map(|_| ())
+    }
+
+    pub fn close(&mut self) -> Poll<(), ()> {
+        self.stream.close()
     }
 }
