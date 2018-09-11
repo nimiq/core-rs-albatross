@@ -13,6 +13,8 @@ use tokio_tungstenite::connect_async;
 use std::io;
 use std;
 use utils::locking::MultiLock;
+use std::fmt::Debug;
+use std::fmt;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -200,6 +202,12 @@ impl Stream for NimiqMessageStream
     }
 }
 
+impl Debug for NimiqMessageStream {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "NimiqMessageStream {{}}")
+    }
+}
+
 /// Future returned from nimiq_connect_async() which will resolve
 /// once the tokio-tungstenite connection is established.
 pub struct ConnectAsync<S: Stream + Sink, E>
@@ -235,6 +243,7 @@ pub fn nimiq_connect_async(url: Url)
     ConnectAsync {inner: connect}
 }
 
+#[derive(Debug)]
 pub struct SharedNimiqMessageStream {
     inner: MultiLock<NimiqMessageStream>,
 }
