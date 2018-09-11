@@ -28,18 +28,46 @@ pub struct PeerAddress {
     services: u32,
     timestamp: u64,
     net_address: NetAddress,
-    public_key: Option<PublicKey>,
+    public_key: PublicKey,
     distance: u8,
     signature: Signature,
 }
 
 impl Serialize for PeerAddress {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
-        unimplemented!()
+        let mut size = 0;
+        size += self.ty.get_protocol().serialize(writer)?;
+        size += self.services.serialize(writer)?;
+        size += self.timestamp.serialize(writer)?;
+        size += self.net_address.serialize(writer)?;
+        size += self.public_key.serialize(writer)?;
+        size += self.distance.serialize(writer)?;
+        size += self.signature.serialize(writer)?;
+        size += match &self.ty {
+            PeerAddressType::Dumb => 0,
+            PeerAddressType::Ws(host, port) => host.serialize::<u16, W>(writer)? + port.serialize(writer)?,
+            PeerAddressType::Wss(host, port) => host.serialize::<u16, W>(writer)? + port.serialize(writer)?,
+            PeerAddressType::Rtc => 0
+        };
+        return Ok(size);
     }
 
     fn serialized_size(&self) -> usize {
-        unimplemented!()
+        let mut size = 0;
+        size += self.ty.get_protocol().serialized_size();
+        size += self.services.serialized_size();
+        size += self.timestamp.serialized_size();
+        size += self.net_address.serialized_size();
+        size += self.public_key.serialized_size();
+        size += self.distance.serialized_size();
+        size += self.signature.serialized_size();
+        size += match &self.ty {
+            PeerAddressType::Dumb => 0,
+            PeerAddressType::Ws(host, port) => host.serialized_size::<u16>() + port.serialized_size(),
+            PeerAddressType::Wss(host, port) => host.serialized_size::<u16>() + port.serialized_size(),
+            PeerAddressType::Rtc => 0
+        };
+        return size;
     }
 }
 
@@ -58,20 +86,17 @@ impl Deserialize for PeerAddress {
             Protocol::Wss => PeerAddressType::Wss(DeserializeWithLength::deserialize::<u16, R>(reader)?, Deserialize::deserialize(reader)?),
             Protocol::Rtc => PeerAddressType::Rtc
         };
-        return Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key: Some(public_key), distance, signature});
+        return Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key, distance, signature});
     }
 }
 
 impl PeerAddress {
     pub fn verify_signature(&self) -> bool {
-        self.public_key.unwrap().verify(&self.signature, self.get_signature_data().as_slice())
+        self.public_key.verify(&self.signature, self.get_signature_data().as_slice())
     }
 
     pub fn as_uri(&self) -> String {
-        let peer_id: String = match self.public_key {
-            Some(public_key) => String::from(::hex::encode(&PeerId::from(&public_key).0)),
-            None => String::from("")
-        };
+        let peer_id: String = String::from(::hex::encode(&PeerId::from(&self.public_key).0));
         match self.ty {
             PeerAddressType::Dumb => format!("dumb:///{}", peer_id),
             PeerAddressType::Ws(ref host, ref port) => format!("ws:///{}:{}/{}", host, port, peer_id),

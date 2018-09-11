@@ -239,34 +239,15 @@ impl Serialize for Message {
     }
 }
 
+create_typed_array!(ChallengeNonce, u8, 32);
+
+#[derive(Serialize, Deserialize)]
 pub struct VersionMessage {
     version: u32,
     peer_address: PeerAddress,
     genesis_hash: Blake2bHash,
     head_hash: Blake2bHash,
-    challenge_nonce: [u8; 32],
-}
-
-impl Deserialize for VersionMessage {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, io::Error> {
-        let version: u32 = Deserialize::deserialize(reader)?;
-        let peer_address: PeerAddress = Deserialize::deserialize(reader)?;
-        let genesis_hash: Blake2bHash = Deserialize::deserialize(reader)?;
-        let head_hash: Blake2bHash = Deserialize::deserialize(reader)?;
-        let mut challenge_nonce = [0u8; 32];
-        reader.read_exact(&mut challenge_nonce)?;
-        return Ok(VersionMessage { version, peer_address, genesis_hash, head_hash, challenge_nonce });
-    }
-}
-
-impl Serialize for VersionMessage {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
-        unimplemented!()
-    }
-
-    fn serialized_size(&self) -> usize {
-        unimplemented!()
-    }
+    challenge_nonce: ChallengeNonce,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]

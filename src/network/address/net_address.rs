@@ -11,6 +11,17 @@ pub enum NetAddress {
     Unknown,
 }
 
+impl NetAddress {
+    pub fn get_type(&self) -> NetAddressType {
+        return match self {
+            NetAddress::IPv4(_) => NetAddressType::IPv4,
+            NetAddress::IPv6(_) => NetAddressType::IPv6,
+            NetAddress::Unspecified => NetAddressType::Unspecified,
+            NetAddress::Unknown => NetAddressType::Unknown
+        };
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum NetAddressType {
@@ -34,10 +45,26 @@ impl Deserialize for NetAddress {
 
 impl Serialize for NetAddress {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
-        unimplemented!()
+        let mut size = 0;
+        size += self.get_type().serialize(writer)?;
+        size += match self {
+            NetAddress::IPv4(ipv4) => ipv4.serialize(writer)?,
+            NetAddress::IPv6(ipv6) => ipv6.serialize(writer)?,
+            NetAddress::Unspecified => 0,
+            NetAddress::Unknown => 0
+        };
+        return Ok(size);
     }
 
     fn serialized_size(&self) -> usize {
-        unimplemented!()
+        let mut size = 0;
+        size += self.get_type().serialized_size();
+        size += match self {
+            NetAddress::IPv4(ipv4) => ipv4.serialized_size(),
+            NetAddress::IPv6(ipv6) => ipv6.serialized_size(),
+            NetAddress::Unspecified => 0,
+            NetAddress::Unknown => 0
+        };
+        return size;
     }
 }
