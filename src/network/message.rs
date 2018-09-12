@@ -214,7 +214,7 @@ impl Serialize for Message {
     }
 
     fn serialized_size(&self) -> usize {
-        let mut size = 32 + 32 ; // magic
+        let mut size = 4 + 4 + 4; // magic + serialized_size + checksum
         size += self.ty().serialized_size();
         size += match self {
             Message::Version(version_message) => version_message.serialized_size(),
