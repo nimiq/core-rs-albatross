@@ -65,3 +65,32 @@ macro_rules! hash_typed_array {
         impl ::consensus::base::primitive::hash::Hash for $name {}
     };
 }
+
+macro_rules! add_hex_io_fns_typed_arr {
+    ($name: ident, $len: expr) => {
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                return f.write_str(&::hex::encode(&self.0));
+            }
+        }
+
+        impl ::std::str::FromStr for $name {
+            type Err = ::hex::FromHexError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                let vec = Vec::from_hex(s)?;
+                if vec.len() == $len {
+                    return Ok($name::from(&vec[..]));
+                } else {
+                    return Err(::hex::FromHexError::InvalidStringLength);
+                }
+            }
+        }
+
+        impl From<&'static str> for $name {
+            fn from(s: &'static str) -> Self {
+                return s.parse().unwrap();
+            }
+        }
+    };
+}

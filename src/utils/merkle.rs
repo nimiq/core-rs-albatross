@@ -1,8 +1,6 @@
-extern crate bit_vec;
-
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
 use consensus::base::primitive::hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
-use self::bit_vec::BitVec;
+use bit_vec::BitVec;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::error;

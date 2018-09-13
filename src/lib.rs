@@ -27,6 +27,7 @@ extern crate futures;
 extern crate tokio;
 extern crate tokio_tungstenite;
 extern crate tungstenite;
+extern crate bit_vec;
 
 #[macro_use]
 pub mod macros;
