@@ -27,7 +27,7 @@ pub fn compute_pbkdf2_sha512(password: &[u8], salt: &[u8], iterations: usize, de
         u.write(salt).map_err(|e| Pbkdf2Error::IOError(e))?;
         u.write_u32::<BigEndian>(i as u32).map_err(|e| Pbkdf2Error::IOError(e))?;
 
-        let mut t: [u8; SHA512_LENGTH] = compute_hmac_sha512(password, &u[..]).into();
+        let mut t: [u8; SHA512_LENGTH] = compute_hmac_sha512(password, u.as_slice()).into();
         let mut u = t;
         for j in 1..iterations {
             let tmp_hash =

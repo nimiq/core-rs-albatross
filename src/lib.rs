@@ -20,6 +20,9 @@ extern crate sha2;
 extern crate lmdb_zero;
 extern crate fs2;
 extern crate parking_lot;
+extern crate bit_vec;
+extern crate unicode_normalization;
+extern crate regex;
 
 extern crate url;
 extern crate byteorder;
@@ -27,7 +30,6 @@ extern crate futures;
 extern crate tokio;
 extern crate tokio_tungstenite;
 extern crate tungstenite;
-extern crate bit_vec;
 
 #[macro_use]
 pub mod macros;

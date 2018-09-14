@@ -6,6 +6,10 @@ use utils::bit_vec::IntoChunkedBitVecIterator;
 use std::fmt;
 use hex::FromHex;
 use std::str::FromStr;
+use consensus::base::primitive::hash::pbkdf2::Pbkdf2Error;
+use consensus::base::primitive::hash::pbkdf2::compute_pbkdf2_sha512;
+use utils::key_derivation::ExtendedPrivateKey;
+use unicode_normalization::UnicodeNormalization;
 
 /**
  * Our entropy implementation is fixed to 32 bytes.
@@ -168,6 +172,22 @@ impl Mnemonic {
             (true, true) => MnemonicType::UNKNOWN,
             (false, false) => MnemonicType::INVALID,
         }
+    }
+
+    pub (in super) fn to_seed(&self, password: Option<&str>) -> Result<Vec<u8>, Pbkdf2Error> {
+        let mnemonic: String = self.to_string();
+        let mnemonic: String = (&mnemonic).nfkd().collect();
+
+        let mut salt: String = "mnemonic".to_string();
+        if let Some(pw) = password {
+            salt.extend(pw.nfkd());
+        }
+
+        compute_pbkdf2_sha512(mnemonic.as_bytes(), salt.as_bytes(), 2048, 64)
+    }
+
+    pub fn to_master_key(&self, password: Option<&str>) -> Result<ExtendedPrivateKey, Pbkdf2Error> {
+        Ok(ExtendedPrivateKey::master_key_from_seed(self.to_seed(password)?))
     }
 }
 

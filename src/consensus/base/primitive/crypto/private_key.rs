@@ -1,7 +1,10 @@
 use ed25519_dalek;
 use rand::OsRng;
+use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
+use consensus::base::primitive::hash::{Hash, SerializeContent};
 
 use consensus::base::primitive::crypto::{PublicKey};
+use std::io;
 
 pub struct PrivateKey(pub(in super) ed25519_dalek::SecretKey);
 
@@ -38,3 +41,28 @@ impl Clone for PrivateKey {
         return PrivateKey(cloned_dalek);
     }
 }
+
+impl Deserialize for PrivateKey {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+        let mut buf = [0u8; PrivateKey::SIZE];
+        reader.read_exact(&mut buf)?;
+        return Ok(PrivateKey::from(&buf));
+    }
+}
+
+impl Serialize for PrivateKey {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+        writer.write(self.as_bytes())?;
+        return Ok(self.serialized_size());
+    }
+
+    fn serialized_size(&self) -> usize {
+        return PrivateKey::SIZE;
+    }
+}
+
+impl SerializeContent for PrivateKey {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+}
+
+impl Hash for PrivateKey { }
