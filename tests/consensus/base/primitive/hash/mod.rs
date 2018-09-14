@@ -1,4 +1,6 @@
-use nimiq::consensus::base::primitive::hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash};
+mod hmac;
+mod pbkdf2;
+use nimiq::consensus::base::primitive::hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash,Sha512Hasher,Sha512Hash};
 use std::io::Write;
 
 #[test]
@@ -34,4 +36,15 @@ fn it_can_compute_blake2b() {
     h.write(b"te").unwrap();
     h.write(b"st").unwrap();
     assert_eq!(h.finish(), Blake2bHash::from("928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202"));
+}
+
+#[test]
+fn it_can_compute_sha512() {
+    // sha512('test') = 'ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8a0e1d5f84f88bc887fd67b143732c304cc5fa9ad8e6f57f50028a8ff'
+
+    assert_eq!(Sha512Hasher::default().digest(b"test"), Sha512Hash::from("ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8a0e1d5f84f88bc887fd67b143732c304cc5fa9ad8e6f57f50028a8ff"));
+    let mut h = Sha512Hasher::default();
+    h.write(b"te").unwrap();
+    h.write(b"st").unwrap();
+    assert_eq!(h.finish(), Sha512Hash::from("ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8a0e1d5f84f88bc887fd67b143732c304cc5fa9ad8e6f57f50028a8ff"));
 }

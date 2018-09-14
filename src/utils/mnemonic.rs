@@ -1,7 +1,4 @@
 use utils::crc::Crc8Computer;
-use std::io;
-use std::fmt::Debug;
-use beserial::{Serialize, Deserialize};
 use consensus::base::primitive::hash::{Sha256Hasher, Hasher};
 use std::str;
 use bit_vec::BitVec;

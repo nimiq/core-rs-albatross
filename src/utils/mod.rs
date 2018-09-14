@@ -4,3 +4,4 @@ pub mod db;
 pub mod locking;
 pub mod mnemonic;
 pub mod bit_vec;
+pub mod key_derivation;

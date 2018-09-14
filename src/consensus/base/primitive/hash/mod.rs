@@ -1,11 +1,19 @@
+pub mod hmac;
+pub mod pbkdf2;
+pub mod sha512;
+
 use std::str;
 use hex::{FromHex};
 use blake2_rfc::blake2b::Blake2b;
 use libargon2_sys::argon2d_hash;
-use sha2::{Sha256,Digest};
+use sha2::{Sha256, Sha512, Digest};
 use beserial::{Serialize, Deserialize};
 use std::io;
 use std::fmt::Debug;
+use std::cmp::Ordering;
+use std::fmt::Error;
+use std::fmt::Formatter;
+pub use self::sha512::*;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -215,10 +223,17 @@ add_hash_trait_arr!([u8; 32]);
 add_hash_trait_arr!([u8; 64]);
 add_hash_trait_arr!([u8]);
 add_hash_trait_arr!(Vec<u8>);
+impl<'a> SerializeContent for &'a [u8] {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        writer.write(self)?;
+        Ok(self.len())
+    }
+}
+
 impl<'a> SerializeContent for &'a str {
     fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
         state.write(self.as_bytes())?;
-        return Ok(self.len())
+        Ok(self.len())
     }
 }
 
