@@ -1,4 +1,5 @@
 use nimiq::utils::mnemonic::*;
+use hex;
 
 struct TestVector {
     entropy: &'static str,
@@ -18,6 +19,8 @@ impl TestVector {
     fn entropy_len(&self) -> usize {
         self.entropy.len() / 2
     }
+
+    fn get_seed(&self) -> Vec<u8> { hex::decode(self.seed.unwrap()).unwrap() }
 }
 
 #[test]
@@ -154,6 +157,9 @@ fn it_correctly_computes_mnemonics() {
         let computed_entropy = mnemonic.to_entropy(WORDLIST_EN);
         assert!(computed_entropy.is_some(), "mnemonic.to_entropy yields None in test case {}", i);
         assert_eq!(mnemonic.to_entropy(WORDLIST_EN).unwrap(), entropy, "Invalid mnemonic.to_entropy in test case {}", i);
+        if vector.seed.is_some() {
+            assert_eq!(mnemonic.to_seed(Some("TREZOR")).unwrap(), vector.get_seed());
+        }
     }
 }
 

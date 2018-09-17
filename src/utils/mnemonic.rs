@@ -154,7 +154,7 @@ impl Mnemonic {
         Mnemonic::bits_to_entropy_generic(bits, true)
     }
 
-    /// Return the type of this Mnemonic.
+    /// Returns the type of this Mnemonic.
     pub fn get_type<'a>(&self, wordlist: Wordlist<'a>) -> MnemonicType {
         let bits = self.to_bits(wordlist);
 
@@ -174,7 +174,8 @@ impl Mnemonic {
         }
     }
 
-    pub (in super) fn to_seed(&self, password: Option<&str>) -> Result<Vec<u8>, Pbkdf2Error> {
+    /// Returns the seed for this mnemonic.
+    pub fn to_seed(&self, password: Option<&str>) -> Result<Vec<u8>, Pbkdf2Error> {
         let mnemonic: String = self.to_string();
         let mnemonic: String = (&mnemonic).nfkd().collect();
 
@@ -183,11 +184,14 @@ impl Mnemonic {
             salt.extend(pw.nfkd());
         }
 
+        println!("{} - {}", &mnemonic, &salt);
+
         compute_pbkdf2_sha512(mnemonic.as_bytes(), salt.as_bytes(), 2048, 64)
     }
 
+    /// Returns the corresponding master extended private key for this mnemonic.
     pub fn to_master_key(&self, password: Option<&str>) -> Result<ExtendedPrivateKey, Pbkdf2Error> {
-        Ok(ExtendedPrivateKey::master_key_from_seed(self.to_seed(password)?))
+        Ok(ExtendedPrivateKey::from_seed(self.to_seed(password)?))
     }
 }
 

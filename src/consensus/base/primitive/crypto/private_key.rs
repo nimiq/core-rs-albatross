@@ -5,6 +5,9 @@ use consensus::base::primitive::hash::{Hash, SerializeContent};
 
 use consensus::base::primitive::crypto::{PublicKey};
 use std::io;
+use std::fmt::Debug;
+use std::fmt::Error;
+use std::fmt::Formatter;
 
 pub struct PrivateKey(pub(in super) ed25519_dalek::SecretKey);
 
@@ -66,3 +69,17 @@ impl SerializeContent for PrivateKey {
 }
 
 impl Hash for PrivateKey { }
+
+impl Debug for PrivateKey {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "PrivateKey")
+    }
+}
+
+impl PartialEq for PrivateKey {
+    fn eq(&self, other: &PrivateKey) -> bool {
+        self.as_bytes() == other.as_bytes()
+    }
+}
+
+impl Eq for PrivateKey {}

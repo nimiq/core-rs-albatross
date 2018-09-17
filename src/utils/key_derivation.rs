@@ -7,36 +7,43 @@ use beserial::Serialize;
 use consensus::base::primitive::hash::Sha512Hash;
 use consensus::base::primitive::Address;
 use regex::Regex;
+use std::borrow::Cow;
 
-const CHAIN_CODE_SIZE: usize = 32;
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExtendedPrivateKey {
     key: PrivateKey,
-    chain_code: [u8; CHAIN_CODE_SIZE],
+    chain_code: [u8; ExtendedPrivateKey::CHAIN_CODE_SIZE],
 }
 
 /// This is the byte representation of "ed25519 seed".
 const B_CURVE: [u8; 12] = [101, 100, 50, 53, 53, 49, 57, 32, 115, 101, 101, 100];
 
 impl ExtendedPrivateKey {
-    pub (in super) fn master_key_from_seed(seed: Vec<u8>) -> Self {
+    pub const CHAIN_CODE_SIZE: usize = 32;
+
+    /// Returns the corresponding master extended private key for a seed.
+    pub fn from_seed(seed: Vec<u8>) -> Self {
         let hash = compute_hmac_sha512(&B_CURVE, seed.as_slice());
         ExtendedPrivateKey::from(hash)
     }
 
+    /// Checks whether a string is a valid derivation path.
     pub fn is_valid_path(path: &str) -> bool {
-        let re = Regex::new(r"^m(\/[0-9]+')*$").unwrap();
+        let re = Regex::new(r"^m(/[0-9]+')*$").unwrap();
         if !re.is_match(&path) {
             return false;
         }
 
         // Overflow check.
-        path.split("/").skip(1).all(|segment| u32::from_str_radix(segment, 10).is_ok())
+        path.split("/").skip(1).all(|segment| segment.trim_right_matches("'").parse::<u32>().is_ok())
     }
 
+    /// Converts a mnemonic into the corresponding master extended private key.
     pub fn from_mnemonic(mnemonic: &Mnemonic, password: Option<&str>) -> Result<Self, Pbkdf2Error> {
-        Ok(ExtendedPrivateKey::master_key_from_seed(mnemonic.to_seed(password)?))
+        Ok(ExtendedPrivateKey::from_seed(mnemonic.to_seed(password)?))
     }
 
+    /// Returns the derived extended private key at a given index.
     pub fn derive(&self, mut index: u32) -> Option<Self> {
         // Only hardened derivation is allowed for ed25519.
         if index < 0x80000000 {
@@ -52,27 +59,36 @@ impl ExtendedPrivateKey {
         Some(ExtendedPrivateKey::from(hash))
     }
 
+    /// Derives a key by path.
     pub fn derive_path(&self, path: &str) -> Option<Self> {
         if !ExtendedPrivateKey::is_valid_path(path) {
             return None;
         }
 
-        let mut derived_key: Option<ExtendedPrivateKey> = None;
+        let mut derived_key: Cow<ExtendedPrivateKey> = Cow::Borrowed(self);
         for segment in path.split("/").skip(1) {
-            if let Some(key) = derived_key {
-                derived_key = Some(key.derive(u32::from_str_radix(segment, 10).unwrap())?);
-            } else {
-                derived_key = Some(self.derive(u32::from_str_radix(segment, 10).unwrap())?);
-            }
+            derived_key = Cow::Owned(derived_key.derive(segment.trim_right_matches("'").parse::<u32>().unwrap())?);
         }
 
-        derived_key
+        Some(derived_key.into_owned())
     }
 
-    pub fn private_key(self) -> PrivateKey {
+    /// Returns a reference to the chain code slice.
+    pub fn get_chain_code(&self) -> &[u8] {
+        &self.chain_code
+    }
+
+    /// Converts the ExtendedPrivateKey format into a normal PrivateKey, loosing the ability for derivation.
+    pub fn into_private_key(self) -> PrivateKey {
         self.key
     }
 
+    /// Returns the public key for this private key.
+    pub fn to_public_key(&self) -> PublicKey {
+        PublicKey::from(&self.key)
+    }
+
+    /// Returns the public address for this private key.
     pub fn to_address(&self) -> Address {
         let pub_key = PublicKey::from(&self.key);
         Address::from(&pub_key)
@@ -84,7 +100,7 @@ impl From<Sha512Hash> for ExtendedPrivateKey {
         let mut private_key: [u8; PrivateKey::SIZE] = Default::default();
         private_key.copy_from_slice(&hash.as_bytes()[..32]);
 
-        let mut chain_code: [u8; CHAIN_CODE_SIZE] = Default::default();
+        let mut chain_code: [u8; ExtendedPrivateKey::CHAIN_CODE_SIZE] = Default::default();
         chain_code.copy_from_slice(&hash.as_bytes()[32..]);
 
         ExtendedPrivateKey {
@@ -96,12 +112,18 @@ impl From<Sha512Hash> for ExtendedPrivateKey {
 
 impl From<ExtendedPrivateKey> for PrivateKey {
     fn from(key: ExtendedPrivateKey) -> Self {
-        key.private_key()
+        key.into_private_key()
     }
 }
 
 impl<'a> From<&'a ExtendedPrivateKey> for Address {
     fn from(key: &'a ExtendedPrivateKey) -> Self {
         key.to_address()
+    }
+}
+
+impl<'a> From<&'a ExtendedPrivateKey> for PublicKey {
+    fn from(key: &'a ExtendedPrivateKey) -> Self {
+        key.to_public_key()
     }
 }
