@@ -30,6 +30,7 @@ lmdb-zero = "0.4.4"
 fs2 = "0.4.3"
 parking_lot = "0.6"
 unicode-normalization = "0.1.7"
+tempdir = "0.3"
 
 url = "1.7"
 tokio = "0.1"

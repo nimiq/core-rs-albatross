@@ -19,6 +19,21 @@ pub trait AsDatabaseKey {
     fn as_database_bytes(&self) -> Cow<[u8]>;
 }
 
+bitflags! {
+    #[derive(Default)]
+    pub struct DatabaseFlags: u32 {
+        /// Duplicate keys may be used in the database.
+        const DUPLICATE_KEYS        = 0b00000001;
+        /// This flag may only be used in combination with `DUPLICATE_KEYS`.
+        /// This option tells the database that the values for this database are all the same size.
+        const DUP_FIXED_SIZE_VALUES = 0b00000010;
+        /// Keys are binary integers in native byte order and will be sorted as such.
+        const USIZE_KEYS            = 0b00000100;
+        /// This option specifies that duplicate data items are binary integers, similar to `USIZE_KEYS` keys.
+        const DUP_USIZE_VALUES      = 0b00001000;
+    }
+}
+
 #[derive(Debug)]
 pub enum Environment {
     Volatile(volatile::VolatileEnvironment),
@@ -28,8 +43,15 @@ pub enum Environment {
 impl Environment {
     pub fn open_database(&self, name: String) -> Database {
         match *self {
-            Environment::Volatile(ref env) => { return Database::Volatile(env.open_database(name)); }
-            Environment::Persistent(ref env) => { return Database::Persistent(env.open_database(name)); }
+            Environment::Volatile(ref env) => { return Database::Volatile(env.open_database(name, Default::default())); }
+            Environment::Persistent(ref env) => { return Database::Persistent(env.open_database(name, Default::default())); }
+        }
+    }
+
+    pub fn open_database_with_flags(&self, name: String, flags: DatabaseFlags) -> Database {
+        match *self {
+            Environment::Volatile(ref env) => { return Database::Volatile(env.open_database(name, flags)); }
+            Environment::Persistent(ref env) => { return Database::Persistent(env.open_database(name, flags)); }
         }
     }
 
@@ -45,7 +67,7 @@ impl Environment {
 
 #[derive(Debug)]
 pub enum Database<'env> {
-    Volatile(volatile::VolatileDatabase),
+    Volatile(volatile::VolatileDatabase<'env>),
     Persistent(lmdb::LmdbDatabase<'env>),
 }
 

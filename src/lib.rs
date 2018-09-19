@@ -23,6 +23,7 @@ extern crate parking_lot;
 extern crate bit_vec;
 extern crate unicode_normalization;
 extern crate regex;
+extern crate tempdir;
 
 extern crate url;
 extern crate byteorder;

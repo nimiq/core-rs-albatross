@@ -10,7 +10,7 @@ fn it_can_put_and_get_a_balance() {
     let address = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
     let mut account = Account::Basic(BasicAccount { balance: 20 });
 
-    let env = VolatileEnvironment::new();
+    let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
     let mut txn = WriteTransaction::new(&env);
 
@@ -52,7 +52,7 @@ fn it_can_put_and_get_multiple_balances() {
     let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
     let account3 = Account::Basic(BasicAccount { balance: 55555555 });
 
-    let env = VolatileEnvironment::new();
+    let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
     let mut txn = WriteTransaction::new(&env);
 
@@ -83,7 +83,7 @@ fn it_is_invariant_to_history() {
     let account1 = Account::Basic(BasicAccount { balance: 5 });
     let account2 = Account::Basic(BasicAccount { balance: 55 });
 
-    let env = VolatileEnvironment::new();
+    let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
     let mut txn = WriteTransaction::new(&env);
 
@@ -112,7 +112,7 @@ fn it_is_invariant_to_insertion_order() {
 
     let empty_account = Account::Basic(BasicAccount { balance: 0 });
 
-    let env = VolatileEnvironment::new();
+    let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
     let mut txn = WriteTransaction::new(&env);
 
@@ -197,7 +197,7 @@ fn it_can_merge_nodes_while_pruning() {
 
     let empty_account = Account::Basic(BasicAccount { balance: 0 });
 
-    let env = VolatileEnvironment::new();
+    let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
     let mut txn = WriteTransaction::new(&env);
 

@@ -9,7 +9,7 @@ use nimiq::consensus::policy;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
-    let env = VolatileEnvironment::new();
+    let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(&env);
     let address_miner = Address::from([1u8; Address::SIZE]);
     let address_recipient = Address::from([2u8; Address::SIZE]);
@@ -71,7 +71,7 @@ fn it_can_deal_with_multiple_transactions_per_sender() {
 
 #[test]
 fn it_correctly_rewards_miners() {
-    let env = VolatileEnvironment::new();
+    let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(&env);
     let address_miner1 = Address::from([1u8; Address::SIZE]);
     let address_miner2 = Address::from([2u8; Address::SIZE]);
@@ -135,7 +135,7 @@ fn it_correctly_rewards_miners() {
 
 #[test]
 fn it_checks_for_sufficient_funds() {
-    let env = VolatileEnvironment::new();
+    let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(&env);
     let address_sender = Address::from([1u8; Address::SIZE]);
     let address_recipient = Address::from([2u8; Address::SIZE]);

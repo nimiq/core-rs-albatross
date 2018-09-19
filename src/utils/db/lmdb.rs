@@ -16,20 +16,24 @@ pub struct LmdbEnvironment {
 }
 
 impl LmdbEnvironment {
-    pub fn new(path: &str, size: usize, max_dbs: u32, flags: lmdb_zero::open::Flags) -> Environment {
+    pub fn new(path: &str, size: usize, max_dbs: u32, flags: lmdb_zero::open::Flags) -> Result<Environment, lmdb_zero::Error> {
+        return Ok(Environment::Persistent(LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?));
+    }
+
+    pub(in super) fn new_lmdb_environment(path: &str, size: usize, max_dbs: u32, flags: lmdb_zero::open::Flags) -> Result<Self, lmdb_zero::Error> {
         fs::create_dir_all(path).unwrap();
 
-        let mut env = lmdb_zero::EnvBuilder::new().unwrap();
-        env.set_maxdbs(max_dbs).unwrap();
+        let mut env = lmdb_zero::EnvBuilder::new()?;
+        env.set_maxdbs(max_dbs)?;
         let env = unsafe {
-            env.open(path, flags, 0o600).unwrap()
+            env.open(path, flags, 0o600)?
         };
 
-        let info = env.info().unwrap();
+        let info = env.info()?;
         let cur_mapsize = info.mapsize;
         if cur_mapsize < size {
-            unsafe { env.set_mapsize(size).unwrap() };
-            let info = env.info().unwrap();
+            unsafe { env.set_mapsize(size)? };
+            let info = env.info()?;
             let cur_mapsize = info.mapsize;
             info!("LMDB memory map size: {}", cur_mapsize);
         }
@@ -40,13 +44,31 @@ impl LmdbEnvironment {
             lmdb.do_resize(0);
         }
 
-        return Environment::Persistent(lmdb);
+        return Ok(lmdb);
     }
 
-    pub(in super) fn open_database<'env>(&'env self, name: String) -> LmdbDatabase<'env> {
+    pub(in super) fn open_database<'env>(&'env self, name: String, flags: DatabaseFlags) -> LmdbDatabase<'env> {
         // This is an implicit transaction, so take the lock first.
         let guard = self.creation_gate.read();
-        return LmdbDatabase { db: lmdb_zero::Database::open(&self.env, Some(&name), &lmdb_zero::DatabaseOptions::new(lmdb_zero::db::CREATE)).unwrap() };
+        let mut db_flags = lmdb_zero::db::CREATE;
+
+        // Translate flags.
+        if flags.contains(DatabaseFlags::DUPLICATE_KEYS) {
+            db_flags.insert(lmdb_zero::db::DUPSORT);
+
+            if flags.contains(DatabaseFlags::DUP_FIXED_SIZE_VALUES) {
+                db_flags.insert(lmdb_zero::db::DUPFIXED);
+            }
+
+            if flags.contains(DatabaseFlags::DUP_USIZE_VALUES) {
+                db_flags.insert(lmdb_zero::db::INTEGERDUP);
+            }
+        }
+        if flags.contains(DatabaseFlags::USIZE_KEYS) {
+            db_flags.insert(lmdb_zero::db::INTEGERKEY);
+        }
+
+        return LmdbDatabase { db: lmdb_zero::Database::open(&self.env, Some(&name), &lmdb_zero::DatabaseOptions::new(db_flags)).unwrap() };
     }
 
     pub(in super) fn drop_database(self) -> io::Result<()> {
@@ -206,7 +228,7 @@ mod tests {
 
     #[test]
     fn it_can_save_basic_objects() {
-        let env = LmdbEnvironment::new("./test", 0, 1, lmdb_zero::open::Flags::empty());
+        let env = LmdbEnvironment::new("./test", 0, 1, lmdb_zero::open::Flags::empty()).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -260,7 +282,7 @@ mod tests {
 
     #[test]
     fn isolation_test() {
-        let env = LmdbEnvironment::new("./test2", 0, 1, lmdb_zero::open::NOTLS);
+        let env = LmdbEnvironment::new("./test2", 0, 1, lmdb_zero::open::NOTLS).unwrap();
         {
             let db = env.open_database("test".to_string());
 
