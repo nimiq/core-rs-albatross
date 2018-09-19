@@ -2,17 +2,19 @@ pub mod hmac;
 pub mod pbkdf2;
 pub mod sha512;
 
-use std::str;
-use hex::{FromHex};
 use blake2_rfc::blake2b::Blake2b;
 use libargon2_sys::argon2d_hash;
 use sha2::{Sha256, Sha512, Digest};
 use beserial::{Serialize, Deserialize};
-use std::io;
-use std::fmt::Debug;
+use hex::FromHex;
+use utils::db::{AsDatabaseKey, FromDatabaseValue, IntoDatabaseValue};
+
+use std::borrow::Cow;
 use std::cmp::Ordering;
-use std::fmt::Error;
-use std::fmt::Formatter;
+use std::fmt::{Debug, Error, Formatter};
+use std::io;
+use std::str;
+
 pub use self::sha512::*;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -72,6 +74,9 @@ impl<H> SerializeContent for H where H: HashOutput {
 
 impl<H> Hash for H where H: HashOutput {}
 
+
+// Blake2b
+
 const BLAKE2B_LENGTH : usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2bHash, BLAKE2B_LENGTH);
@@ -116,6 +121,31 @@ impl Hasher for Blake2bHasher {
         return Blake2bHash::from(result.as_bytes());
     }
 }
+
+impl AsDatabaseKey for Blake2bHash {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        return Cow::Borrowed(&self.0);
+    }
+}
+
+impl IntoDatabaseValue for Blake2bHash {
+    fn database_byte_size(&self) -> usize {
+        return Self::len();
+    }
+
+    fn copy_into_database(&self, bytes: &mut [u8]) {
+        bytes.copy_from_slice(&self.0);
+    }
+}
+
+impl FromDatabaseValue for Blake2bHash {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+        return Ok(bytes.into());
+    }
+}
+
+
+// Argon2d
 
 const ARGON2D_LENGTH : usize = 32;
 const NIMIQ_ARGON2_SALT: &'static str = "nimiqrocks!";
@@ -173,6 +203,9 @@ impl Hasher for Argon2dHasher {
         return self.hash_bytes(self.buf.as_slice(), NIMIQ_ARGON2_SALT.as_bytes());
     }
 }
+
+
+// SHA256
 
 const SHA256_LENGTH : usize = 32;
 create_typed_array!(Sha256Hash, u8, SHA256_LENGTH);

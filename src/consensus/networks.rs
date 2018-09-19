@@ -1,5 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use consensus::base::block::{Block, BlockHeader, BlockInterlink};
+use consensus::base::primitive::hash::{Hash, Blake2bHash};
 use hex;
 use std::collections::HashMap;
 
@@ -18,6 +19,7 @@ pub struct NetworkInfo {
     pub name: String,
     pub seed_peers: Vec<String>, // FIXME
     pub genesis_block: Block,
+    pub genesis_hash: Blake2bHash,
     pub accounts: String, // FIXME
 }
 
@@ -47,6 +49,7 @@ lazy_static! {
                     interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                     body: None,
                 },
+                genesis_hash: hex::decode("264aaf8a4f9828a76c550635da078eb466306a189fcc03710bee9f649c869d12").unwrap()[..].into(),
                 accounts: String::new(),
             },
         );

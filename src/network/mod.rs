@@ -1,7 +1,10 @@
+pub use self::time::NetworkTime;
+
 pub mod address;
 pub mod message;
 pub mod websocket;
 pub mod peer_channel;
+pub mod time;
 
 use beserial::{Serialize, Deserialize};
 

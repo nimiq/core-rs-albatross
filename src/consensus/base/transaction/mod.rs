@@ -127,7 +127,7 @@ impl Transaction {
 
         // Check that value + fee doesn't overflow.
         // TODO also check max supply?
-        if let None = self.value + self.fee {
+        if (self.value + self.fee).is_none() {
             return false;
         }
 

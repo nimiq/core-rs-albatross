@@ -31,6 +31,9 @@ extern crate futures;
 extern crate tokio;
 extern crate tokio_tungstenite;
 extern crate tungstenite;
+extern crate num_traits;
+extern crate num_bigint;
+extern crate bigdecimal;
 
 #[macro_use]
 pub mod macros;

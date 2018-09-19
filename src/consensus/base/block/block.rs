@@ -1,8 +1,9 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize};
-use consensus::base::block::{BlockBody, BlockHeader, BlockInterlink};
+use consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target};
 use consensus::base::primitive::hash::{Blake2bHash, Hash};
 use consensus::networks::NetworkId;
 use std::io;
+use utils::db::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize)]
 pub struct Block {
@@ -92,5 +93,43 @@ impl Block {
 
         // Everything checks out.
         return true;
+    }
+
+    pub fn is_immediate_successor_of(&self, predecessor: &Block) -> bool {
+        // Check header.
+        if !self.header.is_immediate_successor_of(&predecessor.header) {
+            return false;
+        }
+
+        // Check that the interlink is correct.
+        let interlink = predecessor.get_next_interlink(self.header.n_bits.into());
+        if self.interlink != interlink {
+            return false;
+        }
+
+        // Everything checks out.
+        return true;
+    }
+
+    pub fn get_next_interlink(&self, next_target: Target) -> BlockInterlink {
+        unimplemented!();
+    }
+}
+
+
+impl IntoDatabaseValue for Block {
+    fn database_byte_size(&self) -> usize {
+        return self.serialized_size();
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl FromDatabaseValue for Block {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+        let mut cursor = io::Cursor::new(bytes);
+        return Deserialize::deserialize(&mut cursor);
     }
 }

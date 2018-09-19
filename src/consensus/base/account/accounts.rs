@@ -37,11 +37,29 @@ impl<'env> Accounts<'env> {
     }
 
     pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), AccountError> {
-        unimplemented!();
+        if block.body.is_none() {
+            return Err(AccountError("Cannot commit block without body".to_string()));
+        }
+
+        self.commit_block_body(txn, block.body.as_ref().unwrap(), block.header.height)?;
+
+        if block.header.accounts_hash != self.tree.root_hash(txn) {
+            return Err(AccountError("AccountsHash mismatch".to_string()));
+        }
+
+        return Ok(());
     }
 
     pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), AccountError> {
-        unimplemented!();
+        if block.body.is_none() {
+            return Err(AccountError("Cannot revert block without body".to_string()));
+        }
+
+        if block.header.accounts_hash != self.tree.root_hash(txn) {
+            return Err(AccountError("AccountsHash mismatch".to_string()));
+        }
+
+        return Ok(self.revert_block_body(txn, block.body.as_ref().unwrap(), block.header.height)?);
     }
 
     pub fn commit_block_body(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32) -> Result<(), AccountError> {

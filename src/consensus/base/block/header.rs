@@ -26,6 +26,27 @@ impl BlockHeader {
     pub(super) fn verify_proof_of_work(&self) -> bool {
         let pow: Argon2dHash = self.hash();
         let target: Target = self.n_bits.into();
-        return target.is_reached_by(&pow);
+        return target.is_met_by(&pow);
+    }
+
+    pub fn is_immediate_successor_of(&self, prev_header: &BlockHeader) -> bool {
+        // Check that the height is one higher than the previous height.
+        if self.height != prev_header.height + 1 {
+            return false;
+        }
+
+        // Check that the timestamp is greater or equal to the predecessor's timestamp.
+        if self.timestamp < prev_header.timestamp {
+            return false;
+        }
+
+        // Check that the hash of the predecessor block equals prevHash.
+        let prev_hash: Blake2bHash = prev_header.hash();
+        if self.prev_hash != prev_hash {
+            return false;
+        }
+
+        // Everything checks out.
+        return true;
     }
 }

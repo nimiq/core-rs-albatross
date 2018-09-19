@@ -73,6 +73,51 @@ primitive_serialize!(u16, 2, read_u16, write_u16);
 primitive_serialize!(u32, 4, read_u32, write_u32);
 primitive_serialize!(u64, 8, read_u64, write_u64);
 
+
+// Implementation for i8 and i16/32/64 (big endian)
+
+impl Deserialize for i8 {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self> {
+        return reader.read_i8();
+    }
+}
+
+impl Serialize for i8 {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize> {
+        writer.write_i8(*self)?;
+        return Ok(self.serialized_size());
+    }
+
+    fn serialized_size(&self) -> usize {
+        return 1;
+    }
+}
+
+primitive_serialize!(i16, 2, read_i16, write_i16);
+primitive_serialize!(i32, 4, read_i32, write_i32);
+primitive_serialize!(i64, 8, read_i64, write_i64);
+
+
+// Boolean
+
+impl Deserialize for bool {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self> {
+        return Ok(reader.read_u8()? != 0);
+    }
+}
+
+impl Serialize for bool {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize> {
+        writer.write_u8(if *self { 1u8 } else { 0u8 })?;
+        return Ok(self.serialized_size());
+    }
+
+    fn serialized_size(&self) -> usize {
+        return 1;
+    }
+}
+
+
 // String
 
 impl DeserializeWithLength for String {

@@ -9,11 +9,7 @@ impl Coin {
     pub const ZERO: Coin = Coin(0u64);
 
     // JavaScript Number.MAX_SAFE_INTEGER: 2^53 - 1
-    const MAX_SAFE_VALUE: u64 = 9007199254740991u64;
-
-    pub fn new(value: u64) -> Self {
-        Coin(value)
-    }
+    pub const MAX_SAFE_VALUE: u64 = 9007199254740991u64;
 }
 
 impl Add<Coin> for Coin {

@@ -9,6 +9,7 @@ use super::transaction::Transaction;
 use consensus::base::primitive::Address;
 use consensus::base::primitive::hash::{Hash, SerializeContent};
 use std::io;
+use std::fmt;
 
 pub use self::basic_account::BasicAccount;
 pub use self::htlc_contract::HashedTimeLockedContract;
@@ -221,3 +222,9 @@ impl Hash for PrunedAccount {}
 
 #[derive(Debug, Clone)]
 pub struct AccountError(String);
+
+impl fmt::Display for AccountError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        return write!(f, "{}", self.0);
+    }
+}
