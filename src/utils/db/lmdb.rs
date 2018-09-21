@@ -60,11 +60,11 @@ impl LmdbEnvironment {
                 db_flags.insert(lmdb_zero::db::DUPFIXED);
             }
 
-            if flags.contains(DatabaseFlags::DUP_USIZE_VALUES) {
+            if flags.contains(DatabaseFlags::DUP_UINT_VALUES) {
                 db_flags.insert(lmdb_zero::db::INTEGERDUP);
             }
         }
-        if flags.contains(DatabaseFlags::USIZE_KEYS) {
+        if flags.contains(DatabaseFlags::UINT_KEYS) {
             db_flags.insert(lmdb_zero::db::INTEGERKEY);
         }
 
@@ -162,10 +162,18 @@ impl<'env> LmdbReadTransaction<'env> {
         return LmdbReadTransaction { txn: lmdb_zero::ReadTransaction::new(&env.env).unwrap(), guard };
     }
 
-    pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseKey + ?Sized, V: FromDatabaseValue {
+    pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         let access = self.txn.access();
-        let result: Option<&[u8]> = access.get(&db.db, AsDatabaseKey::as_database_bytes(key).as_ref()).to_opt().unwrap();
+        let result: Option<&[u8]> = access.get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
         return Some(FromDatabaseValue::copy_from_database(result?).unwrap());
+    }
+
+    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbCursor<'txn, 'db> {
+        let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
+        LmdbCursor {
+            cursor,
+            txn: &self.txn,
+        }
     }
 }
 
@@ -190,14 +198,14 @@ impl<'env> LmdbWriteTransaction<'env> {
         return LmdbWriteTransaction { txn: lmdb_zero::WriteTransaction::new(&env.env).unwrap(), guard };
     }
 
-    pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseKey + ?Sized, V: FromDatabaseValue {
+    pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         let access = self.txn.access();
-        let result: Option<&[u8]> = access.get(&db.db, AsDatabaseKey::as_database_bytes(key).as_ref()).to_opt().unwrap();
+        let result: Option<&[u8]> = access.get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
         return Some(FromDatabaseValue::copy_from_database(result?).unwrap());
     }
 
-    pub(in super) fn put<K, V>(&mut self, db: &LmdbDatabase, key: &K, value: &V) where K: AsDatabaseKey + ?Sized, V: IntoDatabaseValue + ?Sized {
-        let key = AsDatabaseKey::as_database_bytes(key);
+    pub(in super) fn put_reserve<K, V>(&mut self, db: &LmdbDatabase, key: &K, value: &V) where K: AsDatabaseBytes + ?Sized, V: IntoDatabaseValue + ?Sized {
+        let key = AsDatabaseBytes::as_database_bytes(key);
         let value_size = IntoDatabaseValue::database_byte_size(value);
         unsafe {
             let mut access = self.txn.access();
@@ -206,19 +214,163 @@ impl<'env> LmdbWriteTransaction<'env> {
         }
     }
 
-    pub(in super) fn remove<K>(&mut self, db: &LmdbDatabase, key: &K) where K: AsDatabaseKey + ?Sized {
+    pub(in super) fn put<K, V>(&mut self, db: &LmdbDatabase, key: &K, value: &V) where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let value = AsDatabaseBytes::as_database_bytes(value);
         let mut access = self.txn.access();
-        access.del_key(&db.db, AsDatabaseKey::as_database_bytes(key).as_ref()).to_opt().unwrap();
+        access.put(&db.db, key.as_ref(), value.as_ref(), lmdb_zero::put::Flags::empty()).unwrap();
+    }
+
+    pub(in super) fn remove<K>(&mut self, db: &LmdbDatabase, key: &K) where K: AsDatabaseBytes + ?Sized {
+        let mut access = self.txn.access();
+        access.del_key(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
+    }
+
+    pub(in super) fn remove_item<K, V>(&mut self, db: &LmdbDatabase, key: &K, value: &V) where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
+        let mut access = self.txn.access();
+        access.del_item(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref(), AsDatabaseBytes::as_database_bytes(value).as_ref()).to_opt().unwrap();
     }
 
     pub(in super) fn commit(self) {
         self.txn.commit().unwrap();
+    }
+
+    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbCursor<'txn, 'db> {
+        let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
+        LmdbCursor {
+            cursor,
+            txn: &self.txn,
+        }
     }
 }
 
 impl<'env> fmt::Debug for LmdbWriteTransaction<'env> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "LmdbWriteTransaction {{ txn: {:?} }}", self.txn)
+    }
+}
+
+pub struct LmdbCursor<'txn, 'db> {
+    cursor: lmdb_zero::Cursor<'txn, 'db>,
+    txn: &'txn lmdb_zero::ConstTransaction<'txn>,
+}
+
+impl<'txn, 'db> LmdbCursor<'txn, 'db> {
+    pub(in super) fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.first(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<&[u8]> = self.cursor.first_dup(&access).to_opt().unwrap();
+        Some(FromDatabaseValue::copy_from_database(result?).unwrap())
+    }
+
+    pub(in super) fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.last(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<&[u8]> = self.cursor.last_dup(&access).to_opt().unwrap();
+        Some(FromDatabaseValue::copy_from_database(result?).unwrap())
+    }
+
+    pub(in super) fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let value = AsDatabaseBytes::as_database_bytes(value);
+        let result = self.cursor.seek_kv(key.as_ref(), value.as_ref());
+        result.is_ok()
+    }
+
+    pub(in super) fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let value = AsDatabaseBytes::as_database_bytes(value);
+        let access = self.txn.access();
+        let result: Option<&[u8]> = self.cursor.seek_k_nearest_v(&access, key.as_ref(), value.as_ref()).to_opt().unwrap();
+        Some(FromDatabaseValue::copy_from_database(result?).unwrap())
+    }
+
+    pub(in super) fn get_current<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.get_current(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn next<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.next(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn next_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.next_dup(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.next_nodup(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn prev<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.prev(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.prev_dup(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.prev_nodup(&access).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn seek_key<K, V>(&mut self, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let access = self.txn.access();
+        let result: Option<&[u8]> = self.cursor.seek_k(&access, key.as_ref()).to_opt().unwrap();
+        Some(FromDatabaseValue::copy_from_database(result?).unwrap())
+    }
+
+    pub(in super) fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.seek_k_both(&access, key.as_ref()).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+        let key = AsDatabaseBytes::as_database_bytes(key);
+        let access = self.txn.access();
+        let result: Option<(&[u8], &[u8])> = self.cursor.seek_range_k(&access, key.as_ref()).to_opt().unwrap();
+        let (key, value) = result?;
+        Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
+    }
+
+    pub(in super) fn count_duplicates(&mut self) -> usize {
+        self.cursor.count().unwrap()
     }
 }
 
@@ -243,10 +395,10 @@ mod tests {
             assert!(tx.get::<str, String>(&db, "test").is_none());
 
             // Write and read value.
-            tx.put(&db, "test", "one");
+            tx.put_reserve(&db, "test", "one");
             assert_eq!(tx.get::<str, String>(&db, "test"), Some("one".to_string()));
             // Overwrite and read value.
-            tx.put(&db, "test", "two");
+            tx.put_reserve(&db, "test", "two");
             assert_eq!(tx.get::<str, String>(&db, "test"), Some("two".to_string()));
             tx.commit();
 
@@ -269,7 +421,7 @@ mod tests {
 
             // Write and abort.
             let mut tx = WriteTransaction::new(&env);
-            tx.put(&db, "test", "one");
+            tx.put_reserve(&db, "test", "one");
             tx.abort();
 
             // Check aborted transaction.
@@ -293,7 +445,7 @@ mod tests {
             // WriteTransaction.
             let mut txw = WriteTransaction::new(&env);
             assert!(txw.get::<str, String>(&db, "test").is_none());
-            txw.put(&db, "test", "one");
+            txw.put_reserve(&db, "test", "one");
             assert_eq!(txw.get::<str, String>(&db, "test"), Some("one".to_string()));
 
             // ReadTransaction should still have the old state.
@@ -308,6 +460,115 @@ mod tests {
             // Have a new ReadTransaction read the new state.
             let tx2 = ReadTransaction::new(&env);
             assert_eq!(tx2.get::<str, String>(&db, "test"), Some("one".to_string()));
+        }
+
+        env.drop_database().unwrap();
+    }
+
+    #[test]
+    fn duplicates_test() {
+        let env = LmdbEnvironment::new("./test3", 0, 1, lmdb_zero::open::NOTLS).unwrap();
+        {
+            let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
+
+            // Write one value.
+            let mut txw = WriteTransaction::new(&env);
+            assert!(txw.get::<str, u32>(&db, "test").is_none());
+            txw.put::<str, u32>(&db, "test", &125);
+            assert_eq!(txw.get::<str, u32>(&db, "test"), Some(125));
+            txw.commit();
+
+            // Have a new ReadTransaction read the new state.
+            {
+                let tx = ReadTransaction::new(&env);
+                assert_eq!(tx.get::<str, u32>(&db, "test"), Some(125));
+            }
+
+            // Write a second smaller value.
+            let mut txw = WriteTransaction::new(&env);
+            assert_eq!(txw.get::<str, u32>(&db, "test"), Some(125));
+            txw.put::<str, u32>(&db, "test", &12);
+            assert_eq!(txw.get::<str, u32>(&db, "test"), Some(12));
+            txw.commit();
+
+            // Have a new ReadTransaction read the smaller value.
+            {
+                let tx = ReadTransaction::new(&env);
+                assert_eq!(tx.get::<str, u32>(&db, "test"), Some(12));
+            }
+
+            // Remove smaller value and write larger value.
+            let mut txw = WriteTransaction::new(&env);
+            assert_eq!(txw.get::<str, u32>(&db, "test"), Some(12));
+            txw.remove_item::<str, u32>(&db, "test", &12);
+            txw.put::<str, u32>(&db, "test", &5783);
+            assert_eq!(txw.get::<str, u32>(&db, "test"), Some(125));
+            txw.commit();
+
+            // Have a new ReadTransaction read the smallest value.
+            {
+                let tx = ReadTransaction::new(&env);
+                assert_eq!(tx.get::<str, u32>(&db, "test"), Some(125));
+            }
+
+            // Remove everything.
+            let mut txw = WriteTransaction::new(&env);
+            assert_eq!(txw.get::<str, u32>(&db, "test"), Some(125));
+            txw.remove::<str>(&db, "test");
+            assert!(txw.get::<str, u32>(&db, "test").is_none());
+            txw.commit();
+
+            // Have a new ReadTransaction read the new state.
+            {
+                let tx = ReadTransaction::new(&env);
+                assert!(tx.get::<str, u32>(&db, "test").is_none());
+            }
+        }
+
+        env.drop_database().unwrap();
+    }
+
+    #[test]
+    fn cursor_test() {
+        let env = LmdbEnvironment::new("./test4", 0, 1, lmdb_zero::open::NOTLS).unwrap();
+        {
+            let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
+
+            let test1: String = "test1".to_string();
+            let test2: String = "test2".to_string();
+
+            // Write some values.
+            let mut txw = WriteTransaction::new(&env);
+            assert!(txw.get::<str, u32>(&db, "test").is_none());
+            txw.put::<str, u32>(&db, "test1", &125);
+            txw.put::<str, u32>(&db, "test1", &12);
+            txw.put::<str, u32>(&db, "test1", &5783);
+            txw.put::<str, u32>(&db, "test2", &5783);
+            txw.commit();
+
+            // Have a new ReadTransaction read the new state.
+            let tx = ReadTransaction::new(&env);
+            let mut cursor = tx.cursor(&db);
+            assert_eq!(cursor.first::<String, u32>(), Some((test1.clone(), 12)));
+            assert_eq!(cursor.last::<String, u32>(), Some((test2.clone(), 5783)));
+            assert_eq!(cursor.prev::<String, u32>(), Some((test1.clone(), 5783)));
+            assert_eq!(cursor.first_duplicate::<u32>(), Some(12));
+            assert_eq!(cursor.next_duplicate::<String, u32>(), Some((test1.clone(), 125)));
+            assert_eq!(cursor.prev_duplicate::<String, u32>(), Some((test1.clone(), 12)));
+            assert_eq!(cursor.next_no_duplicate::<String, u32>(), Some((test2.clone(), 5783)));
+            assert!(cursor.seek_key::<str, u32>("test").is_none());
+            assert_eq!(cursor.seek_key::<str, u32>("test1"), Some(12));
+            assert_eq!(cursor.count_duplicates(), 3);
+            assert_eq!(cursor.last_duplicate::<u32>(), Some(5783));
+//            assert_eq!(cursor.seek_key_both::<String, u32>(&test1), Some((test1.clone(), 12)));
+            assert!(!cursor.seek_key_value::<str, u32>("test1", &15));
+            assert!(cursor.seek_key_value::<str, u32>("test1", &125));
+            assert_eq!(cursor.get_current::<String, u32>(), Some((test1.clone(), 125)));
+            assert_eq!(cursor.seek_key_nearest_value::<str, u32>("test1", &126), Some(5783));
+            assert_eq!(cursor.get_current::<String, u32>(), Some((test1.clone(), 5783)));
+            assert!(cursor.prev_no_duplicate::<String, u32>().is_none());
+            assert_eq!(cursor.next::<String, u32>(), Some((test2.clone(), 5783)));
+//            assert_eq!(cursor.seek_range_key::<String, u32>("test"), Some((test1.clone(), 12)));
         }
 
         env.drop_database().unwrap();

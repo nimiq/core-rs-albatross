@@ -18,7 +18,7 @@ impl<'env> AccountsTree<'env> {
         let mut txn = WriteTransaction::new(env);
         if tree.get_root(&txn).is_none() {
             let root = AddressNibbles::empty();
-            txn.put(&tree.db, &root, &AccountsTreeNode::new_branch(root.clone(), NO_CHILDREN));
+            txn.put_reserve(&tree.db, &root, &AccountsTreeNode::new_branch(root.clone(), NO_CHILDREN));
         }
         txn.commit();
         return tree;
@@ -48,13 +48,13 @@ impl<'env> AccountsTree<'env> {
         if common_prefix.len() != node_prefix.len() {
             // Insert the new account node.
             let new_child = AccountsTreeNode::new_terminal(prefix, account);
-            txn.put(&self.db, new_child.prefix(), &new_child);
+            txn.put_reserve(&self.db, new_child.prefix(), &new_child);
 
             // Insert the new parent node.
             let new_parent = AccountsTreeNode::new_branch(common_prefix, NO_CHILDREN)
                 .with_child(&node_prefix, Blake2bHash::default()).unwrap()
                 .with_child(new_child.prefix(), Blake2bHash::default()).unwrap();
-            txn.put(&self.db, new_parent.prefix(), &new_parent);
+            txn.put_reserve(&self.db, new_parent.prefix(), &new_parent);
 
             return self.update_keys_batch(txn, new_parent.prefix().clone(), root_path);
         }
@@ -75,7 +75,7 @@ impl<'env> AccountsTree<'env> {
             // Update the account.
             let node: AccountsTreeNode = txn.get(&self.db, &node_prefix).unwrap();
             let node = node.with_account(account).unwrap();
-            txn.put(&self.db, node.prefix(), &node);
+            txn.put_reserve(&self.db, node.prefix(), &node);
 
             return self.update_keys_batch(txn, node_prefix, root_path);
         }
@@ -90,9 +90,9 @@ impl<'env> AccountsTree<'env> {
 
         // If no matching child exists, add a new child account node to the current node.
         let child = AccountsTreeNode::new_terminal(prefix, account);
-        txn.put(&self.db, child.prefix(), &child);
+        txn.put_reserve(&self.db, child.prefix(), &child);
         let node = node.with_child(child.prefix(), Blake2bHash::default()).unwrap();
-        txn.put(&self.db, node.prefix(), &node);
+        txn.put_reserve(&self.db, node.prefix(), &node);
 
         return self.update_keys_batch(txn, node_prefix, root_path);
     }
@@ -117,7 +117,7 @@ impl<'env> AccountsTree<'env> {
                 // Otherwise, if the node has children left, update it and all keys on the
                 // remaining root path. Pruning finished.
                 // XXX Special case: We start with an empty root node. Don't delete it.
-                txn.put(&self.db, node.prefix(), &node);
+                txn.put_reserve(&self.db, node.prefix(), &node);
                 return self.update_keys_batch(txn, node_prefix.clone(), root_path);
             }
 
@@ -131,7 +131,7 @@ impl<'env> AccountsTree<'env> {
         let mut tmp_prefix = prefix;
         while let Some(node) = root_path.pop() {
             let node = node.with_child(&tmp_prefix, Blake2bHash::default()).unwrap();
-            txn.put(&self.db, node.prefix(), &node);
+            txn.put_reserve(&self.db, node.prefix(), &node);
             tmp_prefix = node.prefix().clone(); // TODO: can we get rid of the clone here?
         }
     }
@@ -153,7 +153,7 @@ impl<'env> AccountsTree<'env> {
                 child.hash = self.update_hashes(txn, &(node_key + &child.suffix));
             }
         }
-        txn.put(&self.db, node.prefix(), &node);
+        txn.put_reserve(&self.db, node.prefix(), &node);
         return node.hash();
     }
 

@@ -9,7 +9,7 @@ use std::io;
 use std::cmp;
 use std::borrow::Cow;
 use hex;
-use utils::db::AsDatabaseKey;
+use utils::db::AsDatabaseBytes;
 
 // Stores a compact representation of length nibbles.
 // Each u8 stores up to 2 nibbles.
@@ -245,7 +245,7 @@ impl Deserialize for AddressNibbles {
     }
 }
 
-impl AsDatabaseKey for AddressNibbles {
+impl AsDatabaseBytes for AddressNibbles {
     fn as_database_bytes(&self) -> Cow<[u8]> {
         // TODO: Improve AddressNibbles, so that no serialization is needed.
         let v = Serialize::serialize_to_vec(&self);
