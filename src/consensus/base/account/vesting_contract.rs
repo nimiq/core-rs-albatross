@@ -94,7 +94,7 @@ impl VestingContract {
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_sub(self.balance, (transaction.value + transaction.fee).unwrap())?;
+        let balance: Coin = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
 
         // Check vesting min cap.
         if balance < self.min_cap(block_height) {
@@ -114,15 +114,15 @@ impl VestingContract {
     }
 
     pub fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_add(self.balance, (transaction.value + transaction.fee).unwrap())?;
+        let balance: Coin = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
         return Ok(self.with_balance(balance));
     }
 
     pub fn min_cap(&self, block_height: u32) -> Coin {
         return if self.vesting_step_blocks > 0 && self.vesting_step_amount > Coin::ZERO {
             let steps = ((block_height - self.vesting_start) as f64 / self.vesting_step_blocks as f64).floor();
-            let min_cap = self.vesting_total_amount.0 as f64 - steps * self.vesting_step_amount.0 as f64;
-            Coin(min_cap.max(0f64) as u64)
+            let min_cap = u64::from(self.vesting_total_amount) as f64 - steps * u64::from(self.vesting_step_amount) as f64;
+            Coin::from(min_cap.max(0f64) as u64)
         } else {
             Coin::ZERO
         };

@@ -35,7 +35,7 @@ fn it_can_commit_and_revert_a_block_body() {
     let tx = Transaction::new_basic(
         address_miner.clone(),
         address_recipient.clone(),
-        Coin(10),
+        10.into(),
         Coin::ZERO,
         1,
         NetworkId::Main
@@ -49,9 +49,9 @@ fn it_can_commit_and_revert_a_block_body() {
         txn.commit();
     }
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin(10));
+    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::from(10));
     assert_eq!(accounts.get(&address_miner, None).balance(),
-               Coin(policy::block_reward_at(1).0 + policy::block_reward_at(2).0 - 10));
+               policy::block_reward_at(1) + policy::block_reward_at(2) - Coin::from(10));
     assert_ne!(hash1, accounts.hash(None));
 
     {
@@ -96,10 +96,10 @@ fn it_correctly_rewards_miners() {
 
     assert_eq!(accounts.get(&address_miner1, None).balance(), policy::block_reward_at(1));
 
-    let value1 = Coin(5);
-    let fee1 = Coin(3);
-    let value2 = Coin(7);
-    let fee2 = Coin(11);
+    let value1 = Coin::from(5);
+    let fee1 = Coin::from(3);
+    let value2 = Coin::from(7);
+    let fee2 = Coin::from(11);
     let tx1 = Transaction::new_basic(
         address_miner1.clone(),
         address_recipient1.clone(),
@@ -128,8 +128,8 @@ fn it_correctly_rewards_miners() {
         txn.commit();
     }
 
-    assert_eq!(accounts.get(&address_miner1, None).balance(), Coin(policy::block_reward_at(2).0 - value1.0 - fee1.0 - value2.0 - fee2.0));
-    assert_eq!(accounts.get(&address_miner2, None).balance(), Coin(policy::block_reward_at(2).0 + fee1.0 + fee2.0));
+    assert_eq!(accounts.get(&address_miner1, None).balance(), policy::block_reward_at(2) - value1 - fee1 - value2 - fee2);
+    assert_eq!(accounts.get(&address_miner2, None).balance(), policy::block_reward_at(2) + fee1 + fee2);
     assert_eq!(accounts.get(&address_recipient1, None).balance(), value1);
     assert_eq!(accounts.get(&address_recipient2, None).balance(), value2);
 }
@@ -144,7 +144,7 @@ fn it_checks_for_sufficient_funds() {
     let mut tx = Transaction::new_basic(
         address_sender.clone(),
         address_recipient.clone(),
-        Coin(10),
+        10.into(),
         Coin::ZERO,
         1,
         NetworkId::Main
@@ -186,7 +186,7 @@ fn it_checks_for_sufficient_funds() {
     assert_ne!(hash1, hash2);
 
     // Single transaction exceeding funds.
-    tx.value = (policy::block_reward_at(1) + Coin(10)).unwrap();
+    tx.value = policy::block_reward_at(1) + Coin::from(10);
     body.transactions = vec![tx.clone()];
 
     {
@@ -199,9 +199,9 @@ fn it_checks_for_sufficient_funds() {
     assert_eq!(hash2, accounts.hash(None));
 
     // Multiple transactions exceeding funds.
-    tx.value = Coin(policy::block_reward_at(1).0 / 2 + 10);
+    tx.value = Coin::from(u64::from(policy::block_reward_at(1)) / 2 + 10);
     let mut tx2 = tx.clone();
-    tx2.value = Coin(tx2.value.0 + 10);
+    tx2.value = tx2.value + Coin::from(10);
     body.transactions = vec![tx, tx2];
 
     {

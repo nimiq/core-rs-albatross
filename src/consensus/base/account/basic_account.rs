@@ -35,12 +35,12 @@ impl BasicAccount {
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_sub(self.balance, (transaction.value + transaction.fee).unwrap())?;
+        let balance: Coin = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
         return Ok(BasicAccount { balance });
     }
 
     pub fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_add(self.balance, (transaction.value + transaction.fee).unwrap())?;
+        let balance: Coin = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
         return Ok(BasicAccount { balance });
     }
 }

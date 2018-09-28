@@ -1,8 +1,10 @@
+use bigdecimal::BigDecimal;
 use consensus::base::account::Accounts;
 use consensus::base::block::{Block, Target, TargetCompact};
 use consensus::base::blockchain::{ChainData, ChainStore};
 use consensus::base::primitive::hash::{Hash, Blake2bHash};
 use consensus::networks::{NetworkId, get_network_info};
+use consensus::policy;
 use network::NetworkTime;
 use utils::db::{Environment, ReadTransaction, WriteTransaction};
 
@@ -110,7 +112,7 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         }
 
         // Check that the difficulty is correct.
-        let next_target = self.get_next_target(&prev_data.head);
+        let next_target = self.get_next_target(Some(&block.header.prev_hash));
         if block.header.n_bits != TargetCompact::from(next_target) {
             warn!("Rejecting block - difficulty mismatch");
             return PushResult::Invalid;
@@ -261,8 +263,90 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         return true;
     }
 
-    pub fn get_next_target(&self, head: &Block) -> Target {
-        unimplemented!();
+    pub fn get_next_target(&self, head_hash: Option<&Blake2bHash>) -> Target {
+        let chain_data;
+        let head_data = match head_hash {
+            Some(hash) => {
+                chain_data = self.chain_store
+                    .get_chain_data(hash, false, None)
+                    .expect("Failed to compute next target - unknown head_hash");
+                &chain_data
+            }
+            None => &self.main_chain
+        };
+
+        let tail_height = 1i64.max(head_data.head.header.height as i64 - policy::DIFFICULTY_BLOCK_WINDOW as i64) as u32;
+        let tail_data;
+        if head_data.on_main_chain {
+            tail_data = self.chain_store
+                .get_chain_data_at(tail_height)
+                .expect("Failed to compute next target - tail block not found");
+        } else {
+            let mut prev_data;
+            let mut prev_hash = head_data.head.header.prev_hash.clone();
+            let mut i = 0;
+            // XXX Mimic do ... while {} loop control flow.
+            while {
+                // Loop condition
+                prev_data = self.chain_store
+                    .get_chain_data(&prev_hash, false, None)
+                    .expect("Failed to compute next target - fork predecessor not found");
+                prev_hash = prev_data.head.header.prev_hash.clone();
+
+                i < policy::DIFFICULTY_BLOCK_WINDOW && !prev_data.on_main_chain
+            } { /* Loop body */ i += 1; }
+
+            if prev_data.on_main_chain && prev_data.head.header.height > tail_height {
+                tail_data = self.chain_store
+                    .get_chain_data_at(tail_height)
+                    .expect("Failed to compute next target - tail block not found");
+            } else {
+                tail_data = prev_data;
+            }
+        }
+
+        let head = &head_data.head.header;
+        let tail = &tail_data.head.header;
+        assert!(head.height - tail.height == policy::DIFFICULTY_BLOCK_WINDOW
+            || (head.height <= policy::DIFFICULTY_BLOCK_WINDOW && tail.height == 1),
+            "Failed to compute next target - invalid head/tail block");
+
+        let mut delta_total_difficulty = &head_data.total_difficulty - &tail_data.total_difficulty;
+        let mut actual_time = head.timestamp - tail.timestamp;
+
+        // Simulate that the Policy.BLOCK_TIME was achieved for the blocks before the genesis block, i.e. we simulate
+        // a sliding window that starts before the genesis block. Assume difficulty = 1 for these blocks.
+        if head.height <= policy::DIFFICULTY_BLOCK_WINDOW {
+            actual_time += (policy::DIFFICULTY_BLOCK_WINDOW - head.height + 1) * policy::BLOCK_TIME;
+            delta_total_difficulty += BigDecimal::from(policy::DIFFICULTY_BLOCK_WINDOW - head.height + 1).into();
+        }
+
+        // Compute the target adjustment factor.
+        let expected_time = policy::DIFFICULTY_BLOCK_WINDOW * policy::BLOCK_TIME;
+        let mut adjustment = actual_time as f64 / expected_time as f64;
+
+        // Clamp the adjustment factor to [1 / MAX_ADJUSTMENT_FACTOR, MAX_ADJUSTMENT_FACTOR].
+        adjustment = adjustment.max(1f64 / policy::DIFFICULTY_MAX_ADJUSTMENT_FACTOR);
+        adjustment = adjustment.min(policy::DIFFICULTY_MAX_ADJUSTMENT_FACTOR);
+
+        // Compute the next target.
+        let average_difficulty = BigDecimal::from(delta_total_difficulty) / BigDecimal::from(policy::DIFFICULTY_BLOCK_WINDOW);
+        let average_target = &*policy::BLOCK_TARGET_MAX / average_difficulty; // Do not use Difficulty -> Target conversion here to preserve precision.
+        let mut next_target = average_target * BigDecimal::from(adjustment);
+
+        // Make sure the target is below or equal the maximum allowed target (difficulty 1).
+        // Also enforce a minimum target of 1.
+        if next_target > *policy::BLOCK_TARGET_MAX {
+            next_target = policy::BLOCK_TARGET_MAX.clone();
+        }
+        let min_target = BigDecimal::from(1);
+        if next_target < min_target {
+            next_target = min_target;
+        }
+
+        // XXX Reduce target precision to nBits precision.
+        let n_bits: TargetCompact = Target::from(next_target).into();
+        return Target::from(n_bits);
     }
 
     pub fn head(&self) -> &Block {

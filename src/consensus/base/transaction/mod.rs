@@ -127,7 +127,7 @@ impl Transaction {
 
         // Check that value + fee doesn't overflow.
         // TODO also check max supply?
-        if (self.value + self.fee).is_none() {
+        if self.value.checked_add(self.fee).is_none() {
             return false;
         }
 

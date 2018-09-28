@@ -81,9 +81,9 @@ impl Account {
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         // Check account balance.
-        // !!! This assumes that transaction.value + transaction.fee does not overflow. !!!
+        // This assumes that transaction.value + transaction.fee does not overflow.
         let balance = self.balance();
-        if balance < (transaction.value + transaction.fee).unwrap() {
+        if balance < transaction.value + transaction.fee {
             return Err(AccountError("Insufficient funds".to_string()));
         }
 
@@ -134,14 +134,14 @@ impl Account {
     }
 
     pub fn balance_add(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
-        return match balance + value {
+        return match balance.checked_add(value) {
             Some(result) => Ok(result),
             None => Err(AccountError("Balance overflow (add)".to_string()))
         };
     }
 
     pub fn balance_sub(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
-        return match balance - value {
+        return match balance.checked_sub(value) {
             Some(result) => Ok(result),
             None => Err(AccountError("Balance overflow (sub)".to_string()))
         };

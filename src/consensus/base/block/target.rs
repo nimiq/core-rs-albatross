@@ -1,9 +1,9 @@
 use beserial::{Serialize, Deserialize, SerializeWithLength, DeserializeWithLength, WriteBytesExt, ReadBytesExt};
 use bigdecimal::BigDecimal;
-use num_bigint::{BigInt, Sign};
+use num_bigint::{BigInt, Sign, ToBigInt};
 use consensus::base::primitive::hash::Argon2dHash;
 use consensus::policy;
-use std::ops::{Add, Sub};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::io;
 use std::fmt;
 
@@ -26,7 +26,7 @@ impl From<u32> for TargetCompact {
 impl From<TargetCompact> for Target {
     fn from(t: TargetCompact) -> Self {
         let mut val = [0u8; 32];
-        let shift_bytes: usize = ((t.0 >> 24) - 3) as usize;
+        let shift_bytes: usize = ((t.0 >> 24) as i16 - 3).max(0) as usize;
         let value = t.0 & 0xffffff;
         val[32 - shift_bytes - 1] = (value & 0xff) as u8;
         val[32 - shift_bytes - 2] = ((value >> 8) & 0xff) as u8;
@@ -44,12 +44,41 @@ impl From<Target> for TargetCompact {
                 break;
             }
         }
-        if target.0[first_byte] >= 0x80 {
+
+        if target.0[first_byte] >= 0x80 && first_byte <= 29 {
             first_byte -= 1;
         }
-        let shift_bytes = 32 - first_byte;
 
-        return TargetCompact(((shift_bytes as u32) << 24) + ((target.0[first_byte] as u32) << 16) + ((target.0[first_byte + 1] as u32) << 8) + target.0[first_byte + 2] as u32);
+        let shift_bytes = 32 - first_byte;
+        let start_byte = first_byte.min(29);
+        return TargetCompact(((shift_bytes as u32) << 24) + ((target.0[start_byte] as u32) << 16) + ((target.0[start_byte + 1] as u32) << 8) + target.0[start_byte + 2] as u32);
+    }
+}
+
+impl<'a> From<&'a Argon2dHash> for Target {
+    fn from(hash: &'a Argon2dHash) -> Self {
+        Target::from(hash.as_bytes())
+    }
+}
+
+impl From<BigDecimal> for Target {
+    fn from(decimal: BigDecimal) -> Target {
+        let bytes = decimal.to_bigint().unwrap().to_bytes_be().1;
+        let byte_len = bytes.len();
+        assert!(byte_len <= 32, "Cannot convert BigDecimal to Target - out of bounds");
+
+        let mut target = [0u8; 32];
+        for i in 0..byte_len {
+            target[32 - byte_len + i] = bytes[i];
+        }
+
+        return Target(target);
+    }
+}
+
+impl From<Target> for BigDecimal {
+    fn from(target: Target) -> Self {
+        BigDecimal::new(BigInt::from_bytes_be(Sign::Plus, &target.0), 0)
     }
 }
 
@@ -59,10 +88,30 @@ impl From<TargetCompact> for Difficulty {
     }
 }
 
+impl From<Difficulty> for TargetCompact {
+    fn from(difficulty: Difficulty) -> Self {
+        Target::from(difficulty).into()
+    }
+}
+
 impl From<Target> for Difficulty {
     fn from(target: Target) -> Self {
-        Difficulty(&*policy::BLOCK_TARGET_MAX / BigDecimal::parse_bytes(target.as_bytes(), 10).unwrap())
+        Difficulty(&*policy::BLOCK_TARGET_MAX / BigDecimal::from(target))
     }
+}
+
+impl From<Difficulty> for Target {
+    fn from(difficulty: Difficulty) -> Self {
+        Target::from(&*policy::BLOCK_TARGET_MAX / BigDecimal::from(difficulty))
+    }
+}
+
+impl From<BigDecimal> for Difficulty {
+    fn from(decimal: BigDecimal) -> Self { Difficulty(decimal) }
+}
+
+impl From<Difficulty> for BigDecimal {
+    fn from(difficulty: Difficulty) -> Self { difficulty.0 }
 }
 
 impl Add<Difficulty> for Difficulty {
@@ -70,14 +119,6 @@ impl Add<Difficulty> for Difficulty {
 
     fn add(self, rhs: Difficulty) -> Difficulty {
         Difficulty(self.0 + rhs.0)
-    }
-}
-
-impl Sub<Difficulty> for Difficulty {
-    type Output = Difficulty;
-
-    fn sub(self, rhs: Difficulty) -> Difficulty {
-        Difficulty(self.0 - rhs.0)
     }
 }
 
@@ -89,11 +130,31 @@ impl<'a, 'b> Add<&'b Difficulty> for &'a Difficulty {
     }
 }
 
+impl AddAssign<Difficulty> for Difficulty {
+    fn add_assign(&mut self, rhs: Difficulty) {
+        *self = Difficulty(&self.0 + &rhs.0);
+    }
+}
+
+impl Sub<Difficulty> for Difficulty {
+    type Output = Difficulty;
+
+    fn sub(self, rhs: Difficulty) -> Difficulty {
+        Difficulty(self.0 - rhs.0)
+    }
+}
+
 impl<'a, 'b> Sub<&'b Difficulty> for &'a Difficulty {
     type Output = Difficulty;
 
     fn sub(self, rhs: &'b Difficulty) -> Difficulty {
         Difficulty(&self.0 - &rhs.0)
+    }
+}
+
+impl SubAssign<Difficulty> for Difficulty {
+    fn sub_assign(&mut self, rhs: Difficulty) {
+        *self = Difficulty(&self.0 - &rhs.0);
     }
 }
 
@@ -133,10 +194,13 @@ impl fmt::Display for Difficulty {
     }
 }
 
-
 impl Target {
     pub fn is_met_by(&self, hash: &Argon2dHash) -> bool {
-        let reached = Target::from(hash.as_bytes());
+        let reached = Target::from(hash);
         return &reached < self;
+    }
+
+    pub fn get_depth(&self) -> u8 {
+        unimplemented!();
     }
 }

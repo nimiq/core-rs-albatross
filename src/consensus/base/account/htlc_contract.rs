@@ -141,7 +141,7 @@ impl HashedTimeLockedContract {
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_sub(self.balance, (transaction.value + transaction.fee).unwrap())?;
+        let balance: Coin = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
 
         let verify = || -> io::Result<bool> {
             let proof_buf = &mut &transaction.proof[..];
@@ -172,8 +172,8 @@ impl HashedTimeLockedContract {
 
                     // Check min cap.
                     let cap_ratio = 1f64 - (hash_depth as f64 / self.hash_count as f64);
-                    let min_cap = (cap_ratio * self.total_amount.0 as f64).floor().max(0f64) as u64;
-                    return Ok(balance >= Coin(min_cap));
+                    let min_cap = (cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64;
+                    return Ok(balance >= Coin::from(min_cap));
                 },
                 ProofType::EarlyResolve => {
                     let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
@@ -196,7 +196,7 @@ impl HashedTimeLockedContract {
     }
 
     pub fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_add(self.balance, (transaction.value + transaction.fee).unwrap())?;
+        let balance: Coin = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
         return Ok(self.with_balance(balance));
     }
 }

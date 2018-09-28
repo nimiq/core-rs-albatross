@@ -1,6 +1,6 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize};
 use consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target};
-use consensus::base::primitive::hash::{Blake2bHash, Hash};
+use consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
 use consensus::networks::NetworkId;
 use std::io;
 use utils::db::{FromDatabaseValue, IntoDatabaseValue};
@@ -112,7 +112,31 @@ impl Block {
     }
 
     pub fn get_next_interlink(&self, next_target: Target) -> BlockInterlink {
-        unimplemented!();
+        let mut hashes: Vec<Blake2bHash> = vec![];
+        let hash: Blake2bHash = self.header.hash();
+        let pow: Argon2dHash = self.header.hash();
+
+        // Compute how many times this blockHash should be included in the next interlink.
+        let this_pow_depth = Target::from(&pow).get_depth() as i16;
+        let next_target_depth = next_target.get_depth() as i16;
+        let num_occurrences = (this_pow_depth - next_target_depth + 1).max(0);
+
+        // Push this blockHash numOccurrences times onto the next interlink.
+        for i in 0..num_occurrences {
+            hashes.push(hash.clone());
+        }
+
+        // Compute how many blocks to omit from the beginning of this interlink.
+        let this_target_depth = Target::from(self.header.n_bits).get_depth() as i16;
+        let target_offset = next_target_depth - this_target_depth;
+        let interlink_offset = (num_occurrences + target_offset) as usize;
+
+        // Push the remaining hashes from this interlink.
+        for i in interlink_offset..self.interlink.len() {
+            hashes.push(self.interlink.hashes[i].clone());
+        }
+
+        return BlockInterlink::new(hashes, &hash);
     }
 }
 

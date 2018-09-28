@@ -9,7 +9,7 @@ use nimiq::consensus::base::primitive::coin::Coin;
 #[test]
 fn it_can_put_and_get_a_balance() {
     let address = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-    let mut account = Account::Basic(BasicAccount { balance: Coin(20) });
+    let mut account = Account::Basic(BasicAccount { balance: 20.into() });
 
     let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
@@ -24,7 +24,7 @@ fn it_can_put_and_get_a_balance() {
 
     // 2. Increase balance, put, and check.
     if let Account::Basic(ref mut basic_account) = account {
-        basic_account.balance = Coin(50);
+        basic_account.balance = 50.into();
     }
     tree.put(&mut txn, &address, account.clone());
 
@@ -47,11 +47,11 @@ fn it_can_put_and_get_a_balance() {
 #[test]
 fn it_can_put_and_get_multiple_balances() {
     let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-    let account1 = Account::Basic(BasicAccount { balance: Coin(5) });
+    let account1 = Account::Basic(BasicAccount { balance: 5.into() });
     let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
-    let account2 = Account::Basic(BasicAccount { balance: Coin(55) });
+    let account2 = Account::Basic(BasicAccount { balance: 55.into() });
     let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
-    let account3 = Account::Basic(BasicAccount { balance: Coin(55555555) });
+    let account3 = Account::Basic(BasicAccount { balance: 55555555.into() });
 
     let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
@@ -81,8 +81,8 @@ fn it_can_put_and_get_multiple_balances() {
 #[test]
 fn it_is_invariant_to_history() {
     let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-    let account1 = Account::Basic(BasicAccount { balance: Coin(5) });
-    let account2 = Account::Basic(BasicAccount { balance: Coin(55) });
+    let account1 = Account::Basic(BasicAccount { balance: 5.into() });
+    let account2 = Account::Basic(BasicAccount { balance: 55.into() });
 
     let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
@@ -105,11 +105,11 @@ fn it_is_invariant_to_history() {
 #[test]
 fn it_is_invariant_to_insertion_order() {
     let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-    let account1 = Account::Basic(BasicAccount { balance: Coin(5) });
+    let account1 = Account::Basic(BasicAccount { balance: 5.into() });
     let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
-    let account2 = Account::Basic(BasicAccount { balance: Coin(55) });
+    let account2 = Account::Basic(BasicAccount { balance: 55.into() });
     let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
-    let account3 = Account::Basic(BasicAccount { balance: Coin(55555555) });
+    let account3 = Account::Basic(BasicAccount { balance: 55555555.into() });
 
     let empty_account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 
@@ -190,11 +190,11 @@ fn it_is_invariant_to_insertion_order() {
 #[test]
 fn it_can_merge_nodes_while_pruning() {
     let address1 = Address::from(&hex::decode("0102030405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
-    let account1 = Account::Basic(BasicAccount { balance: Coin(5) });
+    let account1 = Account::Basic(BasicAccount { balance: 5.into() });
     let address2 = Address::from(&hex::decode("0103030405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
-    let account2 = Account::Basic(BasicAccount { balance: Coin(55) });
+    let account2 = Account::Basic(BasicAccount { balance: 55.into() });
     let address3 = Address::from(&hex::decode("0103040405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
-    let account3 = Account::Basic(BasicAccount { balance: Coin(55555555) });
+    let account3 = Account::Basic(BasicAccount { balance: 55555555.into() });
 
     let empty_account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 
