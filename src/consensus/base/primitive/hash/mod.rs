@@ -7,7 +7,7 @@ use libargon2_sys::argon2d_hash;
 use sha2::{Sha256, Sha512, Digest};
 use beserial::{Serialize, Deserialize};
 use hex::FromHex;
-use utils::db::{AsDatabaseKey, FromDatabaseValue, IntoDatabaseValue};
+use utils::db::{AsDatabaseBytes, FromDatabaseValue};
 
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -122,19 +122,9 @@ impl Hasher for Blake2bHasher {
     }
 }
 
-impl AsDatabaseKey for Blake2bHash {
+impl AsDatabaseBytes for Blake2bHash {
     fn as_database_bytes(&self) -> Cow<[u8]> {
         return Cow::Borrowed(&self.0);
-    }
-}
-
-impl IntoDatabaseValue for Blake2bHash {
-    fn database_byte_size(&self) -> usize {
-        return Self::len();
-    }
-
-    fn copy_into_database(&self, bytes: &mut [u8]) {
-        bytes.copy_from_slice(&self.0);
     }
 }
 

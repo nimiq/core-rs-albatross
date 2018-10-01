@@ -1,24 +1,28 @@
 use consensus::base::block::Block;
 use consensus::base::blockchain::ChainData;
 use consensus::base::primitive::hash::Blake2bHash;
-use utils::db::{Database, Transaction, ReadTransaction, WriteTransaction, Environment};
+use utils::db::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};
 
 #[derive(Debug)]
 pub struct ChainStore<'env> {
     env: &'env Environment,
     chain_db: Database<'env>,
-    block_db: Database<'env>
+    block_db: Database<'env>,
+    height_idx: Database<'env>
 }
 
 impl<'env> ChainStore<'env> {
     const CHAIN_DB_NAME: &'static str = "ChainData";
     const BLOCK_DB_NAME: &'static str = "Block";
+    const HEIGHT_IDX_NAME: &'static str = "HeightIdx";
     const HEAD_KEY: &'static str = "head";
 
     pub fn new(env: &'env Environment) -> Self {
         let chain_db = env.open_database(Self::CHAIN_DB_NAME.to_string());
-        let block_db = env.open_database(Self::CHAIN_DB_NAME.to_string());
-        return ChainStore { env, chain_db, block_db };
+        let block_db = env.open_database(Self::BLOCK_DB_NAME.to_string());
+        let height_idx = env.open_database_with_flags(Self::HEIGHT_IDX_NAME.to_string(),
+            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES);
+        return ChainStore { env, chain_db, block_db, height_idx };
     }
 
     pub fn get_head(&self, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
@@ -42,36 +46,78 @@ impl<'env> ChainStore<'env> {
             }
         };
 
-        let chain_data_opt = txn.get(&self.chain_db, hash);
-        if chain_data_opt.is_none() {
-            return None;
+        let mut chain_data: ChainData = match txn.get(&self.chain_db, hash) {
+            Some(data) => data,
+            None => return None
+        };
+
+        if include_body {
+            if let Some(block) = txn.get(&self.block_db, hash) {
+                chain_data.head = block;
+            } else {
+                warn!("Block body requested but not present");
+            }
         }
 
-        let mut chain_data = chain_data_opt.unwrap();
-        if !include_body {
-            return Some(chain_data);
-        }
-
-        let block_opt = txn.get(&self.block_db, hash);
-        if block_opt.is_none() {
-            warn!("Block body requested but not present");
-            return Some(chain_data);
-        }
-
-        chain_data.head = block_opt.unwrap();
         return Some(chain_data);
     }
 
     pub fn put_chain_data(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, chain_data: &ChainData, include_body: bool) {
-        txn.put(&self.chain_db, hash, chain_data);
+        // Store chain data. Block body will not be persisted.
+        txn.put_reserve(&self.chain_db, hash, chain_data);
 
+        // Store body if requested.
         if include_body && chain_data.head.body.is_some() {
-            txn.put(&self.block_db, hash, &chain_data.head);
+            txn.put_reserve(&self.block_db, hash, &chain_data.head);
         }
+
+        // Add to height index.
+        let height = chain_data.head.header.height;
+        txn.put(&self.height_idx, &height, hash);
     }
 
-    pub fn get_chain_data_at(&self, block_height: u32) -> Option<ChainData> {
-        unimplemented!();
+    pub fn get_chain_data_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainData> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(self.env);
+                &read_txn
+            }
+        };
+
+        // Seek to the first block at the given height.
+        let mut cursor = txn.cursor(&self.height_idx);
+        let mut block_hash = match cursor.seek_key::<u32, Blake2bHash>(&block_height) {
+            Some(hash) => hash,
+            None => return None
+        };
+
+        // Iterate until we find the main chain block.
+        let mut chain_data: ChainData;
+        while {
+            // Loop condition
+            chain_data = txn
+                .get(&self.chain_db, &block_hash)
+                .expect("Corrupted store: ChainData referenced from index not found");
+            !chain_data.on_main_chain
+        } {
+            // Loop Body
+            block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
+                Some((_, hash)) => hash,
+                None => return None
+            };
+        }
+
+        if include_body {
+            if let Some(block) = txn.get(&self.block_db, &block_hash) {
+                chain_data.head = block;
+            } else {
+                warn!("Block body requested but not present");
+            }
+        }
+
+        return Some(chain_data);
     }
 
     pub fn get_block(&self, hash: &Blake2bHash) -> Option<Block> {

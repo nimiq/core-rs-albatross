@@ -279,7 +279,7 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         let tail_data;
         if head_data.on_main_chain {
             tail_data = self.chain_store
-                .get_chain_data_at(tail_height)
+                .get_chain_data_at(tail_height, false, None)
                 .expect("Failed to compute next target - tail block not found");
         } else {
             let mut prev_data;
@@ -298,7 +298,7 @@ impl<'env, 'time> Blockchain<'env, 'time> {
 
             if prev_data.on_main_chain && prev_data.head.header.height > tail_height {
                 tail_data = self.chain_store
-                    .get_chain_data_at(tail_height)
+                    .get_chain_data_at(tail_height, false, None)
                     .expect("Failed to compute next target - tail block not found");
             } else {
                 tail_data = prev_data;
