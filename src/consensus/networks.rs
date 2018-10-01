@@ -1,6 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use consensus::base::block::{Block, BlockHeader, BlockInterlink};
-use consensus::base::primitive::hash::{Hash, Blake2bHash};
+use consensus::base::primitive::hash::Blake2bHash;
 use hex;
 use std::collections::HashMap;
 

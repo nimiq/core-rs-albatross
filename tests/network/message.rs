@@ -40,7 +40,6 @@ fn parse_version_message() {
 
 #[test]
 fn parse_inv_message() {
-    let hex_msg = "";
     let vec = ::hex::decode(INV_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
     match message { Message::Inv(_) => assert!(true), _ => assert!(false) };

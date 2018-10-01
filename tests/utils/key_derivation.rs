@@ -1,4 +1,3 @@
-use nimiq::utils::mnemonic::*;
 use nimiq::utils::key_derivation::*;
 use nimiq::consensus::base::primitive::crypto::{PrivateKey, PublicKey};
 use hex;

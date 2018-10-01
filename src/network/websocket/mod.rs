@@ -11,7 +11,6 @@ use url::Url;
 use tokio::net::TcpStream;
 use tokio_tungstenite::connect_async;
 use std::io;
-use std;
 use utils::locking::MultiLock;
 use std::fmt::Debug;
 use std::fmt;
