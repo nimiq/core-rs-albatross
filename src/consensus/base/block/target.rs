@@ -201,6 +201,35 @@ impl Target {
     }
 
     pub fn get_depth(&self) -> u8 {
-        unimplemented!();
+        // Compute: 240 - ceil(log2(self))
+
+        // Find first non-zero byte.
+        let len = self.0.len();
+        let mut first_byte = 0;
+        for i in 0..len {
+            if self.0[i] > 0 {
+                first_byte = i;
+                break;
+            }
+        }
+
+        // Find last non-zero byte.
+        let mut last_byte = 0;
+        for i in 0..len - first_byte {
+            let idx = len - i - 1;
+            if self.0[idx] > 0 {
+                last_byte = idx;
+                break;
+            }
+        }
+
+        let leading_zeros = self.0[first_byte].leading_zeros();
+        let mut exp = 8 - leading_zeros + (len - first_byte - 1) as u32 * 8;
+
+        if first_byte == last_byte && self.0[first_byte].trailing_zeros() + leading_zeros == 7 {
+            exp -= 1;
+        }
+
+        return 240 - exp as u8;
     }
 }

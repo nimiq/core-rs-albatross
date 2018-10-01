@@ -58,3 +58,14 @@ fn it_correctly_calculates_compact_from_difficulty() {
     assert_eq!(TargetCompact::from(Difficulty::from(policy::BLOCK_TARGET_MAX.clone())), 0x01000001.into());
 }
 
+#[test]
+fn it_correctly_calculates_target_depth() {
+    assert_eq!(Target::from(TargetCompact::from(0x1f010000)).get_depth(), 0);
+    assert_eq!(Target::from(TargetCompact::from(0x1f008f00)).get_depth(), 0);
+    assert_eq!(Target::from(TargetCompact::from(0x1e800000)).get_depth(), 1);
+    assert_eq!(Target::from(TargetCompact::from(0x1e600000)).get_depth(), 1);
+    assert_eq!(Target::from(TargetCompact::from(0x1e400000)).get_depth(), 2);
+    assert_eq!(Target::from(TargetCompact::from(0x01000002)).get_depth(), 239);
+    assert_eq!(Target::from(TargetCompact::from(0x01000001)).get_depth(), 240);
+}
+
