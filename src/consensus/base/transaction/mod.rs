@@ -31,7 +31,7 @@ pub struct SignatureProof {
 }
 
 impl SignatureProof {
-    fn from(public_key: PublicKey, signature: Signature) -> Self {
+    pub fn from(public_key: PublicKey, signature: Signature) -> Self {
         return SignatureProof {
             public_key,
             merkle_path: Blake2bMerklePath::empty(),
@@ -53,7 +53,7 @@ impl SignatureProof {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Debug)]
 #[repr(C)]
 pub struct Transaction {
     pub data: Vec<u8>,
@@ -166,7 +166,6 @@ impl Transaction {
         res.append(&mut self.flags.serialize_to_vec());
         return res;
     }
-
 }
 
 impl Serialize for Transaction {

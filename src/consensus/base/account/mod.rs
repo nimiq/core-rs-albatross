@@ -103,7 +103,7 @@ impl Account {
         };
     }
 
-    fn account_type(&self) -> AccountType {
+    pub fn account_type(&self) -> AccountType {
         return match *self {
             Account::Basic(_) => AccountType::Basic,
             Account::Vesting(_) => AccountType::Vesting,
