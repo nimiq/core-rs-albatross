@@ -5,9 +5,10 @@ pub mod vesting_contract;
 pub mod accounts;
 
 use beserial::{Deserialize, Serialize, WriteBytesExt, ReadBytesExt};
-use super::transaction::Transaction;
+use consensus::base::transaction::Transaction;
 use consensus::base::primitive::Address;
 use consensus::base::primitive::hash::{Hash, SerializeContent};
+use std::cmp::Ordering;
 use std::io;
 use std::fmt;
 
@@ -208,10 +209,10 @@ impl Deserialize for Account {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, Debug, Serialize, Deserialize)]
 pub struct PrunedAccount {
-    address: Address,
-    account: Account,
+    pub address: Address,
+    pub account: Account,
 }
 
 impl SerializeContent for PrunedAccount {
@@ -219,6 +220,25 @@ impl SerializeContent for PrunedAccount {
 }
 
 impl Hash for PrunedAccount {}
+
+impl Ord for PrunedAccount {
+    fn cmp(&self, other: &PrunedAccount) -> Ordering {
+        self.address.cmp(&other.address)
+    }
+}
+
+impl PartialOrd for PrunedAccount {
+    fn partial_cmp(&self, other: &PrunedAccount) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for PrunedAccount {
+    fn eq(&self, other: &PrunedAccount) -> bool {
+        self.address == other.address
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub struct AccountError(String);

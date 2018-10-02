@@ -1,18 +1,20 @@
 use beserial::{Serialize, Deserialize};
+use consensus::base::account::{Account, AccountError};
 use consensus::base::transaction::Transaction;
-use super::{Account, AccountError};
 use consensus::base::transaction::SignatureProof;
 use consensus::base::primitive::Address;
-use consensus::base::primitive::hash::{Hasher, Blake2bHash, Blake2bHasher, HashAlgorithm};
-use std::io;
+use consensus::base::primitive::hash::{HashAlgorithm, Hasher, Blake2bHasher, Sha256Hasher};
 use consensus::base::primitive::coin::Coin;
+use std::io;
+
+create_typed_array!(AnyHash, u8, 32);
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct HashedTimeLockedContract {
     pub balance: Coin,
     pub sender: Address,
     pub recipient: Address,
-    pub hash_root: Blake2bHash, // TODO add support for other hash algorithms
+    pub hash_root: AnyHash,
     pub hash_count: u8,
     pub timeout: u32,
     pub total_amount: Coin
@@ -28,10 +30,8 @@ pub enum ProofType {
 
 impl HashedTimeLockedContract {
     pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return match HashedTimeLockedContract::create_from_transaction(balance, transaction) {
-            Ok(account) => Ok(account),
-            Err(_) => Err(AccountError("Failed to create HTLC".to_string()))
-        };
+        return HashedTimeLockedContract::create_from_transaction(balance, transaction)
+            .map_err(|_| AccountError("Failed to create HTLC".to_string()));
     }
 
     fn create_from_transaction(balance: Coin, transaction: &Transaction) -> io::Result<Self> {
@@ -52,7 +52,7 @@ impl HashedTimeLockedContract {
         return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_root, hash_count, timeout, total_amount));
     }
 
-    fn new(balance: Coin, sender: Address, recipient: Address, hash_root: Blake2bHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
+    fn new(balance: Coin, sender: Address, recipient: Address, hash_root: AnyHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
         return HashedTimeLockedContract { balance, sender, recipient, hash_root, hash_count, timeout, total_amount };
     }
 
@@ -78,16 +78,20 @@ impl HashedTimeLockedContract {
                 ProofType::RegularTransfer => {
                     let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
                     let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
-                    let hash_root: Blake2bHash = Deserialize::deserialize(proof_buf)?;
-                    let mut pre_image: Blake2bHash = Deserialize::deserialize(proof_buf)?;
+                    let hash_root: [u8; 32] = AnyHash::deserialize(proof_buf)?.into();
+                    let mut pre_image: [u8; 32] = AnyHash::deserialize(proof_buf)?.into();
 
                     for i in 0..hash_depth {
                         match hash_algorithm {
                             HashAlgorithm::Blake2b => {
-                                pre_image = Blake2bHasher::default().digest(pre_image.as_bytes());
+                                pre_image = Blake2bHasher::default().digest(&pre_image[..]).into();
                             },
-                            // TODO add support for other hash algorithms
-                            _ => unimplemented!()
+                            HashAlgorithm::Sha256 => {
+                                pre_image = Sha256Hasher::default().digest(&pre_image[..]).into();
+                            }
+                            _ => {
+                                return Ok(false);
+                            }
                         }
                     }
 
@@ -156,13 +160,13 @@ impl HashedTimeLockedContract {
                     // Check that the provided hash_root is correct.
                     let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
                     let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
-                    let hash_root: Blake2bHash = Deserialize::deserialize(proof_buf)?;
+                    let hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
                     if hash_root != self.hash_root {
                         return Ok(false);
                     }
 
                     // Ignore pre_image.
-                    let pre_image: Blake2bHash = Deserialize::deserialize(proof_buf)?;
+                    let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
 
                     // Check that the transaction is signed by the authorized recipient.
                     let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;

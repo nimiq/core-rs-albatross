@@ -70,12 +70,29 @@ impl BlockBody {
             }
         }
 
+        let mut previous_acc: Option<&PrunedAccount> = None;
         for acc in &self.pruned_accounts {
             // Ensure pruned accounts are ordered and unique.
-            unimplemented!();
+            if let Some(previous) = previous_acc {
+                match previous.cmp(acc) {
+                    Ordering::Equal => {
+                        warn!("Invalid block - duplicate pruned account");
+                        return false;
+                    }
+                    Ordering::Greater => {
+                        warn!("Invalid block - pruned accounts not ordered");
+                        return false;
+                    }
+                    _ => (),
+                }
+            }
+            previous_acc = Some(acc);
 
-            // Check that pruned accounts are actually supposed to be pruned
-            unimplemented!();
+            // Check that pruned accounts are actually supposed to be pruned.
+            if !acc.account.is_to_be_pruned() {
+                warn!("Invalid block - invalid pruned account");
+                return false;
+            }
         }
 
         // Everything checks out.

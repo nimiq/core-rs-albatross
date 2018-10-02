@@ -17,10 +17,8 @@ pub struct VestingContract {
 
 impl VestingContract {
     pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return match VestingContract::create_from_transaction(balance, transaction) {
-            Ok(account) => Ok(account),
-            Err(_) => Err(AccountError("Failed to create vesting contract".to_string()))
-        };
+        return VestingContract::create_from_transaction(balance, transaction)
+            .map_err(|_| AccountError("Failed to create vesting contract".to_string()));
     }
 
     fn create_from_transaction(balance: Coin, transaction: &Transaction) -> io::Result<Self> {

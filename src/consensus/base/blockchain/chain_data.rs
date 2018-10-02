@@ -14,7 +14,13 @@ pub struct ChainData {
 
 impl ChainData {
     pub fn initial(block: Block) -> Self {
-        unimplemented!();
+        let total_difficulty = Difficulty::from(block.header.n_bits);
+        return ChainData {
+            head: block,
+            total_difficulty,
+            on_main_chain: true,
+            main_chain_successor: None
+        };
     }
 
     pub fn next(&self, block: Block) -> Self {
