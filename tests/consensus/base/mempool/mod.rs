@@ -14,14 +14,16 @@ use nimiq::utils::db::WriteTransaction;
 use nimiq::utils::db::volatile::VolatileEnvironment;
 use std::sync::Arc;
 use nimiq::consensus::base::primitive::coin::Coin;
+use nimiq::consensus::base::blockchain::Blockchain;
+use nimiq::network::NetworkTime;
 
 const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0754d1260f15bea0e8fb07ab18f45301483599e34000000000000c350000000000000008a00019640023fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a";
 
 #[test]
 fn push_same_tx_twice() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
-    let mut mempool = Mempool::new(&accounts);
+    let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
+    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -30,7 +32,7 @@ fn push_same_tx_twice() {
     // Give address_a balance
     let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), pruned_accounts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
-    accounts.commit_block_body(&mut txn, &body, 1);
+    blockchain.accounts.commit_block_body(&mut txn, &body, 1);
     txn.commit();
 
     // Generate and sign transaction from address_a
@@ -52,8 +54,8 @@ fn push_same_tx_twice() {
 #[test]
 fn push_tx_with_wrong_signature() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
-    let mut mempool = Mempool::new(&accounts);
+    let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
+    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
     let mut t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
@@ -67,8 +69,8 @@ fn push_tx_with_wrong_signature() {
 #[test]
 fn push_tx_with_insufficient_balance() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
-    let mut mempool = Mempool::new(&accounts);
+    let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
+    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
@@ -82,8 +84,8 @@ fn push_tx_with_insufficient_balance() {
 #[test]
 fn push_and_get_valid_tx() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
-    let mut mempool = Mempool::new(&accounts);
+    let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
+    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -92,7 +94,7 @@ fn push_and_get_valid_tx() {
     // Give address_a balance
     let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), pruned_accounts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
-    accounts.commit_block_body(&mut txn, &body, 1);
+    blockchain.accounts.commit_block_body(&mut txn, &body, 1);
     txn.commit();
 
     // Generate and sign transaction from address_a
@@ -114,8 +116,8 @@ fn push_and_get_valid_tx() {
 #[test]
 fn push_and_get_two_tx_same_user() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
-    let mut mempool = Mempool::new(&accounts);
+    let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
+    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -124,7 +126,7 @@ fn push_and_get_two_tx_same_user() {
     // Give address_a balance
     let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), pruned_accounts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
-    accounts.commit_block_body(&mut txn, &body, 1);
+    blockchain.accounts.commit_block_body(&mut txn, &body, 1);
     txn.commit();
 
     // Generate, sign and push 1st transaction from address_a
@@ -156,8 +158,8 @@ fn push_and_get_two_tx_same_user() {
 #[test]
 fn reject_free_tx_beyond_limit() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
-    let mut mempool = Mempool::new(&accounts);
+    let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
+    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -166,7 +168,7 @@ fn reject_free_tx_beyond_limit() {
     // Give address_a balance
     let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), pruned_accounts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
-    accounts.commit_block_body(&mut txn, &body, 1);
+    blockchain.accounts.commit_block_body(&mut txn, &body, 1);
     txn.commit();
 
     for i in 0..10 + 1 {

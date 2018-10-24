@@ -138,6 +138,10 @@ impl Block {
 
         return BlockInterlink::new(hashes, &hash);
     }
+
+    pub fn height(&self) -> u32 {
+        return self.header.height;
+    }
 }
 
 

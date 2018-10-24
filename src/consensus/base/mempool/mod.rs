@@ -8,9 +8,11 @@ use consensus::base::primitive::hash::{Blake2bHash, Hash};
 use consensus::base::primitive::Address;
 use std::cmp::Ordering;
 use std::sync::Arc;
+use consensus::base::blockchain::Blockchain;
 
 pub struct Mempool<'t> {
     accounts: &'t Accounts<'t>,
+    blockchain: &'t Blockchain<'t, 't>,
     transactions_by_hash: HashMap<Blake2bHash, Arc<Transaction>>,
     transactions_by_sender: HashMap<Address, BTreeSet<Arc<Transaction>>>,
     transactions_by_recipient: HashMap<Address, BTreeSet<Arc<Transaction>>>,
@@ -18,9 +20,10 @@ pub struct Mempool<'t> {
 }
 
 impl<'t> Mempool<'t> {
-    pub fn new(accounts: &'t Accounts<'t>) -> Self {
+    pub fn new(blockchain: &'t Blockchain<'t, 't>, accounts: &'t Accounts<'t>) -> Self {
         return Mempool {
             accounts,
+            blockchain,
             transactions_by_hash: HashMap::new(),
             transactions_by_sender: HashMap::new(),
             transactions_by_recipient: HashMap::new(),
@@ -58,7 +61,7 @@ impl<'t> Mempool<'t> {
         if recipient_account.account_type() != transaction.recipient_type {
             return ReturnCode::Invalid;
         }
-        if let Err(_) = recipient_account.with_incoming_transaction(&transaction, 1) { // TODO
+        if let Err(_) = recipient_account.with_incoming_transaction(&transaction, self.blockchain.head().height()) {
             return ReturnCode::Invalid;
         }
 
@@ -67,7 +70,7 @@ impl<'t> Mempool<'t> {
         if sender_account.account_type() != transaction.sender_type {
             return ReturnCode::Invalid;
         }
-        if let Err(e) = sender_account.with_outgoing_transaction(&transaction, 2) { // TODO
+        if let Err(e) = sender_account.with_outgoing_transaction(&transaction, self.blockchain.head().height()) {
             return ReturnCode::Invalid;
         }
 
@@ -120,6 +123,13 @@ impl<'t> Mempool<'t> {
         if let Entry::Occupied(mut e) = self.transactions_by_sender.entry(transaction_arc.sender.clone()) {
             e.get_mut().insert(Arc::clone(&transaction_arc));
         };
+
+        // Tell listeners about the new valid transaction we received.
+        // TODO
+
+        if self.transactions_sorted_fee.len() > SIZE_MAX {
+            self.pop_low_fee_transaction();
+        }
 
         return ReturnCode::Accepted;
     }
@@ -193,6 +203,16 @@ impl<'t> Mempool<'t> {
         }
     }
 
+    fn pop_low_fee_transaction(&mut self) {
+        let mut owned = Option::None;
+        if let Some(t) = self.transactions_sorted_fee.iter().next() {
+            owned = Some(t.clone());
+        }
+        if let Some(t) = owned {
+            self.remove_transaction(&t);
+        }
+    }
+
     fn remove_transaction(&mut self, transaction: &Arc<Transaction>) {
         self.transactions_by_hash.remove(&transaction.hash());
         self.transactions_sorted_fee.remove(transaction);
@@ -247,3 +267,6 @@ const TRANSACTIONS_PER_SENDER_MAX : u32 = 500;
 
 /// Maximum number of "free" transactions per sender.
 const FREE_TRANSACTIONS_PER_SENDER_MAX : u32 = 10;
+
+/// Maximum number of transactions in the mempool.
+const SIZE_MAX : usize = 100000;

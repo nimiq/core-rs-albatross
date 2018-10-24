@@ -14,7 +14,7 @@ pub struct Blockchain<'env, 'time> {
     network_time: &'time NetworkTime,
     network_id: NetworkId,
 
-    accounts: Accounts<'env>,
+    pub accounts: Accounts<'env>,
     chain_store: ChainStore<'env>,
     main_chain: ChainData,
     head_hash: Blake2bHash,
