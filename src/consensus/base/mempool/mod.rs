@@ -7,6 +7,7 @@ use consensus::base::account::Accounts;
 use consensus::base::primitive::hash::{Blake2bHash, Hash};
 use consensus::base::primitive::Address;
 use std::cmp::Ordering;
+use std::convert::From;
 use std::sync::Arc;
 use consensus::base::blockchain::Blockchain;
 
@@ -14,9 +15,9 @@ pub struct Mempool<'t> {
     accounts: &'t Accounts<'t>,
     blockchain: &'t Blockchain<'t, 't>,
     transactions_by_hash: HashMap<Blake2bHash, Arc<Transaction>>,
-    transactions_by_sender: HashMap<Address, BTreeSet<Arc<Transaction>>>,
-    transactions_by_recipient: HashMap<Address, BTreeSet<Arc<Transaction>>>,
-    transactions_sorted_fee: BTreeSet<Arc<Transaction>>
+    transactions_by_sender: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
+    transactions_by_recipient: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
+    transactions_sorted_fee: BTreeSet<Arc<TransactionSortable>>
 }
 
 impl<'t> Mempool<'t> {
@@ -75,6 +76,7 @@ impl<'t> Mempool<'t> {
         }
 
         let transaction_arc = Arc::new(transaction);
+        let transaction_sortable = Arc::new(TransactionSortable(Arc::clone(&transaction_arc)));
 
         // Add new transaction to the sender's pending transaction set. Then re-check all transactions in the set
         // in fee/byte order against the sender account state. Adding high fee transactions may thus invalidate
@@ -83,7 +85,7 @@ impl<'t> Mempool<'t> {
         let mut sender_changed = sender_account;
         if let Some(s) = self.transactions_by_sender.get(&transaction_arc.sender) {
             let mut transactions_sorted = s.clone();
-            transactions_sorted.insert(Arc::clone(&transaction_arc));
+            transactions_sorted.insert(Arc::clone(&transaction_sortable));
 
             let mut tx_count = 0;
             for curr_tx in transactions_sorted {
@@ -95,7 +97,7 @@ impl<'t> Mempool<'t> {
                     }
                 }
                 if tx_count >= TRANSACTIONS_PER_SENDER_MAX {
-                    if curr_tx == transaction_arc {
+                    if curr_tx.0 == transaction_arc {
                         return ReturnCode::Invalid;
                     } else {
                         remove_txs.push(Arc::clone(&curr_tx));
@@ -109,19 +111,19 @@ impl<'t> Mempool<'t> {
 
         // Transaction is valid, add it to the mempool.
         self.transactions_by_hash.insert(hash, Arc::clone(&transaction_arc));
-        self.transactions_sorted_fee.insert(Arc::clone(&transaction_arc));
+        self.transactions_sorted_fee.insert(Arc::clone(&transaction_sortable));
 
         if let None = self.transactions_by_recipient.get(&transaction_arc.recipient) {
             self.transactions_by_recipient.insert(transaction_arc.recipient.clone(), BTreeSet::new());
         };
         if let Entry::Occupied(mut e) = self.transactions_by_recipient.entry(transaction_arc.recipient.clone()) {
-            e.get_mut().insert(Arc::clone(&transaction_arc));
+            e.get_mut().insert(Arc::clone(&transaction_sortable));
         };
         if let None = self.transactions_by_sender.get(&transaction_arc.sender) {
             self.transactions_by_sender.insert(transaction_arc.sender.clone(), BTreeSet::new());
         };
         if let Entry::Occupied(mut e) = self.transactions_by_sender.entry(transaction_arc.sender.clone()) {
-            e.get_mut().insert(Arc::clone(&transaction_arc));
+            e.get_mut().insert(Arc::clone(&transaction_sortable));
         };
 
         // Tell listeners about the new valid transaction we received.
@@ -145,8 +147,8 @@ impl<'t> Mempool<'t> {
         let mut ret = Vec::new();
         let size_sum = 0;
         for transaction in &self.transactions_sorted_fee {
-            if size_sum + transaction.serialized_size() <= max_size as usize {
-                ret.push(Arc::clone(transaction));
+            if size_sum + transaction.0.serialized_size() <= max_size as usize {
+                ret.push(Arc::clone(&transaction.0));
             }
         };
         return ret;
@@ -163,14 +165,14 @@ impl<'t> Mempool<'t> {
         for address in addresses {
             // Fetch transactions by sender first
             if let Some(txs_arc) = self.transactions_by_sender.get(&address) {
-                for tx_arc in txs_arc {
-                    ret.push(Arc::clone(tx_arc));
+                for ts_arc in txs_arc {
+                    ret.push(Arc::clone(&ts_arc.0));
                 }
             }
             // Fetch transactions by recipient second
             if let Some(txs_arc) = self.transactions_by_recipient.get(&address) {
-                for tx_arc in txs_arc {
-                    ret.push(Arc::clone(tx_arc));
+                for ts_arc in txs_arc {
+                    ret.push(Arc::clone(&ts_arc.0));
                 }
             }
         }
@@ -184,15 +186,15 @@ impl<'t> Mempool<'t> {
             let mut sender_account = self.accounts.get(&address, None);
 
             let mut transactions_sorted_new = BTreeSet::new();
-            for curr_tx in transactions_sorted {
-                let new_sender_account_option = sender_account.with_outgoing_transaction(&curr_tx, 1);
-                let recipient_account = self.accounts.get(&curr_tx.recipient, None);
-                let new_recipient_account_option = recipient_account.with_incoming_transaction(&curr_tx, 1);
+            for curr_ts in transactions_sorted {
+                let new_sender_account_option = sender_account.with_outgoing_transaction(&curr_ts.0, 1);
+                let recipient_account = self.accounts.get(&curr_ts.0.recipient, None);
+                let new_recipient_account_option = recipient_account.with_incoming_transaction(&curr_ts.0, 1);
                 if new_sender_account_option.is_ok() || new_recipient_account_option.is_ok() {
-                    transactions_sorted_new.insert(Arc::clone(curr_tx));
+                    transactions_sorted_new.insert(Arc::clone(&curr_ts));
                     sender_account = new_sender_account_option.unwrap();
                 } else {
-                    self.remove_transaction(&curr_tx);
+                    self.remove_transaction(&curr_ts);
                 }
             }
             if transactions_sorted_new.len() > 0 {
@@ -213,42 +215,33 @@ impl<'t> Mempool<'t> {
         }
     }
 
-    fn remove_transaction(&mut self, transaction: &Arc<Transaction>) {
-        self.transactions_by_hash.remove(&transaction.hash());
-        self.transactions_sorted_fee.remove(transaction);
+    fn remove_transaction(&mut self, ts: &TransactionSortable) {
+        self.transactions_by_hash.remove(&ts.0.hash());
+        self.transactions_sorted_fee.remove(ts);
 
         let mut remove_key = false;
-        if let Entry::Occupied(mut e) = self.transactions_by_sender.entry(transaction.sender.clone()) {
+        if let Entry::Occupied(mut e) = self.transactions_by_sender.entry(ts.0.sender.clone()) {
             let mut transactions_sorted = e.get_mut();
             if transactions_sorted.len() > 1 {
-                transactions_sorted.remove(transaction);
+                transactions_sorted.remove(ts);
             } else {
                 remove_key = true;
             }
         }
         if remove_key {
-            self.transactions_by_sender.remove(&transaction.sender);
+            self.transactions_by_sender.remove(&ts.0.sender);
         }
-        if let Entry::Occupied(mut e) = self.transactions_by_recipient.entry(transaction.recipient.clone()) {
+        if let Entry::Occupied(mut e) = self.transactions_by_recipient.entry(ts.0.recipient.clone()) {
             let mut transactions_sorted = e.get_mut();
             if transactions_sorted.len() > 1 {
-                transactions_sorted.remove(transaction);
+                transactions_sorted.remove(ts);
             } else {
                 remove_key = true;
             }
         }
         if remove_key {
-            self.transactions_by_recipient.remove(&transaction.sender);
+            self.transactions_by_recipient.remove(&ts.0.sender);
         }
-    }
-}
-
-impl Ord for Transaction {
-    fn cmp(&self, other: &Self) -> Ordering {
-        return Ordering::Equal
-            .then_with(|| (u64::from(self.fee) / self.serialized_size() as u64).cmp(&(u64::from(other.fee) / other.serialized_size() as u64)))
-            .then_with(|| self.fee.cmp(&other.fee))
-            .then_with(|| self.value.cmp(&other.value));
     }
 }
 
@@ -257,6 +250,18 @@ pub enum ReturnCode {
     Invalid,
     Accepted,
     Known
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Debug)]
+struct TransactionSortable(Arc<Transaction>);
+
+impl Ord for TransactionSortable {
+    fn cmp(&self, other: &Self) -> Ordering {
+        return Ordering::Equal
+            .then_with(|| (u64::from(self.0.fee) / self.0.serialized_size() as u64).cmp(&(u64::from(other.0.fee) / other.0.serialized_size() as u64)))
+            .then_with(|| self.0.fee.cmp(&other.0.fee))
+            .then_with(|| self.0.value.cmp(&other.0.value));
+    }
 }
 
 /// Fee threshold in sat/byte below which transactions are considered "free".

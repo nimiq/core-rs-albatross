@@ -53,7 +53,7 @@ impl SignatureProof {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Debug)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 #[repr(C)]
 pub struct Transaction {
     pub data: Vec<u8>,
