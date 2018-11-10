@@ -1,0 +1,82 @@
+image: 'rust:latest'
+
+stages:
+  - test
+  - doc
+  - build
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/cargo
+  APT_CACHE_DIR: $CI_PROJECT_DIR/apt
+
+before_script:
+  - apt-get update -yq
+
+stages:
+  - build
+  - test
+  - deploy
+
+build-stable:
+  stage: build
+  script:
+    - rustc --version
+    - cargo --version
+    - cargo build --all
+
+build-nightly:
+  image: 'rustlang/rust:nightly'
+  stage: build
+  script:
+    - rustc +nightly --version
+    - cargo +nightly --version
+    - cargo +nightly build --all
+
+test-stable:
+  stage: test
+  dependencies:
+    - build-stable
+  script:
+    - cargo test --all
+
+test-nightly:
+  image: 'rustlang/rust:nightly'
+  stage: test
+  dependencies:
+    - build-nightly
+  script:
+    - cargo +nightly test --all
+
+coverage:
+  stage: test
+  dependencies:
+    - build-stable
+  script:
+    - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y cmake unzip libelf-dev libdw-dev binutils-dev libiberty-dev
+    - cargo coverage --version || cargo install cargo-travis
+    - if [ -e target/kcov-master ] && ! [ -x target/kcov-master/build/src/kcov ]; then rm -rf target/kcov-master; fi
+    - rm -rf target/kcov target/kcov-*-*
+    - cargo coverage --exclude-pattern="$PWD/tests","$PWD/cargo"
+    - rm -rf target/master.zip*
+    - echo "Coverage:" $(grep -Po 'covered":.*?[^\\]"' target/kcov/index.js | grep "[0-9]*\.[0-9]" -o)
+  artifacts:
+    paths:
+      - target/kcov
+
+pages:
+  stage: deploy
+  script:
+    - cargo doc --no-deps
+    - mv target/doc public
+    - echo '<meta http-equiv="refresh" content="0; url=nimiq">' > public/index.html
+  artifacts:
+    paths:
+      - public
+  only:
+    - master
+
+cache:
+  paths:
+    - apt/
+    - cargo/
+    - target/
