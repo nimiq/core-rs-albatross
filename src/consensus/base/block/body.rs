@@ -39,7 +39,7 @@ impl Hash for BlockBody {
 
 #[allow(unreachable_code)]
 impl BlockBody {
-    pub(super) fn verify(&self, network_id: NetworkId) -> bool {
+    pub(super) fn verify(&self, block_height: u32, network_id: NetworkId) -> bool {
         let mut previous_tx: Option<&Transaction> = None;
         for tx in &self.transactions {
             // Ensure transactions are ordered and unique.
@@ -58,14 +58,15 @@ impl BlockBody {
             }
             previous_tx = Some(tx);
 
-            // Check that all transactions are valid.
-            if !tx.verify() {
+            // Check intrinsic transaction invariants.
+            if !tx.verify(network_id) {
                 warn!("Invalid block - invalid transaction");
                 return false;
             }
 
-            // Check that all transactions belong to this network
-            if tx.network_id != network_id {
+            // Check that the transaction is within its validity window.
+            if !tx.is_valid_at(block_height) {
+                warn!("Invalid block - transaction outside validity window");
                 return false;
             }
         }
@@ -88,7 +89,7 @@ impl BlockBody {
             }
             previous_acc = Some(acc);
 
-            // Check that pruned accounts are actually supposed to be pruned.
+            // Check that the account is actually supposed to be pruned.
             if !acc.account.is_to_be_pruned() {
                 warn!("Invalid block - invalid pruned account");
                 return false;

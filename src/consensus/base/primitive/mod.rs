@@ -10,6 +10,8 @@ pub mod crypto;
 pub mod hash;
 pub mod coin;
 
+pub use self::coin::Coin;
+
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
 

@@ -1,12 +1,11 @@
 use nimiq::consensus::base::account::Accounts;
-use nimiq::consensus::base::primitive::Address;
+use nimiq::consensus::base::primitive::{Address, Coin};
 use nimiq::consensus::base::block::BlockBody;
 use nimiq::utils::db::WriteTransaction;
 use nimiq::utils::db::volatile::VolatileEnvironment;
 use nimiq::consensus::base::transaction::Transaction;
 use nimiq::consensus::networks::NetworkId;
 use nimiq::consensus::policy;
-use nimiq::consensus::base::primitive::coin::Coin;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {

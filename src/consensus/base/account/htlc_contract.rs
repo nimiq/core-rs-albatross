@@ -2,9 +2,8 @@ use beserial::{Serialize, Deserialize};
 use consensus::base::account::{Account, AccountError};
 use consensus::base::transaction::Transaction;
 use consensus::base::transaction::SignatureProof;
-use consensus::base::primitive::Address;
+use consensus::base::primitive::{Address, Coin};
 use consensus::base::primitive::hash::{HashAlgorithm, Hasher, Blake2bHasher, Sha256Hasher};
-use consensus::base::primitive::coin::Coin;
 use std::io;
 
 create_typed_array!(AnyHash, u8, 32);

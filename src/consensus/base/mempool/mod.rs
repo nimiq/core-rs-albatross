@@ -12,8 +12,8 @@ use std::sync::Arc;
 use consensus::base::blockchain::Blockchain;
 
 pub struct Mempool<'t> {
-    accounts: &'t Accounts<'t>,
     blockchain: &'t Blockchain<'t, 't>,
+    accounts: &'t Accounts<'t>,
     transactions_by_hash: HashMap<Blake2bHash, Arc<Transaction>>,
     transactions_by_sender: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
     transactions_by_recipient: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
@@ -21,10 +21,10 @@ pub struct Mempool<'t> {
 }
 
 impl<'t> Mempool<'t> {
-    pub fn new(blockchain: &'t Blockchain<'t, 't>, accounts: &'t Accounts<'t>) -> Self {
+    pub fn new(blockchain: &'t Blockchain<'t, 't>) -> Self {
         return Mempool {
-            accounts,
             blockchain,
+            accounts: &blockchain.accounts,
             transactions_by_hash: HashMap::new(),
             transactions_by_sender: HashMap::new(),
             transactions_by_recipient: HashMap::new(),
@@ -52,8 +52,8 @@ impl<'t> Mempool<'t> {
             }
         }
 
-        // Intrinsic transaction verification
-        if !transaction.verify() {
+        // Intrinsic transaction verification.
+        if !transaction.verify(self.blockchain.network_id) {
             return ReturnCode::Invalid;
         }
 
@@ -62,7 +62,7 @@ impl<'t> Mempool<'t> {
         if recipient_account.account_type() != transaction.recipient_type {
             return ReturnCode::Invalid;
         }
-        if let Err(_) = recipient_account.with_incoming_transaction(&transaction, self.blockchain.head().height()) {
+        if let Err(_) = recipient_account.with_incoming_transaction(&transaction, self.blockchain.height()) {
             return ReturnCode::Invalid;
         }
 
@@ -71,7 +71,7 @@ impl<'t> Mempool<'t> {
         if sender_account.account_type() != transaction.sender_type {
             return ReturnCode::Invalid;
         }
-        if let Err(e) = sender_account.with_outgoing_transaction(&transaction, self.blockchain.head().height()) {
+        if let Err(e) = sender_account.with_outgoing_transaction(&transaction, self.blockchain.height()) {
             return ReturnCode::Invalid;
         }
 
@@ -90,7 +90,7 @@ impl<'t> Mempool<'t> {
             let mut tx_count = 0;
             for curr_tx in transactions_sorted {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if let Ok(new_account) = sender_changed.with_outgoing_transaction(&transaction_arc, 1) {
+                    if let Ok(new_account) = sender_changed.with_outgoing_transaction(&transaction_arc, self.blockchain.height()) {
                         sender_changed = new_account;
                         tx_count += 1;
                         continue;

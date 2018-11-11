@@ -1,7 +1,7 @@
 use beserial::Deserialize;
 use beserial::Serialize;
 use hex;
-use nimiq::consensus::base::primitive::Address;
+use nimiq::consensus::base::primitive::{Address, Coin};
 use nimiq::consensus::base::primitive::hash::Hash;
 use nimiq::consensus::base::primitive::crypto::KeyPair;
 use nimiq::consensus::base::block::BlockBody;
@@ -11,7 +11,6 @@ use nimiq::consensus::networks::NetworkId;
 use nimiq::utils::db::WriteTransaction;
 use nimiq::utils::db::volatile::VolatileEnvironment;
 use std::sync::Arc;
-use nimiq::consensus::base::primitive::coin::Coin;
 use nimiq::consensus::base::blockchain::Blockchain;
 use nimiq::network::NetworkTime;
 
@@ -21,7 +20,7 @@ const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c3
 fn push_same_tx_twice() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
-    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
+    let mut mempool = Mempool::new(&blockchain);
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -53,7 +52,7 @@ fn push_same_tx_twice() {
 fn push_tx_with_wrong_signature() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
-    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
+    let mut mempool = Mempool::new(&blockchain);
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
     let mut t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
@@ -68,7 +67,7 @@ fn push_tx_with_wrong_signature() {
 fn push_tx_with_insufficient_balance() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
-    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
+    let mut mempool = Mempool::new(&blockchain);
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
@@ -83,7 +82,7 @@ fn push_tx_with_insufficient_balance() {
 fn push_and_get_valid_tx() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
-    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
+    let mut mempool = Mempool::new(&blockchain);
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -115,7 +114,7 @@ fn push_and_get_valid_tx() {
 fn push_and_get_two_tx_same_user() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
-    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
+    let mut mempool = Mempool::new(&blockchain);
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -157,7 +156,7 @@ fn push_and_get_two_tx_same_user() {
 fn reject_free_tx_beyond_limit() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Blockchain::new(&env, &NetworkTime {}, NetworkId::Main);
-    let mut mempool = Mempool::new(&blockchain, &blockchain.accounts);
+    let mut mempool = Mempool::new(&blockchain);
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);

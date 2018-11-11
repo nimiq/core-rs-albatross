@@ -1,6 +1,6 @@
 use consensus::base::account::{Account, AccountError, AccountType};
 use consensus::base::block::{Block, BlockBody};
-use consensus::base::primitive::Address;
+use consensus::base::primitive::{Address, Coin};
 use consensus::base::primitive::hash::Blake2bHash;
 use consensus::base::transaction::{Transaction, TransactionFlags};
 use consensus::networks::NetworkId;
@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use super::tree::AccountsTree;
 use utils::db;
 use utils::db::{Environment, ReadTransaction, WriteTransaction};
-use consensus::base::primitive::coin::Coin;
 
 #[derive(Debug)]
 pub struct Accounts<'env> {

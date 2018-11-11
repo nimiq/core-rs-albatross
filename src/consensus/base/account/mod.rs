@@ -6,7 +6,7 @@ pub mod accounts;
 
 use beserial::{Deserialize, Serialize, WriteBytesExt, ReadBytesExt};
 use consensus::base::transaction::Transaction;
-use consensus::base::primitive::Address;
+use consensus::base::primitive::{Address, Coin};
 use consensus::base::primitive::hash::{Hash, SerializeContent};
 use std::cmp::Ordering;
 use std::io;
@@ -16,7 +16,6 @@ pub use self::basic_account::BasicAccount;
 pub use self::htlc_contract::HashedTimeLockedContract;
 pub use self::vesting_contract::VestingContract;
 pub use self::accounts::Accounts;
-use consensus::base::primitive::coin::Coin;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]

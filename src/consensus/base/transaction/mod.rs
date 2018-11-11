@@ -1,13 +1,13 @@
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
 use consensus::base::account::{Account, AccountType};
-use consensus::base::primitive::Address;
+use consensus::base::primitive::{Address, Coin};
 use consensus::base::primitive::crypto::{PublicKey, Signature};
 use consensus::base::primitive::hash::{Hash, SerializeContent, Blake2bHash};
 use consensus::networks::NetworkId;
+use consensus::policy;
 use std::cmp::{Ord, Ordering};
 use std::io;
 use utils::merkle::Blake2bMerklePath;
-use consensus::base::primitive::coin::Coin;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -130,8 +130,10 @@ impl Transaction {
             .then_with(|| self.flags.cmp(&tx.flags));
     }
 
-    pub fn verify(&self) -> bool {
-        // TODO Check network id.
+    pub fn verify(&self, network_id: NetworkId) -> bool {
+        if self.network_id != network_id {
+            return false;
+        }
 
         // Check that sender != recipient.
         if self.recipient == self.sender {
@@ -162,6 +164,11 @@ impl Transaction {
         }
 
         return true;
+    }
+
+    pub fn is_valid_at(&self, block_height: u32) -> bool {
+        return block_height >= self.validity_start_height
+            && block_height < self.validity_start_height + policy::TRANSACTION_VALIDITY_WINDOW;
     }
 
     pub fn contract_creation_address(&self) -> Address {

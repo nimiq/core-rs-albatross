@@ -26,7 +26,7 @@ impl From<u32> for TargetCompact {
 impl From<TargetCompact> for Target {
     fn from(t: TargetCompact) -> Self {
         let mut val = [0u8; 32];
-        let shift_bytes: usize = ((t.0 >> 24) as i16 - 3).max(0) as usize;
+        let shift_bytes = (t.0 >> 24).saturating_sub(3) as usize;
         let value = t.0 & 0xffffff;
         val[32 - shift_bytes - 1] = (value & 0xff) as u8;
         val[32 - shift_bytes - 2] = ((value >> 8) & 0xff) as u8;

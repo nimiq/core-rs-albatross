@@ -1,7 +1,7 @@
 use bigdecimal::BigDecimal;
 use consensus::base::account::Accounts;
 use consensus::base::block::{Block, Target, TargetCompact};
-use consensus::base::blockchain::{ChainData, ChainStore};
+use consensus::base::blockchain::{ChainData, ChainStore, TransactionCache};
 use consensus::base::primitive::hash::{Hash, Blake2bHash};
 use consensus::networks::{NetworkId, get_network_info};
 use consensus::policy;
@@ -12,10 +12,11 @@ use utils::db::{Environment, ReadTransaction, WriteTransaction};
 pub struct Blockchain<'env, 'time> {
     env: &'env Environment,
     network_time: &'time NetworkTime,
-    network_id: NetworkId,
+    pub network_id: NetworkId,
 
     pub accounts: Accounts<'env>,
     chain_store: ChainStore<'env>,
+    transaction_cache: TransactionCache,
     main_chain: ChainData,
     head_hash: Blake2bHash,
 }
@@ -55,9 +56,16 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         assert_eq!(main_chain.head.header.accounts_hash, accounts.hash(None),
             "Inconsistent chain/accounts state. Reset your consensus database.");
 
-        // TODO Initialize TransactionCache.
+        // Initialize TransactionCache.
+        let mut transaction_cache = TransactionCache::new();
+        let blocks = chain_store.get_blocks_backward(&head_hash, transaction_cache.missing_blocks() - 1, true);
+        for block in blocks.iter().rev() {
+            transaction_cache.push_block(block);
+        }
+        transaction_cache.push_block(&main_chain.head);
+        assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.header.height));
 
-        return Blockchain { env, network_time, network_id, accounts, chain_store, main_chain, head_hash };
+        return Blockchain { env, network_time, network_id, accounts, chain_store, transaction_cache, main_chain, head_hash };
     }
 
     fn init(env: &'env Environment, network_time: &'time NetworkTime, network_id: NetworkId, chain_store: ChainStore<'env>) -> Self {
@@ -70,13 +78,16 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         let mut txn = WriteTransaction::new(env);
         chain_store.put_chain_data(&mut txn, &head_hash, &main_chain, true);
         chain_store.set_head(&mut txn, &head_hash);
+        // FIXME commit chain & accounts txn together
         txn.commit();
 
         // TODO Initialize accounts.
         let accounts = Accounts::new(env);
 
+        // Initialize empty TransactionCache.
+        let transaction_cache = TransactionCache::new();
 
-        return Blockchain { env, network_time, network_id, accounts, chain_store, main_chain, head_hash };
+        return Blockchain { env, network_time, network_id, accounts, chain_store, transaction_cache, main_chain, head_hash };
     }
 
     pub fn push(&mut self, block: Block) -> PushResult {
@@ -92,7 +103,7 @@ impl<'env, 'time> Blockchain<'env, 'time> {
             return PushResult::Invalid;
         }
 
-        // Check intrinsic block invariants.
+        // Check (sort of) intrinsic block invariants.
         if !block.verify(self.network_time.now(), self.network_id) {
             return PushResult::Invalid;
         }
@@ -148,10 +159,14 @@ impl<'env, 'time> Blockchain<'env, 'time> {
     }
 
     fn extend(&mut self, block_hash: Blake2bHash, mut chain_data: ChainData, mut prev_data: ChainData) -> bool {
+        // Check transactions against TransactionCache to prevent replay.
+        if self.transaction_cache.contains_any(&chain_data.head) {
+            warn!("Rejecting block - transaction already included");
+            return false;
+        }
+
+        // Commit block to AccountsTree.
         let mut txn = WriteTransaction::new(self.env);
-
-        // TODO check TransactionCache!
-
         if let Err(e) = self.accounts.commit_block(&mut txn, &chain_data.head) {
             warn!("Rejecting block - commit failed: {}", e);
             txn.abort();
@@ -164,8 +179,10 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         self.chain_store.put_chain_data(&mut txn, &block_hash, &chain_data, true);
         self.chain_store.put_chain_data(&mut txn, &chain_data.head.header.prev_hash, &prev_data, false);
         self.chain_store.set_head(&mut txn, &block_hash);
-
         txn.commit();
+
+        self.transaction_cache.push_block(&chain_data.head);
+
         self.main_chain = chain_data;
         self.head_hash = block_hash;
 
@@ -194,8 +211,9 @@ impl<'env, 'time> Blockchain<'env, 'time> {
 
         debug!("Found common ancestor {} at height #{}, {} blocks up", current.0, current.1.head.header.height, fork_chain.len());
 
-        // Revert the AccountsTree to the common ancestor state.
+        // Revert AccountsTree & TransactionCache to the common ancestor state.
         let mut write_txn = WriteTransaction::new(self.env);
+        let mut cache_txn = self.transaction_cache.clone();
 
         let mut revert_chain: Vec<(Blake2bHash, ChainData)> = vec![];
         let mut ancestor = current;
@@ -204,6 +222,8 @@ impl<'env, 'time> Blockchain<'env, 'time> {
             if let Err(e) = self.accounts.revert_block(&mut write_txn, &current.1.head) {
                 panic!("Failed to revert main chain while rebranching - {}", e);
             }
+
+            cache_txn.revert_block(&current.1.head);
 
             let prev_hash = current.1.head.header.prev_hash.clone();
             let prev_data = self.chain_store
@@ -217,14 +237,34 @@ impl<'env, 'time> Blockchain<'env, 'time> {
             current = (prev_hash, prev_data);
         }
 
-        // TODO TransactionCache
+        // Fetch missing blocks for TransactionCache.
+        assert!(cache_txn.is_empty() || cache_txn.head_hash() == ancestor.0);
+        let start_hash = if cache_txn.is_empty() {
+            ancestor.1.main_chain_successor.unwrap()
+        } else {
+            cache_txn.tail_hash()
+        };
+        let blocks = self.chain_store.get_blocks_backward(&start_hash, cache_txn.missing_blocks(), true);
+        for block in blocks.iter() {
+            cache_txn.prepend_block(block);
+        }
+        assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.header.height));
 
-        // Apply all fork blocks.
+        // Check each fork block against TransactionCache & commit to AccountsTree.
         for fork_block in fork_chain.iter().rev() {
-            if let Err(e) = self.accounts.commit_block(&mut write_txn, &fork_block.1.head) {
-                warn!("Failed to apply fork block while rebranching - {}", e);
+            if cache_txn.contains_any(&fork_block.1.head) {
+                warn!("Failed to apply fork block while rebranching - transaction already included");
+                write_txn.abort();
                 return false;
             }
+
+            if let Err(e) = self.accounts.commit_block(&mut write_txn, &fork_block.1.head) {
+                warn!("Failed to apply fork block while rebranching - {}", e);
+                write_txn.abort();
+                return false;
+            }
+
+            cache_txn.push_block(&fork_block.1.head);
         }
 
         // Fork looks good.
@@ -257,6 +297,8 @@ impl<'env, 'time> Blockchain<'env, 'time> {
 
         // Commit transaction & update head.
         write_txn.commit();
+        self.transaction_cache = cache_txn;
+
         self.main_chain = fork_chain[0].1.clone(); // TODO get rid of the .clone() here
         self.head_hash = fork_chain[0].0.clone();
 
@@ -275,7 +317,7 @@ impl<'env, 'time> Blockchain<'env, 'time> {
             None => &self.main_chain
         };
 
-        let tail_height = 1i64.max(head_data.head.header.height as i64 - policy::DIFFICULTY_BLOCK_WINDOW as i64) as u32;
+        let tail_height = 1u32.max(head_data.head.header.height.saturating_sub(policy::DIFFICULTY_BLOCK_WINDOW));
         let tail_data;
         if head_data.on_main_chain {
             tail_data = self.chain_store
@@ -350,6 +392,10 @@ impl<'env, 'time> Blockchain<'env, 'time> {
     }
 
     pub fn head(&self) -> &Block {
-        return &self.main_chain.head;
+        &self.main_chain.head
+    }
+
+    pub fn height(&self) -> u32 {
+        self.main_chain.head.header.height
     }
 }

@@ -81,7 +81,7 @@ impl Block {
 
     fn verify_body(&self, body: &BlockBody, network_id: NetworkId) -> bool {
         // Check that the body is valid.
-        if !body.verify(network_id) {
+        if !body.verify(self.header.height, network_id) {
             return false;
         }
 
@@ -137,10 +137,6 @@ impl Block {
         }
 
         return BlockInterlink::new(hashes, &hash);
-    }
-
-    pub fn height(&self) -> u32 {
-        return self.header.height;
     }
 }
 

@@ -120,11 +120,48 @@ impl<'env> ChainStore<'env> {
         return Some(chain_data);
     }
 
-    pub fn get_block(&self, hash: &Blake2bHash) -> Option<Block> {
-        unimplemented!();
+    pub fn get_block(&self, hash: &Blake2bHash, include_body: bool, txn_option: Option<&Transaction>) -> Option<Block> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(self.env);
+                &read_txn
+            }
+        };
+
+        return if include_body {
+            txn.get(&self.block_db, hash)
+        } else {
+            txn.get(&self.chain_db, hash).map(|chain_data: ChainData| chain_data.head)
+        };
     }
 
     pub fn get_block_at(&self, block_height: u32) -> Option<Block> {
         unimplemented!();
+    }
+
+    pub fn get_blocks_backward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool) -> Vec<Block> {
+        let txn = ReadTransaction::new(self.env);
+
+        let mut blocks= Vec::new();
+        let start_block = match self.get_block(start_block_hash, false, Some(&txn)) {
+            Some(block) => block,
+            None => return blocks
+        };
+
+        let mut hash = start_block.header.prev_hash;
+        while (blocks.len() as u32) < count {
+            let block_opt = self.get_block(&hash, include_body, Some(&txn));
+            if block_opt.is_none() {
+                break;
+            }
+
+            let block = block_opt.unwrap();
+            hash = block.header.prev_hash.clone();
+            blocks.push(block);
+        }
+
+        return blocks;
     }
 }

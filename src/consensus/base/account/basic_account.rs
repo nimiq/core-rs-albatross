@@ -3,7 +3,7 @@ use super::AccountError;
 use super::super::transaction::Transaction;
 use consensus::base::account::Account;
 use consensus::base::transaction::SignatureProof;
-use consensus::base::primitive::coin::Coin;
+use consensus::base::primitive::Coin;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BasicAccount {

@@ -1,7 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use nimiq::consensus::base::account::AccountType;
-use nimiq::consensus::base::primitive::Address;
-use nimiq::consensus::base::primitive::coin::Coin;
+use nimiq::consensus::base::primitive::{Address, Coin};
 use nimiq::consensus::base::transaction::*;
 use nimiq::consensus::networks::NetworkId;
 use hex;

@@ -1,9 +1,8 @@
 use beserial::{Serialize, Deserialize};
-use consensus::base::primitive::Address;
+use consensus::base::primitive::{Address, Coin};
 use consensus::base::transaction::{Transaction, SignatureProof};
 use super::{Account, AccountError};
 use std::io;
-use consensus::base::primitive::coin::Coin;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct VestingContract {
