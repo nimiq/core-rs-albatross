@@ -43,13 +43,12 @@ impl HashedTimeLockedContract {
         let hash_root = Deserialize::deserialize(reader)?;
         let hash_count = Deserialize::deserialize(reader)?;
         let timeout = Deserialize::deserialize(reader)?;
-        let total_amount: Coin = Deserialize::deserialize(reader)?;
 
         if hash_count == 0 {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid hash_count"));
         }
 
-        return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_root, hash_count, timeout, total_amount));
+        return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_root, hash_count, timeout, transaction.value));
     }
 
     fn new(balance: Coin, sender: Address, recipient: Address, hash_root: AnyHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
@@ -120,7 +119,10 @@ impl HashedTimeLockedContract {
 
         return match verify() {
             Ok(result) => result,
-            Err(e) => false
+            Err(e) => {
+                println!("{}", e);
+                false
+            }
         };
     }
 

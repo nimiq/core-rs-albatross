@@ -71,7 +71,7 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn new_basic(sender: Address, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
-        return Transaction {
+        return Self {
             data: Vec::new(),
             sender,
             sender_type: AccountType::Basic,
@@ -84,6 +84,24 @@ impl Transaction {
             flags: TransactionFlags::empty(),
             proof: Vec::new()
         };
+    }
+
+    pub fn new_contract_creation(data: Vec<u8>, sender: Address, sender_type: AccountType, recipient_type: AccountType, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
+        let mut tx = Self {
+            data,
+            sender,
+            sender_type,
+            recipient: Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]),
+            recipient_type,
+            value,
+            fee,
+            validity_start_height,
+            network_id,
+            flags: TransactionFlags::CONTRACT_CREATION,
+            proof: Vec::new()
+        };
+        tx.recipient = tx.contract_creation_address();
+        return tx;
     }
 
     fn transaction_type(&self) -> TransactionType {
