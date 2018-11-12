@@ -261,8 +261,7 @@ impl Future for AcceptAsync<WebSocketLayer> {
 }
 
 /// Connect to a given URL.
-pub fn nimiq_connect_async(url: Url)
-                           -> ConnectAsync<WebSocketStream<MaybeTlsStream<TcpStream>>, io::Error>
+pub fn nimiq_connect_async(url: Url) -> ConnectAsync<WebSocketLayer, io::Error>
 {
     let connect = Box::new(
         connect_async(url).map(|(ws,_)| ws).map_err(|e| {
