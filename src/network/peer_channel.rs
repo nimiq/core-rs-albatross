@@ -11,25 +11,8 @@ use crate::consensus::base::primitive::hash::Argon2dHash;
 use crate::network::message::Message;
 use crate::network::websocket::NimiqMessageStreamError;
 use crate::network::websocket::SharedNimiqMessageStream;
-
-#[derive(Clone, Debug)]
-pub struct Peer {
-    sink: PeerSink,
-    version: Option<u8>,
-    head_hash: Option<Argon2dHash>,
-    time_offset: Option<u8>,
-}
-
-impl Peer {
-    pub fn new(sink: PeerSink) -> Self {
-        Peer {
-            sink,
-            version: None,
-            head_hash: None,
-            time_offset: None,
-        }
-    }
-}
+use crate::network::peer::Peer;
+use crate::network::connection::network_connection::AddressInfo;
 
 #[derive(Debug)]
 pub enum ProtocolError {
@@ -128,27 +111,22 @@ impl Debug for Session {
     }
 }
 
+#[derive(Clone)]
 pub struct PeerSink {
-    sink: UnboundedSender<Message>
+    sink: UnboundedSender<Message>,
+    pub address_info: AddressInfo,
 }
 
 impl PeerSink {
-    pub fn new(channel: UnboundedSender<Message>) -> Self {
+    pub fn new(channel: UnboundedSender<Message>, address_info: AddressInfo) -> Self {
         PeerSink {
-            sink: channel.clone()
+            sink: channel.clone(),
+            address_info
         }
     }
 
     pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> {
         self.sink.unbounded_send(msg)
-    }
-}
-
-impl Clone for PeerSink {
-    fn clone(&self) -> Self {
-        PeerSink {
-            sink: self.sink.clone()
-        }
     }
 }
 
