@@ -1,20 +1,16 @@
-use network::websocket::NimiqMessageStream;
-use tokio::prelude::{Stream,Sink};
-use network::message::Message;
+use std::fmt;
+use std::fmt::Debug;
+use std::sync::Arc;
+
 use futures::prelude::*;
 use futures::sync::mpsc::*;
-use futures::stream::Forward;
+use parking_lot::Mutex;
+use tokio::prelude::{Stream};
+
+use consensus::base::primitive::hash::Argon2dHash;
+use network::message::Message;
 use network::websocket::NimiqMessageStreamError;
 use network::websocket::SharedNimiqMessageStream;
-use consensus::base::primitive::hash::Argon2dHash;
-use parking_lot::Mutex;
-use std::sync::Arc;
-use std::fmt::Debug;
-use std::fmt;
-use network::address::net_address::NetAddress;
-use network::address::peer_address::PeerAddress;
-use network::Protocol;
-use network::connection::close_type::CloseType;
 
 #[derive(Clone, Debug)]
 pub struct Peer {
@@ -90,7 +86,7 @@ pub struct Session {
 }
 
 impl Session {
-    fn new(sink: PeerSink) -> Session {
+    pub fn new(sink: PeerSink) -> Session {
         let peer = Peer::new(sink.clone());
         let ping = PingAgent::new(sink.clone()).boxed();
         Session {
@@ -189,63 +185,5 @@ impl PeerStream {
         });
 
         process_message
-    }
-}
-
-pub struct NetworkConnection {
-    peer_stream: Option<PeerStream>,
-    peer_sink: PeerSink,
-    stream: SharedNimiqMessageStream,
-    forward_future: Option<Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>>,
-    session: Arc<Session>,
-//    pub peer_address: PeerAddress,
-}
-
-impl NetworkConnection {
-    pub fn new(stream: NimiqMessageStream) -> Self {
-        let shared_stream: SharedNimiqMessageStream = stream.into();
-        let (tx, rx) = unbounded(); // TODO: use bounded channel?
-
-        let forward_future = Some(rx.forward(shared_stream.clone()));
-
-        let peer_sink = PeerSink::new(tx);
-        let session = Arc::new(Session::new(peer_sink.clone()));
-
-        NetworkConnection {
-            peer_stream: Some(PeerStream::new(shared_stream.clone(), session.clone())),
-            peer_sink,
-            stream: shared_stream,
-            forward_future,
-            session,
-        }
-    }
-
-    pub fn process_connection(&mut self) -> impl Future<Item=(), Error=()> {
-        assert!(self.forward_future.is_some() && self.peer_stream.is_some(), "Process connection can only be called once!");
-
-        self.session.initialize();
-
-        let forward_future = self.forward_future.take().unwrap();
-        let stream = self.peer_stream.take().unwrap();
-        let pair = forward_future.join(stream.process_stream().map_err(|_| ())); // TODO: throwing away error info here
-        pair.map(|_| ())
-    }
-
-    pub fn close(&mut self, ty: CloseType, reason: &str) -> Poll<(), ()> {
-        debug!("Closing {:?} connection, reason: {}", ty, reason);
-        self.session.on_close();
-        self.stream.close()
-    }
-
-    pub fn net_address(&self) -> &NetAddress {
-        self.stream.net_address()
-    }
-
-    pub fn outbound(&self) -> bool {
-        self.stream.outbound()
-    }
-
-    pub fn inbound(&self) -> bool {
-        !self.outbound()
     }
 }

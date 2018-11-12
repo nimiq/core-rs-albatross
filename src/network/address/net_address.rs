@@ -1,7 +1,6 @@
 use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
 use std::io;
 use std::cmp::min;
-use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Clone)]
