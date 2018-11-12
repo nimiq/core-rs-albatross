@@ -9,7 +9,7 @@ use tungstenite::protocol::Message as WebSocketMessage;
 use tungstenite::error::Error as WsError;
 use url::Url;
 use tokio::net::TcpStream;
-use tokio_tungstenite::connect_async;
+use tokio_tungstenite::{connect_async, accept_async};
 use std::io;
 use utils::locking::MultiLock;
 use std::fmt::Debug;
@@ -241,6 +241,25 @@ impl<E> Future for ConnectAsync<WebSocketLayer, E>
     }
 }
 
+/// Future returned from nimiq_accept_async() which will resolve
+/// once the connection handshake has finished.
+pub struct AcceptAsync<S: Stream + Sink>
+{
+    inner: Box<Future<Item = S, Error = io::Error> + Send>,
+}
+
+impl Future for AcceptAsync<WebSocketLayer> {
+    type Item = NimiqMessageStream;
+    type Error = io::Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        match self.inner.poll()? {
+            Async::NotReady => Ok(Async::NotReady),
+            Async::Ready(ws) => Ok(Async::Ready(NimiqMessageStream::new(ws))),
+        }
+    }
+}
+
 /// Connect to a given URL.
 pub fn nimiq_connect_async(url: Url)
                            -> ConnectAsync<WebSocketStream<MaybeTlsStream<TcpStream>>, io::Error>
@@ -253,6 +272,18 @@ pub fn nimiq_connect_async(url: Url)
     );
 
     ConnectAsync {inner: connect}
+}
+
+pub fn nimiq_accept_async(stream: TcpStream) -> AcceptAsync<WebSocketLayer>
+{
+    let accept = Box::new(
+        accept_async(tokio_tungstenite::stream::Stream::Plain(stream)).map(|ws| ws).map_err(|e| {
+            println!("Error during the websocket handshake occurred: {}", e);
+            io::Error::new(io::ErrorKind::Other, e)
+        })
+    );
+
+    AcceptAsync {inner: accept}
 }
 
 #[derive(Debug)]
