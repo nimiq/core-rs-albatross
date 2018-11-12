@@ -4,7 +4,11 @@ use network::Protocol;
 use network::address::{NetAddress, PeerId};
 use std::io;
 use std::vec::Vec;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::fmt;
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum PeerAddressType {
     Dumb,
     Ws(String, u16),
@@ -13,7 +17,7 @@ pub enum PeerAddressType {
 }
 
 impl PeerAddressType {
-    pub fn get_protocol(&self) -> Protocol {
+    pub fn protocol(&self) -> Protocol {
         match self {
             PeerAddressType::Dumb => Protocol::Dumb,
             PeerAddressType::Ws(_, _) => Protocol::Ws,
@@ -23,20 +27,22 @@ impl PeerAddressType {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PeerAddress {
-    ty: PeerAddressType,
-    services: u32,
-    timestamp: u64,
-    net_address: NetAddress,
-    public_key: PublicKey,
-    distance: u8,
-    signature: Signature,
+    pub ty: PeerAddressType,
+    pub services: u32,
+    pub timestamp: u64,
+    pub net_address: NetAddress,
+    pub public_key: PublicKey,
+    pub distance: u8,
+    pub signature: Signature,
+    pub peer_id: PeerId,
 }
 
 impl Serialize for PeerAddress {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
         let mut size = 0;
-        size += self.ty.get_protocol().serialize(writer)?;
+        size += self.ty.protocol().serialize(writer)?;
         size += self.services.serialize(writer)?;
         size += self.timestamp.serialize(writer)?;
         size += self.net_address.serialize(writer)?;
@@ -54,7 +60,7 @@ impl Serialize for PeerAddress {
 
     fn serialized_size(&self) -> usize {
         let mut size = 0;
-        size += self.ty.get_protocol().serialized_size();
+        size += self.ty.protocol().serialized_size();
         size += self.services.serialized_size();
         size += self.timestamp.serialized_size();
         size += self.net_address.serialized_size();
@@ -86,7 +92,8 @@ impl Deserialize for PeerAddress {
             Protocol::Wss => PeerAddressType::Wss(DeserializeWithLength::deserialize::<u16, R>(reader)?, Deserialize::deserialize(reader)?),
             Protocol::Rtc => PeerAddressType::Rtc
         };
-        return Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key, distance, signature});
+        let peer_id = PeerId::from(&public_key);
+        return Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key, distance, signature, peer_id});
     }
 }
 
@@ -96,7 +103,7 @@ impl PeerAddress {
     }
 
     pub fn as_uri(&self) -> String {
-        let peer_id: String = String::from(::hex::encode(&PeerId::from(&self.public_key).0));
+        let peer_id: String = String::from(::hex::encode(&self.peer_id.0));
         match self.ty {
             PeerAddressType::Dumb => format!("dumb:///{}", peer_id),
             PeerAddressType::Ws(ref host, ref port) => format!("ws:///{}:{}/{}", host, port, peer_id),
@@ -106,7 +113,7 @@ impl PeerAddress {
     }
 
     pub fn get_signature_data(&self) -> Vec<u8> {
-        let mut res: Vec<u8> = (self.ty.get_protocol() as u8).serialize_to_vec();
+        let mut res: Vec<u8> = (self.ty.protocol() as u8).serialize_to_vec();
         res.append(&mut self.services.serialize_to_vec());
         res.append(&mut self.timestamp.serialize_to_vec());
 
@@ -119,6 +126,46 @@ impl PeerAddress {
         };
 
         return res;
+    }
+
+    pub fn protocol(&self) -> Protocol { self.ty.protocol() }
+
+    pub fn peer_id(&self) -> &PeerId { &self.peer_id }
+}
+
+impl PartialEq for PeerAddress {
+    fn eq(&self, other: &PeerAddress) -> bool {
+        // We consider peer addresses to be equal if the public key or peer id is not known on one of them:
+        // Peers from the network always contain a peer id and public key, peers without peer id or public key
+        // are always set by the user.
+        return self.protocol() == other.protocol()
+            && self.public_key == other.public_key
+            && self.peer_id == other.peer_id
+            /* services is ignored */
+            /* timestamp is ignored */
+            /* netAddress is ignored */
+            /* distance is ignored */;
+    }
+}
+
+impl Eq for PeerAddress {}
+
+impl Hash for PeerAddress {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let peer_id: String = String::from(::hex::encode(&self.peer_id.0));
+        let peer_id_uri = match self.ty {
+            PeerAddressType::Dumb => format!("dumb:///{}", peer_id),
+            PeerAddressType::Ws(_, _) => format!("ws:///{}", peer_id),
+            PeerAddressType::Wss(_, _) => format!("wss:///{}", peer_id),
+            PeerAddressType::Rtc => format!("rtc:///{}", peer_id)
+        };
+        peer_id_uri.hash(state);
+    }
+}
+
+impl fmt::Display for PeerAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.as_uri())
     }
 }
 

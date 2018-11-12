@@ -1,5 +1,5 @@
-mod net_address;
-mod peer_address;
+pub mod net_address;
+pub mod peer_address;
 
 pub use self::net_address::*;
 pub use self::peer_address::*;

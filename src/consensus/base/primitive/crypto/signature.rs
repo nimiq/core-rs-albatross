@@ -3,7 +3,7 @@ use std::io;
 use ed25519_dalek;
 use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Signature(pub(in super) ed25519_dalek::Signature);
 
 impl Signature {

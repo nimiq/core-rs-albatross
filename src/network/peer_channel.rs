@@ -11,6 +11,10 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use std::fmt::Debug;
 use std::fmt;
+use network::address::net_address::NetAddress;
+use network::address::peer_address::PeerAddress;
+use network::Protocol;
+use network::connection::close_type::CloseType;
 
 #[derive(Clone, Debug)]
 pub struct Peer {
@@ -36,12 +40,12 @@ pub enum ProtocolError {
     SendError(SendError<Message>),
 }
 
-pub trait Protocol: Send {
+pub trait Agent: Send {
     /// Initialize the protocol.
     fn initialize(&mut self) {}
 
     /// Maintain the protocol state.
-    fn maintain(&mut self) {}
+//    fn maintain(&mut self) {}
 
     /// Handle a message.
     fn on_message(&mut self, msg: &Message) -> Result<(), ProtocolError>;
@@ -50,25 +54,25 @@ pub trait Protocol: Send {
     fn on_close(&mut self) {}
 
     /// Boxes the protocol.
-    fn boxed(self) -> Box<Protocol> where Self: Sized + 'static {
+    fn boxed(self) -> Box<Agent> where Self: Sized + 'static {
         Box::new(self)
     }
 }
 
 #[derive(Debug)]
-pub struct PingProtocol {
+pub struct PingAgent {
     sink: PeerSink,
 }
 
-impl PingProtocol {
+impl PingAgent {
     pub fn new(sink: PeerSink) -> Self {
-        PingProtocol {
+        PingAgent {
             sink,
         }
     }
 }
 
-impl Protocol for PingProtocol {
+impl Agent for PingAgent {
     fn on_message(&mut self, msg: &Message) -> Result<(), ProtocolError> {
         if let Message::Ping(nonce) = msg {
             // Respond with a pong message.
@@ -82,13 +86,13 @@ impl Protocol for PingProtocol {
 
 pub struct Session {
     peer: Peer,
-    protocols: Mutex<Vec<Box<Protocol>>>,
+    protocols: Mutex<Vec<Box<Agent>>>,
 }
 
 impl Session {
     fn new(sink: PeerSink) -> Session {
         let peer = Peer::new(sink.clone());
-        let ping = PingProtocol::new(sink.clone()).boxed();
+        let ping = PingAgent::new(sink.clone()).boxed();
         Session {
             peer,
             protocols: Mutex::new(vec![ping]),
@@ -101,11 +105,11 @@ impl Session {
         }
     }
 
-    pub fn maintain(&self) {
-        for protocol in self.protocols.lock().iter_mut() {
-            protocol.maintain();
-        }
-    }
+//    pub fn maintain(&self) {
+//        for protocol in self.protocols.lock().iter_mut() {
+//            protocol.maintain();
+//        }
+//    }
 
     pub fn on_message(&self, msg: Message) -> Result<(), ProtocolError> {
         self.protocols.lock().iter_mut().map(|protocol| {
@@ -194,6 +198,7 @@ pub struct PeerConnection {
     stream: SharedNimiqMessageStream,
     forward_future: Option<Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>>,
     session: Arc<Session>,
+//    pub peer_address: PeerAddress,
 }
 
 impl PeerConnection {
@@ -226,8 +231,21 @@ impl PeerConnection {
         pair.map(|_| ())
     }
 
-    pub fn close(&mut self) -> Poll<(), ()> {
+    pub fn close(&mut self, ty: CloseType, reason: &str) -> Poll<(), ()> {
+        debug!("Closing {:?} connection, reason: {}", ty, reason);
         self.session.on_close();
         self.stream.close()
+    }
+
+    pub fn net_address(&self) -> &NetAddress {
+        self.stream.net_address()
+    }
+
+    pub fn outbound(&self) -> bool {
+        self.stream.outbound()
+    }
+
+    pub fn inbound(&self) -> bool {
+        !self.outbound()
     }
 }

@@ -16,3 +16,10 @@ pub enum Protocol {
     Rtc = 2,
     Ws = 4
 }
+
+const IPV4_SUBNET_MASK: u8 = 24;
+const IPV6_SUBNET_MASK: u8 = 96;
+const PEER_COUNT_PER_IP_MAX: usize = 20;
+const OUTBOUND_PEER_COUNT_PER_SUBNET_MAX: usize = 2;
+const INBOUND_PEER_COUNT_PER_SUBNET_MAX: usize = 100;
+const PEER_COUNT_MAX: usize = 4000;

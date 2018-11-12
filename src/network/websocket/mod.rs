@@ -14,6 +14,7 @@ use std::io;
 use utils::locking::MultiLock;
 use std::fmt::Debug;
 use std::fmt;
+use network::address::net_address::NetAddress;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -39,6 +40,8 @@ pub struct NimiqMessageStream
     processing_tag: u8,
     sending_tag: u8,
     buf: Vec<WebSocketMessage>,
+    net_address: NetAddress,
+    outbound: bool,
 }
 
 impl NimiqMessageStream
@@ -49,7 +52,17 @@ impl NimiqMessageStream
             processing_tag: 0,
             sending_tag: 0,
             buf: Vec::with_capacity(64), // 1/10th of the max number of messages we would ever need to store
+            net_address: NetAddress::Unknown, // TODO
+            outbound: true, // TODO
         };
+    }
+
+    pub fn net_address(&self) -> &NetAddress {
+        &self.net_address
+    }
+
+    pub fn outbound(&self) -> bool {
+        self.outbound
     }
 }
 
@@ -245,11 +258,27 @@ pub fn nimiq_connect_async(url: Url)
 #[derive(Debug)]
 pub struct SharedNimiqMessageStream {
     inner: MultiLock<NimiqMessageStream>,
+    net_address: NetAddress,
+    outbound: bool,
+}
+
+impl SharedNimiqMessageStream {
+    pub fn net_address(&self) -> &NetAddress {
+        &self.net_address
+    }
+
+    pub fn outbound(&self) -> bool {
+        self.outbound
+    }
 }
 
 impl From<NimiqMessageStream> for SharedNimiqMessageStream {
     fn from(stream: NimiqMessageStream) -> Self {
+        let net_address = stream.net_address().clone();
+        let outbound = stream.outbound();
         SharedNimiqMessageStream {
+            net_address,
+            outbound,
             inner: MultiLock::new(stream),
         }
     }
@@ -259,6 +288,8 @@ impl Clone for SharedNimiqMessageStream {
     #[inline]
     fn clone(&self) -> Self {
         SharedNimiqMessageStream {
+            net_address: self.net_address.clone(),
+            outbound: self.outbound,
             inner: self.inner.clone()
         }
     }
