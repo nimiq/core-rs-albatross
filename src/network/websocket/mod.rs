@@ -9,11 +9,11 @@ use tungstenite::protocol::Message as WebSocketMessage;
 use tungstenite::error::Error as WsError;
 use url::Url;
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, accept_async};
+use tokio_tungstenite::{connect_async, accept_async, stream::PeerAddr};
 use std::io;
 use utils::locking::MultiLock;
 use std::fmt::Debug;
-use std::fmt;
+use std::{fmt, net};
 use network::address::net_address::NetAddress;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -46,14 +46,18 @@ pub struct NimiqMessageStream
 
 impl NimiqMessageStream
 {
-    fn new(ws_socket: WebSocketLayer) -> Self {
+    fn new(ws_socket: WebSocketLayer, outbound: bool) -> Self {
+        let peer_addr = ws_socket.get_ref().peer_addr().unwrap();
         return NimiqMessageStream {
             inner: ws_socket,
             processing_tag: 0,
             sending_tag: 0,
             buf: Vec::with_capacity(64), // 1/10th of the max number of messages we would ever need to store
-            net_address: NetAddress::Unknown, // TODO
-            outbound: true, // TODO
+            net_address: match peer_addr.ip() {
+                net::IpAddr::V4(ip4) => NetAddress::IPv4(ip4),
+                net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
+            },
+            outbound: outbound,
         };
     }
 
@@ -236,7 +240,7 @@ impl<E> Future for ConnectAsync<WebSocketLayer, E>
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         match self.inner.poll()? {
             Async::NotReady => Ok(Async::NotReady),
-            Async::Ready(ws) => Ok(Async::Ready(NimiqMessageStream::new(ws))),
+            Async::Ready(ws) => Ok(Async::Ready(NimiqMessageStream::new(ws, true))),
         }
     }
 }
@@ -255,7 +259,7 @@ impl Future for AcceptAsync<WebSocketLayer> {
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         match self.inner.poll()? {
             Async::NotReady => Ok(Async::NotReady),
-            Async::Ready(ws) => Ok(Async::Ready(NimiqMessageStream::new(ws))),
+            Async::Ready(ws) => Ok(Async::Ready(NimiqMessageStream::new(ws, false))),
         }
     }
 }

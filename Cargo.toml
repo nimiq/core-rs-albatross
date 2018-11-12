@@ -40,7 +40,7 @@ tokio = "0.1"
 futures = "0.1"
 byteorder = "1.2"
 tungstenite = "0.6"
-tokio-tungstenite = "0.6"
+tokio-tungstenite = { git = "https://github.com/jeffesquivels/tokio-tungstenite", branch = "implement_peer_addr" }
 regex = "1"
 
 [dev-dependencies]
