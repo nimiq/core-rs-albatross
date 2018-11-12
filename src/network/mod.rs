@@ -5,6 +5,7 @@ pub mod message;
 pub mod websocket;
 pub mod peer_channel;
 pub mod time;
+pub mod connection;
 
 use beserial::{Serialize, Deserialize};
 

@@ -192,7 +192,7 @@ impl PeerStream {
     }
 }
 
-pub struct PeerConnection {
+pub struct NetworkConnection {
     peer_stream: Option<PeerStream>,
     peer_sink: PeerSink,
     stream: SharedNimiqMessageStream,
@@ -201,7 +201,7 @@ pub struct PeerConnection {
 //    pub peer_address: PeerAddress,
 }
 
-impl PeerConnection {
+impl NetworkConnection {
     pub fn new(stream: NimiqMessageStream) -> Self {
         let shared_stream: SharedNimiqMessageStream = stream.into();
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
@@ -211,7 +211,7 @@ impl PeerConnection {
         let peer_sink = PeerSink::new(tx);
         let session = Arc::new(Session::new(peer_sink.clone()));
 
-        PeerConnection {
+        NetworkConnection {
             peer_stream: Some(PeerStream::new(shared_stream.clone(), session.clone())),
             peer_sink,
             stream: shared_stream,
