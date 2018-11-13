@@ -1,6 +1,6 @@
 use beserial::{Serialize, Deserialize};
-use consensus::base::account::{Account, AccountError};
-use consensus::base::transaction::Transaction;
+use consensus::base::account::{Account, AccountError, AccountType};
+use consensus::base::transaction::{Transaction, TransactionFlags};
 use consensus::base::transaction::SignatureProof;
 use consensus::base::primitive::{Address, Coin};
 use consensus::base::primitive::hash::{Hasher, Blake2bHasher, Sha256Hasher};
@@ -39,11 +39,48 @@ pub enum ProofType {
 
 impl HashedTimeLockedContract {
     pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return HashedTimeLockedContract::create_from_transaction(balance, transaction)
-            .map_err(|_| AccountError("Failed to create HTLC".to_string()));
+        let (sender, recipient, hash_algorithm, hash_root, hash_count, timeout) = HashedTimeLockedContract::parse_and_verify_creation_transaction(transaction)?;
+        return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value));
     }
 
-    fn create_from_transaction(balance: Coin, transaction: &Transaction) -> io::Result<Self> {
+    fn new(balance: Coin, sender: Address, recipient: Address, hash_algorithm: HashAlgorithm, hash_root: AnyHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
+        return HashedTimeLockedContract { balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, total_amount };
+    }
+
+    pub fn verify_incoming_transaction(transaction: &Transaction) -> bool {
+        return HashedTimeLockedContract::parse_and_verify_creation_transaction(transaction).is_ok();
+    }
+
+    fn parse_and_verify_creation_transaction(transaction: &Transaction) -> Result<(Address, Address, HashAlgorithm, AnyHash, u8, u32), AccountError> {
+        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+            return Err(AccountError("HTLC: Only contract creation is allowed".to_string()));
+        }
+
+        if transaction.recipient_type != AccountType::HTLC {
+            return Err(AccountError("HTLC: Recipient type must match created contract".to_string()));
+        }
+
+        if transaction.recipient != transaction.contract_creation_address() {
+            return Err(AccountError("HTLC: Recipient address must match contract creation address".to_string()));
+        }
+
+        if transaction.data.len() != (20 * 2 + 1 + 32 + 1 + 4) {
+            return Err(AccountError("HTLC: Invalid creation data: invalid length".to_string()));
+        }
+
+        return match HashedTimeLockedContract::parse_creation_transaction(transaction) {
+            Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout)) => {
+                if hash_count == 0 {
+                    return Err(AccountError("HTLC: Invalid creation data: hash_count may not be zero".to_string()));
+                }
+
+                Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout))
+            }
+            Err(e) => Err(AccountError(format!("HTLC: Invalid creation data: {}", e)))
+        }
+    }
+
+    fn parse_creation_transaction(transaction: &Transaction) -> io::Result<(Address, Address, HashAlgorithm, AnyHash, u8, u32)> {
         let reader = &mut &transaction.data[..];
 
         let sender: Address = Deserialize::deserialize(reader)?;
@@ -53,26 +90,7 @@ impl HashedTimeLockedContract {
         let hash_count = Deserialize::deserialize(reader)?;
         let timeout = Deserialize::deserialize(reader)?;
 
-        if hash_count == 0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid hash_count"));
-        }
-
-        return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value));
-    }
-
-    fn new(balance: Coin, sender: Address, recipient: Address, hash_algorithm: HashAlgorithm, hash_root: AnyHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
-        return HashedTimeLockedContract { balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, total_amount };
-    }
-
-    pub fn verify_incoming_transaction(transaction: &Transaction) -> bool {
-        // The contract creation transaction is the only valid incoming transaction.
-        if transaction.recipient != transaction.contract_creation_address() {
-            return false;
-        }
-
-        // TODO verify create arguments
-
-        return true;
+        return Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout));
     }
 
     pub fn verify_outgoing_transaction(transaction: &Transaction) -> bool {
@@ -105,23 +123,30 @@ impl HashedTimeLockedContract {
                     }
 
                     let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                    if proof_buf.len() != 0 {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "Over-long proof"));
+                    }
                     return Ok(signature_proof.verify(tx_buf));
                 },
                 ProofType::EarlyResolve => {
                     let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
                     let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                    if proof_buf.len() != 0 {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "Over-long proof"));
+                    }
                     return Ok(
                         signature_proof_recipient.verify(tx_buf)
                         && signature_proof_sender.verify(tx_buf));
                 },
                 ProofType::TimeoutResolve => {
                     let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                    if proof_buf.len() != 0 {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "Over-long proof"));
+                    }
                     return Ok(signature_proof.verify(tx_buf));
                 }
             }
         };
-
-        // TODO reject overlong proofs
 
         return match verify() {
             Ok(result) => result,
@@ -141,7 +166,7 @@ impl HashedTimeLockedContract {
             hash_root: self.hash_root.clone(),
             hash_count: self.hash_count,
             timeout: self.timeout,
-            total_amount: self.total_amount
+            total_amount: self.total_amount,
         };
     }
 
