@@ -92,12 +92,12 @@ fn it_can_serialize_block_108273() {
 fn it_can_verify_genesis_block() {
     let v: Vec<u8> = hex::decode(MAINNET_GENESIS_BLOCK).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(1530218988, NetworkId::Main));
+    assert!(block.verify(1530218988, NetworkId::Main).is_ok());
 }
 
 #[test]
 fn it_can_verify_block_108273() {
     let v: Vec<u8> = hex::decode(BLOCK_108273).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(1530218999, NetworkId::Main));
+    assert!(block.verify(1530218999, NetworkId::Main).is_ok());
 }

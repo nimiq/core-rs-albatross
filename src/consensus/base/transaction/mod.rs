@@ -11,7 +11,7 @@ use utils::merkle::Blake2bMerklePath;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum TransactionType {
+pub enum TransactionFormat {
     Basic = 0,
     Extended = 1,
 }
@@ -91,7 +91,7 @@ impl Transaction {
             data,
             sender,
             sender_type,
-            recipient: Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]),
+            recipient: Address::from([0u8; 20]),
             recipient_type,
             value,
             fee,
@@ -104,7 +104,7 @@ impl Transaction {
         return tx;
     }
 
-    fn transaction_type(&self) -> TransactionType {
+    pub fn format(&self) -> TransactionFormat {
         if let Result::Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
             if self.sender_type == AccountType::Basic &&
                 self.recipient_type == AccountType::Basic &&
@@ -112,10 +112,10 @@ impl Transaction {
                 self.flags.is_empty() &&
                 self.sender == Address::from(&signature_proof.public_key) &&
                 signature_proof.merkle_path.len() == 0 {
-                return TransactionType::Basic;
+                return TransactionFormat::Basic;
             }
         }
-        return TransactionType::Extended;
+        return TransactionFormat::Extended;
     }
 
     pub fn cmp_block_order(&self, tx: &Transaction) -> Ordering {
@@ -130,40 +130,40 @@ impl Transaction {
             .then_with(|| self.flags.cmp(&tx.flags));
     }
 
-    pub fn verify(&self, network_id: NetworkId) -> bool {
+    pub fn verify(&self, network_id: NetworkId) -> Result<(), TransactionError> {
         if self.network_id != network_id {
-            return false;
+            return Err(TransactionError::ForeignNetwork);
         }
 
         // Check that sender != recipient.
         if self.recipient == self.sender {
-            return false;
+            return Err(TransactionError::SenderEqualsRecipient);
         }
 
         // Check that value > 0.
         if self.value == Coin::ZERO {
-            return false;
+            return Err(TransactionError::ZeroValue);
         }
 
         // Check that value + fee doesn't overflow.
         // TODO also check max supply?
         if self.value.checked_add(self.fee).is_none() {
-            return false;
+            return Err(TransactionError::Overflow);
         }
 
         // TODO Check account types valid?
 
         // Check transaction validity for sender account.
         if !Account::verify_outgoing_transaction(&self) {
-            return false;
+            return Err(TransactionError::InvalidForSender);
         }
 
         // Check transaction validity for recipient account.
         if !Account::verify_incoming_transaction(&self) {
-            return false;
+            return Err(TransactionError::InvalidForRecipient);
         }
 
-        return true;
+        return Ok(());
     }
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
@@ -195,11 +195,11 @@ impl Transaction {
 
 impl Serialize for Transaction {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
-        match self.transaction_type() {
-            TransactionType::Basic => {
+        match self.format() {
+            TransactionFormat::Basic => {
                 let signature_proof = SignatureProof::deserialize_from_vec(&self.proof)?;
                 let mut size = 0;
-                size += Serialize::serialize(&TransactionType::Basic, writer)?;
+                size += Serialize::serialize(&TransactionFormat::Basic, writer)?;
                 size += Serialize::serialize(&signature_proof.public_key, writer)?;
                 size += Serialize::serialize(&self.recipient, writer)?;
                 size += Serialize::serialize(&self.value, writer)?;
@@ -209,9 +209,9 @@ impl Serialize for Transaction {
                 size += Serialize::serialize(&signature_proof.signature, writer)?;
                 return Ok(size);
             }
-            TransactionType::Extended => {
+            TransactionFormat::Extended => {
                 let mut size = 0;
-                size += Serialize::serialize(&TransactionType::Extended, writer)?;
+                size += Serialize::serialize(&TransactionFormat::Extended, writer)?;
                 size += SerializeWithLength::serialize::<u16, W>(&self.data, writer)?;
                 size += Serialize::serialize(&self.sender, writer)?;
                 size += Serialize::serialize(&self.sender_type, writer)?;
@@ -229,8 +229,8 @@ impl Serialize for Transaction {
     }
 
     fn serialized_size(&self) -> usize {
-        match self.transaction_type() {
-            TransactionType::Basic => {
+        match self.format() {
+            TransactionFormat::Basic => {
                 let signature_proof = SignatureProof::deserialize_from_vec(&self.proof).unwrap();
                 let mut size = 1;
                 size += Serialize::serialized_size(&signature_proof.public_key);
@@ -242,7 +242,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialized_size(&signature_proof.signature);
                 return size;
             }
-            TransactionType::Extended => {
+            TransactionFormat::Extended => {
                 let mut size = 1;
                 size += SerializeWithLength::serialized_size::<u16>(&self.data);
                 size += Serialize::serialized_size(&self.sender);
@@ -263,9 +263,9 @@ impl Serialize for Transaction {
 
 impl Deserialize for Transaction {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
-        let transaction_type: TransactionType = Deserialize::deserialize(reader)?;
+        let transaction_type: TransactionFormat = Deserialize::deserialize(reader)?;
         match transaction_type {
-            TransactionType::Basic => {
+            TransactionFormat::Basic => {
                 let sender_public_key: PublicKey = Deserialize::deserialize(reader)?;
                 return Ok(Transaction {
                     data: vec![],
@@ -281,7 +281,7 @@ impl Deserialize for Transaction {
                     proof: SignatureProof::from(sender_public_key.clone(), Deserialize::deserialize(reader)?).serialize_to_vec(),
                 });
             }
-            TransactionType::Extended => {
+            TransactionFormat::Extended => {
                 return Ok(Transaction {
                     data: DeserializeWithLength::deserialize::<u16, R>(reader)?,
                     sender: Deserialize::deserialize(reader)?,
@@ -318,3 +318,13 @@ impl SerializeContent for Transaction {
 }
 
 impl Hash for Transaction {}
+
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+pub enum TransactionError {
+    ForeignNetwork,
+    ZeroValue,
+    Overflow,
+    SenderEqualsRecipient,
+    InvalidForSender,
+    InvalidForRecipient
+}

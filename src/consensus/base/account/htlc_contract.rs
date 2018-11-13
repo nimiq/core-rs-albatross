@@ -3,20 +3,30 @@ use consensus::base::account::{Account, AccountError};
 use consensus::base::transaction::Transaction;
 use consensus::base::transaction::SignatureProof;
 use consensus::base::primitive::{Address, Coin};
-use consensus::base::primitive::hash::{HashAlgorithm, Hasher, Blake2bHasher, Sha256Hasher};
+use consensus::base::primitive::hash::{Hasher, Blake2bHasher, Sha256Hasher};
+use hex::FromHex;
 use std::io;
 
 create_typed_array!(AnyHash, u8, 32);
+add_hex_io_fns_typed_arr!(AnyHash, AnyHash::SIZE);
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct HashedTimeLockedContract {
     pub balance: Coin,
     pub sender: Address,
     pub recipient: Address,
+    pub hash_algorithm: HashAlgorithm,
     pub hash_root: AnyHash,
     pub hash_count: u8,
     pub timeout: u32,
     pub total_amount: Coin
+}
+
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum HashAlgorithm {
+    Blake2b = 1,
+    Sha256 = 3
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -47,11 +57,11 @@ impl HashedTimeLockedContract {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid hash_count"));
         }
 
-        return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_root, hash_count, timeout, transaction.value));
+        return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value));
     }
 
-    fn new(balance: Coin, sender: Address, recipient: Address, hash_root: AnyHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
-        return HashedTimeLockedContract { balance, sender, recipient, hash_root, hash_count, timeout, total_amount };
+    fn new(balance: Coin, sender: Address, recipient: Address, hash_algorithm: HashAlgorithm, hash_root: AnyHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
+        return HashedTimeLockedContract { balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, total_amount };
     }
 
     pub fn verify_incoming_transaction(transaction: &Transaction) -> bool {
@@ -86,9 +96,6 @@ impl HashedTimeLockedContract {
                             },
                             HashAlgorithm::Sha256 => {
                                 pre_image = Sha256Hasher::default().digest(&pre_image[..]).into();
-                            }
-                            _ => {
-                                return Ok(false);
                             }
                         }
                     }
@@ -130,6 +137,7 @@ impl HashedTimeLockedContract {
             balance,
             sender: self.sender.clone(),
             recipient: self.recipient.clone(),
+            hash_algorithm: self.hash_algorithm,
             hash_root: self.hash_root.clone(),
             hash_count: self.hash_count,
             timeout: self.timeout,

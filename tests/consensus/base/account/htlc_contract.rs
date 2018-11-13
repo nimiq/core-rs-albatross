@@ -1,9 +1,35 @@
-use beserial::Serialize;
-use nimiq::consensus::base::account::{Account, AccountType, HashedTimeLockedContract};
-use nimiq::consensus::base::account::htlc_contract::{AnyHash, ProofType};
-use nimiq::consensus::base::primitive::{Address, coin::Coin, crypto::{KeyPair, Signature}, hash::{Blake2bHash, Blake2bHasher, HashAlgorithm, Hasher, HashOutput}};
+use beserial::{Serialize, Deserialize};
+use nimiq::consensus::base::account::{AccountType, HashedTimeLockedContract};
+use nimiq::consensus::base::account::htlc_contract::{AnyHash, ProofType, HashAlgorithm};
+use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair, hash::{Blake2bHasher, Hasher}};
 use nimiq::consensus::base::transaction::{SignatureProof, Transaction, TransactionFlags};
 use nimiq::consensus::networks::NetworkId;
+
+const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f01000296350000000000000001";
+
+#[test]
+fn it_can_deserialize_a_htlc() {
+    let bytes: Vec<u8> = hex::decode(HTLC).unwrap();
+    let htlc: HashedTimeLockedContract = Deserialize::deserialize(&mut &bytes[..]).unwrap();
+    assert_eq!(htlc.balance, Coin::ZERO);
+    assert_eq!(htlc.hash_algorithm, HashAlgorithm::Sha256);
+    assert_eq!(htlc.hash_count, 1);
+    assert_eq!(htlc.hash_root, AnyHash::from("daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f"));
+    assert_eq!(htlc.sender, Address::from("1b215589344cf570d36bec770825eae30b732139"));
+    assert_eq!(htlc.recipient, Address::from("24786862babbdb05e7c4430612135eb2a8368123"));
+    assert_eq!(htlc.timeout, 169525);
+    assert_eq!(htlc.total_amount, Coin::from(1));
+}
+
+#[test]
+fn it_can_serialize_a_htlc() {
+    let bytes: Vec<u8> = hex::decode(HTLC).unwrap();
+    let htlc: HashedTimeLockedContract = Deserialize::deserialize(&mut &bytes[..]).unwrap();
+    let mut bytes2: Vec<u8> = Vec::with_capacity(htlc.serialized_size());
+    let size = htlc.serialize(&mut bytes2).unwrap();
+    assert_eq!(size, htlc.serialized_size());
+    assert_eq!(hex::encode(bytes2), HTLC);
+}
 
 #[test]
 fn it_can_create_contract_from_transaction() {
@@ -16,7 +42,6 @@ fn it_can_create_contract_from_transaction() {
     AnyHash::from([0u8; 32]).serialize(&mut data);
     Serialize::serialize(&2u8, &mut data);
     Serialize::serialize(&1000u32, &mut data);
-    println!("{}", hex::encode(&data));
     let transaction = Transaction::new_contract_creation(
         data,
         sender.clone(),
@@ -37,14 +62,14 @@ fn it_can_create_contract_from_transaction() {
             assert_eq!(htlc.hash_count, 2);
             assert_eq!(htlc.timeout, 1000);
         }
-        Err(e) => assert!(false)
+        Err(_) => assert!(false)
     }
 }
 
 #[test]
 fn it_can_verify_valid_outgoing_transaction() {
-    let keyPair = KeyPair::generate();
-    let addr = Address::from(&keyPair.public);
+    let key_pair = KeyPair::generate();
+    let addr = Address::from(&key_pair.public);
     let mut tx = Transaction {
         data: vec![],
         sender: Address::from([0u8; 20]),
@@ -60,8 +85,8 @@ fn it_can_verify_valid_outgoing_transaction() {
     };
 
     // regular
-    let signature = keyPair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(keyPair.public, signature);
+    let signature = key_pair.sign(&tx.serialize_content()[..]);
+    let signature_proof = SignatureProof::from(key_pair.public, signature);
     let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
     Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);

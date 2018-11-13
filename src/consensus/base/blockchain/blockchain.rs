@@ -104,7 +104,8 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         }
 
         // Check (sort of) intrinsic block invariants.
-        if !block.verify(self.network_time.now(), self.network_id) {
+        if let Err(e) = block.verify(self.network_time.now(), self.network_id) {
+            warn!("Rejecting block - verification failed ({:?})", e);
             return PushResult::Invalid;
         }
 

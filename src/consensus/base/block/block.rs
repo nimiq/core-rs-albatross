@@ -1,5 +1,5 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize};
-use consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target};
+use consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target, BlockError};
 use consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
 use consensus::networks::NetworkId;
 use std::io;
@@ -27,72 +27,68 @@ impl Deserialize for Block {
 impl Block {
     const TIMESTAMP_DRIFT_MAX: u32 = 600;
     const MAX_SIZE: usize = 100000; // 100 kb
+    const VERSION: u16 = 1;
 
-    pub fn verify(&self, timestamp_now: u32, network_id: NetworkId) -> bool {
+    pub fn verify(&self, timestamp_now: u32, network_id: NetworkId) -> Result<(), BlockError> {
+        // XXX Check that the block version is supported.
+        if self.header.version != Block::VERSION {
+            return Err(BlockError::UnsupportedVersion);
+        }
+
         // Check that the timestamp is not too far into the future.
+        // XXX Move this check to Blockchain?
         if self.header.timestamp > timestamp_now + Block::TIMESTAMP_DRIFT_MAX {
-            warn!("Invalid block - timestamp too far in the future");
-            return false;
+            return Err(BlockError::FromTheFuture);
         }
 
         // Check that the header hash matches the difficulty.
         if !self.header.verify_proof_of_work() {
-            warn!("Invalid block - PoW verification failed");
-            return false;
+            return Err(BlockError::InvalidPoW);
         }
 
         // Check that the maximum block size is not exceeded.
         if self.serialized_size() > Block::MAX_SIZE {
-            warn!("Invalid block - max block size exceeded");
-            return false;
+            return Err(BlockError::SizeExceeded);
         }
 
         // Verify that the interlink is valid.
-        if !self.verify_interlink(network_id) {
-            return false;
-        }
+        self.verify_interlink(network_id)?;
 
         // Verify the body if it is present.
         if let Option::Some(ref body) = self.body {
-            if !self.verify_body(body, network_id) {
-                return false;
-            }
+            self.verify_body(body, network_id)?;
         }
 
         // Everything checks out.
-        return true;
+        return Ok(());
     }
 
-    fn verify_interlink(&self, network_id: NetworkId) -> bool {
+    fn verify_interlink(&self, network_id: NetworkId) -> Result<(), BlockError> {
         // Skip check for genesis block due to the cyclic dependency (since the interlink hash contains the genesis block hash).
         if self.header.height == 1 && self.header.interlink_hash == Blake2bHash::from([0u8; Blake2bHash::SIZE]) {
-            return true;
+            return Ok(());
         }
 
         // Check that the interlink_hash given in the header matches the actual interlink_hash.
         if self.header.interlink_hash != self.interlink.hash(network_id) {
-            warn!("Invalid block - interlink hash mismatch");
-            return false;
+            return Err(BlockError::InterlinkHashMismatch);
         }
 
         // Everything checks out.
-        return true;
+        return Ok(());
     }
 
-    fn verify_body(&self, body: &BlockBody, network_id: NetworkId) -> bool {
+    fn verify_body(&self, body: &BlockBody, network_id: NetworkId) -> Result<(), BlockError> {
         // Check that the body is valid.
-        if !body.verify(self.header.height, network_id) {
-            return false;
-        }
+        body.verify(self.header.height, network_id)?;
 
         // Check that bodyHash given in the header matches the actual body hash.
         if self.header.body_hash != body.hash() {
-            warn!("Invalid block - body hash mismatch");
-            return false;
+            return Err(BlockError::BodyHashMismatch);
         }
 
         // Everything checks out.
-        return true;
+        return Ok(());
     }
 
     pub fn is_immediate_successor_of(&self, predecessor: &Block) -> bool {
@@ -140,7 +136,6 @@ impl Block {
     }
 }
 
-
 impl IntoDatabaseValue for Block {
     fn database_byte_size(&self) -> usize {
         return self.serialized_size();
@@ -157,3 +152,4 @@ impl FromDatabaseValue for Block {
         return Deserialize::deserialize(&mut cursor);
     }
 }
+

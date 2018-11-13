@@ -1,5 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use consensus::base::account::PrunedAccount;
+use consensus::base::block::BlockError;
 use consensus::base::primitive::Address;
 use consensus::base::primitive::hash::{Hash, HashOutput, SerializeContent};
 use consensus::base::transaction::Transaction;
@@ -39,19 +40,17 @@ impl Hash for BlockBody {
 
 #[allow(unreachable_code)]
 impl BlockBody {
-    pub(super) fn verify(&self, block_height: u32, network_id: NetworkId) -> bool {
+    pub fn verify(&self, block_height: u32, network_id: NetworkId) -> Result<(), BlockError> {
         let mut previous_tx: Option<&Transaction> = None;
         for tx in &self.transactions {
             // Ensure transactions are ordered and unique.
             if let Some(previous) = previous_tx {
                 match previous.cmp_block_order(tx) {
                     Ordering::Equal => {
-                        warn!("Invalid block - duplicate transaction");
-                        return false;
+                        return Err(BlockError::DuplicateTransaction);
                     }
                     Ordering::Greater => {
-                        warn!("Invalid block - transactions not ordered");
-                        return false;
+                        return Err(BlockError::TransactionsNotOrdered);
                     }
                     _ => (),
                 }
@@ -59,15 +58,13 @@ impl BlockBody {
             previous_tx = Some(tx);
 
             // Check intrinsic transaction invariants.
-            if !tx.verify(network_id) {
-                warn!("Invalid block - invalid transaction");
-                return false;
+            if let Err(e) = tx.verify(network_id) {
+                return Err(BlockError::InvalidTransaction(e));
             }
 
             // Check that the transaction is within its validity window.
             if !tx.is_valid_at(block_height) {
-                warn!("Invalid block - transaction outside validity window");
-                return false;
+                return Err(BlockError::ExpiredTransaction);
             }
         }
 
@@ -77,12 +74,10 @@ impl BlockBody {
             if let Some(previous) = previous_acc {
                 match previous.cmp(acc) {
                     Ordering::Equal => {
-                        warn!("Invalid block - duplicate pruned account");
-                        return false;
+                        return Err(BlockError::DuplicatePrunedAccount);
                     }
                     Ordering::Greater => {
-                        warn!("Invalid block - pruned accounts not ordered");
-                        return false;
+                        return Err(BlockError::PrunedAccountsNotOrdered);
                     }
                     _ => (),
                 }
@@ -91,12 +86,11 @@ impl BlockBody {
 
             // Check that the account is actually supposed to be pruned.
             if !acc.account.is_to_be_pruned() {
-                warn!("Invalid block - invalid pruned account");
-                return false;
+                return Err(BlockError::InvalidPrunedAccount);
             }
         }
 
         // Everything checks out.
-        return true;
+        return Ok(());
     }
 }

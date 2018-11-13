@@ -17,15 +17,6 @@ use std::str;
 
 pub use self::sha512::*;
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum HashAlgorithm {
-    Blake2b = 1,
-    Argon2d = 2,
-    Sha256 = 3,
-    Sha512 = 4
-}
-
 pub trait Hasher: Default + io::Write {
     type Output: HashOutput;
 

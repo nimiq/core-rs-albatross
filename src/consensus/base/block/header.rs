@@ -23,7 +23,7 @@ impl SerializeContent for BlockHeader {
 impl Hash for BlockHeader {}
 
 impl BlockHeader {
-    pub(super) fn verify_proof_of_work(&self) -> bool {
+    pub fn verify_proof_of_work(&self) -> bool {
         let pow: Argon2dHash = self.hash();
         let target: Target = self.n_bits.into();
         return target.is_met_by(&pow);

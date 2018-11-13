@@ -53,7 +53,7 @@ impl<'t> Mempool<'t> {
         }
 
         // Intrinsic transaction verification.
-        if !transaction.verify(self.blockchain.network_id) {
+        if transaction.verify(self.blockchain.network_id).is_err() {
             return ReturnCode::Invalid;
         }
 

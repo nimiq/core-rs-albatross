@@ -42,9 +42,46 @@ fn it_can_calculate_genesis_header_pow() {
     assert_eq!(Hash::hash::<Argon2dHash>(&header).as_bytes(), &hex::decode("000087dccfcb8625a84c821887c5c515f92f5078501bf49369f8993657cdc034").unwrap()[..]);
 }
 
-// #[test]
-// fn it_can_verify_proof_of_work() {
-// let header = BlockHeader::deserialize_from_vec(&hex::decode(MAINNET_GENESIS_HEADER).unwrap()).unwrap();
-// assert!(header.verify_proof_of_work());
-// }
-//
+#[test]
+fn it_can_verify_proof_of_work() {
+    let header = BlockHeader::deserialize_from_vec(&hex::decode(MAINNET_GENESIS_HEADER).unwrap()).unwrap();
+    assert!(header.verify_proof_of_work());
+}
+
+#[test]
+fn it_correctly_identifies_immediate_successors() {
+    let header1 = BlockHeader::deserialize_from_vec(&hex::decode(MAINNET_GENESIS_HEADER).unwrap()).unwrap();
+    let mut header2 = BlockHeader {
+        version: 1,
+        prev_hash: header1.hash(),
+        interlink_hash: Blake2bHash::from([0u8; Blake2bHash::SIZE]),
+        body_hash: Blake2bHash::from([0u8; Blake2bHash::SIZE]),
+        accounts_hash: Blake2bHash::from([0u8; Blake2bHash::SIZE]),
+        n_bits: 0x1f010000.into(),
+        height: 2,
+        timestamp: header1.timestamp + 1,
+        nonce: 0
+    };
+    assert!(header2.is_immediate_successor_of(&header1));
+
+    // header2.height == header1.height + 1
+    header2.height = 3;
+    assert!(!header2.is_immediate_successor_of(&header1));
+    header2.height = 1;
+    assert!(!header2.is_immediate_successor_of(&header1));
+    header2.height = 2;
+
+    // header2.timestamp >= header1.timestamp
+    header2.timestamp = header1.timestamp;
+    assert!(header2.is_immediate_successor_of(&header1));
+    header2.timestamp = header1.timestamp - 1;
+    assert!(!header2.is_immediate_successor_of(&header1));
+    header2.timestamp = header1.timestamp + 1;
+
+    // header2.prev_hash == header1.hash()
+    header2.prev_hash = Blake2bHash::from([1u8; Blake2bHash::SIZE]);
+    assert!(!header2.is_immediate_successor_of(&header1));
+
+    header2.prev_hash = header1.hash();
+    assert!(header2.is_immediate_successor_of(&header1));
+}
