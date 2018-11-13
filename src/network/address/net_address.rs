@@ -3,6 +3,9 @@ use std::io;
 use std::cmp::min;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
+create_typed_array!(IPv4Address, u8, 4);
+create_typed_array!(IPv6Address, u8, 16);
+
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Clone)]
 pub enum NetAddress {
     IPv4(Ipv4Addr),

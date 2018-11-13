@@ -128,6 +128,19 @@ impl PeerAddress {
         return res;
     }
 
+    pub fn is_seed(&self) -> bool {
+        return self.timestamp == 0;
+    }
+
+    pub fn exceeds_age(&self) -> bool {
+        if self.is_seed() {
+            return false;
+        }
+
+        // TODO Check age
+        return false;
+    }
+
     pub fn protocol(&self) -> Protocol { self.ty.protocol() }
 
     pub fn peer_id(&self) -> &PeerId { &self.peer_id }
