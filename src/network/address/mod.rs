@@ -1,6 +1,6 @@
 pub mod net_address;
 pub mod peer_address;
-mod peer_address_book;
+pub mod peer_address_book;
 mod peer_address_state;
 
 pub use self::net_address::*;

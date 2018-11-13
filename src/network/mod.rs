@@ -4,6 +4,7 @@ pub mod address;
 pub mod message;
 pub mod websocket;
 pub mod peer_channel;
+pub mod peer_scorer;
 pub mod time;
 pub mod connection;
 

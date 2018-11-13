@@ -221,7 +221,7 @@ impl<'t> Mempool<'t> {
 
         let mut remove_key = false;
         if let Entry::Occupied(mut e) = self.transactions_by_sender.entry(ts.0.sender.clone()) {
-            let mut transactions_sorted = e.get_mut();
+            let transactions_sorted = e.get_mut();
             if transactions_sorted.len() > 1 {
                 transactions_sorted.remove(ts);
             } else {
@@ -232,7 +232,7 @@ impl<'t> Mempool<'t> {
             self.transactions_by_sender.remove(&ts.0.sender);
         }
         if let Entry::Occupied(mut e) = self.transactions_by_recipient.entry(ts.0.recipient.clone()) {
-            let mut transactions_sorted = e.get_mut();
+            let transactions_sorted = e.get_mut();
             if transactions_sorted.len() > 1 {
                 transactions_sorted.remove(ts);
             } else {

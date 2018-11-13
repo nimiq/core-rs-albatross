@@ -3,6 +3,7 @@ use crate::network;
 use std::sync::Arc;
 use std::collections::HashMap;
 use crate::network::peer_channel::Session;
+use crate::network::Protocol;
 
 pub struct PeerAddressInfo {
     pub peer_address: Arc<PeerAddress>,
@@ -10,7 +11,8 @@ pub struct PeerAddressInfo {
     pub signal_router: SignalRouter,
     pub last_connected: u64,
     pub failed_attempts: u32,
-    pub banned_until: i32
+    pub banned_until: u64,
+    pub ban_backoff: u64
 }
 
 impl PeerAddressInfo {
@@ -21,8 +23,17 @@ impl PeerAddressInfo {
             signal_router: SignalRouter::new(peer_address),
             last_connected: 0,
             failed_attempts: 0,
-            banned_until: 0
+            banned_until: 0,
+            ban_backoff: network::address::peer_address_book::INITIAL_FAILED_BACKOFF
         };
+    }
+
+    pub fn max_failed_attempts(&self) -> u32 {
+        match self.peer_address.protocol() {
+            Protocol::Rtc => network::address::peer_address_book::MAX_FAILED_ATTEMPTS_RTC,
+            Protocol::Ws | Protocol::Wss => network::address::peer_address_book::MAX_FAILED_ATTEMPTS_WS,
+            default => 0
+        }
     }
 }
 
@@ -48,7 +59,7 @@ impl SignalRouter {
         };
     }
 
-    pub fn add_route(&mut self, signal_channel: Session, distance: u8, timestamp: u64) -> bool {
+    pub fn add_route(&mut self, signal_channel: Arc<Session>, distance: u8, timestamp: u64) -> bool {
         let new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
 
         // TODO old route
@@ -71,17 +82,34 @@ impl SignalRouter {
 
         return false;
     }
+
+    pub fn delete_best_route(&self) {
+        unimplemented!()
+    }
+
+    pub fn delete_route(&self, signal_channel: Arc<Session>) {
+        unimplemented!()
+    }
+
+    pub fn delete_all_routes(&mut self) {
+        self.best_route = None;
+        unimplemented!()
+    }
+
+    pub fn has_route(&self) -> bool {
+        unimplemented!()
+    }
 }
 
 pub struct SignalRouteInfo {
     failed_attempts: u32,
     pub timestamp: u64,
-    pub signal_channel: Session,
+    pub signal_channel: Arc<Session>,
     distance: u8
 }
 
 impl SignalRouteInfo {
-    pub fn new(signal_channel: Session, distance: u8, timestamp: u64) -> SignalRouteInfo {
+    pub fn new(signal_channel: Arc<Session>, distance: u8, timestamp: u64) -> SignalRouteInfo {
         return SignalRouteInfo {
             failed_attempts: 0,
             timestamp: timestamp,
