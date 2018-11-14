@@ -1,20 +1,31 @@
+use std::{io, fmt, net, fmt::Debug};
+
+use url::Url;
+use futures::prelude::*;
+use tokio::net::TcpStream;
+
 use beserial::{Deserialize, Serialize};
 use byteorder::{BigEndian, ByteOrder};
-use futures::prelude::*;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use crate::network::message::Message as NimiqMessage;
-use tungstenite::protocol::Message as WebSocketMessage;
+use tungstenite::{
+    protocol::Message as WebSocketMessage,
+    error::Error as WsError
+};
+use tokio_tungstenite::{
+    MaybeTlsStream,
+    WebSocketStream,
+    connect_async,
+    accept_async,
+    stream::PeerAddr
+};
 
-use tungstenite::error::Error as WsError;
-use url::Url;
-use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, accept_async, stream::PeerAddr};
-use std::io;
 use crate::utils::locking::MultiLock;
-use std::fmt::Debug;
-use std::{fmt, net};
-use crate::network::address::net_address::NetAddress;
+use crate::network::{
+    address::net_address::NetAddress,
+    message::Message as NimiqMessage
+};
+
+pub mod web_socket_connector;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -299,8 +310,8 @@ pub struct SharedNimiqMessageStream {
 }
 
 impl SharedNimiqMessageStream {
-    pub fn net_address(&self) -> &NetAddress {
-        &self.net_address
+    pub fn net_address(&self) -> NetAddress {
+        self.net_address.clone()
     }
 
     pub fn outbound(&self) -> bool {
