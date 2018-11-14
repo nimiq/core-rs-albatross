@@ -174,6 +174,8 @@ impl<'env, 'time> Blockchain<'env, 'time> {
             return false;
         }
 
+        self.transaction_cache.push_block(&chain_info.head);
+
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(block_hash.clone());
 
@@ -181,8 +183,6 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         self.chain_store.put_chain_info(&mut txn, &chain_info.head.header.prev_hash, &prev_info, false);
         self.chain_store.set_head(&mut txn, &block_hash);
         txn.commit();
-
-        self.transaction_cache.push_block(&chain_info.head);
 
         self.main_chain = chain_info;
         self.head_hash = block_hash;

@@ -56,7 +56,8 @@ impl TransactionCache {
 
         let descriptor = BlockDescriptor::from(block);
         for hash in &descriptor.transaction_hashes {
-            self.transaction_hashes.insert(hash.clone());
+            let is_new = self.transaction_hashes.insert(hash.clone());
+            assert!(is_new);
         }
         self.block_order.push_back(descriptor);
 
@@ -80,7 +81,8 @@ impl TransactionCache {
 
         let descriptor = BlockDescriptor::from(block);
         for hash in &descriptor.transaction_hashes {
-            self.transaction_hashes.insert(hash.clone());
+            let is_new = self.transaction_hashes.insert(hash.clone());
+            assert!(is_new);
         }
         self.block_order.push_front(descriptor);
     }

@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use nimiq::consensus::base::block::*;
 use nimiq::consensus::base::primitive::{Address, Coin};
-use nimiq::consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
+use nimiq::consensus::base::primitive::hash::{Hash, Blake2bHash};
 use nimiq::consensus::networks::NetworkId;
 use hex;
 
