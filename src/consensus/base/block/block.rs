@@ -1,4 +1,4 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize};
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use crate::consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target, BlockError};
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
 use crate::consensus::networks::NetworkId;
@@ -13,7 +13,7 @@ pub struct Block {
 }
 
 impl Deserialize for Block {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let header: BlockHeader = Deserialize::deserialize(reader)?;
         let interlink = BlockInterlink::deserialize(reader, &header.prev_hash)?;
         return Ok(Block {
@@ -149,7 +149,7 @@ impl IntoDatabaseValue for Block {
 impl FromDatabaseValue for Block {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
-        return Deserialize::deserialize(&mut cursor);
+        return Ok(Deserialize::deserialize(&mut cursor)?);
     }
 }
 

@@ -1,6 +1,6 @@
 use std::io;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt, uvar};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializingError, SerializeWithLength, WriteBytesExt, uvar};
 use crate::consensus::base::Subscription;
 use crate::consensus::base::account::tree::AccountsProof;
 use crate::consensus::base::block::{Block, BlockHeader};
@@ -102,7 +102,7 @@ impl Message {
 const MAGIC: u32 = 0x42042042;
 
 impl Deserialize for Message {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         pub struct ReaderComputeCrc32<'a, T: 'a + ReadBytesExt> {
             reader: &'a mut T,
             crc32: Crc32Computer,
@@ -137,7 +137,7 @@ impl Deserialize for Message {
         let mut crc32_reader = ReaderComputeCrc32::new(reader);
         let magic: u32 = Deserialize::deserialize(&mut crc32_reader)?;
         if magic != MAGIC {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong magic byte"));
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong magic byte").into());
         }
         let ty: MessageType = Deserialize::deserialize(&mut crc32_reader)?;
         let length: u32 = Deserialize::deserialize(&mut crc32_reader)?;
@@ -160,19 +160,19 @@ impl Deserialize for Message {
             MessageType::GetAddr => Message::GetAddr(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Ping => Message::Ping(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Pong => Message::Pong(Deserialize::deserialize(&mut crc32_reader)?),
-            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type"))
+            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into())
         };
 
         let crc_comp = crc32_reader.crc32.result();
         if crc_comp != checksum {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Bad checksum"));
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Bad checksum").into());
         }
         return Ok(message);
     }
 }
 
 impl Serialize for Message {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size= 0;
         let serialized_size: u32 = self.serialized_size() as u32;
         let mut v = Vec::with_capacity(serialized_size as usize);

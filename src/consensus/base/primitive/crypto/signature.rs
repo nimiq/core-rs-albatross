@@ -1,7 +1,5 @@
-use std::io;
-
 use ed25519_dalek;
-use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
+use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
 
 #[derive(Debug, Clone)]
 pub struct Signature(pub(in super) ed25519_dalek::Signature);
@@ -37,7 +35,7 @@ impl From<[u8; Signature::SIZE]> for Signature {
 }
 
 impl Deserialize for Signature {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let mut buf = [0u8; Signature::SIZE];
         reader.read_exact(&mut buf)?;
         return Ok(Signature::from(&buf));
@@ -45,7 +43,7 @@ impl Deserialize for Signature {
 }
 
 impl Serialize for Signature {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         writer.write(&self.to_bytes())?;
         return Ok(self.serialized_size());
     }

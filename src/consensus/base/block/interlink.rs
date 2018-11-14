@@ -1,4 +1,4 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize, WriteBytesExt};
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use crate::consensus::base::primitive::hash::{Blake2bHash, Hash};
 use crate::consensus::networks::{get_network_info, NetworkId};
 use std::io;
@@ -60,7 +60,7 @@ impl BlockInterlink {
 }
 
 impl Serialize for BlockInterlink {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         size += Serialize::serialize(&(self.hashes.len() as u8), writer)?;
         writer.write_all(&self.repeat_bits[..])?;

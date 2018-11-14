@@ -1,4 +1,4 @@
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializingError, SerializeWithLength, WriteBytesExt};
 use crate::consensus::base::primitive::hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
 use bit_vec::BitVec;
 use std::borrow::Cow;
@@ -131,7 +131,7 @@ impl<H> MerklePath<H> where H: HashOutput {
 }
 
 impl<H: HashOutput> Serialize for MerklePath<H> {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size: usize = 0;
         size += Serialize::serialize(&(self.nodes.len() as u8), writer)?;
         let compressed = self.compress();
@@ -152,7 +152,7 @@ impl<H: HashOutput> Serialize for MerklePath<H> {
 }
 
 impl<H: HashOutput> Deserialize for MerklePath<H> {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let count: u8 = Deserialize::deserialize(reader)?;
 
         let left_bits_size = (count + 7) / 8; // For rounding up: (num + divisor - 1) / divisor
@@ -168,7 +168,7 @@ impl<H: HashOutput> Deserialize for MerklePath<H> {
                     hash: Deserialize::deserialize(reader)?,
                 });
             } else {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "failed to read left bits"));
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "failed to read left bits").into());
             }
         }
         return Ok(MerklePath { nodes });
@@ -366,7 +366,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
 }
 
 impl<H: HashOutput> Serialize for MerkleProof<H> {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size: usize = 0;
         size += Serialize::serialize(&(self.operations.len() as u16), writer)?;
         let compressed = self.compress();
@@ -385,7 +385,7 @@ impl<H: HashOutput> Serialize for MerkleProof<H> {
 }
 
 impl<H: HashOutput> Deserialize for MerkleProof<H> {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let count: u16 = Deserialize::deserialize(reader)?;
 
         let operations_size = (count + 3) / 4; // For rounding up: (num + divisor - 1) / divisor
@@ -399,7 +399,7 @@ impl<H: HashOutput> Deserialize for MerkleProof<H> {
                 (Some(false), Some(false)) => MerkleProofOperation::ConsumeProof,
                 (Some(false), Some(true)) => MerkleProofOperation::ConsumeInput,
                 (Some(true), Some(false)) => MerkleProofOperation::Hash,
-                _ => { return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "invalid operation in bitvector")); }
+                _ => { return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "invalid operation in bitvector").into()); }
             };
             operations.push(op);
         }

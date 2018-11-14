@@ -1,8 +1,7 @@
-use beserial::{Serialize, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
+use beserial::{Serialize, SerializingError, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
 use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
 use crate::network::Protocol;
 use crate::network::address::{NetAddress, PeerId};
-use std::io;
 use std::vec::Vec;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -40,7 +39,7 @@ pub struct PeerAddress {
 }
 
 impl Serialize for PeerAddress {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         size += self.ty.protocol().serialize(writer)?;
         size += self.services.serialize(writer)?;
@@ -78,7 +77,7 @@ impl Serialize for PeerAddress {
 }
 
 impl Deserialize for PeerAddress {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, io::Error> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let protocol: Protocol = Deserialize::deserialize(reader)?;
         let services: u32 = Deserialize::deserialize(reader)?;
         let timestamp: u64 = Deserialize::deserialize(reader)?;
@@ -183,7 +182,7 @@ impl fmt::Display for PeerAddress {
 }
 
 impl Deserialize for PeerAddressType {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, io::Error> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let protocol: Protocol = Deserialize::deserialize(reader)?;
         match protocol {
             Protocol::Dumb => Ok(PeerAddressType::Dumb),
@@ -195,7 +194,7 @@ impl Deserialize for PeerAddressType {
 }
 
 impl Serialize for PeerAddressType {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         Ok(match self {
             PeerAddressType::Dumb => Protocol::Dumb.serialize(writer)?,
             PeerAddressType::Ws(host, port) => Protocol::Ws.serialize(writer)? + host.serialize::<u16, W>(writer)? + port.serialize(writer)?,

@@ -1,5 +1,4 @@
-use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
-use std::io;
+use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
 use std::cmp::min;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
@@ -74,7 +73,7 @@ pub enum NetAddressType {
 }
 
 impl Deserialize for NetAddress {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let ty: NetAddressType = Deserialize::deserialize(reader)?;
         match ty {
             NetAddressType::IPv4 => {
@@ -94,7 +93,7 @@ impl Deserialize for NetAddress {
 }
 
 impl Serialize for NetAddress {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, io::Error> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         size += self.get_type().serialize(writer)?;
         size += match self {

@@ -1,6 +1,5 @@
-use crate::{Deserialize, ReadBytesExt, Serialize, WriteBytesExt};
+use crate::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use num;
-use std::io;
 
 #[allow(non_camel_case_types)]
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Copy, Clone)]
@@ -27,7 +26,7 @@ impl num::ToPrimitive for uvar {
 }
 
 impl Serialize for uvar {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         if self.0 < 0x80 {
             // Just that byte
@@ -96,17 +95,17 @@ impl Serialize for uvar {
 }
 
 impl Deserialize for uvar {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
-        fn read<T: num::ToPrimitive + Deserialize, R: ReadBytesExt>(reader: &mut R) -> io::Result<u64> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        fn read<T: num::ToPrimitive + Deserialize, R: ReadBytesExt>(reader: &mut R) -> Result<u64, SerializingError> {
             let n: T = Deserialize::deserialize(reader)?;
-            return n.to_u64().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput));
+            return Ok(n.to_u64().unwrap());
         }
         let first_byte: u8 = Deserialize::deserialize(reader)?;
         if first_byte == 0xFF {
             // 8 bytes follow
             let byte_1_8 = read::<u64, R>(reader)?;
             if byte_1_8 > u64::max_value() - 0x0102040810204080 {
-                return Err(io::Error::from(io::ErrorKind::InvalidInput));
+                return Err("uvar overflow".into());
             }
             return Ok(uvar(byte_1_8 + 0x0102040810204080));
         } else if first_byte == 0xFE {

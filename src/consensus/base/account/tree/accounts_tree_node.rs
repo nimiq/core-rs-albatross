@@ -1,6 +1,6 @@
 use super::AddressNibbles;
 use super::super::Account;
-use beserial::{Serialize, Deserialize, WriteBytesExt, ReadBytesExt};
+use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt, ReadBytesExt};
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash, SerializeContent};
 use std::io;
 use std::iter;
@@ -149,7 +149,7 @@ impl AccountsTreeNode {
 }
 
 impl Serialize for AccountsTreeNode {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size: usize = 0;
         size += Serialize::serialize(&self.node_type(), writer)?;
         size += Serialize::serialize(self.prefix(), writer)?;
@@ -195,7 +195,7 @@ impl Serialize for AccountsTreeNode {
 }
 
 impl Deserialize for AccountsTreeNode {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let node_type: AccountsTreeNodeType = Deserialize::deserialize(reader)?;
         let prefix: AddressNibbles = Deserialize::deserialize(reader)?;
 
@@ -212,7 +212,7 @@ impl Deserialize for AccountsTreeNode {
                     if let Some(i) = child.suffix.get(0) {
                         children[i] = Some(child);
                     } else {
-                        return Err(io::Error::from(io::ErrorKind::InvalidData));
+                        return Err(io::Error::from(io::ErrorKind::InvalidData).into());
                     }
                 }
                 return Ok(AccountsTreeNode::new_branch(prefix, children));
@@ -222,7 +222,7 @@ impl Deserialize for AccountsTreeNode {
 }
 
 impl SerializeContent for AccountsTreeNode {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
 impl IntoDatabaseValue for AccountsTreeNode {
@@ -238,7 +238,7 @@ impl IntoDatabaseValue for AccountsTreeNode {
 impl FromDatabaseValue for AccountsTreeNode {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
-        return Deserialize::deserialize(&mut cursor);
+        return Ok(Deserialize::deserialize(&mut cursor)?);
     }
 }
 

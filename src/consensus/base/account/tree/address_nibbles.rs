@@ -1,4 +1,4 @@
-use beserial::{Serialize, Deserialize, WriteBytesExt, ReadBytesExt, SerializeWithLength, DeserializeWithLength};
+use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt, ReadBytesExt, SerializeWithLength, DeserializeWithLength};
 use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
 use crate::consensus::base::primitive::Address;
 use std::ops;
@@ -223,7 +223,7 @@ impl ops::Add<AddressNibbles> for AddressNibbles {
 }
 
 impl Serialize for AddressNibbles {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let size = SerializeWithLength::serialize::<u8, W>(&self.to_string(), writer)?;
         return Ok(size);
     }
@@ -234,12 +234,12 @@ impl Serialize for AddressNibbles {
 }
 
 impl Deserialize for AddressNibbles {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let hex_repr: String = DeserializeWithLength::deserialize::<u8, R>(reader)?;
         let pot_address: Result<AddressNibbles, hex::FromHexError> = hex_repr.parse();
 
         return match pot_address {
-            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e).into()),
             Ok(address) => Ok(address),
         };
     }

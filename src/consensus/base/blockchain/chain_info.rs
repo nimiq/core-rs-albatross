@@ -1,4 +1,4 @@
-use beserial::{Serialize, Deserialize, WriteBytesExt};
+use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt};
 use crate::consensus::base::block::{Block, BlockBody, Difficulty};
 use crate::consensus::base::primitive::hash::Blake2bHash;
 use crate::utils::db::{FromDatabaseValue, IntoDatabaseValue};
@@ -37,7 +37,7 @@ impl ChainInfo {
 // Do not serialize the block body.
 // XXX Move this into Block.serialize_xxx()?
 impl Serialize for ChainInfo {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         size += Serialize::serialize(&self.head.header, writer)?;
         size += Serialize::serialize(&self.head.interlink, writer)?;
@@ -73,6 +73,6 @@ impl IntoDatabaseValue for ChainInfo {
 impl FromDatabaseValue for ChainInfo {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
-        return Deserialize::deserialize(&mut cursor);
+        return Ok(Deserialize::deserialize(&mut cursor)?);
     }
 }

@@ -17,7 +17,7 @@ pub struct BlockHeader {
 }
 
 impl SerializeContent for BlockHeader {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
 impl Hash for BlockHeader {}

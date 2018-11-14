@@ -146,6 +146,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
                                 serialized_size_body.append(quote! { size += Serialize::serialized_size(&self.#i); }.as_str());
                             }
                         }
+                        i = i + 1;
                     }
                 }
                 syn::VariantData::Unit => panic!("Serialize can not be derived for unit struct {}", name)
@@ -156,7 +157,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
     quote! {
         impl #impl_generics Serialize for #name #ty_generics #where_clause {
             #[allow(unused_mut,unused_variables)]
-            fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> ::std::io::Result<usize> {
+            fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> Result<usize, ::beserial::SerializingError> {
                 let mut size = 0;
                 #serialize_body
                 return Ok(size);
@@ -210,7 +211,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                     let num: u64 = u.into();
                     return match num {
                         #num_cases
-                        _ => Err(::std::io::Error::from(::std::io::ErrorKind::InvalidInput))
+                        other => Err(format!("{} is not a valid enum value", other).into())
                     };
                 };
             } else {
@@ -218,7 +219,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                     let num: #ty = Deserialize::deserialize(reader)?;
                     return match num {
                         #num_cases
-                        _ => Err(::std::io::Error::from(::std::io::ErrorKind::InvalidInput))
+                        other => Err(format!("{} is not a valid enum value", other).into())
                     };
                 };
             }
@@ -276,7 +277,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
     quote! {
         impl #impl_generics Deserialize for #name #ty_generics #where_clause {
             #[allow(unused_mut,unused_variables)]
-            fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> ::std::io::Result<Self> {
+            fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> Result<Self, ::beserial::SerializingError> {
                 #deserialize_body
             }
         }

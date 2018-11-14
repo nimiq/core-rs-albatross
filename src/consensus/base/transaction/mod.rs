@@ -1,4 +1,4 @@
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializingError, SerializeWithLength, WriteBytesExt};
 use crate::consensus::base::account::{Account, AccountType};
 use crate::consensus::base::primitive::{Address, Coin};
 use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
@@ -194,7 +194,7 @@ impl Transaction {
 }
 
 impl Serialize for Transaction {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         match self.format() {
             TransactionFormat::Basic => {
                 let signature_proof = SignatureProof::deserialize_from_vec(&self.proof)?;
@@ -262,7 +262,7 @@ impl Serialize for Transaction {
 }
 
 impl Deserialize for Transaction {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let transaction_type: TransactionFormat = Deserialize::deserialize(reader)?;
         match transaction_type {
             TransactionFormat::Basic => {

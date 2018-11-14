@@ -4,7 +4,7 @@ pub mod htlc_contract;
 pub mod vesting_contract;
 pub mod accounts;
 
-use beserial::{Deserialize, Serialize, WriteBytesExt, ReadBytesExt};
+use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt, ReadBytesExt};
 use crate::consensus::base::transaction::Transaction;
 use crate::consensus::base::primitive::{Address, Coin};
 use crate::consensus::base::primitive::hash::{Hash, HashOutput, Hasher, SerializeContent};
@@ -149,7 +149,7 @@ impl Account {
 }
 
 impl Serialize for Account {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size: usize = 0;
         size += Serialize::serialize(&self.account_type(), writer)?;
 
@@ -188,7 +188,7 @@ impl Serialize for Account {
 }
 
 impl Deserialize for Account {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let account_type: AccountType = Deserialize::deserialize(reader)?;
 
         match account_type {
@@ -215,7 +215,7 @@ pub struct PrunedAccount {
 }
 
 impl SerializeContent for PrunedAccount {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
 impl Hash for PrunedAccount {

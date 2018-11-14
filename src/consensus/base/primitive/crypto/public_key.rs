@@ -3,7 +3,7 @@ use std::io;
 use sha2;
 
 use ed25519_dalek;
-use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
+use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
 use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
 
 use crate::consensus::base::primitive::crypto::{PrivateKey, Signature};
@@ -57,7 +57,7 @@ impl From<[u8; PublicKey::SIZE]> for PublicKey {
 }
 
 impl Deserialize for PublicKey {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let mut buf = [0u8; PublicKey::SIZE];
         reader.read_exact(&mut buf)?;
         return Ok(PublicKey::from(&buf));
@@ -65,7 +65,7 @@ impl Deserialize for PublicKey {
 }
 
 impl Serialize for PublicKey {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         writer.write(self.as_bytes())?;
         return Ok(self.serialized_size());
     }
@@ -76,7 +76,7 @@ impl Serialize for PublicKey {
 }
 
 impl SerializeContent for PublicKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
 impl Hash for PublicKey { }

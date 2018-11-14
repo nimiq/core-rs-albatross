@@ -1,6 +1,6 @@
 use ed25519_dalek;
 use rand::OsRng;
-use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
+use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
 use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
 
 use crate::consensus::base::primitive::crypto::{PublicKey};
@@ -46,7 +46,7 @@ impl Clone for PrivateKey {
 }
 
 impl Deserialize for PrivateKey {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let mut buf = [0u8; PrivateKey::SIZE];
         reader.read_exact(&mut buf)?;
         return Ok(PrivateKey::from(&buf));
@@ -54,7 +54,7 @@ impl Deserialize for PrivateKey {
 }
 
 impl Serialize for PrivateKey {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         writer.write(self.as_bytes())?;
         return Ok(self.serialized_size());
     }
@@ -65,7 +65,7 @@ impl Serialize for PrivateKey {
 }
 
 impl SerializeContent for PrivateKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
 impl Hash for PrivateKey { }

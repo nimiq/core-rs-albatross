@@ -1,4 +1,4 @@
-use beserial::{Serialize, Deserialize, ReadBytesExt};
+use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt};
 use std::ops::{Add, Sub};
 use std::io;
 
@@ -37,13 +37,13 @@ impl Sub<Coin> for Coin {
 }
 
 impl Deserialize for Coin {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let value: u64 = Deserialize::deserialize(reader)?;
 
         // Check that the value does not exceed Javascript's Number.MAX_SAFE_INTEGER.
         return match value <= Coin::MAX_SAFE_VALUE {
             true => Ok(Coin(value)),
-            false => Err(io::Error::new(io::ErrorKind::InvalidData, "Coin value out of bounds"))
+            false => Err(io::Error::new(io::ErrorKind::InvalidData, "Coin value out of bounds").into())
         };
     }
 }

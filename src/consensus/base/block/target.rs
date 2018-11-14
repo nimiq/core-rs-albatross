@@ -1,10 +1,9 @@
-use beserial::{Serialize, Deserialize, SerializeWithLength, DeserializeWithLength, WriteBytesExt, ReadBytesExt};
+use beserial::{Serialize, SerializingError, Deserialize, SerializeWithLength, DeserializeWithLength, WriteBytesExt, ReadBytesExt};
 use bigdecimal::BigDecimal;
 use num_bigint::{BigInt, Sign, ToBigInt};
 use crate::consensus::base::primitive::hash::Argon2dHash;
 use crate::consensus::policy;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
-use std::io;
 use std::fmt;
 
 #[derive(Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -164,7 +163,7 @@ impl SubAssign<Difficulty> for Difficulty {
 }
 
 impl Serialize for Difficulty {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let (digits, scale) = self.0.as_bigint_and_exponent();
         let (_, bytes) = digits.to_bytes_be();
 
@@ -185,7 +184,7 @@ impl Serialize for Difficulty {
 }
 
 impl Deserialize for Difficulty {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> io::Result<Self> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let bytes: Vec<u8> = DeserializeWithLength::deserialize::<u8, R>(reader)?;
         let digits: BigInt = BigInt::from_bytes_be(Sign::Plus, bytes.as_slice());
         let scale: i64 = Deserialize::deserialize(reader)?;

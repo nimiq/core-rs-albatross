@@ -16,7 +16,7 @@ impl<'a> From<&'a [u8]> for Sha512Hash {
 }
 
 impl ::beserial::Deserialize for Sha512Hash {
-    fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> ::std::io::Result<Self> {
+    fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> Result<Self, ::beserial::SerializingError> {
         let mut a = [0 as u8; SHA512_LENGTH];
         reader.read_exact(&mut a[..])?;
         return Ok(Sha512Hash(a))
@@ -24,7 +24,7 @@ impl ::beserial::Deserialize for Sha512Hash {
 }
 
 impl ::beserial::Serialize for Sha512Hash {
-    fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> ::std::io::Result<usize> {
+    fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> Result<usize, ::beserial::SerializingError> {
         writer.write(&self.0)?;
         return Ok(SHA512_LENGTH);
     }
