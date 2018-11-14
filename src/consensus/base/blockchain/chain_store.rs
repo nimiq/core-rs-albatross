@@ -1,7 +1,7 @@
-use consensus::base::block::Block;
-use consensus::base::blockchain::ChainData;
-use consensus::base::primitive::hash::Blake2bHash;
-use utils::db::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};
+use crate::consensus::base::block::Block;
+use crate::consensus::base::blockchain::ChainData;
+use crate::consensus::base::primitive::hash::Blake2bHash;
+use crate::utils::db::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};
 
 #[derive(Debug)]
 pub struct ChainStore<'env> {

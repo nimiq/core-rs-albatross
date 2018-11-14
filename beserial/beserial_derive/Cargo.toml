@@ -2,6 +2,7 @@
 name = "beserial_derive"
 version = "0.1.0"
 authors = ["Marvin W <git@larma.de>"]
+edition = "2018"
 
 [lib]
 proc-macro = true

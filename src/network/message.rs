@@ -1,14 +1,14 @@
 use std::io;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt, uvar};
-use consensus::base::Subscription;
-use consensus::base::account::tree::AccountsProof;
-use consensus::base::block::{Block, BlockHeader};
-use consensus::base::primitive::crypto::{PublicKey, Signature};
-use consensus::base::primitive::hash::Blake2bHash;
-use consensus::base::transaction::Transaction;
-use network::address::PeerAddress;
-use utils::crc::Crc32Computer;
+use crate::consensus::base::Subscription;
+use crate::consensus::base::account::tree::AccountsProof;
+use crate::consensus::base::block::{Block, BlockHeader};
+use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
+use crate::consensus::base::primitive::hash::Blake2bHash;
+use crate::consensus::base::transaction::Transaction;
+use crate::network::address::PeerAddress;
+use crate::utils::crc::Crc32Computer;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u64)]

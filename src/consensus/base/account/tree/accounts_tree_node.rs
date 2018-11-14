@@ -1,11 +1,11 @@
 use super::AddressNibbles;
 use super::super::Account;
 use beserial::{Serialize, Deserialize, WriteBytesExt, ReadBytesExt};
-use consensus::base::primitive::hash::{Hash, Blake2bHash, SerializeContent};
+use crate::consensus::base::primitive::hash::{Hash, Blake2bHash, SerializeContent};
 use std::io;
 use std::iter;
 use std::slice;
-use utils::db::{FromDatabaseValue, IntoDatabaseValue};
+use crate::utils::db::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
 pub (in super) struct AccountsTreeNodeChild {

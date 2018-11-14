@@ -1,3 +1,4 @@
+#![feature(extern_crate_item_prelude)]
 #![recursion_limit = "128"]
 
 extern crate proc_macro;

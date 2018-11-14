@@ -1,6 +1,6 @@
 use beserial::{Serialize, Deserialize, WriteBytesExt, ReadBytesExt, SerializeWithLength, DeserializeWithLength};
-use consensus::base::primitive::hash::{Hash, SerializeContent};
-use consensus::base::primitive::Address;
+use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
+use crate::consensus::base::primitive::Address;
 use std::ops;
 use std::usize;
 use std::fmt;
@@ -9,7 +9,7 @@ use std::io;
 use std::cmp;
 use std::borrow::Cow;
 use hex;
-use utils::db::AsDatabaseBytes;
+use crate::utils::db::AsDatabaseBytes;
 
 // Stores a compact representation of length nibbles.
 // Each u8 stores up to 2 nibbles.

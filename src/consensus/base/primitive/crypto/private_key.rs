@@ -1,9 +1,9 @@
 use ed25519_dalek;
 use rand::OsRng;
 use beserial::{Serialize, Deserialize, ReadBytesExt, WriteBytesExt};
-use consensus::base::primitive::hash::{Hash, SerializeContent};
+use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
 
-use consensus::base::primitive::crypto::{PublicKey};
+use crate::consensus::base::primitive::crypto::{PublicKey};
 use std::io;
 use std::fmt::Debug;
 use std::fmt::Error;

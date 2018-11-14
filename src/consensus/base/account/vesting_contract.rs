@@ -1,6 +1,6 @@
 use beserial::{Serialize, Deserialize};
-use consensus::base::primitive::{Address, Coin};
-use consensus::base::transaction::{Transaction, SignatureProof};
+use crate::consensus::base::primitive::{Address, Coin};
+use crate::consensus::base::transaction::{Transaction, SignatureProof};
 use super::{Account, AccountError};
 use std::io;
 

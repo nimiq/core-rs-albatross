@@ -1,5 +1,5 @@
 use bigdecimal::BigDecimal;
-use consensus::base::primitive::Coin;
+use crate::consensus::base::primitive::Coin;
 use num_bigint::BigInt;
 use num_traits::pow;
 

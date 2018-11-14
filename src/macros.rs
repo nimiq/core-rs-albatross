@@ -62,7 +62,7 @@ macro_rules! hash_typed_array {
             }
         }
 
-        impl ::consensus::base::primitive::hash::Hash for $name {}
+        impl crate::consensus::base::primitive::hash::Hash for $name {}
     };
 }
 

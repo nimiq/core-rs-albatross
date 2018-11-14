@@ -147,7 +147,7 @@ fn verify_rejects_invalid_pow() {
 fn verify_rejects_excessive_size() {
     let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     {
-        let mut body = block.body.as_mut().unwrap();
+        let body = block.body.as_mut().unwrap();
         let tx = body.transactions[0].clone();
         for _ in 0..800 {
             body.transactions.push(tx.clone());
@@ -178,7 +178,7 @@ fn verify_rejects_mismatched_body_hash() {
 fn verify_rejects_invalid_body() {
     let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     {
-        let mut body = block.body.as_mut().unwrap();
+        let body = block.body.as_mut().unwrap();
         body.transactions[0].validity_start_height = 5;
     }
     assert_eq!(block.verify(block.header.timestamp, NetworkId::Main), Err(BlockError::ExpiredTransaction));

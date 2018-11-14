@@ -1,9 +1,9 @@
 use beserial::{Serialize, Deserialize};
 use super::AccountError;
 use super::super::transaction::Transaction;
-use consensus::base::account::Account;
-use consensus::base::transaction::SignatureProof;
-use consensus::base::primitive::Coin;
+use crate::consensus::base::account::Account;
+use crate::consensus::base::transaction::SignatureProof;
+use crate::consensus::base::primitive::Coin;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BasicAccount {

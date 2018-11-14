@@ -1,14 +1,14 @@
-use utils::crc::Crc8Computer;
-use consensus::base::primitive::hash::{Sha256Hasher, Hasher};
+use crate::utils::crc::Crc8Computer;
+use crate::consensus::base::primitive::hash::{Sha256Hasher, Hasher};
 use std::str;
 use bit_vec::BitVec;
-use utils::bit_vec::IntoChunkedBitVecIterator;
+use crate::utils::bit_vec::IntoChunkedBitVecIterator;
 use std::fmt;
 use hex::FromHex;
 use std::str::FromStr;
-use consensus::base::primitive::hash::pbkdf2::Pbkdf2Error;
-use consensus::base::primitive::hash::pbkdf2::compute_pbkdf2_sha512;
-use utils::key_derivation::ExtendedPrivateKey;
+use crate::consensus::base::primitive::hash::pbkdf2::Pbkdf2Error;
+use crate::consensus::base::primitive::hash::pbkdf2::compute_pbkdf2_sha512;
+use crate::utils::key_derivation::ExtendedPrivateKey;
 use unicode_normalization::UnicodeNormalization;
 
 /**

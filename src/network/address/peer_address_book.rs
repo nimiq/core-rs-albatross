@@ -1,15 +1,15 @@
-use network::address::PeerId;
+use crate::network::address::PeerId;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
-use network::address::net_address::NetAddress;
-use network::address::peer_address::PeerAddress;
-use network::address::peer_address_state::PeerAddressInfo;
-use network::address::peer_address_state::PeerAddressState;
-use utils;
-use utils::get_current_time_millis;
-use network::Protocol;
-use network::peer_channel::Session;
+use crate::network::address::net_address::NetAddress;
+use crate::network::address::peer_address::PeerAddress;
+use crate::network::address::peer_address_state::PeerAddressInfo;
+use crate::network::address::peer_address_state::PeerAddressState;
+use crate::utils;
+use crate::utils::get_current_time_millis;
+use crate::network::Protocol;
+use crate::network::peer_channel::Session;
 
 pub struct PeerAddressBook {
     state_by_address: HashMap<Arc<PeerAddress>, Arc<PeerAddressInfo>>,
@@ -148,7 +148,7 @@ impl PeerAddressBook {
 
     /// Called when a connection to this peerAddress is closed.
     pub fn close(&mut self, channel: &Session, peer_address: Arc<PeerAddress>) {
-        if let Entry::Occupied(mut e) = self.state_by_address.entry(Arc::clone(&peer_address)) {
+        if let Entry::Occupied(e) = self.state_by_address.entry(Arc::clone(&peer_address)) {
 
         }
     }

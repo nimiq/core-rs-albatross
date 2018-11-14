@@ -1,12 +1,12 @@
 use bigdecimal::BigDecimal;
-use consensus::base::account::Accounts;
-use consensus::base::block::{Block, Target, TargetCompact};
-use consensus::base::blockchain::{ChainData, ChainStore, TransactionCache};
-use consensus::base::primitive::hash::{Hash, Blake2bHash};
-use consensus::networks::{NetworkId, get_network_info};
-use consensus::policy;
-use network::NetworkTime;
-use utils::db::{Environment, ReadTransaction, WriteTransaction};
+use crate::consensus::base::account::Accounts;
+use crate::consensus::base::block::{Block, Target, TargetCompact};
+use crate::consensus::base::blockchain::{ChainData, ChainStore, TransactionCache};
+use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
+use crate::consensus::networks::{NetworkId, get_network_info};
+use crate::consensus::policy;
+use crate::network::NetworkTime;
+use crate::utils::db::{Environment, ReadTransaction, WriteTransaction};
 
 #[derive(Debug)]
 pub struct Blockchain<'env, 'time> {

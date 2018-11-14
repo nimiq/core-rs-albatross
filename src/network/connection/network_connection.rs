@@ -4,15 +4,15 @@ use futures::prelude::*;
 use futures::stream::Forward;
 use futures::sync::mpsc::*;
 
-use network::address::net_address::NetAddress;
-use network::connection::close_type::CloseType;
-use network::message::Message;
-use network::peer_channel::PeerSink;
-use network::peer_channel::PeerStream;
-use network::peer_channel::Session;
-use network::websocket::NimiqMessageStream;
-use network::websocket::SharedNimiqMessageStream;
-use network::address::peer_address::PeerAddress;
+use crate::network::address::net_address::NetAddress;
+use crate::network::connection::close_type::CloseType;
+use crate::network::message::Message;
+use crate::network::peer_channel::PeerSink;
+use crate::network::peer_channel::PeerStream;
+use crate::network::peer_channel::Session;
+use crate::network::websocket::NimiqMessageStream;
+use crate::network::websocket::SharedNimiqMessageStream;
+use crate::network::address::peer_address::PeerAddress;
 
 pub struct NetworkConnection {
     peer_stream: Option<PeerStream>,

@@ -3,7 +3,7 @@ use byteorder::{BigEndian, ByteOrder};
 use futures::prelude::*;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use network::message::Message as NimiqMessage;
+use crate::network::message::Message as NimiqMessage;
 use tungstenite::protocol::Message as WebSocketMessage;
 
 use tungstenite::error::Error as WsError;
@@ -11,10 +11,10 @@ use url::Url;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{connect_async, accept_async, stream::PeerAddr};
 use std::io;
-use utils::locking::MultiLock;
+use crate::utils::locking::MultiLock;
 use std::fmt::Debug;
 use std::{fmt, net};
-use network::address::net_address::NetAddress;
+use crate::network::address::net_address::NetAddress;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -116,14 +116,14 @@ impl Sink for NimiqMessageStream
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
         match self.inner.poll_complete() {
-            Ok(async) => Ok(async),
+            Ok(r#async) => Ok(r#async),
             Err(error) => Err(()),
         }
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
         match self.inner.close() {
-            Ok(async) => Ok(async),
+            Ok(r#async) => Ok(r#async),
             Err(error) => Err(()),
         }
     }

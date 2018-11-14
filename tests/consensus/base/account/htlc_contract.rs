@@ -152,7 +152,7 @@ fn it_does_not_support_incoming_transactions() {
 #[test]
 fn it_can_verify_valid_outgoing_transaction() {
     let key_pair = KeyPair::generate();
-    let addr = Address::from(&key_pair.public);
+    let _addr = Address::from(&key_pair.public);
     let mut tx = Transaction {
         data: vec![],
         sender: Address::from([0u8; 20]),

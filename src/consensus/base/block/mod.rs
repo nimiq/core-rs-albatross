@@ -10,7 +10,7 @@ pub use self::header::BlockHeader;
 pub use self::interlink::BlockInterlink;
 pub use self::target::{Target, TargetCompact, Difficulty};
 
-use consensus::base::transaction::TransactionError;
+use crate::consensus::base::transaction::TransactionError;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum BlockError {

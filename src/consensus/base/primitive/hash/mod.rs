@@ -7,7 +7,7 @@ use libargon2_sys::argon2d_hash;
 use sha2::{Sha256, Sha512, Digest};
 use beserial::{Serialize, Deserialize};
 use hex::FromHex;
-use utils::db::{AsDatabaseBytes, FromDatabaseValue};
+use crate::utils::db::{AsDatabaseBytes, FromDatabaseValue};
 
 use std::borrow::Cow;
 use std::cmp::Ordering;

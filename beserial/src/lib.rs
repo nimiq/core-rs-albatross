@@ -4,7 +4,7 @@ extern crate num;
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 pub use num::ToPrimitive;
 use std::io::Result;
-pub use types::uvar;
+pub use crate::types::uvar;
 
 mod types;
 

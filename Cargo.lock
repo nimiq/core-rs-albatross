@@ -582,7 +582,7 @@ dependencies = [
  "sha2 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio-tungstenite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio-tungstenite 0.6.0 (git+https://github.com/jeffesquivels/tokio-tungstenite?branch=implement_peer_addr)",
  "tungstenite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-normalization 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 1.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1138,7 +1138,7 @@ dependencies = [
 [[package]]
 name = "tokio-tungstenite"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/jeffesquivels/tokio-tungstenite?branch=implement_peer_addr#abf4b284e35a7422fa8411dec1d9ad256c7948c6"
 dependencies = [
  "bytes 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1438,7 +1438,7 @@ dependencies = [
 "checksum tokio-threadpool 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "a5758cecb6e0633cea5d563ac07c975e04961690b946b04fd84e7d6445a8f6af"
 "checksum tokio-timer 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)" = "d03fa701f9578a01b7014f106b47f0a363b4727a7f3f75d666e312ab7acbbf1c"
 "checksum tokio-tls 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e53fdbf3156f588be1676022fe794232b24922d426e8c14f4e46891c1e31c440"
-"checksum tokio-tungstenite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4e744ff297473d047436c108c99e478fd73c1dd27e2c08e352907dcd864c720f"
+"checksum tokio-tungstenite 0.6.0 (git+https://github.com/jeffesquivels/tokio-tungstenite?branch=implement_peer_addr)" = "<none>"
 "checksum tokio-udp 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "da941144b816d0dcda4db3a1ba87596e4df5e860a72b70783fe435891f80601c"
 "checksum tokio-uds 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "424c1ed15a0132251813ccea50640b224c809d6ceafb88154c1a8775873a0e89"
 "checksum tungstenite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "91541638322b14335fa96c3a4167d9424de72f22986b9d12a52350873b4e83f1"

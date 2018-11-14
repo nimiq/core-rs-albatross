@@ -7,10 +7,10 @@ use futures::sync::mpsc::*;
 use parking_lot::Mutex;
 use tokio::prelude::{Stream};
 
-use consensus::base::primitive::hash::Argon2dHash;
-use network::message::Message;
-use network::websocket::NimiqMessageStreamError;
-use network::websocket::SharedNimiqMessageStream;
+use crate::consensus::base::primitive::hash::Argon2dHash;
+use crate::network::message::Message;
+use crate::network::websocket::NimiqMessageStreamError;
+use crate::network::websocket::SharedNimiqMessageStream;
 
 #[derive(Clone, Debug)]
 pub struct Peer {

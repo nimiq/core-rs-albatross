@@ -1,7 +1,7 @@
-use consensus::base::block::Block;
-use consensus::base::primitive::hash::{Hash, Blake2bHash};
-use consensus::base::transaction::Transaction;
-use consensus::policy;
+use crate::consensus::base::block::Block;
+use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
+use crate::consensus::base::transaction::Transaction;
+use crate::consensus::policy;
 use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone)]

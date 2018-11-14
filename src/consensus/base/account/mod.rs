@@ -5,9 +5,9 @@ pub mod vesting_contract;
 pub mod accounts;
 
 use beserial::{Deserialize, Serialize, WriteBytesExt, ReadBytesExt};
-use consensus::base::transaction::Transaction;
-use consensus::base::primitive::{Address, Coin};
-use consensus::base::primitive::hash::{Hash, HashOutput, Hasher, SerializeContent};
+use crate::consensus::base::transaction::Transaction;
+use crate::consensus::base::primitive::{Address, Coin};
+use crate::consensus::base::primitive::hash::{Hash, HashOutput, Hasher, SerializeContent};
 use std::cmp::Ordering;
 use std::io;
 use std::fmt;
@@ -220,7 +220,7 @@ impl SerializeContent for PrunedAccount {
 
 impl Hash for PrunedAccount {
     fn hash<H: HashOutput>(&self) -> H  {
-        let mut h = H::Builder::default();
+        let h = H::Builder::default();
         self.serialize_content(&mut vec![]).unwrap();
         return h.finish();
     }

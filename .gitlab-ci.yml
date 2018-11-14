@@ -17,40 +17,38 @@ stages:
   - test
   - deploy
 
-build-stable:
+.build:
   stage: build
   script:
     - rustc --version
     - cargo --version
     - cargo build --all
 
-build-nightly:
-  image: 'rustlang/rust:nightly'
-  stage: build
-  script:
-    - rustc +nightly --version
-    - cargo +nightly --version
-    - cargo +nightly build --all
+#build-stable:
+#  extends: .build
 
-test-stable:
+build-nightly:
+  extends: .build
+  image: 'rustlang/rust:nightly'
+
+.test:
   stage: test
-  dependencies:
-    - build-stable
   script:
     - cargo test --all
 
+#test-stable:
+#  extends: .test
+#  dependencies:
+#    - build-stable
+
 test-nightly:
+  extends: .test
   image: 'rustlang/rust:nightly'
-  stage: test
   dependencies:
     - build-nightly
-  script:
-    - cargo +nightly test --all
 
-coverage:
+.coverage:
   stage: test
-  dependencies:
-    - build-stable
   script:
     - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y cmake unzip libelf-dev libdw-dev binutils-dev libiberty-dev
     - cargo coverage --version || cargo install cargo-travis
@@ -63,7 +61,18 @@ coverage:
     paths:
       - target/kcov
 
-pages:
+#coverage-stable:
+#  extends: .coverage
+#  dependencies:
+#    - build-stable
+
+coverage-nightly:
+  extends: .coverage
+  image: 'rustlang/rust:nightly'
+  dependencies:
+    - build-nightly
+
+.pages:
   stage: deploy
   script:
     - cargo doc --no-deps
@@ -74,6 +83,15 @@ pages:
       - public
   only:
     - master
+
+# stable
+#pages:
+#  extends: .pages
+
+# nightly
+#pages:
+#  extends: .pages
+#  image: 'rustlang/rust:nightly'
 
 cache:
   paths:

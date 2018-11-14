@@ -2,7 +2,7 @@ use ed25519_dalek;
 use rand::OsRng;
 use sha2;
 
-use consensus::base::primitive::crypto::{PublicKey, PrivateKey, Signature};
+use crate::consensus::base::primitive::crypto::{PublicKey, PrivateKey, Signature};
 
 pub struct KeyPair {
     pub public: PublicKey,

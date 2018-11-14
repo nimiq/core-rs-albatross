@@ -1,12 +1,12 @@
 use beserial::{Deserialize, Serialize};
-use consensus::base::account::PrunedAccount;
-use consensus::base::block::BlockError;
-use consensus::base::primitive::Address;
-use consensus::base::primitive::hash::{Hash, HashOutput, SerializeContent};
-use consensus::base::transaction::Transaction;
-use consensus::networks::NetworkId;
+use crate::consensus::base::account::PrunedAccount;
+use crate::consensus::base::block::BlockError;
+use crate::consensus::base::primitive::Address;
+use crate::consensus::base::primitive::hash::{Hash, HashOutput, SerializeContent};
+use crate::consensus::base::transaction::Transaction;
+use crate::consensus::networks::NetworkId;
 use std::{cmp::Ordering, io};
-use utils::merkle;
+use crate::utils::merkle;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BlockBody {

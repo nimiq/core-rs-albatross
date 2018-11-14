@@ -1,13 +1,13 @@
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, WriteBytesExt};
-use consensus::base::account::{Account, AccountType};
-use consensus::base::primitive::{Address, Coin};
-use consensus::base::primitive::crypto::{PublicKey, Signature};
-use consensus::base::primitive::hash::{Hash, SerializeContent, Blake2bHash};
-use consensus::networks::NetworkId;
-use consensus::policy;
+use crate::consensus::base::account::{Account, AccountType};
+use crate::consensus::base::primitive::{Address, Coin};
+use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
+use crate::consensus::base::primitive::hash::{Hash, SerializeContent, Blake2bHash};
+use crate::consensus::networks::NetworkId;
+use crate::consensus::policy;
 use std::cmp::{Ord, Ordering};
 use std::io;
-use utils::merkle::Blake2bMerklePath;
+use crate::utils::merkle::Blake2bMerklePath;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]

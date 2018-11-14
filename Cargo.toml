@@ -6,6 +6,7 @@ license = "Apache-2.0"
 description = "Nimiq Core implementation in Rust"
 repository = "https://github.com/nimiq-network/core-rs"
 homepage = "https://nimiq.com"
+edition = "2018"
 
 # Remove sometime
 publish = false

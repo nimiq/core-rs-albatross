@@ -1,4 +1,4 @@
-use ::{Deserialize, ReadBytesExt, Serialize, WriteBytesExt};
+use crate::{Deserialize, ReadBytesExt, Serialize, WriteBytesExt};
 use num;
 use std::io;
 

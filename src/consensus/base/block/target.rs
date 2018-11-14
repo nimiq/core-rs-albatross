@@ -1,8 +1,8 @@
 use beserial::{Serialize, Deserialize, SerializeWithLength, DeserializeWithLength, WriteBytesExt, ReadBytesExt};
 use bigdecimal::BigDecimal;
 use num_bigint::{BigInt, Sign, ToBigInt};
-use consensus::base::primitive::hash::Argon2dHash;
-use consensus::policy;
+use crate::consensus::base::primitive::hash::Argon2dHash;
+use crate::consensus::policy;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::io;
 use std::fmt;

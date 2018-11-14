@@ -1,7 +1,7 @@
 use beserial::{Serialize, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
-use consensus::base::primitive::crypto::{PublicKey, Signature};
-use network::Protocol;
-use network::address::{NetAddress, PeerId};
+use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
+use crate::network::Protocol;
+use crate::network::address::{NetAddress, PeerId};
 use std::io;
 use std::vec::Vec;
 use std::hash::Hash;

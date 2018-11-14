@@ -1,9 +1,9 @@
 use beserial::{Serialize, Deserialize};
-use consensus::base::account::{Account, AccountError, AccountType};
-use consensus::base::transaction::{Transaction, TransactionFlags};
-use consensus::base::transaction::SignatureProof;
-use consensus::base::primitive::{Address, Coin};
-use consensus::base::primitive::hash::{Hasher, Blake2bHasher, Sha256Hasher};
+use crate::consensus::base::account::{Account, AccountError, AccountType};
+use crate::consensus::base::transaction::{Transaction, TransactionFlags};
+use crate::consensus::base::transaction::SignatureProof;
+use crate::consensus::base::primitive::{Address, Coin};
+use crate::consensus::base::primitive::hash::{Hasher, Blake2bHasher, Sha256Hasher};
 use hex::FromHex;
 use std::io;
 

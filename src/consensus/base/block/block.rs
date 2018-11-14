@@ -1,9 +1,9 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize};
-use consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target, BlockError};
-use consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
-use consensus::networks::NetworkId;
+use crate::consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target, BlockError};
+use crate::consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
+use crate::consensus::networks::NetworkId;
 use std::io;
-use utils::db::{FromDatabaseValue, IntoDatabaseValue};
+use crate::utils::db::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize)]
 pub struct Block {

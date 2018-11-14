@@ -1,8 +1,8 @@
-use network::address::peer_address::PeerAddress;
-use network;
+use crate::network::address::peer_address::PeerAddress;
+use crate::network;
 use std::sync::Arc;
 use std::collections::HashMap;
-use network::peer_channel::Session;
+use crate::network::peer_channel::Session;
 
 pub struct PeerAddressInfo {
     pub peer_address: Arc<PeerAddress>,
@@ -49,7 +49,7 @@ impl SignalRouter {
     }
 
     pub fn add_route(&mut self, signal_channel: Session, distance: u8, timestamp: u64) -> bool {
-        let mut new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
+        let new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
 
         // TODO old route
 
