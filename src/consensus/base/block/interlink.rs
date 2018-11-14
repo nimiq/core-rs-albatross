@@ -82,7 +82,7 @@ impl Serialize for BlockInterlink {
 }
 
 impl BlockInterlink {
-    pub(super) fn hash(&self, network_id: NetworkId) -> Blake2bHash {
+    pub fn hash(&self, network_id: NetworkId) -> Blake2bHash {
         let network_info = get_network_info(network_id).unwrap();
         let mut vec: Vec<Blake2bHash> = Vec::with_capacity(2 + self.compressed.len());
         vec.push(self.repeat_bits.hash());

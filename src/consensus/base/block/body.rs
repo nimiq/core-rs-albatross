@@ -57,14 +57,14 @@ impl BlockBody {
             }
             previous_tx = Some(tx);
 
-            // Check intrinsic transaction invariants.
-            if let Err(e) = tx.verify(network_id) {
-                return Err(BlockError::InvalidTransaction(e));
-            }
-
             // Check that the transaction is within its validity window.
             if !tx.is_valid_at(block_height) {
                 return Err(BlockError::ExpiredTransaction);
+            }
+
+            // Check intrinsic transaction invariants.
+            if let Err(e) = tx.verify(network_id) {
+                return Err(BlockError::InvalidTransaction(e));
             }
         }
 

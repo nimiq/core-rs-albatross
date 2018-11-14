@@ -41,7 +41,7 @@ impl Block {
             return Err(BlockError::FromTheFuture);
         }
 
-        // Check that the header hash matches the difficulty.
+        // Check that the proof of work is valid.
         if !self.header.verify_proof_of_work() {
             return Err(BlockError::InvalidPoW);
         }

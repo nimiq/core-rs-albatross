@@ -7,7 +7,7 @@ pub mod accounts;
 use beserial::{Deserialize, Serialize, WriteBytesExt, ReadBytesExt};
 use consensus::base::transaction::Transaction;
 use consensus::base::primitive::{Address, Coin};
-use consensus::base::primitive::hash::{Hash, SerializeContent};
+use consensus::base::primitive::hash::{Hash, HashOutput, Hasher, SerializeContent};
 use std::cmp::Ordering;
 use std::io;
 use std::fmt;
@@ -218,7 +218,13 @@ impl SerializeContent for PrunedAccount {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { self.serialize(writer) }
 }
 
-impl Hash for PrunedAccount {}
+impl Hash for PrunedAccount {
+    fn hash<H: HashOutput>(&self) -> H  {
+        let mut h = H::Builder::default();
+        self.serialize_content(&mut vec![]).unwrap();
+        return h.finish();
+    }
+}
 
 impl Ord for PrunedAccount {
     fn cmp(&self, other: &PrunedAccount) -> Ordering {

@@ -7,12 +7,12 @@ use nimiq::consensus::base::transaction::{TransactionFormat, TransactionFlags, T
 use nimiq::consensus::networks::NetworkId;
 use hex;
 
-const MAINNET_GENESIS_BODY: &str = "0000000000000000000000000000000000000000836c6f766520616920616d6f72206d6f68616262617420687562756e2063696e7461206c7975626f76206268616c616261736120616d6f7572206b61756e6120706927617261206c696562652065736871207570656e646f207072656d6120616d6f7265206b61747265736e616e20736172616e6720616e7075207072656d612079657500000000";
-const MAINNET_B169500_BODY: &str = "b403040ff02b4a9a4d10f8a4beff71750cd3aa7f324e696d6275732d393630656364346238313936303030303030323266386531313034663066663830323530373939373632320003010000ad8e224835e6cc0cadbcf500a49dae46f67697040224786862babbdb05e7c4430612135eb2a836812300000000000000000100000000000000000002961b2a0000a4010301daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f94dc65fbd91fc9f5ed1d92dba86d2e59607774b13e27a556d92a56ade9808d32cebdb4e704995dd63f97429a827541d3c6253bc0c2f472c3341b538e2f4bc60800e930b6408b84cb3a7985c54e742c4a1af3110b865386144a0e1badd0bceefc162cecfda0761ce11e06a076c2882b2e21309602973a4443ba4d672b665d4f3f0100bf703dd4eb71e245cced26f014f40dc29f0f71e6bffce722a7ceecba1b71cb8d44d5c0727a1a08efd376cd005293e33236232fad0000000000004e2000000000000001180002961a2a8f6693b1eb1537aa8eec3f99898d91474e5cfa1de1c81a1ee9e0c04ba0205e310d65708ea6e5ed9e7953f4dce64e73392333a2b83d1b30d0df9eb74bcc68980900725323e8f226e7b9dac90331505844f83e45f28cc6f0534039f55c725536d1ec6573413bec835fa4fb54f4dfc3b273a9e8ecc95b000000000011c7020000000000000000000296192a53ddbfd2dd72a78a8b62699e0012585f4768f07e397ae3bb23d0cd379c0c12c9dbe0aca1ae8f005330bbb33c80ee1449229ad6d0e482a1fc8124233dd953600e0001ad8e224835e6cc0cadbcf500a49dae46f67697040200000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f01000296350000000000000001";
+const GENESIS_BODY: &str = "0000000000000000000000000000000000000000836c6f766520616920616d6f72206d6f68616262617420687562756e2063696e7461206c7975626f76206268616c616261736120616d6f7572206b61756e6120706927617261206c696562652065736871207570656e646f207072656d6120616d6f7265206b61747265736e616e20736172616e6720616e7075207072656d612079657500000000";
+const B169500_BODY: &str = "b403040ff02b4a9a4d10f8a4beff71750cd3aa7f324e696d6275732d393630656364346238313936303030303030323266386531313034663066663830323530373939373632320003010000ad8e224835e6cc0cadbcf500a49dae46f67697040224786862babbdb05e7c4430612135eb2a836812300000000000000000100000000000000000002961b2a0000a4010301daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f94dc65fbd91fc9f5ed1d92dba86d2e59607774b13e27a556d92a56ade9808d32cebdb4e704995dd63f97429a827541d3c6253bc0c2f472c3341b538e2f4bc60800e930b6408b84cb3a7985c54e742c4a1af3110b865386144a0e1badd0bceefc162cecfda0761ce11e06a076c2882b2e21309602973a4443ba4d672b665d4f3f0100bf703dd4eb71e245cced26f014f40dc29f0f71e6bffce722a7ceecba1b71cb8d44d5c0727a1a08efd376cd005293e33236232fad0000000000004e2000000000000001180002961a2a8f6693b1eb1537aa8eec3f99898d91474e5cfa1de1c81a1ee9e0c04ba0205e310d65708ea6e5ed9e7953f4dce64e73392333a2b83d1b30d0df9eb74bcc68980900725323e8f226e7b9dac90331505844f83e45f28cc6f0534039f55c725536d1ec6573413bec835fa4fb54f4dfc3b273a9e8ecc95b000000000011c7020000000000000000000296192a53ddbfd2dd72a78a8b62699e0012585f4768f07e397ae3bb23d0cd379c0c12c9dbe0aca1ae8f005330bbb33c80ee1449229ad6d0e482a1fc8124233dd953600e0001ad8e224835e6cc0cadbcf500a49dae46f67697040200000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f01000296350000000000000001";
 
 #[test]
 fn it_can_deserialize_genesis_body() {
-    let v: Vec<u8> = hex::decode(MAINNET_GENESIS_BODY).unwrap();
+    let v: Vec<u8> = hex::decode(GENESIS_BODY).unwrap();
     let body: BlockBody = Deserialize::deserialize(&mut &v[..]).unwrap();
     assert_eq!(body.miner, Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]));
     assert_eq!(body.extra_data, "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".as_bytes().to_vec());
@@ -22,23 +22,23 @@ fn it_can_deserialize_genesis_body() {
 
 #[test]
 fn it_can_serialize_genesis_body() {
-    let v: Vec<u8> = hex::decode(MAINNET_GENESIS_BODY).unwrap();
+    let v: Vec<u8> = hex::decode(GENESIS_BODY).unwrap();
     let body: BlockBody = Deserialize::deserialize(&mut &v[..]).unwrap();
     let mut v2: Vec<u8> = Vec::with_capacity(body.serialized_size());
     let size = body.serialize(&mut v2).unwrap();
     assert_eq!(size, body.serialized_size());
-    assert_eq!(hex::encode(v2), MAINNET_GENESIS_BODY);
+    assert_eq!(hex::encode(v2), GENESIS_BODY);
 }
 
 #[test]
 fn it_can_calculate_genesis_body_hash() {
-    let body = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_GENESIS_BODY).unwrap()).unwrap();
-    assert_eq!(Hash::hash::<Blake2bHash>(&body).as_bytes(), &hex::decode("7cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a").unwrap()[..]);
+    let body = BlockBody::deserialize_from_vec(&hex::decode(GENESIS_BODY).unwrap()).unwrap();
+    assert_eq!(Hash::hash::<Blake2bHash>(&body), Blake2bHash::from("7cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a"));
 }
 
 #[test]
 fn it_can_deserialize_b169500_body() {
-    let v: Vec<u8> = hex::decode(MAINNET_B169500_BODY).unwrap();
+    let v: Vec<u8> = hex::decode(B169500_BODY).unwrap();
     let body: BlockBody = Deserialize::deserialize(&mut &v[..]).unwrap();
     assert_eq!(body.miner, Address::from(&hex::decode("b403040ff02b4a9a4d10f8a4beff71750cd3aa7f").unwrap()[..]));
     assert_eq!(body.extra_data, "Nimbus-960ecd4b819600000022f8e1104f0ff802507997622".as_bytes().to_vec());
@@ -77,12 +77,18 @@ fn it_can_deserialize_b169500_body() {
 
 #[test]
 fn it_can_serialize_b169500_body() {
-    let v: Vec<u8> = hex::decode(MAINNET_B169500_BODY).unwrap();
+    let v: Vec<u8> = hex::decode(B169500_BODY).unwrap();
     let body: BlockBody = Deserialize::deserialize(&mut &v[..]).unwrap();
     let mut v2: Vec<u8> = Vec::with_capacity(body.serialized_size());
     let size = body.serialize(&mut v2).unwrap();
     assert_eq!(size, body.serialized_size());
-    assert_eq!(hex::encode(v2), MAINNET_B169500_BODY);
+    assert_eq!(hex::encode(v2), B169500_BODY);
+}
+
+#[test]
+fn it_can_calculate_b169500_body_hash() {
+    let body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
+    assert_eq!(Hash::hash::<Blake2bHash>(&body), Blake2bHash::from("a65795b408a23693203cb7bbae3206fafcf0f49a8e2832b51df27e904d1f397d"));
 }
 
 #[test]
@@ -98,13 +104,13 @@ fn verify_accepts_an_empty_body() {
 
 #[test]
 fn verify_accepts_body_169500() {
-    let body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_B169500_BODY).unwrap()).unwrap();
+    let body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     assert!(body.verify(169500, NetworkId::Main).is_ok());
 }
 
 #[test]
 fn verify_rejects_duplicate_transactions() {
-    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_B169500_BODY).unwrap()).unwrap();
+    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     let tx = body.transactions[2].clone();
     body.transactions.push(tx);
     assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::DuplicateTransaction));
@@ -112,7 +118,7 @@ fn verify_rejects_duplicate_transactions() {
 
 #[test]
 fn verify_rejects_unordered_transactions() {
-    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_B169500_BODY).unwrap()).unwrap();
+    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     let tx = body.transactions[2].clone();
     body.transactions.insert(0, tx);
     body.transactions.remove(2);
@@ -121,21 +127,21 @@ fn verify_rejects_unordered_transactions() {
 
 #[test]
 fn verify_rejects_invalid_transactions() {
-    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_B169500_BODY).unwrap()).unwrap();
+    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     body.transactions[1].proof[0] += 1;
     assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::InvalidTransaction(TransactionError::InvalidForSender)));
 }
 
 #[test]
 fn verify_rejects_expired_transactions() {
-    let body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_B169500_BODY).unwrap()).unwrap();
+    let body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     assert_eq!(body.verify(169400, NetworkId::Main), Err(BlockError::ExpiredTransaction));
     assert_eq!(body.verify(169620, NetworkId::Main), Err(BlockError::ExpiredTransaction));
 }
 
 #[test]
 fn verify_rejects_duplicate_pruned_accounts() {
-    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_B169500_BODY).unwrap()).unwrap();
+    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     let account = body.pruned_accounts[0].clone();
     body.pruned_accounts.push(account);
     assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::DuplicatePrunedAccount));
@@ -143,7 +149,7 @@ fn verify_rejects_duplicate_pruned_accounts() {
 
 #[test]
 fn verify_rejects_unordered_pruned_accounts() {
-    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_B169500_BODY).unwrap()).unwrap();
+    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     let mut account = body.pruned_accounts[0].clone();
     account.address = Address::from([1u8; Address::SIZE]);
     body.pruned_accounts.push(account);
@@ -152,7 +158,7 @@ fn verify_rejects_unordered_pruned_accounts() {
 
 #[test]
 fn verify_rejects_invalid_pruned_accounts() {
-    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(MAINNET_B169500_BODY).unwrap()).unwrap();
+    let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     let pruned_account = PrunedAccount {
         address: Address::from([255u8; Address::SIZE]),
         account: Account::Vesting(VestingContract {

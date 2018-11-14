@@ -91,7 +91,7 @@ impl Transaction {
             data,
             sender,
             sender_type,
-            recipient: Address::from([0u8; 20]),
+            recipient: Address::from([0u8; Address::SIZE]),
             recipient_type,
             value,
             fee,
