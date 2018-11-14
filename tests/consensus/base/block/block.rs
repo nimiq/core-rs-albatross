@@ -1,5 +1,4 @@
 use beserial::{Deserialize, Serialize};
-use bigdecimal::BigDecimal;
 use nimiq::consensus::base::block::*;
 use nimiq::consensus::base::primitive::{Address, Coin};
 use nimiq::consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
@@ -212,7 +211,7 @@ const DUMMY_HASH: &str = "324dcf027dd4a30a932c441f365a25e86b173defa4b8e589482534
 #[test]
 fn next_interlink_is_correct_1() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL0).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(4)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(4).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -223,7 +222,7 @@ fn next_interlink_is_correct_1() {
 #[test]
 fn next_interlink_is_correct_2() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL2).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(4)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(4).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -234,7 +233,7 @@ fn next_interlink_is_correct_2() {
 #[test]
 fn next_interlink_is_correct_3() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL0).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(2)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(2).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -245,7 +244,7 @@ fn next_interlink_is_correct_3() {
 #[test]
 fn next_interlink_is_correct_4() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL2).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(2)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(2).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -256,7 +255,7 @@ fn next_interlink_is_correct_4() {
 #[test]
 fn next_interlink_is_correct_5() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL0).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(8)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(8).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -267,7 +266,7 @@ fn next_interlink_is_correct_5() {
 #[test]
 fn next_interlink_is_correct_6() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL2).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(8)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(8).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -278,7 +277,7 @@ fn next_interlink_is_correct_6() {
 #[test]
 fn next_interlink_is_correct_7() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL0).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(1)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(1).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -289,7 +288,7 @@ fn next_interlink_is_correct_7() {
 #[test]
 fn next_interlink_is_correct_8() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL2).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(1)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(1).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -300,7 +299,7 @@ fn next_interlink_is_correct_8() {
 #[test]
 fn next_interlink_is_correct_9() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL0).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(16)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(16).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
@@ -311,7 +310,7 @@ fn next_interlink_is_correct_9() {
 #[test]
 fn next_interlink_is_correct_10() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(TEST_BLOCK_LVL2).unwrap()).unwrap();
-    let interlink = block.get_next_interlink(Difficulty::from(BigDecimal::from(16)).into());
+    let interlink = block.get_next_interlink(Difficulty::from(16).into());
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();

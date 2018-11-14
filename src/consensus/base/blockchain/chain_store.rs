@@ -1,5 +1,5 @@
 use crate::consensus::base::block::Block;
-use crate::consensus::base::blockchain::ChainData;
+use crate::consensus::base::blockchain::ChainInfo;
 use crate::consensus::base::primitive::hash::Blake2bHash;
 use crate::utils::db::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};
 
@@ -36,7 +36,7 @@ impl<'env> ChainStore<'env> {
         txn.put(&self.chain_db, ChainStore::HEAD_KEY, hash);
     }
 
-    pub fn get_chain_data(&self, hash: &Blake2bHash, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainData> {
+    pub fn get_chain_info(&self, hash: &Blake2bHash, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainInfo> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -46,37 +46,37 @@ impl<'env> ChainStore<'env> {
             }
         };
 
-        let mut chain_data: ChainData = match txn.get(&self.chain_db, hash) {
+        let mut chain_info: ChainInfo = match txn.get(&self.chain_db, hash) {
             Some(data) => data,
             None => return None
         };
 
         if include_body {
             if let Some(block) = txn.get(&self.block_db, hash) {
-                chain_data.head = block;
+                chain_info.head = block;
             } else {
                 warn!("Block body requested but not present");
             }
         }
 
-        return Some(chain_data);
+        return Some(chain_info);
     }
 
-    pub fn put_chain_data(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, chain_data: &ChainData, include_body: bool) {
+    pub fn put_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, chain_info: &ChainInfo, include_body: bool) {
         // Store chain data. Block body will not be persisted.
-        txn.put_reserve(&self.chain_db, hash, chain_data);
+        txn.put_reserve(&self.chain_db, hash, chain_info);
 
         // Store body if requested.
-        if include_body && chain_data.head.body.is_some() {
-            txn.put_reserve(&self.block_db, hash, &chain_data.head);
+        if include_body && chain_info.head.body.is_some() {
+            txn.put_reserve(&self.block_db, hash, &chain_info.head);
         }
 
         // Add to height index.
-        let height = chain_data.head.header.height;
+        let height = chain_info.head.header.height;
         txn.put(&self.height_idx, &height, hash);
     }
 
-    pub fn get_chain_data_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainData> {
+    pub fn get_chain_info_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainInfo> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -94,13 +94,13 @@ impl<'env> ChainStore<'env> {
         };
 
         // Iterate until we find the main chain block.
-        let mut chain_data: ChainData;
+        let mut chain_info: ChainInfo;
         while {
             // Loop condition
-            chain_data = txn
+            chain_info = txn
                 .get(&self.chain_db, &block_hash)
-                .expect("Corrupted store: ChainData referenced from index not found");
-            !chain_data.on_main_chain
+                .expect("Corrupted store: ChainInfo referenced from index not found");
+            !chain_info.on_main_chain
         } {
             // Loop Body
             block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
@@ -111,13 +111,13 @@ impl<'env> ChainStore<'env> {
 
         if include_body {
             if let Some(block) = txn.get(&self.block_db, &block_hash) {
-                chain_data.head = block;
+                chain_info.head = block;
             } else {
                 warn!("Block body requested but not present");
             }
         }
 
-        return Some(chain_data);
+        return Some(chain_info);
     }
 
     pub fn get_block(&self, hash: &Blake2bHash, include_body: bool, txn_option: Option<&Transaction>) -> Option<Block> {
@@ -133,7 +133,7 @@ impl<'env> ChainStore<'env> {
         return if include_body {
             txn.get(&self.block_db, hash)
         } else {
-            txn.get(&self.chain_db, hash).map(|chain_data: ChainData| chain_data.head)
+            txn.get(&self.chain_db, hash).map(|chain_info: ChainInfo| chain_info.head)
         };
     }
 

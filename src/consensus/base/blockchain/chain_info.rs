@@ -5,17 +5,17 @@ use crate::utils::db::{FromDatabaseValue, IntoDatabaseValue};
 use std::io;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize)]
-pub struct ChainData {
+pub struct ChainInfo {
     pub head: Block,
     pub total_difficulty: Difficulty,
     pub on_main_chain: bool,
     pub main_chain_successor: Option<Blake2bHash>
 }
 
-impl ChainData {
+impl ChainInfo {
     pub fn initial(block: Block) -> Self {
         let total_difficulty = Difficulty::from(block.header.n_bits);
-        return ChainData {
+        return ChainInfo {
             head: block,
             total_difficulty,
             on_main_chain: true,
@@ -25,7 +25,7 @@ impl ChainData {
 
     pub fn next(&self, block: Block) -> Self {
         let total_difficulty = &self.total_difficulty + &Difficulty::from(block.header.n_bits);
-        return ChainData {
+        return ChainInfo {
             head: block,
             total_difficulty,
             on_main_chain: false,
@@ -36,12 +36,15 @@ impl ChainData {
 
 // Do not serialize the block body.
 // XXX Move this into Block.serialize_xxx()?
-impl Serialize for ChainData {
+impl Serialize for ChainInfo {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> io::Result<usize> {
         let mut size = 0;
         size += Serialize::serialize(&self.head.header, writer)?;
         size += Serialize::serialize(&self.head.interlink, writer)?;
         size += Serialize::serialize(&None::<BlockBody>, writer)?;
+        size += Serialize::serialize(&self.total_difficulty, writer)?;
+        size += Serialize::serialize(&self.on_main_chain, writer)?;
+        size += Serialize::serialize(&self.main_chain_successor, writer)?;
         return Ok(size);
     }
 
@@ -50,11 +53,14 @@ impl Serialize for ChainData {
         size += Serialize::serialized_size(&self.head.header);
         size += Serialize::serialized_size(&self.head.interlink);
         size += Serialize::serialized_size(&None::<BlockBody>);
+        size += Serialize::serialized_size(&self.total_difficulty);
+        size += Serialize::serialized_size(&self.on_main_chain);
+        size += Serialize::serialized_size(&self.main_chain_successor);
         return size;
     }
 }
 
-impl IntoDatabaseValue for ChainData {
+impl IntoDatabaseValue for ChainInfo {
     fn database_byte_size(&self) -> usize {
         return self.serialized_size();
     }
@@ -64,7 +70,7 @@ impl IntoDatabaseValue for ChainData {
     }
 }
 
-impl FromDatabaseValue for ChainData {
+impl FromDatabaseValue for ChainInfo {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
         return Deserialize::deserialize(&mut cursor);

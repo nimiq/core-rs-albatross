@@ -110,6 +110,11 @@ impl From<BigDecimal> for Difficulty {
     fn from(decimal: BigDecimal) -> Self { Difficulty(decimal) }
 }
 
+// Convenience for testing
+impl From<u64> for Difficulty {
+    fn from(value: u64) -> Self { Difficulty(BigDecimal::from(value)) }
+}
+
 impl From<Difficulty> for BigDecimal {
     fn from(difficulty: Difficulty) -> Self { difficulty.0 }
 }

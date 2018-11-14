@@ -43,16 +43,16 @@ fn it_correctly_converts_from_target_to_bigdecimal() {
 
 #[test]
 fn it_correctly_calculates_target_from_difficulty() {
-    assert_eq!(Target::from(Difficulty::from(BigDecimal::from(1))), [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
-    assert_eq!(Target::from(Difficulty::from(BigDecimal::from(256))), [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
+    assert_eq!(Target::from(Difficulty::from(1)), [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
+    assert_eq!(Target::from(Difficulty::from(256)), [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
     assert_eq!(Target::from(Difficulty::from(policy::BLOCK_TARGET_MAX.clone())), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1].into());
 }
 
 #[test]
 fn it_correctly_calculates_compact_from_difficulty() {
-    assert_eq!(TargetCompact::from(Difficulty::from(BigDecimal::from(1))), 0x1f010000.into());
-    assert_eq!(TargetCompact::from(Difficulty::from(BigDecimal::from(250))), 0x1e010624.into());
-    assert_eq!(TargetCompact::from(Difficulty::from(BigDecimal::from(256))), 0x1e010000.into());
+    assert_eq!(TargetCompact::from(Difficulty::from(1)), 0x1f010000.into());
+    assert_eq!(TargetCompact::from(Difficulty::from(250)), 0x1e010624.into());
+    assert_eq!(TargetCompact::from(Difficulty::from(256)), 0x1e010000.into());
     assert_eq!(TargetCompact::from(Difficulty::from(BigDecimal::new(pow(BigInt::from(2), 32) - 1, 0))), 0x1b010000.into());
     assert_eq!(TargetCompact::from(Difficulty::from(BigDecimal::new(pow(BigInt::from(2), 53) - 1, 0))), 0x18080000.into());
     assert_eq!(TargetCompact::from(Difficulty::from(policy::BLOCK_TARGET_MAX.clone())), 0x01000001.into());

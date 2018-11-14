@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
-use crate::consensus::base::block::{Block, BlockHeader, BlockInterlink};
+use crate::consensus::base::block::{Block, BlockHeader, BlockInterlink, BlockBody};
 use crate::consensus::base::primitive::hash::Blake2bHash;
-use hex;
+use crate::consensus::base::primitive::Address;
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -39,17 +39,22 @@ lazy_static! {
                         version: 1,
                         prev_hash: [0u8; 32].into(),
                         interlink_hash: [0u8; 32].into(),
-                        body_hash: hex::decode("7cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a").unwrap()[..].into(),
-                        accounts_hash: hex::decode("1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c").unwrap()[..].into(),
+                        body_hash: "7cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a".into(),
+                        accounts_hash: "1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c".into(),
                         n_bits: 0x1f010000.into(),
                         height: 1,
                         timestamp: 1523727000,
                         nonce: 137689,
                     },
                     interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
-                    body: None,
+                    body: Some(BlockBody {
+                        miner: [0u8; Address::SIZE].into(),
+                        extra_data: "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".as_bytes().to_vec(),
+                        transactions: vec![],
+                        pruned_accounts: vec![],
+                    }),
                 },
-                genesis_hash: hex::decode("264aaf8a4f9828a76c550635da078eb466306a189fcc03710bee9f649c869d12").unwrap()[..].into(),
+                genesis_hash: "264aaf8a4f9828a76c550635da078eb466306a189fcc03710bee9f649c869d12".into(),
                 accounts: String::new(),
             },
         );
