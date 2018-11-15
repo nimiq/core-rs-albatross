@@ -9,7 +9,7 @@ pub mod mnemonic;
 pub mod bit_vec;
 pub mod key_derivation;
 pub mod services;
-
+pub mod observer;
 
 pub fn get_current_time_millis() -> u64 {
     let start = SystemTime::now();
