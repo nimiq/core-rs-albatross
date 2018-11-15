@@ -8,6 +8,7 @@ pub mod locking;
 pub mod mnemonic;
 pub mod bit_vec;
 pub mod key_derivation;
+pub mod services;
 
 
 pub fn get_current_time_millis() -> u64 {
