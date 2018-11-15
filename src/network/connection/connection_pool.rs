@@ -59,7 +59,7 @@ pub struct ConnectionPool {
 }
 
 impl ConnectionPool {
-    const DEFAULT_BAN_TIME: u64 = 1000 * 60 * 10; // seconds
+    const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
 
     /// Initiates a outbound connection.
     pub fn connect_outbound(&mut self, peer_address: &PeerAddress) -> bool {
@@ -426,7 +426,7 @@ impl ConnectionPool {
             } else {
                 net_address.subnet(64)
             };
-            let unban_time = SystemTime::now() + Duration::new(ConnectionPool::DEFAULT_BAN_TIME, 0);
+            let unban_time = SystemTime::now() + ConnectionPool::DEFAULT_BAN_TIME;
             self.banned_ips.insert(banned_address, unban_time);
         }
     }

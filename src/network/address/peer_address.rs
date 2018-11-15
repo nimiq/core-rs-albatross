@@ -1,12 +1,17 @@
 use beserial::{Serialize, SerializingError, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
 use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
+use crate::network;
 use crate::network::Protocol;
 use crate::network::address::{NetAddress, PeerId};
 use crate::utils::services::ServiceFlags;
+use crate::utils::systemtime_to_timestamp;
 use std::vec::Vec;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::fmt;
+use std::time::SystemTime;
+use std::time::Duration;
+use std::time::UNIX_EPOCH;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum PeerAddressType {
@@ -137,7 +142,15 @@ impl PeerAddress {
             return false;
         }
 
-        // TODO Check age
+        if let Ok(duration_since_unix) = SystemTime::now().duration_since(UNIX_EPOCH) {
+            let age = duration_since_unix - Duration::from_millis(self.timestamp);
+            match self.protocol() {
+                Protocol::Ws =>  return age > network::address::peer_address_book::MAX_AGE_WEBSOCKET,
+                Protocol::Wss =>  return age > network::address::peer_address_book::MAX_AGE_WEBSOCKET,
+                Protocol::Rtc =>  return age > network::address::peer_address_book::MAX_AGE_WEBRTC,
+                Protocol::Dumb =>  return age > network::address::peer_address_book::MAX_AGE_DUMB,
+            }
+        }
         return false;
     }
 

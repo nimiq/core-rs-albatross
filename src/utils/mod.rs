@@ -11,12 +11,10 @@ pub mod key_derivation;
 pub mod services;
 pub mod observer;
 
-pub fn get_current_time_millis() -> u64 {
-    let start = SystemTime::now();
+pub fn systemtime_to_timestamp(start : SystemTime) -> u64 {
     let since_the_epoch = start.duration_since(UNIX_EPOCH);
     if let Ok(duration) = since_the_epoch {
         return duration.as_secs() * 1000 + duration.subsec_nanos() as u64 / 1_000_000;
-    } else {
-        return 0;
     }
+    return 0;
 }

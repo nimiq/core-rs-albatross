@@ -6,14 +6,17 @@ use crate::network::address::peer_address::PeerAddress;
 use crate::network::address::peer_address_state::PeerAddressInfo;
 use crate::network::address::peer_address_state::PeerAddressState;
 use crate::network::connection::close_type::CloseType;
+use crate::network::NetworkTime;
+use crate::utils;
+use crate::utils::systemtime_to_timestamp;
 use std::cmp;
 use std::collections::hash_map::Entry;
 use std::collections::hash_set::Iter;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use crate::utils;
-use crate::utils::get_current_time_millis;
+use std::time::Duration;
+use std::time::SystemTime;
 
 pub struct PeerAddressBook {
     info_by_address: HashMap<Arc<PeerAddress>, PeerAddressInfo>,
@@ -75,7 +78,7 @@ impl PeerAddressBook {
         }
 
         // Ignore address if its timestamp is too far in the future.
-        if addr_arc.timestamp > get_current_time_millis() + MAX_TIMESTAMP_DRIFT {
+        if addr_arc.timestamp > systemtime_to_timestamp(SystemTime::now() + MAX_TIMESTAMP_DRIFT) {
             return false;
         }
 
@@ -166,9 +169,9 @@ impl PeerAddressBook {
 
         if let Some(info) = self.info_by_address.get_mut(&peer_address) {
             info.state = PeerAddressState::Established;
-            info.last_connected = utils::get_current_time_millis();
+            info.last_connected = Some(SystemTime::now());
             info.failed_attempts = 0;
-            info.banned_until = 0;
+            info.banned_until = None;
 
             if !info.peer_address.is_seed() {
                 info.peer_address = Arc::clone(&peer_address);
@@ -187,7 +190,7 @@ impl PeerAddressBook {
                     if info.ban_backoff >= MAX_FAILED_BACKOFF {
                         self.remove_from_store(Arc::clone(&peer_address));
                     } else {
-                        info.banned_until = get_current_time_millis() + info.ban_backoff;
+                        info.banned_until = Some(SystemTime::now() + info.ban_backoff);
                         info.ban_backoff = cmp::min(MAX_FAILED_BACKOFF, info.ban_backoff * 2);
                     }
                 }
@@ -219,14 +222,14 @@ impl PeerAddressBook {
         }
     }
 
-    fn ban(&mut self, peer_address: Arc<PeerAddress>, duration: u64) {
+    fn ban(&mut self, peer_address: Arc<PeerAddress>, duration: Duration) {
         if self.info_by_address.get(&Arc::clone(&peer_address)).is_none() {
             self.add_to_store(PeerAddressInfo::new(Arc::clone(&peer_address)));
         }
 
         if let Some(info) = self.info_by_address.get_mut(&peer_address) {
             info.state = PeerAddressState::Banned;
-            info.banned_until = get_current_time_millis() + duration;
+            info.banned_until = Some(SystemTime::now() + duration);
 
             // Drop all routes to this peer.
             info.signal_router.delete_all_routes();
@@ -285,19 +288,19 @@ impl PeerAddressBook {
     }
 }
 
-const MAX_AGE_WEBSOCKET: u32 = 1000 * 60 * 30; // 30 minutes
-const MAX_AGE_WEBRTC: u32 = 1000 * 60 * 15; // 10 minutes
-const MAX_AGE_DUMB: u32 = 1000 * 60; // 1 minute
+pub const MAX_AGE_WEBSOCKET: Duration = Duration::from_secs(60 * 30); // 30 minutes
+pub const MAX_AGE_WEBRTC: Duration = Duration::from_secs(60 * 15); // 15 minutes
+pub const MAX_AGE_DUMB: Duration = Duration::from_secs(60); // 1 minute
 
 pub const MAX_DISTANCE: u8 = 4;
 pub const MAX_FAILED_ATTEMPTS_WS: u32 = 3;
 pub const MAX_FAILED_ATTEMPTS_RTC: u32 = 2;
 
-const MAX_TIMESTAMP_DRIFT: u64 = 1000 * 60 * 10; // 10 minutes
+const MAX_TIMESTAMP_DRIFT: Duration = Duration::from_secs(60 * 10); // 10 minutes
 const HOUSEKEEPING_INTERVAL: i32 = 1000 * 60; // 1 minute
-const DEFAULT_BAN_TIME: u64 = 1000 * 60 * 10; // 10 minutes
-pub const INITIAL_FAILED_BACKOFF: u64 = 1000 * 30; // 30 seconds
-pub const MAX_FAILED_BACKOFF: u64 = 1000 * 60 * 10; // 10 minutes
+const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // 10 minutes
+pub const INITIAL_FAILED_BACKOFF: Duration = Duration::from_secs(30); // 30 seconds
+pub const MAX_FAILED_BACKOFF: Duration = Duration::from_secs(60 * 10); // 10 minutes
 
 const MAX_SIZE_WS: usize = 10000; // TODO different for browser
 const MAX_SIZE_WSS: usize = 10000;

@@ -1,7 +1,9 @@
 use crate::network::address::peer_address::PeerAddress;
 use crate::network;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
 use crate::network::peer_channel::Session;
 use crate::network::Protocol;
 
@@ -9,10 +11,10 @@ pub struct PeerAddressInfo {
     pub peer_address: Arc<PeerAddress>,
     pub state: PeerAddressState,
     pub signal_router: SignalRouter,
-    pub last_connected: u64,
+    pub last_connected: Option<SystemTime>,
     pub failed_attempts: u32,
-    pub banned_until: u64,
-    pub ban_backoff: u64
+    pub banned_until: Option<SystemTime>,
+    pub ban_backoff: Duration
 }
 
 impl PeerAddressInfo {
@@ -21,9 +23,9 @@ impl PeerAddressInfo {
             peer_address: Arc::clone(&peer_address),
             state: PeerAddressState::New,
             signal_router: SignalRouter::new(peer_address),
-            last_connected: 0,
+            last_connected: None,
             failed_attempts: 0,
-            banned_until: 0,
+            banned_until: None,
             ban_backoff: network::address::peer_address_book::INITIAL_FAILED_BACKOFF
         };
     }
