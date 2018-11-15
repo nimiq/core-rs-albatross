@@ -34,6 +34,8 @@ pub enum CloseType {
     PeerConnectionRecycledInboundExchange = 37,
     InboundConnectionsBlocked = 38,
 
+    InvalidConnectionState = 40,
+
     ManualPeerDisconnect = 90,
 
     // Ban Close Types

@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::LinkedList;
 use crate::network::Peer;
 use crate::network::address::peer_address_book::PeerAddressBook;
+use crate::utils::observer::Notifier;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -27,12 +28,14 @@ macro_rules! update_checked {
     };
 }
 
+type ConnectionId = usize;
+
 
 pub struct ConnectionPool {
     connections: SparseVec<ConnectionInfo>,
-    connections_by_peer_address: HashMap<Arc<PeerAddress>, usize>,
-    connections_by_net_address: HashMap<NetAddress, HashSet<usize>>,
-    connections_by_subnet: HashMap<NetAddress, HashSet<usize>>,
+    connections_by_peer_address: HashMap<Arc<PeerAddress>, ConnectionId>,
+    connections_by_net_address: HashMap<NetAddress, HashSet<ConnectionId>>,
+    connections_by_subnet: HashMap<NetAddress, HashSet<ConnectionId>>,
 
     peer_count_ws: usize,
     peer_count_wss: usize,
@@ -56,15 +59,17 @@ pub struct ConnectionPool {
     banned_ips: HashMap<NetAddress, SystemTime>,
 
     addresses: PeerAddressBook,
+
+    notifier: Notifier<ConnectionPoolEvent>,
 }
 
 impl ConnectionPool {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
 
     /// Initiates a outbound connection.
-    pub fn connect_outbound(&mut self, peer_address: &PeerAddress) -> bool {
+    pub fn connect_outbound(&mut self, peer_address: Arc<PeerAddress>) -> bool {
         // All checks in one step.
-        if !self.check_outbound_connection_request(peer_address) {
+        if !self.check_outbound_connection_request(peer_address.clone()) {
             return false;
         }
 
@@ -108,6 +113,11 @@ impl ConnectionPool {
     /// Get the connection info for a peer address as a mutable borrow.
     pub fn get_connection_by_peer_address_mut(&mut self, peer_address: &PeerAddress) -> Option<&mut ConnectionInfo> {
         Some(self.connections.get_mut(*self.connections_by_peer_address.get(peer_address)?).expect("Missing connection"))
+    }
+
+    /// Get the connection info for a ConnectionId.
+    pub fn get_connection(&mut self, connection_id: ConnectionId) -> Option<&ConnectionInfo> {
+        self.connections.get(connection_id)
     }
 
     /// Get a list of connection info for a net address.
@@ -155,14 +165,14 @@ impl ConnectionPool {
     }
 
     /// Close a connection.
-    fn close(info: &ConnectionInfo, ty: CloseType) {
-        if let Some(network_connection) = info.network_connection() {
+    fn close(network_connection: Option<&NetworkConnection>, ty: CloseType) {
+        if let Some(network_connection) = network_connection {
             tokio::spawn(network_connection.close(ty));
         }
     }
 
     /// Checks the validity of a connection.
-    fn check_connection(&self, connection_id: usize) -> bool {
+    fn check_connection(&self, connection_id: ConnectionId) -> bool {
         let info = self.connections.get(connection_id).unwrap();
         let conn = info.network_connection();
         assert!(conn.is_some(), "Connection must be established");
@@ -171,7 +181,7 @@ impl ConnectionPool {
         // Close connection if we currently do not allow inbound connections.
         // TODO WebRTC connections are exempt.
         if conn.inbound() && !self.allow_inbound_connections {
-            ConnectionPool::close(info, CloseType::InboundConnectionsBlocked);
+            ConnectionPool::close(info.network_connection(), CloseType::InboundConnectionsBlocked);
             return false;
         }
 
@@ -179,19 +189,19 @@ impl ConnectionPool {
         if net_address.is_reliable() {
             // Close connection if peer's IP is banned.
             if self.is_ip_banned(&net_address) {
-                ConnectionPool::close(info, CloseType::BannedIp);
+                ConnectionPool::close(info.network_connection(), CloseType::BannedIp);
                 return false;
             }
 
             // Close connection if we have too many connections to the peer's IP address.
             if self.get_num_connections_by_net_address(&net_address) > network::PEER_COUNT_PER_IP_MAX {
-                ConnectionPool::close(info, CloseType::ConnectionLimitPerIp);
+                ConnectionPool::close(info.network_connection(), CloseType::ConnectionLimitPerIp);
                 return false;
             }
 
             // Close connection if we have too many connections to the peer's subnet.
             if self.get_num_connections_by_subnet(&net_address) > network::INBOUND_PEER_COUNT_PER_SUBNET_MAX {
-                ConnectionPool::close(info, CloseType::ConnectionLimitPerIp);
+                ConnectionPool::close(info.network_connection(), CloseType::ConnectionLimitPerIp);
                 return false;
             }
         }
@@ -203,7 +213,7 @@ impl ConnectionPool {
             && !conn.outbound()
             && !(conn.inbound() && self.allow_inbound_exchange) {
 
-            ConnectionPool::close(info, CloseType::MaxPeerCountReached);
+            ConnectionPool::close(info.network_connection(), CloseType::MaxPeerCountReached);
             return false;
         }
         return true;
@@ -213,12 +223,23 @@ impl ConnectionPool {
     fn on_connection(&mut self, connection: NetworkConnection) {
         let connection_id;
         if connection.outbound() {
-            self.connecting_count = self.connecting_count.checked_sub(1).expect("connecting_count < 0");
-
             let peer_address = connection.peer_address().expect("Outbound connection without peer address");
-            connection_id = *self.connections_by_peer_address.get(&peer_address).expect("Outbound connection without entry in connection pool");
+            let connection_id_opt = self.connections_by_peer_address.get(&peer_address);
 
-            assert_eq!(self.connections.get(connection_id).unwrap().state(), ConnectionState::Connecting, "Expected state to be connecting ({:?})", peer_address);
+            if connection_id_opt.is_none() {
+                ConnectionPool::close(Some(&connection), CloseType::InvalidConnectionState);
+                error!("No ConnectionInfo present for outgoing connection ({:?}", peer_address);
+                return;
+            }
+
+            connection_id = *connection_id_opt.unwrap();
+            if self.connections.get(connection_id).unwrap().state() != ConnectionState::Connecting {
+                ConnectionPool::close(Some(&connection), CloseType::InvalidConnectionState);
+                error!("Expected state to be connecting ({:?}", peer_address);
+                return;
+            }
+
+            update_checked!(self.connecting_count, PeerCountUpdate::Remove);
 
             // Set peerConnection to CONNECTED state.
             self.connections.get_mut(connection_id).unwrap().set_network_connection(connection);
@@ -233,15 +254,35 @@ impl ConnectionPool {
         if !self.check_connection(connection_id) {
             return;
         }
+
+        // Connection accepted.
+
+        let info = self.connections.get(connection_id).expect("Missing connection");
+        let net_address = info.network_connection().map(|p| p.net_address()).clone();
+
+        if let Some(ref net_address) = net_address {
+            self.add_net_address(connection_id, &net_address);
+        }
+
+        // The extra lookup is needed to satisfy the borrow checker.
+        let info = self.connections.get(connection_id).expect("Missing connection");
+
+        let conn_type = if info.network_connection().unwrap().inbound() { "inbound" } else { "outbound" };
+        debug!("Connection established ({}) #{} (net_address={:?}, peer_address={:?})", conn_type, connection_id, net_address, info.peer_address());
+
+        // Let listeners know about this connection.
+        // TODO self.notifier.notify(ConnectionPoolEvent::Connection(...);
+
+        // TODO create agent and initate handshake
     }
 
     /// Checks the validity of a handshake.
-    fn check_handshake(&mut self, connection_id: usize, peer: &Peer) -> bool {
+    fn check_handshake(&mut self, connection_id: ConnectionId, peer: &Peer) -> bool {
         let info = self.connections.get(connection_id).unwrap();
 
         // Close connection if peer's address is banned.
         if self.addresses.is_banned(peer.peer_address()) {
-            ConnectionPool::close(info, CloseType::PeerIsBanned);
+            ConnectionPool::close(info.network_connection(), CloseType::PeerIsBanned);
             return false;
         }
 
@@ -252,7 +293,7 @@ impl ConnectionPool {
                 // If we already have an established connection to this peer, close this connection.
                 let stored_connection = self.connections.get(*stored_connection_id).expect("Missing connection");
                 if stored_connection.state() == ConnectionState::Established {
-                    ConnectionPool::close(info, CloseType::DuplicateConnection);
+                    ConnectionPool::close(info.network_connection(), CloseType::DuplicateConnection);
                     return false;
                 }
             }
@@ -260,7 +301,7 @@ impl ConnectionPool {
 
         // Close connection if we have too many dumb connections.
         if peer.peer_address().protocol() == Protocol::Dumb && self.peer_count_dumb >= network::PEER_COUNT_DUMB_MAX {
-            ConnectionPool::close(info, CloseType::ConnectionLimitDumb);
+            ConnectionPool::close(info.network_connection(), CloseType::ConnectionLimitDumb);
             return false;
         }
 
@@ -271,14 +312,14 @@ impl ConnectionPool {
     }
 
     /// Callback during handshake.
-    fn on_handshake(&mut self, connection_id: usize, peer: Peer) { // TODO Arc<RwLock<Peer>>?
+    fn on_handshake(&mut self, connection_id: ConnectionId, peer: Peer) { // TODO Arc<RwLock<Peer>>?
         let info = self.connections.get(connection_id).expect("Missing connection");
         let network_connection = info.network_connection().unwrap();
 
         if network_connection.inbound() {
             // Re-check allowInboundExchange as it might have changed.
             if self.peer_count() >= network::PEER_COUNT_MAX && !self.allow_inbound_exchange {
-                ConnectionPool::close(info, CloseType::MaxPeerCountReached);
+                ConnectionPool::close(info.network_connection(), CloseType::MaxPeerCountReached);
                 return;
             }
 
@@ -299,7 +340,7 @@ impl ConnectionPool {
                         },
                         ConnectionState::Established => {
                             // If we have another established connection to this peer, close this connection.
-                            ConnectionPool::close(info, CloseType::DuplicateConnection);
+                            ConnectionPool::close(info.network_connection(), CloseType::DuplicateConnection);
                             return;
                         },
                         ConnectionState::Negotiating => {
@@ -307,16 +348,16 @@ impl ConnectionPool {
                             // TODO get own PeerId and compare
                             // if <self>.peer_address().peer_id() < peer.peer_address().peer_id() {
                             if true {
-                                ConnectionPool::close(stored_connection, CloseType::SimultaneousConnection);
+                                ConnectionPool::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
                                 assert!(self.get_connection_by_peer_address(&peer.peer_address()).is_none(), "ConnectionInfo not removed");
                             } else {
                                 // The peer with the higher peerId closes this connection and keeps his stored connection.
-                                ConnectionPool::close(info, CloseType::SimultaneousConnection);
+                                ConnectionPool::close(info.network_connection(), CloseType::SimultaneousConnection);
                             }
                         },
                         _ => {
                             // Accept this connection and close the stored connection.
-                            ConnectionPool::close(stored_connection, CloseType::SimultaneousConnection);
+                            ConnectionPool::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
                             assert!(self.get_connection_by_peer_address(&peer.peer_address()).is_none(), "ConnectionInfo not removed");
                         },
                     }
@@ -334,7 +375,7 @@ impl ConnectionPool {
 
         // Check if we need to recycle a connection.
         if self.peer_count() >= network::PEER_COUNT_MAX {
-            // TODO fire event
+             self.notifier.notify(ConnectionPoolEvent::RecyclingRequest);
         }
 
         // Set ConnectionInfo to Established state.
@@ -355,15 +396,17 @@ impl ConnectionPool {
         let network_connection = info.network_connection().unwrap();
         self.addresses.established(&network_connection.session(), peer.peer_address());
 
-        // TODO Let listeners know about this peer.
+        // Let listeners know about this peer.
+        self.notifier.notify(ConnectionPoolEvent::PeerJoined(peer.clone()));
 
-        // TODO Let listeners know that the peers changed.
+        // Let listeners know that the peers changed.
+        self.notifier.notify(ConnectionPoolEvent::PeersChanged);
 
         debug!("[PEER-JOINED] {:?} {:?} (version={:?}, services={:?}, headHash={:?})", peer.peer_address(), peer.net_address(), peer.version, peer.peer_address().services, peer.head_hash);
     }
 
     /// Callback upon closing of connection.
-    fn on_close(&mut self, connection_id: usize, ty: CloseType) {
+    fn on_close(&mut self, connection_id: ConnectionId, ty: CloseType) {
         // Only propagate the close type (i.e. track fails/bans) if the peerAddress is set.
         // This is true for
         // - all outbound connections
@@ -387,9 +430,11 @@ impl ConnectionPool {
 
             self.update_connected_peer_count(connection_id, PeerCountUpdate::Remove);
 
-            // TODO Tell listeners that this peer has gone away.
+            // Tell listeners that this peer has gone away.
+            self.notifier.notify(ConnectionPoolEvent::PeerLeft(info.peer().expect("Peer not set").clone()));
 
-            // TODO Let listeners know that the peers changed.
+            // Let listeners know that the peers changed.
+            self.notifier.notify(ConnectionPoolEvent::PeersChanged);
 
             debug!("[PEER-LEFT] {:?} {:?} (version={:?}, closeType={:?})", info.peer_address(), net_address, info.peer().map(|p| p.version), ty);
         } else {
@@ -400,13 +445,14 @@ impl ConnectionPool {
                 },
                 Some(false) => {
                     debug!("Connection #{:?} to {:?} closed pre-handshake: {:?}", connection_id, info.peer_address(), ty);
-                    // TODO fire connect-error
+                    self.notifier.notify(ConnectionPoolEvent::ConnectError(info.peer_address().expect("PeerAddress not set").clone(), ty));
                 },
                 _ => unreachable!("Invalid state, closing connection with network connection not set"),
             }
         }
 
-        // TODO Let listeners know about this closing.
+        // Let listeners know about this closing.
+        self.notifier.notify(ConnectionPoolEvent::Close(connection_id, ty));
 
         // Set the peer connection to closed state.
         info.close();
@@ -445,8 +491,8 @@ impl ConnectionPool {
     }
 
     /// Callback on connect error.
-    fn on_connect_error(&mut self, peer_address: Arc<PeerAddress>, reason: &str) {
-        debug!("Connection to {:?} failed - {:?}", peer_address, reason);
+    fn on_connect_error(&mut self, peer_address: Arc<PeerAddress>) {
+        debug!("Connection to {:?} failed", peer_address);
 
         let connection_id = *self.connections_by_peer_address.get(&peer_address).expect("PeerAddress not stored");
         let info = self.connections.get(connection_id).expect("Missing connection");
@@ -458,11 +504,11 @@ impl ConnectionPool {
         // TODO: PeerAddressBook currently doesn't support optional first argument.
 //        self.addresses.close(None, peer_address, CloseType::ConnectionFailed);
 
-        // TODO FIRE connect-error
+        self.notifier.notify(ConnectionPoolEvent::ConnectError(peer_address.clone(), CloseType::ConnectionFailed));
     }
 
     /// Updates the number of connected peers.
-    fn update_connected_peer_count(&mut self, connection_id: usize, update: PeerCountUpdate) {
+    fn update_connected_peer_count(&mut self, connection_id: ConnectionId, update: PeerCountUpdate) {
         // We assume the connection to be present and having a valid peer address/network connection.
         let info = self.connections.get(connection_id).unwrap();
         let peer_address = info.peer_address().unwrap();
@@ -498,33 +544,36 @@ impl ConnectionPool {
     }
 
     /// Check the validity of a outbound connection request (e.g. no duplicate connections).
-    fn check_outbound_connection_request(&self, peer_address: &PeerAddress) -> bool {
+    fn check_outbound_connection_request(&self, peer_address: Arc<PeerAddress>) -> bool {
         match peer_address.protocol() {
             Protocol::Wss => {},
             Protocol::Ws => {},
             _ => {
-                warn!("Cannot connect to {} - unsupported protocol", peer_address);
+                error!("Cannot connect to {} - unsupported protocol", peer_address);
                 return false;
             },
         }
 
-        // TODO check banned
+        if self.addresses.is_banned(peer_address.clone()) {
+            error!("Connecting to banned address {:?}", peer_address);
+            return false;
+        }
 
-        let info = self.get_connection_by_peer_address(peer_address);
+        let info = self.get_connection_by_peer_address(&peer_address);
         if let Some(info) = info {
-            debug!("Duplicate connection to {}", peer_address);
+            error!("Duplicate connection to {}", peer_address);
             return false;
         }
 
         // Forbid connection if we have too many connections to the peer's IP address.
         if peer_address.net_address.is_reliable() {
             if self.get_num_connections_by_net_address(&peer_address.net_address) >= network::PEER_COUNT_PER_IP_MAX {
-                debug!("Connection limit per IP ({}) reached", network::PEER_COUNT_PER_IP_MAX);
+                error!("Connection limit per IP ({}) reached", network::PEER_COUNT_PER_IP_MAX);
                 return false;
             }
 
             if self.get_num_outbound_connections_by_subnet(&peer_address.net_address) >= network::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX {
-                debug!("Connection limit per IP ({}) reached", network::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX);
+                error!("Connection limit per IP ({}) reached", network::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX);
                 return false;
             }
         }
@@ -533,7 +582,7 @@ impl ConnectionPool {
     }
 
     /// Add a new connection to the connection pool.
-    fn add(&mut self, info: ConnectionInfo) -> usize {
+    fn add(&mut self, info: ConnectionInfo) -> ConnectionId {
         let peer_address = info.peer_address();
         let connection_id = self.connections.insert(info);
 
@@ -545,13 +594,13 @@ impl ConnectionPool {
     }
 
     /// Add a new connection to the connection pool.
-    fn add_peer_address(&mut self, connection_id: usize, peer_address: Arc<PeerAddress>) {
+    fn add_peer_address(&mut self, connection_id: ConnectionId, peer_address: Arc<PeerAddress>) {
         // Add to peer address map.
         self.connections_by_peer_address.insert(peer_address, connection_id);
     }
 
     /// Remove a connection from the connection pool.
-    fn remove(&mut self, connection_id: usize) -> ConnectionInfo {
+    fn remove(&mut self, connection_id: ConnectionId) -> ConnectionInfo {
         // TODO: Can we make sure that we never remove a connection twice?
         let info = self.connections.remove(connection_id).unwrap();
 
@@ -567,7 +616,7 @@ impl ConnectionPool {
     }
 
     /// Adds the net address to a connection.
-    fn add_net_address(&mut self, connection_id: usize, net_address: &NetAddress) {
+    fn add_net_address(&mut self, connection_id: ConnectionId, net_address: &NetAddress) {
         // Only add reliable netAddresses.
         if !net_address.is_reliable() {
             return;
@@ -584,7 +633,7 @@ impl ConnectionPool {
     }
 
     /// Removes the connection from net address specific maps.
-    fn remove_net_address(&mut self, connection_id: usize, net_address: &NetAddress) {
+    fn remove_net_address(&mut self, connection_id: ConnectionId, net_address: &NetAddress) {
         // Only add reliable netAddresses.
         if !net_address.is_reliable() {
             return;
@@ -622,6 +671,17 @@ impl ConnectionPool {
 enum PeerCountUpdate {
     Add,
     Remove
+}
+
+#[derive(Clone)]
+enum ConnectionPoolEvent {
+    PeerJoined(Peer),
+    PeerLeft(Peer),
+    PeersChanged,
+    ConnectError(Arc<PeerAddress>, CloseType),
+    Close(ConnectionId, CloseType), // TODO is that really useful? ConnectionId won't exist anymore
+//    Connection(NetworkConnection), // TODO not really practical
+    RecyclingRequest,
 }
 
 /// This is a special vector implementation that has a O(1) remove function.

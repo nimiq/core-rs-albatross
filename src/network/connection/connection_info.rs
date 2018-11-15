@@ -38,9 +38,9 @@ impl ConnectionInfo {
         info
     }
 
-    pub fn outbound(peer_address: PeerAddress) -> Self {
+    pub fn outbound(peer_address: Arc<PeerAddress>) -> Self {
         let mut info = ConnectionInfo::new();
-        info.peer_address = Some(Arc::new(peer_address));
+        info.peer_address = Some(peer_address);
         info
     }
 
