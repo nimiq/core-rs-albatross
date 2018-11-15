@@ -2,6 +2,7 @@ use beserial::{Serialize, SerializingError, SerializeWithLength, Deserialize, De
 use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
 use crate::network::Protocol;
 use crate::network::address::{NetAddress, PeerId};
+use crate::utils::services::ServiceFlags;
 use std::vec::Vec;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -29,7 +30,7 @@ impl PeerAddressType {
 #[derive(Debug, Clone)]
 pub struct PeerAddress {
     pub ty: PeerAddressType,
-    pub services: u32,
+    pub services: ServiceFlags,
     pub timestamp: u64,
     pub net_address: NetAddress,
     pub public_key: PublicKey,
@@ -79,7 +80,7 @@ impl Serialize for PeerAddress {
 impl Deserialize for PeerAddress {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let protocol: Protocol = Deserialize::deserialize(reader)?;
-        let services: u32 = Deserialize::deserialize(reader)?;
+        let services: ServiceFlags = Deserialize::deserialize(reader)?;
         let timestamp: u64 = Deserialize::deserialize(reader)?;
         let net_address: NetAddress = Deserialize::deserialize(reader)?;
         let public_key: PublicKey = Deserialize::deserialize(reader)?;

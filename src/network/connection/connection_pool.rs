@@ -18,6 +18,16 @@ use std::collections::LinkedList;
 use crate::network::Peer;
 use crate::network::address::peer_address_book::PeerAddressBook;
 
+macro_rules! update_checked {
+    ($peer_count: expr, $update: expr) => {
+        $peer_count = match $update {
+            PeerCountUpdate::Add => $peer_count + 1,
+            PeerCountUpdate::Remove => $peer_count.checked_sub(1).expect(stringify!($peer_count < 0)),
+        }
+    };
+}
+
+
 pub struct ConnectionPool {
     connections: SparseVec<ConnectionInfo>,
     connections_by_peer_address: HashMap<Arc<PeerAddress>, usize>,
@@ -457,32 +467,25 @@ impl ConnectionPool {
         let network_connection = info.network_connection().unwrap();
 
         match peer_address.protocol() {
-            Protocol::Wss => self.peer_count_wss = match update {
-                PeerCountUpdate::Add => self.peer_count_wss + 1,
-                PeerCountUpdate::Remove => self.peer_count_wss.checked_sub(1).expect("peer_count_wss < 0"),
-            },
-            Protocol::Ws => self.peer_count_ws = match update {
-                PeerCountUpdate::Add => self.peer_count_ws + 1,
-                PeerCountUpdate::Remove => self.peer_count_ws.checked_sub(1).expect("peer_count_ws < 0"),
-            },
-            Protocol::Rtc => self.peer_count_rtc = match update {
-                PeerCountUpdate::Add => self.peer_count_rtc + 1,
-                PeerCountUpdate::Remove => self.peer_count_rtc.checked_sub(1).expect("peer_count_rtc < 0"),
-            },
-            Protocol::Dumb => self.peer_count_dumb = match update {
-                PeerCountUpdate::Add => self.peer_count_dumb + 1,
-                PeerCountUpdate::Remove => self.peer_count_dumb.checked_sub(1).expect("peer_count_dumb < 0"),
-            },
+            Protocol::Wss => update_checked!(self.peer_count_wss, update),
+            Protocol::Ws => update_checked!(self.peer_count_ws, update),
+            Protocol::Rtc => update_checked!(self.peer_count_rtc, update),
+            Protocol::Dumb => update_checked!(self.peer_count_dumb, update),
         }
 
-        // TODO Check services.
+        if peer_address.services.is_full_node() {
+            update_checked!(self.peer_count_full, update);
+        } else if peer_address.services.is_light_node() {
+            update_checked!(self.peer_count_light, update);
+        } else if peer_address.services.is_nano_node() {
+            update_checked!(self.peer_count_nano, update);
+        }
 
         if network_connection.outbound() {
-            self.peer_count_outbound = match update {
-                PeerCountUpdate::Add => self.peer_count_outbound + 1,
-                PeerCountUpdate::Remove => self.peer_count_outbound.checked_sub(1).expect("peer_count_outbound < 0"),
-            };
-            // TODO: check for WS full node
+            update_checked!(self.peer_count_outbound, update);
+            if peer_address.services.is_full_node() && (peer_address.protocol() == Protocol::Wss || peer_address.protocol() == Protocol::Ws) {
+                update_checked!(self.peer_count_full_ws_outbound, update);
+            }
         }
     }
 
