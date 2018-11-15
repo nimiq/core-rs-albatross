@@ -431,6 +431,7 @@ impl ConnectionPool {
         }
     }
 
+    /// Checks whether an IP address is banned.
     fn is_ip_banned(&self, net_address: &NetAddress) -> bool {
         !net_address.is_pseudo() && self.banned_ips.contains_key(net_address)
     }
@@ -443,6 +444,7 @@ impl ConnectionPool {
         });
     }
 
+    /// Callback on connect error.
     fn on_connect_error(&mut self, peer_address: Arc<PeerAddress>, reason: &str) {
         debug!("Connection to {:?} failed - {:?}", peer_address, reason);
 
