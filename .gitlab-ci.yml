@@ -9,9 +9,6 @@ variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
   APT_CACHE_DIR: $CI_PROJECT_DIR/apt
 
-before_script:
-  - apt-get update -yq
-
 stages:
   - build
   - test
@@ -24,53 +21,51 @@ stages:
     - cargo --version
     - cargo build --all
 
-#build-stable:
-#  extends: .build
-
-build-nightly:
-  extends: .build
-  image: 'rustlang/rust:nightly'
-
 .test:
   stage: test
   script:
+    - rustc --version
+    - cargo --version
     - cargo test --all
+
+.coverage:
+  stage: test
+  script:
+    - rustc --version
+    - cargo --version
+    - apt-get update -yq
+    - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y cmake libelf-dev libdw-dev binutils-dev libiberty-dev jq
+    - ./scripts/coverage.sh --all --tests
+  artifacts:
+    paths:
+      - cov/cov
+
+#build-nightly:
+#  extends: .build
+#  image: 'rustlang/rust:nightly'
+
+test-nightly:
+  extends: .test
+  image: 'rustlang/rust:nightly'
+#  dependencies:
+#    - build-nightly
+
+coverage-nightly:
+  extends: .coverage
+  image: 'rustlang/rust:nightly'
+
+#build-stable:
+#  extends: .build
 
 #test-stable:
 #  extends: .test
 #  dependencies:
 #    - build-stable
 
-test-nightly:
-  extends: .test
-  image: 'rustlang/rust:nightly'
-  dependencies:
-    - build-nightly
-
-.coverage:
-  stage: test
-  script:
-    - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y cmake unzip libelf-dev libdw-dev binutils-dev libiberty-dev
-    - cargo coverage --version || cargo install cargo-travis
-    - if [ -e target/kcov-master ] && ! [ -x target/kcov-master/build/src/kcov ]; then rm -rf target/kcov-master; fi
-    - rm -rf target/kcov target/kcov-*-*
-    - cargo coverage --exclude-pattern="$PWD/tests","$PWD/cargo"
-    - rm -rf target/master.zip*
-    - echo "Coverage:" $(grep -Po 'covered":.*?[^\\]"' target/kcov/index.js | grep "[0-9]*\.[0-9]" -o)
-  artifacts:
-    paths:
-      - target/kcov
-
 #coverage-stable:
 #  extends: .coverage
 #  dependencies:
 #    - build-stable
-
-coverage-nightly:
-  extends: .coverage
-  image: 'rustlang/rust:nightly'
-  dependencies:
-    - build-nightly
 
 .pages:
   stage: deploy
@@ -97,4 +92,5 @@ cache:
   paths:
     - apt/
     - cargo/
+    - cov/
     - target/

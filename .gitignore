@@ -1,4 +1,4 @@
-
+/cov
 /target
 **/*.rs.bk
 /.idea
