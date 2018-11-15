@@ -1,8 +1,8 @@
-pub trait Listener<E: Copy> {
+pub trait Listener<E: Clone> {
     fn on_event(&self, event: E);
 }
 
-impl<E: Copy, F: Fn(E)> Listener<E> for F {
+impl<E: Clone, F: Fn(E)> Listener<E> for F {
     fn on_event(&self, event: E) {
         self(event);
     }
@@ -15,7 +15,7 @@ pub struct Notifier<E> {
     next_handle: ListenerHandle
 }
 
-impl<E: Copy> Notifier<E> {
+impl<E: Clone> Notifier<E> {
     pub fn new() -> Self {
         Self {
             listeners: Vec::new(),
@@ -41,7 +41,7 @@ impl<E: Copy> Notifier<E> {
 
     pub fn notify(&self, event: E) {
         for (_, listener) in &self.listeners {
-            listener.on_event(event);
+            listener.on_event(event.clone());
         }
     }
 }
