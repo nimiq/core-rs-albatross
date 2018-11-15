@@ -16,6 +16,7 @@ use super::connection_info::{ConnectionInfo, ConnectionState};
 use std::collections::HashSet;
 use std::collections::LinkedList;
 use crate::network::Peer;
+use crate::network::address::peer_address_book::PeerAddressBook;
 
 pub struct ConnectionPool {
     connections: SparseVec<ConnectionInfo>,
@@ -43,6 +44,8 @@ pub struct ConnectionPool {
     allow_inbound_exchange: bool,
 
     banned_ips: HashMap<NetAddress, SystemTime>,
+
+    addresses: PeerAddressBook,
 }
 
 impl ConnectionPool {
@@ -227,7 +230,10 @@ impl ConnectionPool {
         let info = self.connections.get(connection_id).unwrap();
 
         // Close connection if peer's address is banned.
-        // TODO
+        if self.addresses.is_banned(peer.peer_address()) {
+            ConnectionPool::close(info, CloseType::PeerIsBanned);
+            return false;
+        }
 
         // Duplicate/simultaneous connection check (post version):
         let stored_connection_id = self.connections_by_peer_address.get(&peer.peer_address());
@@ -333,7 +339,11 @@ impl ConnectionPool {
 
         // TODO Setup signal forwarding.
 
-        // TODO Mark address as established.
+        // Mark address as established.
+        // TODO Maybe replace Session by Peer?
+        let info = self.connections.get(connection_id).expect("Missing connection");
+        let network_connection = info.network_connection().unwrap();
+        self.addresses.established(&network_connection.session(), peer.peer_address());
 
         // TODO Let listeners know about this peer.
 
@@ -350,7 +360,7 @@ impl ConnectionPool {
         // - inbound connections post handshake (peerAddress is verified)
         let info = self.connections.get(connection_id).unwrap();
         if let Some(peer_address) = info.peer_address() {
-            // TODO propagate to address book
+            self.addresses.close(&info.session().unwrap(), peer_address, ty);
         }
 
         let mut info = self.remove(connection_id);
@@ -423,7 +433,21 @@ impl ConnectionPool {
         });
     }
 
-    // TODO fn on_connect_error(peer_address: PeerAddress, reason: )
+    fn on_connect_error(&mut self, peer_address: Arc<PeerAddress>, reason: &str) {
+        debug!("Connection to {:?} failed - {:?}", peer_address, reason);
+
+        let connection_id = *self.connections_by_peer_address.get(&peer_address).expect("PeerAddress not stored");
+        let info = self.connections.get(connection_id).expect("Missing connection");
+        assert_eq!(info.state(), ConnectionState::Connecting, "ConnectionInfo state not Connecting, but {:?} ({:?})", info.state(), peer_address);
+        self.remove(connection_id);
+
+        self.connecting_count = self.connecting_count.checked_sub(1).expect("connecting_count < 0");
+
+        // TODO: PeerAddressBook currently doesn't support optional first argument.
+//        self.addresses.close(None, peer_address, CloseType::ConnectionFailed);
+
+        // TODO FIRE connect-error
+    }
 
     /// Updates the number of connected peers.
     fn update_connected_peer_count(&mut self, connection_id: usize, update: PeerCountUpdate) {

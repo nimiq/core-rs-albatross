@@ -82,6 +82,7 @@ impl NetworkConnection {
         self.address_info.set_peer_address(peer_address);
     }
 
+    pub fn session(&self) -> Arc<Session> { self.session.clone() }
     pub fn address_info(&self) -> AddressInfo {
         self.address_info.clone()
     }

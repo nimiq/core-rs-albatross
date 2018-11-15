@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::network::address::peer_address::PeerAddress;
 use crate::network::connection::NetworkConnection;
 use crate::network::Peer;
+use crate::network::peer_channel::Session;
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, PartialEq, Eq)]
 pub enum ConnectionState {
@@ -53,6 +54,7 @@ impl ConnectionInfo {
     }
     pub fn network_connection(&self) -> Option<&NetworkConnection> { self.network_connection.as_ref() }
     pub fn peer(&self) -> Option<&Peer> { self.peer.as_ref() }
+    pub fn session(&self) -> Option<Arc<Session>> { self.network_connection.as_ref().map(|n| n.session()) }
 
     pub fn set_peer_address(&mut self, peer_address: Arc<PeerAddress>) { self.peer_address = Some(peer_address) }
     pub fn set_network_connection(&mut self, network_connection: NetworkConnection) {
