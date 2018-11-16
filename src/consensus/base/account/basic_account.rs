@@ -1,6 +1,6 @@
 use beserial::{Serialize, Deserialize};
 use super::AccountError;
-use super::super::transaction::Transaction;
+use super::super::transaction::{Transaction, TransactionError};
 use crate::consensus::base::account::Account;
 use crate::consensus::base::transaction::SignatureProof;
 use crate::consensus::base::primitive::Coin;
@@ -11,17 +11,19 @@ pub struct BasicAccount {
 }
 
 impl BasicAccount {
-    pub fn verify_incoming_transaction(transaction: &Transaction) -> bool {
-        return true;
+    pub fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+        Ok(())
     }
 
-    pub fn verify_outgoing_transaction(transaction: &Transaction) -> bool {
-        let signature_proof: SignatureProof = match Deserialize::deserialize(&mut &transaction.proof[..]) {
-            Ok(v) => v,
-            Err(e) => return false
-        };
-        return signature_proof.is_signed_by(&transaction.sender)
-            && signature_proof.verify(transaction.serialize_content().as_slice());
+    pub fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+        let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
+
+        if !signature_proof.is_signed_by(&transaction.sender) || !signature_proof.verify(transaction.serialize_content().as_slice()) {
+            warn!("Invalid signature");
+            return Err(TransactionError::InvalidProof);
+        }
+
+        Ok(())
     }
 
     pub fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {

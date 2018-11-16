@@ -1,6 +1,6 @@
 use beserial::{Serialize, Deserialize};
 use crate::consensus::base::account::{Account, AccountError, AccountType};
-use crate::consensus::base::transaction::{Transaction, TransactionFlags};
+use crate::consensus::base::transaction::{Transaction, TransactionError, TransactionFlags};
 use crate::consensus::base::transaction::SignatureProof;
 use crate::consensus::base::primitive::{Address, Coin};
 use crate::consensus::base::primitive::hash::{Hasher, Blake2bHasher, Sha256Hasher};
@@ -47,40 +47,40 @@ impl HashedTimeLockedContract {
         return HashedTimeLockedContract { balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, total_amount };
     }
 
-    pub fn verify_incoming_transaction(transaction: &Transaction) -> bool {
-        return HashedTimeLockedContract::parse_and_verify_creation_transaction(transaction).is_ok();
+    pub fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+        HashedTimeLockedContract::parse_and_verify_creation_transaction(transaction)?;
+        Ok(())
     }
 
-    fn parse_and_verify_creation_transaction(transaction: &Transaction) -> Result<(Address, Address, HashAlgorithm, AnyHash, u8, u32), AccountError> {
-        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-            return Err(AccountError("HTLC: Only contract creation is allowed".to_string()));
-        }
+    fn parse_and_verify_creation_transaction(transaction: &Transaction) -> Result<(Address, Address, HashAlgorithm, AnyHash, u8, u32), TransactionError> {
+        assert_eq!(transaction.recipient_type, AccountType::HTLC);
 
-        if transaction.recipient_type != AccountType::HTLC {
-            return Err(AccountError("HTLC: Recipient type must match created contract".to_string()));
+        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+            warn!("Only contract creation is allowed");
+            return Err(TransactionError::InvalidForRecipient);
         }
 
         if transaction.recipient != transaction.contract_creation_address() {
-            return Err(AccountError("HTLC: Recipient address must match contract creation address".to_string()));
+            warn!("Recipient address must match contract creation address");
+            return Err(TransactionError::InvalidForRecipient);
         }
 
         if transaction.data.len() != (20 * 2 + 1 + 32 + 1 + 4) {
-            return Err(AccountError("HTLC: Invalid creation data: invalid length".to_string()));
+            warn!("Invalid creation data: invalid length");
+            return Err(TransactionError::InvalidData);
         }
 
-        return match HashedTimeLockedContract::parse_creation_transaction(transaction) {
-            Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout)) => {
-                if hash_count == 0 {
-                    return Err(AccountError("HTLC: Invalid creation data: hash_count may not be zero".to_string()));
-                }
+        let (sender, recipient, hash_algorithm, hash_root, hash_count, timeout) = HashedTimeLockedContract::parse_creation_transaction(transaction)?;
 
-                Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout))
-            }
-            Err(e) => Err(AccountError(format!("HTLC: Invalid creation data: {}", e)))
+        if hash_count == 0 {
+            warn!("Invalid creation data: hash_count may not be zero");
+            return Err(TransactionError::InvalidData);
         }
+
+        Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout))
     }
 
-    fn parse_creation_transaction(transaction: &Transaction) -> io::Result<(Address, Address, HashAlgorithm, AnyHash, u8, u32)> {
+    fn parse_creation_transaction(transaction: &Transaction) -> Result<(Address, Address, HashAlgorithm, AnyHash, u8, u32), TransactionError> {
         let reader = &mut &transaction.data[..];
 
         let sender: Address = Deserialize::deserialize(reader)?;
@@ -93,68 +93,75 @@ impl HashedTimeLockedContract {
         return Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout));
     }
 
-    pub fn verify_outgoing_transaction(transaction: &Transaction) -> bool {
-        let verify = || -> io::Result<bool> {
-            let tx_content = transaction.serialize_content();
-            let tx_buf = tx_content.as_slice();
+    pub fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+        let tx_content = transaction.serialize_content();
+        let tx_buf = tx_content.as_slice();
 
-            let proof_buf = &mut &transaction.proof[..];
-            let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
-            match proof_type {
-                ProofType::RegularTransfer => {
-                    let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
-                    let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
-                    let hash_root: [u8; 32] = AnyHash::deserialize(proof_buf)?.into();
-                    let mut pre_image: [u8; 32] = AnyHash::deserialize(proof_buf)?.into();
+        let proof_buf = &mut &transaction.proof[..];
+        let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
+        match proof_type {
+            ProofType::RegularTransfer => {
+                let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
+                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
+                let hash_root: [u8; 32] = AnyHash::deserialize(proof_buf)?.into();
+                let mut pre_image: [u8; 32] = AnyHash::deserialize(proof_buf)?.into();
+                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
-                    for i in 0..hash_depth {
-                        match hash_algorithm {
-                            HashAlgorithm::Blake2b => {
-                                pre_image = Blake2bHasher::default().digest(&pre_image[..]).into();
-                            },
-                            HashAlgorithm::Sha256 => {
-                                pre_image = Sha256Hasher::default().digest(&pre_image[..]).into();
-                            }
+                if proof_buf.len() != 0 {
+                    warn!("Over-long proof");
+                    return Err(TransactionError::InvalidProof);
+                }
+
+                for i in 0..hash_depth {
+                    match hash_algorithm {
+                        HashAlgorithm::Blake2b => {
+                            pre_image = Blake2bHasher::default().digest(&pre_image[..]).into();
+                        },
+                        HashAlgorithm::Sha256 => {
+                            pre_image = Sha256Hasher::default().digest(&pre_image[..]).into();
                         }
                     }
+                }
 
-                    if hash_root != pre_image {
-                        return Ok(false);
-                    }
+                if hash_root != pre_image {
+                    warn!("Hash mismatch");
+                    return Err(TransactionError::InvalidProof);
+                }
 
-                    let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                    if proof_buf.len() != 0 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "Over-long proof"));
-                    }
-                    return Ok(signature_proof.verify(tx_buf));
-                },
-                ProofType::EarlyResolve => {
-                    let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                    let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                    if proof_buf.len() != 0 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "Over-long proof"));
-                    }
-                    return Ok(
-                        signature_proof_recipient.verify(tx_buf)
-                        && signature_proof_sender.verify(tx_buf));
-                },
-                ProofType::TimeoutResolve => {
-                    let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                    if proof_buf.len() != 0 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "Over-long proof"));
-                    }
-                    return Ok(signature_proof.verify(tx_buf));
+                if !signature_proof.verify(tx_buf) {
+                    warn!("Invalid signature");
+                    return Err(TransactionError::InvalidProof);
+                }
+            },
+            ProofType::EarlyResolve => {
+                let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
+
+                if proof_buf.len() != 0 {
+                    warn!("Over-long proof");
+                    return Err(TransactionError::InvalidProof)
+                }
+
+                if !signature_proof_recipient.verify(tx_buf) || !signature_proof_sender.verify(tx_buf) {
+                    warn!("Invalid signature");
+                    return Err(TransactionError::InvalidProof)
+                }
+            },
+            ProofType::TimeoutResolve => {
+                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
+
+                if proof_buf.len() != 0 {
+                    warn!("Over-long proof");
+                    return Err(TransactionError::InvalidProof)
+                }
+
+                if !signature_proof.verify(tx_buf) {
+                    warn!("Invalid signature");
+                    return Err(TransactionError::InvalidProof)
                 }
             }
-        };
-
-        return match verify() {
-            Ok(result) => result,
-            Err(e) => {
-                println!("{}", e);
-                false
-            }
-        };
+        }
+        Ok(())
     }
 
     fn with_balance(&self, balance: Coin) -> Self {
@@ -171,11 +178,11 @@ impl HashedTimeLockedContract {
     }
 
     pub fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return Err(AccountError("Illegal incoming transaction".to_string()));
+        return Err(AccountError::InvalidForRecipient);
     }
 
     pub fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return Err(AccountError("Illegal incoming transaction".to_string()));
+        return Err(AccountError::InvalidForRecipient);
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
@@ -186,7 +193,8 @@ impl HashedTimeLockedContract {
             ProofType::RegularTransfer => {
                 // Check that the contract has not expired yet.
                 if self.timeout < block_height {
-                    return Err(AccountError(format!("HTLC expired: {} < {}", self.timeout, block_height)));
+                    warn!("HTLC expired: {} < {}", self.timeout, block_height);
+                    return Err(AccountError::InvalidForSender);
                 }
 
                 // Check that the provided hash_root is correct.
@@ -194,7 +202,8 @@ impl HashedTimeLockedContract {
                 let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
                 let hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
                 if hash_algorithm != self.hash_algorithm || hash_root != self.hash_root {
-                    return Err(AccountError("HTLC hash mismatch".to_string()));
+                    warn!("HTLC hash mismatch");
+                    return Err(AccountError::InvalidForSender);
                 }
 
                 // Ignore pre_image.
@@ -203,14 +212,14 @@ impl HashedTimeLockedContract {
                 // Check that the transaction is signed by the authorized recipient.
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
                 if !signature_proof.is_signed_by(&self.recipient) {
-                    return Err(AccountError("Invalid signature".to_string()));
+                    return Err(AccountError::InvalidSignature);
                 }
 
                 // Check min cap.
                 let cap_ratio = 1f64 - (hash_depth as f64 / self.hash_count as f64);
                 let min_cap = (cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64;
                 if balance < Coin::from(min_cap) {
-                    return Err(AccountError("Balance underflowed HTLC cap".to_string()));
+                    return Err(AccountError::InsufficientFunds);
                 }
             },
             ProofType::EarlyResolve => {
@@ -219,19 +228,20 @@ impl HashedTimeLockedContract {
                 let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
                 if !signature_proof_recipient.is_signed_by(&self.recipient)
                         || !signature_proof_sender.is_signed_by(&self.sender) {
-                    return Err(AccountError("Invalid signature".to_string()));
+                    return Err(AccountError::InvalidSignature);
                 }
             },
             ProofType::TimeoutResolve => {
                 // Check that the contract has expired.
                 if self.timeout >= block_height {
-                    return Err(AccountError(format!("HTLC not yet expired: {} >= {}", self.timeout, block_height)));
+                    warn!("HTLC not yet expired: {} >= {}", self.timeout, block_height);
+                    return Err(AccountError::InvalidForSender);
                 }
 
                 // Check that the transaction is signed by the original sender.
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
                 if !signature_proof.is_signed_by(&self.sender) {
-                    return Err(AccountError("Invalid signature".to_string()));
+                    return Err(AccountError::InvalidSignature);
                 }
             }
         }

@@ -1,5 +1,7 @@
 extern crate byteorder;
 extern crate num;
+#[macro_use]
+extern crate log;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 pub use num::ToPrimitive;
@@ -30,47 +32,32 @@ pub trait Serialize {
 
 // Error and result
 
-#[derive(Debug)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum SerializingError {
-    IoError(std::io::Error),
-    String(String),
-    StaticStr(&'static str),
+    IoError,
+    InvalidEncoding,
+    InvalidValue,
+    Overflow,
 }
 
 impl std::fmt::Display for SerializingError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            SerializingError::IoError(e) => write!(f, "SerializingError: {}", e),
-            SerializingError::String(s) => write!(f, "SerializingError: {}", s),
-            SerializingError::StaticStr(s) => write!(f, "SerializingError: {}", s),
-        }
+        // TODO: Don't use debug formatter
+        write!(f, "{:?}", self)
     }
 }
 
 impl From<std::io::Error> for SerializingError {
     fn from(io_error: std::io::Error) -> Self {
-        SerializingError::IoError(io_error)
+        warn!("I/O error: {}", io_error);
+        SerializingError::IoError
     }
 }
 
-impl From<String> for SerializingError {
-    fn from(string: String) -> Self {
-        SerializingError::String(string)
-    }
-}
-
-impl From<&'static str> for SerializingError {
-    fn from(static_str: &'static str) -> Self {
-        SerializingError::StaticStr(static_str)
-    }
-}
-
+#[deprecated]
 impl From<SerializingError> for std::io::Error {
-    fn from(e: SerializingError) -> Self {
-        match e {
-            SerializingError::IoError(e) => e,
-            _ => std::io::Error::from(std::io::ErrorKind::Other),
-        }
+    fn from(_: SerializingError) -> Self {
+        std::io::Error::from(std::io::ErrorKind::Other)
     }
 }
 
@@ -150,7 +137,7 @@ impl Deserialize for bool {
         match reader.read_u8()? {
             0 => Ok(false),
             1 => Ok(true),
-            other => Err(format!("{} is not a valid boolean value", other).into()),
+            other => Err(SerializingError::InvalidValue),
         }
     }
 }
@@ -172,7 +159,7 @@ impl Serialize for bool {
 impl DeserializeWithLength for String {
     fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let vec: Vec<u8> = DeserializeWithLength::deserialize::<D, R>(reader)?;
-        String::from_utf8(vec).or(Err("invalid utf8".into()))
+        String::from_utf8(vec).or(Err(SerializingError::InvalidEncoding))
     }
 }
 
@@ -250,7 +237,7 @@ impl<T: Deserialize> Deserialize for Option<T> {
         return match is_present {
             0 => Ok(Option::None),
             1 => Ok(Option::Some(Deserialize::deserialize(reader)?)),
-            other => Err(format!("{} is not a valid option value", other).into()),
+            other => Err(SerializingError::InvalidValue),
         };
     }
 }

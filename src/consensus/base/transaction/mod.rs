@@ -154,14 +154,10 @@ impl Transaction {
         // TODO Check account types valid?
 
         // Check transaction validity for sender account.
-        if !Account::verify_outgoing_transaction(&self) {
-            return Err(TransactionError::InvalidForSender);
-        }
+        Account::verify_outgoing_transaction(&self)?;
 
         // Check transaction validity for recipient account.
-        if !Account::verify_incoming_transaction(&self) {
-            return Err(TransactionError::InvalidForRecipient);
-        }
+        Account::verify_incoming_transaction(&self)?;
 
         return Ok(());
     }
@@ -326,5 +322,21 @@ pub enum TransactionError {
     Overflow,
     SenderEqualsRecipient,
     InvalidForSender,
-    InvalidForRecipient
+    InvalidProof,
+    InvalidForRecipient,
+    InvalidData,
+    InvalidSerialization(SerializingError)
+}
+
+impl std::fmt::Display for TransactionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // TODO: Don't use debug formatter
+        write!(f, "{:?}", self)
+    }
+}
+
+impl From<SerializingError> for TransactionError {
+    fn from(e: SerializingError) -> Self {
+        TransactionError::InvalidSerialization(e)
+    }
 }

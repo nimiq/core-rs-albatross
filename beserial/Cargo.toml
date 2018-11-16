@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 byteorder = "1.2.3"
 num = "0.1.42"
+log = "0.4.3"

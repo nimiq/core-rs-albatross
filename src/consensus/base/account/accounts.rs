@@ -37,13 +37,13 @@ impl<'env> Accounts<'env> {
 
     pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), AccountError> {
         if block.body.is_none() {
-            return Err(AccountError("Cannot commit block without body".to_string()));
+            return Err(AccountError::Any("Cannot commit block without body".to_string()));
         }
 
         self.commit_block_body(txn, block.body.as_ref().unwrap(), block.header.height)?;
 
         if block.header.accounts_hash != self.tree.root_hash(txn) {
-            return Err(AccountError("AccountsHash mismatch".to_string()));
+            return Err(AccountError::Any("AccountsHash mismatch".to_string()));
         }
 
         return Ok(());
@@ -51,11 +51,11 @@ impl<'env> Accounts<'env> {
 
     pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), AccountError> {
         if block.body.is_none() {
-            return Err(AccountError("Cannot revert block without body".to_string()));
+            return Err(AccountError::Any("Cannot revert block without body".to_string()));
         }
 
         if block.header.accounts_hash != self.tree.root_hash(txn) {
-            return Err(AccountError("AccountsHash mismatch".to_string()));
+            return Err(AccountError::Any("AccountsHash mismatch".to_string()));
         }
 
         return Ok(self.revert_block_body(txn, block.body.as_ref().unwrap(), block.header.height)?);
@@ -154,7 +154,7 @@ impl<'env> Accounts<'env> {
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));
         if recipient_account.account_type() != AccountType::Basic {
-            return Err(AccountError("Contract already exists".to_string()));
+            return Err(AccountError::Any("Contract already exists".to_string()));
         }
 
         let new_recipient_account = Account::new_contract(transaction.recipient_type, recipient_account.balance(), transaction, block_height)?;
@@ -169,11 +169,11 @@ impl<'env> Accounts<'env> {
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));
         if recipient_account.account_type() == AccountType::Basic {
-            return Err(AccountError("Contract does not exist".to_string()));
+            return Err(AccountError::Any("Contract does not exist".to_string()));
         }
 
         if recipient_account.account_type() != transaction.recipient_type {
-            return Err(AccountError("Wrong contract type".to_string()));
+            return Err(AccountError::Any("Wrong contract type".to_string()));
         }
 
         let new_recipient_account = Account::new_basic(recipient_account.balance());
@@ -198,7 +198,7 @@ impl<'env> Accounts<'env> {
                 None => false
             };
             if !correctly_pruned {
-                return Err(AccountError("Account not pruned correctly".to_string()));
+                return Err(AccountError::Any("Account not pruned correctly".to_string()));
             }
 
             self.tree.put_batch(txn, &transaction.sender, Account::INITIAL);
@@ -206,7 +206,7 @@ impl<'env> Accounts<'env> {
         }
 
         if pruned_accounts.len() > 0 {
-            return Err(AccountError("Account was invalidly pruned".to_string()));
+            return Err(AccountError::Any("Account was invalidly pruned".to_string()));
         }
 
         return Ok(());

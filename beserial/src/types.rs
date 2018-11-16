@@ -105,7 +105,7 @@ impl Deserialize for uvar {
             // 8 bytes follow
             let byte_1_8 = read::<u64, R>(reader)?;
             if byte_1_8 > u64::max_value() - 0x0102040810204080 {
-                return Err("uvar overflow".into());
+                return Err(SerializingError::Overflow);
             }
             return Ok(uvar(byte_1_8 + 0x0102040810204080));
         } else if first_byte == 0xFE {

@@ -1,6 +1,6 @@
 use beserial::{Serialize, Deserialize};
 use crate::consensus::base::primitive::{Address, Coin};
-use crate::consensus::base::transaction::{Transaction, SignatureProof};
+use crate::consensus::base::transaction::{Transaction, TransactionError, SignatureProof};
 use super::{Account, AccountError};
 use std::io;
 
@@ -17,7 +17,7 @@ pub struct VestingContract {
 impl VestingContract {
     pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         return VestingContract::create_from_transaction(balance, transaction)
-            .map_err(|_| AccountError("Failed to create vesting contract".to_string()));
+            .map_err(|_| AccountError::Any("Failed to create vesting contract".to_string()));
     }
 
     fn create_from_transaction(balance: Coin, transaction: &Transaction) -> io::Result<Self> {
@@ -52,23 +52,32 @@ impl VestingContract {
         return VestingContract { balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount };
     }
 
-    pub fn verify_incoming_transaction(transaction: &Transaction) -> bool {
+    pub fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         // The contract creation transaction is the only valid incoming transaction.
         if transaction.recipient != transaction.contract_creation_address() {
-            return false;
+            warn!("Only contract creation is allowed");
+            return Err(TransactionError::InvalidForRecipient);
         }
 
         // Check that data field has the correct length.
         let allowed_sizes = [Address::SIZE + 4, Address::SIZE + 16, Address::SIZE + 24];
-        return allowed_sizes.contains(&transaction.data.len());
+        if !allowed_sizes.contains(&transaction.data.len()) {
+            warn!("Invalid creation data: invalid length");
+            return Err(TransactionError::InvalidData);
+        }
+
+        Ok(())
     }
 
-    pub fn verify_outgoing_transaction(transaction: &Transaction) -> bool {
-        let signature_proof: SignatureProof = match Deserialize::deserialize(&mut &transaction.proof[..]) {
-            Ok(v) => v,
-            Err(e) => return false
-        };
-        return signature_proof.verify(transaction.serialize_content().as_slice());
+    pub fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+        let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
+
+        if !signature_proof.verify(transaction.serialize_content().as_slice()) {
+            warn!("Invalid signature");
+            return Err(TransactionError::InvalidProof);
+        }
+
+        Ok(())
     }
 
     fn with_balance(&self, balance: Coin) -> Self {
@@ -83,11 +92,11 @@ impl VestingContract {
     }
 
     pub fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return Err(AccountError("Illegal incoming transaction".to_string()));
+        return Err(AccountError::Any("Illegal incoming transaction".to_string()));
     }
 
     pub fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return Err(AccountError("Illegal incoming transaction".to_string()));
+        return Err(AccountError::Any("Illegal incoming transaction".to_string()));
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
@@ -95,16 +104,16 @@ impl VestingContract {
 
         // Check vesting min cap.
         if balance < self.min_cap(block_height) {
-            return Err(AccountError("Insufficient funds available".to_string()));
+            return Err(AccountError::Any("Insufficient funds available".to_string()));
         }
 
         // Check transaction signer is contract owner.
         let signature_proof: SignatureProof = match Deserialize::deserialize(&mut &transaction.proof[..]) {
             Ok(v) => v,
-            Err(e) => return Err(AccountError("Invalid proof".to_string()))
+            Err(e) => return Err(AccountError::Any("Invalid proof".to_string()))
         };
         if !signature_proof.is_signed_by(&self.owner) {
-            return Err(AccountError("Invalid signer".to_string()));
+            return Err(AccountError::Any("Invalid signer".to_string()));
         }
 
         return Ok(self.with_balance(balance));

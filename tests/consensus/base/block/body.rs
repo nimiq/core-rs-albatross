@@ -129,7 +129,7 @@ fn verify_rejects_unordered_transactions() {
 fn verify_rejects_invalid_transactions() {
     let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     body.transactions[1].proof[0] += 1;
-    assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::InvalidTransaction(TransactionError::InvalidForSender)));
+    assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::InvalidTransaction(TransactionError::InvalidProof)));
 }
 
 #[test]
