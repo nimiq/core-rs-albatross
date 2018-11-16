@@ -149,105 +149,21 @@ fn it_does_not_support_incoming_transactions() {
     assert!(contract.without_incoming_transaction(&tx, 2).is_err());
 }
 
-#[test]
-fn it_can_verify_valid_outgoing_transaction() {
-    let key_pair = KeyPair::generate();
-    let _addr = Address::from(&key_pair.public);
-    let mut tx = Transaction {
-        data: vec![],
-        sender: Address::from([0u8; 20]),
-        sender_type: AccountType::HTLC,
-        recipient: Address::from([0u8; 20]),
-        recipient_type: AccountType::Basic,
-        value: Coin::from(100),
-        fee: Coin::from(0),
-        validity_start_height: 1,
-        network_id: NetworkId::Dummy,
-        flags: TransactionFlags::empty(),
-        proof: vec![],
-    };
-
-    // regular: valid Blake-2b
-    let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
-    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&1u8, &mut proof);
-    Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(&[0u8; 32]))), &mut proof);
-    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
-    Serialize::serialize(&signature_proof, &mut proof);
-    tx.proof = proof;
-    assert!(HashedTimeLockedContract::verify_outgoing_transaction(&tx));
-
-    // regular: valid SHA-256
-    proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Sha256, &mut proof);
-    Serialize::serialize(&1u8, &mut proof);
-    Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Sha256Hasher::default().digest(&[0u8; 32]))), &mut proof);
-    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
-    Serialize::serialize(&signature_proof, &mut proof);
-    tx.proof = proof;
-    assert!(HashedTimeLockedContract::verify_outgoing_transaction(&tx));
-
-    // regular: invalid hash
-    tx.proof[35] = 1;
-    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
-    tx.proof[35] = 0;
-
-    // regular: invalid algorithm
-    tx.proof[1] = 99;
-    proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + signature_proof.serialized_size());
-    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
-    tx.proof[1] = HashAlgorithm::Blake2b as u8;
-
-    // regular: invalid signature
-    tx.proof[68] = tx.proof[68] % 250 + 1;
-    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
-
-    // regular: invalid over-long
-    proof = Vec::with_capacity(4 + 2 * AnyHash::SIZE + signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
-    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
-    Serialize::serialize(&1u8, &mut proof);
-    Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(&[0u8; 32]))), &mut proof);
-    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
-    Serialize::serialize(&signature_proof, &mut proof);
-    Serialize::serialize(&0u8, &mut proof);
-    tx.proof = proof;
-    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
-
-    // early resolve: valid
-    proof = Vec::with_capacity(1 + 2 * signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
-    Serialize::serialize(&signature_proof, &mut proof);
-    Serialize::serialize(&signature_proof, &mut proof);
-    tx.proof = proof;
-    assert!(HashedTimeLockedContract::verify_outgoing_transaction(&tx));
-
-    // timeout resolve: valid
-    proof = Vec::with_capacity(1 + signature_proof.serialized_size());
-    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
-    Serialize::serialize(&signature_proof, &mut proof);
-    tx.proof = proof;
-    assert!(HashedTimeLockedContract::verify_outgoing_transaction(&tx));
-}
-
-#[test]
-fn it_can_apply_and_revert_regular_transfer() {
-    let key_pair = KeyPair::generate();
-    let recipient = Address::from(&key_pair.public);
+fn prepare_outgoing_transaction() -> (HashedTimeLockedContract, Transaction, AnyHash, SignatureProof, SignatureProof) {
+    let sender_key_pair = KeyPair::generate();
+    let recipient_key_pair = KeyPair::generate();
+    let sender = Address::from(&sender_key_pair.public);
+    let recipient = Address::from(&recipient_key_pair.public);
     let pre_image = AnyHash::from([1u8; 32]);
-    let hash_root = AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(&pre_image.as_bytes())));
+    let hash_root = AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(Blake2bHasher::default().digest(&pre_image.as_bytes()).as_bytes())));
 
     let start_contract = HashedTimeLockedContract {
         balance: Coin::from(1000),
-        sender: Address::from([0u8; 20]),
+        sender: sender.clone(),
         recipient: recipient.clone(),
         hash_algorithm: HashAlgorithm::Blake2b,
         hash_root,
-        hash_count: 1,
+        hash_count: 2,
         timeout: 100,
         total_amount: Coin::from(1000),
     };
@@ -266,19 +182,235 @@ fn it_can_apply_and_revert_regular_transfer() {
         proof: vec![],
     };
 
-    let signature = key_pair.sign(&tx.serialize_content()[..]);
-    let signature_proof = SignatureProof::from(key_pair.public, signature);
-    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + signature_proof.serialized_size());
+    let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
+    let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);
+    let sender_signature_proof = SignatureProof::from(sender_key_pair.public, sender_signature);
+    let recipient_signature_proof = SignatureProof::from(recipient_key_pair.public, recipient_signature);
+
+    return (start_contract, tx, pre_image, sender_signature_proof, recipient_signature_proof)
+}
+
+#[test]
+fn it_can_verify_regular_transfer() {
+    let (_, mut tx, _, _, recipient_signature_proof ) = prepare_outgoing_transaction();
+
+    // regular: valid Blake-2b
+    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
     Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
     Serialize::serialize(&1u8, &mut proof);
+    Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(&[0u8; 32]))), &mut proof);
+    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+
+    // regular: valid SHA-256
+    proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Sha256, &mut proof);
+    Serialize::serialize(&1u8, &mut proof);
+    Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Sha256Hasher::default().digest(&[0u8; 32]))), &mut proof);
+    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+
+    // regular: invalid hash
+    tx.proof[35] = 1;
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+    tx.proof[35] = 0;
+
+    // regular: invalid algorithm
+    tx.proof[1] = 99;
+    proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+    tx.proof[1] = HashAlgorithm::Blake2b as u8;
+
+    // regular: invalid signature
+    tx.proof[68] = tx.proof[68] % 250 + 1;
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+
+    // regular: invalid over-long
+    proof = Vec::with_capacity(4 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&1u8, &mut proof);
+    Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(&[0u8; 32]))), &mut proof);
+    Serialize::serialize(&AnyHash::from([0u8; 32]), &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    Serialize::serialize(&0u8, &mut proof);
+    tx.proof = proof;
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+}
+
+#[test]
+fn it_can_verify_early_resolve() {
+    let (_, mut tx, _, sender_signature_proof, recipient_signature_proof ) = prepare_outgoing_transaction();
+
+    // early resolve: valid
+    let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+
+    // early resolve: invalid signature 1
+    let bak = tx.proof[4];
+    tx.proof[4] = tx.proof[4] % 250 + 1;
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+    tx.proof[4] = bak;
+
+    // early resolve: invalid signature 2
+    let bak = tx.proof.len() - 2;
+    tx.proof[bak] = tx.proof[bak] % 250 + 1;
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+
+    // early resolve: invalid over-long
+    proof = Vec::with_capacity(2 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    Serialize::serialize(&0u8, &mut proof);
+    tx.proof = proof;
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+}
+
+#[test]
+fn it_can_verify_timeout_resolve() {
+    let (_, mut tx, _, sender_signature_proof, _ ) = prepare_outgoing_transaction();
+
+    // timeout resolve: valid
+    let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+
+    // timeout resolve: invalid signature
+    tx.proof[4] = tx.proof[4] % 250 + 1;
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+
+    // timeout resolve: invalid over-long
+    proof = Vec::with_capacity(2 + sender_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    Serialize::serialize(&0u8, &mut proof);
+    tx.proof = proof;
+    assert!(!HashedTimeLockedContract::verify_outgoing_transaction(&tx));
+}
+
+#[test]
+fn it_can_apply_and_revert_valid_transaction() {
+    let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) = prepare_outgoing_transaction();
+
+    // regular transfer
+    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&2u8, &mut proof);
     Serialize::serialize(&start_contract.hash_root, &mut proof);
     Serialize::serialize(&pre_image, &mut proof);
-    Serialize::serialize(&signature_proof, &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
 
     let mut contract = start_contract.with_outgoing_transaction(&tx, 1).unwrap();
     assert_eq!(contract.balance, Coin::from(0));
     contract = contract.without_outgoing_transaction(&tx, 1).unwrap();
     assert_eq!(contract, start_contract);
+
+    // early resolve
+    let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    tx.proof = proof;
+
+    let mut contract = start_contract.with_outgoing_transaction(&tx, 1).unwrap();
+    assert_eq!(contract.balance, Coin::from(0));
+    contract = contract.without_outgoing_transaction(&tx, 1).unwrap();
+    assert_eq!(contract, start_contract);
+
+    // timeout resolve
+    let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    tx.proof = proof;
+
+    let mut contract = start_contract.with_outgoing_transaction(&tx, 101).unwrap();
+    assert_eq!(contract.balance, Coin::from(0));
+    contract = contract.without_outgoing_transaction(&tx, 1).unwrap();
+    assert_eq!(contract, start_contract);
+}
+
+#[test]
+fn it_refuses_invalid_transaction() {
+    let (mut start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) = prepare_outgoing_transaction();
+
+    // regular transfer: timeout passed
+    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&2u8, &mut proof);
+    Serialize::serialize(&start_contract.hash_root, &mut proof);
+    Serialize::serialize(&pre_image, &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(start_contract.with_outgoing_transaction(&tx, 101).is_err());
+
+    // regular transfer: hash mismatch
+    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&2u8, &mut proof);
+    Serialize::serialize(&AnyHash::from([1u8; 32]), &mut proof);
+    Serialize::serialize(&pre_image, &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(start_contract.with_outgoing_transaction(&tx, 1).is_err());
+
+    // regular transfer: invalid signature
+    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&2u8, &mut proof);
+    Serialize::serialize(&start_contract.hash_root, &mut proof);
+    Serialize::serialize(&pre_image, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(start_contract.with_outgoing_transaction(&tx, 1).is_err());
+
+    // regular transfer: underflow
+    let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::RegularTransfer, &mut proof);
+    Serialize::serialize(&HashAlgorithm::Blake2b, &mut proof);
+    Serialize::serialize(&1u8, &mut proof);
+    Serialize::serialize(&start_contract.hash_root, &mut proof);
+    Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(&(<[u8; 32]>::from(pre_image))))), &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(start_contract.with_outgoing_transaction(&tx, 1).is_err());
+
+    // early resolve: invalid signature
+    let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::EarlyResolve, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(start_contract.with_outgoing_transaction(&tx, 1).is_err());
+
+    // timeout resolve: timeout not expired
+    let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
+    Serialize::serialize(&sender_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(start_contract.with_outgoing_transaction(&tx, 1).is_err());
+
+    // timeout resolve: invalid signature
+    let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size());
+    Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
+    Serialize::serialize(&recipient_signature_proof, &mut proof);
+    tx.proof = proof;
+    assert!(start_contract.with_outgoing_transaction(&tx, 101).is_err());
 }

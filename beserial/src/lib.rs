@@ -37,6 +37,16 @@ pub enum SerializingError {
     StaticStr(&'static str),
 }
 
+impl std::fmt::Display for SerializingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            SerializingError::IoError(e) => write!(f, "SerializingError: {}", e),
+            SerializingError::String(s) => write!(f, "SerializingError: {}", s),
+            SerializingError::StaticStr(s) => write!(f, "SerializingError: {}", s),
+        }
+    }
+}
+
 impl From<std::io::Error> for SerializingError {
     fn from(io_error: std::io::Error) -> Self {
         SerializingError::IoError(io_error)

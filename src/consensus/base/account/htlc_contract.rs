@@ -180,57 +180,62 @@ impl HashedTimeLockedContract {
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
+        let proof_buf = &mut &transaction.proof[..];
+        let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
+        match proof_type {
+            ProofType::RegularTransfer => {
+                // Check that the contract has not expired yet.
+                if self.timeout < block_height {
+                    return Err(AccountError(format!("HTLC expired: {} < {}", self.timeout, block_height)));
+                }
 
-        let verify = || -> io::Result<bool> {
-            let proof_buf = &mut &transaction.proof[..];
-            let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
-            match proof_type {
-                ProofType::RegularTransfer => {
-                    // Check that the contract has not expired yet.
-                    if self.timeout < block_height {
-                        return Ok(false);
-                    }
+                // Check that the provided hash_root is correct.
+                let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
+                let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
+                let hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
+                if hash_algorithm != self.hash_algorithm || hash_root != self.hash_root {
+                    return Err(AccountError("HTLC hash mismatch".to_string()));
+                }
 
-                    // Check that the provided hash_root is correct.
-                    let hash_algorithm: HashAlgorithm = Deserialize::deserialize(proof_buf)?;
-                    let hash_depth: u8 = Deserialize::deserialize(proof_buf)?;
-                    let hash_root: AnyHash = Deserialize::deserialize(proof_buf)?;
-                    if hash_root != self.hash_root {
-                        return Ok(false);
-                    }
+                // Ignore pre_image.
+                let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
 
-                    // Ignore pre_image.
-                    let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
+                // Check that the transaction is signed by the authorized recipient.
+                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                if !signature_proof.is_signed_by(&self.recipient) {
+                    return Err(AccountError("Invalid signature".to_string()));
+                }
 
-                    // Check that the transaction is signed by the authorized recipient.
-                    let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                    if !signature_proof.is_signed_by(&self.recipient) {
-                        return Ok(false);
-                    }
+                // Check min cap.
+                let cap_ratio = 1f64 - (hash_depth as f64 / self.hash_count as f64);
+                let min_cap = (cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64;
+                if balance < Coin::from(min_cap) {
+                    return Err(AccountError("Balance underflowed HTLC cap".to_string()));
+                }
+            },
+            ProofType::EarlyResolve => {
+                // Check that the transaction is signed by both parties.
+                let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                if !signature_proof_recipient.is_signed_by(&self.recipient)
+                        || !signature_proof_sender.is_signed_by(&self.sender) {
+                    return Err(AccountError("Invalid signature".to_string()));
+                }
+            },
+            ProofType::TimeoutResolve => {
+                // Check that the contract has expired.
+                if self.timeout >= block_height {
+                    return Err(AccountError(format!("HTLC not yet expired: {} >= {}", self.timeout, block_height)));
+                }
 
-                    // Check min cap.
-                    let cap_ratio = 1f64 - (hash_depth as f64 / self.hash_count as f64);
-                    let min_cap = (cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64;
-                    return Ok(balance >= Coin::from(min_cap));
-                },
-                ProofType::EarlyResolve => {
-                    let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                    let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                    return Ok(
-                        signature_proof_recipient.is_signed_by(&self.recipient)
-                        && signature_proof_sender.is_signed_by(&self.sender));
-                },
-                ProofType::TimeoutResolve => {
-                    let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
-                    return Ok(signature_proof.is_signed_by(&self.sender));
+                // Check that the transaction is signed by the original sender.
+                let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                if !signature_proof.is_signed_by(&self.sender) {
+                    return Err(AccountError("Invalid signature".to_string()));
                 }
             }
-        };
-
-        return match verify() {
-            Ok(true) => Ok(self.with_balance(balance)),
-            _ => Err(AccountError("Proof error".to_string()))
-        };
+        }
+        Ok(self.with_balance(balance))
     }
 
     pub fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {

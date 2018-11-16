@@ -253,3 +253,9 @@ impl fmt::Display for AccountError {
         return write!(f, "{}", self.0);
     }
 }
+
+impl From<SerializingError> for AccountError {
+    fn from(e: SerializingError) -> Self {
+        AccountError(format!("Error deserializing proof/data: {}", e))
+    }
+}
