@@ -61,12 +61,12 @@ impl AddressNibbles {
 
     pub (in super) fn common_prefix(&self, other: &AddressNibbles) -> AddressNibbles {
         let min_len = cmp::min(self.len(), other.len());
-        let byte_len = min_len / 2;
+        let byte_len = min_len / 2 + (min_len % 2);
 
         let mut first_difference_nibble = min_len;
         for j in 0..byte_len {
             if self.bytes[j] != other.bytes[j] {
-                first_difference_nibble = if self.get(j * 2) != other.get(j * 2) { j * 2 } else { j * 2 + 1};
+                first_difference_nibble = if self.get(j * 2) != other.get(j * 2) { j * 2 } else { j * 2 + 1 };
                 break;
             }
         }
@@ -269,6 +269,7 @@ mod tests {
         assert_eq!(an.to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
 
         // Test slicing
+        assert_eq!(an.slice(0, 1).to_string(), "c");
         assert_eq!(an.slice(0, 2).to_string(), "cf");
         assert_eq!(an.slice(0, 3).to_string(), "cfb");
         assert_eq!(an.slice(1, 3).to_string(), "fb");
@@ -296,5 +297,13 @@ mod tests {
         let an2: AddressNibbles = "1200000000000000000000000000000000000000".parse().unwrap();
         assert_eq!(an1.common_prefix(&an2), an2.common_prefix(&an1));
         assert_eq!(an1.common_prefix(&an2).to_string(), "1");
+
+        let an3: AddressNibbles = "2dc".parse().unwrap();
+        let an4: AddressNibbles = "2da3183636aae21c2710b5bd4486903f8541fb80".parse().unwrap();
+        assert_eq!(an3.common_prefix(&an4), "2d".parse().unwrap());
+
+        let an5: AddressNibbles = "2da".parse().unwrap();
+        let an6: AddressNibbles = "2da3183636aae21c2710b5bd4486903f8541fb80".parse().unwrap();
+        assert_eq!(an5.common_prefix(&an6), "2da".parse().unwrap());
     }
 }

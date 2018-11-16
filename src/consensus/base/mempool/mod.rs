@@ -1,35 +1,41 @@
 use beserial::Serialize;
+use parking_lot::RwLock;
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use crate::consensus::base::transaction::Transaction;
-use crate::consensus::base::account::Accounts;
-use crate::consensus::base::primitive::hash::{Blake2bHash, Hash};
-use crate::consensus::base::primitive::Address;
-use std::cmp::Ordering;
 use std::convert::From;
 use std::sync::Arc;
-use crate::consensus::base::blockchain::Blockchain;
+use crate::consensus::base::blockchain::{Blockchain, BlockchainEvent};
+use crate::consensus::base::primitive::hash::{Blake2bHash, Hash};
+use crate::consensus::base::primitive::Address;
+use crate::consensus::base::transaction::Transaction;
 
-pub struct Mempool<'t> {
-    blockchain: &'t Blockchain<'t, 't>,
-    accounts: &'t Accounts<'t>,
+pub struct Mempool<'env> {
+    blockchain: Arc<RwLock<Blockchain<'env>>>,
     transactions_by_hash: HashMap<Blake2bHash, Arc<Transaction>>,
     transactions_by_sender: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
     transactions_by_recipient: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
     transactions_sorted_fee: BTreeSet<Arc<TransactionSortable>>
 }
 
-impl<'t> Mempool<'t> {
-    pub fn new(blockchain: &'t Blockchain<'t, 't>) -> Self {
-        return Mempool {
-            blockchain,
-            accounts: &blockchain.accounts,
+impl<'env> Mempool<'env> {
+    pub fn new(blockchain: Arc<RwLock<Blockchain<'env>>>) -> Arc<RwLock<Self>> {
+        let arc = Arc::new(RwLock::new(Self {
+            blockchain: blockchain.clone(),
             transactions_by_hash: HashMap::new(),
             transactions_by_sender: HashMap::new(),
             transactions_by_recipient: HashMap::new(),
             transactions_sorted_fee: BTreeSet::new()
-        };
+        }));
+
+        let arc_listener = arc.clone();
+        blockchain.write().notifier.register(move |event: BlockchainEvent| arc_listener.write().on_blockchain_event(event));
+        arc
+    }
+
+    fn on_blockchain_event(&mut self, event: BlockchainEvent) {
+        println!("Mempool received blockchain event: {:?}", event);
     }
 
     pub fn push_transaction(&mut self, transaction: Transaction) -> ReturnCode {
@@ -52,26 +58,34 @@ impl<'t> Mempool<'t> {
             }
         }
 
+        // Acquire read lock on the blockchain and hold it until the end of the function.
+        // This ensures that:
+        // - all transaction validation checks run against the same blockchain state
+        // - the mempool is in a consistent state when a HeadChanged/Rebranched event causes it to evict transactions
+        let blockchain_arc = self.blockchain.clone();
+        let blockchain = blockchain_arc.read();
+        let block_height = blockchain.height() + 1;
+
         // Intrinsic transaction verification.
-        if transaction.verify(self.blockchain.network_id).is_err() {
+        if transaction.verify(blockchain.network_id).is_err() {
             return ReturnCode::Invalid;
         }
 
         // Retrieve recipient account and test incoming transaction.
-        let recipient_account = self.accounts.get(&transaction.recipient, None);
+        let recipient_account = blockchain.accounts.get(&transaction.recipient, None);
         if recipient_account.account_type() != transaction.recipient_type {
             return ReturnCode::Invalid;
         }
-        if let Err(_) = recipient_account.with_incoming_transaction(&transaction, self.blockchain.height()) {
+        if let Err(_) = recipient_account.with_incoming_transaction(&transaction, block_height) {
             return ReturnCode::Invalid;
         }
 
         // Retrieve sender account and test outgoing transaction.
-        let sender_account = self.accounts.get(&transaction.sender, None);
+        let sender_account = blockchain.accounts.get(&transaction.sender, None);
         if sender_account.account_type() != transaction.sender_type {
             return ReturnCode::Invalid;
         }
-        if let Err(e) = sender_account.with_outgoing_transaction(&transaction, self.blockchain.height()) {
+        if let Err(e) = sender_account.with_outgoing_transaction(&transaction, block_height) {
             return ReturnCode::Invalid;
         }
 
@@ -90,7 +104,7 @@ impl<'t> Mempool<'t> {
             let mut tx_count = 0;
             for curr_tx in transactions_sorted {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if let Ok(new_account) = sender_changed.with_outgoing_transaction(&transaction_arc, self.blockchain.height()) {
+                    if let Ok(new_account) = sender_changed.with_outgoing_transaction(&transaction_arc, block_height) {
                         sender_changed = new_account;
                         tx_count += 1;
                         continue;
@@ -182,14 +196,19 @@ impl<'t> Mempool<'t> {
     /// Evict all transactions from the pool that have become invalid due to changes in the
     /// account state (i.e. typically because the were included in a newly mined block). No need to re-check signatures.
     fn evict_transactions(&mut self) {
+        let blockchain_arc = self.blockchain.clone();
+        let blockchain = blockchain_arc.read();
+
         for (address, transactions_sorted) in self.transactions_by_sender.clone().iter() {
-            let mut sender_account = self.accounts.get(&address, None);
+            let mut sender_account = blockchain.accounts.get(&address, None);
 
             let mut transactions_sorted_new = BTreeSet::new();
             for curr_ts in transactions_sorted {
                 let new_sender_account_option = sender_account.with_outgoing_transaction(&curr_ts.0, 1);
-                let recipient_account = self.accounts.get(&curr_ts.0.recipient, None);
+
+                let recipient_account = blockchain.accounts.get(&curr_ts.0.recipient, None);
                 let new_recipient_account_option = recipient_account.with_incoming_transaction(&curr_ts.0, 1);
+
                 if new_sender_account_option.is_ok() || new_recipient_account_option.is_ok() {
                     transactions_sorted_new.insert(Arc::clone(&curr_ts));
                     sender_account = new_sender_account_option.unwrap();

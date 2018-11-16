@@ -353,7 +353,6 @@ impl IntoDatabaseValue for str {
     }
 
     fn copy_into_database(&self, bytes: &mut [u8]) {
-        println!("{} {}", bytes.len(), self.len());
         bytes.copy_from_slice(self.as_bytes());
     }
 }

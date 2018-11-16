@@ -1,7 +1,7 @@
+use hex;
 use nimiq::consensus::base::account::tree::AccountsTree;
 use nimiq::consensus::base::account::{Account, BasicAccount};
 use nimiq::consensus::base::primitive::{Address, Coin};
-use hex;
 use nimiq::utils::db::volatile::VolatileEnvironment;
 use nimiq::utils::db::WriteTransaction;
 

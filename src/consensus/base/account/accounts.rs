@@ -1,12 +1,14 @@
+use beserial::Deserialize;
+use hex;
+use std::collections::HashMap;
 use crate::consensus::base::account::{Account, AccountError, AccountType};
+use crate::consensus::base::account::tree::AccountsTree;
 use crate::consensus::base::block::{Block, BlockBody};
 use crate::consensus::base::primitive::{Address, Coin};
 use crate::consensus::base::primitive::hash::Blake2bHash;
 use crate::consensus::base::transaction::{Transaction, TransactionFlags};
-use crate::consensus::networks::NetworkId;
+use crate::consensus::networks::{NetworkId, NetworkInfo, get_network_info};
 use crate::consensus::policy;
-use std::collections::HashMap;
-use super::tree::AccountsTree;
 use crate::utils::db;
 use crate::utils::db::{Environment, ReadTransaction, WriteTransaction};
 
@@ -19,6 +21,28 @@ pub struct Accounts<'env> {
 impl<'env> Accounts<'env> {
     pub fn new(env: &'env Environment) -> Self {
         return Accounts { env, tree: AccountsTree::new(env) };
+    }
+
+    pub fn init(&self, txn: &mut WriteTransaction, network_id: NetworkId) {
+        let network_info = get_network_info(network_id).unwrap();
+        let account_bytes = hex::decode(&network_info.genesis_accounts).unwrap();
+        let reader = &mut &account_bytes[..];
+        let count = u16::deserialize(reader).unwrap();
+
+        for i in 0..count {
+            let address = Address::deserialize(reader).unwrap();
+            let account = Account::deserialize(reader).unwrap();
+            self.tree.put_batch(txn, &address, account);
+        }
+        self.tree.finalize_batch(txn);
+
+        let genesis_header = &network_info.genesis_block.header;
+        let genesis_body = network_info.genesis_block.body.as_ref().unwrap();
+        self.commit_block_body(txn, genesis_body, genesis_header.height)
+            .expect("Failed to commit genesis block body");
+
+        assert_eq!(self.tree.root_hash(txn), genesis_header.accounts_hash,
+                   "Genesis AccountHash mismatch");
     }
 
     pub fn get(&self, address: &Address, txn_option: Option<&db::Transaction>) -> Account {

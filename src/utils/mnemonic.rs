@@ -184,8 +184,6 @@ impl Mnemonic {
             salt.extend(pw.nfkd());
         }
 
-        println!("{} - {}", &mnemonic, &salt);
-
         compute_pbkdf2_sha512(mnemonic.as_bytes(), salt.as_bytes(), 2048, 64)
     }
 

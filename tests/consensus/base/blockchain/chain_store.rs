@@ -117,7 +117,7 @@ fn it_can_get_blocks_backward() {
     let mut block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
     store.put_chain_info(&mut txn, &block.header.hash::<Blake2bHash>(), &ChainInfo::initial(block.clone()), true);
 
-    for i in 0..20 {
+    for _ in 0..20 {
         let mut b = block.clone();
         b.header.prev_hash = block.header.hash();
         b.header.height = block.header.height + 1;

@@ -1,4 +1,6 @@
 use bigdecimal::BigDecimal;
+use parking_lot::RwLock;
+use std::sync::Arc;
 use crate::consensus::base::account::Accounts;
 use crate::consensus::base::block::{Block, Target, TargetCompact};
 use crate::consensus::base::blockchain::{ChainInfo, ChainStore, TransactionCache};
@@ -7,11 +9,11 @@ use crate::consensus::networks::{NetworkId, get_network_info};
 use crate::consensus::policy;
 use crate::network::NetworkTime;
 use crate::utils::db::{Environment, ReadTransaction, WriteTransaction};
+use crate::utils::observer::Notifier;
 
-#[derive(Debug)]
-pub struct Blockchain<'env, 'time> {
+pub struct Blockchain<'env> {
     env: &'env Environment,
-    network_time: &'time NetworkTime,
+    network_time: Arc<RwLock<NetworkTime>>,
     pub network_id: NetworkId,
 
     pub accounts: Accounts<'env>,
@@ -19,27 +21,37 @@ pub struct Blockchain<'env, 'time> {
     transaction_cache: TransactionCache,
     main_chain: ChainInfo,
     head_hash: Blake2bHash,
+
+    pub notifier: Notifier<'env, BlockchainEvent>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PushResult {
     Orphan,
     Invalid,
     Known,
     Extended,
     Rebranched,
-    Forked
+    Forked,
 }
 
-impl<'env, 'time> Blockchain<'env, 'time> {
-    pub fn new(env: &'env Environment, network_time: &'time NetworkTime, network_id: NetworkId) -> Self {
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BlockchainEvent {
+    HeadChanged,
+    BlockReverted,
+    Rebranched,
+}
+
+impl<'env> Blockchain<'env> {
+    pub fn new(env: &'env Environment, network_time: Arc<RwLock<NetworkTime>>, network_id: NetworkId) -> Self {
         let chain_store = ChainStore::new(env);
-        return match chain_store.get_head(None) {
+        match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash),
             None => Blockchain::init(env, network_time, network_id, chain_store)
-        };
+        }
     }
 
-    fn load(env: &'env Environment, network_time: &'time NetworkTime, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Self {
+    fn load(env: &'env Environment, network_time: Arc<RwLock<NetworkTime>>, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Self {
         // Check that the correct genesis block is stored.
         let network_info = get_network_info(network_id).unwrap();
         let genesis_info = chain_store.get_chain_info(&network_info.genesis_hash, false, None);
@@ -65,29 +77,49 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         transaction_cache.push_block(&main_chain.head);
         assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.header.height));
 
-        return Blockchain { env, network_time, network_id, accounts, chain_store, transaction_cache, main_chain, head_hash };
+        Blockchain {
+            env,
+            network_time,
+            network_id,
+            accounts,
+            chain_store,
+            transaction_cache,
+            main_chain,
+            head_hash,
+            notifier: Notifier::new()
+        }
     }
 
-    fn init(env: &'env Environment, network_time: &'time NetworkTime, network_id: NetworkId, chain_store: ChainStore<'env>) -> Self {
+    fn init(env: &'env Environment, network_time: Arc<RwLock<NetworkTime>>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Self {
         // Initialize chain & accounts with genesis block.
         let network_info = get_network_info(network_id).unwrap();
         let main_chain = ChainInfo::initial(network_info.genesis_block.clone());
         let head_hash = network_info.genesis_hash.clone();
 
-        // Store genesis block.
+        // Initialize accounts.
+        let accounts = Accounts::new(env);
         let mut txn = WriteTransaction::new(env);
+        accounts.init(&mut txn, network_id);
+
+        // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
         chain_store.set_head(&mut txn, &head_hash);
-        // FIXME commit chain & accounts txn together
         txn.commit();
-
-        // TODO Initialize accounts.
-        let accounts = Accounts::new(env);
 
         // Initialize empty TransactionCache.
         let transaction_cache = TransactionCache::new();
 
-        return Blockchain { env, network_time, network_id, accounts, chain_store, transaction_cache, main_chain, head_hash };
+        Blockchain {
+            env,
+            network_time,
+            network_id,
+            accounts,
+            chain_store,
+            transaction_cache,
+            main_chain,
+            head_hash,
+            notifier: Notifier::new()
+        }
     }
 
     pub fn push(&mut self, block: Block) -> PushResult {
@@ -104,7 +136,7 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         }
 
         // Check (sort of) intrinsic block invariants.
-        if let Err(e) = block.verify(self.network_time.now(), self.network_id) {
+        if let Err(e) = block.verify(self.network_time.read().now(), self.network_id) {
             warn!("Rejecting block - verification failed ({:?})", e);
             return PushResult::Invalid;
         }
@@ -187,6 +219,8 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         self.main_chain = chain_info;
         self.head_hash = block_hash;
 
+        self.notifier.notify(BlockchainEvent::HeadChanged);
+
         return true;
     }
 
@@ -255,12 +289,14 @@ impl<'env, 'time> Blockchain<'env, 'time> {
         for fork_block in fork_chain.iter().rev() {
             if cache_txn.contains_any(&fork_block.1.head) {
                 warn!("Failed to apply fork block while rebranching - transaction already included");
+                // TODO delete invalid fork from store
                 write_txn.abort();
                 return false;
             }
 
             if let Err(e) = self.accounts.commit_block(&mut write_txn, &fork_block.1.head) {
                 warn!("Failed to apply fork block while rebranching - {}", e);
+                // TODO delete invalid fork from store
                 write_txn.abort();
                 return false;
             }

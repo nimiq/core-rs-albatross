@@ -127,7 +127,7 @@ fn it_correctly_rewards_miners() {
         txn.commit();
     }
 
-    assert_eq!(accounts.get(&address_miner1, None).balance(), policy::block_reward_at(2) - value1 - fee1 - value2 - fee2);
+    assert_eq!(accounts.get(&address_miner1, None).balance(), policy::block_reward_at(1) - value1 - fee1 - value2 - fee2);
     assert_eq!(accounts.get(&address_miner2, None).balance(), policy::block_reward_at(2) + fee1 + fee2);
     assert_eq!(accounts.get(&address_recipient1, None).balance(), value1);
     assert_eq!(accounts.get(&address_recipient2, None).balance(), value2);

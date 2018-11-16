@@ -42,7 +42,7 @@ impl<'env> AccountsTree<'env> {
     fn insert_batch(&self, txn: &mut WriteTransaction, node_prefix: AddressNibbles, prefix: AddressNibbles, account: Account, mut root_path: Vec<AccountsTreeNode>) {
         // Find common prefix between node and new address.
         let common_prefix = node_prefix.common_prefix(&prefix);
-        println!("Common Prefix between {} and {}: {}", node_prefix.to_string(), prefix.to_string(), common_prefix.to_string());
+        //println!("Common Prefix between {} and {}: {}", node_prefix.to_string(), prefix.to_string(), common_prefix.to_string());
 
         // If the node prefix does not fully match the new address, split the node.
         if common_prefix.len() != node_prefix.len() {
