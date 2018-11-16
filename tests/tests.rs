@@ -14,5 +14,5 @@ mod network;
 mod utils;
 
 pub fn setup() {
-    pretty_env_logger::try_init();
+    pretty_env_logger::try_init().unwrap_or(());
 }

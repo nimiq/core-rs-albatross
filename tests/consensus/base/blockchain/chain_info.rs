@@ -20,7 +20,7 @@ fn it_can_be_serialized_and_deserialized() {
     let chain_info = ChainInfo::initial(genesis_block);
 
     let mut v: Vec<u8> = Vec::with_capacity(chain_info.serialized_size());
-    chain_info.serialize(&mut v);
+    chain_info.serialize(&mut v).unwrap();
     let chain_info2: ChainInfo = Deserialize::deserialize(&mut &v[..]).unwrap();
     assert_eq!(chain_info, chain_info2);
 }
@@ -31,7 +31,7 @@ fn serialize_strips_body() {
     let mut chain_info = ChainInfo::initial(genesis_block.clone());
 
     let mut v: Vec<u8> = Vec::with_capacity(chain_info.serialized_size());
-    chain_info.serialize(&mut v);
+    chain_info.serialize(&mut v).unwrap();
     let chain_info2: ChainInfo = Deserialize::deserialize(&mut &v[..]).unwrap();
 
     chain_info.head.body = None;
