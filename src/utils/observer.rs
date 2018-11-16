@@ -11,12 +11,12 @@ impl<E: Clone, F: Fn(E)> Listener<E> for F
 
 pub type ListenerHandle = usize;
 
-pub struct Notifier<E> {
-    listeners: Vec<(ListenerHandle, Box<Listener<E>>)>,
+pub struct Notifier<'l, E> {
+    listeners: Vec<(ListenerHandle, Box<Listener<E> + 'l>)>,
     next_handle: ListenerHandle
 }
 
-impl<E: Clone> Notifier<E> {
+impl<'l, E: Clone> Notifier<'l, E> {
     pub fn new() -> Self {
         Self {
             listeners: Vec::new(),
@@ -24,7 +24,7 @@ impl<E: Clone> Notifier<E> {
         }
     }
 
-    pub fn register<T: Listener<E> + 'static>(&mut self, listener: T) -> ListenerHandle {
+    pub fn register<T: Listener<E> + 'l>(&mut self, listener: T) -> ListenerHandle {
         let handle = self.next_handle;
         self.listeners.push((handle, Box::new(listener)));
         self.next_handle += 1;

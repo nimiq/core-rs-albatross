@@ -46,7 +46,7 @@ fn it_can_register_notify_deregister() {
 
     let event4_rc1 = Arc::new(RwLock::new(0));
     let event4_rc2 = event4_rc1.clone();
-    let handle4 = notifier.register(move |e: u32| *event4_rc2.write().unwrap() = e);
+    let _handle4 = notifier.register(move |e: u32| *event4_rc2.write().unwrap() = e);
     assert_eq!(*event4_rc1.read().unwrap(), 0);
 
     notifier.notify(5555);

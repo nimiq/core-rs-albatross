@@ -60,7 +60,7 @@ pub struct ConnectionPool {
 
     addresses: PeerAddressBook,
 
-    notifier: Notifier<ConnectionPoolEvent>,
+    notifier: Notifier<'static, ConnectionPoolEvent>,
 }
 
 impl ConnectionPool {
