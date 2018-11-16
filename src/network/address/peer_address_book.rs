@@ -1,3 +1,4 @@
+use crate::consensus::networks::{NetworkId, get_network_info};
 use crate::network::Protocol;
 use crate::network::peer_channel::Session;
 use crate::network::address::PeerId;
@@ -18,16 +19,39 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+
 pub struct PeerAddressBook {
     info_by_address: HashMap<Arc<PeerAddress>, PeerAddressInfo>,
     ws_addresses: HashSet<Arc<PeerAddress>>,
     wss_addresses: HashSet<Arc<PeerAddress>>,
     rtc_addresses: HashSet<Arc<PeerAddress>>,
     address_by_peer_id: HashMap<PeerId, Arc<PeerAddress>>,
-    address_by_net_addr: HashMap<NetAddress, Vec<PeerAddress>>
+    address_by_net_addr: HashMap<NetAddress, Vec<PeerAddress>>,
+    seeded: bool
 }
 
 impl PeerAddressBook {
+    pub fn new() -> PeerAddressBook {
+        let mut ret = PeerAddressBook {
+            info_by_address: HashMap::new(),
+            ws_addresses: HashSet::new(),
+            wss_addresses: HashSet::new(),
+            rtc_addresses: HashSet::new(),
+            address_by_peer_id: HashMap::new(),
+            address_by_net_addr: HashMap::new(),
+            seeded: false
+        };
+
+        // Init hardcoded seed peers.
+        if let Some(network_info) = get_network_info(NetworkId::Main) {
+            for peer_address in network_info.seed_peers.iter() {
+                ret.add_single(None, peer_address.clone());
+            }
+        }
+
+        return ret;
+    }
+
     pub fn get_ws(&self) -> Iter<Arc<PeerAddress>> {
         return self.ws_addresses.iter();
     }
@@ -285,6 +309,10 @@ impl PeerAddressBook {
             // Delete the address.
             self.info_by_address.remove(&peer_address);
         }
+    }
+
+    pub fn seeded(&self) -> bool {
+        self.seeded
     }
 }
 
