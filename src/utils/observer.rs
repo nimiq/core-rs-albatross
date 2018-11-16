@@ -1,8 +1,9 @@
-pub trait Listener<E: Clone> {
+pub trait Listener<E: Clone>: Send + Sync {
     fn on_event(&self, event: E);
 }
 
-impl<E: Clone, F: Fn(E)> Listener<E> for F {
+impl<E: Clone, F: Fn(E)> Listener<E> for F
+    where F: Send + Sync {
     fn on_event(&self, event: E) {
         self(event);
     }
