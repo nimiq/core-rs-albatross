@@ -4,21 +4,21 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
-use crate::network::peer_channel::Session;
+use crate::network::peer_channel::PeerChannel;
 use crate::network::Protocol;
 
-pub struct PeerAddressInfo {
+pub struct PeerAddressInfo<'conn> {
     pub peer_address: Arc<PeerAddress>,
     pub state: PeerAddressState,
-    pub signal_router: SignalRouter,
+    pub signal_router: SignalRouter<'conn>,
     pub last_connected: Option<SystemTime>,
     pub failed_attempts: u32,
     pub banned_until: Option<SystemTime>,
     pub ban_backoff: Duration
 }
 
-impl PeerAddressInfo {
-    pub fn new(peer_address: Arc<PeerAddress>) -> PeerAddressInfo {
+impl<'conn> PeerAddressInfo<'conn> {
+    pub fn new(peer_address: Arc<PeerAddress>) -> Self {
         return PeerAddressInfo {
             peer_address: Arc::clone(&peer_address),
             state: PeerAddressState::New,
@@ -48,20 +48,20 @@ pub enum PeerAddressState {
     Banned
 }
 
-pub struct SignalRouter {
-    pub best_route: Option<SignalRouteInfo>,
+pub struct SignalRouter<'conn> {
+    pub best_route: Option<SignalRouteInfo<'conn>>,
     peer_address: Arc<PeerAddress>
 }
 
-impl SignalRouter {
-    pub fn new(peer_address: Arc<PeerAddress>) -> SignalRouter {
+impl<'conn> SignalRouter<'conn> {
+    pub fn new(peer_address: Arc<PeerAddress>) -> Self {
         return SignalRouter {
             best_route: None,
-            peer_address: peer_address
+            peer_address
         };
     }
 
-    pub fn add_route(&mut self, signal_channel: Arc<Session>, distance: u8, timestamp: u64) -> bool {
+    pub fn add_route(&mut self, signal_channel: Arc<PeerChannel<'conn>>, distance: u8, timestamp: u64) -> bool {
         let new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
 
         // TODO old route
@@ -89,7 +89,7 @@ impl SignalRouter {
         unimplemented!()
     }
 
-    pub fn delete_route(&self, signal_channel: Arc<Session>) {
+    pub fn delete_route(&self, signal_channel: Arc<PeerChannel<'conn>>) {
         unimplemented!()
     }
 
@@ -103,20 +103,20 @@ impl SignalRouter {
     }
 }
 
-pub struct SignalRouteInfo {
+pub struct SignalRouteInfo<'conn> {
     failed_attempts: u32,
     pub timestamp: u64,
-    pub signal_channel: Arc<Session>,
+    pub signal_channel: Arc<PeerChannel<'conn>>,
     distance: u8
 }
 
-impl SignalRouteInfo {
-    pub fn new(signal_channel: Arc<Session>, distance: u8, timestamp: u64) -> SignalRouteInfo {
+impl<'conn> SignalRouteInfo<'conn> {
+    pub fn new(signal_channel: Arc<PeerChannel<'conn>>, distance: u8, timestamp: u64) -> Self {
         return SignalRouteInfo {
             failed_attempts: 0,
-            timestamp: timestamp,
-            signal_channel: signal_channel,
-            distance: distance
+            timestamp,
+            signal_channel,
+            distance
         }
     }
 

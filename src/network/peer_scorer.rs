@@ -3,11 +3,11 @@ use crate::network::address::peer_address::PeerAddress;
 use std::sync::Arc;
 
 pub struct PeerScorer<'t> {
-    addresses: &'t PeerAddressBook
+    addresses: &'t PeerAddressBook<'t>
 }
 
 impl<'t> PeerScorer<'t> {
-    pub fn new(addresses: &'t PeerAddressBook) -> PeerScorer {
+    pub fn new(addresses: &'t PeerAddressBook<'t>) -> Self {
         return PeerScorer {
             addresses
         }

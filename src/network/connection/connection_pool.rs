@@ -31,8 +31,8 @@ macro_rules! update_checked {
 type ConnectionId = usize;
 
 
-pub struct ConnectionPool {
-    connections: SparseVec<ConnectionInfo>,
+pub struct ConnectionPool<'network> {
+    connections: SparseVec<ConnectionInfo<'network>>,
     connections_by_peer_address: HashMap<Arc<PeerAddress>, ConnectionId>,
     connections_by_net_address: HashMap<NetAddress, HashSet<ConnectionId>>,
     connections_by_subnet: HashMap<NetAddress, HashSet<ConnectionId>>,
@@ -58,12 +58,12 @@ pub struct ConnectionPool {
 
     banned_ips: HashMap<NetAddress, SystemTime>,
 
-    addresses: PeerAddressBook,
+    addresses: PeerAddressBook<'network>,
 
-    notifier: Notifier<'static, ConnectionPoolEvent>,
+    notifier: Notifier<'network, ConnectionPoolEvent<'network>>,
 }
 
-impl ConnectionPool {
+impl<'network> ConnectionPool<'network> {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
 
     /// Initiates a outbound connection.
@@ -106,22 +106,22 @@ impl ConnectionPool {
     }
 
     /// Get the connection info for a peer address.
-    pub fn get_connection_by_peer_address(&self, peer_address: &PeerAddress) -> Option<&ConnectionInfo> {
+    pub fn get_connection_by_peer_address(&self, peer_address: &PeerAddress) -> Option<&ConnectionInfo<'network>> {
         Some(self.connections.get(*self.connections_by_peer_address.get(peer_address)?).expect("Missing connection"))
     }
 
     /// Get the connection info for a peer address as a mutable borrow.
-    pub fn get_connection_by_peer_address_mut(&mut self, peer_address: &PeerAddress) -> Option<&mut ConnectionInfo> {
+    pub fn get_connection_by_peer_address_mut(&mut self, peer_address: &PeerAddress) -> Option<&mut ConnectionInfo<'network>> {
         Some(self.connections.get_mut(*self.connections_by_peer_address.get(peer_address)?).expect("Missing connection"))
     }
 
     /// Get the connection info for a ConnectionId.
-    pub fn get_connection(&mut self, connection_id: ConnectionId) -> Option<&ConnectionInfo> {
+    pub fn get_connection(&mut self, connection_id: ConnectionId) -> Option<&ConnectionInfo<'network>> {
         self.connections.get(connection_id)
     }
 
     /// Get a list of connection info for a net address.
-    pub fn get_connections_by_net_address(&self, net_address: &NetAddress) -> Option<Vec<&ConnectionInfo>> {
+    pub fn get_connections_by_net_address(&self, net_address: &NetAddress) -> Option<Vec<&ConnectionInfo<'network>>> {
         self.connections_by_net_address.get(net_address).map(|s| {
             s.iter().map(|i| self.connections.get(*i).expect("Missing connection")).collect()
         })
@@ -133,7 +133,7 @@ impl ConnectionPool {
     }
 
     /// Get a list of connection info for a subnet.
-    pub fn get_connections_by_subnet(&self, net_address: &NetAddress) -> Option<Vec<&ConnectionInfo>> {
+    pub fn get_connections_by_subnet(&self, net_address: &NetAddress) -> Option<Vec<&ConnectionInfo<'network>>> {
         self.connections_by_subnet.get(&ConnectionPool::get_subnet_address(net_address)).map(|s| {
             s.iter().map(|i| self.connections.get(*i).expect("Missing connection")).collect()
         })
@@ -145,7 +145,7 @@ impl ConnectionPool {
     }
 
     /// Retrieve a list of connection info for all outbound connections into a subnet.
-    pub fn get_outbound_connections_by_subnet(&self, net_address: &NetAddress) -> Option<Vec<&ConnectionInfo>> {
+    pub fn get_outbound_connections_by_subnet(&self, net_address: &NetAddress) -> Option<Vec<&ConnectionInfo<'network>>> {
         self.get_connections_by_subnet(net_address)
             .map(|mut v| {
                 v.retain(|info| {
@@ -220,7 +220,7 @@ impl ConnectionPool {
     }
 
     /// Callback upon connection establishment.
-    fn on_connection(&mut self, connection: NetworkConnection) {
+    fn on_connection(&mut self, connection: NetworkConnection<'network>) {
         let connection_id;
         if connection.outbound() {
             let peer_address = connection.peer_address().expect("Outbound connection without peer address");
@@ -277,7 +277,7 @@ impl ConnectionPool {
     }
 
     /// Checks the validity of a handshake.
-    fn check_handshake(&mut self, connection_id: ConnectionId, peer: &Peer) -> bool {
+    fn check_handshake(&mut self, connection_id: ConnectionId, peer: &Peer<'network>) -> bool {
         let info = self.connections.get(connection_id).unwrap();
 
         // Close connection if peer's address is banned.
@@ -312,7 +312,7 @@ impl ConnectionPool {
     }
 
     /// Callback during handshake.
-    fn on_handshake(&mut self, connection_id: ConnectionId, peer: Peer) { // TODO Arc<RwLock<Peer>>?
+    fn on_handshake(&mut self, connection_id: ConnectionId, peer: Peer<'network>) {
         let info = self.connections.get(connection_id).expect("Missing connection");
         let network_connection = info.network_connection().unwrap();
 
@@ -394,7 +394,7 @@ impl ConnectionPool {
         // TODO Maybe replace Session by Peer?
         let info = self.connections.get(connection_id).expect("Missing connection");
         let network_connection = info.network_connection().unwrap();
-        self.addresses.established(&network_connection.session(), peer.peer_address());
+        // TODO self.addresses.established(&network_connection.session(), peer.peer_address());
 
         // Let listeners know about this peer.
         self.notifier.notify(ConnectionPoolEvent::PeerJoined(peer.clone()));
@@ -413,7 +413,7 @@ impl ConnectionPool {
         // - inbound connections post handshake (peerAddress is verified)
         let info = self.connections.get(connection_id).unwrap();
         if let Some(peer_address) = info.peer_address() {
-            self.addresses.close(&info.session().unwrap(), peer_address, ty);
+            // TODO self.addresses.close(&info.session().unwrap(), peer_address, ty);
         }
 
         let mut info = self.remove(connection_id);
@@ -582,7 +582,7 @@ impl ConnectionPool {
     }
 
     /// Add a new connection to the connection pool.
-    fn add(&mut self, info: ConnectionInfo) -> ConnectionId {
+    fn add(&mut self, info: ConnectionInfo<'network>) -> ConnectionId {
         let peer_address = info.peer_address();
         let connection_id = self.connections.insert(info);
 
@@ -600,7 +600,7 @@ impl ConnectionPool {
     }
 
     /// Remove a connection from the connection pool.
-    fn remove(&mut self, connection_id: ConnectionId) -> ConnectionInfo {
+    fn remove(&mut self, connection_id: ConnectionId) -> ConnectionInfo<'network> {
         // TODO: Can we make sure that we never remove a connection twice?
         let info = self.connections.remove(connection_id).unwrap();
 
@@ -674,9 +674,9 @@ enum PeerCountUpdate {
 }
 
 #[derive(Clone)]
-enum ConnectionPoolEvent {
-    PeerJoined(Peer),
-    PeerLeft(Peer),
+enum ConnectionPoolEvent<'network> {
+    PeerJoined(Peer<'network>),
+    PeerLeft(Peer<'network>),
     PeersChanged,
     ConnectError(Arc<PeerAddress>, CloseType),
     Close(ConnectionId, CloseType), // TODO is that really useful? ConnectionId won't exist anymore

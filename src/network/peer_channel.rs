@@ -1,5 +1,4 @@
 use std::fmt;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 use futures::prelude::*;
@@ -13,6 +12,13 @@ use crate::network::websocket::NimiqMessageStreamError;
 use crate::network::websocket::SharedNimiqMessageStream;
 use crate::network::peer::Peer;
 use crate::network::connection::network_connection::AddressInfo;
+use crate::utils::observer::Notifier;
+use std::fmt::Debug;
+use crate::network::connection::close_type::CloseType;
+use crate::utils::observer::Listener;
+use crate::network::connection::network_connection::NetworkConnection;
+use parking_lot::RwLock;
+use crate::utils::observer::ListenerHandle;
 
 #[derive(Debug)]
 pub enum ProtocolError {
@@ -63,65 +69,71 @@ impl Agent for PingAgent {
     }
 }
 
-pub struct Session {
-    peer: Peer,
-    protocols: Mutex<Vec<Box<Agent>>>,
+#[derive(Clone)]
+pub struct PeerChannel<'conn> {
+    stream_notifier: Arc<RwLock<Notifier<'conn, PeerStreamEvent>>>,
+    pub notifier: Arc<RwLock<Notifier<'conn, PeerChannelEvent>>>,
+    network_connection_listener_handle: ListenerHandle,
+    peer_sink: PeerSink,
+    pub address_info: AddressInfo,
 }
 
-impl Session {
-    pub fn new(sink: PeerSink) -> Session {
-        let peer = Peer::new(sink.clone());
-        let ping = PingAgent::new(sink.clone()).boxed();
-        Session {
-            peer,
-            protocols: Mutex::new(vec![ping]),
-        }
-    }
+impl<'conn> PeerChannel<'conn> {
+    pub fn new(network_connection: Arc<NetworkConnection<'conn>>, address_info: AddressInfo) -> PeerChannel {
+        let notifier = Arc::new(RwLock::new(Notifier::new()));
+        let bubble_notifier = notifier.clone();
+        let network_connection_listener_handle = network_connection.notifier.write().register(move |e| {
+            bubble_notifier.read().notify(PeerChannelEvent::from(e));
+        });
 
-    pub fn initialize(&self) {
-        for protocol in self.protocols.lock().iter_mut() {
-            protocol.initialize();
-        }
-    }
-
-//    pub fn maintain(&self) {
-//        for protocol in self.protocols.lock().iter_mut() {
-//            protocol.maintain();
-//        }
-//    }
-
-    pub fn on_message(&self, msg: Message) -> Result<(), ProtocolError> {
-        self.protocols.lock().iter_mut().map(|protocol| {
-            protocol.on_message(&msg)
-        })
-            .collect::<Result<Vec<()>, ProtocolError>>()
-            .map(|_| ())
-    }
-
-    pub fn on_close(&self) {
-        for protocol in self.protocols.lock().iter_mut() {
-            protocol.on_close();
+        PeerChannel {
+            stream_notifier: network_connection.notifier.clone(),
+            notifier,
+            network_connection_listener_handle,
+            peer_sink: network_connection.peer_sink(),
+            address_info,
         }
     }
 }
 
-impl Debug for Session {
+impl<'conn> Drop for PeerChannel<'conn> {
+    fn drop(&mut self) {
+        self.stream_notifier.write().deregister(self.network_connection_listener_handle);
+    }
+}
+
+impl<'conn> Debug for PeerChannel<'conn> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Session {{ peer: {:?} }}", self.peer)
+        write!(f, "PeerChannel {{}}")
+    }
+}
+
+#[derive(Clone)]
+pub enum PeerChannelEvent {
+    Message(Arc<Message>),
+    Close(CloseType),
+    Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
+}
+
+impl From<PeerStreamEvent> for PeerChannelEvent {
+    fn from(e: PeerStreamEvent) -> Self {
+        match e {
+            PeerStreamEvent::Message(msg) => PeerChannelEvent::Message(msg),
+            PeerStreamEvent::Close(ty) => PeerChannelEvent::Close(ty),
+            PeerStreamEvent::Error => PeerChannelEvent::Error,
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct PeerSink {
     sink: UnboundedSender<Message>,
-    pub address_info: AddressInfo,
 }
 
 impl PeerSink {
-    pub fn new(channel: UnboundedSender<Message>, address_info: AddressInfo) -> Self {
+    pub fn new(channel: UnboundedSender<Message>) -> Self {
         PeerSink {
             sink: channel.clone(),
-            address_info
         }
     }
 
@@ -136,32 +148,49 @@ impl Debug for PeerSink {
     }
 }
 
-#[derive(Debug)]
-pub struct PeerStream {
-    stream: SharedNimiqMessageStream,
-    session: Arc<Session>,
+#[derive(Clone)]
+pub enum PeerStreamEvent {
+    Message(Arc<Message>),
+    Close(CloseType),
+    Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
 }
 
-impl PeerStream {
-    pub fn new(stream: SharedNimiqMessageStream, session: Arc<Session>) -> Self {
+pub struct PeerStream<'conn> {
+    stream: SharedNimiqMessageStream,
+    notifier: Arc<RwLock<Notifier<'conn, PeerStreamEvent>>>,
+}
+
+impl<'conn> PeerStream<'conn> {
+    pub fn new(stream: SharedNimiqMessageStream, notifier: Arc<RwLock<Notifier<'conn, PeerStreamEvent>>>) -> Self {
         PeerStream {
             stream,
-            session,
+            notifier,
         }
     }
 
-    pub fn process_stream(self) -> impl Future<Item=(), Error=NimiqMessageStreamError> {
+    pub fn process_stream(self) -> impl Future<Item=(), Error=NimiqMessageStreamError> + 'conn {
         let stream = self.stream;
-        let session = self.session;
+        let msg_notifier = self.notifier.clone();
+        let error_notifier = self.notifier.clone();
+        let close_notifier = self.notifier;
 
         let process_message = stream.for_each(move |msg| {
-            if let Err(err) = session.on_message(msg) {
-                println!("{:?}", err);
-                // TODO: What to do with the error here?
-            }
+            msg_notifier.read().notify(PeerStreamEvent::Message(Arc::new(msg)));
             Ok(())
+        }).or_else(move |error| {
+            error_notifier.read().notify(PeerStreamEvent::Error);
+            Err(error)
+        }).and_then(move |result| {
+            close_notifier.read().notify(PeerStreamEvent::Close(CloseType::ClosedByRemote));
+            Ok(result)
         });
 
         process_message
+    }
+}
+
+impl<'conn> Debug for PeerStream<'conn> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.stream.fmt(f)
     }
 }

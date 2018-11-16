@@ -76,7 +76,7 @@ impl Sink for NimiqMessageStream
     type SinkError = ();
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        // Save and increment tag. (TODO: what about locking?)
+        // Save and increment tag.
         let tag = self.sending_tag;
         self.sending_tag = self.sending_tag.wrapping_add(1);
 
@@ -103,6 +103,8 @@ impl Sink for NimiqMessageStream
                 Ok(state) => match state {
                     AsyncSink::Ready => (),
                     // We started to send some chunks, but now the queue is full:
+                    // FIXME If this happens, we will try sending the whole message again with a new tag.
+                    // This should be improved, e.g. using https://docs.rs/futures/0.2.1/futures/sink/struct.Buffer.html.
                     AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(item)),
                 },
                 Err(error) => return Err(()),

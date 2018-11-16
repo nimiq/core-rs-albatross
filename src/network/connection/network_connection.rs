@@ -9,59 +9,49 @@ use crate::network::connection::close_type::CloseType;
 use crate::network::message::Message;
 use crate::network::peer_channel::PeerSink;
 use crate::network::peer_channel::PeerStream;
-use crate::network::peer_channel::Session;
+use crate::network::peer_channel::PeerChannel;
 use crate::network::websocket::NimiqMessageStream;
 use crate::network::websocket::SharedNimiqMessageStream;
 use crate::network::address::peer_address::PeerAddress;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
+use crate::network::websocket::NimiqMessageStreamError;
+use crate::utils::observer::Notifier;
+use crate::network::peer_channel::PeerStreamEvent;
 
-pub struct NetworkConnection {
-    peer_stream: Option<PeerStream>,
+#[derive(Clone)]
+pub struct NetworkConnection<'conn> {
     peer_sink: PeerSink,
     stream: SharedNimiqMessageStream,
-    forward_future: Option<Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>>,
-    session: Arc<Session>,
     address_info: AddressInfo,
+    pub notifier: Arc<RwLock<Notifier<'conn, PeerStreamEvent>>>,
 }
 
-impl NetworkConnection {
-    pub fn new(stream: NimiqMessageStream, address_info: Option<AddressInfo>) -> Self {
-        let shared_stream: SharedNimiqMessageStream = stream.into();
+impl<'conn> NetworkConnection<'conn> {
+    pub fn new_connection_setup(stream: SharedNimiqMessageStream, address_info: AddressInfo) -> (Self, ProcessConnectionFuture<'conn>) {
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
 
-        let forward_future = Some(rx.forward(shared_stream.clone()));
+        let forward_future = rx.forward(stream.clone());
 
-        let net_address = Arc::new(shared_stream.net_address().clone());
-        let address_info = address_info.unwrap_or(AddressInfo::new(None, None));
-        address_info.set_net_address(net_address);
+        let peer_sink = PeerSink::new(tx);
+        let notifier = Arc::new(RwLock::new(Notifier::new()));
+        let peer_stream = PeerStream::new(stream.clone(), notifier.clone());
 
-        let peer_sink = PeerSink::new(tx, address_info.clone());
-        let session = Arc::new(Session::new(peer_sink.clone()));
-
-        NetworkConnection {
-            peer_stream: Some(PeerStream::new(shared_stream.clone(), session.clone())),
+        let network_connection = NetworkConnection {
             peer_sink,
-            stream: shared_stream,
-            forward_future,
-            session,
+            stream,
             address_info,
-        }
-    }
+            notifier,
+        };
 
-    pub fn process_connection(&mut self) -> impl Future<Item=(), Error=()> {
-        assert!(self.forward_future.is_some() && self.peer_stream.is_some(), "Process connection can only be called once!");
-
-        self.session.initialize();
-
-        let forward_future = self.forward_future.take().unwrap();
-        let stream = self.peer_stream.take().unwrap();
-        let pair = forward_future.join(stream.process_stream().map_err(|_| ())); // TODO: throwing away error info here
-        pair.map(|_| ())
+        (network_connection, ProcessConnectionFuture::new(peer_stream, forward_future))
     }
 
     pub fn close(&self, ty: CloseType) -> CloseFuture {
-        CloseFuture::new(self.session.clone(), self.stream.clone(), ty)
+        // Call `session.on_close()` eagerly, but only once.
+        debug!("Closing connection, reason: {:?}", ty);
+        self.notifier.read().notify(PeerStreamEvent::Close(ty));
+        CloseFuture::new(self.stream.clone(), ty)
     }
 
     pub fn net_address(&self) -> Arc<NetAddress> {
@@ -82,22 +72,42 @@ impl NetworkConnection {
         self.address_info.set_peer_address(peer_address);
     }
 
-    pub fn session(&self) -> Arc<Session> { self.session.clone() }
+    pub fn peer_sink(&self) -> PeerSink { self.peer_sink.clone() }
     pub fn address_info(&self) -> AddressInfo {
         self.address_info.clone()
     }
 }
 
+pub struct ProcessConnectionFuture<'conn> {
+    inner: Box<Future<Item=(), Error=()> + Send + Sync + 'conn>,
+}
+
+impl<'conn> ProcessConnectionFuture<'conn> {
+    pub fn new(peer_stream: PeerStream<'conn>, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>) -> Self {
+        let pair = forward_future.join(peer_stream.process_stream().map_err(|_| ())); // TODO: throwing away error info here
+        ProcessConnectionFuture {
+            inner: Box::new(pair.map(|_| ()))
+        }
+    }
+}
+
+impl<'conn> Future for ProcessConnectionFuture<'conn> {
+    type Item = ();
+    type Error = ();
+
+    fn poll(&mut self) -> Result<Async<<Self as Future>::Item>, <Self as Future>::Error> {
+        self.inner.poll()
+    }
+}
+
 pub struct CloseFuture {
-    session: Option<Arc<Session>>,
     stream: SharedNimiqMessageStream,
     ty: CloseType,
 }
 
 impl CloseFuture {
-    pub fn new(session: Arc<Session>, stream: SharedNimiqMessageStream, ty: CloseType) -> Self {
+    pub fn new(stream: SharedNimiqMessageStream, ty: CloseType) -> Self {
         CloseFuture {
-            session: Some(session),
             stream,
             ty
         }
@@ -109,11 +119,6 @@ impl Future for CloseFuture {
     type Error = ();
 
     fn poll(&mut self) -> Poll<(), ()> {
-        // Call `session.on_close()` eagerly, but only once.
-        if let Some(session) = self.session.take() {
-            debug!("Closing connection, reason: {:?}", self.ty);
-            session.on_close();
-        }
         self.stream.close()
     }
 }
