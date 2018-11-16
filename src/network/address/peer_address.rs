@@ -56,7 +56,7 @@ impl Serialize for PeerAddress {
         if let Some(signature) = &self.signature {
             size += signature.serialize(writer)?;
         } else {
-            return Err(beserial::SerializingError::StaticStr("Signature required for serializing PeerAddress"));
+            return Err(beserial::SerializingError::InvalidValue);
         }
         size += match &self.ty {
             PeerAddressType::Dumb => 0,
