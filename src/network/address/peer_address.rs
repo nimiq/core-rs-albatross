@@ -40,7 +40,7 @@ pub struct PeerAddress {
     pub net_address: NetAddress,
     pub public_key: PublicKey,
     pub distance: u8,
-    pub signature: Signature,
+    pub signature: Option<Signature>,
     pub peer_id: PeerId,
 }
 
@@ -53,7 +53,11 @@ impl Serialize for PeerAddress {
         size += self.net_address.serialize(writer)?;
         size += self.public_key.serialize(writer)?;
         size += self.distance.serialize(writer)?;
-        size += self.signature.serialize(writer)?;
+        if let Some(signature) = &self.signature {
+            size += signature.serialize(writer)?;
+        } else {
+            return Err(beserial::SerializingError::StaticStr("Signature required for serializing PeerAddress"));
+        }
         size += match &self.ty {
             PeerAddressType::Dumb => 0,
             PeerAddressType::Ws(host, port) => host.serialize::<u16, W>(writer)? + port.serialize(writer)?,
@@ -71,7 +75,7 @@ impl Serialize for PeerAddress {
         size += self.net_address.serialized_size();
         size += self.public_key.serialized_size();
         size += self.distance.serialized_size();
-        size += self.signature.serialized_size();
+        size += self.signature.serialized_size() - 1; // No 0/1 for the Option
         size += match &self.ty {
             PeerAddressType::Dumb => 0,
             PeerAddressType::Ws(host, port) => host.serialized_size::<u16>() + port.serialized_size(),
@@ -98,13 +102,16 @@ impl Deserialize for PeerAddress {
             Protocol::Rtc => PeerAddressType::Rtc
         };
         let peer_id = PeerId::from(&public_key);
-        return Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key, distance, signature, peer_id});
+        return Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key, distance, signature: Some(signature), peer_id});
     }
 }
 
 impl PeerAddress {
     pub fn verify_signature(&self) -> bool {
-        self.public_key.verify(&self.signature, self.get_signature_data().as_slice())
+        if let Some(signature) = &self.signature {
+            return self.public_key.verify(signature, self.get_signature_data().as_slice());
+        }
+        return false;
     }
 
     pub fn as_uri(&self) -> String {
