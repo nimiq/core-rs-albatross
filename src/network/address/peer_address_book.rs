@@ -20,8 +20,8 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 
-pub struct PeerAddressBook<'network> {
-    info_by_address: HashMap<Arc<PeerAddress>, PeerAddressInfo<'network>>,
+pub struct PeerAddressBook {
+    info_by_address: HashMap<Arc<PeerAddress>, PeerAddressInfo>,
     ws_addresses: HashSet<Arc<PeerAddress>>,
     wss_addresses: HashSet<Arc<PeerAddress>>,
     rtc_addresses: HashSet<Arc<PeerAddress>>,
@@ -30,7 +30,7 @@ pub struct PeerAddressBook<'network> {
     seeded: bool
 }
 
-impl<'network> PeerAddressBook<'network> {
+impl PeerAddressBook {
     pub fn new() -> Self {
         let mut ret = PeerAddressBook {
             info_by_address: HashMap::new(),
@@ -55,7 +55,7 @@ impl<'network> PeerAddressBook<'network> {
         return self.ws_addresses.iter();
     }
 
-    pub fn get_info(&self, peer_address: Arc<PeerAddress>) -> Option<&PeerAddressInfo<'network>> {
+    pub fn get_info(&self, peer_address: Arc<PeerAddress>) -> Option<&PeerAddressInfo> {
         return self.info_by_address.get(&peer_address);
     }
 
@@ -66,7 +66,7 @@ impl<'network> PeerAddressBook<'network> {
         return None;
     }
 
-    pub fn get_channel_by_peer_id(&self, peer_id: &PeerId) -> Option<&PeerChannel<'network>> {
+    pub fn get_channel_by_peer_id(&self, peer_id: &PeerId) -> Option<&PeerChannel> {
         if let Some(peer_address) = self.address_by_peer_id.get(peer_id) {
             if let Some(info) = self.info_by_address.get(peer_address) {
                 if let Some(ref best_route_opt) = info.signal_router.best_route {
@@ -81,13 +81,13 @@ impl<'network> PeerAddressBook<'network> {
         unimplemented!()
     }
 
-    pub fn add(&mut self, channel: Option<&PeerChannel<'network>>, peer_addresses: Vec<PeerAddress>) {
+    pub fn add(&mut self, channel: Option<&PeerChannel>, peer_addresses: Vec<PeerAddress>) {
         for peer_address in peer_addresses {
             self.add_single(channel, peer_address);
         }
     }
 
-    fn add_single(&mut self, channel: Option<&PeerChannel<'network>>, peer_address: PeerAddress) -> bool {
+    fn add_single(&mut self, channel: Option<&PeerChannel>, peer_address: PeerAddress) -> bool {
         let addr_arc = Arc::new(peer_address);
         // Ignore our own address.
         // TODO
@@ -162,7 +162,7 @@ impl<'network> PeerAddressBook<'network> {
         return changed;
     }
 
-    fn add_to_store(&mut self, info: PeerAddressInfo<'network>) {
+    fn add_to_store(&mut self, info: PeerAddressInfo) {
         // Index by peerId.
         self.address_by_peer_id.insert(info.peer_address.peer_id.clone(), Arc::clone(&info.peer_address));
 
@@ -185,7 +185,7 @@ impl<'network> PeerAddressBook<'network> {
     /// Called when a connection to this peerAddress has been established.
     /// The connection might have been initiated by the other peer, so address may not be known previously.
     /// If it is already known, it has been updated by a previous version message.
-    pub fn established(&mut self, channel: &PeerChannel<'network>, peer_address: Arc<PeerAddress>) {
+    pub fn established(&mut self, channel: &PeerChannel, peer_address: Arc<PeerAddress>) {
         if self.info_by_address.get(&Arc::clone(&peer_address)).is_none() {
             self.add_to_store(PeerAddressInfo::new(Arc::clone(&peer_address)));
         }
@@ -203,7 +203,7 @@ impl<'network> PeerAddressBook<'network> {
     }
 
     /// Called when a connection to this peerAddress is closed.
-    pub fn close(&mut self, channel: &PeerChannel<'network>, peer_address: Arc<PeerAddress>, ty: CloseType) {
+    pub fn close(&mut self, channel: &PeerChannel, peer_address: Arc<PeerAddress>, ty: CloseType) {
         if let Some(info) = self.info_by_address.get_mut(&peer_address) {
             if ty.is_failing_type() {
                 info.failed_attempts += 1;
@@ -231,7 +231,7 @@ impl<'network> PeerAddressBook<'network> {
     }
 
     /// Called when a message has been returned as unroutable.
-    pub fn unroutable(&mut self, channel: &PeerChannel<'network>, peer_address: Arc<PeerAddress>) {
+    pub fn unroutable(&mut self, channel: &PeerChannel, peer_address: Arc<PeerAddress>) {
         if let Some(info) = self.info_by_address.get(&peer_address) {
 
             if let Some(best_route) = &info.signal_router.best_route {

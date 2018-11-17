@@ -5,15 +5,15 @@ use crate::network::address::net_address::NetAddress;
 use crate::network::peer_channel::PeerChannel;
 
 #[derive(Clone, Debug)]
-pub struct Peer<'conn> {
-    pub channel: PeerChannel<'conn>,
+pub struct Peer {
+    pub channel: PeerChannel,
     pub version: Option<u8>,
     pub head_hash: Option<Argon2dHash>,
     pub time_offset: Option<u8>,
 }
 
-impl<'conn> Peer<'conn> {
-    pub fn new(channel: PeerChannel<'conn>) -> Self {
+impl Peer {
+    pub fn new(channel: PeerChannel) -> Self {
         Peer {
             channel,
             version: None,

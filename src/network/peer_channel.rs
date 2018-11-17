@@ -72,17 +72,17 @@ impl Agent for PingAgent {
 }
 
 #[derive(Clone)]
-pub struct PeerChannel<'conn> {
-    stream_notifier: Arc<RwLock<Notifier<'conn, PeerStreamEvent>>>,
-    pub notifier: Arc<RwLock<Notifier<'conn, PeerChannelEvent>>>,
+pub struct PeerChannel {
+    stream_notifier: Arc<RwLock<Notifier<'static, PeerStreamEvent>>>,
+    pub notifier: Arc<RwLock<Notifier<'static, PeerChannelEvent>>>,
     network_connection_listener_handle: ListenerHandle,
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
     closed: Arc<AtomicBool>,
 }
 
-impl<'conn> PeerChannel<'conn> {
-    pub fn new(network_connection: &NetworkConnection<'conn>) -> Self {
+impl PeerChannel {
+    pub fn new(network_connection: &NetworkConnection) -> Self {
         let notifier = Arc::new(RwLock::new(Notifier::new()));
         let closed = Arc::new(AtomicBool::new(false));
         let address_info = network_connection.address_info();
@@ -117,13 +117,13 @@ impl<'conn> PeerChannel<'conn> {
     }
 }
 
-impl<'conn> Drop for PeerChannel<'conn> {
+impl Drop for PeerChannel {
     fn drop(&mut self) {
         self.stream_notifier.write().deregister(self.network_connection_listener_handle);
     }
 }
 
-impl<'conn> Debug for PeerChannel<'conn> {
+impl Debug for PeerChannel {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "PeerChannel {{}}")
     }
@@ -176,20 +176,20 @@ pub enum PeerStreamEvent {
     Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
 }
 
-pub struct PeerStream<'conn> {
+pub struct PeerStream {
     stream: SharedNimiqMessageStream,
-    notifier: Arc<RwLock<Notifier<'conn, PeerStreamEvent>>>,
+    notifier: Arc<RwLock<Notifier<'static, PeerStreamEvent>>>,
 }
 
-impl<'conn> PeerStream<'conn> {
-    pub fn new(stream: SharedNimiqMessageStream, notifier: Arc<RwLock<Notifier<'conn, PeerStreamEvent>>>) -> Self {
+impl PeerStream {
+    pub fn new(stream: SharedNimiqMessageStream, notifier: Arc<RwLock<Notifier<'static, PeerStreamEvent>>>) -> Self {
         PeerStream {
             stream,
             notifier,
         }
     }
 
-    pub fn process_stream(self) -> impl Future<Item=(), Error=NimiqMessageStreamError> + 'conn {
+    pub fn process_stream(self) -> impl Future<Item=(), Error=NimiqMessageStreamError> + 'static {
         let stream = self.stream;
         let msg_notifier = self.notifier.clone();
         let error_notifier = self.notifier.clone();
@@ -210,7 +210,7 @@ impl<'conn> PeerStream<'conn> {
     }
 }
 
-impl<'conn> Debug for PeerStream<'conn> {
+impl Debug for PeerStream {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         self.stream.fmt(f)
     }

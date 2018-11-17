@@ -20,15 +20,15 @@ use crate::utils::observer::Notifier;
 use crate::network::peer_channel::PeerStreamEvent;
 
 #[derive(Clone)]
-pub struct NetworkConnection<'conn> {
+pub struct NetworkConnection {
     peer_sink: PeerSink,
     stream: SharedNimiqMessageStream,
     address_info: AddressInfo,
-    pub notifier: Arc<RwLock<Notifier<'conn, PeerStreamEvent>>>,
+    pub notifier: Arc<RwLock<Notifier<'static, PeerStreamEvent>>>,
 }
 
-impl<'conn> NetworkConnection<'conn> {
-    pub fn new_connection_setup(stream: SharedNimiqMessageStream, address_info: AddressInfo) -> (Self, ProcessConnectionFuture<'conn>) {
+impl NetworkConnection {
+    pub fn new_connection_setup(stream: SharedNimiqMessageStream, address_info: AddressInfo) -> (Self, ProcessConnectionFuture) {
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
 
         let forward_future = rx.forward(stream.clone());
@@ -78,12 +78,12 @@ impl<'conn> NetworkConnection<'conn> {
     }
 }
 
-pub struct ProcessConnectionFuture<'conn> {
-    inner: Box<Future<Item=(), Error=()> + Send + Sync + 'conn>,
+pub struct ProcessConnectionFuture {
+    inner: Box<Future<Item=(), Error=()> + Send + Sync + 'static>,
 }
 
-impl<'conn> ProcessConnectionFuture<'conn> {
-    pub fn new(peer_stream: PeerStream<'conn>, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>) -> Self {
+impl ProcessConnectionFuture {
+    pub fn new(peer_stream: PeerStream, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>) -> Self {
         let pair = forward_future.join(peer_stream.process_stream().map_err(|_| ())); // TODO: throwing away error info here
         ProcessConnectionFuture {
             inner: Box::new(pair.map(|_| ()))
@@ -91,7 +91,7 @@ impl<'conn> ProcessConnectionFuture<'conn> {
     }
 }
 
-impl<'conn> Future for ProcessConnectionFuture<'conn> {
+impl Future for ProcessConnectionFuture {
     type Item = ();
     type Error = ();
 
