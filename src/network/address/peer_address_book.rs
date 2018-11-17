@@ -203,7 +203,7 @@ impl PeerAddressBook {
     }
 
     /// Called when a connection to this peerAddress is closed.
-    pub fn close(&mut self, channel: &PeerChannel, peer_address: Arc<PeerAddress>, ty: CloseType) {
+    pub fn close(&mut self, channel: Option<&PeerChannel>, peer_address: Arc<PeerAddress>, ty: CloseType) {
         if let Some(info) = self.info_by_address.get_mut(&peer_address) {
             if ty.is_failing_type() {
                 info.failed_attempts += 1;

@@ -328,7 +328,7 @@ impl ConnectionPool {
         debug!("Connection established ({}) #{} (net_address={:?}, peer_address={:?})", conn_type, connection_id, net_address, info.peer_address());
 
         // Let listeners know about this connection.
-        // TODO self.notifier.notify(ConnectionPoolEvent::Connection(...);
+        self.notifier.notify(ConnectionPoolEvent::Connection(connection_id));
 
         // Set the peer_channel
         info.set_peer_channel(peer_channel);
@@ -451,10 +451,8 @@ impl ConnectionPool {
         // TODO Setup signal forwarding.
 
         // Mark address as established.
-        // TODO Maybe replace Session by Peer?
         let info = self.connections.get(connection_id).expect("Missing connection");
-        let network_connection = info.network_connection().unwrap();
-        // TODO self.addresses.established(&network_connection.session(), peer.peer_address());
+        self.addresses.established(info.peer_channel().unwrap(), peer.peer_address());
 
         // Let listeners know about this peer.
         self.notifier.notify(ConnectionPoolEvent::PeerJoined(peer.clone()));
@@ -473,7 +471,7 @@ impl ConnectionPool {
         // - inbound connections post handshake (peerAddress is verified)
         let info = self.connections.get(connection_id).unwrap();
         if let Some(peer_address) = info.peer_address() {
-            // TODO self.addresses.close(&info.session().unwrap(), peer_address, ty);
+             self.addresses.close(info.peer_channel(), peer_address, ty);
         }
 
         let mut info = self.remove(connection_id);
@@ -561,10 +559,9 @@ impl ConnectionPool {
 
         self.connecting_count = self.connecting_count.checked_sub(1).expect("connecting_count < 0");
 
-        // TODO: PeerAddressBook currently doesn't support optional first argument.
-//        self.addresses.close(None, peer_address, CloseType::ConnectionFailed);
+        self.addresses.close(None, peer_address.clone(), CloseType::ConnectionFailed);
 
-        self.notifier.notify(ConnectionPoolEvent::ConnectError(peer_address.clone(), CloseType::ConnectionFailed));
+        self.notifier.notify(ConnectionPoolEvent::ConnectError(peer_address, CloseType::ConnectionFailed));
     }
 
     /// Updates the number of connected peers.
@@ -740,7 +737,7 @@ enum ConnectionPoolEvent {
     PeersChanged,
     ConnectError(Arc<PeerAddress>, CloseType),
     Close(ConnectionId, CloseType), // TODO is that really useful? ConnectionId won't exist anymore
-//    Connection(NetworkConnection), // TODO not really practical
+    Connection(ConnectionId),
     RecyclingRequest,
 }
 
