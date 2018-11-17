@@ -19,6 +19,8 @@ use crate::utils::observer::Listener;
 use crate::network::connection::network_connection::NetworkConnection;
 use parking_lot::RwLock;
 use crate::utils::observer::ListenerHandle;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 #[derive(Debug)]
 pub enum ProtocolError {
@@ -76,14 +78,27 @@ pub struct PeerChannel<'conn> {
     network_connection_listener_handle: ListenerHandle,
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
+    closed: Arc<AtomicBool>,
 }
 
 impl<'conn> PeerChannel<'conn> {
     pub fn new(network_connection: Arc<NetworkConnection<'conn>>, address_info: AddressInfo) -> PeerChannel {
         let notifier = Arc::new(RwLock::new(Notifier::new()));
+        let closed = Arc::new(AtomicBool::new(false));
+
+        let inner_closed = closed.clone();
         let bubble_notifier = notifier.clone();
         let network_connection_listener_handle = network_connection.notifier.write().register(move |e| {
-            bubble_notifier.read().notify(PeerChannelEvent::from(e));
+            let event = PeerChannelEvent::from(e);
+            match event {
+                PeerChannelEvent::Close(ty) => {
+                    // Don't fire close event again when already closed.
+                    if !inner_closed.swap(true, Ordering::Relaxed) {
+                        bubble_notifier.read().notify(PeerChannelEvent::Close(ty));
+                    }
+                },
+                event => bubble_notifier.read().notify(event),
+            };
         });
 
         PeerChannel {
@@ -92,7 +107,12 @@ impl<'conn> PeerChannel<'conn> {
             network_connection_listener_handle,
             peer_sink: network_connection.peer_sink(),
             address_info,
+            closed,
         }
+    }
+
+    pub fn closed(&self) -> bool {
+        self.closed.load(Ordering::Relaxed)
     }
 }
 
