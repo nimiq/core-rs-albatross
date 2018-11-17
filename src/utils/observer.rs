@@ -57,3 +57,40 @@ pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
         }
     }
 }
+
+pub trait PassThroughListener<E: Clone>: Send + Sync {
+    fn on_event(&self, event: E);
+}
+
+impl<E: Clone, F: Fn(E)> PassThroughListener<E> for F
+    where F: Send + Sync {
+    fn on_event(&self, event: E) {
+        self(event);
+    }
+}
+
+pub struct PassThroughNotifier<'l, E> {
+    listener: Option<Box<PassThroughListener<E> + 'l>>,
+}
+
+impl<'l, E: Clone> PassThroughNotifier<'l, E> {
+    pub fn new() -> Self {
+        Self {
+            listener: None,
+        }
+    }
+
+    pub fn register<T: PassThroughListener<E> + 'l>(&mut self, listener: T) {
+        self.listener = Some(Box::new(listener));
+    }
+
+    pub fn deregister(&mut self) {
+        self.listener = None;
+    }
+
+    pub fn notify(&self, event: E) {
+        if let Some(ref listener) = self.listener {
+            listener.on_event(event);
+        }
+    }
+}

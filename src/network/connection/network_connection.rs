@@ -16,7 +16,7 @@ use crate::network::address::peer_address::PeerAddress;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use crate::network::websocket::NimiqMessageStreamError;
-use crate::utils::observer::Notifier;
+use crate::utils::observer::PassThroughNotifier;
 use crate::network::peer_channel::PeerStreamEvent;
 
 #[derive(Clone)]
@@ -24,7 +24,7 @@ pub struct NetworkConnection {
     peer_sink: PeerSink,
     stream: SharedNimiqMessageStream,
     address_info: AddressInfo,
-    pub notifier: Arc<RwLock<Notifier<'static, PeerStreamEvent>>>,
+    pub notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
 }
 
 impl NetworkConnection {
@@ -34,7 +34,7 @@ impl NetworkConnection {
         let forward_future = rx.forward(stream.clone());
 
         let peer_sink = PeerSink::new(tx);
-        let notifier = Arc::new(RwLock::new(Notifier::new()));
+        let notifier = Arc::new(RwLock::new(PassThroughNotifier::new()));
         let peer_stream = PeerStream::new(stream.clone(), notifier.clone());
 
         let network_connection = NetworkConnection {

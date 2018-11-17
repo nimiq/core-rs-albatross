@@ -12,13 +12,11 @@ use crate::network::websocket::NimiqMessageStreamError;
 use crate::network::websocket::SharedNimiqMessageStream;
 use crate::network::peer::Peer;
 use crate::network::connection::network_connection::AddressInfo;
-use crate::utils::observer::Notifier;
+use crate::utils::observer::{Notifier, Listener, PassThroughNotifier, PassThroughListener, ListenerHandle};
 use std::fmt::Debug;
 use crate::network::connection::close_type::CloseType;
-use crate::utils::observer::Listener;
 use crate::network::connection::network_connection::NetworkConnection;
 use parking_lot::RwLock;
-use crate::utils::observer::ListenerHandle;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
@@ -73,9 +71,8 @@ impl Agent for PingAgent {
 
 #[derive(Clone)]
 pub struct PeerChannel {
-    stream_notifier: Arc<RwLock<Notifier<'static, PeerStreamEvent>>>,
+    stream_notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
     pub notifier: Arc<RwLock<Notifier<'static, PeerChannelEvent>>>,
-    network_connection_listener_handle: ListenerHandle,
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
     closed: Arc<AtomicBool>,
@@ -89,7 +86,7 @@ impl PeerChannel {
 
         let inner_closed = closed.clone();
         let bubble_notifier = notifier.clone();
-        let network_connection_listener_handle = network_connection.notifier.write().register(move |e: &PeerStreamEvent| {
+        network_connection.notifier.write().register(move |e: PeerStreamEvent| {
             let event = PeerChannelEvent::from(e);
             match event {
                 PeerChannelEvent::Close(ty) => {
@@ -105,7 +102,6 @@ impl PeerChannel {
         PeerChannel {
             stream_notifier: network_connection.notifier.clone(),
             notifier,
-            network_connection_listener_handle,
             peer_sink: network_connection.peer_sink(),
             address_info,
             closed,
@@ -119,7 +115,7 @@ impl PeerChannel {
 
 impl Drop for PeerChannel {
     fn drop(&mut self) {
-        self.stream_notifier.write().deregister(self.network_connection_listener_handle);
+        self.stream_notifier.write().deregister();
     }
 }
 
@@ -136,11 +132,11 @@ pub enum PeerChannelEvent {
     Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
 }
 
-impl<'a> From<&'a PeerStreamEvent> for PeerChannelEvent {
-    fn from(e: &'a PeerStreamEvent) -> Self {
+impl From<PeerStreamEvent> for PeerChannelEvent {
+    fn from(e: PeerStreamEvent) -> Self {
         match e {
-            PeerStreamEvent::Message(msg) => PeerChannelEvent::Message(msg.clone()),
-            PeerStreamEvent::Close(ty) => PeerChannelEvent::Close(*ty),
+            PeerStreamEvent::Message(msg) => PeerChannelEvent::Message(msg),
+            PeerStreamEvent::Close(ty) => PeerChannelEvent::Close(ty),
             PeerStreamEvent::Error => PeerChannelEvent::Error,
         }
     }
@@ -178,11 +174,11 @@ pub enum PeerStreamEvent {
 
 pub struct PeerStream {
     stream: SharedNimiqMessageStream,
-    notifier: Arc<RwLock<Notifier<'static, PeerStreamEvent>>>,
+    notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
 }
 
 impl PeerStream {
-    pub fn new(stream: SharedNimiqMessageStream, notifier: Arc<RwLock<Notifier<'static, PeerStreamEvent>>>) -> Self {
+    pub fn new(stream: SharedNimiqMessageStream, notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>) -> Self {
         PeerStream {
             stream,
             notifier,

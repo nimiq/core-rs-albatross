@@ -84,3 +84,28 @@ fn it_can_register_notify_deregister() {
     assert_eq!(*event4_rc1.read().unwrap(), 6666);
     assert_eq!(*event5_rc1.read().unwrap(), 999);
 }
+
+#[test]
+fn it_can_pass_through_notifications() {
+    let mut notifier: PassThroughNotifier<u32> = PassThroughNotifier::new();
+
+    let event1_rc1 = Arc::new(RwLock::new(0));
+    let event1_rc2 = event1_rc1.clone();
+    notifier.register(move |e: u32| *event1_rc2.write().unwrap() = e);
+    assert_eq!(*event1_rc1.read().unwrap(), 0);
+
+    let event2_rc1 = Arc::new(RwLock::new(0));
+    let event2_rc2 = event2_rc1.clone();
+    let handle2 = notifier.register(move |e: u32| *event2_rc2.write().unwrap() = e);
+    assert_eq!(*event2_rc1.read().unwrap(), 0);
+
+    notifier.notify(42);
+    assert_eq!(*event1_rc1.read().unwrap(), 0);
+    assert_eq!(*event2_rc1.read().unwrap(), 42);
+
+    notifier.deregister();
+
+    notifier.notify(4711);
+    assert_eq!(*event1_rc1.read().unwrap(), 0);
+    assert_eq!(*event2_rc1.read().unwrap(), 42);
+}
