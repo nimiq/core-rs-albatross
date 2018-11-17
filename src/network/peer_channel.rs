@@ -89,13 +89,13 @@ impl PeerChannel {
 
         let inner_closed = closed.clone();
         let bubble_notifier = notifier.clone();
-        let network_connection_listener_handle = network_connection.notifier.write().register(move |e| {
+        let network_connection_listener_handle = network_connection.notifier.write().register(move |e: &PeerStreamEvent| {
             let event = PeerChannelEvent::from(e);
             match event {
                 PeerChannelEvent::Close(ty) => {
                     // Don't fire close event again when already closed.
                     if !inner_closed.swap(true, Ordering::Relaxed) {
-                        bubble_notifier.read().notify(PeerChannelEvent::Close(ty));
+                        bubble_notifier.read().notify(event);
                     }
                 },
                 event => bubble_notifier.read().notify(event),
@@ -136,11 +136,11 @@ pub enum PeerChannelEvent {
     Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
 }
 
-impl From<PeerStreamEvent> for PeerChannelEvent {
-    fn from(e: PeerStreamEvent) -> Self {
+impl<'a> From<&'a PeerStreamEvent> for PeerChannelEvent {
+    fn from(e: &'a PeerStreamEvent) -> Self {
         match e {
-            PeerStreamEvent::Message(msg) => PeerChannelEvent::Message(msg),
-            PeerStreamEvent::Close(ty) => PeerChannelEvent::Close(ty),
+            PeerStreamEvent::Message(msg) => PeerChannelEvent::Message(msg.clone()),
+            PeerStreamEvent::Close(ty) => PeerChannelEvent::Close(*ty),
             PeerStreamEvent::Error => PeerChannelEvent::Error,
         }
     }

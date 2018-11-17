@@ -1,12 +1,12 @@
 use std::sync::{Weak, Arc};
 
 pub trait Listener<E: Clone>: Send + Sync {
-    fn on_event(&self, event: E);
+    fn on_event(&self, event: &E);
 }
 
-impl<E: Clone, F: Fn(E)> Listener<E> for F
+impl<E: Clone, F: Fn(&E)> Listener<E> for F
     where F: Send + Sync {
-    fn on_event(&self, event: E) {
+    fn on_event(&self, event: &E) {
         self(event);
     }
 }
@@ -44,7 +44,7 @@ impl<'l, E: Clone> Notifier<'l, E> {
 
     pub fn notify(&self, event: E) {
         for (_, listener) in &self.listeners {
-            listener.on_event(event.clone());
+            listener.on_event(&event);
         }
     }
 }

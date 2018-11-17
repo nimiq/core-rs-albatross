@@ -30,11 +30,11 @@ impl<'env> Mempool<'env> {
         }));
 
         let arc_listener = arc.clone();
-        blockchain.write().notifier.register(move |event: BlockchainEvent| arc_listener.write().on_blockchain_event(event));
+        blockchain.write().notifier.register(move |event: &BlockchainEvent| arc_listener.write().on_blockchain_event(event));
         arc
     }
 
-    fn on_blockchain_event(&mut self, event: BlockchainEvent) {
+    fn on_blockchain_event(&mut self, event: &BlockchainEvent) {
         println!("Mempool received blockchain event: {:?}", event);
     }
 
