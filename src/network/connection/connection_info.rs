@@ -19,6 +19,7 @@ pub struct ConnectionInfo<'conn> {
     peer_address: Option<Arc<PeerAddress>>,
     network_connection: Option<NetworkConnection<'conn>>,
     peer: Option<Peer<'conn>>,
+    peer_channel: Option<PeerChannel<'conn>>,
     state: ConnectionState,
 }
 
@@ -28,6 +29,7 @@ impl<'conn> ConnectionInfo<'conn> {
             peer_address: None,
             network_connection: None,
             peer: None,
+            peer_channel: None,
             state: ConnectionState::New,
         }
     }
@@ -54,7 +56,7 @@ impl<'conn> ConnectionInfo<'conn> {
     }
     pub fn network_connection(&self) -> Option<&NetworkConnection<'conn>> { self.network_connection.as_ref() }
     pub fn peer(&self) -> Option<&Peer<'conn>> { self.peer.as_ref() }
-//    pub fn session(&self) -> Option<Arc<Session>> { self.network_connection.as_ref().map(|n| n.session()) }
+    pub fn peer_channel(&self) -> Option<&PeerChannel<'conn>> { self.peer_channel.as_ref() }
 
     pub fn set_peer_address(&mut self, peer_address: Arc<PeerAddress>) { self.peer_address = Some(peer_address) }
     pub fn set_network_connection(&mut self, network_connection: NetworkConnection<'conn>) {
@@ -65,6 +67,7 @@ impl<'conn> ConnectionInfo<'conn> {
         self.peer = Some(peer);
         self.state = ConnectionState::Established;
     }
+    pub fn set_peer_channel(&mut self, peer_channel: PeerChannel<'conn>) { self.peer_channel = Some(peer_channel); }
 
     pub fn negotiating(&mut self) {
         assert_eq!(self.state, ConnectionState::Connected);

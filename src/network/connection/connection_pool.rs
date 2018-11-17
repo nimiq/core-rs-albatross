@@ -17,7 +17,11 @@ use std::collections::HashSet;
 use std::collections::LinkedList;
 use crate::network::Peer;
 use crate::network::address::peer_address_book::PeerAddressBook;
-use crate::utils::observer::Notifier;
+use crate::utils::observer::{Notifier, weak_listener};
+use crate::network::peer_channel::PeerChannel;
+use std::sync::Weak;
+use parking_lot::RwLock;
+use crate::network::peer_channel::PeerChannelEvent;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -61,10 +65,51 @@ pub struct ConnectionPool<'network> {
     addresses: PeerAddressBook<'network>,
 
     notifier: Notifier<'network, ConnectionPoolEvent<'network>>,
+
+    listener: Weak<RwLock<ConnectionPool<'network>>>,
 }
 
 impl<'network> ConnectionPool<'network> {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
+
+    /// Constructor.
+    pub fn new(peer_address_book: PeerAddressBook<'network>) -> Arc<RwLock<Self>> {
+        let arc = Arc::new(RwLock::new(ConnectionPool {
+            connections: SparseVec::new(),
+            connections_by_peer_address: HashMap::new(),
+            connections_by_net_address: HashMap::new(),
+            connections_by_subnet: HashMap::new(),
+
+            peer_count_ws: 0,
+            peer_count_wss: 0,
+            peer_count_rtc: 0,
+            peer_count_dumb: 0,
+
+            peer_count_full: 0,
+            peer_count_light: 0,
+            peer_count_nano: 0,
+
+            peer_count_outbound: 0,
+            peer_count_full_ws_outbound: 0,
+
+            connecting_count: 0,
+
+            inbound_count: 0,
+
+            allow_inbound_connections: false,
+            allow_inbound_exchange: false,
+
+            banned_ips: HashMap::new(),
+
+            addresses: peer_address_book,
+
+            notifier: Notifier::new(),
+
+            listener: Weak::new(),
+        }));
+        arc.write().listener = Arc::downgrade(&arc);
+        arc
+    }
 
     /// Initiates a outbound connection.
     pub fn connect_outbound(&mut self, peer_address: Arc<PeerAddress>) -> bool {
@@ -219,6 +264,14 @@ impl<'network> ConnectionPool<'network> {
         return true;
     }
 
+    fn on_peer_channel_event(&mut self, connection_id: ConnectionId, event: PeerChannelEvent) {
+        match event {
+            PeerChannelEvent::Close(ty) => self.on_close(connection_id, ty),
+//             TODO PeerChannelEvent::Error => self.on_connect_error(),
+            _ => {},
+        }
+    }
+
     /// Callback upon connection establishment.
     fn on_connection(&mut self, connection: NetworkConnection<'network>) {
         let connection_id;
@@ -249,7 +302,12 @@ impl<'network> ConnectionPool<'network> {
             self.inbound_count += 1;
         }
 
-        // TODO Register close listener early to clean up correctly in case _checkConnection() closes the connection.
+        // Register close listener early to clean up correctly in case _checkConnection() closes the connection.
+        let info = self.connections.get(connection_id).expect("Missing connection");
+        let peer_channel = PeerChannel::new(info.network_connection().unwrap());
+        peer_channel.notifier.write().register(weak_listener(self.listener.clone(), move |arc, event| {
+            arc.write().on_peer_channel_event(connection_id, event);
+        }));
 
         if !self.check_connection(connection_id) {
             return;
@@ -257,7 +315,6 @@ impl<'network> ConnectionPool<'network> {
 
         // Connection accepted.
 
-        let info = self.connections.get(connection_id).expect("Missing connection");
         let net_address = info.network_connection().map(|p| p.net_address()).clone();
 
         if let Some(ref net_address) = net_address {
@@ -265,13 +322,16 @@ impl<'network> ConnectionPool<'network> {
         }
 
         // The extra lookup is needed to satisfy the borrow checker.
-        let info = self.connections.get(connection_id).expect("Missing connection");
+        let info = self.connections.get_mut(connection_id).expect("Missing connection");
 
         let conn_type = if info.network_connection().unwrap().inbound() { "inbound" } else { "outbound" };
         debug!("Connection established ({}) #{} (net_address={:?}, peer_address={:?})", conn_type, connection_id, net_address, info.peer_address());
 
         // Let listeners know about this connection.
         // TODO self.notifier.notify(ConnectionPoolEvent::Connection(...);
+
+        // Set the peer_channel
+        info.set_peer_channel(peer_channel);
 
         // TODO create agent and initate handshake
     }
@@ -715,8 +775,11 @@ impl<T> SparseVec<T> {
     }
 
     pub fn remove(&mut self, index: usize) -> Option<T> {
-        self.free_indices.push_back(index);
-        self.inner.get_mut(index)?.take()
+        let value = self.inner.get_mut(index)?.take();
+        if value.is_some() {
+            self.free_indices.push_back(index);
+        }
+        value
     }
 
     pub fn insert(&mut self, value: T) -> usize {
@@ -728,5 +791,45 @@ impl<T> SparseVec<T> {
             self.inner.push(Some(value));
             index
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sparse_vec_can_store_objects() {
+        let mut v = SparseVec::new();
+
+        // Insert.
+        let i1 = v.insert(5);
+        assert_eq!(i1, 0);
+        let i2 = v.insert(5);
+        assert_eq!(i2, 1);
+
+        // Read/Write access.
+        assert_eq!(v.get(i1), Some(&5));
+        *v.get_mut(i2).unwrap() = 8;
+        assert_eq!(v.get(i2), Some(&8));
+        assert_eq!(v.get(2), None);
+        assert_eq!(v.free_indices.len(), 0);
+
+        // Remove.
+        assert_eq!(v.remove(i1), Some(5));
+        assert_eq!(v.get(i1), None);
+        let i3 = v.insert(1);
+        assert_eq!(i3, 0);
+
+        assert_eq!(v.remove(i2), Some(8));
+        assert_eq!(v.remove(i2), None);
+        assert_eq!(v.free_indices.len(), 1);
+
+        let i4 = v.insert(2);
+        assert_eq!(i4, 1);
+        assert_eq!(v.free_indices.len(), 0);
+
+        let i5 = v.insert(4);
+        assert_eq!(i5, 2);
     }
 }

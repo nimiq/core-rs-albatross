@@ -82,9 +82,10 @@ pub struct PeerChannel<'conn> {
 }
 
 impl<'conn> PeerChannel<'conn> {
-    pub fn new(network_connection: Arc<NetworkConnection<'conn>>, address_info: AddressInfo) -> PeerChannel {
+    pub fn new(network_connection: &NetworkConnection<'conn>) -> Self {
         let notifier = Arc::new(RwLock::new(Notifier::new()));
         let closed = Arc::new(AtomicBool::new(false));
+        let address_info = network_connection.address_info();
 
         let inner_closed = closed.clone();
         let bubble_notifier = notifier.clone();

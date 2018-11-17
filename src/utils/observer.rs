@@ -1,3 +1,5 @@
+use std::sync::{Weak, Arc};
+
 pub trait Listener<E: Clone>: Send + Sync {
     fn on_event(&self, event: E);
 }
@@ -43,6 +45,15 @@ impl<'l, E: Clone> Notifier<'l, E> {
     pub fn notify(&self, event: E) {
         for (_, listener) in &self.listeners {
             listener.on_event(event.clone());
+        }
+    }
+}
+
+pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
+    where C: Fn(Arc<T>, E) + Send + Sync, E: Clone, T: Send + Sync {
+    move |event| {
+        if let Some(arc) = weak_ref.upgrade() {
+            closure(arc, event);
         }
     }
 }
