@@ -264,9 +264,9 @@ impl ConnectionPool {
         return true;
     }
 
-    fn on_peer_channel_event(&mut self, connection_id: ConnectionId, event: PeerChannelEvent) {
+    fn on_peer_channel_event(&mut self, connection_id: ConnectionId, event: &PeerChannelEvent) {
         match event {
-            PeerChannelEvent::Close(ty) => self.on_close(connection_id, ty),
+            PeerChannelEvent::Close(ty) => self.on_close(connection_id, ty.clone()),
 //             TODO PeerChannelEvent::Error => self.on_connect_error(),
             _ => {},
         }

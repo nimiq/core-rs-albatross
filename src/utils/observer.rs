@@ -50,8 +50,8 @@ impl<'l, E: Clone> Notifier<'l, E> {
 }
 
 pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
-    where C: Fn(Arc<T>, E) + Send + Sync, E: Clone, T: Send + Sync {
-    move |event| {
+    where C: Fn(Arc<T>, &E) + Send + Sync, E: Clone, T: Send + Sync {
+    move |event: &E| {
         if let Some(arc) = weak_ref.upgrade() {
             closure(arc, event);
         }
