@@ -1,4 +1,7 @@
+use parking_lot::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
+use std::time::Duration;
 
 pub mod crc;
 pub mod merkle;
@@ -16,4 +19,8 @@ pub fn systemtime_to_timestamp(start : SystemTime) -> u64 {
         return duration.as_secs() * 1000 + duration.subsec_nanos() as u64 / 1_000_000;
     }
     return 0;
+}
+
+pub fn timestamp_to_systemtime(start: u64) -> SystemTime {
+    UNIX_EPOCH + Duration::from_millis(start)
 }

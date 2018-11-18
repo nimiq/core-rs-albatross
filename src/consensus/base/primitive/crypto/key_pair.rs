@@ -3,7 +3,9 @@ use rand::OsRng;
 use sha2;
 
 use crate::consensus::base::primitive::crypto::{PublicKey, PrivateKey, Signature};
+use beserial::{Serialize, Deserialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct KeyPair {
     pub public: PublicKey,
     pub private: PrivateKey,
