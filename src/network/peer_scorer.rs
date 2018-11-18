@@ -1,13 +1,14 @@
 use crate::network::address::peer_address_book::PeerAddressBook;
 use crate::network::address::peer_address::PeerAddress;
 use std::sync::Arc;
+use parking_lot::RwLock;
 
-pub struct PeerScorer<'t> {
-    addresses: &'t PeerAddressBook
+pub struct PeerScorer {
+    addresses: Arc<RwLock<PeerAddressBook>>
 }
 
-impl<'t> PeerScorer<'t> {
-    pub fn new(addresses: &'t PeerAddressBook) -> Self {
+impl PeerScorer {
+    pub fn new(addresses: Arc<RwLock<PeerAddressBook>>) -> Self {
         return PeerScorer {
             addresses
         }
@@ -15,10 +16,6 @@ impl<'t> PeerScorer<'t> {
 
     pub fn pick_address(&self) -> Option<Arc<PeerAddress>> {
         // TODO
-        let ws_addrs = self.addresses.get_ws();
-        for ws_addr in ws_addrs {
-            return Some(Arc::clone(ws_addr));
-        }
         return None;
     }
 

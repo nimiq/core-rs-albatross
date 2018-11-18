@@ -65,7 +65,7 @@ pub struct ConnectionPool {
 
     banned_ips: HashMap<NetAddress, SystemTime>,
 
-    addresses: PeerAddressBook,
+    addresses: Arc<RwLock<PeerAddressBook>>,
 
     notifier: Notifier<'static, ConnectionPoolEvent>,
 
@@ -76,7 +76,7 @@ impl ConnectionPool {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
 
     /// Constructor.
-    pub fn new(peer_address_book: PeerAddressBook, network_config: Arc<NetworkConfig>) -> Arc<RwLock<Self>> {
+    pub fn new(peer_address_book: Arc<RwLock<PeerAddressBook>>, network_config: Arc<NetworkConfig>) -> Arc<RwLock<Self>> {
         let arc = Arc::new(RwLock::new(ConnectionPool {
             connections: SparseVec::new(),
             connections_by_peer_address: HashMap::new(),
@@ -346,7 +346,7 @@ impl ConnectionPool {
         let info = self.connections.get(connection_id).unwrap();
 
         // Close connection if peer's address is banned.
-        if self.addresses.is_banned(peer.peer_address()) {
+        if self.addresses.read().is_banned(peer.peer_address()) {
             ConnectionPool::close(info.network_connection(), CloseType::PeerIsBanned);
             return false;
         }
@@ -455,7 +455,7 @@ impl ConnectionPool {
 
         // Mark address as established.
         let info = self.connections.get(connection_id).expect("Missing connection");
-        self.addresses.established(info.peer_channel().unwrap(), peer.peer_address());
+        self.addresses.write().established(info.peer_channel().unwrap(), peer.peer_address());
 
         // Let listeners know about this peer.
         self.notifier.notify(ConnectionPoolEvent::PeerJoined(peer.clone()));
@@ -474,7 +474,7 @@ impl ConnectionPool {
         // - inbound connections post handshake (peerAddress is verified)
         let info = self.connections.get(connection_id).unwrap();
         if let Some(peer_address) = info.peer_address() {
-             self.addresses.close(info.peer_channel(), peer_address, ty);
+             self.addresses.write().close(info.peer_channel(), peer_address, ty);
         }
 
         let mut info = self.remove(connection_id);
@@ -562,7 +562,7 @@ impl ConnectionPool {
 
         self.connecting_count = self.connecting_count.checked_sub(1).expect("connecting_count < 0");
 
-        self.addresses.close(None, peer_address.clone(), CloseType::ConnectionFailed);
+        self.addresses.write().close(None, peer_address.clone(), CloseType::ConnectionFailed);
 
         self.notifier.notify(ConnectionPoolEvent::ConnectError(peer_address, CloseType::ConnectionFailed));
     }
@@ -614,7 +614,7 @@ impl ConnectionPool {
             },
         }
 
-        if self.addresses.is_banned(peer_address.clone()) {
+        if self.addresses.read().is_banned(peer_address.clone()) {
             error!("Connecting to banned address {:?}", peer_address);
             return false;
         }
