@@ -30,6 +30,7 @@ fn it_can_serialize_a_vesting_contract() {
 
 
 #[test]
+#[allow(unused_must_use)]
 fn it_can_verify_creation_transaction() {
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 4);
     let owner = Address::from([0u8; 20]);
@@ -89,6 +90,7 @@ fn it_can_verify_creation_transaction() {
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 4);
     let owner = Address::from([0u8; 20]);

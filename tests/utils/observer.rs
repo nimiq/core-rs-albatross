@@ -96,7 +96,7 @@ fn it_can_pass_through_notifications() {
 
     let event2_rc1 = Arc::new(RwLock::new(0));
     let event2_rc2 = event2_rc1.clone();
-    let handle2 = notifier.register(move |e: u32| *event2_rc2.write().unwrap() = e);
+    let _handle2 = notifier.register(move |e: u32| *event2_rc2.write().unwrap() = e);
     assert_eq!(*event2_rc1.read().unwrap(), 0);
 
     notifier.notify(42);

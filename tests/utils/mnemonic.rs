@@ -184,6 +184,7 @@ fn it_correctly_detects_collisions() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn it_correctly_computes_legacy_mnemonics() {
     let test_case = TestVector {
         entropy: "a9cb4c81a0e6818d75f0c3efc512c41e1a34fd011551f916ea73f60e3ec5e4df",

@@ -1,5 +1,5 @@
 use beserial::{Serialize, SerializingError, Deserialize};
-use nimiq::consensus::base::account::{Account, AccountError, AccountType, HashedTimeLockedContract};
+use nimiq::consensus::base::account::{AccountError, AccountType, HashedTimeLockedContract};
 use nimiq::consensus::base::account::htlc_contract::{AnyHash, ProofType, HashAlgorithm};
 use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair, hash::{Blake2bHasher, Sha256Hasher, Hasher}};
 use nimiq::consensus::base::transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
@@ -32,6 +32,7 @@ fn it_can_serialize_a_htlc() {
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn it_can_verify_creation_transaction() {
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 6);
     let sender = Address::from([0u8; 20]);
@@ -89,6 +90,7 @@ fn it_can_verify_creation_transaction() {
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn it_can_create_contract_from_transaction() {
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE * 2 + AnyHash::SIZE + 6);
     let sender = Address::from([0u8; 20]);
@@ -162,7 +164,7 @@ fn prepare_outgoing_transaction() -> (HashedTimeLockedContract, Transaction, Any
         total_amount: Coin::from(1000),
     };
 
-    let mut tx = Transaction {
+    let tx = Transaction {
         data: vec![],
         sender: Address::from([0u8; 20]),
         sender_type: AccountType::HTLC,
@@ -185,6 +187,7 @@ fn prepare_outgoing_transaction() -> (HashedTimeLockedContract, Transaction, Any
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn it_can_verify_regular_transfer() {
     let (_, mut tx, _, _, recipient_signature_proof ) = prepare_outgoing_transaction();
 
@@ -239,6 +242,7 @@ fn it_can_verify_regular_transfer() {
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn it_can_verify_early_resolve() {
     let (_, mut tx, _, sender_signature_proof, recipient_signature_proof ) = prepare_outgoing_transaction();
 
@@ -272,6 +276,7 @@ fn it_can_verify_early_resolve() {
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn it_can_verify_timeout_resolve() {
     let (_, mut tx, _, sender_signature_proof, _ ) = prepare_outgoing_transaction();
 
@@ -296,6 +301,7 @@ fn it_can_verify_timeout_resolve() {
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn it_can_apply_and_revert_valid_transaction() {
     let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) = prepare_outgoing_transaction();
 
@@ -339,8 +345,9 @@ fn it_can_apply_and_revert_valid_transaction() {
 }
 
 #[test]
+#[allow(unused_must_use)]
 fn it_refuses_invalid_transaction() {
-    let (mut start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) = prepare_outgoing_transaction();
+    let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) = prepare_outgoing_transaction();
 
     // regular transfer: timeout passed
     let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
