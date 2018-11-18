@@ -18,22 +18,22 @@ fn it_can_extend_the_main_chain() {
     crate::setup();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(RwLock::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime {})), NetworkId::Main)));
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime {})), NetworkId::Main));
     let mempool = Mempool::new(blockchain.clone());
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
-    let mut status = blockchain.write().push(block);
+    let mut status = blockchain.push(block);
     assert_eq!(status, PushResult::Extended);
 
     block = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
-    status = blockchain.write().push(block);
+    status = blockchain.push(block);
     assert_eq!(status, PushResult::Extended);
 
     block = Block::deserialize_from_vec(&hex::decode(BLOCK_4).unwrap()).unwrap();
-    status = blockchain.write().push(block);
+    status = blockchain.push(block);
     assert_eq!(status, PushResult::Extended);
 
     block = Block::deserialize_from_vec(&hex::decode(BLOCK_5).unwrap()).unwrap();
-    status = blockchain.write().push(block);
+    status = blockchain.push(block);
     assert_eq!(status, PushResult::Extended);
 }

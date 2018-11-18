@@ -1,5 +1,5 @@
 use bigdecimal::BigDecimal;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, MappedRwLockReadGuard, Mutex};
 use std::sync::Arc;
 use crate::consensus::base::account::Accounts;
 use crate::consensus::base::block::{Block, Target, TargetCompact};
@@ -15,14 +15,17 @@ pub struct Blockchain<'env> {
     env: &'env Environment,
     network_time: Arc<RwLock<NetworkTime>>,
     pub network_id: NetworkId,
-
-    pub accounts: Accounts<'env>,
+    pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
     chain_store: ChainStore<'env>,
+    state: RwLock<BlockchainState<'env>>,
+    push_lock: Mutex<()>,
+}
+
+struct BlockchainState<'env> {
+    accounts: Accounts<'env>,
     transaction_cache: TransactionCache,
     main_chain: ChainInfo,
     head_hash: Blake2bHash,
-
-    pub notifier: Notifier<'env, BlockchainEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -37,9 +40,8 @@ pub enum PushResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BlockchainEvent {
-    HeadChanged,
-    BlockReverted,
-    Rebranched,
+    Extended,
+    Reverted,
 }
 
 impl<'env> Blockchain<'env> {
@@ -81,12 +83,15 @@ impl<'env> Blockchain<'env> {
             env,
             network_time,
             network_id,
-            accounts,
+            notifier: RwLock::new(Notifier::new()),
             chain_store,
-            transaction_cache,
-            main_chain,
-            head_hash,
-            notifier: Notifier::new()
+            state: RwLock::new(BlockchainState {
+                accounts,
+                transaction_cache,
+                main_chain,
+                head_hash
+            }),
+            push_lock: Mutex::new(())
         }
     }
 
@@ -113,16 +118,22 @@ impl<'env> Blockchain<'env> {
             env,
             network_time,
             network_id,
-            accounts,
+            notifier: RwLock::new(Notifier::new()),
             chain_store,
-            transaction_cache,
-            main_chain,
-            head_hash,
-            notifier: Notifier::new()
+            state: RwLock::new(BlockchainState {
+                accounts,
+                transaction_cache,
+                main_chain,
+                head_hash
+            }),
+            push_lock: Mutex::new(())
         }
     }
 
-    pub fn push(&mut self, block: Block) -> PushResult {
+    pub fn push(&self, block: Block) -> PushResult {
+        // Allow only one push operation at a time.
+        let lock = self.push_lock.lock();
+
         // Check if we already know this block.
         let hash: Blake2bHash = block.header.hash();
         if self.chain_store.get_chain_info(&hash, false, None).is_some() {
@@ -166,7 +177,7 @@ impl<'env> Blockchain<'env> {
         let chain_info = prev_info.next(block);
 
         // Check if the block extends our current main chain.
-        if chain_info.head.header.prev_hash == self.head_hash {
+        if chain_info.head.header.prev_hash == self.state.read().head_hash {
             return match self.extend(hash, chain_info, prev_info) {
                 true => PushResult::Extended,
                 false => PushResult::Invalid
@@ -174,7 +185,7 @@ impl<'env> Blockchain<'env> {
         }
 
         // Otherwise, check if the new chain is harder than our current main chain.
-        if chain_info.total_difficulty > self.main_chain.total_difficulty {
+        if chain_info.total_difficulty > self.state.read().main_chain.total_difficulty {
             // A fork has become the hardest chain, rebranch to it.
             return match self.rebranch(hash, chain_info) {
                 true => PushResult::Rebranched,
@@ -191,22 +202,24 @@ impl<'env> Blockchain<'env> {
         return PushResult::Forked;
     }
 
-    fn extend(&mut self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> bool {
-        // Check transactions against TransactionCache to prevent replay.
-        if self.transaction_cache.contains_any(&chain_info.head) {
-            warn!("Rejecting block - transaction already included");
-            return false;
-        }
-
-        // Commit block to AccountsTree.
+    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> bool {
         let mut txn = WriteTransaction::new(self.env);
-        if let Err(e) = self.accounts.commit_block(&mut txn, &chain_info.head) {
-            warn!("Rejecting block - commit failed: {}", e);
-            txn.abort();
-            return false;
-        }
+        {
+            let state = self.state.read();
 
-        self.transaction_cache.push_block(&chain_info.head);
+            // Check transactions against TransactionCache to prevent replay.
+            if state.transaction_cache.contains_any(&chain_info.head) {
+                warn!("Rejecting block - transaction already included");
+                return false;
+            }
+
+            // Commit block to AccountsTree.
+            if let Err(e) = state.accounts.commit_block(&mut txn, &chain_info.head) {
+                warn!("Rejecting block - commit failed: {}", e);
+                txn.abort();
+                return false;
+            }
+        }
 
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(block_hash.clone());
@@ -214,17 +227,26 @@ impl<'env> Blockchain<'env> {
         self.chain_store.put_chain_info(&mut txn, &block_hash, &chain_info, true);
         self.chain_store.put_chain_info(&mut txn, &chain_info.head.header.prev_hash, &prev_info, false);
         self.chain_store.set_head(&mut txn, &block_hash);
-        txn.commit();
 
-        self.main_chain = chain_info;
-        self.head_hash = block_hash;
+        // Acquire write lock.
+        {
+            let mut state = self.state.write();
 
-        self.notifier.notify(BlockchainEvent::HeadChanged);
+            state.transaction_cache.push_block(&chain_info.head);
+
+            state.main_chain = chain_info;
+            state.head_hash = block_hash;
+
+            txn.commit();
+        }
+
+        // Give up write lock before notifying.
+        self.notifier.read().notify(BlockchainEvent::Extended);
 
         return true;
     }
 
-    fn rebranch(&mut self, block_hash: Blake2bHash, chain_info: ChainInfo) -> bool {
+    fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo) -> bool {
         debug!("Rebranching to fork {}, height #{}, total_difficulty {}", block_hash, chain_info.head.header.height, chain_info.total_difficulty);
 
         // Find the common ancestor between our current main chain and the fork chain.
@@ -247,102 +269,115 @@ impl<'env> Blockchain<'env> {
         debug!("Found common ancestor {} at height #{}, {} blocks up", current.0, current.1.head.header.height, fork_chain.len());
 
         // Revert AccountsTree & TransactionCache to the common ancestor state.
-        let mut write_txn = WriteTransaction::new(self.env);
-        let mut cache_txn = self.transaction_cache.clone();
-
         let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut ancestor = current;
-        current = (self.head_hash.clone(), self.main_chain.clone());
-        while current.0 != ancestor.0 {
-            if let Err(e) = self.accounts.revert_block(&mut write_txn, &current.1.head) {
-                panic!("Failed to revert main chain while rebranching - {}", e);
+
+        let mut write_txn = WriteTransaction::new(self.env);
+        let mut cache_txn;
+        {
+            let state = self.state.read();
+
+            cache_txn = state.transaction_cache.clone();
+            // XXX Get rid of the .clone() here.
+            current = (state.head_hash.clone(), state.main_chain.clone());
+
+            while current.0 != ancestor.0 {
+                if let Err(e) = state.accounts.revert_block(&mut write_txn, &current.1.head) {
+                    panic!("Failed to revert main chain while rebranching - {}", e);
+                }
+
+                cache_txn.revert_block(&current.1.head);
+
+                let prev_hash = current.1.head.header.prev_hash.clone();
+                let prev_info = self.chain_store
+                    .get_chain_info(&prev_hash, true, Some(&read_txn))
+                    .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
+
+                assert_eq!(prev_info.head.header.accounts_hash, state.accounts.hash(Some(&write_txn)),
+                           "Failed to revert main chain while rebranching - inconsistent state");
+
+                revert_chain.push(current);
+                current = (prev_hash, prev_info);
             }
 
-            cache_txn.revert_block(&current.1.head);
-
-            let prev_hash = current.1.head.header.prev_hash.clone();
-            let prev_info = self.chain_store
-                .get_chain_info(&prev_hash, true, Some(&read_txn))
-                .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
-
-            assert_eq!(prev_info.head.header.accounts_hash, self.accounts.hash(Some(&write_txn)),
-                "Failed to revert main chain while rebranching - inconsistent state");
-
-            revert_chain.push(current);
-            current = (prev_hash, prev_info);
-        }
-
-        // Fetch missing blocks for TransactionCache.
-        assert!(cache_txn.is_empty() || cache_txn.head_hash() == ancestor.0);
-        let start_hash = if cache_txn.is_empty() {
-            ancestor.1.main_chain_successor.unwrap()
-        } else {
-            cache_txn.tail_hash()
-        };
-        let blocks = self.chain_store.get_blocks_backward(&start_hash, cache_txn.missing_blocks(), true);
-        for block in blocks.iter() {
-            cache_txn.prepend_block(block);
-        }
-        assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.header.height));
-
-        // Check each fork block against TransactionCache & commit to AccountsTree.
-        for fork_block in fork_chain.iter().rev() {
-            if cache_txn.contains_any(&fork_block.1.head) {
-                warn!("Failed to apply fork block while rebranching - transaction already included");
-                // TODO delete invalid fork from store
-                write_txn.abort();
-                return false;
+            // Fetch missing blocks for TransactionCache.
+            assert!(cache_txn.is_empty() || cache_txn.head_hash() == ancestor.0);
+            let start_hash = if cache_txn.is_empty() {
+                ancestor.1.main_chain_successor.unwrap()
+            } else {
+                cache_txn.tail_hash()
+            };
+            let blocks = self.chain_store.get_blocks_backward(&start_hash, cache_txn.missing_blocks(), true);
+            for block in blocks.iter() {
+                cache_txn.prepend_block(block);
             }
+            assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.header.height));
 
-            if let Err(e) = self.accounts.commit_block(&mut write_txn, &fork_block.1.head) {
-                warn!("Failed to apply fork block while rebranching - {}", e);
-                // TODO delete invalid fork from store
-                write_txn.abort();
-                return false;
+            // Check each fork block against TransactionCache & commit to AccountsTree.
+            for fork_block in fork_chain.iter().rev() {
+                if cache_txn.contains_any(&fork_block.1.head) {
+                    warn!("Failed to apply fork block while rebranching - transaction already included");
+                    // TODO delete invalid fork from store
+                    write_txn.abort();
+                    return false;
+                }
+
+                if let Err(e) = state.accounts.commit_block(&mut write_txn, &fork_block.1.head) {
+                    warn!("Failed to apply fork block while rebranching - {}", e);
+                    // TODO delete invalid fork from store
+                    write_txn.abort();
+                    return false;
+                }
+
+                cache_txn.push_block(&fork_block.1.head);
             }
-
-            cache_txn.push_block(&fork_block.1.head);
         }
 
         // Fork looks good.
+        // Acquire write lock.
+        {
+            let mut state = self.state.write();
 
-        // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
-        for reverted_block in revert_chain.iter_mut() {
-            reverted_block.1.on_main_chain = false;
-            reverted_block.1.main_chain_successor = None;
-            self.chain_store.put_chain_info(&mut write_txn, &reverted_block.0, &reverted_block.1, false);
+            // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
+            for reverted_block in revert_chain.iter_mut() {
+                reverted_block.1.on_main_chain = false;
+                reverted_block.1.main_chain_successor = None;
+                self.chain_store.put_chain_info(&mut write_txn, &reverted_block.0, &reverted_block.1, false);
+            }
+
+            // Update the mainChainSuccessor of the common ancestor block.
+            ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
+            self.chain_store.put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
+
+            // Set onMainChain flag / mainChainSuccessor on the fork.
+            for i in (0..fork_chain.len()).rev() {
+                let main_chain_successor = match i > 0 {
+                    true => Some(fork_chain[i - 1].0.clone()),
+                    false => None
+                };
+
+                let fork_block = &mut fork_chain[i];
+                fork_block.1.on_main_chain = true;
+                fork_block.1.main_chain_successor = main_chain_successor;
+
+                // Include the body of the new block (at position 0).
+                self.chain_store.put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
+            }
+
+            // Commit transaction & update head.
+            write_txn.commit();
+            state.transaction_cache = cache_txn;
+
+            state.main_chain = fork_chain[0].1.clone(); // TODO get rid of the .clone() here
+            state.head_hash = fork_chain[0].0.clone();
         }
-
-        // Update the mainChainSuccessor of the common ancestor block.
-        ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
-        self.chain_store.put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
-
-        // Set onMainChain flag / mainChainSuccessor on the fork.
-        for i in (0..fork_chain.len()).rev() {
-            let main_chain_successor = match i > 0 {
-                true => Some(fork_chain[i - 1].0.clone()),
-                false => None
-            };
-
-            let fork_block = &mut fork_chain[i];
-            fork_block.1.on_main_chain = true;
-            fork_block.1.main_chain_successor = main_chain_successor;
-
-            // Include the body of the new block (at position 0).
-            self.chain_store.put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
-        }
-
-        // Commit transaction & update head.
-        write_txn.commit();
-        self.transaction_cache = cache_txn;
-
-        self.main_chain = fork_chain[0].1.clone(); // TODO get rid of the .clone() here
-        self.head_hash = fork_chain[0].0.clone();
 
         return true;
     }
 
     pub fn get_next_target(&self, head_hash: Option<&Blake2bHash>) -> Target {
+        let state = self.state.read();
+
         let chain_info;
         let head_info = match head_hash {
             Some(hash) => {
@@ -351,7 +386,7 @@ impl<'env> Blockchain<'env> {
                     .expect("Failed to compute next target - unknown head_hash");
                 &chain_info
             }
-            None => &self.main_chain
+            None => &state.main_chain
         };
 
         let tail_height = 1u32.max(head_info.head.header.height.saturating_sub(policy::DIFFICULTY_BLOCK_WINDOW));
@@ -428,11 +463,16 @@ impl<'env> Blockchain<'env> {
         return Target::from(n_bits);
     }
 
-    pub fn head(&self) -> &Block {
-        &self.main_chain.head
+    pub fn head_hash(&self) -> Blake2bHash {
+        self.state.read().head_hash.clone()
     }
 
     pub fn height(&self) -> u32 {
-        self.main_chain.head.header.height
+        self.state.read().main_chain.head.header.height
+    }
+
+    pub fn accounts(&self) -> MappedRwLockReadGuard<Accounts<'env>> {
+        let guard = self.state.read();
+        RwLockReadGuard::map(guard, |s| &s.accounts)
     }
 }

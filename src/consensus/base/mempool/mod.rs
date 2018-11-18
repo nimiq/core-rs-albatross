@@ -12,7 +12,7 @@ use crate::consensus::base::primitive::Address;
 use crate::consensus::base::transaction::Transaction;
 
 pub struct Mempool<'env> {
-    blockchain: Arc<RwLock<Blockchain<'env>>>,
+    blockchain: Arc<Blockchain<'env>>,
     transactions_by_hash: HashMap<Blake2bHash, Arc<Transaction>>,
     transactions_by_sender: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
     transactions_by_recipient: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
@@ -20,7 +20,7 @@ pub struct Mempool<'env> {
 }
 
 impl<'env> Mempool<'env> {
-    pub fn new(blockchain: Arc<RwLock<Blockchain<'env>>>) -> Arc<RwLock<Self>> {
+    pub fn new(blockchain: Arc<Blockchain<'env>>) -> Arc<RwLock<Self>> {
         let arc = Arc::new(RwLock::new(Self {
             blockchain: blockchain.clone(),
             transactions_by_hash: HashMap::new(),
@@ -30,12 +30,13 @@ impl<'env> Mempool<'env> {
         }));
 
         let arc_listener = arc.clone();
-        blockchain.write().notifier.register(move |event: &BlockchainEvent| arc_listener.write().on_blockchain_event(event));
+        blockchain.notifier.write().register(move |event: &BlockchainEvent| arc_listener.write().on_blockchain_event(event));
         arc
     }
 
     fn on_blockchain_event(&mut self, event: &BlockchainEvent) {
         println!("Mempool received blockchain event: {:?}", event);
+        println!("Blockchain height: {}", self.blockchain.height());
     }
 
     pub fn push_transaction(&mut self, transaction: Transaction) -> ReturnCode {
@@ -62,17 +63,17 @@ impl<'env> Mempool<'env> {
         // This ensures that:
         // - all transaction validation checks run against the same blockchain state
         // - the mempool is in a consistent state when a HeadChanged/Rebranched event causes it to evict transactions
-        let blockchain_arc = self.blockchain.clone();
-        let blockchain = blockchain_arc.read();
-        let block_height = blockchain.height() + 1;
+        let bc_arc = self.blockchain.clone(); // XXX Get rid of this clone()
+        let accounts = bc_arc.accounts();
+        let block_height = self.blockchain.height() + 1;
 
         // Intrinsic transaction verification.
-        if transaction.verify(blockchain.network_id).is_err() {
+        if transaction.verify(self.blockchain.network_id).is_err() {
             return ReturnCode::Invalid;
         }
 
         // Retrieve recipient account and test incoming transaction.
-        let recipient_account = blockchain.accounts.get(&transaction.recipient, None);
+        let recipient_account = accounts.get(&transaction.recipient, None);
         if recipient_account.account_type() != transaction.recipient_type {
             return ReturnCode::Invalid;
         }
@@ -81,7 +82,7 @@ impl<'env> Mempool<'env> {
         }
 
         // Retrieve sender account and test outgoing transaction.
-        let sender_account = blockchain.accounts.get(&transaction.sender, None);
+        let sender_account = accounts.get(&transaction.sender, None);
         if sender_account.account_type() != transaction.sender_type {
             return ReturnCode::Invalid;
         }
@@ -196,18 +197,21 @@ impl<'env> Mempool<'env> {
     /// Evict all transactions from the pool that have become invalid due to changes in the
     /// account state (i.e. typically because the were included in a newly mined block). No need to re-check signatures.
     fn evict_transactions(&mut self) {
-        let blockchain_arc = self.blockchain.clone();
-        let blockchain = blockchain_arc.read();
+        let bc_arc = self.blockchain.clone(); // XXX Get rid of this clone()
+        let accounts = bc_arc.accounts();
+        let block_height = self.blockchain.height() + 1;
 
         for (address, transactions_sorted) in self.transactions_by_sender.clone().iter() {
-            let mut sender_account = blockchain.accounts.get(&address, None);
+            // TODO check transaction validity window.
+
+            let mut sender_account = accounts.get(&address, None);
 
             let mut transactions_sorted_new = BTreeSet::new();
             for curr_ts in transactions_sorted {
-                let new_sender_account_option = sender_account.with_outgoing_transaction(&curr_ts.0, 1);
+                let new_sender_account_option = sender_account.with_outgoing_transaction(&curr_ts.0, block_height);
 
-                let recipient_account = blockchain.accounts.get(&curr_ts.0.recipient, None);
-                let new_recipient_account_option = recipient_account.with_incoming_transaction(&curr_ts.0, 1);
+                let recipient_account = accounts.get(&curr_ts.0.recipient, None);
+                let new_recipient_account_option = recipient_account.with_incoming_transaction(&curr_ts.0, block_height);
 
                 if new_sender_account_option.is_ok() || new_recipient_account_option.is_ok() {
                     transactions_sorted_new.insert(Arc::clone(&curr_ts));

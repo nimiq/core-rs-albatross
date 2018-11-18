@@ -1,4 +1,3 @@
-use nimiq::consensus::base::block::Block;
 use nimiq::consensus::base::blockchain::TransactionCache;
 use nimiq::consensus::base::primitive::{Address, Coin};
 use nimiq::consensus::base::primitive::hash::{Hash, Blake2bHash};
