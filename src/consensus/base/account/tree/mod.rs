@@ -8,5 +8,5 @@ use self::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
 use self::address_nibbles::AddressNibbles;
 pub use self::accounts_tree::AccountsTree;
 
-#[derive(Serialize,Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AccountsProof {}

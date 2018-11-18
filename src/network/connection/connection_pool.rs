@@ -1,27 +1,28 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::LinkedList;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::time::{Duration, SystemTime};
 
+use parking_lot::RwLock;
 use tokio;
 
 use crate::network;
 use crate::network::address::net_address::{NetAddress, NetAddressType};
 use crate::network::address::peer_address::PeerAddress;
+use crate::network::address::peer_address_book::PeerAddressBook;
 use crate::network::connection::NetworkConnection;
+use crate::network::network_config::NetworkConfig;
+use crate::network::Peer;
+use crate::network::peer_channel::PeerChannel;
+use crate::network::peer_channel::PeerChannelEvent;
 use crate::network::Protocol;
+use crate::utils::observer::{Notifier, weak_listener};
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
-use std::collections::HashSet;
-use std::collections::LinkedList;
-use crate::network::Peer;
-use crate::network::address::peer_address_book::PeerAddressBook;
-use crate::utils::observer::{Notifier, weak_listener};
-use crate::network::peer_channel::PeerChannel;
-use std::sync::Weak;
-use parking_lot::RwLock;
-use crate::network::peer_channel::PeerChannelEvent;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -40,6 +41,8 @@ pub struct ConnectionPool {
     connections_by_peer_address: HashMap<Arc<PeerAddress>, ConnectionId>,
     connections_by_net_address: HashMap<NetAddress, HashSet<ConnectionId>>,
     connections_by_subnet: HashMap<NetAddress, HashSet<ConnectionId>>,
+
+    network_config: Arc<NetworkConfig>,
 
     peer_count_ws: usize,
     peer_count_wss: usize,
@@ -73,12 +76,14 @@ impl ConnectionPool {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
 
     /// Constructor.
-    pub fn new(peer_address_book: PeerAddressBook) -> Arc<RwLock<Self>> {
+    pub fn new(peer_address_book: PeerAddressBook, network_config: Arc<NetworkConfig>) -> Arc<RwLock<Self>> {
         let arc = Arc::new(RwLock::new(ConnectionPool {
             connections: SparseVec::new(),
             connections_by_peer_address: HashMap::new(),
             connections_by_net_address: HashMap::new(),
             connections_by_subnet: HashMap::new(),
+
+            network_config,
 
             peer_count_ws: 0,
             peer_count_wss: 0,
@@ -405,9 +410,7 @@ impl ConnectionPool {
                         },
                         ConnectionState::Negotiating => {
                             // The peer with the lower peerId accepts this connection and closes his stored connection.
-                            // TODO get own PeerId and compare
-                            // if <self>.peer_address().peer_id() < peer.peer_address().peer_id() {
-                            if true {
+                            if self.network_config.peer_id() < peer.peer_address().peer_id() {
                                 ConnectionPool::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
                                 assert!(self.get_connection_by_peer_address(&peer.peer_address()).is_none(), "ConnectionInfo not removed");
                             } else {

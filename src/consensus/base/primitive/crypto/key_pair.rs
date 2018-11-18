@@ -2,8 +2,9 @@ use ed25519_dalek;
 use rand::OsRng;
 use sha2;
 
-use crate::consensus::base::primitive::crypto::{PublicKey, PrivateKey, Signature};
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
+
+use crate::consensus::base::primitive::crypto::{PrivateKey, PublicKey, Signature};
 
 #[derive(Serialize, Deserialize)]
 pub struct KeyPair {

@@ -1,13 +1,15 @@
-use ed25519_dalek;
-use rand::OsRng;
-use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
-use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
-
-use crate::consensus::base::primitive::crypto::{PublicKey};
-use std::io;
 use std::fmt::Debug;
 use std::fmt::Error;
 use std::fmt::Formatter;
+use std::io;
+
+use ed25519_dalek;
+use rand::OsRng;
+
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+
+use crate::consensus::base::primitive::crypto::PublicKey;
+use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
 
 pub struct PrivateKey(pub(in super) ed25519_dalek::SecretKey);
 

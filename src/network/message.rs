@@ -1,13 +1,17 @@
 use std::io;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializingError, SerializeWithLength, WriteBytesExt, uvar};
-use crate::consensus::base::Subscription;
+use rand::OsRng;
+use rand::Rng;
+
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
+
 use crate::consensus::base::account::tree::AccountsProof;
 use crate::consensus::base::block::{Block, BlockHeader};
-use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
+use crate::consensus::base::primitive::crypto::{PublicKey, Signature, KeyPair};
 use crate::consensus::base::primitive::hash::Blake2bHash;
+use crate::consensus::base::Subscription;
 use crate::consensus::base::transaction::Transaction;
-use crate::network::address::PeerAddress;
+use crate::network::address::{PeerAddress, PeerId};
 use crate::utils::crc::Crc32Computer;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -53,6 +57,7 @@ pub enum MessageType {
     VerAck = 90,
 }
 
+#[derive(Clone)]
 pub enum Message {
     Version(VersionMessage),
     Inv(Vec<InvVector>),
@@ -241,13 +246,34 @@ impl Serialize for Message {
 
 create_typed_array!(ChallengeNonce, u8, 32);
 
-#[derive(Serialize, Deserialize)]
+impl ChallengeNonce {
+    pub fn generate() -> Self {
+        let mut nonce = Self::default();
+        let mut cspring: OsRng = OsRng::new().unwrap();
+        cspring.fill_bytes(&mut nonce.0);
+        nonce
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct VersionMessage {
-    version: u32,
-    peer_address: PeerAddress,
-    genesis_hash: Blake2bHash,
-    head_hash: Blake2bHash,
-    challenge_nonce: ChallengeNonce,
+    pub version: u32,
+    pub peer_address: PeerAddress,
+    pub genesis_hash: Blake2bHash,
+    pub head_hash: Blake2bHash,
+    pub challenge_nonce: ChallengeNonce,
+}
+
+impl VersionMessage {
+    pub fn new(peer_address: PeerAddress, head_hash: Blake2bHash, challenge_nonce: ChallengeNonce) -> Message {
+        Message::Version(Self {
+            version: 0, // TODO
+            peer_address,
+            genesis_hash: Blake2bHash::default(), // TODO
+            head_hash,
+            challenge_nonce,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -258,13 +284,13 @@ pub enum InvVectorType {
     Block = 2,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct InvVector {
     ty: InvVectorType,
     hash: Blake2bHash,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TxMessage {
     transaction: Transaction,
     accounts_proof: Option<AccountsProof>,
@@ -277,7 +303,7 @@ pub enum GetBlocksDirection {
     Backward = 2,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GetBlocksMessage {
     #[beserial(len_type(u16))]
     locators: Vec<Blake2bHash>,
@@ -296,7 +322,7 @@ pub enum RejectMessageCode {
     InsufficientFee = 0x42,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RejectMessage {
     message_type: MessageType,
     code: RejectMessageCode,
@@ -306,27 +332,39 @@ pub struct RejectMessage {
     extra_data: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AddrMessage {
     #[beserial(len_type(u16))]
     addresses: Vec<PeerAddress>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct AccountsProofMessage {
     block_hash: Blake2bHash,
     accounts_proof: Option<AccountsProof>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GetAddrMessage {
     protocol_mask: u8,
     service_mask: u32,
     max_results: u16, // TODO this is optional right now but is always set
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct VerAckMessage {
     public_key: PublicKey,
     signature: Signature,
+}
+
+impl VerAckMessage {
+    pub fn new(peer_id: &PeerId, peer_challence_nonce: &ChallengeNonce, key_pair: &KeyPair) -> Message {
+        let mut data = peer_id.serialize_to_vec();
+        peer_challence_nonce.serialize(&mut data);
+        let signature = key_pair.sign(&data[..]);
+        Message::VerAck(Self {
+            public_key: key_pair.public.clone(),
+            signature,
+        })
+    }
 }

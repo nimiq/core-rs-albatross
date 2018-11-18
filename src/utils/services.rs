@@ -1,4 +1,4 @@
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 
 bitflags! {
     #[derive(Default, Serialize, Deserialize)]

@@ -1,72 +1,34 @@
 use std::fmt;
+use std::fmt::Debug;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use futures::prelude::*;
 use futures::sync::mpsc::*;
 use parking_lot::Mutex;
-use tokio::prelude::{Stream};
+use parking_lot::RwLock;
+use tokio::prelude::Stream;
 
 use crate::consensus::base::primitive::hash::Argon2dHash;
+use crate::network::connection::close_type::CloseType;
+use crate::network::connection::network_connection::AddressInfo;
+use crate::network::connection::network_connection::NetworkConnection;
 use crate::network::message::Message;
+use crate::network::peer::Peer;
 use crate::network::websocket::NimiqMessageStreamError;
 use crate::network::websocket::SharedNimiqMessageStream;
-use crate::network::peer::Peer;
-use crate::network::connection::network_connection::AddressInfo;
-use crate::utils::observer::{Notifier, Listener, PassThroughNotifier, PassThroughListener, ListenerHandle};
-use std::fmt::Debug;
-use crate::network::connection::close_type::CloseType;
-use crate::network::connection::network_connection::NetworkConnection;
-use parking_lot::RwLock;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-
-#[derive(Debug)]
-pub enum ProtocolError {
-    SendError(SendError<Message>),
-}
+use crate::utils::observer::{Listener, ListenerHandle, Notifier, PassThroughListener, PassThroughNotifier};
 
 pub trait Agent: Send {
     /// Initialize the protocol.
-    fn initialize(&mut self) {}
-
-    /// Maintain the protocol state.
-//    fn maintain(&mut self) {}
+    fn initialize(&mut self);
 
     /// Handle a message.
-    fn on_message(&mut self, msg: &Message) -> Result<(), ProtocolError>;
+    fn on_message(&mut self, msg: &Message);
 
     /// On disconnect.
-    fn on_close(&mut self) {}
-
-    /// Boxes the protocol.
-    fn boxed(self) -> Box<Agent> where Self: Sized + 'static {
-        Box::new(self)
-    }
-}
-
-#[derive(Debug)]
-pub struct PingAgent {
-    sink: PeerSink,
-}
-
-impl PingAgent {
-    pub fn new(sink: PeerSink) -> Self {
-        PingAgent {
-            sink,
-        }
-    }
-}
-
-impl Agent for PingAgent {
-    fn on_message(&mut self, msg: &Message) -> Result<(), ProtocolError> {
-        if let Message::Ping(nonce) = msg {
-            // Respond with a pong message.
-            self.sink.send(Message::Pong(*nonce))
-                .map_err(|err| ProtocolError::SendError(err))
-        } else {
-            Ok(())
-        }
-    }
+    fn on_close(&mut self);
 }
 
 #[derive(Clone)]
@@ -108,6 +70,10 @@ impl PeerChannel {
         }
     }
 
+    pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> {
+        self.peer_sink.send(msg)
+    }
+
     pub fn closed(&self) -> bool {
         self.closed.load(Ordering::Relaxed)
     }
@@ -127,7 +93,7 @@ impl Debug for PeerChannel {
 
 #[derive(Clone)]
 pub enum PeerChannelEvent {
-    Message(Arc<Message>),
+    Message(Message),
     Close(CloseType),
     Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
 }
@@ -167,7 +133,7 @@ impl Debug for PeerSink {
 
 #[derive(Clone)]
 pub enum PeerStreamEvent {
-    Message(Arc<Message>),
+    Message(Message),
     Close(CloseType),
     Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
 }
@@ -192,7 +158,7 @@ impl PeerStream {
         let close_notifier = self.notifier;
 
         let process_message = stream.for_each(move |msg| {
-            msg_notifier.read().notify(PeerStreamEvent::Message(Arc::new(msg)));
+            msg_notifier.read().notify(PeerStreamEvent::Message(msg));
             Ok(())
         }).or_else(move |error| {
             error_notifier.read().notify(PeerStreamEvent::Error);

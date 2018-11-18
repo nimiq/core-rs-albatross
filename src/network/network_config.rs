@@ -1,14 +1,17 @@
-use super::ProtocolFlags;
+use std::fs;
+use std::time::SystemTime;
+
+use beserial::{Deserialize, Serialize};
+
 use crate::consensus::base::primitive::crypto::{KeyPair, PublicKey};
-use crate::utils::services::Services;
+use crate::network::address::net_address::NetAddress;
+use crate::network::address::peer_address::{PeerAddress, PeerAddressType};
 use crate::network::address::PeerId;
 use crate::network::Protocol;
-use crate::network::address::peer_address::{PeerAddress, PeerAddressType};
+use crate::utils::services::Services;
 use crate::utils::systemtime_to_timestamp;
-use std::time::SystemTime;
-use crate::network::address::net_address::NetAddress;
-use std::fs;
-use beserial::{Serialize, Deserialize};
+
+use super::ProtocolFlags;
 
 pub struct NetworkConfig {
     protocol_mask: ProtocolFlags,
