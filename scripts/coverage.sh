@@ -39,12 +39,12 @@ for file in $tests; do
     echo Test: $file;
     if [ -x $file ] && [ -f $file ]; then
         mkdir -p "cov/cov/$(basename $file)" &&
-        cov/kcov-master/build/src/kcov --exclude-pattern=$CARGO_HOME,/usr,$PWD/tests --verify "cov/cov/$(basename $file)" "$file"
+        cov/kcov-master/build/src/kcov --exclude-line="unreachable!" --exclude-pattern=$CARGO_HOME,/usr,$PWD/tests --verify "cov/cov/$(basename $file)" "$file"
     fi
 done
 
 # Merge results
-cov/kcov-master/build/src/kcov --merge cov/cov cov/cov/*
+cov/kcov-master/build/src/kcov --exclude-line="unreachable!" --merge cov/cov cov/cov/*
 
 echo "Coverage:" $(grep -Po 'covered":.*?[^\\]"' cov/cov/index.js | grep "[0-9]*\.[0-9]" -o)
 echo "Report: file://$PWD/cov/cov/index.html"

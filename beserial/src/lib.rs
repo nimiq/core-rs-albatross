@@ -137,7 +137,7 @@ impl Deserialize for bool {
         match reader.read_u8()? {
             0 => Ok(false),
             1 => Ok(true),
-            other => Err(SerializingError::InvalidValue),
+            _ => Err(SerializingError::InvalidValue),
         }
     }
 }
@@ -237,7 +237,7 @@ impl<T: Deserialize> Deserialize for Option<T> {
         return match is_present {
             0 => Ok(Option::None),
             1 => Ok(Option::Some(Deserialize::deserialize(reader)?)),
-            other => Err(SerializingError::InvalidValue),
+            _ => Err(SerializingError::InvalidValue),
         };
     }
 }

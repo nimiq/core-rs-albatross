@@ -1,8 +1,9 @@
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
+
 use crate::consensus::base::primitive::{Address, Coin};
-use crate::consensus::base::transaction::{Transaction, TransactionError, SignatureProof};
-use super::{Account, AccountError};
-use std::io;
+use crate::consensus::base::transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
+
+use super::{Account, AccountError, AccountType};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct VestingContract {
@@ -11,41 +12,13 @@ pub struct VestingContract {
     pub vesting_start: u32,
     pub vesting_step_blocks: u32,
     pub vesting_step_amount: Coin,
-    pub vesting_total_amount: Coin
+    pub vesting_total_amount: Coin,
 }
 
 impl VestingContract {
     pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return VestingContract::create_from_transaction(balance, transaction)
-            .map_err(|_| AccountError::Any("Failed to create vesting contract".to_string()));
-    }
-
-    fn create_from_transaction(balance: Coin, transaction: &Transaction) -> io::Result<Self> {
-        let reader = &mut &transaction.data[..];
-        let owner = Deserialize::deserialize(reader)?;
-
-        if transaction.data.len() == Address::SIZE + 4 {
-            // Only block number: vest full amount at that block
-            let vesting_step_blocks = Deserialize::deserialize(reader)?;
-            return Ok(VestingContract::new(balance, owner, 0, vesting_step_blocks, transaction.value, transaction.value));
-        }
-        else if transaction.data.len() == Address::SIZE + 16 {
-            let vesting_start = Deserialize::deserialize(reader)?;
-            let vesting_step_blocks = Deserialize::deserialize(reader)?;
-            let vesting_step_amount = Deserialize::deserialize(reader)?;
-            return Ok(VestingContract::new(balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, transaction.value));
-        }
-        else if transaction.data.len() == Address::SIZE + 24 {
-            // Create a vesting account with some instantly vested funds or additional funds considered.
-            let vesting_start = Deserialize::deserialize(reader)?;
-            let vesting_step_blocks = Deserialize::deserialize(reader)?;
-            let vesting_step_amount = Deserialize::deserialize(reader)?;
-            let vesting_total_amount = Deserialize::deserialize(reader)?;
-            return Ok(VestingContract::new(balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount));
-        }
-        else {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid transaction data"));
-        }
+        let (owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount) = VestingContract::parse_and_verify_creation_transaction(transaction)?;
+        return Ok(VestingContract::new(transaction.value, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount));
     }
 
     fn new(balance: Coin, owner: Address, vesting_start: u32, vesting_step_blocks: u32, vesting_step_amount: Coin, vesting_total_amount: Coin) -> Self {
@@ -53,6 +26,18 @@ impl VestingContract {
     }
 
     pub fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+        VestingContract::parse_and_verify_creation_transaction(transaction)?;
+        Ok(())
+    }
+
+    fn parse_and_verify_creation_transaction(transaction: &Transaction) -> Result<(Address, u32, u32, Coin, Coin), TransactionError> {
+        assert_eq!(transaction.recipient_type, AccountType::Vesting);
+
+        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+            warn!("Only contract creation is allowed");
+            return Err(TransactionError::InvalidForRecipient);
+        }
+
         // The contract creation transaction is the only valid incoming transaction.
         if transaction.recipient != transaction.contract_creation_address() {
             warn!("Only contract creation is allowed");
@@ -66,7 +51,32 @@ impl VestingContract {
             return Err(TransactionError::InvalidData);
         }
 
-        Ok(())
+        Ok(VestingContract::parse_creation_transaction(transaction)?)
+    }
+
+    fn parse_creation_transaction(transaction: &Transaction) -> Result<(Address, u32, u32, Coin, Coin), TransactionError> {
+        let reader = &mut &transaction.data[..];
+        let owner = Deserialize::deserialize(reader)?;
+
+        if transaction.data.len() == Address::SIZE + 4 {
+            // Only block number: vest full amount at that block
+            let vesting_step_blocks = Deserialize::deserialize(reader)?;
+            return Ok((owner, 0, vesting_step_blocks, transaction.value, transaction.value));
+        } else if transaction.data.len() == Address::SIZE + 16 {
+            let vesting_start = Deserialize::deserialize(reader)?;
+            let vesting_step_blocks = Deserialize::deserialize(reader)?;
+            let vesting_step_amount = Deserialize::deserialize(reader)?;
+            return Ok((owner, vesting_start, vesting_step_blocks, vesting_step_amount, transaction.value));
+        } else if transaction.data.len() == Address::SIZE + 24 {
+            // Create a vesting account with some instantly vested funds or additional funds considered.
+            let vesting_start = Deserialize::deserialize(reader)?;
+            let vesting_step_blocks = Deserialize::deserialize(reader)?;
+            let vesting_step_amount = Deserialize::deserialize(reader)?;
+            let vesting_total_amount = Deserialize::deserialize(reader)?;
+            return Ok((owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount));
+        } else {
+            unreachable!();
+        }
     }
 
     pub fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
@@ -87,16 +97,16 @@ impl VestingContract {
             vesting_start: self.vesting_start,
             vesting_step_blocks: self.vesting_step_blocks,
             vesting_step_amount: self.vesting_step_amount,
-            vesting_total_amount: self.vesting_total_amount
+            vesting_total_amount: self.vesting_total_amount,
         };
     }
 
     pub fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return Err(AccountError::Any("Illegal incoming transaction".to_string()));
+        return Err(AccountError::InvalidForRecipient);
     }
 
     pub fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return Err(AccountError::Any("Illegal incoming transaction".to_string()));
+        return Err(AccountError::InvalidForRecipient);
     }
 
     pub fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
@@ -104,16 +114,13 @@ impl VestingContract {
 
         // Check vesting min cap.
         if balance < self.min_cap(block_height) {
-            return Err(AccountError::Any("Insufficient funds available".to_string()));
+            return Err(AccountError::InsufficientFunds);
         }
 
         // Check transaction signer is contract owner.
-        let signature_proof: SignatureProof = match Deserialize::deserialize(&mut &transaction.proof[..]) {
-            Ok(v) => v,
-            Err(e) => return Err(AccountError::Any("Invalid proof".to_string()))
-        };
+        let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
         if !signature_proof.is_signed_by(&self.owner) {
-            return Err(AccountError::Any("Invalid signer".to_string()));
+            return Err(AccountError::InvalidSignature);
         }
 
         return Ok(self.with_balance(balance));

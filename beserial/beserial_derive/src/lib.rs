@@ -211,7 +211,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                     let num: u64 = u.into();
                     return match num {
                         #num_cases
-                        other => Err(::beserial::SerializingError::InvalidValue)
+                        _ => Err(::beserial::SerializingError::InvalidValue)
                     };
                 };
             } else {
@@ -219,7 +219,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                     let num: #ty = Deserialize::deserialize(reader)?;
                     return match num {
                         #num_cases
-                        other => Err(::beserial::SerializingError::InvalidValue)
+                        _ => Err(::beserial::SerializingError::InvalidValue)
                     };
                 };
             }

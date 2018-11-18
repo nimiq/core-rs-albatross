@@ -131,14 +131,14 @@ impl Account {
     pub fn balance_add(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
         return match balance.checked_add(value) {
             Some(result) => Ok(result),
-            None => Err(AccountError::Any("Balance overflow (add)".to_string()))
+            None => Err(AccountError::InsufficientFunds)
         };
     }
 
     pub fn balance_sub(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
         return match balance.checked_sub(value) {
             Some(result) => Ok(result),
-            None => Err(AccountError::Any("Balance overflow (sub)".to_string()))
+            None => Err(AccountError::InsufficientFunds)
         };
     }
 }

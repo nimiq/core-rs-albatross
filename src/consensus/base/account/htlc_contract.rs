@@ -5,7 +5,6 @@ use crate::consensus::base::transaction::SignatureProof;
 use crate::consensus::base::primitive::{Address, Coin};
 use crate::consensus::base::primitive::hash::{Hasher, Blake2bHasher, Sha256Hasher};
 use hex::FromHex;
-use std::io;
 
 create_typed_array!(AnyHash, u8, 32);
 add_hex_io_fns_typed_arr!(AnyHash, AnyHash::SIZE);
