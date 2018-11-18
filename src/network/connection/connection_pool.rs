@@ -56,12 +56,12 @@ pub struct ConnectionPool {
     peer_count_outbound: usize,
     peer_count_full_ws_outbound: usize,
 
-    connecting_count: usize,
+    pub connecting_count: usize,
 
     inbound_count: usize,
 
     allow_inbound_connections: bool,
-    allow_inbound_exchange: bool,
+    pub allow_inbound_exchange: bool,
 
     banned_ips: HashMap<NetAddress, SystemTime>,
 

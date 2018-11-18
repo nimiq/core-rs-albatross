@@ -3,12 +3,125 @@ use crate::consensus::base::block::{Block, BlockHeader, BlockInterlink, BlockBod
 use crate::consensus::base::primitive::hash::Blake2bHash;
 use crate::consensus::base::primitive::crypto::PublicKey;
 use crate::consensus::base::primitive::Address;
+use crate::network::NetworkTime;
+use crate::network::address::peer_address_book::PeerAddressBook;
 use crate::network::address::PeerId;
+use crate::network::connection::connection_pool::ConnectionPool;
 use crate::network::address::peer_address::PeerAddressType;
 use crate::network::address::peer_address::PeerAddress;
 use crate::network::address::net_address::NetAddress;
+use crate::network::peer_scorer::PeerScorer;
+use crate::network::connection::close_type::CloseType;
+use crate::network::network_config::NetworkConfig;
 use crate::utils::services::ServiceFlags;
 use std::collections::HashMap;
+use std::sync::Arc;
+use parking_lot::RwLock;
+
+pub struct Network {
+    network_config: Arc<NetworkConfig>,
+    network_time: NetworkTime,
+    auto_connect: bool,
+    backed_off: bool,
+    addresses: Arc<RwLock<PeerAddressBook>>,
+    connections: Arc<RwLock<ConnectionPool>>,
+    scorer: PeerScorer
+}
+
+impl Network {
+    const PEER_COUNT_MAX: usize = 4000;
+    const PEER_COUNT_RECYCLING_ACTIVE: usize = 1000;
+    const RECYCLING_PERCENTAGE_MIN: f32 = 0.01;
+    const RECYCLING_PERCENTAGE_MAX: f32 = 0.20;
+    const CONNECTING_COUNT_MAX: usize = 2;
+    const SCORE_INBOUND_EXCHANGE: f32 = 0.5;
+
+    pub fn new(network_config: Arc<NetworkConfig>) -> Self {
+        let addresses = Arc::new(RwLock::new(PeerAddressBook::new()));
+        Network {
+            network_config: Arc::clone(&network_config),
+            network_time: NetworkTime {},
+            auto_connect: false,
+            backed_off: false,
+            addresses: Arc::clone(&addresses),
+            connections: ConnectionPool::new(Arc::clone(&addresses), Arc::clone(&network_config)),
+            scorer: PeerScorer::new(Arc::clone(&addresses))
+        }
+    }
+
+    pub fn connect(&mut self) {
+        self.auto_connect = true;
+
+        // Start connecting to peers.
+        self.check_peer_count();
+    }
+
+    pub fn disconnect(&mut self) {
+        self.auto_connect = false;
+
+        unimplemented!();
+    }
+
+    fn check_peer_count(&mut self) {
+        if self.auto_connect && self.addresses.read().seeded() && !self.scorer.is_good_peer_set() && self.connections.read().connecting_count < Network::CONNECTING_COUNT_MAX {
+            // Pick a peer address that we are not connected to yet.
+            let peer_addr_opt = self.scorer.pick_address();
+
+            // We can't connect if we don't know any more addresses or only want connections to good peers.
+            let only_good_peers = self.scorer.needs_good_peers() && !self.scorer.needs_more_peers();
+            let mut should_back_off = peer_addr_opt.is_none();
+            if !should_back_off && only_good_peers {
+                if let Some(peer_addr) = &peer_addr_opt {
+                    should_back_off = !self.scorer.is_good_peer(Arc::clone(peer_addr));
+                }
+            }
+            if should_back_off {
+                // TODO
+            }
+
+            // Connect to this address.
+            if let Some(peer_address) = peer_addr_opt {
+                if !self.connections.write().connect_outbound(Arc::clone(&peer_address)) {
+                    self.addresses.write().close(None, peer_address, CloseType::ConnectionFailed);
+                }
+            }
+            return;
+        }
+    }
+
+    fn update_time_offset(&self) {
+        unimplemented!()
+    }
+
+    fn housekeeping(&self) {
+        // TODO
+
+        // recycle
+        if self.peer_count() < Network::PEER_COUNT_RECYCLING_ACTIVE {
+            // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
+            let percentage_to_recycle = (self.peer_count() - Network::PEER_COUNT_RECYCLING_ACTIVE) as f32 * (Network::RECYCLING_PERCENTAGE_MAX - Network::RECYCLING_PERCENTAGE_MIN) / (Network::PEER_COUNT_MAX - Network::PEER_COUNT_RECYCLING_ACTIVE) as f32 + Network::RECYCLING_PERCENTAGE_MIN as f32;
+            let connections_to_recycle = f32::ceil(self.peer_count() as f32 * percentage_to_recycle) as u32;
+            self.scorer.recycle_connections(connections_to_recycle, CloseType::PeerConnectionRecycled, "Peer connection recycled");
+        }
+
+        // set ability to exchange for new inbound connections
+        self.connections.write().allow_inbound_exchange = match self.scorer.lowest_connection_score() {
+            Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
+            None => false
+        };
+
+        // Request fresh addresses.
+        self.refresh_addresses();
+    }
+
+    fn refresh_addresses(&self) {
+        unimplemented!()
+    }
+
+    pub fn peer_count(&self) -> usize {
+        return self.connections.read().peer_count();
+    }
+}
 
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
 #[repr(u8)]
