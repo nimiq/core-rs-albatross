@@ -19,6 +19,8 @@ use tokio::{
     net::TcpListener,
 };
 
+use tokio_tungstenite::{stream::Stream as StreamSwitcher};
+
 use crate::network::{
     Protocol,
     address::{PeerAddress},
@@ -80,7 +82,7 @@ impl WebSocketConnector {
         let socket = TcpListener::bind(&addr).unwrap();
         let srv = socket.incoming().for_each(move |stream| {
             let notifier = Arc::clone(&notifier);
-            nimiq_accept_async(stream).map(move |msg_stream| {
+            nimiq_accept_async(StreamSwitcher::Plain(stream)).map(move |msg_stream| {
 
                 // FIXME: Find a way to provide reverse proxy support (i.e. getting the correct IP
                 // address from the request headers instead of from the socket itself)

@@ -10,6 +10,7 @@ extern crate tokio_tungstenite;
 use futures::prelude::*;
 use tokio::net::TcpListener;
 use std::io::{Error, ErrorKind};
+use tokio_tungstenite::{stream::Stream as StreamSwitcher};
 
 use nimiq::network::websocket::{nimiq_connect_async, nimiq_accept_async};
 use futures::sync::mpsc::channel;
@@ -30,11 +31,11 @@ pub fn main() {
 
     // Web Socket server setup
 
-    let srv = socket.incoming().for_each(move |stream| {
+    let srv = socket.incoming().for_each(move |tcp| {
 
-        let addr = stream.peer_addr().expect("connected streams should have a peer address");
+        let addr = tcp.peer_addr().expect("connected streams should have a peer address");
 
-        nimiq_accept_async(stream).and_then(move |ws_stream| {
+        nimiq_accept_async(StreamSwitcher::Plain(tcp)).and_then(move |ws_stream| {
             println!("New WebSocket connection: {}", addr);
 
             // Let's split the WebSocket stream, so we can work with the
@@ -104,7 +105,7 @@ pub fn main() {
 
     // Create a future that will resolve once both client and server futures resolve
     // (and since the server part will never resolve, this will run forever)
-    let both = client;//.join(srv);
+    let both = client.join(srv);
 
     // Execute both setups in Tokio
     tokio::run(both.map(|_| ()).map_err(|_| ()));

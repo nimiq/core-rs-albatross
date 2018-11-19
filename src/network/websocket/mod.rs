@@ -2,7 +2,10 @@ use std::{io, fmt, net, fmt::Debug};
 
 use url::Url;
 use futures::prelude::*;
-use tokio::net::TcpStream;
+use tokio::{
+    net::TcpStream,
+    io::{AsyncRead, AsyncWrite},
+};
 
 use beserial::{Deserialize, Serialize};
 use byteorder::{BigEndian, ByteOrder};
@@ -57,7 +60,7 @@ pub struct NimiqMessageStream
 
 impl NimiqMessageStream
 {
-    fn new(ws_socket: WebSocketLayer, outbound: bool) -> Self {
+    fn new(ws_socket: WebSocketStream<MaybeTlsStream<TcpStream>>, outbound: bool) -> Self {
         let peer_addr = ws_socket.get_ref().peer_addr().unwrap();
         return NimiqMessageStream {
             inner: ws_socket,
@@ -258,25 +261,6 @@ impl<E> Future for ConnectAsync<WebSocketLayer, E>
     }
 }
 
-/// Future returned from nimiq_accept_async() which will resolve
-/// once the connection handshake has finished.
-pub struct AcceptAsync<S: Stream + Sink>
-{
-    inner: Box<Future<Item = S, Error = io::Error> + Send>,
-}
-
-impl Future for AcceptAsync<WebSocketLayer> {
-    type Item = NimiqMessageStream;
-    type Error = io::Error;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.inner.poll()? {
-            Async::NotReady => Ok(Async::NotReady),
-            Async::Ready(ws) => Ok(Async::Ready(NimiqMessageStream::new(ws, false))),
-        }
-    }
-}
-
 /// Connect to a given URL.
 pub fn nimiq_connect_async(url: Url) -> ConnectAsync<WebSocketLayer, io::Error>
 {
@@ -290,16 +274,23 @@ pub fn nimiq_connect_async(url: Url) -> ConnectAsync<WebSocketLayer, io::Error>
     ConnectAsync {inner: connect}
 }
 
-pub fn nimiq_accept_async(stream: TcpStream) -> AcceptAsync<WebSocketLayer>
+pub fn nimiq_accept_async(stream: MaybeTlsStream<TcpStream>) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send>
 {
-    let accept = Box::new(
-        accept_async(tokio_tungstenite::stream::Stream::Plain(stream)).map(|ws| ws).map_err(|e| {
-            println!("Error during the websocket handshake occurred: {}", e);
-            io::Error::new(io::ErrorKind::Other, e)
-        })
-    );
+    // let accept = Box::new(
+    //     accept_async(stream).map_err(|e| {
+    //         println!("Error during the websocket handshake occurred: {}", e);
+    //         io::Error::new(io::ErrorKind::Other, e)
+    //     })
+    // );
+    Box::new(accept_async(stream).map(|ws_stream| {
+        NimiqMessageStream::new(ws_stream, false)
+    })
+    .map_err(|e| {
+        println!("Error during the websocket handshake occurred: {}", e);
+        io::Error::new(io::ErrorKind::Other, e)
+    }))
 
-    AcceptAsync {inner: accept}
+    // AcceptAsync {inner: accept}
 }
 
 #[derive(Debug)]
