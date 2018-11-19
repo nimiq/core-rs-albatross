@@ -13,6 +13,13 @@ use std::io::{Error, ErrorKind};
 
 use nimiq::network::websocket::{nimiq_connect_async, nimiq_accept_async};
 use futures::sync::mpsc::channel;
+use nimiq::network::websocket::{SharedNimiqMessageStream, NimiqMessageStreamError};
+use std::sync::Arc;
+use parking_lot::Mutex;
+use nimiq::network::connection::network_connection::CloseFuture;
+use nimiq::network::connection::close_type::CloseType;
+use futures::sync::mpsc::unbounded;
+use futures::sync::oneshot;
 
 pub fn main() {
     let addr = "127.0.0.1:8081".to_string();
@@ -59,20 +66,36 @@ pub fn main() {
 
     // Web Socket client setup
     let client = nimiq_connect_async(url::Url::parse("ws://127.0.0.1:8080").unwrap()).and_then(|msg_stream| {
-        let (sink, stream) = msg_stream.split();
+        let shared_stream: SharedNimiqMessageStream = msg_stream.into();
 
-        let (tx, rx) = channel(10);
-        let ws_writer = rx.forward(sink);
+        let (closing_tx, closing_rx) = oneshot::channel();
+        let closing_tx = Arc::new(Mutex::new(Some(closing_tx)));
+
+        let (tx, rx) = unbounded();
+        let ws_writer = rx.forward(shared_stream.clone());
 
         let mut conntx = tx.clone();
-        let ws_reader = stream.for_each(move |msg| {
+        let counter = Arc::new(Mutex::new(0usize));
+        let inner_counter = counter.clone();
+        let ws_reader = shared_stream.clone().for_each(move |msg| {
+            let mut counter = inner_counter.lock();
+            *counter += 1;
+            if *counter == 2 {
+                println!("Closed!");
+                let tx = closing_tx.lock().take().unwrap();
+                tx.send(());
+                return Ok(());
+            }
             println!("Got message type: {:?}", msg.ty());
-            conntx.start_send(msg).expect("se escochero la vara");
+            conntx.unbounded_send(msg).map_err(|_| NimiqMessageStreamError::TagMismatch)?;
             Ok(())
         });
 
-        let connection = ws_reader.map_err(|_| ())
-            .select(ws_writer.map(|_| ()).map_err(|_| ()));
+        let connection = (ws_reader.map_err(|_| ())
+            .select(ws_writer.map(|_| ()).map_err(|_| ()))).map(|_| ()).map_err(|_| ())
+            .select(closing_rx.map(|_: ()| ()).map_err(|_| ()))
+            .then(move |_| CloseFuture::new(shared_stream.clone(), CloseType::AbortedSync))
+            .map(|_: ()| ()).map_err(|_| ());
 
         tokio::spawn(connection.then(move |_| {
             Ok(())
@@ -82,7 +105,7 @@ pub fn main() {
 
     // Create a future that will resolve once both client and server futures resolve
     // (and since the server part will never resolve, this will run forever)
-    let both = client.join(srv);
+    let both = client;//.join(srv);
 
     // Execute both setups in Tokio
     tokio::run(both.map(|_| ()).map_err(|_| ()));

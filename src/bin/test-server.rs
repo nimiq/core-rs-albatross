@@ -30,7 +30,11 @@ fn main() {
                 let msg = tungstenite::Message::binary(msg);
                 websocket.write_message(msg).unwrap();
                 tag += 1;
-                let rx_msg = websocket.read_message().expect("Some problem");
+                let rx_msg = if let Ok(rx_msg) = websocket.read_message() {
+                    rx_msg
+                } else {
+                    return;
+                };
                 let rx_msg = rx_msg.into_data();
                 let rx_msg_str: String = rx_msg.iter().map(|b| format!("{:02x}", b)).fold(String::new(), |mut hex, c| {hex.push_str(&c[..]); hex});
 
