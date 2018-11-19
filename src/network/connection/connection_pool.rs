@@ -217,7 +217,7 @@ impl ConnectionPool {
     /// Close a connection.
     fn close(network_connection: Option<&NetworkConnection>, ty: CloseType) {
         if let Some(network_connection) = network_connection {
-            tokio::spawn(network_connection.close(ty));
+            network_connection.close(ty);
         }
     }
 

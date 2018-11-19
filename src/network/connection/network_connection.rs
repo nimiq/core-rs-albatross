@@ -18,6 +18,9 @@ use parking_lot::RwLockReadGuard;
 use crate::network::websocket::NimiqMessageStreamError;
 use crate::utils::observer::PassThroughNotifier;
 use crate::network::peer_channel::PeerStreamEvent;
+use futures::sync::oneshot;
+use parking_lot::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Clone)]
 pub struct NetworkConnection {
@@ -33,9 +36,11 @@ impl NetworkConnection {
 
         let forward_future = rx.forward(stream.clone());
 
-        let peer_sink = PeerSink::new(tx);
         let notifier = Arc::new(RwLock::new(PassThroughNotifier::new()));
         let peer_stream = PeerStream::new(stream.clone(), notifier.clone());
+        let (process_connection, closing_helper) = ProcessConnectionFuture::new(peer_stream, forward_future, stream.clone());
+
+        let peer_sink = PeerSink::new(tx, closing_helper);
 
         let network_connection = NetworkConnection {
             peer_sink,
@@ -44,14 +49,11 @@ impl NetworkConnection {
             notifier,
         };
 
-        (network_connection, ProcessConnectionFuture::new(peer_stream, forward_future))
+        (network_connection, process_connection)
     }
 
-    pub fn close(&self, ty: CloseType) -> CloseFuture {
-        // Call `session.on_close()` eagerly, but only once.
-        debug!("Closing connection, reason: {:?}", ty);
-        self.notifier.read().notify(PeerStreamEvent::Close(ty));
-        CloseFuture::new(self.stream.clone(), ty)
+    pub fn close(&self, ty: CloseType) -> bool {
+        self.peer_sink.close(ty)
     }
 
     pub fn net_address(&self) -> Arc<NetAddress> {
@@ -78,16 +80,82 @@ impl NetworkConnection {
     }
 }
 
+pub struct ClosingHelper {
+    closing_tx: Mutex<Option<oneshot::Sender<CloseType>>>,
+    closed: AtomicBool,
+    notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
+}
+
+impl ClosingHelper {
+    pub fn new(closing_tx: oneshot::Sender<CloseType>,
+               notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>) -> Self {
+        Self {
+            closing_tx: Mutex::new(Some(closing_tx)),
+            notifier,
+            closed: AtomicBool::new(false),
+        }
+    }
+
+    pub fn closed(&self) -> bool {
+        self.closed.load(Ordering::Acquire)
+    }
+
+    pub fn close(&self, ty: CloseType) -> bool {
+        debug!("Closing connection, reason: {:?}", ty);
+
+        // Don't close if already done and atomically mark as closed.
+        if self.closed.swap(true, Ordering::Release) {
+            return false;
+        }
+
+        // Send out oneshot with CloseType to close the connection from our end.
+        let mut closing_tx = self.closing_tx.lock();
+        assert!(closing_tx.is_some(), "Trying to close already closed connection.");
+        let closing_tx = closing_tx.take().unwrap();
+        if closing_tx.send(ty).is_err() {
+            // Already closed by remote.
+            return false;
+        }
+
+        // Now send out notifications.
+        self.notifier.read().notify(PeerStreamEvent::Close(ty));
+        return true;
+    }
+}
+
 pub struct ProcessConnectionFuture {
     inner: Box<Future<Item=(), Error=()> + Send + Sync + 'static>,
 }
 
 impl ProcessConnectionFuture {
-    pub fn new(peer_stream: PeerStream, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>) -> Self {
-        let pair = forward_future.join(peer_stream.process_stream().map_err(|_| ())); // TODO: throwing away error info here
-        ProcessConnectionFuture {
-            inner: Box::new(pair.map(|_| ()))
-        }
+    pub fn new(peer_stream: PeerStream, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>, mut shared_stream: SharedNimiqMessageStream) -> (Self, ClosingHelper) {
+        let (closing_tx, closing_rx) = oneshot::channel::<CloseType>();
+        let notifier = peer_stream.notifier.clone();
+
+        // `select` required Item/Error to be the same, that's why we need to map them both to ().
+        let connection = forward_future.map(|_| ()).map_err(|_| ()).select(peer_stream.process_stream().map_err(|_| ())); // TODO: throwing away error info here
+        // `select` required Item/Error to be the same.
+        // `closing_rx` has Item=ClosingType, which we want to use. But Error will be set to ().
+        let closing_future = closing_rx.map_err(|_| ());
+        // `connection` currently has a tuple type, but we will soon call `select`, so unify Error to ()
+        // and set Item=CloseType with `CloseType::Regular` to identify a normal shutdown.
+        let connection = connection.map(|_| CloseType::Regular).map_err(|_| ());
+        // Types have already been unified, so select over normal connection and `closing_future`.
+        let connection = connection.select(closing_future);
+        // If the connection is to be dropped because of a forceful close, CloseType != `CloseType::Regular`.
+        // So, in these cases, send the WS CloseFrame.
+        // Set Item=() and map Error=().
+        let connection = connection.and_then(move |(ty, _)| {
+            // Specifically send close frame if CloseType is not Regular.
+            if ty != CloseType::Regular {
+                shared_stream.close();
+            }
+            Ok(())
+        }).map_err(|_| ());
+
+        (Self {
+            inner: Box::new(connection)
+        }, ClosingHelper::new(closing_tx, notifier))
     }
 }
 
@@ -97,29 +165,6 @@ impl Future for ProcessConnectionFuture {
 
     fn poll(&mut self) -> Result<Async<<Self as Future>::Item>, <Self as Future>::Error> {
         self.inner.poll()
-    }
-}
-
-pub struct CloseFuture {
-    stream: SharedNimiqMessageStream,
-    ty: CloseType,
-}
-
-impl CloseFuture {
-    pub fn new(stream: SharedNimiqMessageStream, ty: CloseType) -> Self {
-        CloseFuture {
-            stream,
-            ty
-        }
-    }
-}
-
-impl Future for CloseFuture {
-    type Item = ();
-    type Error = ();
-
-    fn poll(&mut self) -> Poll<(), ()> {
-        self.stream.close()
     }
 }
 

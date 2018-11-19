@@ -19,6 +19,7 @@ use crate::network::peer::Peer;
 use crate::network::websocket::NimiqMessageStreamError;
 use crate::network::websocket::SharedNimiqMessageStream;
 use crate::utils::observer::{Listener, ListenerHandle, Notifier, PassThroughListener, PassThroughNotifier};
+use crate::network::connection::network_connection::ClosingHelper;
 
 pub trait Agent: Send {
     /// Initialize the protocol.
@@ -37,7 +38,6 @@ pub struct PeerChannel {
     pub notifier: Arc<RwLock<Notifier<'static, PeerChannelEvent>>>,
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
-    closed: Arc<AtomicBool>,
 }
 
 impl PeerChannel {
@@ -50,15 +50,7 @@ impl PeerChannel {
         let bubble_notifier = notifier.clone();
         network_connection.notifier.write().register(move |e: PeerStreamEvent| {
             let event = PeerChannelEvent::from(e);
-            match event {
-                PeerChannelEvent::Close(ty) => {
-                    // Don't fire close event again when already closed.
-                    if !inner_closed.swap(true, Ordering::Relaxed) {
-                        bubble_notifier.read().notify(event);
-                    }
-                },
-                event => bubble_notifier.read().notify(event),
-            };
+            bubble_notifier.read().notify(event)
         });
 
         PeerChannel {
@@ -66,16 +58,16 @@ impl PeerChannel {
             notifier,
             peer_sink: network_connection.peer_sink(),
             address_info,
-            closed,
         }
     }
 
-    pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> {
-        self.peer_sink.send(msg)
-    }
+    pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> { self.peer_sink.send(msg) }
 
     pub fn closed(&self) -> bool {
-        self.closed.load(Ordering::Relaxed)
+        self.peer_sink.closed()
+    }
+    pub fn close(&self, ty: CloseType) -> bool {
+        self.peer_sink.close(ty)
     }
 }
 
@@ -111,17 +103,31 @@ impl From<PeerStreamEvent> for PeerChannelEvent {
 #[derive(Clone)]
 pub struct PeerSink {
     sink: UnboundedSender<Message>,
+    closing_helper: Arc<ClosingHelper>,
 }
 
 impl PeerSink {
-    pub fn new(channel: UnboundedSender<Message>) -> Self {
+    pub fn new(channel: UnboundedSender<Message>, closing_helper: ClosingHelper) -> Self {
         PeerSink {
-            sink: channel.clone(),
+            sink: channel,
+            closing_helper: Arc::new(closing_helper),
         }
     }
 
     pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> {
         self.sink.unbounded_send(msg)
+    }
+
+    /// Closes the connection and returns a boolean value describing whether we closed the channel.
+    /// This may be false if we already closed the channel or the other side closed it.
+    pub fn close(&self, ty: CloseType) -> bool {
+        self.closing_helper.close(ty)
+    }
+
+    /// Checks whether a connection has been closed from our end.
+    pub fn closed(&self) -> bool {
+        // TODO currently this only reflects our end of the connection
+        self.closing_helper.closed()
     }
 }
 
@@ -140,7 +146,7 @@ pub enum PeerStreamEvent {
 
 pub struct PeerStream {
     stream: SharedNimiqMessageStream,
-    notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
+    pub notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
 }
 
 impl PeerStream {

@@ -16,7 +16,6 @@ use futures::sync::mpsc::channel;
 use nimiq::network::websocket::{SharedNimiqMessageStream, NimiqMessageStreamError};
 use std::sync::Arc;
 use parking_lot::Mutex;
-use nimiq::network::connection::network_connection::CloseFuture;
 use nimiq::network::connection::close_type::CloseType;
 use futures::sync::mpsc::unbounded;
 use futures::sync::oneshot;
@@ -66,7 +65,7 @@ pub fn main() {
 
     // Web Socket client setup
     let client = nimiq_connect_async(url::Url::parse("ws://127.0.0.1:8080").unwrap()).and_then(|msg_stream| {
-        let shared_stream: SharedNimiqMessageStream = msg_stream.into();
+        let mut shared_stream: SharedNimiqMessageStream = msg_stream.into();
 
         let (closing_tx, closing_rx) = oneshot::channel();
         let closing_tx = Arc::new(Mutex::new(Some(closing_tx)));
@@ -93,8 +92,8 @@ pub fn main() {
 
         let connection = (ws_reader.map_err(|_| ())
             .select(ws_writer.map(|_| ()).map_err(|_| ()))).map(|_| ()).map_err(|_| ())
-            .select(closing_rx.map(|_: ()| ()).map_err(|_| ()))
-            .then(move |_| CloseFuture::new(shared_stream.clone(), CloseType::AbortedSync))
+            .select(closing_rx.map(|_: ()| ()).map_err(|_| ())).map(|_| ()).map_err(|_| ())
+            .and_then(move |_| { shared_stream.close(); Ok(())})
             .map(|_: ()| ()).map_err(|_| ());
 
         tokio::spawn(connection.then(move |_| {
