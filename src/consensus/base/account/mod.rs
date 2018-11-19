@@ -61,7 +61,7 @@ impl Account {
 
     pub fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         return match account_type {
-            AccountType::Basic => Err(AccountError::Any("Invalid contract type".to_string())),
+            AccountType::Basic => Err(AccountError::InvalidForRecipient),
             AccountType::Vesting => Ok(Account::Vesting(VestingContract::create(balance, transaction, block_height)?)),
             AccountType::HTLC => Ok(Account::HTLC(HashedTimeLockedContract::create(balance, transaction, block_height)?))
         };
@@ -246,6 +246,7 @@ pub enum AccountError {
     InvalidSignature,
     InvalidForSender,
     InvalidForRecipient,
+    InvalidPruning,
     InvalidSerialization(SerializingError),
     InvalidTransaction(TransactionError),
     #[deprecated]

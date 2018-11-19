@@ -1,11 +1,12 @@
-use nimiq::consensus::base::account::Accounts;
-use nimiq::consensus::base::primitive::{Address, Coin};
-use nimiq::consensus::base::block::BlockBody;
-use nimiq::utils::db::WriteTransaction;
-use nimiq::utils::db::volatile::VolatileEnvironment;
-use nimiq::consensus::base::transaction::Transaction;
+use beserial::Serialize;
+use nimiq::consensus::base::account::{AccountError, Accounts, Account, AccountType, PrunedAccount};
+use nimiq::consensus::base::block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
+use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair, hash::{Blake2bHash, Hash, SerializeContent}};
+use nimiq::consensus::base::transaction::{SignatureProof, Transaction};
 use nimiq::consensus::networks::NetworkId;
 use nimiq::consensus::policy;
+use nimiq::utils::db::volatile::VolatileEnvironment;
+use nimiq::utils::db::WriteTransaction;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
@@ -216,4 +217,110 @@ fn it_checks_for_sufficient_funds() {
 #[test]
 fn it_prevents_spending_of_funds_received_in_the_same_block() {
 
+}
+
+#[test]
+fn it_correctly_prunes_account() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts = Accounts::new(&env);
+    let key_pair = KeyPair::generate();
+    let address = Address::from(&key_pair.public);
+    let mut body = BlockBody {
+        miner: address.clone(),
+        extra_data: Vec::new(),
+        transactions: Vec::new(),
+        pruned_accounts: Vec::new()
+    };
+
+    // Give a block reward
+    {
+        let mut txn = WriteTransaction::new(&env);
+        assert!(accounts.commit_block_body(&mut txn, &body, 1).is_ok());
+        txn.commit();
+    }
+
+    // Create vesting contract
+    let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 4);
+    address.serialize(&mut data).unwrap();
+    1u32.serialize(&mut data).unwrap();
+    let mut tx_create = Transaction::new_contract_creation(data, address.clone(), AccountType::Basic, AccountType::Vesting, Coin::from(100), Coin::from(0), 1, NetworkId::Dummy);
+    tx_create.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_create.serialize_content())).serialize_to_vec();
+    let contract_address = tx_create.contract_creation_address();
+    body.transactions = vec![tx_create.clone()];
+    {
+        let mut txn = WriteTransaction::new(&env);
+        assert!(accounts.commit_block_body(&mut txn, &body, 2).is_ok());
+        txn.commit();
+    }
+
+    // Create a block stub from it (for later use)
+    let block = Block {
+        header: BlockHeader {
+            version: 1,
+            prev_hash: Blake2bHash::from([0u8; 32]),
+            interlink_hash: Blake2bHash::from([0u8; 32]),
+            body_hash: body.hash(),
+            accounts_hash: accounts.hash(None),
+            n_bits: TargetCompact::from(1),
+            height: 2,
+            timestamp: 0,
+            nonce: 0
+        },
+        interlink: BlockInterlink::new(vec![], &Blake2bHash::from([0u8; 32])),
+        body: Some(body.clone()),
+    };
+
+    // Empty vesting contract without pruning it
+    let mut tx_prune = Transaction::new_basic(contract_address.clone(), address.clone(), Coin::from(100), Coin::from(0), 2, NetworkId::Dummy);
+    tx_prune.sender_type = AccountType::Vesting;
+    tx_prune.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_prune.serialize_content())).serialize_to_vec();
+    body.transactions = vec![tx_prune.clone()];
+    {
+        let mut txn = WriteTransaction::new(&env);
+        assert_eq!(accounts.commit_block_body(&mut txn, &body, 3), Err(AccountError::InvalidPruning));
+    }
+
+    // Now do proper pruning
+    body.pruned_accounts = vec![PrunedAccount {
+        address: contract_address.clone(),
+        account: accounts.get(&contract_address, None)
+            .with_outgoing_transaction(&tx_prune, 2).unwrap(),
+    }];
+    {
+        let mut txn = WriteTransaction::new(&env);
+        assert!(accounts.commit_block_body(&mut txn, &body, 3).is_ok());
+        txn.commit();
+    }
+
+    // Check that the account was pruned correctly
+    let account_after_prune = accounts.get(&contract_address, None);
+    assert_eq!(account_after_prune.account_type(), AccountType::Basic);
+    assert_eq!(account_after_prune.balance(), Coin::from(0));
+
+    // Now revert pruning
+    {
+        let mut txn = WriteTransaction::new(&env);
+        assert!(accounts.revert_block_body(&mut txn, &body, 3).is_ok());
+        txn.commit();
+    }
+
+    // Check that the account was recovered correctly
+    if let Account::Vesting(vesting_contract) = accounts.get(&contract_address, None) {
+        assert_eq!(vesting_contract.balance, Coin::from(100));
+        assert_eq!(vesting_contract.owner, address);
+    }
+
+    // New revert account
+    body.pruned_accounts = Vec::new();
+    body.transactions = vec![tx_create.clone()];
+    {
+        let mut txn = WriteTransaction::new(&env);
+        assert!(accounts.revert_block(&mut txn, &block).is_ok());
+        txn.commit();
+    }
+
+    // Check that the account is really gone
+    let account_after_prune = accounts.get(&contract_address, None);
+    assert_eq!(account_after_prune.account_type(), AccountType::Basic);
+    assert_eq!(account_after_prune.balance(), Coin::from(0));
 }

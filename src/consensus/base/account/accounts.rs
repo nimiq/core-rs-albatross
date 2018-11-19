@@ -100,7 +100,9 @@ impl<'env> Accounts<'env> {
 
         // Create contracts.
         for transaction in &body.transactions {
-            self.create_contract(txn, transaction, block_height)?;
+            if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                self.create_contract(txn, transaction, block_height)?;
+            }
         }
 
         self.prune_accounts(txn, body)?;
@@ -121,7 +123,9 @@ impl<'env> Accounts<'env> {
 
         // Revert created contracts.
         for transaction in &body.transactions {
-            self.revert_contract(txn, transaction, block_height)?;
+            if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                self.revert_contract(txn, transaction, block_height)?;
+            }
         }
 
         // Process recipient accounts.
@@ -172,32 +176,20 @@ impl<'env> Accounts<'env> {
     }
 
     fn create_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
-        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-            return Ok(());
-        }
+        assert!(transaction.flags.contains(TransactionFlags::CONTRACT_CREATION));
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));
-        if recipient_account.account_type() != AccountType::Basic {
-            return Err(AccountError::Any("Contract already exists".to_string()));
-        }
-
         let new_recipient_account = Account::new_contract(transaction.recipient_type, recipient_account.balance(), transaction, block_height)?;
         self.tree.put_batch(txn, &transaction.recipient, new_recipient_account);
         return Ok(());
     }
 
     fn revert_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
-        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-            return Ok(());
-        }
+        assert!(transaction.flags.contains(TransactionFlags::CONTRACT_CREATION));
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));
-        if recipient_account.account_type() == AccountType::Basic {
-            return Err(AccountError::Any("Contract does not exist".to_string()));
-        }
-
         if recipient_account.account_type() != transaction.recipient_type {
-            return Err(AccountError::Any("Wrong contract type".to_string()));
+            return Err(AccountError::InvalidForRecipient);
         }
 
         let new_recipient_account = Account::new_basic(recipient_account.balance());
@@ -222,7 +214,7 @@ impl<'env> Accounts<'env> {
                 None => false
             };
             if !correctly_pruned {
-                return Err(AccountError::Any("Account not pruned correctly".to_string()));
+                return Err(AccountError::InvalidPruning);
             }
 
             self.tree.put_batch(txn, &transaction.sender, Account::INITIAL);
@@ -230,7 +222,7 @@ impl<'env> Accounts<'env> {
         }
 
         if pruned_accounts.len() > 0 {
-            return Err(AccountError::Any("Account was invalidly pruned".to_string()));
+            return Err(AccountError::InvalidPruning);
         }
 
         return Ok(());
