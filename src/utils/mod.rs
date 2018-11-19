@@ -1,7 +1,8 @@
-use parking_lot::RwLock;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::time::Duration;
+
+use parking_lot::RwLock;
 
 pub mod crc;
 pub mod merkle;
@@ -12,6 +13,7 @@ pub mod bit_vec;
 pub mod key_derivation;
 pub mod services;
 pub mod observer;
+pub mod timers;
 
 pub fn systemtime_to_timestamp(start : SystemTime) -> u64 {
     let since_the_epoch = start.duration_since(UNIX_EPOCH);
