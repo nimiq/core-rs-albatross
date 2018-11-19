@@ -14,6 +14,7 @@ pub mod key_derivation;
 pub mod services;
 pub mod observer;
 pub mod timers;
+pub mod unique_ptr;
 
 pub fn systemtime_to_timestamp(start : SystemTime) -> u64 {
     let since_the_epoch = start.duration_since(UNIX_EPOCH);

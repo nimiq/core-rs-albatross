@@ -1,10 +1,10 @@
 use std::sync::{Weak, Arc};
 
-pub trait Listener<E: Clone>: Send + Sync {
+pub trait Listener<E>: Send + Sync {
     fn on_event(&self, event: &E);
 }
 
-impl<E: Clone, F: Fn(&E)> Listener<E> for F
+impl<E, F: Fn(&E)> Listener<E> for F
     where F: Send + Sync {
     fn on_event(&self, event: &E) {
         self(event);
@@ -18,7 +18,7 @@ pub struct Notifier<'l, E> {
     next_handle: ListenerHandle
 }
 
-impl<'l, E: Clone> Notifier<'l, E> {
+impl<'l, E> Notifier<'l, E> {
     pub fn new() -> Self {
         Self {
             listeners: Vec::new(),
@@ -42,6 +42,14 @@ impl<'l, E: Clone> Notifier<'l, E> {
         }
     }
 
+    pub fn notify_ref(&self, event: &E) {
+        for (_, listener) in &self.listeners {
+            listener.on_event(event);
+        }
+    }
+}
+
+impl<'l, E: Clone> Notifier<'l, E> {
     pub fn notify(&self, event: E) {
         for (_, listener) in &self.listeners {
             listener.on_event(&event);
@@ -50,7 +58,7 @@ impl<'l, E: Clone> Notifier<'l, E> {
 }
 
 pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
-    where C: Fn(Arc<T>, &E) + Send + Sync, E: Clone, T: Send + Sync {
+    where C: Fn(Arc<T>, &E) + Send + Sync, T: Send + Sync {
     move |event: &E| {
         if let Some(arc) = weak_ref.upgrade() {
             closure(arc, event);
@@ -58,11 +66,11 @@ pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
     }
 }
 
-pub trait PassThroughListener<E: Clone>: Send + Sync {
+pub trait PassThroughListener<E>: Send + Sync {
     fn on_event(&self, event: E);
 }
 
-impl<E: Clone, F: Fn(E)> PassThroughListener<E> for F
+impl<E, F: Fn(E)> PassThroughListener<E> for F
     where F: Send + Sync {
     fn on_event(&self, event: E) {
         self(event);
@@ -73,7 +81,7 @@ pub struct PassThroughNotifier<'l, E> {
     listener: Option<Box<PassThroughListener<E> + 'l>>,
 }
 
-impl<'l, E: Clone> PassThroughNotifier<'l, E> {
+impl<'l, E> PassThroughNotifier<'l, E> {
     pub fn new() -> Self {
         Self {
             listener: None,
