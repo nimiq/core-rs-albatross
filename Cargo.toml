@@ -38,6 +38,8 @@ num-bigint = "0.2.0"
 
 url = "1.7"
 tokio = "0.1"
+tokio-tls = "0.2"
+native-tls = "0.2"
 futures = "0.1"
 byteorder = "1.2"
 tungstenite = "0.6"

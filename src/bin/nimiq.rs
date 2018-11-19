@@ -13,11 +13,9 @@ use std::io::{Error, ErrorKind};
 use tokio_tungstenite::{stream::Stream as StreamSwitcher};
 
 use nimiq::network::websocket::{nimiq_connect_async, nimiq_accept_async};
-use futures::sync::mpsc::channel;
 use nimiq::network::websocket::{SharedNimiqMessageStream, NimiqMessageStreamError};
 use std::sync::Arc;
 use parking_lot::Mutex;
-use nimiq::network::connection::close_type::CloseType;
 use futures::sync::mpsc::unbounded;
 use futures::sync::oneshot;
 
@@ -74,16 +72,16 @@ pub fn main() {
         let (tx, rx) = unbounded();
         let ws_writer = rx.forward(shared_stream.clone());
 
-        let mut conntx = tx.clone();
+        let conntx = tx.clone();
         let counter = Arc::new(Mutex::new(0usize));
         let inner_counter = counter.clone();
         let ws_reader = shared_stream.clone().for_each(move |msg| {
             let mut counter = inner_counter.lock();
             *counter += 1;
-            if *counter == 2 {
+            if *counter == 5 {
                 println!("Closed!");
                 let tx = closing_tx.lock().take().unwrap();
-                tx.send(());
+                tx.send(()).unwrap();
                 return Ok(());
             }
             println!("Got message type: {:?}", msg.ty());
@@ -94,7 +92,7 @@ pub fn main() {
         let connection = (ws_reader.map_err(|_| ())
             .select(ws_writer.map(|_| ()).map_err(|_| ()))).map(|_| ()).map_err(|_| ())
             .select(closing_rx.map(|_: ()| ()).map_err(|_| ())).map(|_| ()).map_err(|_| ())
-            .and_then(move |_| { shared_stream.close(); Ok(())})
+            .and_then(move |_| { shared_stream.close().unwrap(); Ok(())})
             .map(|_: ()| ()).map_err(|_| ());
 
         tokio::spawn(connection.then(move |_| {

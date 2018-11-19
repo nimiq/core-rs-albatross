@@ -1,4 +1,6 @@
 use std::{
+    net::SocketAddr,
+    fs::File,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -8,6 +10,7 @@ use std::{
 
 use url::Url;
 use parking_lot::RwLock;
+use native_tls::{Identity, TlsAcceptor};
 
 use futures::{
     prelude::*,
@@ -18,17 +21,31 @@ use tokio::{
     prelude::*,
     net::TcpListener,
 };
+use tokio_tls::{TlsAcceptor as TokioTlsAcceptor};
+use tungstenite::stream::Mode;
 
-use tokio_tungstenite::{stream::Stream as StreamSwitcher};
+use tokio_tungstenite::{
+    MaybeTlsStream,
+    stream::Stream as StreamSwitcher,
+};
 
 use crate::network::{
     Protocol,
-    address::{PeerAddress},
+    address::PeerAddress,
     connection::{
         AddressInfo,
         NetworkConnection,
     },
-    websocket::{nimiq_connect_async, nimiq_accept_async, SharedNimiqMessageStream},
+    network_config::{
+        NetworkConfig,
+        ProtocolConfig,
+    },
+    websocket::{
+        nimiq_connect_async,
+        nimiq_accept_async,
+        NimiqMessageStream,
+        SharedNimiqMessageStream,
+    },
 };
 
 use crate::utils::observer::Notifier;
@@ -49,24 +66,45 @@ impl ConnectionHandle {
     }
 }
 
-
 #[derive(Clone)]
 pub enum WebSocketConnectorEvent {
     Connection(NetworkConnection),
     Error(Arc<PeerAddress>, io::ErrorKind),
 }
 
+pub fn wrap_stream<S>(socket: S, identity_file: Option<String>, mode: Mode)
+        -> Box<Future<Item=MaybeTlsStream<S>, Error=io::Error> + Send>
+    where
+        S: 'static + AsyncRead + AsyncWrite + Send,
+    {
+        match mode {
+            Mode::Plain => Box::new(future::ok(StreamSwitcher::Plain(socket))),
+            Mode::Tls => {
+                let identity_file = identity_file.expect("Tls option should always be called with a certificate.");
+                let mut file = File::open(identity_file).unwrap();
+                let mut pkcs12 = vec![];
+                file.read_to_end(&mut pkcs12).unwrap();
+                let pkcs12 = Identity::from_pkcs12(&pkcs12, "hunter2").unwrap();
+                Box::new(future::result(TlsAcceptor::new(pkcs12))
+                            .map(TokioTlsAcceptor::from)
+                            .and_then(move |acceptor| acceptor.accept(socket))
+                            .map(|s| StreamSwitcher::Tls(s))
+                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e)))
+            }
+        }
+    }
+
 pub struct WebSocketConnector {
     protocol: Protocol,
     protocol_prefix: String,
-    network_config: String,
+    network_config: Arc<RwLock<NetworkConfig>>,
     notifier: Arc<RwLock<Notifier<'static, WebSocketConnectorEvent>>>,
 }
 
 impl WebSocketConnector {
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(5); // 5 seconds
 
-    pub fn new(protocol: Protocol, protocol_prefix: String, network_config: String) -> WebSocketConnector {
+    pub fn new(protocol: Protocol, protocol_prefix: String, network_config: Arc<RwLock<NetworkConfig>>) -> WebSocketConnector {
         WebSocketConnector {
             protocol,
             protocol_prefix,
@@ -76,31 +114,44 @@ impl WebSocketConnector {
     }
 
     pub fn start(&self) {
-        let addr = "127.0.0.1:8081".to_string().parse().unwrap();
+        let network_config = self.network_config.read();
+        let protocol_config = network_config.protocol_config();
+
+        let (host, port, identity_file, mode) = match protocol_config {
+            ProtocolConfig::Ws{host, port, reverse_proxy_config} => {
+                (host.to_string(), port.clone(), None, Mode::Plain)
+            },
+            ProtocolConfig::Wss{host, port, identity_file} => {
+                (host.to_string(), port.clone(), Some(identity_file.to_string()), Mode::Tls)
+            },
+            _ => panic!("Protocol not supported"),
+        };
+
+        let addr = SocketAddr::new(host.parse().expect("Invalid IP address"), port);
+        let socket = TcpListener::bind(&addr).unwrap();
         let notifier = Arc::clone(&self.notifier);
 
-        let socket = TcpListener::bind(&addr).unwrap();
-        let srv = socket.incoming().for_each(move |stream| {
+        let srv = socket.incoming().for_each(move |tcp| {
             let notifier = Arc::clone(&notifier);
-            nimiq_accept_async(StreamSwitcher::Plain(stream)).map(move |msg_stream| {
-
-                // FIXME: Find a way to provide reverse proxy support (i.e. getting the correct IP
-                // address from the request headers instead of from the socket itself)
-
-                let shared_stream: SharedNimiqMessageStream = msg_stream.into();
-                let net_address = Some(Arc::new(shared_stream.net_address()));
-                let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, None));
-                notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
-
-                tokio::spawn(ncfut);
+            let identity_file = identity_file.clone();
+                wrap_stream(tcp, identity_file, mode).and_then(move |ss| {
+                    nimiq_accept_async(ss).map(move |msg_stream: NimiqMessageStream| {
+                        // FIXME: Find a way to provide reverse proxy support (i.e. getting the correct IP
+                        // address from the request headers instead of from the socket itself)
+                        let shared_stream: SharedNimiqMessageStream = msg_stream.into();
+                        let net_address = Some(Arc::new(shared_stream.net_address()));
+                        let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, None));
+                        notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
+                        tokio::spawn(ncfut);
+                    })
+                })
             })
-        })
-        .map_err(|error| (
-            // FIXME: what should we do with incoming connection errors?
-            ()
-        ));
+            .map_err(|error| (
+                // FIXME: what should we do with incoming connection errors?
+                ()
+            ));
 
-        tokio::spawn(srv);
+            tokio::spawn(srv);
     }
 
     pub fn connect(&self, peer_address: Arc<PeerAddress>) -> Arc<ConnectionHandle> {

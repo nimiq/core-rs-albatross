@@ -276,12 +276,6 @@ pub fn nimiq_connect_async(url: Url) -> ConnectAsync<WebSocketLayer, io::Error>
 
 pub fn nimiq_accept_async(stream: MaybeTlsStream<TcpStream>) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send>
 {
-    // let accept = Box::new(
-    //     accept_async(stream).map_err(|e| {
-    //         println!("Error during the websocket handshake occurred: {}", e);
-    //         io::Error::new(io::ErrorKind::Other, e)
-    //     })
-    // );
     Box::new(accept_async(stream).map(|ws_stream| {
         NimiqMessageStream::new(ws_stream, false)
     })
@@ -289,8 +283,6 @@ pub fn nimiq_accept_async(stream: MaybeTlsStream<TcpStream>) -> Box<Future<Item 
         println!("Error during the websocket handshake occurred: {}", e);
         io::Error::new(io::ErrorKind::Other, e)
     }))
-
-    // AcceptAsync {inner: accept}
 }
 
 #[derive(Debug)]
