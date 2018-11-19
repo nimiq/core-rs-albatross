@@ -50,8 +50,8 @@ fn it_can_push_blocks() {
             body.transactions = vec![tx1.clone(), tx2.clone()];
         }
 
-        assert!(!cache.contains(&tx1));
-        assert!(!cache.contains(&tx2));
+        assert!(!cache.contains(&tx1.hash()));
+        assert!(!cache.contains(&tx2.hash()));
         assert!(!cache.contains_any(&b));
 
         cache.push_block(&b);
@@ -62,8 +62,8 @@ fn it_can_push_blocks() {
         assert_eq!(cache.head_hash(), hash);
         assert_eq!(cache.tail_hash(), tail_hash);
 
-        assert!(cache.contains(&tx1));
-        assert!(cache.contains(&tx2));
+        assert!(cache.contains(&tx1.hash()));
+        assert!(cache.contains(&tx2.hash()));
         assert!(cache.contains_any(&block));
     }
 }
@@ -105,8 +105,8 @@ fn it_can_revert_blocks() {
             body.transactions = vec![tx1.clone(), tx2.clone()];
         }
 
-        assert!(!cache.contains(&tx1));
-        assert!(!cache.contains(&tx2));
+        assert!(!cache.contains(&tx1.hash()));
+        assert!(!cache.contains(&tx2.hash()));
         assert!(!cache.contains_any(&b));
 
         cache.push_block(&b);
@@ -118,8 +118,8 @@ fn it_can_revert_blocks() {
         assert_eq!(cache.head_hash(), hash);
         assert_eq!(cache.tail_hash(), blocks[0].header.hash());
 
-        assert!(cache.contains(&tx1));
-        assert!(cache.contains(&tx2));
+        assert!(cache.contains(&tx1.hash()));
+        assert!(cache.contains(&tx2.hash()));
         assert!(cache.contains_any(&block));
     }
 
@@ -177,8 +177,8 @@ fn it_removes_blocks_outside_the_validity_window() {
             body.transactions = vec![tx1.clone(), tx2.clone()];
         }
 
-        assert!(!cache.contains(&tx1));
-        assert!(!cache.contains(&tx2));
+        assert!(!cache.contains(&tx1.hash()));
+        assert!(!cache.contains(&tx2.hash()));
         assert!(!cache.contains_any(&b));
 
         cache.push_block(&b);
@@ -191,8 +191,8 @@ fn it_removes_blocks_outside_the_validity_window() {
         assert_eq!(cache.head_hash(), hash);
         assert_eq!(cache.tail_hash(), blocks[tail_index].header.hash());
 
-        assert!(cache.contains(&tx1));
-        assert!(cache.contains(&tx2));
+        assert!(cache.contains(&tx1.hash()));
+        assert!(cache.contains(&tx2.hash()));
         assert!(cache.contains_any(&block));
 
         if i >= policy::TRANSACTION_VALIDITY_WINDOW as u64 {

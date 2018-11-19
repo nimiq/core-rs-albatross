@@ -131,7 +131,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn push(&self, block: Block) -> PushResult {
-        // Allow only one push operation at a time.
+        // Only one push operation at a time.
         let lock = self.push_lock.lock();
 
         // Check if we already know this block.
@@ -228,8 +228,8 @@ impl<'env> Blockchain<'env> {
         self.chain_store.put_chain_info(&mut txn, &chain_info.head.header.prev_hash, &prev_info, false);
         self.chain_store.set_head(&mut txn, &block_hash);
 
-        // Acquire write lock.
         {
+            // Acquire write lock.
             let mut state = self.state.write();
 
             state.transaction_cache.push_block(&chain_info.head);
@@ -474,5 +474,10 @@ impl<'env> Blockchain<'env> {
     pub fn accounts(&self) -> MappedRwLockReadGuard<Accounts<'env>> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| &s.accounts)
+    }
+
+    pub fn transaction_cache(&self) -> MappedRwLockReadGuard<TransactionCache> {
+        let guard = self.state.read();
+        RwLockReadGuard::map(guard, |s| &s.transaction_cache)
     }
 }

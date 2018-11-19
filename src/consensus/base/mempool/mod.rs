@@ -1,234 +1,348 @@
 use beserial::Serialize;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::convert::From;
+use std::iter;
 use std::sync::Arc;
 use crate::consensus::base::blockchain::{Blockchain, BlockchainEvent};
 use crate::consensus::base::primitive::hash::{Blake2bHash, Hash};
 use crate::consensus::base::primitive::Address;
 use crate::consensus::base::transaction::Transaction;
+use crate::utils::observer::Notifier;
 
 pub struct Mempool<'env> {
     blockchain: Arc<Blockchain<'env>>,
+    pub notifier: RwLock<Notifier<'env, MempoolEvent>>,
+    state: RwLock<MempoolState>,
+    mut_lock: Mutex<()>,
+}
+
+struct MempoolState {
     transactions_by_hash: HashMap<Blake2bHash, Arc<Transaction>>,
-    transactions_by_sender: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
-    transactions_by_recipient: HashMap<Address, BTreeSet<Arc<TransactionSortable>>>,
-    transactions_sorted_fee: BTreeSet<Arc<TransactionSortable>>
+    transactions_by_sender: HashMap<Address, BTreeSet<Arc<Transaction>>>,
+    transactions_by_recipient: HashMap<Address, BTreeSet<Arc<Transaction>>>,
+    transactions_sorted_fee: BTreeSet<Arc<Transaction>>,
+}
+
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub enum MempoolEvent {
+    TransactionAdded,
+    TransactionRestored,
+    TransactionMined,
+    TransactionEvicted,
 }
 
 impl<'env> Mempool<'env> {
-    pub fn new(blockchain: Arc<Blockchain<'env>>) -> Arc<RwLock<Self>> {
-        let arc = Arc::new(RwLock::new(Self {
+    pub fn new(blockchain: Arc<Blockchain<'env>>) -> Arc<Self> {
+        let arc = Arc::new(Self {
             blockchain: blockchain.clone(),
-            transactions_by_hash: HashMap::new(),
-            transactions_by_sender: HashMap::new(),
-            transactions_by_recipient: HashMap::new(),
-            transactions_sorted_fee: BTreeSet::new()
-        }));
+            notifier: RwLock::new(Notifier::new()),
+            state: RwLock::new(MempoolState {
+                transactions_by_hash: HashMap::new(),
+                transactions_by_sender: HashMap::new(),
+                transactions_by_recipient: HashMap::new(),
+                transactions_sorted_fee: BTreeSet::new(),
+            }),
+            mut_lock: Mutex::new(()),
+        });
 
-        let arc_listener = arc.clone();
-        blockchain.notifier.write().register(move |event: &BlockchainEvent| arc_listener.write().on_blockchain_event(event));
+        let arc_self = arc.clone();
+        blockchain.notifier.write().register(move |event: &BlockchainEvent| arc_self.on_blockchain_event(event));
         arc
     }
 
-    fn on_blockchain_event(&mut self, event: &BlockchainEvent) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent) {
         println!("Mempool received blockchain event: {:?}", event);
         println!("Blockchain height: {}", self.blockchain.height());
+        match event {
+            BlockchainEvent::Extended => self.evict_transactions(),
+            _ => () // TODO
+        }
     }
 
-    pub fn push_transaction(&mut self, transaction: Transaction) -> ReturnCode {
-        // Check if we already know this transaction.
+    pub fn push_transaction(&self, transaction: Transaction) -> ReturnCode {
+        // Only one mutating operation at a time.
+        let lock = self.mut_lock.lock();
+
+        let transaction_arc;
         let hash: Blake2bHash = transaction.hash();
-        if self.transactions_by_hash.contains_key(&hash) {
-            return ReturnCode::Known;
-        };
 
-        // Check limit for free transactions.
-        if u64::from(transaction.fee) / (transaction.serialized_size() as u64) < TRANSACTION_RELAY_FEE_MIN {
-            let mut no_tx_below_fee_per_byte = 0;
-            if let Some(transactions_sorted) = self.transactions_by_sender.get(&transaction.sender) {
-                for transaction in transactions_sorted {
-                    no_tx_below_fee_per_byte += 1;
-                    if no_tx_below_fee_per_byte >= FREE_TRANSACTIONS_PER_SENDER_MAX {
-                        return ReturnCode::FeeTooLow;
+        // Transactions that are invalidated by the new transaction are stored here.
+        let mut txs_to_remove = Vec::new();
+
+        {
+            let state = self.state.read();
+
+            // Check if we already know this transaction.
+            if state.transactions_by_hash.contains_key(&hash) {
+                return ReturnCode::Known;
+            };
+
+            // Intrinsic transaction verification.
+            if transaction.verify(self.blockchain.network_id).is_err() {
+                return ReturnCode::Invalid;
+            }
+
+            // Check limit for free transactions.
+            let txs_by_sender_opt = state.transactions_by_sender.get(&transaction.sender);
+            if transaction.fee_per_byte() < TRANSACTION_RELAY_FEE_MIN {
+                let mut num_free_tx = 0;
+                if let Some(transactions) = txs_by_sender_opt {
+                    for tx in transactions {
+                        if tx.fee_per_byte() < TRANSACTION_RELAY_FEE_MIN {
+                            num_free_tx += 1;
+                            if num_free_tx >= FREE_TRANSACTIONS_PER_SENDER_MAX {
+                                return ReturnCode::FeeTooLow;
+                            }
+                        } else {
+                            // We found the first non-free transaction in the set without hitting the limit.
+                            break;
+                        }
                     }
                 }
             }
-        }
 
-        // Acquire read lock on the blockchain and hold it until the end of the function.
-        // This ensures that:
-        // - all transaction validation checks run against the same blockchain state
-        // - the mempool is in a consistent state when a HeadChanged/Rebranched event causes it to evict transactions
-        let bc_arc = self.blockchain.clone(); // XXX Get rid of this clone()
-        let accounts = bc_arc.accounts();
-        let block_height = self.blockchain.height() + 1;
+            // Acquire blockchain read lock.
+            let accounts = self.blockchain.accounts();
+            let transaction_cache = self.blockchain.transaction_cache();
+            let block_height = self.blockchain.height() + 1;
 
-        // Intrinsic transaction verification.
-        if transaction.verify(self.blockchain.network_id).is_err() {
-            return ReturnCode::Invalid;
-        }
+            // Check if transaction is valid at the next block height;
+            if !transaction.is_valid_at(block_height) {
+                return ReturnCode::Invalid;
+            }
 
-        // Retrieve recipient account and test incoming transaction.
-        let recipient_account = accounts.get(&transaction.recipient, None);
-        if recipient_account.account_type() != transaction.recipient_type {
-            return ReturnCode::Invalid;
-        }
-        if let Err(_) = recipient_account.with_incoming_transaction(&transaction, block_height) {
-            return ReturnCode::Invalid;
-        }
+            // Check if transaction has already been mined.
+            if transaction_cache.contains(&hash) {
+                return ReturnCode::Invalid;
+            }
 
-        // Retrieve sender account and test outgoing transaction.
-        let sender_account = accounts.get(&transaction.sender, None);
-        if sender_account.account_type() != transaction.sender_type {
-            return ReturnCode::Invalid;
-        }
-        if let Err(e) = sender_account.with_outgoing_transaction(&transaction, block_height) {
-            return ReturnCode::Invalid;
-        }
+            // Retrieve recipient account and test incoming transaction.
+            let recipient_account = accounts.get(&transaction.recipient, None);
+            if recipient_account.account_type() != transaction.recipient_type {
+                return ReturnCode::Invalid;
+            }
+            if let Err(_) = recipient_account.with_incoming_transaction(&transaction, block_height) {
+                return ReturnCode::Invalid;
+            }
 
-        let transaction_arc = Arc::new(transaction);
-        let transaction_sortable = Arc::new(TransactionSortable(Arc::clone(&transaction_arc)));
+            // Retrieve sender account and test account type.
+            let mut sender_account = accounts.get(&transaction.sender, None);
+            if sender_account.account_type() != transaction.sender_type {
+                return ReturnCode::Invalid;
+            }
 
-        // Add new transaction to the sender's pending transaction set. Then re-check all transactions in the set
-        // in fee/byte order against the sender account state. Adding high fee transactions may thus invalidate
-        // low fee transactions in the set.
-        let mut remove_txs = Vec::new();
-        let mut sender_changed = sender_account;
-        if let Some(s) = self.transactions_by_sender.get(&transaction_arc.sender) {
-            let mut transactions_sorted = s.clone();
-            transactions_sorted.insert(Arc::clone(&transaction_sortable));
-
+            // Re-check all transactions for this sender in fee/byte order against the sender account state.
+            // Adding high fee transactions may thus invalidate low fee transactions in the set.
             let mut tx_count = 0;
-            for curr_tx in transactions_sorted {
+            let mut tx_iter = match txs_by_sender_opt {
+                Some(transactions) => Box::new(transactions.iter()) as Box<DoubleEndedIterator<Item=&Arc<Transaction>>>,
+                None => Box::new(iter::empty())
+            };
+
+            // First apply all transactions with a higher fee/byte.
+            // These are not affected by the new transaction and should never fail to apply.
+            transaction_arc = Arc::new(transaction);
+            let mut tx_opt = tx_iter.next_back();
+            while let Some(tx) = tx_opt {
+                // Break on the first transaction with a lower fee/byte.
+                if tx.cmp(&transaction_arc) == Ordering::Less {
+                    break;
+                }
+
+                sender_account = sender_account
+                    .with_outgoing_transaction(tx, block_height)
+                    .expect("Failed to apply existing transaction");
+                tx_count += 1;
+
+                tx_opt = tx_iter.next_back();
+            }
+
+            // If we are already at the transaction limit, reject the new transaction.
+            if tx_count >= TRANSACTIONS_PER_SENDER_MAX {
+                return ReturnCode::FeeTooLow;
+            }
+
+            // Now, check the new transaction.
+            sender_account = match sender_account.with_outgoing_transaction(&transaction_arc, block_height) {
+                Ok(account) => account,
+                Err(_) => return ReturnCode::Invalid // XXX More specific return code here?
+            };
+            tx_count += 1;
+
+            // Finally, check the remaining transactions with lower fee/byte and evict them if necessary.
+            // tx_opt already contains the first lower/fee byte transaction to check (if there is one remaining).
+            while let Some(tx) = tx_opt {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if let Ok(new_account) = sender_changed.with_outgoing_transaction(&transaction_arc, block_height) {
-                        sender_changed = new_account;
+                    if let Ok(account) = sender_account.with_outgoing_transaction(tx, block_height) {
+                        sender_account = account;
                         tx_count += 1;
-                        continue;
-                    }
-                }
-                if tx_count >= TRANSACTIONS_PER_SENDER_MAX {
-                    if curr_tx.0 == transaction_arc {
-                        return ReturnCode::Invalid;
                     } else {
-                        remove_txs.push(Arc::clone(&curr_tx));
+                        txs_to_remove.push(tx.clone())
                     }
+                } else {
+                    txs_to_remove.push(tx.clone())
                 }
+
+                tx_opt = tx_iter.next_back();
             }
         }
-        for transaction_arc in remove_txs {
-            self.remove_transaction(&transaction_arc);
+
+        {
+            let mut state = self.state.write();
+
+            // Transaction is valid, add it to the mempool.
+            state.transactions_by_hash.insert(hash, Arc::clone(&transaction_arc));
+            state.transactions_sorted_fee.insert(Arc::clone(&transaction_arc));
+
+            let txs_by_recipient = state.transactions_by_recipient
+                .entry(transaction_arc.recipient.clone()) // XXX Get rid of the .clone() here
+                .or_insert_with(|| BTreeSet::new());
+            txs_by_recipient.insert(Arc::clone(&transaction_arc));
+
+            let txs_by_sender = state.transactions_by_sender
+                .entry(transaction_arc.sender.clone()) // XXX Get rid of the .clone() here
+                .or_insert_with(|| BTreeSet::new());
+            txs_by_sender.insert(Arc::clone(&transaction_arc));
+
+            // Evict transactions that were invalidated by the new transaction.
+            for tx in txs_to_remove {
+                Mempool::remove_transaction(&mut *state, &tx);
+            }
+
+            // Remove the lowest fee transaction if mempool max size is reached.
+            if state.transactions_sorted_fee.len() > SIZE_MAX {
+                // TODO
+                //self.pop_low_fee_transaction();
+            }
         }
 
-        // Transaction is valid, add it to the mempool.
-        self.transactions_by_hash.insert(hash, Arc::clone(&transaction_arc));
-        self.transactions_sorted_fee.insert(Arc::clone(&transaction_sortable));
-
-        if let None = self.transactions_by_recipient.get(&transaction_arc.recipient) {
-            self.transactions_by_recipient.insert(transaction_arc.recipient.clone(), BTreeSet::new());
-        };
-        if let Entry::Occupied(mut e) = self.transactions_by_recipient.entry(transaction_arc.recipient.clone()) {
-            e.get_mut().insert(Arc::clone(&transaction_sortable));
-        };
-        if let None = self.transactions_by_sender.get(&transaction_arc.sender) {
-            self.transactions_by_sender.insert(transaction_arc.sender.clone(), BTreeSet::new());
-        };
-        if let Entry::Occupied(mut e) = self.transactions_by_sender.entry(transaction_arc.sender.clone()) {
-            e.get_mut().insert(Arc::clone(&transaction_sortable));
-        };
-
-        // Tell listeners about the new valid transaction we received.
         // TODO
-
-        if self.transactions_sorted_fee.len() > SIZE_MAX {
-            self.pop_low_fee_transaction();
-        }
+        // Tell listeners about the new transaction we received.
+        // Tell listeners about the transactions we evicted.
 
         return ReturnCode::Accepted;
     }
 
     pub fn get_transaction(&self, hash: &Blake2bHash) -> Option<Arc<Transaction>> {
-        match self.transactions_by_hash.get(hash) {
-            Some(t) => Some(Arc::clone(t)),
-            None => None
-        }
+        self.state.read().transactions_by_hash.get(hash).map(|arc| arc.clone())
     }
 
-    pub fn get_transactions(&self, max_size: u32, min_fee_per_byte: u32) -> Vec<Arc<Transaction>> {
-        let mut ret = Vec::new();
-        let size_sum = 0;
-        for transaction in &self.transactions_sorted_fee {
-            if size_sum + transaction.0.serialized_size() <= max_size as usize {
-                ret.push(Arc::clone(&transaction.0));
+    pub fn get_transactions(&self, max_size: usize, min_fee_per_byte: f64) -> Vec<Arc<Transaction>> {
+        let mut txs = Vec::new();
+        let mut size = 0;
+
+        let state = self.state.read();
+        for tx in &state.transactions_sorted_fee {
+            let tx_size = tx.serialized_size();
+            if size + tx_size <= max_size {
+                txs.push(tx.clone());
+                size += tx_size;
+            } else if max_size - size < Transaction::MIN_SIZE {
+                // Break if we can't fit the smallest possible transaction anymore.
+                break;
             }
         };
-        return ret;
+
+        return txs;
     }
 
-    pub fn get_transactions_for_block(&self, max_size: u32) -> Vec<Arc<Transaction>> {
-        let transactions = self.get_transactions(max_size, 0);
+    pub fn get_transactions_for_block(&self, max_size: usize) -> Vec<Arc<Transaction>> {
+        let transactions = self.get_transactions(max_size, 0f64);
         // TODO get to be pruned accounts and remove transactions to fit max_size
         unimplemented!();
     }
 
     pub fn get_transactions_by_addresses(&self, addresses: Vec<Address>, max_transactions: u32) -> Vec<Arc<Transaction>> {
-        let mut ret = Vec::new();
+        let mut txs = Vec::new();
+
+        let state = self.state.read();
         for address in addresses {
-            // Fetch transactions by sender first
-            if let Some(txs_arc) = self.transactions_by_sender.get(&address) {
-                for ts_arc in txs_arc {
-                    ret.push(Arc::clone(&ts_arc.0));
+            // Fetch transactions by sender first.
+            if let Some(transactions) = state.transactions_by_sender.get(&address) {
+                for tx in transactions.iter().rev() {
+                    txs.push(tx.clone());
                 }
             }
-            // Fetch transactions by recipient second
-            if let Some(txs_arc) = self.transactions_by_recipient.get(&address) {
-                for ts_arc in txs_arc {
-                    ret.push(Arc::clone(&ts_arc.0));
+            // Fetch transactions by recipient second.
+            if let Some(transactions) = state.transactions_by_recipient.get(&address) {
+                for tx in transactions.iter().rev() {
+                    txs.push(tx.clone());
                 }
             }
         }
-        return ret;
+
+        return txs;
     }
 
     /// Evict all transactions from the pool that have become invalid due to changes in the
     /// account state (i.e. typically because the were included in a newly mined block). No need to re-check signatures.
-    fn evict_transactions(&mut self) {
-        let bc_arc = self.blockchain.clone(); // XXX Get rid of this clone()
-        let accounts = bc_arc.accounts();
-        let block_height = self.blockchain.height() + 1;
+    fn evict_transactions(&self) {
+        // Only one mutating operation at a time.
+        let lock = self.mut_lock.lock();
 
-        for (address, transactions_sorted) in self.transactions_by_sender.clone().iter() {
-            // TODO check transaction validity window.
+        let mut txs_mined = Vec::new();
+        let mut txs_evicted = Vec::new();
+        {
+            let state = self.state.read();
 
-            let mut sender_account = accounts.get(&address, None);
+            let accounts = self.blockchain.accounts();
+            let transaction_cache = self.blockchain.transaction_cache();
+            let block_height = self.blockchain.height() + 1;
 
-            let mut transactions_sorted_new = BTreeSet::new();
-            for curr_ts in transactions_sorted {
-                let new_sender_account_option = sender_account.with_outgoing_transaction(&curr_ts.0, block_height);
+            for (address, transactions) in state.transactions_by_sender.iter() {
+                let mut sender_account = accounts.get(&address, None);
+                for tx in transactions.iter().rev() {
+                    // Check if the transaction has expired.
+                    if !tx.is_valid_at(block_height) {
+                        txs_evicted.push(tx.clone());
+                        continue;
+                    }
 
-                let recipient_account = accounts.get(&curr_ts.0.recipient, None);
-                let new_recipient_account_option = recipient_account.with_incoming_transaction(&curr_ts.0, block_height);
+                    // Check if the transaction has been mined.
+                    if transaction_cache.contains(&tx.hash()) {
+                        txs_mined.push(tx.clone());
+                        continue;
+                    }
 
-                if new_sender_account_option.is_ok() || new_recipient_account_option.is_ok() {
-                    transactions_sorted_new.insert(Arc::clone(&curr_ts));
-                    sender_account = new_sender_account_option.unwrap();
-                } else {
-                    self.remove_transaction(&curr_ts);
+                    // Check if transaction is still valid for recipient.
+                    let recipient_account = accounts.get(&tx.recipient, None);
+                    if recipient_account.with_incoming_transaction(&tx, block_height).is_err() {
+                        txs_evicted.push(tx.clone());
+                        continue;
+                    }
+
+                    // Check if transaction is still valid for sender.
+                    let sender_account_res = sender_account.with_outgoing_transaction(&tx, block_height);
+                    if sender_account_res.is_err() {
+                        txs_evicted.push(tx.clone());
+                        continue;
+                    }
+
+                    // Transaction ok.
+                    sender_account = sender_account_res.unwrap();
                 }
             }
-            if transactions_sorted_new.len() > 0 {
-                self.transactions_by_sender.insert(address.clone(), transactions_sorted_new);
-            } else {
-                self.transactions_by_sender.remove(&address);
+        }
+
+        {
+            // Evict transactions.
+            let mut state = self.state.write();
+            for tx in txs_mined {
+                Mempool::remove_transaction(&mut state, &tx);
+            }
+            for tx in txs_evicted {
+                Mempool::remove_transaction(&mut state, &tx);
             }
         }
+
+        // TODO notify listeners
     }
 
-    fn pop_low_fee_transaction(&mut self) {
+    fn pop_low_fee_transaction(&self) {
+        // TODO
+        /*
         let mut owned = Option::None;
         if let Some(t) = self.transactions_sorted_fee.iter().next() {
             owned = Some(t.clone());
@@ -236,34 +350,29 @@ impl<'env> Mempool<'env> {
         if let Some(t) = owned {
             self.remove_transaction(&t);
         }
+        */
     }
 
-    fn remove_transaction(&mut self, ts: &TransactionSortable) {
-        self.transactions_by_hash.remove(&ts.0.hash());
-        self.transactions_sorted_fee.remove(ts);
+    fn remove_transaction(state: &mut MempoolState, tx: &Transaction) {
+        state.transactions_by_hash.remove(&tx.hash());
+        state.transactions_sorted_fee.remove(tx);
 
         let mut remove_key = false;
-        if let Entry::Occupied(mut e) = self.transactions_by_sender.entry(ts.0.sender.clone()) {
-            let transactions_sorted = e.get_mut();
-            if transactions_sorted.len() > 1 {
-                transactions_sorted.remove(ts);
-            } else {
-                remove_key = true;
-            }
+        if let Some(transactions) = state.transactions_by_sender.get_mut(&tx.sender) {
+            transactions.remove(tx);
+            remove_key = transactions.is_empty();
         }
         if remove_key {
-            self.transactions_by_sender.remove(&ts.0.sender);
+            state.transactions_by_sender.remove(&tx.sender);
         }
-        if let Entry::Occupied(mut e) = self.transactions_by_recipient.entry(ts.0.recipient.clone()) {
-            let transactions_sorted = e.get_mut();
-            if transactions_sorted.len() > 1 {
-                transactions_sorted.remove(ts);
-            } else {
-                remove_key = true;
-            }
+
+        remove_key = false;
+        if let Some(transactions) = state.transactions_by_recipient.get_mut(&tx.recipient) {
+            transactions.remove(tx);
+            remove_key = transactions.is_empty();
         }
         if remove_key {
-            self.transactions_by_recipient.remove(&ts.0.sender);
+            state.transactions_by_recipient.remove(&tx.recipient);
         }
     }
 }
@@ -276,20 +385,8 @@ pub enum ReturnCode {
     Known
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Debug)]
-struct TransactionSortable(Arc<Transaction>);
-
-impl Ord for TransactionSortable {
-    fn cmp(&self, other: &Self) -> Ordering {
-        return Ordering::Equal
-            .then_with(|| (u64::from(self.0.fee) / self.0.serialized_size() as u64).cmp(&(u64::from(other.0.fee) / other.0.serialized_size() as u64)))
-            .then_with(|| self.0.fee.cmp(&other.0.fee))
-            .then_with(|| self.0.value.cmp(&other.0.value));
-    }
-}
-
 /// Fee threshold in sat/byte below which transactions are considered "free".
-const TRANSACTION_RELAY_FEE_MIN : u64 = 1;
+const TRANSACTION_RELAY_FEE_MIN : f64 = 1f64;
 
 /// Maximum number of transactions per sender.
 const TRANSACTIONS_PER_SENDER_MAX : u32 = 500;

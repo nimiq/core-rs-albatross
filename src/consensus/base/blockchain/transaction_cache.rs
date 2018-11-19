@@ -1,6 +1,5 @@
 use crate::consensus::base::block::Block;
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
-use crate::consensus::base::transaction::Transaction;
 use crate::consensus::policy;
 use std::collections::{HashSet, VecDeque};
 
@@ -38,13 +37,13 @@ impl TransactionCache {
         };
     }
 
-    pub fn contains(&self, transaction: &Transaction) -> bool {
-        self.transaction_hashes.contains(&transaction.hash())
+    pub fn contains(&self, transaction_hash: &Blake2bHash) -> bool {
+        self.transaction_hashes.contains(&transaction_hash)
     }
 
     pub fn contains_any(&self, block: &Block) -> bool {
         for transaction in block.body.as_ref().unwrap().transactions.iter() {
-            if self.contains(transaction) {
+            if self.contains(&transaction.hash()) {
                 return true;
             }
         }

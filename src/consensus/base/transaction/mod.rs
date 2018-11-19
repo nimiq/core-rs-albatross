@@ -53,7 +53,7 @@ impl SignatureProof {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Clone, Eq, Debug)]
 #[repr(C)]
 pub struct Transaction {
     pub data: Vec<u8>,
@@ -70,6 +70,9 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    /// The size in bytes of the smallest possible transaction (basic single-sig).
+    pub const MIN_SIZE: usize = 138;
+
     pub fn new_basic(sender: Address, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
         return Self {
             data: Vec::new(),
@@ -118,16 +121,31 @@ impl Transaction {
         return TransactionFormat::Extended;
     }
 
-    pub fn cmp_block_order(&self, tx: &Transaction) -> Ordering {
+    pub fn cmp_mempool_order(&self, other: &Transaction) -> Ordering {
         return Ordering::Equal
-            .then_with(|| self.recipient.cmp(&tx.recipient))
-            .then_with(|| self.validity_start_height.cmp(&tx.validity_start_height))
-            .then_with(|| self.fee.cmp(&tx.fee))
-            .then_with(|| self.value.cmp(&tx.value))
-            .then_with(|| self.sender.cmp(&tx.sender))
-            .then_with(|| self.recipient_type.cmp(&tx.recipient_type))
-            .then_with(|| self.sender_type.cmp(&tx.sender_type))
-            .then_with(|| self.flags.cmp(&tx.flags));
+            .then_with(|| self.fee_per_byte().partial_cmp(&other.fee_per_byte()).unwrap_or(Ordering::Equal))
+            .then_with(|| self.fee.cmp(&other.fee))
+            .then_with(|| self.value.cmp(&other.value))
+            .then_with(|| self.recipient.cmp(&other.recipient))
+            .then_with(|| self.validity_start_height.cmp(&other.validity_start_height))
+            .then_with(|| self.sender.cmp(&other.sender))
+            .then_with(|| self.recipient_type.cmp(&other.recipient_type))
+            .then_with(|| self.sender_type.cmp(&other.sender_type))
+            .then_with(|| self.flags.cmp(&other.flags))
+            .then_with(|| self.data.cmp(&other.data));
+    }
+
+    pub fn cmp_block_order(&self, other: &Transaction) -> Ordering {
+        return Ordering::Equal
+            .then_with(|| self.recipient.cmp(&other.recipient))
+            .then_with(|| self.validity_start_height.cmp(&other.validity_start_height))
+            .then_with(|| self.fee.cmp(&other.fee))
+            .then_with(|| self.value.cmp(&other.value))
+            .then_with(|| self.sender.cmp(&other.sender))
+            .then_with(|| self.recipient_type.cmp(&other.recipient_type))
+            .then_with(|| self.sender_type.cmp(&other.sender_type))
+            .then_with(|| self.flags.cmp(&other.flags))
+            .then_with(|| self.data.cmp(&other.data));
     }
 
     pub fn verify(&self, network_id: NetworkId) -> Result<(), TransactionError> {
@@ -172,6 +190,10 @@ impl Transaction {
         tx.recipient = Address::from([0u8; Address::SIZE]);
         let hash: Blake2bHash = tx.hash();
         return Address::from(hash);
+    }
+
+    pub fn fee_per_byte(&self) -> f64 {
+        u64::from(self.fee) as f64 / self.serialized_size() as f64
     }
 
     pub fn serialize_content(&self) -> Vec<u8> {
@@ -314,6 +336,33 @@ impl SerializeContent for Transaction {
 }
 
 impl Hash for Transaction {}
+
+impl PartialEq for Transaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.sender == other.sender
+            && self.sender_type == other.sender_type
+            && self.recipient == other.recipient
+            && self.recipient_type == other.recipient_type
+            && self.value == other.value
+            && self.fee == other.fee
+            && self.validity_start_height == other.validity_start_height
+            && self.network_id == other.network_id
+            && self.flags == other.flags
+            && self.data == other.data
+    }
+}
+
+impl PartialOrd for Transaction {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Transaction {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.cmp_mempool_order(other)
+    }
+}
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum TransactionError {
