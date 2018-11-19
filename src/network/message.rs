@@ -13,6 +13,8 @@ use crate::consensus::base::Subscription;
 use crate::consensus::base::transaction::Transaction;
 use crate::network::address::{PeerAddress, PeerId};
 use crate::utils::crc::Crc32Computer;
+use crate::utils::services::ServiceFlags;
+use crate::network::ProtocolFlags;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u64)]
@@ -332,10 +334,29 @@ pub struct RejectMessage {
     extra_data: Vec<u8>,
 }
 
+impl RejectMessage {
+    pub fn new(message_type: MessageType, code: RejectMessageCode, reason: String, extra_data: Option<Vec<u8>>) -> Message {
+        Message::Reject(Self {
+            message_type,
+            code,
+            reason,
+            extra_data: extra_data.unwrap_or_else(|| Vec::new()),
+        })
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AddrMessage {
     #[beserial(len_type(u16))]
-    addresses: Vec<PeerAddress>
+    pub addresses: Vec<PeerAddress>
+}
+
+impl AddrMessage {
+    pub fn new(addresses: Vec<PeerAddress>) -> Message {
+        Message::Addr(Self {
+            addresses
+        })
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -344,17 +365,58 @@ pub struct AccountsProofMessage {
     accounts_proof: Option<AccountsProof>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct GetAddrMessage {
-    protocol_mask: u8,
-    service_mask: u32,
-    max_results: u16, // TODO this is optional right now but is always set
+    pub protocol_mask: ProtocolFlags,
+    pub service_mask: ServiceFlags,
+    pub max_results: u16, // TODO this is optional right now but is always set
+}
+
+impl GetAddrMessage {
+    pub fn new(protocol_mask: ProtocolFlags, service_mask: ServiceFlags, max_results: u16) -> Message {
+        Message::GetAddr(Self {
+            protocol_mask,
+            service_mask,
+            max_results
+        })
+    }
+}
+
+impl Serialize for GetAddrMessage {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size= 0;
+        size += self.protocol_mask.bits().serialize(writer)?;
+        size += self.service_mask.bits().serialize(writer)?;
+        size += self.max_results.serialize(writer)?;
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size= 0;
+        size += self.protocol_mask.bits().serialized_size();
+        size += self.service_mask.bits().serialized_size();
+        size += self.max_results.serialized_size();
+        size
+    }
+}
+
+impl Deserialize for GetAddrMessage {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let protocol_mask = ProtocolFlags::from_bits_truncate(Deserialize::deserialize(reader)?);
+        let service_mask = ServiceFlags::from_bits_truncate(Deserialize::deserialize(reader)?);
+        let max_results: u16 = Deserialize::deserialize(reader)?;
+        Ok(GetAddrMessage {
+            protocol_mask,
+            service_mask,
+            max_results,
+        })
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct VerAckMessage {
-    public_key: PublicKey,
-    signature: Signature,
+    pub public_key: PublicKey,
+    pub signature: Signature,
 }
 
 impl VerAckMessage {

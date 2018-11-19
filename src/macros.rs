@@ -94,3 +94,13 @@ macro_rules! add_hex_io_fns_typed_arr {
         }
     };
 }
+
+macro_rules! upgrade_weak {
+    ($weak_ref: expr) => {
+        if let Some(arc) = $weak_ref.upgrade() {
+            arc
+        } else {
+            return;
+        }
+    }
+}

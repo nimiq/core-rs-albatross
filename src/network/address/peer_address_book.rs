@@ -1,15 +1,3 @@
-use crate::consensus::networks::{NetworkId, get_network_info};
-use crate::network::Protocol;
-use crate::network::peer_channel::PeerChannel;
-use crate::network::address::PeerId;
-use crate::network::address::net_address::NetAddress;
-use crate::network::address::peer_address::PeerAddress;
-use crate::network::address::peer_address_state::PeerAddressInfo;
-use crate::network::address::peer_address_state::PeerAddressState;
-use crate::network::connection::close_type::CloseType;
-use crate::network::NetworkTime;
-use crate::utils;
-use crate::utils::systemtime_to_timestamp;
 use std::cmp;
 use std::collections::hash_map::Entry;
 use std::collections::hash_set::Iter;
@@ -19,6 +7,19 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use crate::consensus::networks::{get_network_info, NetworkId};
+use crate::network::{NetworkTime, ProtocolFlags};
+use crate::network::address::net_address::NetAddress;
+use crate::network::address::peer_address::PeerAddress;
+use crate::network::address::peer_address_state::PeerAddressInfo;
+use crate::network::address::peer_address_state::PeerAddressState;
+use crate::network::address::PeerId;
+use crate::network::connection::close_type::CloseType;
+use crate::network::peer_channel::PeerChannel;
+use crate::network::Protocol;
+use crate::utils;
+use crate::utils::services::ServiceFlags;
+use crate::utils::systemtime_to_timestamp;
 
 pub struct PeerAddressBook {
     info_by_address: HashMap<Arc<PeerAddress>, PeerAddressInfo>,
@@ -77,7 +78,7 @@ impl PeerAddressBook {
         return None;
     }
 
-    pub fn query(max_addresses: u32) -> Vec<PeerAddress> {
+    pub fn query(&self, protocol_mask: ProtocolFlags, service_mask: ServiceFlags, max_addresses: u16) -> Vec<PeerAddress> {
         unimplemented!()
     }
 

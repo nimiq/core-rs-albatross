@@ -1,4 +1,4 @@
-use crate::consensus::base::primitive::hash::Argon2dHash;
+use crate::consensus::base::primitive::hash::Blake2bHash;
 use std::sync::Arc;
 use crate::network::address::peer_address::PeerAddress;
 use crate::network::address::net_address::NetAddress;
@@ -7,18 +7,18 @@ use crate::network::peer_channel::PeerChannel;
 #[derive(Clone, Debug)]
 pub struct Peer {
     pub channel: PeerChannel,
-    pub version: Option<u8>,
-    pub head_hash: Option<Argon2dHash>,
-    pub time_offset: Option<u8>,
+    pub version: u32,
+    pub head_hash: Blake2bHash,
+    pub time_offset: u64,
 }
 
 impl Peer {
-    pub fn new(channel: PeerChannel) -> Self {
+    pub fn new(channel: PeerChannel, version: u32, head_hash: Blake2bHash, time_offset: u64) -> Self {
         Peer {
             channel,
-            version: None,
-            head_hash: None,
-            time_offset: None,
+            version,
+            head_hash,
+            time_offset,
         }
     }
 

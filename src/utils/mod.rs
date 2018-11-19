@@ -14,6 +14,7 @@ pub mod key_derivation;
 pub mod services;
 pub mod observer;
 pub mod timers;
+pub mod version;
 pub mod unique_ptr;
 
 pub fn systemtime_to_timestamp(start : SystemTime) -> u64 {
