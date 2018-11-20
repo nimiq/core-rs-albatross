@@ -42,14 +42,6 @@ impl<'l, E> Notifier<'l, E> {
         }
     }
 
-    pub fn notify_ref(&self, event: &E) {
-        for (_, listener) in &self.listeners {
-            listener.on_event(event);
-        }
-    }
-}
-
-impl<'l, E: Clone> Notifier<'l, E> {
     pub fn notify(&self, event: E) {
         for (_, listener) in &self.listeners {
             listener.on_event(&event);

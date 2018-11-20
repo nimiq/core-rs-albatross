@@ -1,8 +1,5 @@
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::time::Duration;
-
-use parking_lot::RwLock;
 
 pub mod crc;
 pub mod merkle;
