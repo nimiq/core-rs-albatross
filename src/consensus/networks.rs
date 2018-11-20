@@ -46,7 +46,7 @@ impl Network {
     const SCORE_INBOUND_EXCHANGE: f32 = 0.5;
 
     pub fn new(network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Self {
-        let addresses = Arc::new(RwLock::new(PeerAddressBook::new()));
+        let addresses = Arc::new(RwLock::new(PeerAddressBook::new(network_config.clone())));
         Network {
             network_config: Arc::clone(&network_config),
             network_time: NetworkTime::new(0),

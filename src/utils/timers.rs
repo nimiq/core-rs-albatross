@@ -1,12 +1,14 @@
-use tokio::timer::{Delay, Interval};
+use std::collections::HashMap;
+use std::fmt;
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::time::Duration;
 use std::time::Instant;
+
 use futures::prelude::*;
 use futures::sync::oneshot;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::fmt::Debug;
-use std::time::Duration;
 use parking_lot::{Mutex, MutexGuard};
+use tokio::timer::{Delay, Interval};
 
 pub struct Timers<K: Eq + Hash + Debug> {
     delays: Mutex<HashMap<K, oneshot::Sender<()>>>,
@@ -151,5 +153,11 @@ impl<K: Eq + Hash + Debug> Timers<K> {
 impl<K: Eq + Hash + Debug> Drop for Timers<K> {
     fn drop(&mut self) {
         self.clear_all()
+    }
+}
+
+impl<K: Eq + Hash + Debug> fmt::Debug for Timers<K> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Timers {{ num_delays: {}, num_intervals: {} }}", self.delays.lock().len(), self.intervals.lock().len())
     }
 }

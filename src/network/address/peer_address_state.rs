@@ -1,8 +1,10 @@
-use crate::network::address::peer_address::PeerAddress;
-use crate::network;
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
+
+use crate::network;
+use crate::network::address::peer_address::PeerAddress;
+use crate::network::connection::close_type::CloseType;
 use crate::network::peer_channel::PeerChannel;
 use crate::network::Protocol;
 
@@ -12,8 +14,10 @@ pub struct PeerAddressInfo {
     pub signal_router: SignalRouter,
     pub last_connected: Option<SystemTime>,
     pub failed_attempts: u32,
-    pub banned_until: Option<SystemTime>,
-    pub ban_backoff: Duration
+    pub banned_until: Option<Instant>,
+    pub ban_backoff: Duration,
+
+    pub close_types: HashMap<CloseType, usize>,
 }
 
 impl PeerAddressInfo {
@@ -25,7 +29,8 @@ impl PeerAddressInfo {
             last_connected: None,
             failed_attempts: 0,
             banned_until: None,
-            ban_backoff: network::address::peer_address_book::INITIAL_FAILED_BACKOFF
+            ban_backoff: network::address::peer_address_book::INITIAL_FAILED_BACKOFF,
+            close_types: HashMap::new(),
         };
     }
 
@@ -36,9 +41,26 @@ impl PeerAddressInfo {
             default => 0
         }
     }
+
+    pub fn close(&mut self, ty: CloseType) {
+        *self.close_types.entry(ty)
+            .or_insert(0) += 1;
+
+        if self.state == PeerAddressState::Banned {
+            return;
+        }
+
+        if ty.is_banning_type() {
+            self.state = PeerAddressState::Banned;
+        } else if ty.is_failing_type() {
+            self.state = PeerAddressState::Failed;
+        } else {
+            self.state = PeerAddressState::Tried;
+        }
+    }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum PeerAddressState {
     New = 1,
     Established,

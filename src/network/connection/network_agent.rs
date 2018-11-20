@@ -56,11 +56,11 @@ pub struct NetworkAgent {
 
     pub notifier: Notifier<'static, NetworkAgentEvent>,
     
-    timers: Timers<NetworkAgentTimers>,
+    timers: Timers<NetworkAgentTimer>,
 }
 
 #[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
-enum NetworkAgentTimers {
+enum NetworkAgentTimer {
     Handshake,
     Version,
     VerAck,
@@ -78,11 +78,11 @@ pub enum NetworkAgentEvent {
 
 impl NetworkAgent {
     const VERSION_ATTEMPTS_MAX: usize = 10;
-    const HANDSHAKE_TIMEOUT: u64 = 1000 * 4; // 4 seconds
-    const PING_TIMEOUT: u64 = 1000 * 10; // 10 seconds
-    const CONNECTIVITY_CHECK_INTERVAL: u64 = 1000 * 60; // 1 minute
-    const ANNOUNCE_ADDR_INTERVAL: u64 = 1000 * 60 * 10; // 10 minutes
-    const VERSION_RETRY_DELAY: u64 = 500; // 500 ms
+    const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(4); // 4 seconds
+    const PING_TIMEOUT: Duration = Duration::from_secs(10); // 10 seconds
+    const CONNECTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60); // 1 minute
+    const ANNOUNCE_ADDR_INTERVAL: Duration = Duration::from_secs(60 * 10); // 10 minutes
+    const VERSION_RETRY_DELAY: Duration = Duration::from_millis(500); // 500 ms
     const GETADDR_RATE_LIMIT: usize = 3; // per minute
     const MAX_ADDR_PER_MESSAGE: u16 = 1000;
     const MAX_ADDR_PER_REQUEST: u16 = 500;
@@ -140,10 +140,10 @@ impl NetworkAgent {
             }
 
             let weak = self.listener.clone();
-            self.timers.reset_delay(NetworkAgentTimers::Handshake, move || {
+            self.timers.reset_delay(NetworkAgentTimer::Handshake, move || {
                 let arc = upgrade_weak!(weak);
                 arc.write().handshake();
-            }, Instant::now() + Duration::from_millis(NetworkAgent::VERSION_RETRY_DELAY));
+            }, Instant::now() + NetworkAgent::VERSION_RETRY_DELAY);
             return;
         }
 
@@ -154,23 +154,23 @@ impl NetworkAgent {
         if !self.version_received {
             // TODO Should we ban instead?
             let weak = self.listener.clone();
-            self.timers.set_delay(NetworkAgentTimers::Version, move || {
+            self.timers.set_delay(NetworkAgentTimer::Version, move || {
                 let arc = upgrade_weak!(weak);
                 let agent = arc.read();
-                agent.timers.clear_delay(&NetworkAgentTimers::Version);
+                agent.timers.clear_delay(&NetworkAgentTimer::Version);
                 agent.channel.close(CloseType::VersionTimeout);
-            }, Instant::now() + Duration::from_millis(NetworkAgent::HANDSHAKE_TIMEOUT));
+            }, Instant::now() + NetworkAgent::HANDSHAKE_TIMEOUT);
         } else if self.peer_address_verified {
             self.send_ver_ack();
         }
 
         let weak = self.listener.clone();
-        self.timers.set_delay(NetworkAgentTimers::VerAck, move || {
+        self.timers.set_delay(NetworkAgentTimer::VerAck, move || {
             let arc = upgrade_weak!(weak);
             let agent = arc.read();
-            agent.timers.clear_delay(&NetworkAgentTimers::VerAck);
+            agent.timers.clear_delay(&NetworkAgentTimer::VerAck);
             agent.channel.close(CloseType::VerackTimeout);
-        }, Instant::now() + Duration::from_millis(NetworkAgent::HANDSHAKE_TIMEOUT));
+        }, Instant::now() + NetworkAgent::HANDSHAKE_TIMEOUT);
     }
 
     fn send_ver_ack(&mut self) {
@@ -200,7 +200,7 @@ impl NetworkAgent {
         }
 
         // Clear the version timeout.
-        self.timers.clear_delay(&NetworkAgentTimers::Version);
+        self.timers.clear_delay(&NetworkAgentTimer::Version);
 
         // Check if the peer is running a compatible version.
         if !version::is_compatible(msg.version) {
@@ -297,19 +297,19 @@ impl NetworkAgent {
         // Setup regular connectivity check.
         // TODO randomize interval?
         let weak = self.listener.clone();
-        self.timers.set_interval(NetworkAgentTimers::Connectivity, move || {
+        self.timers.set_interval(NetworkAgentTimer::Connectivity, move || {
             let arc = upgrade_weak!(weak);
             let mut agent = arc.write();
             agent.check_connectivity();
-        }, Duration::from_millis(NetworkAgent::CONNECTIVITY_CHECK_INTERVAL));
+        }, NetworkAgent::CONNECTIVITY_CHECK_INTERVAL);
 
         // Regularly announce our address.
         let weak = self.listener.clone();
-        self.timers.set_interval(NetworkAgentTimers::AnnounceAddr, move || {
+        self.timers.set_interval(NetworkAgentTimer::AnnounceAddr, move || {
             let arc = upgrade_weak!(weak);
             let agent = arc.read();
             agent.channel.send(AddrMessage::new(vec![agent.network_config.peer_address()]));
-        }, Duration::from_millis(NetworkAgent::ANNOUNCE_ADDR_INTERVAL));
+        }, NetworkAgent::ANNOUNCE_ADDR_INTERVAL);
 
         // Tell listeners that the handshake with this peer succeeded.
         self.notifier.notify(NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
@@ -359,13 +359,13 @@ impl NetworkAgent {
         // TODO last_message_received missing
         if false {
             let weak = self.listener.clone();
-            self.timers.set_delay(NetworkAgentTimers::Ping(nonce), move || {
+            self.timers.set_delay(NetworkAgentTimer::Ping(nonce), move || {
                 let arc = upgrade_weak!(weak);
                 let mut agent = arc.write();
-                agent.timers.clear_delay(&NetworkAgentTimers::Ping(nonce));
+                agent.timers.clear_delay(&NetworkAgentTimer::Ping(nonce));
                 agent.ping_times.remove(&nonce);
                 agent.channel.close(CloseType::PingTimeout);
-            }, Instant::now() + Duration::from_millis(NetworkAgent::PING_TIMEOUT));
+            }, Instant::now() + NetworkAgent::PING_TIMEOUT);
         }
     }
 
@@ -398,7 +398,7 @@ impl NetworkAgent {
         }
 
         // Clear the VerAck delay.
-        self.timers.clear_delay(&NetworkAgentTimers::VerAck);
+        self.timers.clear_delay(&NetworkAgentTimer::VerAck);
 
         // Verify public key.
         if &PeerId::from(&msg.public_key) != self.channel.address_info.peer_address().unwrap().peer_id() {
@@ -497,6 +497,8 @@ impl NetworkAgent {
             msg.service_mask,
             num_results
         );
+        let addresses = addresses
+            .iter().map(|peer_address| peer_address.as_ref().clone()).collect();
         self.channel.send(AddrMessage::new(addresses));
     }
 
@@ -512,7 +514,7 @@ impl NetworkAgent {
 
     fn on_pong(&mut self, nonce: u32) {
         // Clear the ping delay for this nonce.
-        self.timers.clear_delay(&NetworkAgentTimers::Ping(nonce));
+        self.timers.clear_delay(&NetworkAgentTimer::Ping(nonce));
 
         let start_time = self.ping_times.remove(&nonce);
         if let Some(start_time) = start_time {
