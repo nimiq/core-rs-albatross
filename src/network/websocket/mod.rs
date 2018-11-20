@@ -4,7 +4,6 @@ use url::Url;
 use futures::prelude::*;
 use tokio::{
     net::TcpStream,
-    io::{AsyncRead, AsyncWrite},
 };
 
 use beserial::{Deserialize, Serialize};

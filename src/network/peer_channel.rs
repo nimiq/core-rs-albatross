@@ -2,23 +2,19 @@ use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 
 use futures::prelude::*;
 use futures::sync::mpsc::*;
-use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::prelude::Stream;
 
-use crate::consensus::base::primitive::hash::Argon2dHash;
 use crate::network::connection::close_type::CloseType;
 use crate::network::connection::network_connection::AddressInfo;
 use crate::network::connection::network_connection::NetworkConnection;
 use crate::network::message::Message;
-use crate::network::peer::Peer;
 use crate::network::websocket::NimiqMessageStreamError;
 use crate::network::websocket::SharedNimiqMessageStream;
-use crate::utils::observer::{Listener, ListenerHandle, Notifier, PassThroughListener, PassThroughNotifier};
+use crate::utils::observer::{Notifier, PassThroughNotifier};
 use crate::network::connection::network_connection::ClosingHelper;
 use crate::utils::unique_ptr::UniquePtr;
 

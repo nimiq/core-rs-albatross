@@ -1,13 +1,13 @@
 use beserial::Deserialize;
 use hex;
 use std::collections::HashMap;
-use crate::consensus::base::account::{Account, AccountError, AccountType};
+use crate::consensus::base::account::{Account, AccountError};
 use crate::consensus::base::account::tree::AccountsTree;
 use crate::consensus::base::block::{Block, BlockBody};
 use crate::consensus::base::primitive::{Address, Coin};
 use crate::consensus::base::primitive::hash::Blake2bHash;
 use crate::consensus::base::transaction::{Transaction, TransactionFlags};
-use crate::consensus::networks::{NetworkId, NetworkInfo, get_network_info};
+use crate::consensus::networks::{NetworkId, get_network_info};
 use crate::consensus::policy;
 use crate::utils::db;
 use crate::utils::db::{Environment, ReadTransaction, WriteTransaction};

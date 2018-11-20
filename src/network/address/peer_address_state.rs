@@ -1,6 +1,5 @@
 use crate::network::address::peer_address::PeerAddress;
 use crate::network;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -66,15 +65,11 @@ impl SignalRouter {
 
         // TODO old route
 
-        let mut is_new_best = false;
-        match &self.best_route {
-            Some(route) =>  {
-                is_new_best = new_route.score() > route.score() || (new_route.score() == route.score() && timestamp > route.timestamp);
-            },
-            None => {
-                is_new_best = true;
-            }
-        }
+        let is_new_best = match &self.best_route {
+            Some(route) => new_route.score() > route.score()
+                || (new_route.score() == route.score() && timestamp > route.timestamp),
+            None => true
+        };
         if is_new_best {
             if let Some(ref mut peer_addr_mut) = Arc::get_mut(&mut self.peer_address) {
                 peer_addr_mut.distance = new_route.distance;

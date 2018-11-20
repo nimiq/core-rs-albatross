@@ -1,6 +1,5 @@
 use std::cmp;
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, Instant, SystemTime};
@@ -12,7 +11,7 @@ use beserial::Serialize;
 
 use crate::consensus::base::blockchain::Blockchain;
 use crate::consensus::networks::get_network_info;
-use crate::network::{Peer, ProtocolFlags};
+use crate::network::Peer;
 use crate::network::address::peer_address::PeerAddress;
 use crate::network::address::peer_address_book::PeerAddressBook;
 use crate::network::address::PeerId;
@@ -22,11 +21,9 @@ use crate::network::message::MessageType;
 use crate::network::message::RejectMessage;
 use crate::network::network_config::NetworkConfig;
 use crate::network::peer_channel::{Agent, PeerChannel, PeerChannelEvent};
-use crate::network::Protocol;
 use crate::utils::observer::ListenerHandle;
 use crate::utils::observer::Notifier;
 use crate::utils::observer::weak_listener;
-use crate::utils::services::ServiceFlags;
 use crate::utils::systemtime_to_timestamp;
 use crate::utils::timers::Timers;
 use crate::utils::unique_ptr::UniquePtr;
@@ -92,7 +89,7 @@ impl NetworkAgent {
     const NUM_ADDR_PER_REQUEST: u16 = 200;
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, addresses: Arc<RwLock<PeerAddressBook>>, network_config: Arc<NetworkConfig>, channel: PeerChannel) -> Arc<RwLock<Self>> {
-        let mut agent = Arc::new(RwLock::new(Self {
+        let agent = Arc::new(RwLock::new(Self {
             blockchain,
             addresses,
             network_config,

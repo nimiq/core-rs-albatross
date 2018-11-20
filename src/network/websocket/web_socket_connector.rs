@@ -36,7 +36,6 @@ use crate::network::{
         NetworkConfig,
         ProtocolConfig,
     },
-    Protocol,
     ProtocolFlags,
     websocket::{
         nimiq_accept_async,

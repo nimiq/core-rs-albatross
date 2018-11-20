@@ -4,7 +4,6 @@ use crate::network;
 use crate::network::Protocol;
 use crate::network::address::{NetAddress, PeerId};
 use crate::utils::services::ServiceFlags;
-use crate::utils::systemtime_to_timestamp;
 use std::vec::Vec;
 use std::hash::Hash;
 use std::hash::Hasher;

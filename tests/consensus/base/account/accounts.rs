@@ -1,7 +1,7 @@
 use beserial::Serialize;
 use nimiq::consensus::base::account::{AccountError, Accounts, Account, AccountType, PrunedAccount};
 use nimiq::consensus::base::block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
-use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair, hash::{Blake2bHash, Hash, SerializeContent}};
+use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair, hash::{Blake2bHash, Hash}};
 use nimiq::consensus::base::transaction::{SignatureProof, Transaction};
 use nimiq::consensus::networks::NetworkId;
 use nimiq::consensus::policy;

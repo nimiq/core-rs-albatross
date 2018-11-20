@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::consensus::base::account::{Account, Accounts};
+use crate::consensus::base::account::Accounts;
 use crate::consensus::base::block::Block;
 use crate::consensus::base::blockchain::{Blockchain, BlockchainEvent};
 use crate::consensus::base::primitive::hash::{Blake2bHash, Hash};

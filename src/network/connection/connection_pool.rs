@@ -7,7 +7,6 @@ use std::sync::Weak;
 use std::time::{Duration, SystemTime};
 
 use parking_lot::{RwLock, RwLockWriteGuard};
-use tokio;
 
 use crate::consensus::base::blockchain::Blockchain;
 use crate::network;

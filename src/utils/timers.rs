@@ -7,7 +7,6 @@ use std::hash::Hash;
 use std::fmt::Debug;
 use std::time::Duration;
 use parking_lot::{Mutex, MutexGuard};
-use std::sync::{Arc, Weak};
 
 pub struct Timers<K: Eq + Hash + Debug> {
     delays: Mutex<HashMap<K, oneshot::Sender<()>>>,
