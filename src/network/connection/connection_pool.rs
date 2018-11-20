@@ -370,7 +370,7 @@ impl ConnectionPool {
 
         // Close connection if peer's address is banned.
         let peer_address = peer.peer_address();
-        if self.addresses.read().is_banned(peer_address.clone()) { // TODO This seems a bit inefficient.
+        if self.addresses.read().is_banned(&peer_address) {
             ConnectionPool::close(info.network_connection(), CloseType::PeerIsBanned);
             return false;
         }
@@ -639,7 +639,7 @@ impl ConnectionPool {
             },
         }
 
-        if self.addresses.read().is_banned(peer_address.clone()) {
+        if self.addresses.read().is_banned(&peer_address) {
             error!("Connecting to banned address {:?}", peer_address);
             return false;
         }

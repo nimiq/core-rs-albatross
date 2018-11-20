@@ -56,8 +56,8 @@ impl PeerAddressBook {
         return self.ws_addresses.iter();
     }
 
-    pub fn get_info(&self, peer_address: Arc<PeerAddress>) -> Option<&PeerAddressInfo> {
-        return self.info_by_address.get(&peer_address);
+    pub fn get_info(&self, peer_address: &Arc<PeerAddress>) -> Option<&PeerAddressInfo> {
+        return self.info_by_address.get(peer_address);
     }
 
     pub fn get_by_peer_id(&self, peer_id: &PeerId) -> Option<Arc<PeerAddress>> {
@@ -260,7 +260,7 @@ impl PeerAddressBook {
         }
     }
 
-    pub fn is_banned(&self, peer_address: Arc<PeerAddress>) -> bool {
+    pub fn is_banned(&self, peer_address: &Arc<PeerAddress>) -> bool {
         if let Some(info) = self.get_info(peer_address) {
             if PeerAddressState::Banned == info.state {
                 // XXX Never consider seed peers to be banned. This allows us to use
@@ -276,9 +276,9 @@ impl PeerAddressBook {
     fn remove_from_store(&mut self, peer_address: Arc<PeerAddress>) {
 
         // Never delete seed addresses, ban them instead for a couple of minutes.
-        if let Some(info) = self.get_info(Arc::clone(&peer_address)) {
+        if let Some(info) = self.get_info(&peer_address) {
             if info.peer_address.is_seed() {
-                self.ban(Arc::clone(&peer_address), DEFAULT_BAN_TIME);
+                self.ban(peer_address.clone(), DEFAULT_BAN_TIME);
             }
         }
 
@@ -299,7 +299,7 @@ impl PeerAddressBook {
             default => {}
         }
 
-        if let Some(info) = self.get_info(Arc::clone(&peer_address)) {
+        if let Some(info) = self.get_info(&peer_address) {
 
             // Don't delete bans.
             if info.state == PeerAddressState::Banned {

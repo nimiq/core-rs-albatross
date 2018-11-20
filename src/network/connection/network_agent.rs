@@ -236,7 +236,7 @@ impl NetworkAgent {
         // Check that the given peerAddress matches the one we expect.
         // In case of inbound WebSocket connections, this is the first time we
         // see the remote peer's peerAddress.
-        let peer_address = msg.peer_address.clone();
+        let mut peer_address = msg.peer_address.clone();
         if let Some(channel_peer_address) = self.channel.address_info.peer_address() {
             if &peer_address != channel_peer_address.as_ref() {
                 self.channel.close(CloseType::UnexpectedPeerAddressInVersionMessage);
@@ -247,12 +247,18 @@ impl NetworkAgent {
 
         // The client might not send its netAddress. Set it from our address database if we have it.
         if peer_address.net_address.is_pseudo() {
-//            let stored_address = self.addresses.read().get_info()
-            // TODO Change PeerAddressBook API
+            // TODO Very complicated API call here.
+            let addresses = self.addresses.read();
+            let stored_address = addresses.get_info(&Arc::new(peer_address.clone()));
+            if let Some(peer_address_info) = stored_address {
+                if !peer_address_info.peer_address.net_address.is_pseudo() {
+                    peer_address.net_address = peer_address_info.peer_address.net_address.clone();
+                }
+            }
         }
 
-        // Set/update the channel's peer address.
         let peer_address = Arc::new(peer_address);
+        // Set/update the channel's peer address.
         self.channel.address_info.set_peer_address(peer_address.clone());
 
         // Create peer object. Since the initial version message received from the
@@ -270,7 +276,7 @@ impl NetworkAgent {
 
         // Tell listeners that we received this peer's version information.
         // Listeners registered to this event might close the connection to this peer.
-        self.notifier.notify_ref(&NetworkAgentEvent::Version(UniquePtr::new(self.peer.as_ref().unwrap())));
+        self.notifier.notify(NetworkAgentEvent::Version(UniquePtr::new(self.peer.as_ref().unwrap())));
 
         // Abort handshake if the connection was closed.
         if self.channel.closed() {
@@ -310,7 +316,7 @@ impl NetworkAgent {
         }, Duration::from_millis(NetworkAgent::ANNOUNCE_ADDR_INTERVAL));
 
         // Tell listeners that the handshake with this peer succeeded.
-        self.notifier.notify_ref(&NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
+        self.notifier.notify(NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
 
         // Request new network addresses from the peer.
         self.request_addresses(None);
@@ -515,7 +521,7 @@ impl NetworkAgent {
         let start_time = self.ping_times.remove(&nonce);
         if let Some(start_time) = start_time {
             let delta = start_time.elapsed();
-            self.notifier.notify_ref(&NetworkAgentEvent::PingPong(delta));
+            self.notifier.notify(NetworkAgentEvent::PingPong(delta));
         }
     }
 }
