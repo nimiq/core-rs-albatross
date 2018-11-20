@@ -1,4 +1,4 @@
-use std::{io, fmt, net, fmt::Debug};
+use std::{io, fmt, net, time::Instant, fmt::Debug};
 
 use url::Url;
 use futures::prelude::*;
@@ -56,6 +56,7 @@ pub struct NimiqMessageStream
     buf: Vec<WebSocketMessage>,
     net_address: NetAddress,
     outbound: bool,
+    last_chunk_received_at: Option<Instant>,
 }
 
 impl NimiqMessageStream
@@ -72,6 +73,7 @@ impl NimiqMessageStream
                 net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
             },
             outbound: outbound,
+            last_chunk_received_at: None,
         };
     }
 
@@ -81,6 +83,10 @@ impl NimiqMessageStream
 
     pub fn outbound(&self) -> bool {
         self.outbound
+    }
+
+    pub fn last_chunk_received_at(&self) -> &Option<Instant> {
+        &self.last_chunk_received_at
     }
 }
 
@@ -199,6 +205,9 @@ impl Stream for NimiqMessageStream
         let msg_length = &ws_message[5..9];
         let msg_length = BigEndian::read_u32(msg_length) as usize;
 
+        // Update last chunk timestamp
+        self.last_chunk_received_at = Some(Instant::now());
+
         // We have enough ws messages to create a nimiq message
         if msg_length < ((1 + self.buf.len()) * (MAX_CHUNK_SIZE + 1)) {
             // println!("We have enough ws msgs to create a Nimiq msg!");
@@ -218,7 +227,6 @@ impl Stream for NimiqMessageStream
                 } else {
                     return Err(NimiqMessageStreamError::TagMismatch);
                 }
-
                 remaining_length -= current_message_length;
             }
 
@@ -290,6 +298,7 @@ pub struct SharedNimiqMessageStream {
     inner: MultiLock<NimiqMessageStream>,
     net_address: NetAddress,
     outbound: bool,
+    last_chunk_received_at: Option<Instant>,
 }
 
 impl SharedNimiqMessageStream {
@@ -300,15 +309,21 @@ impl SharedNimiqMessageStream {
     pub fn outbound(&self) -> bool {
         self.outbound
     }
+
+    pub fn last_chunk_received_at(&self) -> Option<&Instant> {
+        self.last_chunk_received_at.as_ref()
+    }
 }
 
 impl From<NimiqMessageStream> for SharedNimiqMessageStream {
     fn from(stream: NimiqMessageStream) -> Self {
         let net_address = stream.net_address().clone();
         let outbound = stream.outbound();
+        let last_chunk_received_at = stream.last_chunk_received_at().clone();
         SharedNimiqMessageStream {
             net_address,
             outbound,
+            last_chunk_received_at,
             inner: MultiLock::new(stream),
         }
     }
@@ -320,6 +335,7 @@ impl Clone for SharedNimiqMessageStream {
         SharedNimiqMessageStream {
             net_address: self.net_address.clone(),
             outbound: self.outbound,
+            last_chunk_received_at: self.last_chunk_received_at.clone(),
             inner: self.inner.clone()
         }
     }
@@ -331,7 +347,10 @@ impl Stream for SharedNimiqMessageStream {
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.inner.poll_lock() {
-            Async::Ready(mut inner) => inner.poll(),
+            Async::Ready(mut inner) => {
+                self.last_chunk_received_at = inner.last_chunk_received_at().clone();
+                inner.poll()
+            },
             Async::NotReady => Ok(Async::NotReady),
         }
     }
