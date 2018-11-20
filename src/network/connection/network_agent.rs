@@ -76,7 +76,7 @@ enum NetworkAgentTimers {
 pub enum NetworkAgentEvent {
     Version(UniquePtr<Peer>),
     Handshake(UniquePtr<Peer>),
-    Addr(Vec<PeerAddress>),
+    Addr,
     PingPong(Duration),
 }
 
@@ -483,7 +483,7 @@ impl NetworkAgent {
         self.addresses.write().add(Some(&self.channel), addresses);
 
         // Tell listeners that we have received new addresses.
-        // TODO Fire Addr
+        self.notifier.notify(NetworkAgentEvent::Addr);
     }
 
     fn on_get_addr(&mut self, msg: &GetAddrMessage) {
