@@ -10,6 +10,7 @@ use crate::consensus::policy;
 use crate::network::NetworkTime;
 use crate::utils::db::{Environment, ReadTransaction, WriteTransaction};
 use crate::utils::observer::Notifier;
+use crate::utils::unique_ptr::UniquePtr;
 
 pub struct Blockchain<'env> {
     env: &'env Environment,
@@ -38,10 +39,10 @@ pub enum PushResult {
     Forked,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BlockchainEvent {
-    Extended,
-    Reverted,
+    Extended(Blake2bHash, UniquePtr<Block>),
+    Rebranched(Vec<(Blake2bHash, Block)>, Vec<(Blake2bHash, Block)>),
 }
 
 impl<'env> Blockchain<'env> {
@@ -241,7 +242,9 @@ impl<'env> Blockchain<'env> {
         }
 
         // Give up write lock before notifying.
-        self.notifier.read().notify(BlockchainEvent::Extended);
+        let state = self.state.read();
+        let event = BlockchainEvent::Extended(state.head_hash.clone(), UniquePtr::new(&state.main_chain.head));
+        self.notifier.read().notify(event);
 
         return true;
     }
@@ -334,8 +337,9 @@ impl<'env> Blockchain<'env> {
         }
 
         // Fork looks good.
-        // Acquire write lock.
+
         {
+            // Acquire write lock.
             let mut state = self.state.write();
 
             // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
@@ -368,9 +372,21 @@ impl<'env> Blockchain<'env> {
             write_txn.commit();
             state.transaction_cache = cache_txn;
 
-            state.main_chain = fork_chain[0].1.clone(); // TODO get rid of the .clone() here
+            state.main_chain = fork_chain[0].1.clone();
             state.head_hash = fork_chain[0].0.clone();
         }
+
+        // Give up write lock before notifying.
+        let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
+        for (hash, chain_info) in revert_chain.into_iter().rev() {
+            reverted_blocks.push((hash, chain_info.head));
+        }
+        let mut adopted_blocks = Vec::with_capacity(fork_chain.len());
+        for (hash, chain_info) in fork_chain.into_iter().rev() {
+            adopted_blocks.push((hash, chain_info.head));
+        }
+        let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
+        self.notifier.read().notify(event);
 
         return true;
     }

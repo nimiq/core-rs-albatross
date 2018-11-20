@@ -3,8 +3,9 @@ use parking_lot::{RwLock, Mutex};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::iter;
 use std::sync::Arc;
+use crate::consensus::base::account::{Account, Accounts};
+use crate::consensus::base::block::Block;
 use crate::consensus::base::blockchain::{Blockchain, BlockchainEvent};
 use crate::consensus::base::primitive::hash::{Blake2bHash, Hash};
 use crate::consensus::base::primitive::Address;
@@ -27,7 +28,7 @@ struct MempoolState {
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub enum MempoolEvent {
-    TransactionAdded,
+    TransactionAdded(Blake2bHash, Arc<Transaction>),
     TransactionRestored,
     TransactionMined,
     TransactionEvicted,
@@ -52,21 +53,11 @@ impl<'env> Mempool<'env> {
         arc
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent) {
-        println!("Mempool received blockchain event: {:?}", event);
-        println!("Blockchain height: {}", self.blockchain.height());
-        match event {
-            BlockchainEvent::Extended => self.evict_transactions(),
-            _ => () // TODO
-        }
-    }
-
     pub fn push_transaction(&self, transaction: Transaction) -> ReturnCode {
+        let hash: Blake2bHash = transaction.hash();
+
         // Only one mutating operation at a time.
         let lock = self.mut_lock.lock();
-
-        let transaction_arc;
-        let hash: Blake2bHash = transaction.hash();
 
         // Transactions that are invalidated by the new transaction are stored here.
         let mut txs_to_remove = Vec::new();
@@ -108,7 +99,7 @@ impl<'env> Mempool<'env> {
             let transaction_cache = self.blockchain.transaction_cache();
             let block_height = self.blockchain.height() + 1;
 
-            // Check if transaction is valid at the next block height;
+            // Check if transaction is valid at the next block height.
             if !transaction.is_valid_at(block_height) {
                 return ReturnCode::Invalid;
             }
@@ -135,19 +126,22 @@ impl<'env> Mempool<'env> {
 
             // Re-check all transactions for this sender in fee/byte order against the sender account state.
             // Adding high fee transactions may thus invalidate low fee transactions in the set.
+            let empty_btree; // XXX Only needed to get an empty BTree iterator
             let mut tx_count = 0;
             let mut tx_iter = match txs_by_sender_opt {
-                Some(transactions) => Box::new(transactions.iter()) as Box<DoubleEndedIterator<Item=&Arc<Transaction>>>,
-                None => Box::new(iter::empty())
+                Some(transactions) => transactions.iter(),
+                None => {
+                    empty_btree = BTreeSet::new();
+                    empty_btree.iter()
+                }
             };
 
             // First apply all transactions with a higher fee/byte.
             // These are not affected by the new transaction and should never fail to apply.
-            transaction_arc = Arc::new(transaction);
             let mut tx_opt = tx_iter.next_back();
             while let Some(tx) = tx_opt {
                 // Break on the first transaction with a lower fee/byte.
-                if tx.cmp(&transaction_arc) == Ordering::Less {
+                if transaction.cmp(tx) == Ordering::Greater {
                     break;
                 }
 
@@ -165,7 +159,7 @@ impl<'env> Mempool<'env> {
             }
 
             // Now, check the new transaction.
-            sender_account = match sender_account.with_outgoing_transaction(&transaction_arc, block_height) {
+            sender_account = match sender_account.with_outgoing_transaction(&transaction, block_height) {
                 Ok(account) => account,
                 Err(_) => return ReturnCode::Invalid // XXX More specific return code here?
             };
@@ -189,22 +183,12 @@ impl<'env> Mempool<'env> {
             }
         }
 
+        let tx_arc = Arc::new(transaction);
+
         {
-            let mut state = self.state.write();
-
             // Transaction is valid, add it to the mempool.
-            state.transactions_by_hash.insert(hash, Arc::clone(&transaction_arc));
-            state.transactions_sorted_fee.insert(Arc::clone(&transaction_arc));
-
-            let txs_by_recipient = state.transactions_by_recipient
-                .entry(transaction_arc.recipient.clone()) // XXX Get rid of the .clone() here
-                .or_insert_with(|| BTreeSet::new());
-            txs_by_recipient.insert(Arc::clone(&transaction_arc));
-
-            let txs_by_sender = state.transactions_by_sender
-                .entry(transaction_arc.sender.clone()) // XXX Get rid of the .clone() here
-                .or_insert_with(|| BTreeSet::new());
-            txs_by_sender.insert(Arc::clone(&transaction_arc));
+            let mut state = self.state.write();
+            Mempool::add_transaction(&mut state, hash.clone(), tx_arc.clone());
 
             // Evict transactions that were invalidated by the new transaction.
             for tx in txs_to_remove {
@@ -213,14 +197,15 @@ impl<'env> Mempool<'env> {
 
             // Remove the lowest fee transaction if mempool max size is reached.
             if state.transactions_sorted_fee.len() > SIZE_MAX {
-                // TODO
-                //self.pop_low_fee_transaction();
+                let tx = state.transactions_sorted_fee.iter().next().unwrap().clone();
+                Mempool::remove_transaction(&mut state, &tx);
             }
         }
 
-        // TODO
         // Tell listeners about the new transaction we received.
-        // Tell listeners about the transactions we evicted.
+        self.notifier.read().notify(MempoolEvent::TransactionAdded(hash, tx_arc));
+
+        // TODO Tell listeners about the transactions we evicted.
 
         return ReturnCode::Accepted;
     }
@@ -276,6 +261,13 @@ impl<'env> Mempool<'env> {
         return txs;
     }
 
+    fn on_blockchain_event(&self, event: &BlockchainEvent) {
+        match event {
+            BlockchainEvent::Extended(_, _) => self.evict_transactions(),
+            BlockchainEvent::Rebranched(reverted_blocks, _) => self.restore_transactions(reverted_blocks),
+        }
+    }
+
     /// Evict all transactions from the pool that have become invalid due to changes in the
     /// account state (i.e. typically because the were included in a newly mined block). No need to re-check signatures.
     fn evict_transactions(&self) {
@@ -287,6 +279,7 @@ impl<'env> Mempool<'env> {
         {
             let state = self.state.read();
 
+            // Acquire blockchain read lock.
             let accounts = self.blockchain.accounts();
             let transaction_cache = self.blockchain.transaction_cache();
             let block_height = self.blockchain.height() + 1;
@@ -308,6 +301,7 @@ impl<'env> Mempool<'env> {
 
                     // Check if transaction is still valid for recipient.
                     let recipient_account = accounts.get(&tx.recipient, None);
+
                     if recipient_account.with_incoming_transaction(&tx, block_height).is_err() {
                         txs_evicted.push(tx.clone());
                         continue;
@@ -340,17 +334,94 @@ impl<'env> Mempool<'env> {
         // TODO notify listeners
     }
 
-    fn pop_low_fee_transaction(&self) {
-        // TODO
-        /*
-        let mut owned = Option::None;
-        if let Some(t) = self.transactions_sorted_fee.iter().next() {
-            owned = Some(t.clone());
+    fn restore_transactions(&self, reverted_blocks: &Vec<(Blake2bHash, Block)>) {
+        // Only one mutating operation at a time.
+        let lock = self.mut_lock.lock();
+
+        // Acquire blockchain read lock.
+        let accounts = self.blockchain.accounts();
+        let transaction_cache = self.blockchain.transaction_cache();
+        let block_height = self.blockchain.height() + 1;
+
+        // Collect all transactions from reverted blocks that are still valid.
+        // Track them by sender and sort them by fee/byte.
+        let mut txs_by_sender = HashMap::new();
+        for (_, block) in reverted_blocks {
+            for tx in block.body.as_ref().unwrap().transactions.iter() {
+                if !tx.is_valid_at(block_height) {
+                    // This transaction has expired (or is not valid yet) on the new chain.
+                    // XXX The transaction is lost!
+                    continue;
+                }
+
+                if transaction_cache.contains(&tx.hash()) {
+                    // This transaction is also included in the new chain, ignore.
+                    continue;
+                }
+
+                let recipient_account = accounts.get(&tx.recipient, None);
+                if recipient_account.with_incoming_transaction(&tx, block_height).is_err() {
+                    // This transaction cannot be accepted by the recipient anymore.
+                    // XXX The transaction is lost!
+                    continue;
+                }
+
+                let txs = txs_by_sender
+                    .entry(&tx.sender)
+                    .or_insert_with(|| BTreeSet::new());
+                txs.insert(tx);
+            }
         }
-        if let Some(t) = owned {
-            self.remove_transaction(&t);
+
+        // Merge the new transaction sets per sender with the existing ones.
+        let mut state = self.state.write();
+
+        for (sender, restored_txs) in txs_by_sender {
+            let empty_btree;
+            let existing_txs = match state.transactions_by_sender.get(&sender) {
+                Some(txs) => txs,
+                None => {
+                    empty_btree = BTreeSet::new();
+                    &empty_btree
+                }
+            };
+
+            let (txs_to_add, txs_to_remove) = Mempool::merge_transactions(&accounts, sender, block_height, existing_txs, &restored_txs);
+            for tx in txs_to_add {
+                Mempool::add_transaction(&mut state, tx.hash(), Arc::new(tx.clone()));
+            }
+            for tx in txs_to_remove {
+                Mempool::remove_transaction(&mut state, &tx);
+            }
         }
-        */
+
+        // Evict lowest fee transactions if the mempool has grown too large.
+        let size = state.transactions_sorted_fee.len();
+        if size > SIZE_MAX {
+            let mut txs_to_remove = Vec::with_capacity(size - SIZE_MAX);
+            let mut iter = state.transactions_sorted_fee.iter();
+            for _ in 0..size - SIZE_MAX {
+                txs_to_remove.push(iter.next().unwrap().clone());
+            }
+            for tx in txs_to_remove {
+                Mempool::remove_transaction(&mut state, &tx);
+            }
+        }
+    }
+
+    fn add_transaction(state: &mut MempoolState, hash: Blake2bHash, tx: Arc<Transaction>) {
+        state.transactions_by_hash.insert(hash, tx.clone());
+        state.transactions_sorted_fee.insert(tx.clone());
+
+        let txs_by_recipient = state.transactions_by_recipient
+            .entry(tx.recipient.clone()) // XXX Get rid of the .clone() here
+            .or_insert_with(|| BTreeSet::new());
+        txs_by_recipient.insert(tx.clone());
+
+        let txs_by_sender = state.transactions_by_sender
+            .entry(tx.sender.clone()) // XXX Get rid of the .clone() here
+            .or_insert_with(|| BTreeSet::new());
+        txs_by_sender.insert(tx.clone());
     }
 
     fn remove_transaction(state: &mut MempoolState, tx: &Transaction) {
@@ -374,6 +445,55 @@ impl<'env> Mempool<'env> {
         if remove_key {
             state.transactions_by_recipient.remove(&tx.recipient);
         }
+    }
+
+    fn merge_transactions<'a>(accounts: &Accounts, sender: &Address, block_height: u32, old_txs: &BTreeSet<Arc<Transaction>>, new_txs: &BTreeSet<&'a Transaction>) -> (Vec<&'a Transaction>, Vec<Arc<Transaction>>) {
+        let mut txs_to_add = Vec::new();
+        let mut txs_to_remove = Vec::new();
+
+        let mut sender_account = accounts.get(sender, None);
+        let mut tx_count = 0;
+
+        let mut iter_old = old_txs.iter();
+        let mut iter_new = new_txs.iter();
+        let mut old_tx = iter_old.next_back();
+        let mut new_tx = iter_new.next_back();
+
+        while old_tx.is_some() || new_tx.is_some() {
+            let new_is_next = match (old_tx, new_tx) {
+                (Some(_), None) => false,
+                (None, Some(_)) => true,
+                (Some(txc), Some(txn)) => txn.cmp(&txc.as_ref()) == Ordering::Greater,
+                (None, None) => unreachable!()
+            };
+
+            if new_is_next {
+                if tx_count < TRANSACTIONS_PER_SENDER_MAX {
+                    let tx = new_tx.unwrap();
+                    if let Ok(account) = sender_account.with_outgoing_transaction(*tx, block_height) {
+                        sender_account = account;
+                        tx_count += 1;
+                        txs_to_add.push(*tx)
+                    }
+                }
+                new_tx = iter_new.next_back();
+            } else {
+                let tx = old_tx.unwrap();
+                if tx_count < TRANSACTIONS_PER_SENDER_MAX {
+                    if let Ok(account) = sender_account.with_outgoing_transaction(tx, block_height) {
+                        sender_account = account;
+                        tx_count += 1;
+                    } else {
+                        txs_to_remove.push(tx.clone())
+                    }
+                } else {
+                    txs_to_remove.push(tx.clone())
+                }
+                old_tx = iter_old.next_back();
+            }
+        }
+
+        (txs_to_add, txs_to_remove)
     }
 }
 
