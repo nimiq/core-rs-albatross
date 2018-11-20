@@ -535,7 +535,7 @@ impl Agent for NetworkAgent {
                 PeerChannelEvent::Close(_) => {
                     arc.write().on_close();
                 },
-                PeerChannelEvent::Error => {},
+                PeerChannelEvent::Error(_) => {},
             }
         })));
     }

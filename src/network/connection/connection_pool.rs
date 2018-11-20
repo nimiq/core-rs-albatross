@@ -139,6 +139,8 @@ impl ConnectionPool {
                     },
                 }
             });
+            // Start accepting incoming connections.
+            pool.websocket_connector.start();
         }
         arc
     }
@@ -282,7 +284,12 @@ impl ConnectionPool {
     fn on_peer_channel_event(&mut self, connection_id: ConnectionId, event: &PeerChannelEvent) {
         match event {
             PeerChannelEvent::Close(ty) => self.on_close(connection_id, ty.clone()),
-//             TODO PeerChannelEvent::Error => self.on_connect_error(),
+            PeerChannelEvent::Error(_) => {
+                let info = self.connections.get(connection_id).unwrap();
+                info.peer_address().map(|peer_address| {
+                    self.on_connect_error(peer_address);
+                });
+            },
             _ => {},
         }
     }
@@ -546,7 +553,7 @@ impl ConnectionPool {
         }
 
         // Let listeners know about this closing.
-        self.notifier.notify(ConnectionPoolEvent::Close(connection_id, ty));
+        self.notifier.notify(ConnectionPoolEvent::Close(connection_id, UniquePtr::new(&info), ty));
 
         // Set the peer connection to closed state.
         info.close();
@@ -766,13 +773,12 @@ enum PeerCountUpdate {
     Remove
 }
 
-#[derive(Clone)]
 enum ConnectionPoolEvent {
     PeerJoined(Peer),
     PeerLeft(Peer),
     PeersChanged,
     ConnectError(Arc<PeerAddress>, CloseType),
-    Close(ConnectionId, CloseType), // TODO is that really useful? ConnectionId won't exist anymore
+    Close(ConnectionId, UniquePtr<ConnectionInfo>, CloseType),
     Connection(ConnectionId),
     RecyclingRequest,
 }

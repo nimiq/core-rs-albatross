@@ -20,6 +20,7 @@ use crate::network::websocket::NimiqMessageStreamError;
 use crate::network::websocket::SharedNimiqMessageStream;
 use crate::utils::observer::{Listener, ListenerHandle, Notifier, PassThroughListener, PassThroughNotifier};
 use crate::network::connection::network_connection::ClosingHelper;
+use crate::utils::unique_ptr::UniquePtr;
 
 pub trait Agent: Send {
     /// Initialize the protocol.
@@ -83,11 +84,10 @@ impl Debug for PeerChannel {
     }
 }
 
-#[derive(Clone)]
 pub enum PeerChannelEvent {
     Message(Message),
     Close(CloseType),
-    Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
+    Error(UniquePtr<NimiqMessageStreamError>),
 }
 
 impl From<PeerStreamEvent> for PeerChannelEvent {
@@ -95,7 +95,7 @@ impl From<PeerStreamEvent> for PeerChannelEvent {
         match e {
             PeerStreamEvent::Message(msg) => PeerChannelEvent::Message(msg),
             PeerStreamEvent::Close(ty) => PeerChannelEvent::Close(ty),
-            PeerStreamEvent::Error => PeerChannelEvent::Error,
+            PeerStreamEvent::Error(error) => PeerChannelEvent::Error(error),
         }
     }
 }
@@ -137,11 +137,10 @@ impl Debug for PeerSink {
     }
 }
 
-#[derive(Clone)]
 pub enum PeerStreamEvent {
     Message(Message),
     Close(CloseType),
-    Error, // cannot use `NimiqMessageStreamError`, because `tungstenite::Error` is not `Clone`
+    Error(UniquePtr<NimiqMessageStreamError>),
 }
 
 pub struct PeerStream {
@@ -167,7 +166,7 @@ impl PeerStream {
             msg_notifier.read().notify(PeerStreamEvent::Message(msg));
             Ok(())
         }).or_else(move |error| {
-            error_notifier.read().notify(PeerStreamEvent::Error);
+            error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(&error)));
             Err(error)
         }).and_then(move |result| {
             close_notifier.read().notify(PeerStreamEvent::Close(CloseType::ClosedByRemote));
