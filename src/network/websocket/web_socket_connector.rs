@@ -1,6 +1,6 @@
 use std::{
-    net::SocketAddr,
     fs::File,
+    net::SocketAddr,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -8,29 +8,25 @@ use std::{
     time::Duration,
 };
 
-use url::Url;
-use parking_lot::RwLock;
-use native_tls::{Identity, TlsAcceptor};
-
 use futures::{
     prelude::*,
 };
-
+use native_tls::{Identity, TlsAcceptor};
+use parking_lot::RwLock;
 use tokio::{
     io,
-    prelude::*,
     net::TcpListener,
+    prelude::*,
 };
-use tokio_tls::{TlsAcceptor as TokioTlsAcceptor};
-use tungstenite::stream::Mode;
-
+use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
 use tokio_tungstenite::{
     MaybeTlsStream,
     stream::Stream as StreamSwitcher,
 };
+use tungstenite::stream::Mode;
+use url::Url;
 
 use crate::network::{
-    Protocol,
     address::PeerAddress,
     connection::{
         AddressInfo,
@@ -40,15 +36,16 @@ use crate::network::{
         NetworkConfig,
         ProtocolConfig,
     },
+    Protocol,
+    ProtocolFlags,
     websocket::{
-        nimiq_connect_async,
         nimiq_accept_async,
+        nimiq_connect_async,
         NimiqMessageStream,
         SharedNimiqMessageStream,
     },
 };
-
-use crate::utils::observer::Notifier;
+use crate::utils::observer::PassThroughNotifier;
 
 // This handle allows the ConnectionPool in the upper layer to signal if this
 // connection should be aborted (f.e. if we are connecting to the same peer,
@@ -57,7 +54,7 @@ use crate::utils::observer::Notifier;
 pub struct ConnectionHandle(AtomicBool);
 
 impl ConnectionHandle {
-    pub fn abort(&mut self) {
+    pub fn abort(&self) {
         self.0.store(true, Ordering::Release);
     }
 
@@ -95,27 +92,22 @@ pub fn wrap_stream<S>(socket: S, identity_file: Option<String>, mode: Mode)
     }
 
 pub struct WebSocketConnector {
-    protocol: Protocol,
-    protocol_prefix: String,
-    network_config: Arc<RwLock<NetworkConfig>>,
-    notifier: Arc<RwLock<Notifier<'static, WebSocketConnectorEvent>>>,
+    network_config: Arc<NetworkConfig>,
+    pub notifier: Arc<RwLock<PassThroughNotifier<'static, WebSocketConnectorEvent>>>,
 }
 
 impl WebSocketConnector {
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(5); // 5 seconds
 
-    pub fn new(protocol: Protocol, protocol_prefix: String, network_config: Arc<RwLock<NetworkConfig>>) -> WebSocketConnector {
+    pub fn new(network_config: Arc<NetworkConfig>) -> WebSocketConnector {
         WebSocketConnector {
-            protocol,
-            protocol_prefix,
             network_config,
-            notifier: Arc::new(RwLock::new(Notifier::new())),
+            notifier: Arc::new(RwLock::new(PassThroughNotifier::new())),
         }
     }
 
     pub fn start(&self) {
-        let network_config = self.network_config.read();
-        let protocol_config = network_config.protocol_config();
+        let protocol_config = self.network_config.protocol_config();
 
         let (host, port, identity_file, mode) = match protocol_config {
             ProtocolConfig::Ws{host, port, reverse_proxy_config} => {
@@ -157,7 +149,7 @@ impl WebSocketConnector {
     pub fn connect(&self, peer_address: Arc<PeerAddress>) -> Arc<ConnectionHandle> {
         let notifier = Arc::clone(&self.notifier);
 
-        if self.protocol != peer_address.protocol() {
+        if !self.network_config.protocol_mask().contains(ProtocolFlags::from(peer_address.protocol())) {
             notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&peer_address), io::ErrorKind::InvalidInput));
         }
 

@@ -6,6 +6,7 @@ use crate::network::Peer;
 use crate::network::peer_channel::PeerChannel;
 use crate::network::connection::network_agent::NetworkAgent;
 use parking_lot::RwLock;
+use crate::network::websocket::web_socket_connector::ConnectionHandle;
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, PartialEq, Eq)]
 pub enum ConnectionState {
@@ -24,6 +25,7 @@ pub struct ConnectionInfo {
     peer_channel: Option<PeerChannel>,
     state: ConnectionState,
     network_agent: Option<Arc<RwLock<NetworkAgent>>>,
+    connection_handle: Option<Arc<ConnectionHandle>>,
 }
 
 impl ConnectionInfo {
@@ -35,6 +37,7 @@ impl ConnectionInfo {
             peer_channel: None,
             state: ConnectionState::New,
             network_agent: None,
+            connection_handle: None,
         }
     }
 
@@ -62,6 +65,7 @@ impl ConnectionInfo {
     pub fn peer(&self) -> Option<&Peer> { self.peer.as_ref() }
     pub fn peer_channel(&self) -> Option<&PeerChannel> { self.peer_channel.as_ref() }
     pub fn network_agent(&self) -> Option<&Arc<RwLock<NetworkAgent>>> { self.network_agent.as_ref() }
+    pub fn connection_handle(&self) -> Option<&Arc<ConnectionHandle>> { self.connection_handle.as_ref() }
 
     pub fn set_peer_address(&mut self, peer_address: Arc<PeerAddress>) { self.peer_address = Some(peer_address) }
     pub fn set_network_connection(&mut self, network_connection: NetworkConnection) {
@@ -74,6 +78,8 @@ impl ConnectionInfo {
     }
     pub fn set_peer_channel(&mut self, peer_channel: PeerChannel) { self.peer_channel = Some(peer_channel); }
     pub fn set_network_agent(&mut self, network_agent: Arc<RwLock<NetworkAgent>>) { self.network_agent = Some(network_agent); }
+    pub fn set_connection_handle(&mut self, handle: Arc<ConnectionHandle>) { self.connection_handle = Some(handle); }
+    pub fn drop_connection_handle(&mut self) { self.connection_handle = None; }
 
     pub fn negotiating(&mut self) {
         assert_eq!(self.state, ConnectionState::Connected);

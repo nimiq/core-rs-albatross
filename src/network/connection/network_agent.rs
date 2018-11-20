@@ -21,17 +21,16 @@ use crate::network::message::*;
 use crate::network::message::MessageType;
 use crate::network::message::RejectMessage;
 use crate::network::network_config::NetworkConfig;
-use crate::network::peer_channel::{PeerChannel, PeerChannelEvent};
-use crate::network::peer_channel::Agent;
+use crate::network::peer_channel::{Agent, PeerChannel, PeerChannelEvent};
 use crate::network::Protocol;
 use crate::utils::observer::ListenerHandle;
+use crate::utils::observer::Notifier;
 use crate::utils::observer::weak_listener;
 use crate::utils::services::ServiceFlags;
 use crate::utils::systemtime_to_timestamp;
 use crate::utils::timers::Timers;
-use crate::utils::version;
-use crate::utils::observer::Notifier;
 use crate::utils::unique_ptr::UniquePtr;
+use crate::utils::version;
 
 pub struct NetworkAgent {
     blockchain: Arc<Blockchain<'static>>,

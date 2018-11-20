@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, SystemTime};
 
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockWriteGuard};
 use tokio;
 
 use crate::consensus::base::blockchain::Blockchain;
@@ -26,6 +26,7 @@ use crate::utils::observer::{Notifier, weak_listener};
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
 use crate::utils::unique_ptr::UniquePtr;
+use crate::network::websocket::web_socket_connector::{WebSocketConnector, WebSocketConnectorEvent};
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -41,6 +42,7 @@ type ConnectionId = usize;
 
 pub struct ConnectionPool {
     blockchain: Arc<Blockchain<'static>>,
+    websocket_connector: WebSocketConnector,
 
     connections: SparseVec<ConnectionInfo>,
     connections_by_peer_address: HashMap<Arc<PeerAddress>, ConnectionId>,
@@ -84,6 +86,8 @@ impl ConnectionPool {
     pub fn new(peer_address_book: Arc<RwLock<PeerAddressBook>>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Arc<RwLock<Self>> {
         let arc = Arc::new(RwLock::new(Self {
             blockchain,
+            websocket_connector: WebSocketConnector::new(network_config.clone()),
+
             connections: SparseVec::new(),
             connections_by_peer_address: HashMap::new(),
             connections_by_net_address: HashMap::new(),
@@ -118,7 +122,24 @@ impl ConnectionPool {
 
             listener: Weak::new(),
         }));
-        arc.write().listener = Arc::downgrade(&arc);
+        // Initialise.
+        {
+            let mut pool: RwLockWriteGuard<ConnectionPool> = arc.write();
+            pool.listener = Arc::downgrade(&arc);
+            let weak = pool.listener.clone();
+            pool.websocket_connector.notifier.write().register(move |event| {
+                let arc = upgrade_weak!(weak);
+                let mut pool: RwLockWriteGuard<ConnectionPool> = arc.write();
+                match event {
+                    WebSocketConnectorEvent::Connection(conn) => {
+                        pool.on_connection(conn);
+                    },
+                    WebSocketConnectorEvent::Error(peer_address, _) => {
+                        pool.on_connect_error(peer_address);
+                    },
+                }
+            });
+        }
         arc
     }
 
@@ -135,28 +156,11 @@ impl ConnectionPool {
         let connection_id = self.add(ConnectionInfo::outbound(peer_address.clone()));
 
         // Choose connector type and call.
-        let mut connecting = false;
-        match peer_address.protocol() {
-            Protocol::Wss => {
-                // TODO
-                connecting = true;
-            },
-            Protocol::Ws => {
-                // TODO
-                connecting = true;
-            },
-            _ => {
-                unreachable!("Cannot connect to non-WS(S) nodes.");
-            },
-        }
-
-        if connecting {
-            self.connecting_count += 1;
-        } else {
-            self.remove(connection_id);
-            debug!("Outbound attempt not connecting: {:?}", peer_address);
-            return false;
-        }
+        let handle = self.websocket_connector.connect(peer_address);
+        self.connections.get_mut(connection_id).map(move |info| {
+            info.set_connection_handle(handle);
+        });
+        self.connecting_count += 1;
 
         return true;
     }
@@ -334,6 +338,7 @@ impl ConnectionPool {
 
         // The extra lookup is needed to satisfy the borrow checker.
         let info = self.connections.get_mut(connection_id).expect("Missing connection");
+        info.drop_connection_handle();
 
         let conn_type = if info.network_connection().unwrap().inbound() { "inbound" } else { "outbound" };
         debug!("Connection established ({}) #{} (net_address={:?}, peer_address={:?})", conn_type, connection_id, net_address, info.peer_address());
@@ -425,7 +430,10 @@ impl ConnectionPool {
                             assert!(protocol == Protocol::Wss || protocol == Protocol::Ws, "Duplicate connection to non-WS node");
                             debug!("Aborting connection attempt to {:?}, simultaneous connection succeeded", peer_address);
 
-                            // TODO abort connecting
+                            // Abort connection.
+                            stored_connection.connection_handle().map(|handle| {
+                                handle.abort();
+                            });
                             assert!(self.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                         },
                         ConnectionState::Established => {
