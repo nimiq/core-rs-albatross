@@ -31,6 +31,7 @@ use crate::utils::systemtime_to_timestamp;
 use crate::utils::timers::Timers;
 use crate::utils::version;
 use crate::utils::observer::Notifier;
+use crate::utils::unique_ptr::UniquePtr;
 
 pub struct NetworkAgent {
     blockchain: Arc<Blockchain<'static>>,
@@ -57,7 +58,7 @@ pub struct NetworkAgent {
     listener: Weak<RwLock<NetworkAgent>>,
     listener_handle: Option<ListenerHandle>,
 
-    pub notifier: Notifier<'static, NetworkAgentEvents>,
+    pub notifier: Notifier<'static, NetworkAgentEvent>,
     
     timers: Timers<NetworkAgentTimers>,
 }
@@ -72,10 +73,9 @@ enum NetworkAgentTimers {
     Ping(u32),
 }
 
-#[derive(Clone)]
-pub enum NetworkAgentEvents {
-    Version(Peer),
-    Handshake(Peer),
+pub enum NetworkAgentEvent {
+    Version(UniquePtr<Peer>),
+    Handshake(UniquePtr<Peer>),
     Addr(Vec<PeerAddress>),
     PingPong(Duration),
 }
@@ -252,7 +252,8 @@ impl NetworkAgent {
         }
 
         // Set/update the channel's peer address.
-        // TODO self.channel.address_info.set_peer_address(Arc::new(peer_address));
+        let peer_address = Arc::new(peer_address);
+        self.channel.address_info.set_peer_address(peer_address.clone());
 
         // Create peer object. Since the initial version message received from the
         // peer contains their local timestamp, we can use it to calculate their
@@ -269,7 +270,7 @@ impl NetworkAgent {
 
         // Tell listeners that we received this peer's version information.
         // Listeners registered to this event might close the connection to this peer.
-        // TODO Fire Version event
+        self.notifier.notify_ref(&NetworkAgentEvent::Version(UniquePtr::new(self.peer.as_ref().unwrap())));
 
         // Abort handshake if the connection was closed.
         if self.channel.closed() {
@@ -309,7 +310,7 @@ impl NetworkAgent {
         }, Duration::from_millis(NetworkAgent::ANNOUNCE_ADDR_INTERVAL));
 
         // Tell listeners that the handshake with this peer succeeded.
-        // TODO Fire handshake
+        self.notifier.notify_ref(&NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
 
         // Request new network addresses from the peer.
         self.request_addresses(None);
@@ -514,7 +515,7 @@ impl NetworkAgent {
         let start_time = self.ping_times.remove(&nonce);
         if let Some(start_time) = start_time {
             let delta = start_time.elapsed();
-            self.notifier.notify(NetworkAgentEvents::PingPong(delta));
+            self.notifier.notify_ref(&NetworkAgentEvent::PingPong(delta));
         }
     }
 }

@@ -37,3 +37,9 @@ impl<T: Ord> Ord for UniquePtr<T> {
 }
 
 impl<T: Eq> Eq for UniquePtr<T> {}
+
+impl<T> AsRef<T> for UniquePtr<T> {
+    fn as_ref(&self) -> &T {
+        self.deref()
+    }
+}

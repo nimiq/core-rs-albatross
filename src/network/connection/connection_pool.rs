@@ -9,10 +9,12 @@ use std::time::{Duration, SystemTime};
 use parking_lot::RwLock;
 use tokio;
 
+use crate::consensus::base::blockchain::Blockchain;
 use crate::network;
 use crate::network::address::net_address::{NetAddress, NetAddressType};
 use crate::network::address::peer_address::PeerAddress;
 use crate::network::address::peer_address_book::PeerAddressBook;
+use crate::network::connection::network_agent::{NetworkAgent, NetworkAgentEvent};
 use crate::network::connection::NetworkConnection;
 use crate::network::network_config::NetworkConfig;
 use crate::network::Peer;
@@ -23,6 +25,7 @@ use crate::utils::observer::{Notifier, weak_listener};
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
+use crate::utils::unique_ptr::UniquePtr;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -37,6 +40,8 @@ type ConnectionId = usize;
 
 
 pub struct ConnectionPool {
+    blockchain: Arc<Blockchain<'static>>,
+
     connections: SparseVec<ConnectionInfo>,
     connections_by_peer_address: HashMap<Arc<PeerAddress>, ConnectionId>,
     connections_by_net_address: HashMap<NetAddress, HashSet<ConnectionId>>,
@@ -76,8 +81,9 @@ impl ConnectionPool {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
 
     /// Constructor.
-    pub fn new(peer_address_book: Arc<RwLock<PeerAddressBook>>, network_config: Arc<NetworkConfig>) -> Arc<RwLock<Self>> {
-        let arc = Arc::new(RwLock::new(ConnectionPool {
+    pub fn new(peer_address_book: Arc<RwLock<PeerAddressBook>>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Arc<RwLock<Self>> {
+        let arc = Arc::new(RwLock::new(Self {
+            blockchain,
             connections: SparseVec::new(),
             connections_by_peer_address: HashMap::new(),
             connections_by_net_address: HashMap::new(),
@@ -335,24 +341,42 @@ impl ConnectionPool {
         // Let listeners know about this connection.
         self.notifier.notify(ConnectionPoolEvent::Connection(connection_id));
 
-        // Set the peer_channel
-        info.set_peer_channel(peer_channel);
+        // Set the peer_channel.
+        info.set_peer_channel(peer_channel.clone());
 
-        // TODO create agent and initate handshake
+        // Create NetworkAgent.
+        let agent = NetworkAgent::new(self.blockchain.clone(), self.addresses.clone(), self.network_config.clone(), peer_channel);
+        let mut locked_agent = agent.write();
+        locked_agent.notifier.register(weak_listener(self.listener.clone(), move |arc, event| {
+            let mut pool = arc.write();
+            match event {
+                NetworkAgentEvent::Version(peer) => {
+                    pool.check_handshake(connection_id, peer);
+                },
+                NetworkAgentEvent::Handshake(peer) => pool.on_handshake(connection_id, peer),
+                _ => {},
+            }
+        }));
+
+        info.set_network_agent(agent.clone());
+
+        // Initiate handshake with the peer.
+        locked_agent.handshake();
     }
 
     /// Checks the validity of a handshake.
-    fn check_handshake(&mut self, connection_id: ConnectionId, peer: &Peer) -> bool {
+    fn check_handshake(&mut self, connection_id: ConnectionId, peer: &UniquePtr<Peer>) -> bool {
         let info = self.connections.get(connection_id).unwrap();
 
         // Close connection if peer's address is banned.
-        if self.addresses.read().is_banned(peer.peer_address()) {
+        let peer_address = peer.peer_address();
+        if self.addresses.read().is_banned(peer_address.clone()) { // TODO This seems a bit inefficient.
             ConnectionPool::close(info.network_connection(), CloseType::PeerIsBanned);
             return false;
         }
 
         // Duplicate/simultaneous connection check (post version):
-        let stored_connection_id = self.connections_by_peer_address.get(&peer.peer_address());
+        let stored_connection_id = self.connections_by_peer_address.get(&peer_address);
         if let Some(stored_connection_id) = stored_connection_id {
             if *stored_connection_id != connection_id {
                 // If we already have an established connection to this peer, close this connection.
@@ -365,7 +389,7 @@ impl ConnectionPool {
         }
 
         // Close connection if we have too many dumb connections.
-        if peer.peer_address().protocol() == Protocol::Dumb && self.peer_count_dumb >= network::PEER_COUNT_DUMB_MAX {
+        if peer_address.protocol() == Protocol::Dumb && self.peer_count_dumb >= network::PEER_COUNT_DUMB_MAX {
             ConnectionPool::close(info.network_connection(), CloseType::ConnectionLimitDumb);
             return false;
         }
@@ -377,9 +401,10 @@ impl ConnectionPool {
     }
 
     /// Callback during handshake.
-    fn on_handshake(&mut self, connection_id: ConnectionId, peer: Peer) {
+    fn on_handshake(&mut self, connection_id: ConnectionId, peer: &UniquePtr<Peer>) {
         let info = self.connections.get(connection_id).expect("Missing connection");
         let network_connection = info.network_connection().unwrap();
+        let peer_address = peer.peer_address();
 
         if network_connection.inbound() {
             // Re-check allowInboundExchange as it might have changed.
@@ -389,19 +414,19 @@ impl ConnectionPool {
             }
 
             // Duplicate/simultaneous connection check (post handshake):
-            let stored_connection_id = self.connections_by_peer_address.get(&peer.peer_address());
+            let stored_connection_id = self.connections_by_peer_address.get(&peer_address);
             if let Some(stored_connection_id) = stored_connection_id {
                 if *stored_connection_id != connection_id {
                     let stored_connection = self.connections.get(*stored_connection_id).expect("Missing connection");
                     match stored_connection.state() {
                         ConnectionState::Connecting => {
                             // Abort the stored connection attempt and accept this connection.
-                            let protocol = peer.peer_address().protocol();
+                            let protocol = peer_address.protocol();
                             assert!(protocol == Protocol::Wss || protocol == Protocol::Ws, "Duplicate connection to non-WS node");
-                            debug!("Aborting connection attempt to {:?}, simultaneous connection succeeded", peer.peer_address());
+                            debug!("Aborting connection attempt to {:?}, simultaneous connection succeeded", peer_address);
 
                             // TODO abort connecting
-                            assert!(self.get_connection_by_peer_address(&peer.peer_address()).is_none(), "ConnectionInfo not removed");
+                            assert!(self.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                         },
                         ConnectionState::Established => {
                             // If we have another established connection to this peer, close this connection.
@@ -410,9 +435,9 @@ impl ConnectionPool {
                         },
                         ConnectionState::Negotiating => {
                             // The peer with the lower peerId accepts this connection and closes his stored connection.
-                            if self.network_config.peer_id() < peer.peer_address().peer_id() {
+                            if self.network_config.peer_id() < peer_address.peer_id() {
                                 ConnectionPool::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
-                                assert!(self.get_connection_by_peer_address(&peer.peer_address()).is_none(), "ConnectionInfo not removed");
+                                assert!(self.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                             } else {
                                 // The peer with the higher peerId closes this connection and keeps his stored connection.
                                 ConnectionPool::close(info.network_connection(), CloseType::SimultaneousConnection);
@@ -421,15 +446,15 @@ impl ConnectionPool {
                         _ => {
                             // Accept this connection and close the stored connection.
                             ConnectionPool::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
-                            assert!(self.get_connection_by_peer_address(&peer.peer_address()).is_none(), "ConnectionInfo not removed");
+                            assert!(self.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                         },
                     }
                 }
             }
 
-            assert!(self.get_connection_by_peer_address(&peer.peer_address()).is_none(), "ConnectionInfo already exists");
-            self.connections.get_mut(connection_id).unwrap().set_peer_address(peer.peer_address());
-            self.add_peer_address(connection_id, peer.peer_address());
+            assert!(self.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo already exists");
+            self.connections.get_mut(connection_id).unwrap().set_peer_address(peer_address.clone());
+            self.add_peer_address(connection_id, peer_address.clone());
 
             self.inbound_count = self.inbound_count.checked_sub(1).expect("inbound_count < 0");
         }
@@ -442,7 +467,7 @@ impl ConnectionPool {
         }
 
         // Set ConnectionInfo to Established state.
-        self.connections.get_mut(connection_id).unwrap().set_peer(peer.clone()); // TODO do we need a clone here?
+        self.connections.get_mut(connection_id).unwrap().set_peer(peer.as_ref().clone()); // TODO do we need a clone here?
 
         if let Some(net_address) = peer.net_address() {
             // The HashSet takes care of only inserting it once.
@@ -455,15 +480,15 @@ impl ConnectionPool {
 
         // Mark address as established.
         let info = self.connections.get(connection_id).expect("Missing connection");
-        self.addresses.write().established(info.peer_channel().unwrap(), peer.peer_address());
+        self.addresses.write().established(info.peer_channel().unwrap(), peer_address.clone());
 
         // Let listeners know about this peer.
-        self.notifier.notify(ConnectionPoolEvent::PeerJoined(peer.clone()));
+        self.notifier.notify(ConnectionPoolEvent::PeerJoined(peer.as_ref().clone()));
 
         // Let listeners know that the peers changed.
         self.notifier.notify(ConnectionPoolEvent::PeersChanged);
 
-        debug!("[PEER-JOINED] {:?} {:?} (version={:?}, services={:?}, headHash={:?})", peer.peer_address(), peer.net_address(), peer.version, peer.peer_address().services, peer.head_hash);
+        debug!("[PEER-JOINED] {:?} {:?} (version={:?}, services={:?}, headHash={:?})", &peer_address, peer.net_address(), peer.version, peer_address.services, peer.head_hash);
     }
 
     /// Callback upon closing of connection.

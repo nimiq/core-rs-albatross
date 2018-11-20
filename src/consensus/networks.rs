@@ -1,24 +1,28 @@
-use beserial::{Deserialize, Serialize};
-use crate::consensus::base::block::{Block, BlockHeader, BlockInterlink, BlockBody};
-use crate::consensus::base::primitive::hash::Blake2bHash;
-use crate::consensus::base::primitive::crypto::PublicKey;
-use crate::consensus::base::primitive::Address;
-use crate::network::NetworkTime;
-use crate::network::address::peer_address_book::PeerAddressBook;
-use crate::network::address::PeerId;
-use crate::network::connection::connection_pool::ConnectionPool;
-use crate::network::address::peer_address::PeerAddressType;
-use crate::network::address::peer_address::PeerAddress;
-use crate::network::address::net_address::NetAddress;
-use crate::network::peer_scorer::PeerScorer;
-use crate::network::connection::close_type::CloseType;
-use crate::network::network_config::NetworkConfig;
-use crate::utils::services::ServiceFlags;
-use crate::utils::timers::Timers;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+
 use parking_lot::RwLock;
+
+use beserial::{Deserialize, Serialize};
+
+use crate::consensus::base::block::{Block, BlockBody, BlockHeader, BlockInterlink};
+use crate::consensus::base::blockchain::Blockchain;
+use crate::consensus::base::primitive::Address;
+use crate::consensus::base::primitive::crypto::PublicKey;
+use crate::consensus::base::primitive::hash::Blake2bHash;
+use crate::network::address::net_address::NetAddress;
+use crate::network::address::peer_address::PeerAddress;
+use crate::network::address::peer_address::PeerAddressType;
+use crate::network::address::peer_address_book::PeerAddressBook;
+use crate::network::address::PeerId;
+use crate::network::connection::close_type::CloseType;
+use crate::network::connection::connection_pool::ConnectionPool;
+use crate::network::network_config::NetworkConfig;
+use crate::network::NetworkTime;
+use crate::network::peer_scorer::PeerScorer;
+use crate::utils::services::ServiceFlags;
+use crate::utils::timers::Timers;
 
 pub struct Network {
     network_config: Arc<NetworkConfig>,
@@ -40,7 +44,7 @@ impl Network {
     const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(5 * 60);
     const SCORE_INBOUND_EXCHANGE: f32 = 0.5;
 
-    pub fn new(network_config: Arc<NetworkConfig>) -> Self {
+    pub fn new(network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Self {
         let addresses = Arc::new(RwLock::new(PeerAddressBook::new()));
         Network {
             network_config: Arc::clone(&network_config),
@@ -48,7 +52,7 @@ impl Network {
             auto_connect: false,
             backed_off: false,
             addresses: Arc::clone(&addresses),
-            connections: ConnectionPool::new(Arc::clone(&addresses), Arc::clone(&network_config)),
+            connections: ConnectionPool::new(Arc::clone(&addresses), Arc::clone(&network_config), blockchain),
             scorer: Arc::new(RwLock::new(PeerScorer::new(Arc::clone(&addresses)))),
             timers: Timers::new()
         }
