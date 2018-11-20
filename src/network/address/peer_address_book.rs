@@ -2,10 +2,12 @@ use std::cmp;
 use std::collections::hash_map::Entry;
 use std::collections::hash_set::Iter;
 use std::collections::HashMap;
+use std::collections::hash_map::Keys;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
+use std::iter::Iterator;
 
 use crate::consensus::networks::{get_network_info, NetworkId};
 use crate::network::{NetworkTime, ProtocolFlags};
@@ -31,7 +33,7 @@ pub struct PeerAddressBook {
     seeded: bool
 }
 
-impl PeerAddressBook {
+impl<'a> PeerAddressBook {
     pub fn new() -> Self {
         let mut ret = PeerAddressBook {
             info_by_address: HashMap::new(),
@@ -52,8 +54,21 @@ impl PeerAddressBook {
 
         return ret;
     }
-    pub fn get_ws(&self) -> Iter<Arc<PeerAddress>> {
+
+    pub fn address_iter(&self) -> impl Iterator<Item = &Arc<PeerAddress>> {
+        return self.info_by_address.keys();
+    }
+
+    pub fn ws_address_iter(&self) -> impl Iterator<Item = &Arc<PeerAddress>> {
         return self.ws_addresses.iter();
+    }
+
+    pub fn wss_address_iter(&self) -> impl Iterator<Item = &Arc<PeerAddress>> {
+        return self.wss_addresses.iter();
+    }
+
+    pub fn rtc_address_iter(&self) -> impl Iterator<Item = &Arc<PeerAddress>> {
+        return self.rtc_addresses.iter();
     }
 
     pub fn get_info(&self, peer_address: &Arc<PeerAddress>) -> Option<&PeerAddressInfo> {

@@ -18,6 +18,7 @@ use crate::network::address::peer_address_book::PeerAddressBook;
 use crate::network::address::PeerId;
 use crate::network::connection::close_type::CloseType;
 use crate::network::connection::connection_pool::ConnectionPool;
+use crate::network::connection::connection_info::ConnectionState;
 use crate::network::network_config::NetworkConfig;
 use crate::network::NetworkTime;
 use crate::network::peer_scorer::PeerScorer;
@@ -48,7 +49,7 @@ impl Network {
         let addresses = Arc::new(RwLock::new(PeerAddressBook::new()));
         Network {
             network_config: Arc::clone(&network_config),
-            network_time: NetworkTime {},
+            network_time: NetworkTime::new(0),
             auto_connect: false,
             backed_off: false,
             addresses: Arc::clone(&addresses),
@@ -105,8 +106,27 @@ impl Network {
         }
     }
 
-    fn update_time_offset(&self) {
-        unimplemented!()
+    fn update_time_offset(&mut self) {
+        let mut offsets = Vec::new();
+        offsets.push(0i64);
+        for connection_info in self.connections.read().connection_iter() {
+            if connection_info.state == ConnectionState::Established {
+                if let Some(peer) = &connection_info.peer {
+                    offsets.push(peer.time_offset);
+                }
+            }
+        }
+
+        offsets.sort_by(|a, b| { i64::cmp(a, b) } );
+
+        let offsets_len = offsets.len();
+        let time_offset = if offsets.len() % 2 == 0 {
+            (offsets[(offsets.len() / 2) - 1] + offsets[(offsets.len() / 2) - 1]) / 2
+        } else {
+            offsets[(offsets.len() - 1) / 2]
+        };
+
+        self.network_time.set_offset(time_offset);
     }
 
     fn housekeeping(connections: Arc<RwLock<ConnectionPool>>, scorer: Arc<RwLock<PeerScorer>>) {

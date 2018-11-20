@@ -15,11 +15,10 @@ pub mod version;
 pub mod unique_ptr;
 
 pub fn systemtime_to_timestamp(start : SystemTime) -> u64 {
-    let since_the_epoch = start.duration_since(UNIX_EPOCH);
-    if let Ok(duration) = since_the_epoch {
-        return duration.as_secs() * 1000 + duration.subsec_nanos() as u64 / 1_000_000;
+    match start.duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_secs() * 1000 + duration.subsec_nanos() as u64 / 1_000_000,
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
     }
-    return 0;
 }
 
 pub fn timestamp_to_systemtime(start: u64) -> SystemTime {

@@ -105,41 +105,41 @@ fn it_can_serialize_block_169500() {
 fn verify_accepts_genesis_block() {
     let v: Vec<u8> = hex::decode(GENESIS_BLOCK).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(block.header.timestamp, NetworkId::Main).is_ok());
+    assert!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main).is_ok());
 }
 
 #[test]
 fn verify_accepts_block_108273() {
     let v: Vec<u8> = hex::decode(BLOCK_108273).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(block.header.timestamp, NetworkId::Main).is_ok());
+    assert!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main).is_ok());
 }
 
 #[test]
 fn verify_accepts_block_169500() {
     let v: Vec<u8> = hex::decode(BLOCK_169500).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(block.header.timestamp, NetworkId::Main).is_ok());
+    assert!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main).is_ok());
 }
 
 #[test]
 fn verify_rejects_unsupported_block_versions() {
     let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     block.header.version = 69;
-    assert_eq!(block.verify(block.header.timestamp, NetworkId::Main), Err(BlockError::UnsupportedVersion));
+    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main), Err(BlockError::UnsupportedVersion));
 }
 
 #[test]
 fn verify_rejects_blocks_from_the_future() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
-    assert_eq!(block.verify(block.header.timestamp - 2000, NetworkId::Main), Err(BlockError::FromTheFuture));
+    assert_eq!(block.verify(block.header.timestamp_in_millis() - 2000 * 1000, NetworkId::Main), Err(BlockError::FromTheFuture));
 }
 
 #[test]
 fn verify_rejects_invalid_pow() {
     let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     block.header.nonce = 1;
-    assert_eq!(block.verify(block.header.timestamp, NetworkId::Main), Err(BlockError::InvalidPoW));
+    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main), Err(BlockError::InvalidPoW));
 }
 
 #[test]
@@ -152,7 +152,7 @@ fn verify_rejects_excessive_size() {
             body.transactions.push(tx.clone());
         }
     }
-    assert_eq!(block.verify(block.header.timestamp, NetworkId::Main), Err(BlockError::SizeExceeded));
+    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main), Err(BlockError::SizeExceeded));
 }
 
 #[test]
@@ -161,7 +161,7 @@ fn verify_rejects_mismatched_interlink_hash() {
     block.header.interlink_hash = Blake2bHash::from([1u8; Blake2bHash::SIZE]);
     block.header.n_bits = 0x1f010000u32.into();
     block.header.nonce = 31675;
-    assert_eq!(block.verify(block.header.timestamp, NetworkId::Main), Err(BlockError::InterlinkHashMismatch));
+    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main), Err(BlockError::InterlinkHashMismatch));
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn verify_rejects_mismatched_body_hash() {
     block.header.body_hash = Blake2bHash::from([1u8; Blake2bHash::SIZE]);
     block.header.n_bits = 0x1f010000u32.into();
     block.header.nonce = 41771;
-    assert_eq!(block.verify(block.header.timestamp, NetworkId::Main), Err(BlockError::BodyHashMismatch));
+    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main), Err(BlockError::BodyHashMismatch));
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn verify_rejects_invalid_body() {
         let body = block.body.as_mut().unwrap();
         body.transactions[0].validity_start_height = 5;
     }
-    assert_eq!(block.verify(block.header.timestamp, NetworkId::Main), Err(BlockError::ExpiredTransaction));
+    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main), Err(BlockError::ExpiredTransaction));
 }
 
 

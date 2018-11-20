@@ -1,5 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Values;
 use std::collections::HashSet;
 use std::collections::LinkedList;
 use std::sync::Arc;
@@ -24,6 +25,7 @@ use crate::utils::observer::{Notifier, weak_listener};
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
+use std::any::Any;
 use crate::utils::unique_ptr::UniquePtr;
 use crate::network::websocket::web_socket_connector::{WebSocketConnector, WebSocketConnectorEvent};
 
@@ -164,6 +166,12 @@ impl ConnectionPool {
         self.connecting_count += 1;
 
         return true;
+    }
+
+    pub fn connection_iter(&self) -> Vec<&ConnectionInfo> {
+        return self.connections_by_peer_address.values().map(|connection_id| {
+            self.connections.get(*connection_id).expect("Missing connection")
+        }).collect();
     }
 
     /// Get the connection info for a peer address.

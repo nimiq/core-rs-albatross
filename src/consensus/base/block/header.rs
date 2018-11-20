@@ -49,4 +49,8 @@ impl BlockHeader {
         // Everything checks out.
         return true;
     }
+
+    pub fn timestamp_in_millis(&self) -> u64 {
+        return self.timestamp as u64 * 1000;
+    }
 }

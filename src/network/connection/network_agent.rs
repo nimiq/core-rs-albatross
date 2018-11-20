@@ -264,7 +264,7 @@ impl NetworkAgent {
             self.channel.clone(),
             msg.version,
             msg.head_hash.clone(),
-            peer_address.timestamp - systemtime_to_timestamp(now))
+            peer_address.timestamp as i64 - systemtime_to_timestamp(now) as i64)
         );
 
         self.peer_challenge_nonce = Some(msg.challenge_nonce.clone());

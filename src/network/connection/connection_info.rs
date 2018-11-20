@@ -21,9 +21,9 @@ pub enum ConnectionState {
 pub struct ConnectionInfo {
     peer_address: Option<Arc<PeerAddress>>,
     network_connection: Option<NetworkConnection>,
-    peer: Option<Peer>,
+    pub peer: Option<Peer>,
     peer_channel: Option<PeerChannel>,
-    state: ConnectionState,
+    pub state: ConnectionState,
     network_agent: Option<Arc<RwLock<NetworkAgent>>>,
     connection_handle: Option<Arc<ConnectionHandle>>,
 }

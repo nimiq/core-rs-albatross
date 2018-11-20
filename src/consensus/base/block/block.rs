@@ -25,11 +25,11 @@ impl Deserialize for Block {
 }
 
 impl Block {
-    const TIMESTAMP_DRIFT_MAX: u32 = 600;
+    const TIMESTAMP_DRIFT_MAX: u64 = 600 * 1000;
     const MAX_SIZE: usize = 100000; // 100 kb
     const VERSION: u16 = 1;
 
-    pub fn verify(&self, timestamp_now: u32, network_id: NetworkId) -> Result<(), BlockError> {
+    pub fn verify(&self, timestamp_now: u64, network_id: NetworkId) -> Result<(), BlockError> {
         // XXX Check that the block version is supported.
         if self.header.version != Block::VERSION {
             return Err(BlockError::UnsupportedVersion);
@@ -37,7 +37,7 @@ impl Block {
 
         // Check that the timestamp is not too far into the future.
         // XXX Move this check to Blockchain?
-        if self.header.timestamp > timestamp_now + Block::TIMESTAMP_DRIFT_MAX {
+        if self.header.timestamp_in_millis() > timestamp_now + Block::TIMESTAMP_DRIFT_MAX {
             return Err(BlockError::FromTheFuture);
         }
 
