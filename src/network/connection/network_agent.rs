@@ -270,7 +270,7 @@ impl NetworkAgent {
 
         // Tell listeners that we received this peer's version information.
         // Listeners registered to this event might close the connection to this peer.
-        self.notifier.notify_ref(&NetworkAgentEvent::Version(UniquePtr::new(self.peer.as_ref().unwrap())));
+        self.notifier.notify(NetworkAgentEvent::Version(UniquePtr::new(self.peer.as_ref().unwrap())));
 
         // Abort handshake if the connection was closed.
         if self.channel.closed() {
@@ -310,7 +310,7 @@ impl NetworkAgent {
         }, Duration::from_millis(NetworkAgent::ANNOUNCE_ADDR_INTERVAL));
 
         // Tell listeners that the handshake with this peer succeeded.
-        self.notifier.notify_ref(&NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
+        self.notifier.notify(NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
 
         // Request new network addresses from the peer.
         self.request_addresses(None);
@@ -515,7 +515,7 @@ impl NetworkAgent {
         let start_time = self.ping_times.remove(&nonce);
         if let Some(start_time) = start_time {
             let delta = start_time.elapsed();
-            self.notifier.notify_ref(&NetworkAgentEvent::PingPong(delta));
+            self.notifier.notify(NetworkAgentEvent::PingPong(delta));
         }
     }
 }
