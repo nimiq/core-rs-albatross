@@ -247,47 +247,22 @@ impl Debug for NimiqMessageStream {
     }
 }
 
-/// Future returned from nimiq_connect_async() which will resolve
-/// once the tokio-tungstenite connection is established.
-pub struct ConnectAsync<S: Stream + Sink, E>
-    where S::Item: IntoData
+/// Connect to a given URL and return a Future that will resolve to a NimiqMessageStream
+pub fn nimiq_connect_async(url: Url) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send>
 {
-    inner: Box<Future<Item = S, Error = E> + Send>,
+    Box::new(connect_async(url).map(|(ws_stream,_)| NimiqMessageStream::new(ws_stream, true))
+    .map_err(|e| {
+        println!("Error while trying to connect to another node: {}", e);
+        io::Error::new(io::ErrorKind::Other, e)
+    }))
 }
 
-impl<E> Future for ConnectAsync<WebSocketLayer, E>
-{
-    type Item = NimiqMessageStream;
-    type Error = E;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.inner.poll()? {
-            Async::NotReady => Ok(Async::NotReady),
-            Async::Ready(ws) => Ok(Async::Ready(NimiqMessageStream::new(ws, true))),
-        }
-    }
-}
-
-/// Connect to a given URL.
-pub fn nimiq_connect_async(url: Url) -> ConnectAsync<WebSocketLayer, io::Error>
-{
-    let connect = Box::new(
-        connect_async(url).map(|(ws,_)| ws).map_err(|e| {
-            println!("Error during the websocket handshake occurred: {}", e);
-            io::Error::new(io::ErrorKind::Other, e)
-        })
-    );
-
-    ConnectAsync {inner: connect}
-}
-
+/// Accept an incoming connection and return a Future that will resolve to a NimiqMessageStream
 pub fn nimiq_accept_async(stream: MaybeTlsStream<TcpStream>) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send>
 {
-    Box::new(accept_async(stream).map(|ws_stream| {
-        NimiqMessageStream::new(ws_stream, false)
-    })
+    Box::new(accept_async(stream).map(|ws_stream| NimiqMessageStream::new(ws_stream, false))
     .map_err(|e| {
-        println!("Error during the websocket handshake occurred: {}", e);
+        println!("Error while accepting a connection from another node: {}", e);
         io::Error::new(io::ErrorKind::Other, e)
     }))
 }
