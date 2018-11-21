@@ -1,5 +1,3 @@
-use std::hash::Hash;
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CloseType {
     Regular = 0, // This one indicates a regular closing of the connection.

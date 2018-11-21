@@ -1,10 +1,8 @@
 use std::cmp;
-use std::collections::hash_map::Entry;
 use std::collections::hash_map::Keys;
 use std::collections::hash_set::Iter;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::hash::Hash;
 use std::iter::Iterator;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -12,7 +10,7 @@ use std::time::{Duration, Instant, SystemTime};
 use rand::{OsRng, Rng};
 
 use crate::consensus::networks::{get_network_info, NetworkId};
-use crate::network::{NetworkTime, ProtocolFlags};
+use crate::network::ProtocolFlags;
 use crate::network::address::net_address::NetAddress;
 use crate::network::address::peer_address::PeerAddress;
 use crate::network::address::peer_address_state::PeerAddressInfo;
@@ -22,7 +20,6 @@ use crate::network::connection::close_type::CloseType;
 use crate::network::network_config::NetworkConfig;
 use crate::network::peer_channel::PeerChannel;
 use crate::network::Protocol;
-use crate::utils;
 use crate::utils::iterators::Alternate;
 use crate::utils::services::ServiceFlags;
 use crate::utils::systemtime_to_timestamp;
@@ -196,7 +193,7 @@ impl PeerAddressBook {
         // TODO Tell listeners that we have learned new addresses.
     }
 
-    fn add_single(&mut self, channel: Option<&PeerChannel>, mut peer_address: PeerAddress) -> bool {
+    fn add_single(&mut self, channel: Option<&PeerChannel>, peer_address: PeerAddress) -> bool {
         // Ignore our own address.
         if self.network_config.peer_address() == peer_address {
             return false;

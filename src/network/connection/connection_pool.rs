@@ -1,6 +1,5 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::collections::hash_map::Values;
 use std::collections::HashSet;
 use std::collections::LinkedList;
 use std::sync::Arc;
@@ -25,7 +24,6 @@ use crate::utils::observer::{Notifier, weak_listener};
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
-use std::any::Any;
 use crate::utils::unique_ptr::UniquePtr;
 use crate::network::websocket::web_socket_connector::{WebSocketConnector, WebSocketConnectorEvent};
 
@@ -68,14 +66,14 @@ pub struct ConnectionPool {
 
     inbound_count: usize,
 
-    allow_inbound_connections: bool,
+    pub allow_inbound_connections: bool,
     pub allow_inbound_exchange: bool,
 
     banned_ips: HashMap<NetAddress, SystemTime>,
 
     addresses: Arc<RwLock<PeerAddressBook>>,
 
-    notifier: Notifier<'static, ConnectionPoolEvent>,
+    pub notifier: Notifier<'static, ConnectionPoolEvent>,
 
     listener: Weak<RwLock<ConnectionPool>>,
 }
@@ -166,6 +164,14 @@ impl ConnectionPool {
         self.connecting_count += 1;
 
         return true;
+    }
+
+    pub fn disconnect(&self) {
+        for connection in self.connection_iter() {
+            if let Some(peer_channel) = connection.peer_channel() {
+                peer_channel.close(CloseType::ManualNetworkDisconnect);
+            }
+        }
     }
 
     pub fn connection_iter(&self) -> Vec<&ConnectionInfo> {
@@ -571,6 +577,10 @@ impl ConnectionPool {
         self.peer_count_ws + self.peer_count_wss + self.peer_count_rtc + self.peer_count_dumb
     }
 
+    pub fn count(&self) -> usize {
+        self.connections_by_peer_address.len() + self.inbound_count
+    }
+
     /// Bans an IP address.
     fn ban_ip(&mut self, net_address: &NetAddress) {
         if net_address.is_reliable() {
@@ -780,7 +790,7 @@ enum PeerCountUpdate {
     Remove
 }
 
-enum ConnectionPoolEvent {
+pub enum ConnectionPoolEvent {
     PeerJoined(Peer),
     PeerLeft(Peer),
     PeersChanged,

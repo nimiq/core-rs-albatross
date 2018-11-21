@@ -1,6 +1,5 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 use std::time::Duration;
-use num_traits::real::Real;
 use crate::utils::systemtime_to_timestamp;
 use atomic::Atomic;
 use atomic::Ordering;
