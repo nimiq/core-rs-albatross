@@ -130,7 +130,7 @@ impl PeerAddress {
 
         match &self.ty {
             PeerAddressType::Ws(host, port) | PeerAddressType::Wss(host, port) => {
-                res.append(&mut host.serialize_to_vec::<u16>());
+                res.append(&mut host.serialize_to_vec::<u8>());
                 res.append(&mut port.serialize_to_vec());
             }
             _ => {}
@@ -206,8 +206,8 @@ impl Deserialize for PeerAddressType {
         let protocol: Protocol = Deserialize::deserialize(reader)?;
         match protocol {
             Protocol::Dumb => Ok(PeerAddressType::Dumb),
-            Protocol::Ws => Ok(PeerAddressType::Ws(DeserializeWithLength::deserialize::<u16, R>(reader)?, Deserialize::deserialize(reader)?)),
-            Protocol::Wss => Ok(PeerAddressType::Wss(DeserializeWithLength::deserialize::<u16, R>(reader)?, Deserialize::deserialize(reader)?)),
+            Protocol::Ws => Ok(PeerAddressType::Ws(DeserializeWithLength::deserialize::<u8, R>(reader)?, Deserialize::deserialize(reader)?)),
+            Protocol::Wss => Ok(PeerAddressType::Wss(DeserializeWithLength::deserialize::<u8, R>(reader)?, Deserialize::deserialize(reader)?)),
             Protocol::Rtc => Ok(PeerAddressType::Rtc)
         }
     }
@@ -217,16 +217,16 @@ impl Serialize for PeerAddressType {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         Ok(match self {
             PeerAddressType::Dumb => Protocol::Dumb.serialize(writer)?,
-            PeerAddressType::Ws(host, port) => Protocol::Ws.serialize(writer)? + host.serialize::<u16, W>(writer)? + port.serialize(writer)?,
-            PeerAddressType::Wss(host, port) => Protocol::Wss.serialize(writer)? + host.serialize::<u16, W>(writer)? + port.serialize(writer)?,
+            PeerAddressType::Ws(host, port) => Protocol::Ws.serialize(writer)? + host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
+            PeerAddressType::Wss(host, port) => Protocol::Wss.serialize(writer)? + host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
             PeerAddressType::Rtc => Protocol::Rtc.serialize(writer)?
         })
     }
 
     fn serialized_size(&self) -> usize {
         Protocol::Dumb.serialized_size() + match self {
-            PeerAddressType::Ws(host, port) => host.serialized_size::<u16>() + port.serialized_size(),
-            PeerAddressType::Wss(host, port) => host.serialized_size::<u16>() + port.serialized_size(),
+            PeerAddressType::Ws(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
+            PeerAddressType::Wss(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
             _ => 0
         }
     }

@@ -297,11 +297,8 @@ impl ConnectionPool {
     fn on_peer_channel_event(&mut self, connection_id: ConnectionId, event: &PeerChannelEvent) {
         match event {
             PeerChannelEvent::Close(ty) => self.on_close(connection_id, ty.clone()),
-            PeerChannelEvent::Error(_) => {
-                let info = self.connections.get(connection_id).unwrap();
-                info.peer_address().map(|peer_address| {
-                    self.on_connect_error(peer_address);
-                });
+            PeerChannelEvent::Error(err) => {
+                warn!("Connection {} has been closed, because of {:?}", connection_id, err.as_ref());
             },
             _ => {},
         }
