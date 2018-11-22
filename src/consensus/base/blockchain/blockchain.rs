@@ -14,7 +14,7 @@ use crate::utils::unique_ptr::UniquePtr;
 
 pub struct Blockchain<'env> {
     env: &'env Environment,
-    network_time: Arc<RwLock<NetworkTime>>,
+    network_time: Arc<NetworkTime>,
     pub network_id: NetworkId,
     pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
     chain_store: ChainStore<'env>,
@@ -46,7 +46,7 @@ pub enum BlockchainEvent {
 }
 
 impl<'env> Blockchain<'env> {
-    pub fn new(env: &'env Environment, network_time: Arc<RwLock<NetworkTime>>, network_id: NetworkId) -> Self {
+    pub fn new(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Self {
         let chain_store = ChainStore::new(env);
         match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash),
@@ -54,7 +54,7 @@ impl<'env> Blockchain<'env> {
         }
     }
 
-    fn load(env: &'env Environment, network_time: Arc<RwLock<NetworkTime>>, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Self {
+    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Self {
         // Check that the correct genesis block is stored.
         let network_info = get_network_info(network_id).unwrap();
         let genesis_info = chain_store.get_chain_info(&network_info.genesis_hash, false, None);
@@ -96,7 +96,7 @@ impl<'env> Blockchain<'env> {
         }
     }
 
-    fn init(env: &'env Environment, network_time: Arc<RwLock<NetworkTime>>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Self {
+    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Self {
         // Initialize chain & accounts with genesis block.
         let network_info = get_network_info(network_id).unwrap();
         let main_chain = ChainInfo::initial(network_info.genesis_block.clone());
@@ -148,7 +148,7 @@ impl<'env> Blockchain<'env> {
         }
 
         // Check (sort of) intrinsic block invariants.
-        if let Err(e) = block.verify(self.network_time.read().now(), self.network_id) {
+        if let Err(e) = block.verify(self.network_time.now(), self.network_id) {
             warn!("Rejecting block - verification failed ({:?})", e);
             return PushResult::Invalid;
         }

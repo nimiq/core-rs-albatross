@@ -20,7 +20,7 @@ const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c3
 #[test]
 fn push_same_tx_twice() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime::new(0))), NetworkId::Main));
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(NetworkTime::new(0)), NetworkId::Main));
     let mempool = Mempool::new(blockchain.clone());
 
     let keypair_a = KeyPair::generate();
@@ -44,7 +44,7 @@ fn push_same_tx_twice() {
 #[test]
 fn push_tx_with_wrong_signature() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime::new(0))), NetworkId::Main));
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(NetworkTime::new(0)), NetworkId::Main));
     let mempool = Mempool::new(blockchain);
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
@@ -56,7 +56,7 @@ fn push_tx_with_wrong_signature() {
 #[test]
 fn push_tx_with_insufficient_balance() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime::new(0))), NetworkId::Main));
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(NetworkTime::new(0)), NetworkId::Main));
     let mempool = Mempool::new(blockchain);
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
@@ -68,7 +68,7 @@ fn push_tx_with_insufficient_balance() {
 #[test]
 fn push_and_get_valid_tx() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime::new(0))), NetworkId::Main));
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(NetworkTime::new(0)), NetworkId::Main));
     let mempool = Mempool::new(blockchain.clone());
 
     let keypair_a = KeyPair::generate();
@@ -98,7 +98,7 @@ fn push_and_get_valid_tx() {
 #[test]
 fn push_and_get_two_tx_same_user() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime::new(0))), NetworkId::Main));
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(NetworkTime::new(0)), NetworkId::Main));
     let mempool = Mempool::new(blockchain.clone());
 
     let keypair_a = KeyPair::generate();
@@ -134,7 +134,7 @@ fn push_and_get_two_tx_same_user() {
 #[test]
 fn reject_free_tx_beyond_limit() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime::new(0))), NetworkId::Main));
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(NetworkTime::new(0)), NetworkId::Main));
     let mempool = Mempool::new(blockchain.clone());
 
     let keypair_a = KeyPair::generate();

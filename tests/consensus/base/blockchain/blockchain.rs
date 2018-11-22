@@ -18,7 +18,7 @@ fn it_can_extend_the_main_chain() {
     crate::setup();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(RwLock::new(NetworkTime::new(0))), NetworkId::Main));
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(NetworkTime::new(0)), NetworkId::Main));
     let _mempool = Mempool::new(blockchain.clone());
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();

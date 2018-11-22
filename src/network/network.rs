@@ -83,7 +83,7 @@ impl Network {
         network
     }
 
-    pub fn connect(&mut self) {
+    pub fn connect(&self) {
         self.auto_connect.store(true, Ordering::Relaxed);
 
         let connections = Arc::clone(&self.connections);
@@ -97,7 +97,7 @@ impl Network {
         self.check_peer_count();
     }
 
-    pub fn disconnect(&mut self) {
+    pub fn disconnect(&self) {
         self.auto_connect.store(false, Ordering::Relaxed);
 
         self.timers.clear_interval(&"network-housekeeping".to_string());
