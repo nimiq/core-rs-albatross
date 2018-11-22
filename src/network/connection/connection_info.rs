@@ -50,6 +50,7 @@ impl ConnectionInfo {
     pub fn outbound(peer_address: Arc<PeerAddress>) -> Self {
         let mut info = ConnectionInfo::new();
         info.peer_address = Some(peer_address);
+        info.state = ConnectionState::Connecting;
         info
     }
 
