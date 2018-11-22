@@ -9,6 +9,7 @@ pub mod time;
 pub mod connection;
 pub mod peer;
 pub mod network_config;
+pub mod network;
 
 use beserial::{Serialize, Deserialize};
 
