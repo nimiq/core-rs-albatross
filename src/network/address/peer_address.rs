@@ -59,8 +59,8 @@ impl Serialize for PeerAddress {
         }
         size += match &self.ty {
             PeerAddressType::Dumb => 0,
-            PeerAddressType::Ws(host, port) => host.serialize::<u16, W>(writer)? + port.serialize(writer)?,
-            PeerAddressType::Wss(host, port) => host.serialize::<u16, W>(writer)? + port.serialize(writer)?,
+            PeerAddressType::Ws(host, port) => host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
+            PeerAddressType::Wss(host, port) => host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
             PeerAddressType::Rtc => 0
         };
         return Ok(size);
@@ -77,8 +77,8 @@ impl Serialize for PeerAddress {
         size += self.signature.serialized_size() - 1; // No 0/1 for the Option
         size += match &self.ty {
             PeerAddressType::Dumb => 0,
-            PeerAddressType::Ws(host, port) => host.serialized_size::<u16>() + port.serialized_size(),
-            PeerAddressType::Wss(host, port) => host.serialized_size::<u16>() + port.serialized_size(),
+            PeerAddressType::Ws(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
+            PeerAddressType::Wss(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
             PeerAddressType::Rtc => 0
         };
         return size;
@@ -96,8 +96,8 @@ impl Deserialize for PeerAddress {
         let signature: Signature = Deserialize::deserialize(reader)?;
         let type_special: PeerAddressType = match protocol {
             Protocol::Dumb => PeerAddressType::Dumb,
-            Protocol::Ws => PeerAddressType::Ws(DeserializeWithLength::deserialize::<u16, R>(reader)?, Deserialize::deserialize(reader)?),
-            Protocol::Wss => PeerAddressType::Wss(DeserializeWithLength::deserialize::<u16, R>(reader)?, Deserialize::deserialize(reader)?),
+            Protocol::Ws => PeerAddressType::Ws(DeserializeWithLength::deserialize::<u8, R>(reader)?, Deserialize::deserialize(reader)?),
+            Protocol::Wss => PeerAddressType::Wss(DeserializeWithLength::deserialize::<u8, R>(reader)?, Deserialize::deserialize(reader)?),
             Protocol::Rtc => PeerAddressType::Rtc
         };
         let peer_id = PeerId::from(&public_key);

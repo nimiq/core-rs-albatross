@@ -112,7 +112,7 @@ impl SignalRouter {
 
     pub fn delete_all_routes(&mut self) {
         self.best_route = None;
-        unimplemented!()
+        // TODO
     }
 
     pub fn has_route(&self) -> bool {

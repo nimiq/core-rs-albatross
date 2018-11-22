@@ -208,6 +208,7 @@ impl Stream for NimiqMessageStream
         self.last_chunk_received_at = Some(Instant::now());
 
         // We have enough ws messages to create a nimiq message
+        // FIXME: validate formula
         if msg_length < ((1 + self.buf.len()) * (MAX_CHUNK_SIZE + 1)) {
             // println!("We have enough ws msgs to create a Nimiq msg!");
 
@@ -228,6 +229,8 @@ impl Stream for NimiqMessageStream
                 }
                 remaining_length -= current_message_length;
             }
+
+            assert_eq!(remaining_length, 0, "Data missing");
 
             // At this point we already read all the messages we need into the binary_data variable
             let nimiq_message: NimiqMessage =
