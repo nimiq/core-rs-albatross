@@ -56,10 +56,10 @@ impl Network {
             timers: Arc::new(Timers::new())
         });
 
-        let network_clone = Arc::clone(&network);
+        let network_clone = Arc::downgrade(&network);
 
         network.connections.write().notifier.register(move |event: &ConnectionPoolEvent| {
-            let network = Arc::clone(&network_clone);
+            let network = upgrade_weak!(&network_clone);
             match event {
                 ConnectionPoolEvent::PeerJoined(peer) => {
                     Network::on_peer_joined(network, peer);
