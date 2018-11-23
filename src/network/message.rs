@@ -15,6 +15,7 @@ use crate::network::address::{PeerAddress, PeerId};
 use crate::utils::crc::Crc32Computer;
 use crate::utils::services::ServiceFlags;
 use crate::network::ProtocolFlags;
+use crate::utils::version;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u64)]
@@ -101,7 +102,7 @@ impl Message {
             Message::GetAddr(_) => MessageType::GetAddr,
             Message::Ping(_) => MessageType::Ping,
             Message::Pong(_) => MessageType::Pong,
-            _ => MessageType::Ping
+            Message::VerAck(_) => MessageType::VerAck,
         }
     }
 }
@@ -267,11 +268,11 @@ pub struct VersionMessage {
 }
 
 impl VersionMessage {
-    pub fn new(peer_address: PeerAddress, head_hash: Blake2bHash, challenge_nonce: ChallengeNonce) -> Message {
+    pub fn new(peer_address: PeerAddress, head_hash: Blake2bHash, genesis_hash: Blake2bHash, challenge_nonce: ChallengeNonce) -> Message {
         Message::Version(Self {
-            version: 0, // TODO
+            version: version::CODE,
             peer_address,
-            genesis_hash: Blake2bHash::default(), // TODO
+            genesis_hash,
             head_hash,
             challenge_nonce,
         })

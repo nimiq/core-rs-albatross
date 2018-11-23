@@ -131,7 +131,8 @@ impl NetworkAgent {
         // Kick off the handshake by telling the peer our version, network address & blockchain head hash.
         // Firefox sends the data-channel-open event too early, so sending the version message might fail.
         // Try again in this case.
-        let msg = VersionMessage::new(self.network_config.peer_address(), self.blockchain.head_hash(), self.challenge_nonce.clone());
+        let network_info = get_network_info(self.blockchain.network_id).unwrap();
+        let msg = VersionMessage::new(self.network_config.peer_address(), self.blockchain.head_hash(), network_info.genesis_hash.clone(), self.challenge_nonce.clone());
         if self.channel.send(msg).is_err() {
             self.version_attempts += 1;
             if self.version_attempts >= NetworkAgent::VERSION_ATTEMPTS_MAX || self.channel.closed() {
@@ -178,13 +179,14 @@ impl NetworkAgent {
         assert!(self.peer_challenge_nonce.is_some());
 
         // TODO Handle Err case?
-        self.channel.send(VerAckMessage::new(self.network_config.peer_id(), self.peer_challenge_nonce.as_ref().unwrap(), self.network_config.key_pair()));
+        println!("PeerId: {:?}", self.network_config.peer_id());
+        self.channel.send(VerAckMessage::new(self.network_config.peer_id(), self.peer_challenge_nonce.as_ref().unwrap(), self.network_config.key_pair())).unwrap();
 
         self.verack_sent = true;
     }
 
     fn on_version(&mut self, msg: &VersionMessage) {
-        warn!("[VERSION] {:?} {:?}", &msg.peer_address, &msg.head_hash);
+        debug!("[VERSION] {:?} {:?}", &msg.peer_address, &msg.head_hash);
 
         let now = SystemTime::now();
 
@@ -279,7 +281,7 @@ impl NetworkAgent {
             return;
         }
 
-        if !self.verack_sent {
+        if !self.version_sent {
             self.handshake();
             return;
         }
