@@ -1,8 +1,9 @@
 use beserial::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use nimiq::consensus::base::account::{AccountType, AccountError};
 use nimiq::consensus::base::block::{Block, BlockError};
-use nimiq::consensus::base::blockchain::{Blockchain, PushResult, PushError};
+use nimiq::consensus::base::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
 use nimiq::consensus::base::primitive::Address;
 use nimiq::consensus::base::primitive::crypto::{KeyPair, PrivateKey};
 use nimiq::consensus::base::primitive::hash::Hash;
@@ -247,5 +248,43 @@ fn it_detects_fork_blocks() {
 
 #[test]
 fn it_rebranches_to_the_harder_chain() {
+    crate::setup();
 
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(Blockchain::new(&env, Arc::new(NetworkTime::new()), NetworkId::Main));
+
+    let block1_2 = crate::next_block(&blockchain)
+        .with_nonce(83054)
+        .build();
+    assert_eq!(blockchain.push(block1_2.clone()), PushResult::Extended);
+
+    let block1_3 = crate::next_block(&blockchain)
+        .with_nonce(23192)
+        .build();
+    assert_eq!(blockchain.push(block1_3.clone()), PushResult::Extended);
+
+    let block1_4 = crate::next_block(&blockchain)
+        .with_nonce(39719)
+        .build();
+
+    let block2_2 = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
+    assert_eq!(blockchain.push(block2_2.clone()), PushResult::Forked);
+
+    let block2_3 = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
+    assert_eq!(blockchain.push(block2_3.clone()), PushResult::Rebranched);
+
+    assert_eq!(blockchain.push(block1_4.clone()), PushResult::Rebranched);
+
+    let block2_4 = Block::deserialize_from_vec(&hex::decode(BLOCK_4).unwrap()).unwrap();
+    let listener_called = Arc::new(AtomicBool::new(false));
+    let reverted_blocks = Arc::new(vec![(block1_2.header.hash(), block1_2), (block1_3.header.hash(), block1_3), (block1_4.header.hash(), block1_4)]);
+    let adopted_blocks = Arc::new(vec![(block2_2.header.hash(), block2_2), (block2_3.header.hash(), block2_3), (block2_4.header.hash(), block2_4.clone())]);
+    let listener_called1 = listener_called.clone();
+    blockchain.notifier.write().register(move |e: &BlockchainEvent| {
+        assert_eq!(*e, BlockchainEvent::Rebranched((*reverted_blocks).clone(), (*adopted_blocks).clone()));
+        listener_called1.store(true, Ordering::Relaxed);
+    });
+
+    assert_eq!(blockchain.push(block2_4), PushResult::Rebranched);
+    assert!(listener_called.load(Ordering::Relaxed));
 }

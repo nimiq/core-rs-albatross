@@ -127,49 +127,49 @@ fn it_can_get_blocks_backward() {
     }
     txn.commit();
 
-    let mut blocks = store.get_blocks_backward(&block.header.prev_hash, 10, true);
+    let mut blocks = store.get_blocks_backward(&block.header.prev_hash, 10, true, None);
     assert_eq!(blocks.len(), 10);
     assert_eq!(blocks[0].header.height, 19);
     assert_eq!(blocks[9].header.height, 10);
     assert!(blocks[0].body.is_some());
     assert!(blocks[9].body.is_some());
 
-    blocks = store.get_blocks_backward(&block.header.prev_hash, 18, false);
+    blocks = store.get_blocks_backward(&block.header.prev_hash, 18, false, None);
     assert_eq!(blocks.len(), 18);
     assert_eq!(blocks[0].header.height, 19);
     assert_eq!(blocks[17].header.height, 2);
     assert!(blocks[0].body.is_none());
     assert!(blocks[17].body.is_none());
 
-    blocks = store.get_blocks_backward(&block.header.prev_hash, 19, true);
+    blocks = store.get_blocks_backward(&block.header.prev_hash, 19, true, None);
     assert_eq!(blocks.len(), 19);
     assert_eq!(blocks[0].header.height, 19);
     assert_eq!(blocks[18].header.height, 1);
     assert!(blocks[0].body.is_some());
     assert!(blocks[18].body.is_some());
 
-    blocks = store.get_blocks_backward(&block.header.prev_hash, 20, false);
+    blocks = store.get_blocks_backward(&block.header.prev_hash, 20, false, None);
     assert_eq!(blocks.len(), 19);
     assert_eq!(blocks[0].header.height, 19);
     assert_eq!(blocks[18].header.height, 1);
     assert!(blocks[0].body.is_none());
     assert!(blocks[18].body.is_none());
 
-    blocks = store.get_blocks_backward(&block.header.hash::<Blake2bHash>(), 20, false);
+    blocks = store.get_blocks_backward(&block.header.hash::<Blake2bHash>(), 20, false, None);
     assert_eq!(blocks.len(), 20);
     assert_eq!(blocks[0].header.height, 20);
     assert_eq!(blocks[19].header.height, 1);
 
-    blocks = store.get_blocks_backward(&block.header.hash::<Blake2bHash>(), 20, false);
+    blocks = store.get_blocks_backward(&block.header.hash::<Blake2bHash>(), 20, false, None);
     assert_eq!(blocks.len(), 20);
     assert_eq!(blocks[0].header.height, 20);
     assert_eq!(blocks[19].header.height, 1);
 
-    blocks = store.get_blocks_backward(&blocks[18].header.hash::<Blake2bHash>(), 20, true);
+    blocks = store.get_blocks_backward(&blocks[18].header.hash::<Blake2bHash>(), 20, true, None);
     assert_eq!(blocks.len(), 1);
     assert_eq!(blocks[0].header.height, 1);
     assert!(blocks[0].body.is_some());
 
-    blocks = store.get_blocks_backward(&blocks[0].header.hash::<Blake2bHash>(), 20, false);
+    blocks = store.get_blocks_backward(&blocks[0].header.hash::<Blake2bHash>(), 20, false, None);
     assert_eq!(blocks.len(), 0);
 }

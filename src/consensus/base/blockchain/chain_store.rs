@@ -141,8 +141,15 @@ impl<'env> ChainStore<'env> {
         unimplemented!();
     }
 
-    pub fn get_blocks_backward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool) -> Vec<Block> {
-        let txn = ReadTransaction::new(self.env);
+    pub fn get_blocks_backward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(self.env);
+                &read_txn
+            }
+        };
 
         let mut blocks= Vec::new();
         let start_block = match self.get_block(start_block_hash, false, Some(&txn)) {

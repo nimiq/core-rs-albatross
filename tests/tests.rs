@@ -9,7 +9,7 @@ extern crate num_traits;
 extern crate num_bigint;
 extern crate pretty_env_logger;
 
-use nimiq::consensus::base::account::{PrunedAccount, AccountError};
+use nimiq::consensus::base::account::PrunedAccount;
 use nimiq::consensus::base::block::{Block, BlockHeader, BlockBody, Difficulty, TargetCompact};
 use nimiq::consensus::base::blockchain::Blockchain;
 use nimiq::consensus::base::primitive::Address;

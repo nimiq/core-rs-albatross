@@ -191,7 +191,7 @@ fn it_correctly_identifies_immediate_successors() {
     block2.header.height += 1;
     block2.header.prev_hash = block1.header.hash();
     block2.header.timestamp = block1.header.timestamp + 10;
-    block2.interlink = block1.get_next_interlink(&Target::from(&block2.header.n_bits));
+    block2.interlink = block1.get_next_interlink(&Target::from(block2.header.n_bits));
     assert!(block2.is_immediate_successor_of(&block1));
 
     block2.header.height -= 2;

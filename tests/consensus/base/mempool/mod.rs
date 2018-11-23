@@ -1,6 +1,5 @@
 use beserial::{Serialize, Deserialize};
 use hex;
-use parking_lot::RwLock;
 use std::sync::Arc;
 
 use nimiq::consensus::base::primitive::{Address, Coin};

@@ -83,7 +83,7 @@ impl<'env> Blockchain<'env> {
 
         // Initialize TransactionCache.
         let mut transaction_cache = TransactionCache::new();
-        let blocks = chain_store.get_blocks_backward(&head_hash, transaction_cache.missing_blocks() - 1, true);
+        let blocks = chain_store.get_blocks_backward(&head_hash, transaction_cache.missing_blocks() - 1, true, None);
         for block in blocks.iter().rev() {
             transaction_cache.push_block(block);
         }
@@ -312,7 +312,7 @@ impl<'env> Blockchain<'env> {
             } else {
                 cache_txn.tail_hash()
             };
-            let blocks = self.chain_store.get_blocks_backward(&start_hash, cache_txn.missing_blocks(), true);
+            let blocks = self.chain_store.get_blocks_backward(&start_hash, cache_txn.missing_blocks(), true, Some(&read_txn));
             for block in blocks.iter() {
                 cache_txn.prepend_block(block);
             }
