@@ -111,7 +111,7 @@ fn it_can_create_contract_from_transaction() {
         0,
         NetworkId::Dummy,
     );
-    match HashedTimeLockedContract::create(Coin::from(0), &transaction, 0) {
+    match HashedTimeLockedContract::create(Coin::from(100), &transaction, 0) {
         Ok(htlc) => {
             assert_eq!(htlc.balance, Coin::from(100));
             assert_eq!(htlc.sender, sender);

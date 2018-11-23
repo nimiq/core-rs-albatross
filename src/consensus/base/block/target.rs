@@ -24,6 +24,11 @@ impl From<u32> for TargetCompact {
 
 impl From<TargetCompact> for Target {
     fn from(t: TargetCompact) -> Self {
+        Target::from(&t)
+    }
+}
+impl<'a> From<&'a TargetCompact> for Target {
+    fn from(t: &'a TargetCompact) -> Self {
         let mut val = [0u8; 32];
         let shift_bytes = (t.0 >> 24).saturating_sub(3) as usize;
         let value = t.0 & 0xffffff;
@@ -36,6 +41,12 @@ impl From<TargetCompact> for Target {
 
 impl From<Target> for TargetCompact {
     fn from(target: Target) -> Self {
+        TargetCompact::from(&target)
+    }
+}
+
+impl<'a> From<&'a Target> for TargetCompact {
+    fn from(target: &'a Target) -> Self {
         let mut first_byte = 0;
         for i in 0..target.0.len() {
             if target.0[i] > 0 {
@@ -234,6 +245,6 @@ impl Target {
             exp -= 1;
         }
 
-        return 240 - exp as u8;
+        return 240u8.saturating_sub(exp as u8);
     }
 }

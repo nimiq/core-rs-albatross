@@ -1,7 +1,7 @@
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
         #[repr(C)]
-        #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+        #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
         pub struct $name ([$t; $len]);
 
         impl<'a> From<&'a [$t]> for $name {
@@ -41,6 +41,12 @@ macro_rules! create_typed_array {
         impl From<$name> for [$t; $len] {
             fn from(i: $name) -> [$t; $len] {
                 return i.0;
+            }
+        }
+
+        impl ::std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                return f.write_str(&::hex::encode(&self.0));
             }
         }
 

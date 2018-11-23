@@ -1,8 +1,8 @@
 use bigdecimal::BigDecimal;
 use parking_lot::{RwLock, RwLockReadGuard, MappedRwLockReadGuard, Mutex};
 use std::sync::Arc;
-use crate::consensus::base::account::Accounts;
-use crate::consensus::base::block::{Block, Target, TargetCompact};
+use crate::consensus::base::account::{Accounts, AccountError};
+use crate::consensus::base::block::{Block, BlockError, Target, TargetCompact};
 use crate::consensus::base::blockchain::{ChainInfo, ChainStore, TransactionCache};
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
 use crate::consensus::networks::{NetworkId, get_network_info};
@@ -31,12 +31,22 @@ struct BlockchainState<'env> {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PushResult {
+    Invalid(PushError),
     Orphan,
-    Invalid,
     Known,
     Extended,
     Rebranched,
     Forked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PushError {
+    InvalidBlock(BlockError),
+    InvalidSuccessor,
+    DifficultyMismatch,
+    DuplicateTransaction,
+    AccountsError(AccountError),
+    InvalidFork,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -132,6 +142,9 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn push(&self, block: Block) -> PushResult {
+        // We expect full blocks (with body).
+        assert!(block.body.is_some(), "Block body expected");
+
         // Only one push operation at a time.
         let lock = self.push_lock.lock();
 
@@ -141,16 +154,10 @@ impl<'env> Blockchain<'env> {
             return PushResult::Known;
         }
 
-        // Check that the block body is present.
-        if block.body.is_none() {
-            warn!("Rejecting block - body missing");
-            return PushResult::Invalid;
-        }
-
         // Check (sort of) intrinsic block invariants.
         if let Err(e) = block.verify(self.network_time.now(), self.network_id) {
             warn!("Rejecting block - verification failed ({:?})", e);
-            return PushResult::Invalid;
+            return PushResult::Invalid(PushError::InvalidBlock(e))
         }
 
         // Check if the block's immediate predecessor is part of the chain.
@@ -164,14 +171,14 @@ impl<'env> Blockchain<'env> {
         let prev_info = prev_info_opt.unwrap();
         if !block.is_immediate_successor_of(&prev_info.head) {
             warn!("Rejecting block - not a valid successor");
-            return PushResult::Invalid;
+            return PushResult::Invalid(PushError::InvalidSuccessor);
         }
 
         // Check that the difficulty is correct.
         let next_target = self.get_next_target(Some(&block.header.prev_hash));
         if block.header.n_bits != TargetCompact::from(next_target) {
             warn!("Rejecting block - difficulty mismatch");
-            return PushResult::Invalid;
+            return PushResult::Invalid(PushError::DifficultyMismatch);
         }
 
         // Block looks good, create ChainInfo.
@@ -179,19 +186,13 @@ impl<'env> Blockchain<'env> {
 
         // Check if the block extends our current main chain.
         if chain_info.head.header.prev_hash == self.state.read().head_hash {
-            return match self.extend(hash, chain_info, prev_info) {
-                true => PushResult::Extended,
-                false => PushResult::Invalid
-            };
+            return self.extend(hash, chain_info, prev_info);
         }
 
         // Otherwise, check if the new chain is harder than our current main chain.
         if chain_info.total_difficulty > self.state.read().main_chain.total_difficulty {
             // A fork has become the hardest chain, rebranch to it.
-            return match self.rebranch(hash, chain_info) {
-                true => PushResult::Rebranched,
-                false => PushResult::Invalid
-            };
+            return self.rebranch(hash, chain_info);
         }
 
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
@@ -203,7 +204,7 @@ impl<'env> Blockchain<'env> {
         return PushResult::Forked;
     }
 
-    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> bool {
+    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> PushResult {
         let mut txn = WriteTransaction::new(self.env);
         {
             let state = self.state.read();
@@ -211,14 +212,15 @@ impl<'env> Blockchain<'env> {
             // Check transactions against TransactionCache to prevent replay.
             if state.transaction_cache.contains_any(&chain_info.head) {
                 warn!("Rejecting block - transaction already included");
-                return false;
+                txn.abort();
+                return PushResult::Invalid(PushError::DuplicateTransaction);
             }
 
             // Commit block to AccountsTree.
             if let Err(e) = state.accounts.commit_block(&mut txn, &chain_info.head) {
                 warn!("Rejecting block - commit failed: {}", e);
                 txn.abort();
-                return false;
+                return PushResult::Invalid(PushError::AccountsError(e));
             }
         }
 
@@ -246,10 +248,10 @@ impl<'env> Blockchain<'env> {
         let event = BlockchainEvent::Extended(state.head_hash.clone(), UniquePtr::new(&state.main_chain.head));
         self.notifier.read().notify(event);
 
-        return true;
+        return PushResult::Extended;
     }
 
-    fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo) -> bool {
+    fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo) -> PushResult {
         debug!("Rebranching to fork {}, height #{}, total_difficulty {}", block_hash, chain_info.head.header.height, chain_info.total_difficulty);
 
         // Find the common ancestor between our current main chain and the fork chain.
@@ -322,14 +324,14 @@ impl<'env> Blockchain<'env> {
                     warn!("Failed to apply fork block while rebranching - transaction already included");
                     // TODO delete invalid fork from store
                     write_txn.abort();
-                    return false;
+                    return PushResult::Invalid(PushError::InvalidFork);
                 }
 
                 if let Err(e) = state.accounts.commit_block(&mut write_txn, &fork_block.1.head) {
                     warn!("Failed to apply fork block while rebranching - {}", e);
                     // TODO delete invalid fork from store
                     write_txn.abort();
-                    return false;
+                    return PushResult::Invalid(PushError::InvalidFork);
                 }
 
                 cache_txn.push_block(&fork_block.1.head);
@@ -388,7 +390,7 @@ impl<'env> Blockchain<'env> {
         let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
         self.notifier.read().notify(event);
 
-        return true;
+        return PushResult::Rebranched;
     }
 
     pub fn get_next_target(&self, head_hash: Option<&Blake2bHash>) -> Target {
@@ -485,6 +487,11 @@ impl<'env> Blockchain<'env> {
 
     pub fn height(&self) -> u32 {
         self.state.read().main_chain.head.header.height
+    }
+
+    pub fn head(&self) -> MappedRwLockReadGuard<Block> {
+        let guard = self.state.read();
+        RwLockReadGuard::map(guard, |s| &s.main_chain.head)
     }
 
     pub fn accounts(&self) -> MappedRwLockReadGuard<Accounts<'env>> {

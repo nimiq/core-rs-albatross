@@ -107,7 +107,7 @@ fn it_can_create_contract_from_transaction() {
         0,
         NetworkId::Dummy,
     );
-    match VestingContract::create(Coin::from(0), &transaction, 0) {
+    match VestingContract::create(Coin::from(100), &transaction, 0) {
         Ok(contract) => {
             assert_eq!(contract.balance, Coin::from(100));
             assert_eq!(contract.owner, owner);
@@ -127,7 +127,7 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&Coin::from(50), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
-    match VestingContract::create(Coin::from(0), &transaction, 0) {
+    match VestingContract::create(Coin::from(100), &transaction, 0) {
         Ok(contract) => {
             assert_eq!(contract.balance, Coin::from(100));
             assert_eq!(contract.owner, owner);
@@ -148,7 +148,7 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&Coin::from(150), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
-    match VestingContract::create(Coin::from(0), &transaction, 0) {
+    match VestingContract::create(Coin::from(100), &transaction, 0) {
         Ok(contract) => {
             assert_eq!(contract.balance, Coin::from(100));
             assert_eq!(contract.owner, owner);

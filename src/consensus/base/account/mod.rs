@@ -88,7 +88,7 @@ impl Account {
         // This assumes that transaction.value + transaction.fee does not overflow.
         let balance = self.balance();
         if balance < transaction.value + transaction.fee {
-            return Err(AccountError::Any("Insufficient funds".to_string()));
+            return Err(AccountError::InsufficientFunds);
         }
 
         invoke_account_instance!(*self, with_outgoing_transaction, transaction, block_height)
@@ -243,6 +243,7 @@ impl PartialEq for PrunedAccount {
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum AccountError {
     InsufficientFunds,
+    TypeMismatch,
     InvalidSignature,
     InvalidForSender,
     InvalidForRecipient,

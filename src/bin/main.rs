@@ -36,7 +36,7 @@ pub fn main() {
     network_config.init_volatile();
     let network_config = Arc::new(network_config);
 
-    let network_time = Arc::new(NetworkTime::new(0));
+    let network_time = Arc::new(NetworkTime::new());
     let blockchain: Arc<Blockchain<'static>> = Arc::new(Blockchain::new(&env, network_time.clone(), network));
 
     tokio::run(Runner {

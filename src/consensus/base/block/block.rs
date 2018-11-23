@@ -25,9 +25,9 @@ impl Deserialize for Block {
 }
 
 impl Block {
+    pub const VERSION: u16 = 1;
     const TIMESTAMP_DRIFT_MAX: u64 = 600 * 1000;
     const MAX_SIZE: usize = 100000; // 100 kb
-    const VERSION: u16 = 1;
 
     pub fn verify(&self, timestamp_now: u64, network_id: NetworkId) -> Result<(), BlockError> {
         // XXX Check that the block version is supported.
@@ -98,7 +98,7 @@ impl Block {
         }
 
         // Check that the interlink is correct.
-        let interlink = predecessor.get_next_interlink(self.header.n_bits.into());
+        let interlink = predecessor.get_next_interlink(&self.header.n_bits.into());
         if self.interlink != interlink {
             return false;
         }
@@ -107,7 +107,7 @@ impl Block {
         return true;
     }
 
-    pub fn get_next_interlink(&self, next_target: Target) -> BlockInterlink {
+    pub fn get_next_interlink(&self, next_target: &Target) -> BlockInterlink {
         let mut hashes: Vec<Blake2bHash> = vec![];
         let hash: Blake2bHash = self.header.hash();
         let pow: Argon2dHash = self.header.hash();
@@ -152,4 +152,3 @@ impl FromDatabaseValue for Block {
         return Ok(Deserialize::deserialize(&mut cursor)?);
     }
 }
-

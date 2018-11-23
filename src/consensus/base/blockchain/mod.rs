@@ -5,5 +5,5 @@ pub mod transaction_cache;
 
 pub use self::chain_info::ChainInfo;
 pub use self::chain_store::ChainStore;
-pub use self::blockchain::{Blockchain, BlockchainEvent, PushResult};
+pub use self::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
 pub use self::transaction_cache::TransactionCache;

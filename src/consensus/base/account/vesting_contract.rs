@@ -18,7 +18,7 @@ pub struct VestingContract {
 impl VestingContract {
     pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         let (owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount) = VestingContract::parse_and_verify_creation_transaction(transaction)?;
-        return Ok(VestingContract::new(transaction.value, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount));
+        return Ok(VestingContract::new(balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount));
     }
 
     fn new(balance: Coin, owner: Address, vesting_start: u32, vesting_step_blocks: u32, vesting_step_amount: Coin, vesting_total_amount: Coin) -> Self {

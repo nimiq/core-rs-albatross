@@ -41,6 +41,7 @@ impl IntoData for WebSocketMessage {
     }
 }
 
+#[derive(Debug)]
 pub enum NimiqMessageStreamError {
     WebSocketError(WsError),
     TagMismatch,

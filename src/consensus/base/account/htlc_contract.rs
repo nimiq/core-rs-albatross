@@ -39,7 +39,7 @@ pub enum ProofType {
 impl HashedTimeLockedContract {
     pub fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
         let (sender, recipient, hash_algorithm, hash_root, hash_count, timeout) = HashedTimeLockedContract::parse_and_verify_creation_transaction(transaction)?;
-        return Ok(HashedTimeLockedContract::new(transaction.value, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value));
+        return Ok(HashedTimeLockedContract::new(balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value));
     }
 
     fn new(balance: Coin, sender: Address, recipient: Address, hash_algorithm: HashAlgorithm, hash_root: AnyHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {

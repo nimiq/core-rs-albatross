@@ -10,7 +10,11 @@ pub struct NetworkTime {
 }
 
 impl NetworkTime {
-    pub fn new(offset: i64) -> Self {
+    pub fn new() -> Self {
+        NetworkTime::with_offset(0)
+    }
+
+    pub fn with_offset(offset: i64) -> Self {
         NetworkTime {
             offset: Atomic::new(offset)
         }

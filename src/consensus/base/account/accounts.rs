@@ -1,7 +1,7 @@
 use beserial::Deserialize;
 use hex;
 use std::collections::HashMap;
-use crate::consensus::base::account::{Account, AccountError};
+use crate::consensus::base::account::{Account, AccountType, AccountError};
 use crate::consensus::base::account::tree::AccountsTree;
 use crate::consensus::base::block::{Block, BlockBody};
 use crate::consensus::base::primitive::{Address, Coin};
@@ -59,6 +59,16 @@ impl<'env> Accounts<'env> {
         };
     }
 
+    pub fn hash_with_block_body(&self, body: &BlockBody, block_height: u32) -> Result<Blake2bHash, AccountError> {
+        let mut txn = WriteTransaction::new(self.env);
+
+        self.commit_block_body(&mut txn, body, block_height)?;
+
+        let hash = self.hash(Some(&txn));
+        txn.abort();
+        Ok(hash)
+    }
+
     pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), AccountError> {
         if block.body.is_none() {
             return Err(AccountError::Any("Cannot commit block without body".to_string()));
@@ -88,13 +98,17 @@ impl<'env> Accounts<'env> {
     pub fn commit_block_body(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32) -> Result<(), AccountError> {
         // Process sender accounts.
         for transaction in &body.transactions {
-            self.process_transaction(txn, &transaction.sender, transaction, block_height,
+            self.process_transaction(txn, &transaction.sender, Some(transaction.sender_type), transaction, block_height,
                                      |account, transaction, block_height| account.with_outgoing_transaction(transaction, block_height))?;
         }
 
         // Process recipient accounts.
         for transaction in &body.transactions {
-            self.process_transaction(txn, &transaction.recipient, transaction, block_height,
+            let recipient_type = match transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                true => None,
+                false => Some(transaction.recipient_type)
+            };
+            self.process_transaction(txn, &transaction.recipient, recipient_type, transaction, block_height,
                                      |account, transaction, block_height| account.with_incoming_transaction(transaction, block_height))?;
         }
 
@@ -130,13 +144,17 @@ impl<'env> Accounts<'env> {
 
         // Process recipient accounts.
         for transaction in &body.transactions {
-            self.process_transaction(txn, &transaction.recipient, transaction, block_height,
+            let recipient_type = match transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                true => None,
+                false => Some(transaction.recipient_type)
+            };
+            self.process_transaction(txn, &transaction.recipient, recipient_type, transaction, block_height,
                                      |account, transaction, block_height| account.without_incoming_transaction(transaction, block_height))?;
         }
 
         // Process sender accounts.
         for transaction in &body.transactions {
-            self.process_transaction(txn, &transaction.sender, transaction, block_height,
+            self.process_transaction(txn, &transaction.sender, Some(transaction.sender_type), transaction, block_height,
                                      |account, transaction, block_height| account.without_outgoing_transaction(transaction, block_height))?;
         }
 
@@ -144,10 +162,16 @@ impl<'env> Accounts<'env> {
         return Ok(());
     }
 
-    fn process_transaction<F>(&self, txn: &mut WriteTransaction, address: &Address, transaction: &Transaction, block_height: u32, account_op: F) -> Result<(), AccountError>
+    fn process_transaction<F>(&self, txn: &mut WriteTransaction, address: &Address, account_type: Option<AccountType>, transaction: &Transaction, block_height: u32, account_op: F) -> Result<(), AccountError>
         where F: Fn(Account, &Transaction, u32) -> Result<Account, AccountError> {
 
         let account = self.get(address, Some(txn));
+
+        // Check account type.
+        if account_type.is_some() && account.account_type() != account_type.unwrap() {
+            return Err(AccountError::TypeMismatch);
+        }
+
         let new_account = account_op(account, transaction, block_height)?;
         self.tree.put_batch(txn, address, new_account);
         return Ok(());
@@ -172,7 +196,7 @@ impl<'env> Accounts<'env> {
             NetworkId::Main, // XXX ignored
         );
 
-        return self.process_transaction(txn, &body.miner, &coinbase_tx, block_height, account_op);
+        return self.process_transaction(txn, &body.miner, Some(AccountType::Basic), &coinbase_tx, block_height, account_op);
     }
 
     fn create_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
@@ -189,7 +213,7 @@ impl<'env> Accounts<'env> {
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));
         if recipient_account.account_type() != transaction.recipient_type {
-            return Err(AccountError::InvalidForRecipient);
+            return Err(AccountError::TypeMismatch);
         }
 
         let new_recipient_account = Account::new_basic(recipient_account.balance());
