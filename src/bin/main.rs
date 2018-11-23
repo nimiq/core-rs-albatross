@@ -29,7 +29,7 @@ pub fn main() {
     let network = NetworkId::Main;
 
     let mut network_config = NetworkConfig::new_ws_network_config(
-        "127.0.0.1".to_string(),
+        "test.vcap.me".to_string(),
         13337,
         None,
     );

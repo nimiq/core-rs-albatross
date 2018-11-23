@@ -168,7 +168,8 @@ impl Deserialize for Message {
             MessageType::GetAddr => Message::GetAddr(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Ping => Message::Ping(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Pong => Message::Pong(Deserialize::deserialize(&mut crc32_reader)?),
-            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into())
+            MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
+            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into()) // FIXME remove default case
         };
 
         let crc_comp = crc32_reader.crc32.result();

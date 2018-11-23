@@ -118,7 +118,7 @@ impl WebSocketConnector {
             _ => panic!("Protocol not supported"),
         };
 
-        let addr = SocketAddr::new(host.parse().expect("Invalid IP address"), port);
+        let addr = SocketAddr::new("::".parse().unwrap(), port);
         let socket = TcpListener::bind(&addr).unwrap();
         let notifier = Arc::clone(&self.notifier);
 
