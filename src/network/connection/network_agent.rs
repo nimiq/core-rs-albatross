@@ -31,7 +31,7 @@ use crate::utils::version;
 
 pub struct NetworkAgent {
     blockchain: Arc<Blockchain<'static>>,
-    addresses: Arc<RwLock<PeerAddressBook>>,
+    addresses: Arc<PeerAddressBook>,
     network_config: Arc<NetworkConfig>,
     channel: PeerChannel,
 
@@ -88,7 +88,7 @@ impl NetworkAgent {
     const MAX_ADDR_PER_REQUEST: u16 = 500;
     const NUM_ADDR_PER_REQUEST: u16 = 200;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, addresses: Arc<RwLock<PeerAddressBook>>, network_config: Arc<NetworkConfig>, channel: PeerChannel) -> Arc<RwLock<Self>> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, addresses: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, channel: PeerChannel) -> Arc<RwLock<Self>> {
         let agent = Arc::new(RwLock::new(Self {
             blockchain,
             addresses,
@@ -246,7 +246,7 @@ impl NetworkAgent {
         // The client might not send its netAddress. Set it from our address database if we have it.
         if peer_address.net_address.is_pseudo() {
             // TODO Very complicated API call here.
-            let addresses = self.addresses.read();
+            let addresses = self.addresses.state();
             let stored_address = addresses.get_info(&Arc::new(peer_address.clone()));
             if let Some(peer_address_info) = stored_address {
                 if !peer_address_info.peer_address.net_address.is_pseudo() {
@@ -478,7 +478,7 @@ impl NetworkAgent {
         }
 
         // Put the new addresses in the address pool.
-        self.addresses.write().add(Some(&self.channel), addresses);
+        self.addresses.add(Some(&self.channel), addresses);
 
         // Tell listeners that we have received new addresses.
         self.notifier.notify(NetworkAgentEvent::Addr);
@@ -494,7 +494,7 @@ impl NetworkAgent {
 
         // Find addresses that match the given protocolMask & serviceMask.
         let num_results = cmp::min(msg.max_results, NetworkAgent::MAX_ADDR_PER_REQUEST);
-        let addresses = self.addresses.read().query(
+        let addresses = self.addresses.query(
             msg.protocol_mask,
             msg.service_mask,
             num_results

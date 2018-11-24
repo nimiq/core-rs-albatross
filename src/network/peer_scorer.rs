@@ -5,11 +5,11 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 pub struct PeerScorer {
-    addresses: Arc<RwLock<PeerAddressBook>>
+    addresses: Arc<PeerAddressBook>
 }
 
 impl PeerScorer {
-    pub fn new(addresses: Arc<RwLock<PeerAddressBook>>) -> Self {
+    pub fn new(addresses: Arc<PeerAddressBook>) -> Self {
         return PeerScorer {
             addresses
         }

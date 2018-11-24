@@ -25,7 +25,7 @@ pub struct Network {
     auto_connect: Arc<Atomic<bool>>,
     backed_off: Arc<Atomic<bool>>,
     backoff: Arc<Atomic<Duration>>,
-    addresses: Arc<RwLock<PeerAddressBook>>,
+    addresses: Arc<PeerAddressBook>,
     connections: Arc<ConnectionPool>,
     scorer: Arc<RwLock<PeerScorer>>,
     timers: Arc<Timers<String>>
@@ -44,7 +44,7 @@ impl Network {
     const CONNECT_THROTTLE: Duration = Duration::from_secs(1);
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: Arc<NetworkConfig>, network_time: Arc<NetworkTime>) -> Arc<Self> {
-        let addresses = Arc::new(RwLock::new(PeerAddressBook::new(network_config.clone())));
+        let addresses = Arc::new(PeerAddressBook::new(network_config.clone()));
         let network = Arc::new(Network {
             network_config: Arc::clone(&network_config),
             network_time,
@@ -140,7 +140,7 @@ impl Network {
     }
 
     fn check_peer_count(&self) {
-        if self.auto_connect.load(Ordering::Relaxed) && self.addresses.read().seeded() && !self.scorer.read().is_good_peer_set() && self.connections.connecting_count() < Network::CONNECTING_COUNT_MAX {
+        if self.auto_connect.load(Ordering::Relaxed) && self.addresses.seeded() && !self.scorer.read().is_good_peer_set() && self.connections.connecting_count() < Network::CONNECTING_COUNT_MAX {
             // Pick a peer address that we are not connected to yet.
             let peer_addr_opt = self.scorer.read().pick_address();
 
@@ -181,7 +181,7 @@ impl Network {
             // Connect to this address.
             if let Some(peer_address) = peer_addr_opt {
                 if !self.connections.connect_outbound(Arc::clone(&peer_address)) {
-                    self.addresses.write().close(None, peer_address, CloseType::ConnectionFailed);
+                    self.addresses.close(None, peer_address, CloseType::ConnectionFailed);
                 }
             }
         }

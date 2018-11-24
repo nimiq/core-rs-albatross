@@ -295,7 +295,7 @@ impl ConnectionPoolState {
 pub struct ConnectionPool {
     blockchain: Arc<Blockchain<'static>>,
     network_config: Arc<NetworkConfig>,
-    addresses: Arc<RwLock<PeerAddressBook>>,
+    addresses: Arc<PeerAddressBook>,
 
     websocket_connector: WebSocketConnector,
 
@@ -310,7 +310,7 @@ impl ConnectionPool {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
 
     /// Constructor.
-    pub fn new(peer_address_book: Arc<RwLock<PeerAddressBook>>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
+    pub fn new(peer_address_book: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
         let pool = Arc::new(Self {
             blockchain,
             network_config: network_config.clone(),
@@ -578,7 +578,7 @@ impl ConnectionPool {
 
             // Close connection if peer's address is banned.
             let peer_address = peer.peer_address();
-            if self.addresses.read().is_banned(&peer_address) {
+            if self.addresses.is_banned(&peer_address) {
                 ConnectionPool::close(info.network_connection(), CloseType::PeerIsBanned);
                 return false;
             }
@@ -711,7 +711,7 @@ impl ConnectionPool {
         {
             let state = self.state.read();
             let info = state.get_connection(connection_id).expect("Missing connection");
-            self.addresses.write().established(info.peer_channel().unwrap(), peer_address.clone());
+            self.addresses.established(info.peer_channel().unwrap(), peer_address.clone());
         }
 
         // Let listeners know about this peer.
@@ -735,7 +735,7 @@ impl ConnectionPool {
             let state = self.state.read();
             let info = state.get_connection(connection_id).expect("Missing connection");
             if let Some(peer_address) = info.peer_address() {
-                self.addresses.write().close(info.peer_channel(), peer_address, ty);
+                self.addresses.close(info.peer_channel(), peer_address, ty);
             }
         }
 
@@ -838,7 +838,7 @@ impl ConnectionPool {
 
             update_checked!(state.connecting_count, PeerCountUpdate::Remove);
 
-            self.addresses.write().close(None, peer_address.clone(), CloseType::ConnectionFailed);
+            self.addresses.close(None, peer_address.clone(), CloseType::ConnectionFailed);
         }
 
         self.notifier.read().notify(ConnectionPoolEvent::ConnectError(peer_address, CloseType::ConnectionFailed));
@@ -861,7 +861,7 @@ impl ConnectionPool {
             },
         }
 
-        if self.addresses.read().is_banned(&peer_address) {
+        if self.addresses.is_banned(&peer_address) {
             error!("Connecting to banned address {:?}", peer_address);
             return false;
         }
