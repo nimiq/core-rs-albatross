@@ -18,6 +18,7 @@ use crate::network::Peer;
 use crate::network::peer_scorer::PeerScorer;
 use crate::utils::timers::Timers;
 
+#[derive(Clone)]
 pub struct Network {
     network_config: Arc<NetworkConfig>,
     network_time: Arc<NetworkTime>,
@@ -25,7 +26,7 @@ pub struct Network {
     backed_off: Arc<Atomic<bool>>,
     backoff: Arc<Atomic<Duration>>,
     addresses: Arc<RwLock<PeerAddressBook>>,
-    connections: Arc<RwLock<ConnectionPool>>,
+    connections: Arc<ConnectionPool>,
     scorer: Arc<RwLock<PeerScorer>>,
     timers: Arc<Timers<String>>
 }
@@ -58,7 +59,7 @@ impl Network {
 
         let network_clone = Arc::downgrade(&network);
 
-        network.connections.write().notifier.register(move |event: &ConnectionPoolEvent| {
+        network.connections.notifier.write().register(move |event: &ConnectionPoolEvent| {
             let network = upgrade_weak!(&network_clone);
             match event {
                 ConnectionPoolEvent::PeerJoined(peer) => {
@@ -102,8 +103,8 @@ impl Network {
 
         self.timers.clear_interval(&"network-housekeeping".to_string());
 
-        self.connections.read().disconnect();
-        self.connections.write().allow_inbound_exchange = false;
+        self.connections.disconnect();
+        self.connections.set_allow_inbound_exchange(false);
     }
 
     fn on_peer_joined(network: Arc<Network>, peer: &Peer) {
@@ -125,10 +126,10 @@ impl Network {
         network.scorer.write().recycle_connections(1, CloseType::PeerConnectionRecycledInboundExchange, "Peer connection recycled inbound exchange");
 
         // set ability to exchange for new inbound connections
-        network.connections.write().allow_inbound_exchange = match network.scorer.read().lowest_connection_score() {
+        network.connections.set_allow_inbound_exchange(match network.scorer.read().lowest_connection_score() {
             Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
             None => false
-        };
+        });
     }
 
     fn on_connect_error(network: Arc<Network>) {
@@ -139,7 +140,7 @@ impl Network {
     }
 
     fn check_peer_count(&self) {
-        if self.auto_connect.load(Ordering::Relaxed) && self.addresses.read().seeded() && !self.scorer.read().is_good_peer_set() && self.connections.read().connecting_count < Network::CONNECTING_COUNT_MAX {
+        if self.auto_connect.load(Ordering::Relaxed) && self.addresses.read().seeded() && !self.scorer.read().is_good_peer_set() && self.connections.connecting_count() < Network::CONNECTING_COUNT_MAX {
             // Pick a peer address that we are not connected to yet.
             let peer_addr_opt = self.scorer.read().pick_address();
 
@@ -164,7 +165,7 @@ impl Network {
                     }, Instant::now() + old_backoff);
                 }
 
-                if self.connections.read().count() == 0 {
+                if self.connections.count() == 0 {
                     // We are not connected to any peers (anymore) and don't know any more addresses to connect to.
 
                     // Tell listeners that we are disconnected. This is primarily useful for tests.
@@ -172,14 +173,14 @@ impl Network {
 
                     // Allow inbound connections. This is important for the first seed node on the network which
                     // will never establish a consensus and needs to accept incoming connections eventually.
-                    self.connections.write().allow_inbound_connections = true;
+                    self.connections.set_allow_inbound_connections(true);
                 }
                 return;
             }
 
             // Connect to this address.
             if let Some(peer_address) = peer_addr_opt {
-                if !self.connections.write().connect_outbound(Arc::clone(&peer_address)) {
+                if !self.connections.connect_outbound(Arc::clone(&peer_address)) {
                     self.addresses.write().close(None, peer_address, CloseType::ConnectionFailed);
                 }
             }
@@ -190,7 +191,8 @@ impl Network {
     fn update_time_offset(&self) {
         let mut offsets = Vec::new();
         offsets.push(0i64);
-        for connection_info in self.connections.read().connection_iter() {
+        let pool_state = self.connections.state();
+        for connection_info in pool_state.connection_iter() {
             if connection_info.state() == ConnectionState::Established {
                 if let Some(peer) = &connection_info.peer() {
                     offsets.push(peer.time_offset);
@@ -210,11 +212,11 @@ impl Network {
         self.network_time.set_offset(time_offset);
     }
 
-    fn housekeeping(connections: Arc<RwLock<ConnectionPool>>, scorer: Arc<RwLock<PeerScorer>>) {
+    fn housekeeping(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
         // TODO
 
         // recycle
-        let peer_count = connections.read().peer_count();
+        let peer_count = connections.peer_count();
         if peer_count < Network::PEER_COUNT_RECYCLING_ACTIVE {
             // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
             let percentage_to_recycle = (peer_count - Network::PEER_COUNT_RECYCLING_ACTIVE) as f32 * (Network::RECYCLING_PERCENTAGE_MAX - Network::RECYCLING_PERCENTAGE_MIN) / (Network::PEER_COUNT_MAX - Network::PEER_COUNT_RECYCLING_ACTIVE) as f32 + Network::RECYCLING_PERCENTAGE_MIN as f32;
@@ -223,36 +225,20 @@ impl Network {
         }
 
         // set ability to exchange for new inbound connections
-        connections.write().allow_inbound_exchange = match scorer.read().lowest_connection_score() {
+        connections.set_allow_inbound_exchange(match scorer.read().lowest_connection_score() {
             Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
             None => false
-        };
+        });
 
         // Request fresh addresses.
         Network::refresh_addresses(connections, scorer);
     }
 
-    fn refresh_addresses(connections: Arc<RwLock<ConnectionPool>>, scorer: Arc<RwLock<PeerScorer>>) {
+    fn refresh_addresses(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
         unimplemented!()
     }
 
     pub fn peer_count(&self) -> usize {
-        return self.connections.read().peer_count();
-    }
-}
-
-impl Clone for Network {
-    fn clone(&self) -> Network {
-        Network {
-            network_config: Arc::clone(&self.network_config),
-            network_time: Arc::clone(&self.network_time),
-            auto_connect: Arc::clone(&self.auto_connect),
-            backed_off: Arc::clone(&self.backed_off),
-            backoff: Arc::clone(&self.backoff),
-            addresses: Arc::clone(&self.addresses),
-            connections: Arc::clone(&self.connections),
-            scorer: Arc::clone(&self.scorer),
-            timers: Arc::clone(&self.timers)
-        }
+        return self.connections.peer_count();
     }
 }
