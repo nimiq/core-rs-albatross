@@ -25,6 +25,8 @@ lazy_static! {
     static ref env: Environment = VolatileEnvironment::new(10).unwrap();
 }
 
+pub fn main() {}
+/*
 pub fn main() {
     let network = NetworkId::Main;
 
@@ -62,3 +64,4 @@ impl Future for Runner {
         Ok(Async::Ready(()))
     }
 }
+*/

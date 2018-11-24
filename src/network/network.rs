@@ -43,16 +43,17 @@ impl Network {
     const SCORE_INBOUND_EXCHANGE: f32 = 0.5;
     const CONNECT_THROTTLE: Duration = Duration::from_secs(1);
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: Arc<NetworkConfig>, network_time: Arc<NetworkTime>) -> Arc<Self> {
-        let addresses = Arc::new(PeerAddressBook::new(network_config.clone()));
+    pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>) -> Arc<Self> {
+        let net_config = Arc::new(network_config);
+        let addresses = Arc::new(PeerAddressBook::new(net_config.clone()));
         let network = Arc::new(Network {
-            network_config: Arc::clone(&network_config),
+            network_config: net_config.clone(),
             network_time,
             auto_connect: Arc::new(Atomic::new(false)),
             backed_off: Arc::new(Atomic::new(false)),
             backoff: Arc::new(Atomic::new(Network::CONNECT_BACKOFF_INITIAL)),
             addresses: Arc::clone(&addresses),
-            connections: ConnectionPool::new(Arc::clone(&addresses), Arc::clone(&network_config), blockchain),
+            connections: ConnectionPool::new(Arc::clone(&addresses), net_config.clone(), blockchain),
             scorer: Arc::new(RwLock::new(PeerScorer::new(Arc::clone(&addresses)))),
             timers: Arc::new(Timers::new())
         });

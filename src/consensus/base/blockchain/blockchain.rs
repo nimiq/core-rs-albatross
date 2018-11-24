@@ -14,8 +14,8 @@ use crate::utils::unique_ptr::UniquePtr;
 
 pub struct Blockchain<'env> {
     env: &'env Environment,
-    network_time: Arc<NetworkTime>,
     pub network_id: NetworkId,
+    network_time: Arc<NetworkTime>,
     pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
     chain_store: ChainStore<'env>,
     state: RwLock<BlockchainState<'env>>,
@@ -56,7 +56,7 @@ pub enum BlockchainEvent {
 }
 
 impl<'env> Blockchain<'env> {
-    pub fn new(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Self {
+    pub fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Self {
         let chain_store = ChainStore::new(env);
         match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash),
@@ -92,8 +92,8 @@ impl<'env> Blockchain<'env> {
 
         Blockchain {
             env,
-            network_time,
             network_id,
+            network_time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
             state: RwLock::new(BlockchainState {
@@ -127,8 +127,8 @@ impl<'env> Blockchain<'env> {
 
         Blockchain {
             env,
-            network_time,
             network_id,
+            network_time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
             state: RwLock::new(BlockchainState {
