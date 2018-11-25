@@ -1,31 +1,56 @@
-use crate::network::address::peer_address_book::PeerAddressBook;
-use crate::network::address::peer_address::PeerAddress;
-use crate::network::address::peer_address_state::PeerAddressState;
-use crate::network::connection::close_type::CloseType;
-use crate::network::connection::connection_pool::ConnectionPool;
-use crate::network::network_config::NetworkConfig;
-use crate::network::ProtocolFlags;
 use crate::utils::services::ServiceFlags;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use rand::Rng;
 use rand::OsRng;
+
+use crate::network::{
+    Protocol,
+    ProtocolFlags,
+    address::{
+        peer_address::PeerAddress,
+        peer_address_book::PeerAddressBook,
+        peer_address_state::PeerAddressState,
+    },
+    connection::{
+        close_type::CloseType,
+        connection_info::{ConnectionInfo, ConnectionState},
+        connection_pool::{ConnectionId, ConnectionPool},
+        network_agent::NetworkAgent,
+    },
+    network_config::NetworkConfig,
+};
+
+type Score = f32;
 
 pub struct PeerScorer {
     network_config: Arc<NetworkConfig>,
     addresses: Arc<PeerAddressBook>,
-    connections: Arc<ConnectionPool>
+    connections: Arc<ConnectionPool>,
+    connection_scores: Vec<(ConnectionId, Score)>,
 }
 
 impl PeerScorer {
-    const PEER_COUNT_MIN_OUTBOUND: usize = 6;
+    const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 12; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
+    const PEER_COUNT_MIN_OUTBOUND: usize = 12; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
+
     const PICK_SELECTION_SIZE: usize = 100;
+
+    const MIN_AGE_FULL: Duration = Duration::from_secs(5 * 60); // 5 minutes
+
+    const MIN_AGE_LIGHT: Duration = Duration::from_secs(2 * 60); // 2 minutes
+
+    const MIN_AGE_NANO: Duration = Duration::from_secs(1 * 60); // 1 minute
+
+    const BEST_PROTOCOL_WS_DISTRIBUTION: f32 = 0.15; // 15%
+
 
     pub fn new(network_config: Arc<NetworkConfig>, addresses: Arc<PeerAddressBook>, connections: Arc<ConnectionPool>) -> Self {
         return PeerScorer {
             network_config,
             addresses,
-            connections
+            connections,
+            connection_scores: Vec::new(),
         }
     }
 
@@ -123,30 +148,112 @@ impl PeerScorer {
     }
 
     pub fn is_good_peer_set(&self) -> bool {
-        false
+        self.needs_good_peers() && self.needs_more_peers()
     }
 
     pub fn needs_good_peers(&self) -> bool {
-        false
+        self.connections.state().get_peer_count_full_ws_outbound() < Self::PEER_COUNT_MIN_FULL_WS_OUTBOUND
     }
 
     pub fn needs_more_peers(&self) -> bool {
-        true
+        self.connections.state().get_peer_count_outbound() < Self::PEER_COUNT_MIN_OUTBOUND
     }
 
     pub fn is_good_peer(&self, peer_address: &Arc<PeerAddress>) -> bool {
-        true
+        peer_address.services.is_full_node() && (peer_address.protocol() == Protocol::Ws || peer_address.protocol() == Protocol::Wss)
     }
 
-    pub fn score_connections(&self) {
+    pub fn score_connections(&mut self) {
+        let mut connection_scores: Vec<(ConnectionId, Score)> = Vec::new();
 
+        let state = self.connections.state();
+        let distribution: f32 = (state.peer_count_ws as f32 + state.peer_count_wss as f32) / state.peer_count() as f32;
+        let peer_count_full_ws_outbound = state.get_peer_count_full_ws_outbound();
+        let connections: Vec<(ConnectionId, &ConnectionInfo)> = state.id_and_connection_iter();
+
+        for connection in connections {
+            if connection.1.state() == ConnectionState::Established {
+                if connection.1.age_established() > self.get_min_age(connection.1.peer_address().expect("No peer address")) {
+                    let score = Self::score_connection(connection.1, distribution, peer_count_full_ws_outbound);
+                    connection_scores.push((connection.0, score));
+                }
+            }
+        }
+
+        connection_scores.sort_unstable_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        self.connection_scores = connection_scores
     }
 
     pub fn recycle_connections(&self, count: u32, ty: CloseType, reason: &str) {
 
     }
 
-    pub fn lowest_connection_score(&self) -> Option<f32> {
+    pub fn lowest_connection_score(&self) -> Option<Score> {
         None
+    }
+
+    fn score_connection(connection_info: &ConnectionInfo, distribution: f32, peer_count_full_ws_outbound: usize) -> Score {
+        // Connection age
+        let score_age = Self::score_connection_age(connection_info);
+
+        // Connection type (inbound/outbound)
+        let score_outbound = match connection_info.network_connection().expect("Missing network connection").outbound() {
+            false => 0.0,
+            true => 1.0,
+        };
+
+        let peer_address = connection_info.peer_address().expect("Missing peer address");
+
+        // Node type (full/light/nano)
+        let score_type: Score;
+        if peer_address.services.is_full_node() {
+            score_type = 1.0;
+        } else if peer_address.services.is_light_node() {
+            score_type = 0.5;
+        } else if peer_address.services.is_nano_node() {
+            score_type = 0.0;
+        } else {
+            unreachable!()
+        }
+
+        // Protocol: Prefer WebSocket over WebRTC over Dumb.
+        let score_protocol: Score = match peer_address.protocol() {
+            Protocol::Wss | Protocol::Ws => {
+                // Boost WebSocket score when low on WebSocket connections.
+                if distribution < Self::BEST_PROTOCOL_WS_DISTRIBUTION || peer_count_full_ws_outbound <= Self::PEER_COUNT_MIN_FULL_WS_OUTBOUND {
+                    1.0
+                } else {
+                    0.6
+                }
+            },
+            Protocol::Rtc => 0.3,
+            Protocol::Dumb => 0.0,
+        };
+
+        // Connection speed, based on ping-pong latency median
+        let median_latency = connection_info.statistics().latency_median();
+        let mut score_speed: f32 = 0.0;
+
+        if median_latency > 0.0 && median_latency < NetworkAgent::PING_TIMEOUT.as_secs() as f32 {
+            score_speed = 1.0 - median_latency / NetworkAgent::PING_TIMEOUT.as_secs() as f32;
+        }
+
+        return 0.15 * score_age + 0.25 * score_outbound + 0.2 * score_type + 0.2 * score_protocol + 0.2 * score_speed;
+    }
+
+    fn score_connection_age(connection_info: &ConnectionInfo) -> Score {
+        unimplemented!()
+    }
+
+    fn get_min_age(&self, peer_address: Arc<PeerAddress>) -> Duration {
+        if peer_address.services.is_full_node() {
+            Self::MIN_AGE_FULL
+        } else if peer_address.services.is_light_node() {
+            Self::MIN_AGE_LIGHT
+        } else if peer_address.services.is_nano_node() {
+            Self::MIN_AGE_NANO
+        } else {
+            unreachable!()
+        }
     }
 }

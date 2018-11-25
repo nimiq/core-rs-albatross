@@ -36,7 +36,7 @@ macro_rules! update_checked {
     };
 }
 
-type ConnectionId = usize;
+pub type ConnectionId = usize;
 
 pub struct ConnectionPoolState {
     connections: SparseVec<ConnectionInfo>,
@@ -44,8 +44,8 @@ pub struct ConnectionPoolState {
     connections_by_net_address: HashMap<NetAddress, HashSet<ConnectionId>>,
     connections_by_subnet: HashMap<NetAddress, HashSet<ConnectionId>>,
 
-    peer_count_ws: usize,
-    peer_count_wss: usize,
+    pub peer_count_ws: usize,
+    pub peer_count_wss: usize,
     peer_count_rtc: usize,
     peer_count_dumb: usize,
 
@@ -53,7 +53,7 @@ pub struct ConnectionPoolState {
     peer_count_light: usize,
     peer_count_nano: usize,
 
-    pub peer_count_outbound: usize,
+    peer_count_outbound: usize,
     peer_count_full_ws_outbound: usize,
 
     pub connecting_count: usize,
@@ -70,6 +70,12 @@ impl ConnectionPoolState {
     pub fn connection_iter(&self) -> Vec<&ConnectionInfo> {
         return self.connections_by_peer_address.values().map(|connection_id| {
             self.connections.get(*connection_id).expect("Missing connection")
+        }).collect();
+    }
+
+    pub fn id_and_connection_iter(&self) -> Vec<(ConnectionId, &ConnectionInfo)> {
+        return self.connections_by_peer_address.values().map(|connection_id| {
+            (*connection_id, self.connections.get(*connection_id).expect("Missing connection"))
         }).collect();
     }
 
@@ -229,6 +235,9 @@ impl ConnectionPoolState {
             }
         }
     }
+
+    pub fn get_peer_count_full_ws_outbound(&self) -> usize { self.peer_count_full_ws_outbound }
+    pub fn get_peer_count_outbound(&self) -> usize { self.peer_count_outbound }
 
     pub fn count(&self) -> usize {
         self.connections_by_peer_address.len() + self.inbound_count

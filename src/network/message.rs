@@ -18,7 +18,7 @@ use crate::network::ProtocolFlags;
 use crate::utils::version;
 use crate::utils::observer::PassThroughNotifier;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u64)]
 #[beserial(uvar)]
 pub enum MessageType {

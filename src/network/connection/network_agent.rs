@@ -75,7 +75,7 @@ pub enum NetworkAgentEvent {
 impl NetworkAgent {
     const VERSION_ATTEMPTS_MAX: usize = 10;
     const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(4); // 4 seconds
-    const PING_TIMEOUT: Duration = Duration::from_secs(10); // 10 seconds
+    pub const PING_TIMEOUT: Duration = Duration::from_secs(10); // 10 seconds
     const CONNECTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60); // 1 minute
     const ANNOUNCE_ADDR_INTERVAL: Duration = Duration::from_secs(60 * 10); // 10 minutes
     const VERSION_RETRY_DELAY: Duration = Duration::from_millis(500); // 500 ms
