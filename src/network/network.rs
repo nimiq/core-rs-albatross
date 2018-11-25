@@ -1,22 +1,31 @@
-use atomic::Atomic;
-use atomic::Ordering;
+use std::hash::Hash;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use atomic::Atomic;
+use atomic::Ordering;
 use parking_lot::RwLock;
 
 use crate::consensus::base::blockchain::Blockchain;
 use crate::network::address::peer_address_book::PeerAddressBook;
 use crate::network::connection::close_type::CloseType;
+use crate::network::connection::connection_info::ConnectionState;
 use crate::network::connection::connection_pool::ConnectionPool;
 use crate::network::connection::connection_pool::ConnectionPoolEvent;
-use crate::network::connection::connection_info::ConnectionState;
 use crate::network::network_config::NetworkConfig;
 use crate::network::NetworkTime;
 use crate::network::Peer;
 use crate::network::peer_scorer::PeerScorer;
 use crate::utils::timers::Timers;
+
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
+enum NetworkTimer {
+    Housekeeping,
+    PeersChanged,
+    ConnectError,
+    PeerCountCheck,
+}
 
 #[derive(Clone)]
 pub struct Network {
@@ -28,7 +37,7 @@ pub struct Network {
     addresses: Arc<PeerAddressBook>,
     connections: Arc<ConnectionPool>,
     scorer: Arc<RwLock<PeerScorer>>,
-    timers: Arc<Timers<String>>
+    timers: Arc<Timers<NetworkTimer>>
 }
 
 impl Network {
@@ -91,7 +100,7 @@ impl Network {
         let connections = Arc::clone(&self.connections);
         let scorer = Arc::clone(&self.scorer);
 
-        self.timers.set_interval("network-housekeeping".to_string(), move || {
+        self.timers.set_interval(NetworkTimer::Housekeeping, move || {
             Network::housekeeping(Arc::clone(&connections), Arc::clone(&scorer));
         }, Network::HOUSEKEEPING_INTERVAL);
 
@@ -102,7 +111,7 @@ impl Network {
     pub fn disconnect(&self) {
         self.auto_connect.store(false, Ordering::Relaxed);
 
-        self.timers.clear_interval(&"network-housekeeping".to_string());
+        self.timers.clear_interval(&NetworkTimer::Housekeeping);
 
         self.connections.disconnect();
         self.connections.set_allow_inbound_exchange(false);
@@ -118,7 +127,7 @@ impl Network {
 
     fn on_peers_changed(network: Arc<Network>) {
         let network_clone2 = Arc::clone(&network);
-        network.timers.set_delay("network-peers-changed-timeout".to_string(), move || {
+        network.timers.set_delay(NetworkTimer::PeersChanged, move || {
             network_clone2.check_peer_count();
         }, Instant::now() + Network::CONNECT_THROTTLE);
     }
@@ -135,7 +144,7 @@ impl Network {
 
     fn on_connect_error(network: Arc<Network>) {
         let network_clone2 = Arc::clone(&network);
-        network.timers.set_delay("network-connect-error-timeout".to_string(), move || {
+        network.timers.set_delay(NetworkTimer::ConnectError, move || {
             network_clone2.check_peer_count();
         }, Instant::now() + Network::CONNECT_THROTTLE);
     }
@@ -161,7 +170,7 @@ impl Network {
                     Duration::min(Network::CONNECT_BACKOFF_MAX, old_backoff * 2);
 
                     let self_clone = Network::clone(self);
-                    self.timers.set_delay("network-bla".to_string(), move || {
+                    self.timers.reset_delay(NetworkTimer::PeerCountCheck, move || {
                         self_clone.check_peer_count();
                     }, Instant::now() + old_backoff);
                 }
@@ -214,9 +223,9 @@ impl Network {
     }
 
     fn housekeeping(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
-        // TODO
+        // TODO Score connections.
 
-        // recycle
+        // Recycle.
         let peer_count = connections.peer_count();
         if peer_count < Network::PEER_COUNT_RECYCLING_ACTIVE {
             // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
@@ -225,7 +234,7 @@ impl Network {
             scorer.write().recycle_connections(connections_to_recycle, CloseType::PeerConnectionRecycled, "Peer connection recycled");
         }
 
-        // set ability to exchange for new inbound connections
+        // Set ability to exchange for new inbound connections.
         connections.set_allow_inbound_exchange(match scorer.read().lowest_connection_score() {
             Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
             None => false
