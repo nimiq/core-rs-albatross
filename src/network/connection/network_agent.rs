@@ -116,14 +116,14 @@ impl NetworkAgent {
         agent
     }
 
-    fn init_listeners(agent: &Arc<RwLock<NetworkAgent>>) {
+    fn init_listeners(agent: &Arc<RwLock<Self>>) {
         agent.write().listener = Arc::downgrade(agent);
 
         let channel = &agent.read().channel;
         let mut msg_notifier = channel.msg_notifier.write();
         msg_notifier.version.register(weak_passthru_listener(
             Arc::downgrade(agent),
-            |agent: Arc<RwLock<NetworkAgent>>, msg: VersionMessage| agent.write().on_version(msg)));
+            |agent, msg: VersionMessage| agent.write().on_version(msg)));
 
         msg_notifier.ver_ack.register(weak_passthru_listener(
             Arc::downgrade(agent),

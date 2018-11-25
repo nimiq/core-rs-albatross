@@ -26,12 +26,10 @@ lazy_static! {
     static ref env: Environment = VolatileEnvironment::new(10).unwrap();
 }
 
-pub fn main() {}
-/*
 pub fn main() {
     pretty_env_logger::try_init().unwrap_or(());
 
-    let network = NetworkId::Main;
+    let network_id = NetworkId::Main;
 
     let mut network_config = NetworkConfig::new_ws_network_config(
         "test.vcap.me".to_string(),
@@ -39,12 +37,10 @@ pub fn main() {
         None,
     );
     network_config.init_volatile();
-    let network_config = Arc::new(network_config);
 
     let network_time = Arc::new(NetworkTime::new());
-    let blockchain: Arc<Blockchain<'static>> = Arc::new(Blockchain::new(&env, network_time.clone(), network));
-
-    let network = Network::new(blockchain.clone(), network_config.clone(), network_time.clone());
+    let blockchain: Arc<Blockchain<'static>> = Arc::new(Blockchain::new(&env, network_id, network_time.clone()));
+    let network = Network::new(blockchain.clone(), network_config, network_time.clone());
 
     tokio::run(Runner {
         network: network.clone(),
@@ -73,4 +69,3 @@ impl Future for Runner {
         Ok(Async::Ready(()))
     }
 }
-*/
