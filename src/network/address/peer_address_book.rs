@@ -207,7 +207,7 @@ impl PeerAddressBook {
                 address_by_peer_id: HashMap::new(),
                 addresses_by_net_address: HashMap::new(),
             }),
-            seeded: AtomicBool::new(false),
+            seeded: AtomicBool::new(true),
             network_config,
             timers: Timers::new(),
             change_lock: Mutex::new(()),
@@ -220,12 +220,15 @@ impl PeerAddressBook {
             }
         }
 
+        return ret;
+    }
+
+    /// Initialises necessary threads.
+    pub fn initialize(&self) {
         // Setup housekeeping interval.
-        ret.timers.set_interval(PeerAddressBookTimer::Housekeeping, || {
+        self.timers.set_interval(PeerAddressBookTimer::Housekeeping, || {
             // TODO Call housekeeping.
         }, HOUSEKEEPING_INTERVAL);
-
-        return ret;
     }
 
     pub fn query(&self, protocol_mask: ProtocolFlags, service_mask: ServiceFlags, max_addresses: u16) -> Vec<Arc<PeerAddress>> {

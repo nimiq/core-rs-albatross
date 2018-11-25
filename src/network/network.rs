@@ -94,6 +94,11 @@ impl Network {
         network
     }
 
+    pub fn initialize(&self) {
+        self.addresses.initialize();
+        self.connections.initialize();
+    }
+
     pub fn connect(&self) {
         self.auto_connect.store(true, Ordering::Relaxed);
 
@@ -229,7 +234,7 @@ impl Network {
         let peer_count = connections.peer_count();
         if peer_count < Network::PEER_COUNT_RECYCLING_ACTIVE {
             // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
-            let percentage_to_recycle = (peer_count - Network::PEER_COUNT_RECYCLING_ACTIVE) as f32 * (Network::RECYCLING_PERCENTAGE_MAX - Network::RECYCLING_PERCENTAGE_MIN) / (Network::PEER_COUNT_MAX - Network::PEER_COUNT_RECYCLING_ACTIVE) as f32 + Network::RECYCLING_PERCENTAGE_MIN as f32;
+            let percentage_to_recycle = (peer_count as f32 - Network::PEER_COUNT_RECYCLING_ACTIVE as f32) * (Network::RECYCLING_PERCENTAGE_MAX - Network::RECYCLING_PERCENTAGE_MIN) / (Network::PEER_COUNT_MAX - Network::PEER_COUNT_RECYCLING_ACTIVE) as f32 + Network::RECYCLING_PERCENTAGE_MIN as f32;
             let connections_to_recycle = f32::ceil(peer_count as f32 * percentage_to_recycle) as u32;
             scorer.write().recycle_connections(connections_to_recycle, CloseType::PeerConnectionRecycled, "Peer connection recycled");
         }

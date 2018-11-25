@@ -365,10 +365,14 @@ impl ConnectionPool {
                     },
                 }
             });
-            // Start accepting incoming connections.
-            pool.websocket_connector.start();
         }
         pool
+    }
+
+    /// Initialises necessary threads.
+    pub fn initialize(&self) {
+        // Start accepting incoming connections.
+        self.websocket_connector.start();
     }
 
     /// Initiates a outbound connection.

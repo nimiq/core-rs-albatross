@@ -101,6 +101,7 @@ impl Sink for NimiqMessageStream
         self.sending_tag = self.sending_tag.wrapping_add(1);
 
         let msg = item.serialize_to_vec();
+        println!("Outgoing: {}", hex::encode(&msg));
 
         // Send chunks to underlying layer.
         let mut remaining = msg.len();
@@ -234,6 +235,7 @@ impl Stream for NimiqMessageStream
             assert_eq!(remaining_length, 0, "Data missing");
 
             // At this point we already read all the messages we need into the binary_data variable
+            println!("Incoming: {}", hex::encode(&binary_data));
             let nimiq_message: NimiqMessage =
                 Deserialize::deserialize(&mut &binary_data[..]).unwrap();
             self.processing_tag += 1;

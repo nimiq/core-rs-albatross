@@ -4,6 +4,7 @@ extern crate lazy_static;
 extern crate nimiq;
 extern crate parking_lot;
 extern crate tokio;
+extern crate pretty_env_logger;
 
 use std::sync::Arc;
 
@@ -28,6 +29,8 @@ lazy_static! {
 pub fn main() {}
 /*
 pub fn main() {
+    pretty_env_logger::try_init().unwrap_or(());
+
     let network = NetworkId::Main;
 
     let mut network_config = NetworkConfig::new_ws_network_config(
@@ -41,17 +44,19 @@ pub fn main() {
     let network_time = Arc::new(NetworkTime::new());
     let blockchain: Arc<Blockchain<'static>> = Arc::new(Blockchain::new(&env, network_time.clone(), network));
 
+    let network = Network::new(blockchain.clone(), network_config.clone(), network_time.clone());
+
     tokio::run(Runner {
-        network_time,
-        network_config,
-        blockchain,
+        network: network.clone(),
+        ran: false,
     });
+
+    println!("Something from network: {:?}", network.peer_count());
 }
 
 pub struct Runner {
-    network_time: Arc<NetworkTime>,
-    network_config: Arc<NetworkConfig>,
-    blockchain: Arc<Blockchain<'static>>,
+    network: Arc<Network>,
+    ran: bool,
 }
 
 impl Future for Runner {
@@ -59,8 +64,12 @@ impl Future for Runner {
     type Error = ();
 
     fn poll(&mut self) -> Result<Async<<Self as Future>::Item>, <Self as Future>::Error> {
-        let network = Network::new(self.blockchain.clone(), self.network_config.clone(), self.network_time.clone());
-        network.connect();
+        if !self.ran {
+            self.network.initialize();
+            self.network.connect();
+            self.ran = true;
+        }
+
         Ok(Async::Ready(()))
     }
 }

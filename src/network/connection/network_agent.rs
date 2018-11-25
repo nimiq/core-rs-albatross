@@ -208,8 +208,7 @@ impl NetworkAgent {
         assert!(self.peer_challenge_nonce.is_some());
 
         // TODO Handle Err case?
-        println!("PeerId: {:?}", self.network_config.peer_id());
-        self.channel.send(VerAckMessage::new(self.network_config.peer_id(), self.peer_challenge_nonce.as_ref().unwrap(), self.network_config.key_pair())).unwrap();
+        self.channel.send(VerAckMessage::new(&self.channel.address_info.peer_address().unwrap().peer_id, self.peer_challenge_nonce.as_ref().unwrap(), self.network_config.key_pair())).unwrap();
 
         self.verack_sent = true;
     }
