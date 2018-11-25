@@ -515,9 +515,9 @@ impl ConnectionPool {
             let info = state.connections.get(connection_id).expect("Missing connection");
             let peer_channel = PeerChannel::new(info.network_connection().unwrap());
             let weak = self.listener.read().clone();
-            peer_channel.notifier.write().register(move |event: &PeerChannelEvent| {
+            peer_channel.close_notifier.write().register(move |ty: &CloseType| {
                 let arc = upgrade_weak!(weak);
-                arc.on_peer_channel_event(connection_id, event);
+                arc.on_close(connection_id, ty.clone());
             });
 
             if !ConnectionPool::check_connection(&state, connection_id) {

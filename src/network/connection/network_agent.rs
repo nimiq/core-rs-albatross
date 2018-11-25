@@ -20,10 +20,8 @@ use crate::network::message::*;
 use crate::network::message::MessageType;
 use crate::network::message::RejectMessage;
 use crate::network::network_config::NetworkConfig;
-use crate::network::peer_channel::{Agent, PeerChannel, PeerChannelEvent};
-use crate::utils::observer::ListenerHandle;
-use crate::utils::observer::Notifier;
-use crate::utils::observer::weak_listener;
+use crate::network::peer_channel::{PeerChannel, PeerChannelEvent};
+use crate::utils::observer::{Listener, Notifier, weak_listener, weak_passthru_listener};
 use crate::utils::systemtime_to_timestamp;
 use crate::utils::timers::Timers;
 use crate::utils::unique_ptr::UniquePtr;
@@ -52,8 +50,6 @@ pub struct NetworkAgent {
     challenge_nonce: ChallengeNonce,
 
     listener: Weak<RwLock<NetworkAgent>>,
-    listener_handle: Option<ListenerHandle>,
-
     pub notifier: Notifier<'static, NetworkAgentEvent>,
     
     timers: Timers<NetworkAgentTimer>,
@@ -110,16 +106,49 @@ impl NetworkAgent {
             address_request: None,
 
             challenge_nonce: ChallengeNonce::generate(),
-            
+
             listener: Weak::new(),
-            listener_handle: None,
             notifier: Notifier::new(),
             
             timers: Timers::new(),
         }));
-        agent.write().listener = Arc::downgrade(&agent);
-        agent.write().initialize();
+        NetworkAgent::init_listeners(&agent);
         agent
+    }
+
+    fn init_listeners(agent: &Arc<RwLock<NetworkAgent>>) {
+        agent.write().listener = Arc::downgrade(agent);
+
+        let channel = &agent.read().channel;
+        let mut msg_notifier = channel.msg_notifier.write();
+        msg_notifier.version.register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent: Arc<RwLock<NetworkAgent>>, msg: VersionMessage| agent.write().on_version(msg)));
+
+        msg_notifier.ver_ack.register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent, msg: VerAckMessage| agent.write().on_ver_ack(msg)));
+
+        msg_notifier.addr.register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent, msg: AddrMessage| agent.write().on_addr(msg)));
+
+        msg_notifier.get_addr.register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent, msg: GetAddrMessage| agent.write().on_get_addr(msg)));
+
+        msg_notifier.ping.register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent, nonce: u32| agent.write().on_ping(nonce)));
+
+        msg_notifier.pong.register(weak_passthru_listener(
+            Arc::downgrade(agent),
+            |agent, nonce: u32| agent.write().on_pong(nonce)));
+
+        let mut close_notifier = channel.close_notifier.write();
+        close_notifier.register(weak_listener(
+            Arc::downgrade(agent),
+            |agent, _| agent.write().on_close()));
     }
 
     pub fn handshake(&mut self) {
@@ -185,7 +214,7 @@ impl NetworkAgent {
         self.verack_sent = true;
     }
 
-    fn on_version(&mut self, msg: &VersionMessage) {
+    fn on_version(&mut self, msg: VersionMessage) {
         debug!("[VERSION] {:?} {:?}", &msg.peer_address, &msg.head_hash);
 
         let now = SystemTime::now();
@@ -385,7 +414,7 @@ impl NetworkAgent {
         return true;
     }
 
-    fn on_ver_ack(&mut self, msg: &VerAckMessage) {
+    fn on_ver_ack(&mut self, msg: VerAckMessage) {
         debug!("[VERACK] from {:?}", self.channel.address_info.peer_address());
 
         // Make sure this is a valid message in our current state.
@@ -428,7 +457,7 @@ impl NetworkAgent {
         }
     }
 
-    fn on_addr(&mut self, msg: &AddrMessage) {
+    fn on_addr(&mut self, msg: AddrMessage) {
         // Make sure this is a valid message in our current state.
         if !self.can_accept_message(MessageType::Addr) {
             return;
@@ -484,7 +513,7 @@ impl NetworkAgent {
         self.notifier.notify(NetworkAgentEvent::Addr);
     }
 
-    fn on_get_addr(&mut self, msg: &GetAddrMessage) {
+    fn on_get_addr(&mut self, msg: GetAddrMessage) {
         // Make sure this is a valid message in our current state.
         if !self.can_accept_message(MessageType::GetAddr) {
             return;
@@ -524,42 +553,10 @@ impl NetworkAgent {
             self.notifier.notify(NetworkAgentEvent::PingPong(delta));
         }
     }
-}
-
-impl Agent for NetworkAgent {
-    fn initialize(&mut self) {
-        self.listener_handle = Some(self.channel.notifier.write().register(weak_listener(self.listener.clone(), move |arc, event| {
-            match *event {
-                PeerChannelEvent::Message(ref msg) => {
-                    arc.write().on_message(msg);
-                },
-                PeerChannelEvent::Close(_) => {
-                    arc.write().on_close();
-                },
-                PeerChannelEvent::Error(_) => {},
-            }
-        })));
-    }
-
-    fn on_message(&mut self, msg: &Message) {
-        match *msg {
-            Message::Version(ref version_msg) => self.on_version(version_msg),
-            Message::VerAck(ref ver_ack_msg) => self.on_ver_ack(ver_ack_msg),
-            Message::Addr(ref addr_msg) => self.on_addr(addr_msg),
-            Message::GetAddr(ref get_addr_msg) => self.on_get_addr(get_addr_msg),
-            Message::Ping(nonce) => self.on_ping(nonce),
-            Message::Pong(nonce) => self.on_pong(nonce),
-            _ => {},
-        }
-    }
 
     fn on_close(&mut self) {
         // Clear all timers and intervals when the peer disconnects.
         self.timers.clear_all();
-        // Deregister from events.
-        if let Some(listener_handle) = self.listener_handle.take() {
-            self.channel.notifier.write().deregister(listener_handle);
-        }
     }
 }
 

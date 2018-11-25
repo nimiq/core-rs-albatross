@@ -58,6 +58,15 @@ pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
     }
 }
 
+pub fn weak_passthru_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl PassThroughListener<E>
+    where C: Fn(Arc<T>, E) + Send + Sync, T: Send + Sync {
+    move |event: E| {
+        if let Some(arc) = weak_ref.upgrade() {
+            closure(arc, event);
+        }
+    }
+}
+
 pub trait PassThroughListener<E>: Send + Sync {
     fn on_event(&self, event: E);
 }

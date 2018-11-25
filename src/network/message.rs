@@ -16,6 +16,7 @@ use crate::utils::crc::Crc32Computer;
 use crate::utils::services::ServiceFlags;
 use crate::network::ProtocolFlags;
 use crate::utils::version;
+use crate::utils::observer::PassThroughNotifier;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u64)]
@@ -248,6 +249,73 @@ impl Serialize for Message {
     }
 }
 
+pub struct MessageNotifier {
+    pub version: PassThroughNotifier<'static, VersionMessage>,
+    pub ver_ack: PassThroughNotifier<'static, VerAckMessage>,
+    pub inv: PassThroughNotifier<'static, Vec<InvVector>>,
+    pub get_data: PassThroughNotifier<'static, Vec<InvVector>>,
+    pub get_header: PassThroughNotifier<'static, Vec<InvVector>>,
+    pub not_found: PassThroughNotifier<'static, Vec<InvVector>>,
+    pub block: PassThroughNotifier<'static, Block>,
+    pub header: PassThroughNotifier<'static, BlockHeader>,
+    pub tx: PassThroughNotifier<'static, TxMessage>,
+    pub get_blocks: PassThroughNotifier<'static, GetBlocksMessage>,
+    pub mempool: PassThroughNotifier<'static, ()>,
+    pub reject: PassThroughNotifier<'static, RejectMessage>,
+    pub subscribe: PassThroughNotifier<'static, Subscription>,
+    pub addr: PassThroughNotifier<'static, AddrMessage>,
+    pub get_addr: PassThroughNotifier<'static, GetAddrMessage>,
+    pub ping: PassThroughNotifier<'static, /*nonce*/ u32>,
+    pub pong: PassThroughNotifier<'static, /*nonce*/ u32>,
+}
+
+impl MessageNotifier {
+    pub fn new() -> Self {
+        MessageNotifier {
+            version: PassThroughNotifier::new(),
+            ver_ack: PassThroughNotifier::new(),
+            inv: PassThroughNotifier::new(),
+            get_data: PassThroughNotifier::new(),
+            get_header: PassThroughNotifier::new(),
+            not_found: PassThroughNotifier::new(),
+            block: PassThroughNotifier::new(),
+            header: PassThroughNotifier::new(),
+            tx: PassThroughNotifier::new(),
+            get_blocks: PassThroughNotifier::new(),
+            mempool: PassThroughNotifier::new(),
+            reject: PassThroughNotifier::new(),
+            subscribe: PassThroughNotifier::new(),
+            addr: PassThroughNotifier::new(),
+            get_addr: PassThroughNotifier::new(),
+            ping: PassThroughNotifier::new(),
+            pong: PassThroughNotifier::new(),
+        }
+    }
+
+    pub fn notify(&self, msg: Message) {
+        match msg {
+            Message::Version(msg) => self.version.notify(msg),
+            Message::VerAck(msg) => self.ver_ack.notify(msg),
+            Message::Inv(vector) => self.inv.notify(vector),
+            Message::GetData(vector) => self.get_data.notify(vector),
+            Message::GetHeader(vector) => self.get_header.notify(vector),
+            Message::NotFound(vector) => self.not_found.notify(vector),
+            Message::Block(block) => self.block.notify(block),
+            Message::Header(header) => self.header.notify(header),
+            Message::Tx(msg) => self.tx.notify(msg),
+            Message::GetBlocks(msg) => self.get_blocks.notify(msg),
+            Message::Mempool => self.mempool.notify(()),
+            Message::Reject(msg) => self.reject.notify(msg),
+            Message::Subscribe(msg) => self.subscribe.notify(msg),
+            Message::Addr(msg) => self.addr.notify(msg),
+            Message::GetAddr(msg) => self.get_addr.notify(msg),
+            Message::Ping(nonce) => self.ping.notify(nonce),
+            Message::Pong(nonce) => self.pong.notify(nonce),
+        }
+    }
+}
+
+
 create_typed_array!(ChallengeNonce, u8, 32);
 
 impl ChallengeNonce {
@@ -280,7 +348,7 @@ impl VersionMessage {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u32)]
 pub enum InvVectorType {
     Error = 0,
@@ -288,7 +356,7 @@ pub enum InvVectorType {
     Block = 2,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct InvVector {
     ty: InvVectorType,
     hash: Blake2bHash,

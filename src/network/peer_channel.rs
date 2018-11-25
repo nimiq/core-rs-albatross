@@ -17,44 +17,38 @@ use crate::network::websocket::SharedNimiqMessageStream;
 use crate::utils::observer::{Notifier, PassThroughNotifier};
 use crate::network::connection::network_connection::ClosingHelper;
 use crate::utils::unique_ptr::UniquePtr;
-
-pub trait Agent: Send {
-    /// Initialize the protocol.
-    fn initialize(&mut self);
-
-    /// Handle a message.
-    fn on_message(&mut self, msg: &Message);
-
-    /// On disconnect.
-    fn on_close(&mut self);
-}
+use crate::network::message::MessageNotifier;
 
 #[derive(Clone)]
 pub struct PeerChannel {
     stream_notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
-    pub notifier: Arc<RwLock<Notifier<'static, PeerChannelEvent>>>,
+    pub msg_notifier: Arc<RwLock<MessageNotifier>>,
+    pub close_notifier: Arc<RwLock<Notifier<'static, CloseType>>>,
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
 }
 
 impl PeerChannel {
     pub fn new(network_connection: &NetworkConnection) -> Self {
-        let notifier = Arc::new(RwLock::new(Notifier::new()));
-        let closed = Arc::new(AtomicBool::new(false));
-        let address_info = network_connection.address_info();
+        let msg_notifier = Arc::new(RwLock::new(MessageNotifier::new()));
+        let close_notifier = Arc::new(RwLock::new(Notifier::new()));
 
-        let inner_closed = closed.clone();
-        let bubble_notifier = notifier.clone();
+        let msg_notifier1 = msg_notifier.clone();
+        let close_notifier1 = close_notifier.clone();
         network_connection.notifier.write().register(move |e: PeerStreamEvent| {
-            let event = PeerChannelEvent::from(e);
-            bubble_notifier.read().notify(event)
+            match e {
+                PeerStreamEvent::Message(msg) => msg_notifier1.read().notify(msg),
+                PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
+                PeerStreamEvent::Error(_) => unimplemented!()
+            }
         });
 
         PeerChannel {
             stream_notifier: network_connection.notifier.clone(),
-            notifier,
+            msg_notifier,
+            close_notifier,
             peer_sink: network_connection.peer_sink(),
-            address_info,
+            address_info: network_connection.address_info(),
         }
     }
 
@@ -65,12 +59,6 @@ impl PeerChannel {
     }
     pub fn close(&self, ty: CloseType) -> bool {
         self.peer_sink.close(ty)
-    }
-}
-
-impl Drop for PeerChannel {
-    fn drop(&mut self) {
-        self.stream_notifier.write().deregister();
     }
 }
 
