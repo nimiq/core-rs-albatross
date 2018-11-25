@@ -55,6 +55,7 @@ impl Network {
     pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>) -> Arc<Self> {
         let net_config = Arc::new(network_config);
         let addresses = Arc::new(PeerAddressBook::new(net_config.clone()));
+        let connections = ConnectionPool::new(Arc::clone(&addresses), net_config.clone(), blockchain);
         let network = Arc::new(Network {
             network_config: net_config.clone(),
             network_time,
@@ -62,8 +63,8 @@ impl Network {
             backed_off: Arc::new(Atomic::new(false)),
             backoff: Arc::new(Atomic::new(Network::CONNECT_BACKOFF_INITIAL)),
             addresses: Arc::clone(&addresses),
-            connections: ConnectionPool::new(Arc::clone(&addresses), net_config.clone(), blockchain),
-            scorer: Arc::new(RwLock::new(PeerScorer::new(Arc::clone(&addresses)))),
+            connections: Arc::clone(&connections),
+            scorer: Arc::new(RwLock::new(PeerScorer::new(Arc::clone(&net_config), Arc::clone(&addresses), Arc::clone(&&connections)))),
             timers: Arc::new(Timers::new())
         });
 
@@ -164,7 +165,7 @@ impl Network {
             let mut no_fitting_peer_available = peer_addr_opt.is_none();
             if !no_fitting_peer_available && only_good_peers {
                 if let Some(peer_addr) = &peer_addr_opt {
-                    no_fitting_peer_available = !self.scorer.read().is_good_peer(Arc::clone(peer_addr));
+                    no_fitting_peer_available = !self.scorer.read().is_good_peer(peer_addr);
                 }
             }
             if no_fitting_peer_available {

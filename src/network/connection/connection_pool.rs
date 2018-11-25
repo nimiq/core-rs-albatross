@@ -53,7 +53,7 @@ pub struct ConnectionPoolState {
     peer_count_light: usize,
     peer_count_nano: usize,
 
-    peer_count_outbound: usize,
+    pub peer_count_outbound: usize,
     peer_count_full_ws_outbound: usize,
 
     pub connecting_count: usize,
@@ -809,6 +809,10 @@ impl ConnectionPool {
     pub fn count(&self) -> usize {
         let state = self.state.read();
         state.count()
+    }
+
+    pub fn peer_count_outbound(&self) -> usize {
+        self.state.read().peer_count_outbound
     }
 
     pub fn allow_inbound_exchange(&self) -> bool {

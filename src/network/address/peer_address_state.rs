@@ -60,7 +60,7 @@ impl PeerAddressInfo {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub enum PeerAddressState {
     New = 1,
     Established,

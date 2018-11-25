@@ -56,6 +56,42 @@ impl PeerAddressBookState {
         return self.rtc_addresses.iter();
     }
 
+    pub fn address_iter_for_protocol_mask(&self, protocol_mask: ProtocolFlags) -> QueryIterator {
+        if protocol_mask == ProtocolFlags::WSS {
+            return QueryIterator::Iter(self.wss_address_iter());
+        } else if protocol_mask == ProtocolFlags::WS {
+            return QueryIterator::Iter(self.ws_address_iter());
+        } else if protocol_mask == ProtocolFlags::WS | ProtocolFlags::WSS {
+            return QueryIterator::Alternate(Alternate::new(self.ws_address_iter(), self.wss_address_iter()));
+        } else if protocol_mask == ProtocolFlags::RTC {
+            return QueryIterator::Iter(self.rtc_address_iter());
+        } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WS {
+            return QueryIterator::Alternate(Alternate::new(self.rtc_address_iter(), self.ws_address_iter()));
+        } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WSS {
+            return QueryIterator::Alternate(Alternate::new(self.rtc_address_iter(), self.wss_address_iter()));
+        } else {
+            return QueryIterator::Keys(self.address_iter());
+        }
+    }
+
+    pub fn known_addresses_nr_for_protocol_mask(&self, protocol_mask: ProtocolFlags) -> usize {
+        if protocol_mask == ProtocolFlags::WSS {
+            return self.known_wss_addresses_count();
+        } else if protocol_mask == ProtocolFlags::WS {
+            return self.known_ws_addresses_count();
+        } else if protocol_mask == ProtocolFlags::WS | ProtocolFlags::WSS {
+            return self.known_ws_addresses_count() + self.known_wss_addresses_count();
+        } else if protocol_mask == ProtocolFlags::RTC {
+            return self.known_rtc_addresses_count();
+        } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WS {
+            return self.known_rtc_addresses_count() + self.known_ws_addresses_count();
+        } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WSS {
+            return self.known_rtc_addresses_count() + self.known_wss_addresses_count();
+        } else {
+            return self.known_addresses_count();
+        }
+    }
+
     pub fn get_info(&self, peer_address: &Arc<PeerAddress>) -> Option<&PeerAddressInfo> {
         return self.info_by_address.get(peer_address);
     }
@@ -234,32 +270,10 @@ impl PeerAddressBook {
     pub fn query(&self, protocol_mask: ProtocolFlags, service_mask: ServiceFlags, max_addresses: u16) -> Vec<Arc<PeerAddress>> {
         let max_addresses = max_addresses as usize; // Internally, we need a usize.
 
-        let iterator;
-        let num_addresses;
-
         let state = self.state.read();
-        if protocol_mask == ProtocolFlags::WSS {
-            num_addresses = state.known_wss_addresses_count();
-            iterator = QueryIterator::Iter(state.wss_address_iter());
-        } else if protocol_mask == ProtocolFlags::WS {
-            num_addresses = state.known_ws_addresses_count();
-            iterator = QueryIterator::Iter(state.ws_address_iter());
-        } else if protocol_mask == ProtocolFlags::WS | ProtocolFlags::WSS {
-            num_addresses = state.known_ws_addresses_count() + state.known_wss_addresses_count();
-            iterator = QueryIterator::Alternate(Alternate::new(state.ws_address_iter(), state.wss_address_iter()));
-        } else if protocol_mask == ProtocolFlags::RTC {
-            num_addresses = state.known_rtc_addresses_count();
-            iterator = QueryIterator::Iter(state.rtc_address_iter());
-        } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WS {
-            num_addresses = state.known_rtc_addresses_count() + state.known_ws_addresses_count();
-            iterator = QueryIterator::Alternate(Alternate::new(state.rtc_address_iter(), state.ws_address_iter()));
-        } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WSS {
-            num_addresses = state.known_rtc_addresses_count() + state.known_wss_addresses_count();
-            iterator = QueryIterator::Alternate(Alternate::new(state.rtc_address_iter(), state.wss_address_iter()));
-        } else {
-            num_addresses = state.known_addresses_count();
-            iterator = QueryIterator::Keys(state.address_iter());
-        }
+
+        let iterator = state.address_iter_for_protocol_mask(protocol_mask);
+        let num_addresses = state.known_addresses_nr_for_protocol_mask(protocol_mask);
 
         let mut start_index = 0;
         // Pick a random start index if we have a lot of addresses.
@@ -611,7 +625,7 @@ impl PeerAddressBook {
 }
 
 #[derive(Clone)]
-enum QueryIterator<'a> {
+pub enum QueryIterator<'a> {
     Keys(Keys<'a, Arc<PeerAddress>, PeerAddressInfo>),
     Iter(Iter<'a, Arc<PeerAddress>>),
     Alternate(Alternate<Iter<'a, Arc<PeerAddress>>, Iter<'a, Arc<PeerAddress>>>),
