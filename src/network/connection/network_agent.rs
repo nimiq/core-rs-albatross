@@ -273,9 +273,8 @@ impl NetworkAgent {
 
         // The client might not send its netAddress. Set it from our address database if we have it.
         if peer_address.net_address.is_pseudo() {
-            // TODO Very complicated API call here.
             let addresses = self.addresses.state();
-            let stored_address = addresses.get_info(&Arc::new(peer_address.clone()));
+            let stored_address = addresses.get_info(&peer_address);
             if let Some(peer_address_info) = stored_address {
                 if !peer_address_info.peer_address.net_address.is_pseudo() {
                     peer_address.net_address = peer_address_info.peer_address.net_address.clone();

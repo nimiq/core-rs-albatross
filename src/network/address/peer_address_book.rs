@@ -1,8 +1,10 @@
+use std::borrow::Borrow;
 use std::cmp;
 use std::collections::hash_map::Keys;
 use std::collections::hash_set::Iter;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::hash::Hash;
 use std::iter::Iterator;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -92,7 +94,8 @@ impl PeerAddressBookState {
         }
     }
 
-    pub fn get_info(&self, peer_address: &Arc<PeerAddress>) -> Option<&PeerAddressInfo> {
+    pub fn get_info<P>(&self, peer_address: &P) -> Option<&PeerAddressInfo>
+        where Arc<PeerAddress>: Borrow<P>, P: Hash + Eq {
         return self.info_by_address.get(peer_address);
     }
 
