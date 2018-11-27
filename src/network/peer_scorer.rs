@@ -59,6 +59,9 @@ impl PeerScorer {
         if candidates.len() == 0 {
             candidates = self.find_candidates(1000, true);
         }
+        if candidates.len() == 0 {
+            return None;
+        }
         candidates.sort_by(|a, b| { a.1.cmp(&b.1) });
         let mut randrng: OsRng = OsRng::new().unwrap();
         let rand_ind = randrng.gen_range(0, usize::min(PeerScorer::PICK_SELECTION_SIZE, candidates.len()));
@@ -74,10 +77,10 @@ impl PeerScorer {
         let num_addresses = addresses_state.known_addresses_nr_for_protocol_mask(self.network_config.protocol_mask().clone());
 
         let mut start_index = 0;
-        let mut end_index = 0;
+        let mut end_index = num_addresses;
         if num_addresses > num_candidates {
             let mut randrng: OsRng = OsRng::new().unwrap();
-            start_index = randrng.gen_range(0, num_candidates);
+            start_index = randrng.gen_range(0, num_addresses);
             end_index = (start_index + num_candidates) % num_addresses;
         }
         let overflow = start_index > end_index;
@@ -148,7 +151,7 @@ impl PeerScorer {
     }
 
     pub fn is_good_peer_set(&self) -> bool {
-        self.needs_good_peers() && self.needs_more_peers()
+        !self.needs_good_peers() && !self.needs_more_peers()
     }
 
     pub fn needs_good_peers(&self) -> bool {
