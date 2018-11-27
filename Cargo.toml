@@ -53,4 +53,5 @@ pretty_env_logger = "0.2.3"
 members = [
     "libargon2-sys",
     "beserial",
+    "extended-collections",
 ]

@@ -1,0 +1,10 @@
+[package]
+name = "extended-collections"
+version = "0.1.0"
+authors = ["Pascal B <git@paberr.net>"]
+edition = "2018"
+
+[dependencies]
+
+[dev-dependencies]
+rand = "0.4.2"
