@@ -116,10 +116,10 @@ impl PeerAddress {
     pub fn as_uri(&self) -> String {
         let peer_id: String = String::from(::hex::encode(&self.peer_id.0));
         match self.ty {
-            PeerAddressType::Dumb => format!("dumb:///{}", peer_id),
-            PeerAddressType::Ws(ref host, ref port) => format!("ws:///{}:{}/{}", host, port, peer_id),
-            PeerAddressType::Wss(ref host, ref port) => format!("wss:///{}:{}/{}", host, port, peer_id),
-            PeerAddressType::Rtc => format!("rtc:///{}", peer_id)
+            PeerAddressType::Dumb => format!("dumb://{}", peer_id),
+            PeerAddressType::Ws(ref host, ref port) => format!("ws://{}:{}/{}", host, port, peer_id),
+            PeerAddressType::Wss(ref host, ref port) => format!("wss://{}:{}/{}", host, port, peer_id),
+            PeerAddressType::Rtc => format!("rtc://{}", peer_id)
         }
     }
 

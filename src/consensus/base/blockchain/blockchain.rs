@@ -481,6 +481,13 @@ impl<'env> Blockchain<'env> {
         return Target::from(n_bits);
     }
 
+    pub fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
+        match self.chain_store.get_chain_info(hash, false, None) {
+            Some(chain_info) => include_forks || chain_info.on_main_chain,
+            None => false
+        }
+    }
+
     pub fn head_hash(&self) -> Blake2bHash {
         self.state.read().head_hash.clone()
     }

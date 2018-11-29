@@ -36,6 +36,7 @@ extern crate tungstenite;
 extern crate num_traits;
 extern crate num_bigint;
 extern crate bigdecimal;
+extern crate weak_table;
 
 #[macro_use]
 pub mod macros;

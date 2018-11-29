@@ -356,10 +356,15 @@ pub enum InvVectorType {
     Block = 2,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct InvVector {
-    ty: InvVectorType,
-    hash: Blake2bHash,
+    pub ty: InvVectorType,
+    pub hash: Blake2bHash,
+}
+impl InvVector {
+    pub fn new(ty: InvVectorType, hash: Blake2bHash) -> Self {
+        InvVector { ty, hash }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

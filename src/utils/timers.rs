@@ -45,10 +45,10 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     /// The key must be unique to all delays and the caller is expected to clear the timeout
     /// (even after successful completion) if the key is going to be used multiple times
     /// or to prevent memory leaks.
-    pub fn set_delay<F: Send + 'static>(&self, key: K, func: F, deadline: Instant)
+    pub fn set_delay<F: Send + 'static>(&self, key: K, func: F, delay: Duration)
         where F: FnOnce() {
         let mut delays = self.delays.lock();
-        self.set_delay_guarded(key, func, deadline, &mut delays);
+        self.set_delay_guarded(key, func, delay, &mut delays);
     }
 
     /// Aborts the delayed closure if still being scheduled, and cleans up the internal handle.
@@ -58,11 +58,11 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     }
 
     /// Aborts the delayed closure if present and schedules a new one.
-    pub fn reset_delay<F: Send + 'static>(&self, key: K, func: F, deadline: Instant)
+    pub fn reset_delay<F: Send + 'static>(&self, key: K, func: F, delay: Duration)
         where F: FnOnce() {
         let mut delays = self.delays.lock();
         self.clear_timer_guarded(&key, &mut delays);
-        self.set_delay_guarded(key, func, deadline, &mut delays);
+        self.set_delay_guarded(key, func, delay, &mut delays);
     }
 
     /// Checks whether a delayed closure exists under this key.
@@ -101,14 +101,14 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     }
 
     // Internal functions
-    fn set_delay_guarded<F: Send + 'static>(&self, key: K, func: F, deadline: Instant, delays: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>)
+    fn set_delay_guarded<F: Send + 'static>(&self, key: K, func: F, delay: Duration, delays: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>)
         where F: FnOnce() {
         if delays.contains_key(&key) {
             error!("Duplicate delay for key {:?}", &key);
             return;
         }
 
-        let task = Delay::new(deadline)
+        let task = Delay::new(Instant::now() + delay)
             .and_then(move |_| {
                 func();
                 Ok(())

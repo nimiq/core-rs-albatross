@@ -173,7 +173,7 @@ impl NetworkAgent {
             self.timers.reset_delay(NetworkAgentTimer::Handshake, move || {
                 let arc = upgrade_weak!(weak);
                 arc.write().handshake();
-            }, Instant::now() + NetworkAgent::VERSION_RETRY_DELAY);
+            }, NetworkAgent::VERSION_RETRY_DELAY);
             return;
         }
 
@@ -189,7 +189,7 @@ impl NetworkAgent {
                 let agent = arc.read();
                 agent.timers.clear_delay(&NetworkAgentTimer::Version);
                 agent.channel.close(CloseType::VersionTimeout);
-            }, Instant::now() + NetworkAgent::HANDSHAKE_TIMEOUT);
+            }, NetworkAgent::HANDSHAKE_TIMEOUT);
         } else if self.peer_address_verified {
             self.send_ver_ack();
         }
@@ -200,7 +200,7 @@ impl NetworkAgent {
             let agent = arc.read();
             agent.timers.clear_delay(&NetworkAgentTimer::VerAck);
             agent.channel.close(CloseType::VerackTimeout);
-        }, Instant::now() + NetworkAgent::HANDSHAKE_TIMEOUT);
+        }, NetworkAgent::HANDSHAKE_TIMEOUT);
     }
 
     fn send_ver_ack(&mut self) {
@@ -394,7 +394,7 @@ impl NetworkAgent {
                 agent.timers.clear_delay(&NetworkAgentTimer::Ping(nonce));
                 agent.ping_times.remove(&nonce);
                 agent.channel.close(CloseType::PingTimeout);
-            }, Instant::now() + NetworkAgent::PING_TIMEOUT);
+            }, NetworkAgent::PING_TIMEOUT);
         }
     }
 

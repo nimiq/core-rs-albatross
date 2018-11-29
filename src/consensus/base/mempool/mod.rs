@@ -210,6 +210,10 @@ impl<'env> Mempool<'env> {
         return ReturnCode::Accepted;
     }
 
+    pub fn contains(&self, hash: &Blake2bHash) -> bool {
+        self.state.read().transactions_by_hash.contains_key(hash)
+    }
+
     pub fn get_transaction(&self, hash: &Blake2bHash) -> Option<Arc<Transaction>> {
         self.state.read().transactions_by_hash.get(hash).map(|arc| arc.clone())
     }

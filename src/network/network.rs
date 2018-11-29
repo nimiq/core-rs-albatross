@@ -135,7 +135,7 @@ impl Network {
         let network_clone2 = Arc::clone(&network);
         network.timers.set_delay(NetworkTimer::PeersChanged, move || {
             network_clone2.check_peer_count();
-        }, Instant::now() + Network::CONNECT_THROTTLE);
+        }, Network::CONNECT_THROTTLE);
     }
 
     fn on_recycling_request(network: Arc<Network>) {
@@ -152,7 +152,7 @@ impl Network {
         let network_clone2 = Arc::clone(&network);
         network.timers.set_delay(NetworkTimer::ConnectError, move || {
             network_clone2.check_peer_count();
-        }, Instant::now() + Network::CONNECT_THROTTLE);
+        }, Network::CONNECT_THROTTLE);
     }
 
     fn check_peer_count(&self) {
@@ -178,7 +178,7 @@ impl Network {
                     let self_clone = Network::clone(self);
                     self.timers.reset_delay(NetworkTimer::PeerCountCheck, move || {
                         self_clone.check_peer_count();
-                    }, Instant::now() + old_backoff);
+                    }, old_backoff);
                 }
 
                 if self.connections.count() == 0 {
