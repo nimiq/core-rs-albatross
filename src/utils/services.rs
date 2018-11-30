@@ -37,4 +37,11 @@ impl Services {
             accepted
         }
     }
+
+    pub fn default() -> Self {
+        Services {
+            provided: ServiceFlags::FULL,
+            accepted: ServiceFlags::FULL,
+        }
+    }
 }
