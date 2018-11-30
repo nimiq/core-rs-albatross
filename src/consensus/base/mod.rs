@@ -7,10 +7,13 @@ pub mod mempool;
 pub mod primitive;
 pub mod transaction;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Subscription {
+
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
 pub enum SubscriptionType {
     None = 0,
     Any = 1,

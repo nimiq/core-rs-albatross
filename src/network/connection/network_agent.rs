@@ -161,7 +161,11 @@ impl NetworkAgent {
         // Firefox sends the data-channel-open event too early, so sending the version message might fail.
         // Try again in this case.
         let network_info = get_network_info(self.blockchain.network_id).unwrap();
-        let msg = VersionMessage::new(self.network_config.peer_address(), self.blockchain.head_hash(), network_info.genesis_hash.clone(), self.challenge_nonce.clone());
+        let msg = VersionMessage::new(
+            self.network_config.peer_address(),
+            self.blockchain.head_hash(),
+            network_info.genesis_hash.clone(),
+            self.challenge_nonce.clone());
         if self.channel.send(msg).is_err() {
             self.version_attempts += 1;
             if self.version_attempts >= NetworkAgent::VERSION_ATTEMPTS_MAX || self.channel.closed() {
@@ -208,13 +212,17 @@ impl NetworkAgent {
         assert!(self.peer_challenge_nonce.is_some());
 
         // TODO Handle Err case?
-        self.channel.send(VerAckMessage::new(&self.channel.address_info.peer_address().unwrap().peer_id, self.peer_challenge_nonce.as_ref().unwrap(), self.network_config.key_pair())).unwrap();
+        let msg = VerAckMessage::new(
+            &self.channel.address_info.peer_address().unwrap().peer_id,
+            self.peer_challenge_nonce.as_ref().unwrap(),
+            self.network_config.key_pair());
+        self.channel.send(msg).unwrap();
 
         self.verack_sent = true;
     }
 
     fn on_version(&mut self, msg: VersionMessage) {
-        debug!("[VERSION] {:?} {:?}", &msg.peer_address, &msg.head_hash);
+        debug!("[VERSION] {} {}", &msg.peer_address, &msg.head_hash);
 
         let now = SystemTime::now();
 
@@ -225,7 +233,7 @@ impl NetworkAgent {
 
         // Ignore duplicate version messages.
         if self.version_received {
-            debug!("Ignoring duplicate version message from {:?}", self.channel.address_info.peer_address());
+            debug!("Ignoring duplicate version message from {}", self.channel.address_info.peer_address().unwrap());
             return;
         }
 
@@ -322,98 +330,9 @@ impl NetworkAgent {
         }
     }
 
-    fn finish_handshake(&mut self) {
-        // Setup regular connectivity check.
-        // TODO randomize interval?
-        let weak = self.listener.clone();
-        self.timers.set_interval(NetworkAgentTimer::Connectivity, move || {
-            let arc = upgrade_weak!(weak);
-            let mut agent = arc.write();
-            agent.check_connectivity();
-        }, NetworkAgent::CONNECTIVITY_CHECK_INTERVAL);
-
-        // Regularly announce our address.
-        let weak = self.listener.clone();
-        self.timers.set_interval(NetworkAgentTimer::AnnounceAddr, move || {
-            let arc = upgrade_weak!(weak);
-            let agent = arc.read();
-            agent.channel.send(AddrMessage::new(vec![agent.network_config.peer_address()]));
-        }, NetworkAgent::ANNOUNCE_ADDR_INTERVAL);
-
-        // Tell listeners that the handshake with this peer succeeded.
-        self.notifier.notify(NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
-
-        // Request new network addresses from the peer.
-        self.request_addresses(None);
-    }
-
-    fn request_addresses(&mut self, max_results: Option<u16>) {
-        assert!(self.peer.is_some());
-        debug!("Requesting addresses from {:?}", self.peer.as_ref().unwrap());
-
-        let max_results = max_results.unwrap_or(NetworkAgent::NUM_ADDR_PER_REQUEST);
-
-        self.address_request = Some(AddressRequest {
-           max_results
-        });
-
-        // Request addresses from peer.
-        self.channel.send(GetAddrMessage::new(
-            self.network_config.protocol_mask(),
-            self.network_config.services().accepted,
-            max_results));
-
-        // We don't use a timeout here. The peer will not respond with an addr message if
-        // it doesn't have any new addresses.
-    }
-
-    fn check_connectivity(&mut self) {
-        // Generate random nonce.
-        let mut cspring: OsRng = OsRng::new().unwrap();
-        let nonce = cspring.next_u32();
-
-        // Send ping message to peer.
-        // If sending the ping message fails, assume the connection has died.
-        if self.channel.send(Message::Ping(nonce)).is_err() {
-            self.channel.close(CloseType::SendingPingMessageFailed);
-            return;
-        }
-
-        // Save ping timestamp to detect the speed of the connection.
-        let start_time = Instant::now();
-        self.ping_times.insert(nonce, start_time.clone());
-
-        // Expect the peer to answer with a pong message if we haven't heard anything from it
-        // within the last CONNECTIVITY_CHECK_INTERVAL. Drop the peer otherwise.
-        // TODO last_message_received missing
-        if false {
-            let weak = self.listener.clone();
-            self.timers.set_delay(NetworkAgentTimer::Ping(nonce), move || {
-                let arc = upgrade_weak!(weak);
-                let mut agent = arc.write();
-                agent.timers.clear_delay(&NetworkAgentTimer::Ping(nonce));
-                agent.ping_times.remove(&nonce);
-                agent.channel.close(CloseType::PingTimeout);
-            }, NetworkAgent::PING_TIMEOUT);
-        }
-    }
-
-    fn can_accept_message(&self, ty: MessageType) -> bool {
-        // The first message must be the version message.
-        if !self.version_received && ty != MessageType::Version {
-            warn!("Discarding {:?} message from {:?} / {:?} - no version message received previously", ty, self.channel.address_info.peer_address(), self.channel.address_info.net_address());
-            return false;
-        }
-        if self.version_received && !self.verack_received && ty != MessageType::VerAck {
-            warn!("Discarding {:?} message from {:?} / {:?} - no verack message received previously", ty, self.channel.address_info.peer_address(), self.channel.address_info.net_address());
-            return false;
-        }
-
-        return true;
-    }
-
     fn on_ver_ack(&mut self, msg: VerAckMessage) {
-        debug!("[VERACK] from {:?}", self.channel.address_info.peer_address());
+        debug!("[VERACK] from {}", self.channel.address_info.peer_address()
+            .map_or("<unknown>".to_string(), |p| p.to_string()));
 
         // Make sure this is a valid message in our current state.
         if !self.can_accept_message(MessageType::VerAck) {
@@ -422,7 +341,8 @@ impl NetworkAgent {
 
         // Ignore duplicate VerAck messages.
         if self.verack_received {
-            debug!("Ignoring duplicate VerAck message from {:?}", self.channel.address_info.peer_address());
+            debug!("Ignoring duplicate VerAck message from {}", self.channel.address_info.peer_address()
+                .map_or("<unknown>".to_string(), |p| p.to_string()));
             return;
         }
 
@@ -455,6 +375,53 @@ impl NetworkAgent {
         }
     }
 
+    fn finish_handshake(&mut self) {
+        // Setup regular connectivity check.
+        // TODO randomize interval?
+        let weak = self.listener.clone();
+        self.timers.set_interval(NetworkAgentTimer::Connectivity, move || {
+            let arc = upgrade_weak!(weak);
+            let mut agent = arc.write();
+            agent.check_connectivity();
+        }, NetworkAgent::CONNECTIVITY_CHECK_INTERVAL);
+
+        // Regularly announce our address.
+        let weak = self.listener.clone();
+        self.timers.set_interval(NetworkAgentTimer::AnnounceAddr, move || {
+            let arc = upgrade_weak!(weak);
+            let agent = arc.read();
+            agent.channel.send(AddrMessage::new(vec![agent.network_config.peer_address()]));
+        }, NetworkAgent::ANNOUNCE_ADDR_INTERVAL);
+
+        // Tell listeners that the handshake with this peer succeeded.
+        self.notifier.notify(NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
+
+        // Request new network addresses from the peer.
+        self.request_addresses(None);
+    }
+
+    fn request_addresses(&mut self, max_results: Option<u16>) {
+        assert!(self.peer.is_some());
+        debug!("Requesting addresses from {}", self.peer.as_ref().unwrap());
+
+        let max_results = max_results.unwrap_or(NetworkAgent::NUM_ADDR_PER_REQUEST);
+
+        self.address_request = Some(AddressRequest {
+           max_results
+        });
+
+        // Request addresses from peer.
+        let msg = GetAddrMessage::new(
+            self.network_config.protocol_mask(),
+            self.network_config.services().accepted,
+            max_results);
+        println!("{:?}", msg);
+        self.channel.send(msg);
+
+        // We don't use a timeout here. The peer will not respond with an addr message if
+        // it doesn't have any new addresses.
+    }
+
     fn on_addr(&mut self, msg: AddrMessage) {
         // Make sure this is a valid message in our current state.
         if !self.can_accept_message(MessageType::Addr) {
@@ -479,7 +446,7 @@ impl NetworkAgent {
             return;
         }
 
-        debug!("[ADDR] {} addresses from {:?}", msg.addresses.len(), peer_address);
+        debug!("[ADDR] {} addresses from {}", msg.addresses.len(), peer_address);
 
         // XXX Discard any addresses beyond the ones we requested
         // and check the addresses the peer sent to us.
@@ -531,6 +498,37 @@ impl NetworkAgent {
         self.channel.send(AddrMessage::new(addresses));
     }
 
+    fn check_connectivity(&mut self) {
+        // Generate random nonce.
+        let mut cspring: OsRng = OsRng::new().unwrap();
+        let nonce = cspring.next_u32();
+
+        // Send ping message to peer.
+        // If sending the ping message fails, assume the connection has died.
+        if self.channel.send(Message::Ping(nonce)).is_err() {
+            self.channel.close(CloseType::SendingPingMessageFailed);
+            return;
+        }
+
+        // Save ping timestamp to detect the speed of the connection.
+        let start_time = Instant::now();
+        self.ping_times.insert(nonce, start_time.clone());
+
+        // Expect the peer to answer with a pong message if we haven't heard anything from it
+        // within the last CONNECTIVITY_CHECK_INTERVAL. Drop the peer otherwise.
+        // TODO last_message_received missing
+        if false {
+            let weak = self.listener.clone();
+            self.timers.set_delay(NetworkAgentTimer::Ping(nonce), move || {
+                let arc = upgrade_weak!(weak);
+                let mut agent = arc.write();
+                agent.timers.clear_delay(&NetworkAgentTimer::Ping(nonce));
+                agent.ping_times.remove(&nonce);
+                agent.channel.close(CloseType::PingTimeout);
+            }, NetworkAgent::PING_TIMEOUT);
+        }
+    }
+
     fn on_ping(&self, nonce: u32) {
         // Make sure this is a valid message in our current state.
         if !self.can_accept_message(MessageType::Ping) {
@@ -555,6 +553,20 @@ impl NetworkAgent {
     fn on_close(&mut self) {
         // Clear all timers and intervals when the peer disconnects.
         self.timers.clear_all();
+    }
+
+    fn can_accept_message(&self, ty: MessageType) -> bool {
+        // The first message must be the version message.
+        if !self.version_received && ty != MessageType::Version {
+            warn!("Discarding {:?} message from {:?} / {:?} - no version message received previously", ty, self.channel.address_info.peer_address(), self.channel.address_info.net_address());
+            return false;
+        }
+        if self.version_received && !self.verack_received && ty != MessageType::VerAck {
+            warn!("Discarding {:?} message from {:?} / {:?} - no verack message received previously", ty, self.channel.address_info.peer_address(), self.channel.address_info.net_address());
+            return false;
+        }
+
+        return true;
     }
 }
 

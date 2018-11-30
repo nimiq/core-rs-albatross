@@ -61,7 +61,7 @@ pub enum MessageType {
     VerAck = 90,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Message {
     Version(VersionMessage),
     Inv(Vec<InvVector>),
@@ -82,6 +82,9 @@ pub enum Message {
     Pong(/*nonce*/ u32),
 
     VerAck(VerAckMessage),
+
+    GetHead,
+    Head(BlockHeader),
 }
 
 impl Message {
@@ -104,6 +107,8 @@ impl Message {
             Message::Ping(_) => MessageType::Ping,
             Message::Pong(_) => MessageType::Pong,
             Message::VerAck(_) => MessageType::VerAck,
+            Message::GetHead => MessageType::GetHead,
+            Message::Head(_) => MessageType::Head,
         }
     }
 }
@@ -149,6 +154,8 @@ impl Deserialize for Message {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong magic byte").into());
         }
         let ty: MessageType = Deserialize::deserialize(&mut crc32_reader)?;
+        println!("Message type: {:?}", ty);
+
         let length: u32 = Deserialize::deserialize(&mut crc32_reader)?;
         let checksum: u32 = Deserialize::deserialize(&mut crc32_reader)?;
 
@@ -170,7 +177,13 @@ impl Deserialize for Message {
             MessageType::Ping => Message::Ping(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Pong => Message::Pong(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
-            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into()) // FIXME remove default case
+            MessageType::GetHead => Message::GetHead,
+            MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
+            _ => {
+
+                error!("Unsupported message type: {:?}", ty);
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into())
+            } // FIXME remove default case
         };
 
         let crc_comp = crc32_reader.crc32.result();
@@ -209,7 +222,9 @@ impl Serialize for Message {
             Message::GetAddr(get_addr_message) => get_addr_message.serialize(&mut v)?,
             Message::Ping(nonce) => nonce.serialize(&mut v)?,
             Message::Pong(nonce) => nonce.serialize(&mut v)?,
-            Message::VerAck(verack_message) => verack_message.serialize(&mut v)?
+            Message::VerAck(verack_message) => verack_message.serialize(&mut v)?,
+            Message::GetHead => 0,
+            Message::Head(header) => header.serialize(&mut v)?,
         };
 
         // write checksum to placeholder
@@ -243,7 +258,9 @@ impl Serialize for Message {
             Message::GetAddr(get_addr_message) => get_addr_message.serialized_size(),
             Message::Ping(nonce) => nonce.serialized_size(),
             Message::Pong(nonce) => nonce.serialized_size(),
-            Message::VerAck(verack_message) => verack_message.serialized_size()
+            Message::VerAck(verack_message) => verack_message.serialized_size(),
+            Message::GetHead => 0,
+            Message::Head(header) => header.serialized_size(),
         };
         return size;
     }
@@ -267,6 +284,8 @@ pub struct MessageNotifier {
     pub get_addr: PassThroughNotifier<'static, GetAddrMessage>,
     pub ping: PassThroughNotifier<'static, /*nonce*/ u32>,
     pub pong: PassThroughNotifier<'static, /*nonce*/ u32>,
+    pub get_head: PassThroughNotifier<'static, ()>,
+    pub head: PassThroughNotifier<'static, BlockHeader>,
 }
 
 impl MessageNotifier {
@@ -289,6 +308,8 @@ impl MessageNotifier {
             get_addr: PassThroughNotifier::new(),
             ping: PassThroughNotifier::new(),
             pong: PassThroughNotifier::new(),
+            get_head: PassThroughNotifier::new(),
+            head: PassThroughNotifier::new(),
         }
     }
 
@@ -311,6 +332,8 @@ impl MessageNotifier {
             Message::GetAddr(msg) => self.get_addr.notify(msg),
             Message::Ping(nonce) => self.ping.notify(nonce),
             Message::Pong(nonce) => self.pong.notify(nonce),
+            Message::GetHead => self.get_head.notify(()),
+            Message::Head(header) => self.head.notify(header),
         }
     }
 }
@@ -327,7 +350,7 @@ impl ChallengeNonce {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VersionMessage {
     pub version: u32,
     pub peer_address: PeerAddress,
@@ -367,7 +390,7 @@ impl InvVector {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxMessage {
     transaction: Transaction,
     accounts_proof: Option<AccountsProof>,
@@ -380,7 +403,7 @@ pub enum GetBlocksDirection {
     Backward = 2,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetBlocksMessage {
     #[beserial(len_type(u16))]
     locators: Vec<Blake2bHash>,
@@ -399,7 +422,7 @@ pub enum RejectMessageCode {
     InsufficientFee = 0x42,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RejectMessage {
     message_type: MessageType,
     code: RejectMessageCode,
@@ -420,7 +443,7 @@ impl RejectMessage {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AddrMessage {
     #[beserial(len_type(u16))]
     pub addresses: Vec<PeerAddress>
@@ -434,13 +457,13 @@ impl AddrMessage {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsProofMessage {
     block_hash: Blake2bHash,
     accounts_proof: Option<AccountsProof>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GetAddrMessage {
     pub protocol_mask: ProtocolFlags,
     pub service_mask: ServiceFlags,
@@ -488,7 +511,7 @@ impl Deserialize for GetAddrMessage {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VerAckMessage {
     pub public_key: PublicKey,
     pub signature: Signature,

@@ -6,7 +6,7 @@ use tokio::{
     net::TcpStream,
 };
 
-use beserial::{Deserialize, Serialize};
+use beserial::{Deserialize, Serialize, SerializingError};
 use byteorder::{BigEndian, ByteOrder};
 
 use tungstenite::{
@@ -45,6 +45,7 @@ impl IntoData for WebSocketMessage {
 pub enum NimiqMessageStreamError {
     WebSocketError(WsError),
     TagMismatch,
+    ParseError(SerializingError),
 }
 
 const MAX_CHUNK_SIZE: usize = 1024 * 16; // 16 kb
@@ -101,7 +102,7 @@ impl Sink for NimiqMessageStream
         self.sending_tag = self.sending_tag.wrapping_add(1);
 
         let msg = item.serialize_to_vec();
-        println!("Outgoing: {}", hex::encode(&msg));
+        //println!("Outgoing: {}", hex::encode(&msg));
 
         // Send chunks to underlying layer.
         let mut remaining = msg.len();
@@ -179,7 +180,7 @@ impl Stream for NimiqMessageStream
         // If there are no web socket messages in the buffer, signal that we don't have anything yet
         // (i.e. we would need to block waiting, which is a no no in an async function)
         if self.buf.len() == 0 {
-            println!("There are no ws msgs yet, poll later");
+            //println!("There are no ws msgs yet, poll later");
             return Ok(Async::NotReady);
         }
 
@@ -189,9 +190,8 @@ impl Stream for NimiqMessageStream
         let mut ws_message = self.buf.remove(0).into_data();
 
         // Make sure the tag is the one we expect
-        let foo = ws_message.remove(0);
-        println!("tag: {}, foo.tag: {}", self.processing_tag, foo);
-        if self.processing_tag != foo {
+        let tag = ws_message.remove(0);
+        if self.processing_tag != tag {
             println!("Tag mismatch!");
             return Err(NimiqMessageStreamError::TagMismatch);
         }
@@ -235,13 +235,16 @@ impl Stream for NimiqMessageStream
             assert_eq!(remaining_length, 0, "Data missing");
 
             // At this point we already read all the messages we need into the binary_data variable
-            println!("Incoming: {}", hex::encode(&binary_data));
-            let nimiq_message: NimiqMessage =
-                Deserialize::deserialize(&mut &binary_data[..]).unwrap();
+            let nimiq_message = Deserialize::deserialize(&mut &binary_data[..]);
+            if let Err(e) = nimiq_message {
+                error!("Failed to parse message: {:?}", e);
+                return Err(NimiqMessageStreamError::ParseError(e));
+            }
+
             self.processing_tag += 1;
-            return Ok(Async::Ready(Some(nimiq_message)));
+            return Ok(Async::Ready(Some(nimiq_message.unwrap())));
         } else {
-            println!("We don't have enough ws msgs yet, poll again later");
+            //println!("We don't have enough ws msgs yet, poll again later");
             return Ok(Async::NotReady);
         }
     }

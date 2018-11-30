@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 use weak_table::PtrWeakHashSet;
 use crate::consensus::base::block::{Block, BlockHeader};
-use crate::consensus::base::blockchain::Blockchain;
+use crate::consensus::base::blockchain::{Blockchain, PushResult};
 use crate::consensus::base::mempool::Mempool;
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
 use crate::network::message::{Message, InvVector, InvVectorType, TxMessage};
@@ -70,7 +70,7 @@ impl InventoryManager {
         let vector1 = vector.clone();
         self.timers.set_delay(InventoryManagerTimer::Request(vector.clone()), move || {
             let this = upgrade_weak!(weak);
-            this.write().note_vector_not_received(agent1, vector1);
+            this.write().note_vector_not_received(&agent1, &vector1);
         }, InventoryManager::REQUEST_TIMEOUT);
     }
 
@@ -79,8 +79,8 @@ impl InventoryManager {
         self.vectors_to_request.remove(vector);
     }
 
-    fn note_vector_not_received(&mut self, agent_weak: Weak<RwLock<InventoryAgent>>, vector: InvVector) {
-        let record_opt = self.vectors_to_request.get_mut(&vector);
+    fn note_vector_not_received(&mut self, agent_weak: &Weak<RwLock<InventoryAgent>>, vector: &InvVector) {
+        let record_opt = self.vectors_to_request.get_mut(vector);
         if record_opt.is_none() {
             return;
         }
@@ -103,7 +103,7 @@ impl InventoryManager {
 
         let next_agent_opt = record.1.iter().next();
         if next_agent_opt.is_none() {
-            self.vectors_to_request.remove(&vector);
+            self.vectors_to_request.remove(vector);
             return;
         }
 
@@ -112,7 +112,7 @@ impl InventoryManager {
         record.0 = Arc::downgrade(&next_agent_arc);
 
         let mut next_agent = next_agent_arc.write();
-        self.request_vector(&mut next_agent, &vector);
+        self.request_vector(&mut next_agent, vector);
     }
 }
 
@@ -122,7 +122,9 @@ enum InventoryEvent {
     KnownBlockAnnounced,
     NewTransactionAnnounced,
     KnownTransactionAnnounced,
-    NoNewObjectsAnnounced
+    NoNewObjectsAnnounced,
+    AllObjectsReceived,
+    BlockProcessed(PushResult),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -166,7 +168,7 @@ impl InventoryAgent {
     const REQUEST_VECTORS_MAX: usize = 1000;
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<RwLock<Self>> {
-        let agent = Arc::new(RwLock::new(InventoryAgent {
+        let this = Arc::new(RwLock::new(InventoryAgent {
             blockchain,
             mempool,
             peer,
@@ -181,35 +183,35 @@ impl InventoryAgent {
             self_weak: Weak::new(),
             timers: Timers::new(),
         }));
-        InventoryAgent::init_listeners(&agent);
-        agent
+        InventoryAgent::init_listeners(&this);
+        this
     }
 
-    fn init_listeners(agent: &Arc<RwLock<Self>>) {
-        agent.write().self_weak = Arc::downgrade(agent);
+    fn init_listeners(this: &Arc<RwLock<Self>>) {
+        this.write().self_weak = Arc::downgrade(this);
 
-        let channel = &agent.read().peer.channel;
+        let channel = &this.read().peer.channel;
         let mut msg_notifier = channel.msg_notifier.write();
         msg_notifier.inv.register(weak_passthru_listener(
-            Arc::downgrade(agent),
-            |agent, vectors: Vec<InvVector>| agent.write().on_inv(vectors)));
+            Arc::downgrade(this),
+            |this, vectors: Vec<InvVector>| this.write().on_inv(vectors)));
         msg_notifier.block.register(weak_passthru_listener(
-            Arc::downgrade(agent),
-            |agent, block: Block| agent.write().on_block(block)));
+            Arc::downgrade(this),
+            |this, block: Block| this.write().on_block(block)));
         msg_notifier.header.register(weak_passthru_listener(
-            Arc::downgrade(agent),
-            |agent, header: BlockHeader| agent.write().on_header(header)));
+            Arc::downgrade(this),
+            |this, header: BlockHeader| this.write().on_header(header)));
         msg_notifier.tx.register(weak_passthru_listener(
-            Arc::downgrade(agent),
-            |agent, msg: TxMessage| agent.write().on_tx(msg)));
+            Arc::downgrade(this),
+            |this, msg: TxMessage| this.write().on_tx(msg)));
         msg_notifier.not_found.register(weak_passthru_listener(
-            Arc::downgrade(agent),
-            |agent, vectors: Vec<InvVector>| agent.write().on_not_found(vectors)));
+            Arc::downgrade(this),
+            |this, vectors: Vec<InvVector>| this.write().on_not_found(vectors)));
 
         let mut close_notifier = channel.close_notifier.write();
         close_notifier.register(weak_listener(
-            Arc::downgrade(agent),
-            |agent, _| agent.write().on_close()));
+            Arc::downgrade(this),
+            |this, _| this.write().on_close()));
     }
 
     fn on_inv(&mut self, vectors: Vec<InvVector>) {
@@ -220,6 +222,7 @@ impl InventoryAgent {
 
         // Check which of the advertised objects we know.
         // Request unknown objects, ignore known ones.
+        let num_vectors = vectors.len();
         let mut unknown_blocks = Vec::new();
         let mut unknown_txs = Vec::new();
         for vector in vectors {
@@ -253,6 +256,9 @@ impl InventoryAgent {
             }
         }
 
+        debug!("[INV] {} vectors, {} new blocks, {} new txs",
+               num_vectors, unknown_blocks.len(), unknown_txs.len());
+
         if !unknown_blocks.is_empty() || !unknown_txs.is_empty() {
             if self.bypass_mgr {
                 self.queue_vectors(unknown_blocks, unknown_txs);
@@ -274,6 +280,7 @@ impl InventoryAgent {
 
     fn on_block(&mut self, block: Block) {
         let hash = block.header.hash::<Blake2bHash>();
+        debug!("[BLOCK] #{} {} from", block.header.height, hash);
 
         // Check if we have requested this block.
         let vector = InvVector::new(InvVectorType::Block, hash);
@@ -286,20 +293,34 @@ impl InventoryAgent {
 
         // Mark object as received.
         self.on_object_received(&vector);
+        self.inv_mgr.write().note_vector_received(&vector);
 
-
+        // TODO do this async
+        let result = self.blockchain.push(block);
+        self.notifier.notify(InventoryEvent::BlockProcessed(result));
     }
 
     fn on_header(&mut self, header: BlockHeader) {
-
+        debug!("[HEADER] #{} {}", header.height, header.hash::<Blake2bHash>());
     }
 
     fn on_tx(&mut self, msg: TxMessage) {
-
     }
 
     fn on_not_found(&mut self, vectors: Vec<InvVector>) {
+        debug!("[NOTFOUND] {} vectors", vectors.len());
 
+        // Remove unknown objects from in-flight list.
+        for vector in vectors {
+            if !self.objects_in_flight.contains(&vector) {
+                continue;
+            }
+
+            self.inv_mgr.write().note_vector_not_received(&self.self_weak, &vector);
+
+            // Mark object as received.
+            self.on_object_received(&vector);
+        }
     }
 
     fn on_close(&mut self) {
@@ -337,8 +358,8 @@ impl InventoryAgent {
         } else {
             let weak = self.self_weak.clone();
             self.timers.set_delay(InventoryAgentTimer::RequestThrottle, move || {
-                let agent = upgrade_weak!(weak);
-                agent.write().request_vectors();
+                let this = upgrade_weak!(weak);
+                this.write().request_vectors();
             }, InventoryAgent::REQUEST_THROTTLE)
         }
     }
@@ -375,8 +396,8 @@ impl InventoryAgent {
         // Set timeout to detect end of request / missing objects.
         let weak = self.self_weak.clone();
         self.timers.set_delay(InventoryAgentTimer::Request, move || {
-            let agent = upgrade_weak!(weak);
-            agent.write().no_more_data();
+            let this = upgrade_weak!(weak);
+            this.write().no_more_data();
         }, InventoryAgent::REQUEST_TIMEOUT);
     }
 
@@ -393,8 +414,8 @@ impl InventoryAgent {
         if !self.objects_in_flight.is_empty() {
             let weak = self.self_weak.clone();
             self.timers.reset_delay(InventoryAgentTimer::Request, move || {
-                let agent = upgrade_weak!(weak);
-                agent.write().no_more_data();
+                let this = upgrade_weak!(weak);
+                this.write().no_more_data();
             }, InventoryAgent::REQUEST_TIMEOUT);
         } else {
             self.no_more_data();
@@ -404,8 +425,20 @@ impl InventoryAgent {
     fn no_more_data(&mut self) {
         self.timers.clear_delay(&InventoryAgentTimer::Request);
 
+        // TODO optimize
+        let inv_mgr_arc = self.inv_mgr.clone();
+        let mut inv_mgr = inv_mgr_arc.write();
         for vector in self.objects_in_flight.drain() {
-            //self.inv_mgr.write().
+            inv_mgr.note_vector_not_received(&self.self_weak, &vector);
+        }
+
+        // TODO objects_that_flew
+
+        // If there are more objects to request, request them.
+        if !self.blocks_to_request.is_empty() || !self.txs_to_request.is_empty() {
+            self.request_vectors();
+        } else {
+            self.notifier.notify(InventoryEvent::AllObjectsReceived);
         }
     }
 

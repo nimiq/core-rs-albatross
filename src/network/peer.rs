@@ -1,5 +1,6 @@
-use crate::consensus::base::primitive::hash::Blake2bHash;
+use std::fmt;
 use std::sync::Arc;
+use crate::consensus::base::primitive::hash::Blake2bHash;
 use crate::network::address::peer_address::PeerAddress;
 use crate::network::address::net_address::NetAddress;
 use crate::network::peer_channel::PeerChannel;
@@ -29,5 +30,11 @@ impl Peer {
 
     pub fn net_address(&self) -> Option<Arc<NetAddress>> {
         self.channel.address_info.net_address()
+    }
+}
+
+impl fmt::Display for Peer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.peer_address())
     }
 }

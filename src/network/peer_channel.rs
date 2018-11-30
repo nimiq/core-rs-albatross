@@ -39,7 +39,9 @@ impl PeerChannel {
             match e {
                 PeerStreamEvent::Message(msg) => msg_notifier1.read().notify(msg),
                 PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
-                PeerStreamEvent::Error(_) => unimplemented!()
+                PeerStreamEvent::Error(e) => {
+                    error!("Got peer stream error: {:?}", *e);
+                }
             }
         });
 

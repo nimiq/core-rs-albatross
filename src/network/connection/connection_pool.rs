@@ -550,7 +550,9 @@ impl ConnectionPool {
             info.drop_connection_handle();
 
             let conn_type = if info.network_connection().unwrap().inbound() { "inbound" } else { "outbound" };
-            debug!("Connection established ({}) #{} (net_address={:?}, peer_address={:?})", conn_type, connection_id, net_address, info.peer_address());
+            debug!("Connection established ({}) #{} {} {}", conn_type, connection_id,
+                    net_address.map_or("<unknown>".to_string(), |n| n.to_string()),
+                    info.peer_address().map_or("<unknown>".to_string(), |p| p.to_string()));
 
             // Set the peer_channel.
             info.set_peer_channel(peer_channel.clone());
@@ -733,7 +735,9 @@ impl ConnectionPool {
         // Let listeners know that the peers changed.
         self.notifier.read().notify(ConnectionPoolEvent::PeersChanged);
 
-        debug!("[PEER-JOINED] {:?} {:?} (version={:?}, services={:?}, headHash={:?})", &peer_address, peer.net_address(), peer.version, peer_address.services, peer.head_hash);
+        debug!("[PEER-JOINED] {} {} (version={:?}, services={:?}, headHash={:?})", &peer_address, peer.net_address()
+            .map_or("<unknown>".to_string(), |n| n.to_string()), peer.version, peer_address.services, peer.head_hash);
+
     }
 
     /// Callback upon closing of connection.
@@ -772,7 +776,7 @@ impl ConnectionPool {
                 state.update_connected_peer_count(connection_id, PeerCountUpdate::Remove);
 
                 established_peer_left = true;
-                debug!("[PEER-LEFT] {:?} {:?} (version={:?}, closeType={:?})", info.peer_address(), net_address, info.peer().map(|p| p.version), ty);
+                debug!("[PEER-LEFT] {} {} (version={:?}, closeType={:?})", info.peer_address().unwrap(), net_address.unwrap(), info.peer().map(|p| p.version), ty);
             } else {
                 match info.network_connection().map(|n| n.inbound()) {
                     Some(true) => {
@@ -843,14 +847,14 @@ impl ConnectionPool {
     /// Callback on connect error.
     fn on_connect_error(&self, peer_address: Arc<PeerAddress>) {
         let guard = self.change_lock.lock();
-        debug!("Connection to {:?} failed", peer_address);
+        debug!("Connection to {} failed", peer_address);
 
         // Aquire write lock and release it again before notifying listeners.
         {
             let mut state = self.state.write();
             let connection_id = *state.connections_by_peer_address.get(&peer_address).expect("PeerAddress not stored");
             let info = state.connections.get(connection_id).expect("Missing connection");
-            assert_eq!(info.state(), ConnectionState::Connecting, "ConnectionInfo state not Connecting, but {:?} ({:?})", info.state(), peer_address);
+            assert_eq!(info.state(), ConnectionState::Connecting, "ConnectionInfo state not Connecting, but {:?} ({})", info.state(), peer_address);
             state.remove(connection_id);
 
             update_checked!(state.connecting_count, PeerCountUpdate::Remove);
@@ -879,7 +883,7 @@ impl ConnectionPool {
         }
 
         if self.addresses.is_banned(&peer_address) {
-            error!("Connecting to banned address {:?}", peer_address);
+            error!("Connecting to banned address {}", peer_address);
             return false;
         }
 

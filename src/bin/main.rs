@@ -4,6 +4,8 @@ extern crate lazy_static;
 extern crate nimiq;
 extern crate parking_lot;
 extern crate tokio;
+#[macro_use]
+extern crate log;
 extern crate pretty_env_logger;
 
 use std::sync::Arc;
@@ -38,9 +40,13 @@ pub fn main() {
     );
     network_config.init_volatile();
 
+    info!("Nimiq Core starting: network={:?}, peer_address={}", network_id, network_config.peer_address());
+
     let network_time = Arc::new(NetworkTime::new());
     let blockchain: Arc<Blockchain<'static>> = Arc::new(Blockchain::new(&env, network_id, network_time.clone()));
     let network = Network::new(blockchain.clone(), network_config, network_time.clone());
+
+    info!("Blockchain state: height={}, head={}", blockchain.height(), blockchain.head_hash());
 
     tokio::run(Runner {
         network: network.clone(),

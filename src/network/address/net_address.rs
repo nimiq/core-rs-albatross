@@ -1,5 +1,6 @@
 use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
 use std::cmp::min;
+use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 create_typed_array!(IPv4Address, u8, 4);
@@ -115,5 +116,16 @@ impl Serialize for NetAddress {
             NetAddress::Unknown => 0
         };
         return size;
+    }
+}
+
+impl fmt::Display for NetAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NetAddress::IPv4(ip) => write!(f, "{}", ip),
+            NetAddress::IPv6(ip) => write!(f, "{}", ip),
+            NetAddress::Unspecified => write!(f, "<unspecified>"),
+            NetAddress::Unknown => write!(f, "<unknown>"),
+        }
     }
 }
