@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 
 bitflags! {
-    #[derive(Default, Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize)]
     pub struct ServiceFlags: u32 {
         const NONE  = 0b00000000;
         const NANO  = 0b00000001;
@@ -24,7 +24,7 @@ impl ServiceFlags {
     }
 }
 
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Services {
     pub provided: ServiceFlags,
     pub accepted: ServiceFlags,
@@ -38,7 +38,7 @@ impl Services {
         }
     }
 
-    pub fn default() -> Self {
+    pub fn full() -> Self {
         Services {
             provided: ServiceFlags::FULL,
             accepted: ServiceFlags::FULL,

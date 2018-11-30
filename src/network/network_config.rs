@@ -27,7 +27,7 @@ impl NetworkConfig {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
             peer_id: None,
-            services: Services::default(),
+            services: Services::full(),
             protocol_config: ProtocolConfig::Ws {
                 host,
                 port,
@@ -41,7 +41,7 @@ impl NetworkConfig {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
             peer_id: None,
-            services: Services::default(),
+            services: Services::full(),
             protocol_config: ProtocolConfig::Wss {
                 host,
                 port,
@@ -55,7 +55,7 @@ impl NetworkConfig {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS, // TODO Browsers might not always support WS.
             key_pair: None,
             peer_id: None,
-            services: Services::default(),
+            services: Services::full(),
             protocol_config: ProtocolConfig::Dumb,
         }
     }
