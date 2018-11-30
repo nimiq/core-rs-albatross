@@ -31,8 +31,8 @@ pub struct PeerScorer {
 }
 
 impl PeerScorer {
-    const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 12; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
-    const PEER_COUNT_MIN_OUTBOUND: usize = 12; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
+    const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 1; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
+    const PEER_COUNT_MIN_OUTBOUND: usize = 1; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
 
     const PICK_SELECTION_SIZE: usize = 100;
 

@@ -120,28 +120,28 @@ impl NetworkAgent {
         agent.write().listener = Arc::downgrade(agent);
 
         let channel = &agent.read().channel;
-        let mut msg_notifier = channel.msg_notifier.write();
-        msg_notifier.version.register(weak_passthru_listener(
+        let msg_notifier = &channel.msg_notifier;
+        msg_notifier.version.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
             |agent, msg: VersionMessage| agent.write().on_version(msg)));
 
-        msg_notifier.ver_ack.register(weak_passthru_listener(
+        msg_notifier.ver_ack.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
             |agent, msg: VerAckMessage| agent.write().on_ver_ack(msg)));
 
-        msg_notifier.addr.register(weak_passthru_listener(
+        msg_notifier.addr.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
             |agent, msg: AddrMessage| agent.write().on_addr(msg)));
 
-        msg_notifier.get_addr.register(weak_passthru_listener(
+        msg_notifier.get_addr.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
             |agent, msg: GetAddrMessage| agent.write().on_get_addr(msg)));
 
-        msg_notifier.ping.register(weak_passthru_listener(
+        msg_notifier.ping.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
             |agent, nonce: u32| agent.write().on_ping(nonce)));
 
-        msg_notifier.pong.register(weak_passthru_listener(
+        msg_notifier.pong.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
             |agent, nonce: u32| agent.write().on_pong(nonce)));
 
@@ -411,12 +411,10 @@ impl NetworkAgent {
         });
 
         // Request addresses from peer.
-        let msg = GetAddrMessage::new(
+        self.channel.send(GetAddrMessage::new(
             self.network_config.protocol_mask(),
             self.network_config.services().accepted,
-            max_results);
-        println!("{:?}", msg);
-        self.channel.send(msg);
+            max_results));
 
         // We don't use a timeout here. The peer will not respond with an addr message if
         // it doesn't have any new addresses.

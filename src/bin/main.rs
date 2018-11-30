@@ -12,20 +12,19 @@ use std::sync::Arc;
 
 use futures::Async;
 use futures::future::Future;
-use parking_lot::RwLock;
 
-use nimiq::consensus::base::blockchain::Blockchain;
+use lmdb_zero::open::Flags;
+
 use nimiq::consensus::networks::NetworkId;
-use nimiq::network::address::peer_address_book::PeerAddressBook;
-use nimiq::network::connection::connection_pool::ConnectionPool;
 use nimiq::network::network_config::NetworkConfig;
-use nimiq::network::NetworkTime;
 use nimiq::utils::db::Environment;
+use nimiq::utils::db::lmdb::LmdbEnvironment;
 use nimiq::utils::db::volatile::VolatileEnvironment;
 use nimiq::network::network::Network;
+use nimiq::consensus::consensus::Consensus;
 
 lazy_static! {
-    static ref env: Environment = VolatileEnvironment::new(10).unwrap();
+    static ref env: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, Flags::empty()).unwrap(); //VolatileEnvironment::new(10).unwrap();
 }
 
 pub fn main() {
@@ -42,23 +41,19 @@ pub fn main() {
 
     info!("Nimiq Core starting: network={:?}, peer_address={}", network_id, network_config.peer_address());
 
-    let network_time = Arc::new(NetworkTime::new());
-    let blockchain: Arc<Blockchain<'static>> = Arc::new(Blockchain::new(&env, network_id, network_time.clone()));
-    let network = Network::new(blockchain.clone(), network_config, network_time.clone());
+    let consensus = Consensus::new(&env, network_id, network_config);
 
-    info!("Blockchain state: height={}, head={}", blockchain.height(), blockchain.head_hash());
+    info!("Blockchain state: height={}, head={}", consensus.blockchain.height(), consensus.blockchain.head_hash());
 
     tokio::run(Runner {
-        network: network.clone(),
-        ran: false,
+        network: consensus.network.clone(),
+        initialized: false,
     });
-
-    println!("Something from network: {:?}", network.peer_count());
 }
 
 pub struct Runner {
     network: Arc<Network>,
-    ran: bool,
+    initialized: bool,
 }
 
 impl Future for Runner {
@@ -66,12 +61,11 @@ impl Future for Runner {
     type Error = ();
 
     fn poll(&mut self) -> Result<Async<<Self as Future>::Item>, <Self as Future>::Error> {
-        if !self.ran {
+        if !self.initialized {
             self.network.initialize();
             self.network.connect();
-            self.ran = true;
+            self.initialized = true;
         }
-
         Ok(Async::Ready(()))
     }
 }

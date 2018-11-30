@@ -1,5 +1,5 @@
 use std::hash::Hash;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 use std::time::Instant;
 
@@ -18,6 +18,7 @@ use crate::network::NetworkTime;
 use crate::network::Peer;
 use crate::network::peer_scorer::PeerScorer;
 use crate::utils::timers::Timers;
+use crate::utils::observer::PassThroughNotifier;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {
@@ -27,17 +28,24 @@ enum NetworkTimer {
     PeerCountCheck,
 }
 
-#[derive(Clone)]
+pub enum NetworkEvent {
+    PeerJoined(Peer),
+    PeerLeft(Peer),
+    PeersChanged,
+}
+
 pub struct Network {
     network_config: Arc<NetworkConfig>,
     network_time: Arc<NetworkTime>,
-    auto_connect: Arc<Atomic<bool>>,
-    backed_off: Arc<Atomic<bool>>,
-    backoff: Arc<Atomic<Duration>>,
+    auto_connect: Atomic<bool>,
+    backed_off: Atomic<bool>,
+    backoff: Atomic<Duration>,
     addresses: Arc<PeerAddressBook>,
     connections: Arc<ConnectionPool>,
     scorer: Arc<RwLock<PeerScorer>>,
-    timers: Arc<Timers<NetworkTimer>>
+    timers: Timers<NetworkTimer>,
+    pub notifier: RwLock<PassThroughNotifier<'static, NetworkEvent>>,
+    self_weak: RwLock<Weak<Network>>,
 }
 
 impl Network {
@@ -55,44 +63,36 @@ impl Network {
     pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>) -> Arc<Self> {
         let net_config = Arc::new(network_config);
         let addresses = Arc::new(PeerAddressBook::new(net_config.clone()));
-        let connections = ConnectionPool::new(Arc::clone(&addresses), net_config.clone(), blockchain);
-        let network = Arc::new(Network {
+        let connections = ConnectionPool::new(addresses.clone(), net_config.clone(), blockchain);
+        let this = Arc::new(Network {
             network_config: net_config.clone(),
             network_time,
-            auto_connect: Arc::new(Atomic::new(false)),
-            backed_off: Arc::new(Atomic::new(false)),
-            backoff: Arc::new(Atomic::new(Network::CONNECT_BACKOFF_INITIAL)),
-            addresses: Arc::clone(&addresses),
-            connections: Arc::clone(&connections),
-            scorer: Arc::new(RwLock::new(PeerScorer::new(Arc::clone(&net_config), Arc::clone(&addresses), Arc::clone(&&connections)))),
-            timers: Arc::new(Timers::new())
+            auto_connect: Atomic::new(false),
+            backed_off: Atomic::new(false),
+            backoff: Atomic::new(Network::CONNECT_BACKOFF_INITIAL),
+            addresses: addresses.clone(),
+            connections: connections.clone(),
+            scorer: Arc::new(RwLock::new(PeerScorer::new(net_config, addresses, connections.clone()))),
+            timers: Timers::new(),
+            notifier: RwLock::new(PassThroughNotifier::new()),
+            self_weak: RwLock::new(Weak::new()),
         });
+        *this.self_weak.write() = Arc::downgrade(&this);
 
-        let network_clone = Arc::downgrade(&network);
-
-        network.connections.notifier.write().register(move |event: &ConnectionPoolEvent| {
-            let network = upgrade_weak!(&network_clone);
+        let weak = Arc::downgrade(&this);
+        this.connections.notifier.write().register(move |event: ConnectionPoolEvent| {
+            let this = upgrade_weak!(weak);
             match event {
-                ConnectionPoolEvent::PeerJoined(peer) => {
-                    Network::on_peer_joined(network, peer);
-                },
-                ConnectionPoolEvent::PeerLeft(peer) => {
-                    Network::on_peer_left(network, peer);
-                },
-                ConnectionPoolEvent::PeersChanged => {
-                    Network::on_peers_changed(network);
-                },
-                ConnectionPoolEvent::RecyclingRequest => {
-                    Network::on_recycling_request(network);
-                },
-                ConnectionPoolEvent::ConnectError(_, _) => {
-                    Network::on_connect_error(network);
-                },
+                ConnectionPoolEvent::PeerJoined(peer) => this.on_peer_joined(peer),
+                ConnectionPoolEvent::PeerLeft(peer) => this.on_peer_left(peer),
+                ConnectionPoolEvent::PeersChanged => this.on_peers_changed(this.clone()),
+                ConnectionPoolEvent::RecyclingRequest => this.on_recycling_request(),
+                ConnectionPoolEvent::ConnectError(_, _) => this.on_connect_error(this.clone()),
                 default => {}
             }
         });
 
-        network
+        this
     }
 
     pub fn initialize(&self) {
@@ -123,35 +123,36 @@ impl Network {
         self.connections.set_allow_inbound_exchange(false);
     }
 
-    fn on_peer_joined(network: Arc<Network>, peer: &Peer) {
-        network.update_time_offset();
+    fn on_peer_joined(&self, peer: Peer) {
+        self.update_time_offset();
+        self.notifier.read().notify(NetworkEvent::PeerJoined(peer));
     }
 
-    fn on_peer_left(network: Arc<Network>, peer: &Peer) {
-        network.update_time_offset();
+    fn on_peer_left(&self, peer: Peer) {
+        self.update_time_offset();
+        self.notifier.read().notify(NetworkEvent::PeerLeft(peer));
     }
 
-    fn on_peers_changed(network: Arc<Network>) {
-        let network_clone2 = Arc::clone(&network);
-        network.timers.set_delay(NetworkTimer::PeersChanged, move || {
-            network_clone2.check_peer_count();
+    fn on_peers_changed(&self, this: Arc<Network>) {
+        self.notifier.read().notify(NetworkEvent::PeersChanged);
+        self.timers.set_delay(NetworkTimer::PeersChanged, move || {
+            this.check_peer_count();
         }, Network::CONNECT_THROTTLE);
     }
 
-    fn on_recycling_request(network: Arc<Network>) {
-        network.scorer.write().recycle_connections(1, CloseType::PeerConnectionRecycledInboundExchange, "Peer connection recycled inbound exchange");
+    fn on_recycling_request(&self) {
+        self.scorer.write().recycle_connections(1, CloseType::PeerConnectionRecycledInboundExchange, "Peer connection recycled inbound exchange");
 
         // set ability to exchange for new inbound connections
-        network.connections.set_allow_inbound_exchange(match network.scorer.write().lowest_connection_score() {
+        self.connections.set_allow_inbound_exchange(match self.scorer.write().lowest_connection_score() {
             Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
             None => false
         });
     }
 
-    fn on_connect_error(network: Arc<Network>) {
-        let network_clone2 = Arc::clone(&network);
-        network.timers.set_delay(NetworkTimer::ConnectError, move || {
-            network_clone2.check_peer_count();
+    fn on_connect_error(&self, this: Arc<Network>) {
+        self.timers.set_delay(NetworkTimer::ConnectError, move || {
+            this.check_peer_count();
         }, Network::CONNECT_THROTTLE);
     }
 
@@ -162,22 +163,23 @@ impl Network {
 
             // We can't connect if we don't know any more addresses or only want connections to good peers.
             let only_good_peers = self.scorer.read().needs_good_peers() && !self.scorer.read().needs_more_peers();
-            let mut no_fitting_peer_available = peer_addr_opt.is_none();
-            if !no_fitting_peer_available && only_good_peers {
+            let mut no_matching_peer_available = peer_addr_opt.is_none();
+            if !no_matching_peer_available && only_good_peers {
                 if let Some(peer_addr) = &peer_addr_opt {
-                    no_fitting_peer_available = !self.scorer.read().is_good_peer(peer_addr);
+                    no_matching_peer_available = !self.scorer.read().is_good_peer(peer_addr);
                 }
             }
-            if no_fitting_peer_available {
 
+            if no_matching_peer_available {
                 if !self.backed_off.load(Ordering::Relaxed) {
                     self.backed_off.store(true, Ordering::Relaxed);
                     let old_backoff = self.backoff.load(Ordering::Relaxed);
                     Duration::min(Network::CONNECT_BACKOFF_MAX, old_backoff * 2);
 
-                    let self_clone = Network::clone(self);
+                    let weak = self.self_weak.read().clone();
                     self.timers.reset_delay(NetworkTimer::PeerCountCheck, move || {
-                        self_clone.check_peer_count();
+                        let this = upgrade_weak!(weak);
+                        this.check_peer_count();
                     }, old_backoff);
                 }
 

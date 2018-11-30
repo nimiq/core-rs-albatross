@@ -117,7 +117,7 @@ impl InventoryManager {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum InventoryEvent {
+pub enum InventoryEvent {
     NewBlockAnnounced,
     KnownBlockAnnounced,
     NewTransactionAnnounced,
@@ -133,7 +133,7 @@ enum InventoryAgentTimer {
     Request,
 }
 
-struct InventoryAgent {
+pub struct InventoryAgent {
     blockchain: Arc<Blockchain<'static>>,
     mempool: Arc<Mempool<'static>>,
     peer: Arc<Peer>,
@@ -191,20 +191,20 @@ impl InventoryAgent {
         this.write().self_weak = Arc::downgrade(this);
 
         let channel = &this.read().peer.channel;
-        let mut msg_notifier = channel.msg_notifier.write();
-        msg_notifier.inv.register(weak_passthru_listener(
+        let msg_notifier = &channel.msg_notifier;
+        msg_notifier.inv.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, vectors: Vec<InvVector>| this.write().on_inv(vectors)));
-        msg_notifier.block.register(weak_passthru_listener(
+        msg_notifier.block.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, block: Block| this.write().on_block(block)));
-        msg_notifier.header.register(weak_passthru_listener(
+        msg_notifier.header.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, header: BlockHeader| this.write().on_header(header)));
-        msg_notifier.tx.register(weak_passthru_listener(
+        msg_notifier.tx.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, msg: TxMessage| this.write().on_tx(msg)));
-        msg_notifier.not_found.register(weak_passthru_listener(
+        msg_notifier.not_found.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, vectors: Vec<InvVector>| this.write().on_not_found(vectors)));
 
@@ -280,7 +280,7 @@ impl InventoryAgent {
 
     fn on_block(&mut self, block: Block) {
         let hash = block.header.hash::<Blake2bHash>();
-        debug!("[BLOCK] #{} {} from", block.header.height, hash);
+        debug!("[BLOCK] #{} {} from {}", block.header.height, hash, self.peer.peer_address());
 
         // Check if we have requested this block.
         let vector = InvVector::new(InvVectorType::Block, hash);

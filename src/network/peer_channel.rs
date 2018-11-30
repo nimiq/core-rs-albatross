@@ -22,7 +22,7 @@ use crate::network::message::MessageNotifier;
 #[derive(Clone)]
 pub struct PeerChannel {
     stream_notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
-    pub msg_notifier: Arc<RwLock<MessageNotifier>>,
+    pub msg_notifier: Arc<MessageNotifier>,
     pub close_notifier: Arc<RwLock<Notifier<'static, CloseType>>>,
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
@@ -30,14 +30,14 @@ pub struct PeerChannel {
 
 impl PeerChannel {
     pub fn new(network_connection: &NetworkConnection) -> Self {
-        let msg_notifier = Arc::new(RwLock::new(MessageNotifier::new()));
+        let msg_notifier = Arc::new(MessageNotifier::new());
         let close_notifier = Arc::new(RwLock::new(Notifier::new()));
 
         let msg_notifier1 = msg_notifier.clone();
         let close_notifier1 = close_notifier.clone();
         network_connection.notifier.write().register(move |e: PeerStreamEvent| {
             match e {
-                PeerStreamEvent::Message(msg) => msg_notifier1.read().notify(msg),
+                PeerStreamEvent::Message(msg) => msg_notifier1.notify(msg),
                 PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
                 PeerStreamEvent::Error(e) => {
                     error!("Got peer stream error: {:?}", *e);

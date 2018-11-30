@@ -4,6 +4,7 @@ use rand::OsRng;
 use rand::Rng;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
+use parking_lot::RwLock;
 
 use crate::consensus::base::account::tree::AccountsProof;
 use crate::consensus::base::block::{Block, BlockHeader};
@@ -179,17 +180,14 @@ impl Deserialize for Message {
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::GetHead => Message::GetHead,
             MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
-            _ => {
-
-                error!("Unsupported message type: {:?}", ty);
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into())
-            } // FIXME remove default case
+            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into())  // FIXME remove default case
         };
 
         let crc_comp = crc32_reader.crc32.result();
         if crc_comp != checksum {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Bad checksum").into());
         }
+
         return Ok(message);
     }
 }
@@ -267,73 +265,73 @@ impl Serialize for Message {
 }
 
 pub struct MessageNotifier {
-    pub version: PassThroughNotifier<'static, VersionMessage>,
-    pub ver_ack: PassThroughNotifier<'static, VerAckMessage>,
-    pub inv: PassThroughNotifier<'static, Vec<InvVector>>,
-    pub get_data: PassThroughNotifier<'static, Vec<InvVector>>,
-    pub get_header: PassThroughNotifier<'static, Vec<InvVector>>,
-    pub not_found: PassThroughNotifier<'static, Vec<InvVector>>,
-    pub block: PassThroughNotifier<'static, Block>,
-    pub header: PassThroughNotifier<'static, BlockHeader>,
-    pub tx: PassThroughNotifier<'static, TxMessage>,
-    pub get_blocks: PassThroughNotifier<'static, GetBlocksMessage>,
-    pub mempool: PassThroughNotifier<'static, ()>,
-    pub reject: PassThroughNotifier<'static, RejectMessage>,
-    pub subscribe: PassThroughNotifier<'static, Subscription>,
-    pub addr: PassThroughNotifier<'static, AddrMessage>,
-    pub get_addr: PassThroughNotifier<'static, GetAddrMessage>,
-    pub ping: PassThroughNotifier<'static, /*nonce*/ u32>,
-    pub pong: PassThroughNotifier<'static, /*nonce*/ u32>,
-    pub get_head: PassThroughNotifier<'static, ()>,
-    pub head: PassThroughNotifier<'static, BlockHeader>,
+    pub version: RwLock<PassThroughNotifier<'static, VersionMessage>>,
+    pub ver_ack: RwLock<PassThroughNotifier<'static, VerAckMessage>>,
+    pub inv: RwLock<PassThroughNotifier<'static, Vec<InvVector>>>,
+    pub get_data: RwLock<PassThroughNotifier<'static, Vec<InvVector>>>,
+    pub get_header: RwLock<PassThroughNotifier<'static, Vec<InvVector>>>,
+    pub not_found: RwLock<PassThroughNotifier<'static, Vec<InvVector>>>,
+    pub block: RwLock<PassThroughNotifier<'static, Block>>,
+    pub header: RwLock<PassThroughNotifier<'static, BlockHeader>>,
+    pub tx: RwLock<PassThroughNotifier<'static, TxMessage>>,
+    pub get_blocks: RwLock<PassThroughNotifier<'static, GetBlocksMessage>>,
+    pub mempool: RwLock<PassThroughNotifier<'static, ()>>,
+    pub reject: RwLock<PassThroughNotifier<'static, RejectMessage>>,
+    pub subscribe: RwLock<PassThroughNotifier<'static, Subscription>>,
+    pub addr: RwLock<PassThroughNotifier<'static, AddrMessage>>,
+    pub get_addr: RwLock<PassThroughNotifier<'static, GetAddrMessage>>,
+    pub ping: RwLock<PassThroughNotifier<'static, /*nonce*/ u32>>,
+    pub pong: RwLock<PassThroughNotifier<'static, /*nonce*/ u32>>,
+    pub get_head: RwLock<PassThroughNotifier<'static, ()>>,
+    pub head: RwLock<PassThroughNotifier<'static, BlockHeader>>,
 }
 
 impl MessageNotifier {
     pub fn new() -> Self {
         MessageNotifier {
-            version: PassThroughNotifier::new(),
-            ver_ack: PassThroughNotifier::new(),
-            inv: PassThroughNotifier::new(),
-            get_data: PassThroughNotifier::new(),
-            get_header: PassThroughNotifier::new(),
-            not_found: PassThroughNotifier::new(),
-            block: PassThroughNotifier::new(),
-            header: PassThroughNotifier::new(),
-            tx: PassThroughNotifier::new(),
-            get_blocks: PassThroughNotifier::new(),
-            mempool: PassThroughNotifier::new(),
-            reject: PassThroughNotifier::new(),
-            subscribe: PassThroughNotifier::new(),
-            addr: PassThroughNotifier::new(),
-            get_addr: PassThroughNotifier::new(),
-            ping: PassThroughNotifier::new(),
-            pong: PassThroughNotifier::new(),
-            get_head: PassThroughNotifier::new(),
-            head: PassThroughNotifier::new(),
+            version: RwLock::new(PassThroughNotifier::new()),
+            ver_ack: RwLock::new(PassThroughNotifier::new()),
+            inv: RwLock::new(PassThroughNotifier::new()),
+            get_data: RwLock::new(PassThroughNotifier::new()),
+            get_header: RwLock::new(PassThroughNotifier::new()),
+            not_found: RwLock::new(PassThroughNotifier::new()),
+            block: RwLock::new(PassThroughNotifier::new()),
+            header: RwLock::new(PassThroughNotifier::new()),
+            tx: RwLock::new(PassThroughNotifier::new()),
+            get_blocks: RwLock::new(PassThroughNotifier::new()),
+            mempool: RwLock::new(PassThroughNotifier::new()),
+            reject: RwLock::new(PassThroughNotifier::new()),
+            subscribe: RwLock::new(PassThroughNotifier::new()),
+            addr: RwLock::new(PassThroughNotifier::new()),
+            get_addr: RwLock::new(PassThroughNotifier::new()),
+            ping: RwLock::new(PassThroughNotifier::new()),
+            pong: RwLock::new(PassThroughNotifier::new()),
+            get_head: RwLock::new(PassThroughNotifier::new()),
+            head: RwLock::new(PassThroughNotifier::new()),
         }
     }
 
     pub fn notify(&self, msg: Message) {
         match msg {
-            Message::Version(msg) => self.version.notify(msg),
-            Message::VerAck(msg) => self.ver_ack.notify(msg),
-            Message::Inv(vector) => self.inv.notify(vector),
-            Message::GetData(vector) => self.get_data.notify(vector),
-            Message::GetHeader(vector) => self.get_header.notify(vector),
-            Message::NotFound(vector) => self.not_found.notify(vector),
-            Message::Block(block) => self.block.notify(block),
-            Message::Header(header) => self.header.notify(header),
-            Message::Tx(msg) => self.tx.notify(msg),
-            Message::GetBlocks(msg) => self.get_blocks.notify(msg),
-            Message::Mempool => self.mempool.notify(()),
-            Message::Reject(msg) => self.reject.notify(msg),
-            Message::Subscribe(msg) => self.subscribe.notify(msg),
-            Message::Addr(msg) => self.addr.notify(msg),
-            Message::GetAddr(msg) => self.get_addr.notify(msg),
-            Message::Ping(nonce) => self.ping.notify(nonce),
-            Message::Pong(nonce) => self.pong.notify(nonce),
-            Message::GetHead => self.get_head.notify(()),
-            Message::Head(header) => self.head.notify(header),
+            Message::Version(msg) => self.version.read().notify(msg),
+            Message::VerAck(msg) => self.ver_ack.read().notify(msg),
+            Message::Inv(vector) => self.inv.read().notify(vector),
+            Message::GetData(vector) => self.get_data.read().notify(vector),
+            Message::GetHeader(vector) => self.get_header.read().notify(vector),
+            Message::NotFound(vector) => self.not_found.read().notify(vector),
+            Message::Block(block) => self.block.read().notify(block),
+            Message::Header(header) => self.header.read().notify(header),
+            Message::Tx(msg) => self.tx.read().notify(msg),
+            Message::GetBlocks(msg) => self.get_blocks.read().notify(msg),
+            Message::Mempool => self.mempool.read().notify(()),
+            Message::Reject(msg) => self.reject.read().notify(msg),
+            Message::Subscribe(msg) => self.subscribe.read().notify(msg),
+            Message::Addr(msg) => self.addr.read().notify(msg),
+            Message::GetAddr(msg) => self.get_addr.read().notify(msg),
+            Message::Ping(nonce) => self.ping.read().notify(nonce),
+            Message::Pong(nonce) => self.pong.read().notify(nonce),
+            Message::GetHead => self.get_head.read().notify(()),
+            Message::Head(header) => self.head.read().notify(header),
         }
     }
 }
@@ -409,6 +407,15 @@ pub struct GetBlocksMessage {
     locators: Vec<Blake2bHash>,
     max_inv_size: u16,
     direction: GetBlocksDirection,
+}
+impl GetBlocksMessage {
+    pub fn new(locators: Vec<Blake2bHash>, max_inv_size: u16, direction: GetBlocksDirection) -> Message {
+        Message::GetBlocks(Self {
+            locators,
+            max_inv_size,
+            direction,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]

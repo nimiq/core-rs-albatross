@@ -20,7 +20,7 @@ use crate::network::Peer;
 use crate::network::peer_channel::PeerChannel;
 use crate::network::peer_channel::PeerChannelEvent;
 use crate::network::Protocol;
-use crate::utils::observer::{Notifier, weak_listener};
+use crate::utils::observer::PassThroughNotifier;
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
@@ -311,7 +311,7 @@ pub struct ConnectionPool {
     state: RwLock<ConnectionPoolState>,
     change_lock: Mutex<()>,
 
-    pub notifier: RwLock<Notifier<'static, ConnectionPoolEvent>>,
+    pub notifier: RwLock<PassThroughNotifier<'static, ConnectionPoolEvent>>,
     listener: RwLock<Weak<ConnectionPool>>,
 }
 
@@ -356,7 +356,7 @@ impl ConnectionPool {
             }),
             change_lock: Mutex::new(()),
 
-            notifier: RwLock::new(Notifier::new()),
+            notifier: RwLock::new(PassThroughNotifier::new()),
             listener: RwLock::new(Weak::new()),
         });
         // Initialise.

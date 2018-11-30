@@ -14,7 +14,7 @@ pub mod network;
 use beserial::{Serialize, Deserialize};
 
 pub use crate::network::peer::Peer;
-pub use crate::network::network::Network;
+pub use crate::network::network::{Network, NetworkEvent};
 pub use crate::network::network_config::NetworkConfig;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]

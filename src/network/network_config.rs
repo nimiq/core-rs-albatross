@@ -8,7 +8,7 @@ use crate::network::address::net_address::NetAddress;
 use crate::network::address::peer_address::{PeerAddress, PeerAddressType};
 use crate::network::address::PeerId;
 use crate::network::Protocol;
-use crate::utils::services::Services;
+use crate::utils::services::{Services, ServiceFlags};
 use crate::utils::systemtime_to_timestamp;
 
 use super::ProtocolFlags;

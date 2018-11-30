@@ -99,24 +99,25 @@ impl Sink for NimiqMessageStream
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
         // Save and increment tag.
         let tag = self.sending_tag;
-        self.sending_tag = self.sending_tag.wrapping_add(1);
+        // XXX JS implementation quirk: Already wrap at 255 instead of 256...
+        self.sending_tag = (self.sending_tag + 1) % 255;
 
         let msg = item.serialize_to_vec();
-        //println!("Outgoing: {}", hex::encode(&msg));
 
         // Send chunks to underlying layer.
         let mut remaining = msg.len();
         let mut chunk;
         while remaining > 0 {
             let mut buffer;
+            let start = msg.len() - remaining;
             if remaining + /*tag*/ 1 >= MAX_CHUNK_SIZE {
                 buffer = Vec::with_capacity(MAX_CHUNK_SIZE + /*tag*/ 1);
                 buffer.push(tag);
-                chunk = &msg[msg.len() - remaining..MAX_CHUNK_SIZE - 1];
+                chunk = &msg[start..start + MAX_CHUNK_SIZE - 1];
             } else {
                 buffer = Vec::with_capacity(remaining + /*tag*/ 1);
                 buffer.push(tag);
-                chunk = &msg[msg.len() - remaining..remaining];
+                chunk = &msg[start..];
             }
 
             buffer.extend(chunk);
@@ -161,7 +162,6 @@ impl Stream for NimiqMessageStream
     // FIXME: This implementation is inefficient as it tries to construct the nimiq message
     // everytime, it should cache the work already done and just do new work on each iteration
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        // println!("Starting `poll()`");
 
         // First, lets get as many WebSocket messages as available and store them in the buffer
         loop {
@@ -175,12 +175,10 @@ impl Stream for NimiqMessageStream
                     },
             }
         }
-        // println!("made it after the polling of tungstenite");
 
         // If there are no web socket messages in the buffer, signal that we don't have anything yet
         // (i.e. we would need to block waiting, which is a no no in an async function)
         if self.buf.len() == 0 {
-            //println!("There are no ws msgs yet, poll later");
             return Ok(Async::NotReady);
         }
 
@@ -241,7 +239,8 @@ impl Stream for NimiqMessageStream
                 return Err(NimiqMessageStreamError::ParseError(e));
             }
 
-            self.processing_tag += 1;
+            // XXX JS implementation quirk: Already wrap at 255 instead of 256...
+            self.processing_tag = (self.processing_tag + 1) % 255;
             return Ok(Async::Ready(Some(nimiq_message.unwrap())));
         } else {
             //println!("We don't have enough ws msgs yet, poll again later");

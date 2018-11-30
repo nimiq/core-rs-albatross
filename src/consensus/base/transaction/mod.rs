@@ -139,8 +139,8 @@ impl Transaction {
         return Ordering::Equal
             .then_with(|| self.recipient.cmp(&other.recipient))
             .then_with(|| self.validity_start_height.cmp(&other.validity_start_height))
-            .then_with(|| self.fee.cmp(&other.fee))
-            .then_with(|| self.value.cmp(&other.value))
+            .then_with(|| other.fee.cmp(&self.fee))
+            .then_with(|| other.value.cmp(&self.value))
             .then_with(|| self.sender.cmp(&other.sender))
             .then_with(|| self.recipient_type.cmp(&other.recipient_type))
             .then_with(|| self.sender_type.cmp(&other.sender_type))
