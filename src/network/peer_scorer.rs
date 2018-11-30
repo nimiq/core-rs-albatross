@@ -55,20 +55,9 @@ impl PeerScorer {
     }
 
     pub fn pick_address(&self) -> Option<Arc<PeerAddress>> {
-        let mut candidates = self.find_candidates(1000, false);
-        if candidates.len() == 0 {
-            candidates = self.find_candidates(1000, true);
-        }
-        if candidates.len() == 0 {
-            return None;
-        }
-        candidates.sort_by(|a, b| { a.1.cmp(&b.1) });
-        let mut randrng: OsRng = OsRng::new().unwrap();
-        let rand_ind = randrng.gen_range(0, usize::min(PeerScorer::PICK_SELECTION_SIZE, candidates.len()));
-        match candidates.get(rand_ind) {
-            Some((peer_address, _)) => return Some(Arc::clone(peer_address)),
-            None => return None
-        }
+        let lock = self.addresses.state();
+        let mut address_iter = lock.address_iter();
+        address_iter.next().cloned()
     }
 
     fn find_candidates(&self, num_candidates: usize, allow_bad_peers: bool) -> Vec<(Arc<PeerAddress>, i32)> {
@@ -92,7 +81,7 @@ impl PeerScorer {
             if !overflow && index >= end_index { break; }
             if overflow && (index >= end_index && index < start_index) { continue; }
 
-            let score = self.score_addresses(address);
+            let score = self.score_address(address);
             if score >= 0 {
                 candidates.push( (Arc::clone(address), score));
                 if candidates.len() >= num_candidates {
@@ -104,7 +93,7 @@ impl PeerScorer {
         return candidates;
     }
 
-    fn score_addresses(&self, peer_address: &Arc<PeerAddress>) -> i32 {
+    fn score_address(&self, peer_address: &Arc<PeerAddress>) -> i32 {
         let address_state = self.addresses.state();
         let peer_address_sopt = address_state.get_info(peer_address);
         match peer_address_sopt {
