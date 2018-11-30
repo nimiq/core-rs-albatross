@@ -1,6 +1,6 @@
 use crate::utils::services::ServiceFlags;
 
-use std::{sync::Arc, time::Duration};
+use std::{cmp, time::Duration, sync::Arc};
 use rand::Rng;
 use rand::OsRng;
 
@@ -37,10 +37,15 @@ impl PeerScorer {
     const PICK_SELECTION_SIZE: usize = 100;
 
     const MIN_AGE_FULL: Duration = Duration::from_secs(5 * 60); // 5 minutes
+    const BEST_AGE_FULL: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
 
     const MIN_AGE_LIGHT: Duration = Duration::from_secs(2 * 60); // 2 minutes
+    const BEST_AGE_LIGHT: Duration = Duration::from_secs(15 * 60); // 15 minutes
+    const MAX_AGE_LIGHT: Duration = Duration::from_secs(6 * 60 * 60); // 6 hours
 
     const MIN_AGE_NANO: Duration = Duration::from_secs(1 * 60); // 1 minute
+    const BEST_AGE_NANO: Duration = Duration::from_secs(5 * 60); // 5 minutes
+    const MAX_AGE_NANO: Duration = Duration::from_secs(30 * 60); // 30 minutes
 
     const BEST_PROTOCOL_WS_DISTRIBUTION: f32 = 0.15; // 15%
 
@@ -185,12 +190,17 @@ impl PeerScorer {
         self.connection_scores = connection_scores
     }
 
-    pub fn recycle_connections(&self, count: u32, ty: CloseType, reason: &str) {
+    pub fn recycle_connections(&mut self, mut count: u32, ty: CloseType, reason: &str) {
+        while count > 0 && self.connection_scores.len() > 0 {
+            let connection_id = self.connection_scores.pop().map(|(connection_id, _)| connection_id).unwrap();
+            let state = self.connections.state();
+            let connection_info = state.get_connection(connection_id).expect("Missing connection");
 
-    }
-
-    pub fn lowest_connection_score(&self) -> Option<Score> {
-        None
+            if connection_info.state() == ConnectionState::Established {
+                connection_info.peer_channel().expect("Missing PeerChannel").close(ty); // FIXME: what about `reason`?
+                count -= 1;
+            }
+        }
     }
 
     fn score_connection(connection_info: &ConnectionInfo, distribution: f32, peer_count_full_ws_outbound: usize) -> Score {
@@ -243,7 +253,20 @@ impl PeerScorer {
     }
 
     fn score_connection_age(connection_info: &ConnectionInfo) -> Score {
-        unimplemented!()
+        let score = |age, best_age, max_age| { cmp::max(cmp::min(1 - (age - best_age) / max_age, 1), 0) };
+
+        let age = connection_info.age_established().as_millis();
+        let services = connection_info.peer_address().expect("No peer address").services;
+
+        if services.is_full_node() {
+            return (age as f32/ (2.0 * Self::BEST_AGE_FULL.as_millis() as f32) + 0.5) as Score;
+        } else if services.is_light_node() {
+            return score(age, Self::BEST_AGE_LIGHT.as_millis(), Self::MAX_AGE_LIGHT.as_millis()) as Score;
+        } else if services.is_nano_node() {
+            return score(age, Self::BEST_AGE_NANO.as_millis(), Self::MAX_AGE_NANO.as_millis()) as Score;
+        } else {
+            unreachable!()
+        }
     }
 
     fn get_min_age(&self, peer_address: Arc<PeerAddress>) -> Duration {
@@ -256,5 +279,26 @@ impl PeerScorer {
         } else {
             unreachable!()
         }
+    }
+
+    pub fn lowest_connection_score(&mut self) -> Option<Score> {
+        while self.connection_scores.len() > 0 {
+            let connection_id = self.connection_scores.last().map(|(connection_id, _)| *connection_id).unwrap();
+            let state = self.connections.state();
+            let connection_info = state.get_connection(connection_id).expect("Missing connection");
+
+            if connection_info.state() == ConnectionState::Established {
+                self.connection_scores.pop();
+            }
+        }
+
+        match self.connection_scores.last() {
+            None => return None,
+            Some(tuple) => Some(tuple.1),
+        }
+    }
+
+    pub fn connection_scores(&self) -> &Vec<(usize, f32)> {
+        &self.connection_scores
     }
 }

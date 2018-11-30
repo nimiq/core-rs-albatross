@@ -142,7 +142,7 @@ impl Network {
         network.scorer.write().recycle_connections(1, CloseType::PeerConnectionRecycledInboundExchange, "Peer connection recycled inbound exchange");
 
         // set ability to exchange for new inbound connections
-        network.connections.set_allow_inbound_exchange(match network.scorer.read().lowest_connection_score() {
+        network.connections.set_allow_inbound_exchange(match network.scorer.write().lowest_connection_score() {
             Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
             None => false
         });
@@ -241,7 +241,7 @@ impl Network {
         }
 
         // Set ability to exchange for new inbound connections.
-        connections.set_allow_inbound_exchange(match scorer.read().lowest_connection_score() {
+        connections.set_allow_inbound_exchange(match scorer.write().lowest_connection_score() {
             Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
             None => false
         });
