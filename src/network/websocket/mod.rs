@@ -210,8 +210,6 @@ impl Stream for NimiqMessageStream
         // We have enough ws messages to create a nimiq message
         // FIXME: validate formula
         if msg_length < ((1 + self.buf.len()) * (MAX_CHUNK_SIZE + 1)) {
-            // println!("We have enough ws msgs to create a Nimiq msg!");
-
             let mut binary_data = ws_message.clone(); // FIXME: clone is slow, fix the problem by figuring out how to do line 94 & 95 without borrow
             let mut remaining_length = msg_length - binary_data.len();
 
@@ -232,18 +230,18 @@ impl Stream for NimiqMessageStream
 
             assert_eq!(remaining_length, 0, "Data missing");
 
+            // XXX JS implementation quirk: Already wrap at 255 instead of 256...
+            self.processing_tag = (self.processing_tag + 1) % 255;
+
             // At this point we already read all the messages we need into the binary_data variable
             let nimiq_message = Deserialize::deserialize(&mut &binary_data[..]);
             if let Err(e) = nimiq_message {
                 error!("Failed to parse message: {:?}", e);
-                return Err(NimiqMessageStreamError::ParseError(e));
+                return Ok(Async::NotReady);
             }
 
-            // XXX JS implementation quirk: Already wrap at 255 instead of 256...
-            self.processing_tag = (self.processing_tag + 1) % 255;
             return Ok(Async::Ready(Some(nimiq_message.unwrap())));
         } else {
-            //println!("We don't have enough ws msgs yet, poll again later");
             return Ok(Async::NotReady);
         }
     }

@@ -146,8 +146,11 @@ impl ProcessConnectionFuture {
             if ty != CloseType::Regular {
                 shared_stream.close();
             }
+            debug!("ProcessConnectionFuture terminated {:?}", ty);
             Ok(())
-        }).map_err(|_| ());
+        }).map_err(|_| {
+            error!("ProcessConnectionFuture errored");
+        });
 
         (Self {
             inner: Box::new(connection)

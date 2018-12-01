@@ -154,9 +154,8 @@ impl Deserialize for Message {
         if magic != MAGIC {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Wrong magic byte").into());
         }
-        let ty: MessageType = Deserialize::deserialize(&mut crc32_reader)?;
-        println!("Message type: {:?}", ty);
 
+        let ty: MessageType = Deserialize::deserialize(&mut crc32_reader)?;
         let length: u32 = Deserialize::deserialize(&mut crc32_reader)?;
         let checksum: u32 = Deserialize::deserialize(&mut crc32_reader)?;
 

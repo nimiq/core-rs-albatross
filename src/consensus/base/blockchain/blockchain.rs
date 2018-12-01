@@ -481,6 +481,12 @@ impl<'env> Blockchain<'env> {
         return Target::from(n_bits);
     }
 
+    pub fn get_block_locators(&self) -> Vec<Blake2bHash> {
+        // Push top 10 hashes first, then back off exponentially.
+        // TODO
+        vec![self.head_hash()]
+    }
+
     pub fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
         match self.chain_store.get_chain_info(hash, false, None) {
             Some(chain_info) => include_forks || chain_info.on_main_chain,
