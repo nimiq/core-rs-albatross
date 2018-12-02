@@ -75,8 +75,8 @@ lazy_static! {
 //                    create_seed_peer_addr("seed-17.nimiq.com", 8443, "c7120f4f88b70a38daa9783e30e89c1c55c3d80d0babed44b4e2ddd09052664a"),
 //                    create_seed_peer_addr("seed-18.nimiq.com", 8443, "c15a2d824a52837fa7165dc232592be35116661e7f28605187ab273dd7233711"),
 //                    create_seed_peer_addr("seed-19.nimiq.com", 8443, "98a24d4b05158314b36e0bd6ce3b42ac5ac061f4bb9664d783eb930caa9315b6"),
-//                    create_seed_peer_addr("seed-20.nimiq.com", 8443, "1fc33f93273d94dd2cf7470274c27ecb1261ec983e43bdbb281803c0a09e68d5")
-                    create_seed_peer_addr_ws("localhost.localdomain", 8080, "8eb84399286cf4e092295c59689383cfbbad1abdeff5bf79221bcac13b1ce994")
+                    create_seed_peer_addr("seed-20.nimiq.com", 8443, "1fc33f93273d94dd2cf7470274c27ecb1261ec983e43bdbb281803c0a09e68d5")
+//                    create_seed_peer_addr_ws("localhost.localdomain", 8080, "8eb84399286cf4e092295c59689383cfbbad1abdeff5bf79221bcac13b1ce994")
                 ],
                 genesis_block: Block {
                     header: BlockHeader {

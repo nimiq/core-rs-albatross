@@ -4,6 +4,7 @@ use rand::OsRng;
 use rand::Rng;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 use parking_lot::RwLock;
 
 use crate::consensus::base::account::tree::AccountsProof;
@@ -111,6 +112,12 @@ impl Message {
             Message::GetHead => MessageType::GetHead,
             Message::Head(_) => MessageType::Head,
         }
+    }
+
+    pub fn peek_length(buffer: &[u8]) -> usize {
+        // FIXME: support for message types > 253 is pending (it changes the length position in the chunk).
+        // The magic number is 4 bytes and the type is 1 byte, so we want to start at the 6th byte (index 5), and the length field is 4 bytes.
+        BigEndian::read_u32(&buffer[5..9]) as usize
     }
 }
 

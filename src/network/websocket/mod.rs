@@ -1,4 +1,4 @@
-use std::{io, fmt, net, time::Instant, fmt::Debug};
+use std::{io, fmt, net, time::Instant, fmt::Debug, collections::VecDeque};
 
 use url::Url;
 use futures::prelude::*;
@@ -7,7 +7,6 @@ use tokio::{
 };
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use byteorder::{BigEndian, ByteOrder};
 
 use tungstenite::{
     protocol::Message as WebSocketMessage,
@@ -46,34 +45,39 @@ pub enum NimiqMessageStreamError {
     WebSocketError(WsError),
     TagMismatch,
     ParseError(SerializingError),
+    ChunkSizeExceeded,
+    MessageSizeExceeded,
+    FinalChunkSizeExceeded,
 }
 
 const MAX_CHUNK_SIZE: usize = 1024 * 16; // 16 kb
-pub struct NimiqMessageStream
-{
+const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 10; // 10 mb
+
+pub struct NimiqMessageStream {
     inner: WebSocketLayer,
-    processing_tag: u8,
+    receiving_tag: u8,
     sending_tag: u8,
-    buf: Vec<WebSocketMessage>,
+    ws_queue: VecDeque<WebSocketMessage>,
+    msg_buf: Option<Vec<u8>>,
     net_address: NetAddress,
     outbound: bool,
     last_chunk_received_at: Option<Instant>,
 }
 
-impl NimiqMessageStream
-{
+impl NimiqMessageStream {
     fn new(ws_socket: WebSocketStream<MaybeTlsStream<TcpStream>>, outbound: bool) -> Self {
         let peer_addr = ws_socket.get_ref().peer_addr().unwrap();
         return NimiqMessageStream {
             inner: ws_socket,
-            processing_tag: 0,
+            receiving_tag: 254,
             sending_tag: 0,
-            buf: Vec::with_capacity(64), // 1/10th of the max number of messages we would ever need to store
+            ws_queue: VecDeque::new(),
+            msg_buf: None,
             net_address: match peer_addr.ip() {
                 net::IpAddr::V4(ip4) => NetAddress::IPv4(ip4),
                 net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
             },
-            outbound: outbound,
+            outbound,
             last_chunk_received_at: None,
         };
     }
@@ -91,15 +95,14 @@ impl NimiqMessageStream
     }
 }
 
-impl Sink for NimiqMessageStream
-{
+impl Sink for NimiqMessageStream {
     type SinkItem = NimiqMessage;
     type SinkError = ();
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
         // Save and increment tag.
         let tag = self.sending_tag;
-        // XXX JS implementation quirk: Already wrap at 255 instead of 256...
+        // XXX JS implementation quirk: Already wrap at 255 instead of 256
         self.sending_tag = (self.sending_tag + 1) % 255;
 
         let msg = item.serialize_to_vec();
@@ -154,96 +157,98 @@ impl Sink for NimiqMessageStream
     }
 }
 
-impl Stream for NimiqMessageStream
-{
+impl Stream for NimiqMessageStream {
     type Item = NimiqMessage;
     type Error = NimiqMessageStreamError;
 
-    // FIXME: This implementation is inefficient as it tries to construct the nimiq message
-    // everytime, it should cache the work already done and just do new work on each iteration
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-
-        // First, lets get as many WebSocket messages as available and store them in the buffer
+        // First, lets get as many WebSocket messages as available and store them in the buffer.
         loop {
             match self.inner.poll() {
-                Ok(Async::Ready(Some(m))) => self.buf.push(m),
-                Ok(Async::Ready(None)) => return Ok(Async::Ready(None)), // FIXME: first flush our buffer and _then_ signal that there will be no more messages available
-                Ok(Async::NotReady) => break,
+                Ok(Async::Ready(Some(m))) => {
+                    // Check max chunk size.
+                    if m.len() > MAX_CHUNK_SIZE {
+                        error!("Max chunk size exceeded ({} > {})", m.len(), MAX_CHUNK_SIZE);
+                        return Err(NimiqMessageStreamError::ChunkSizeExceeded);
+                    }
+                    self.ws_queue.push_back(m)
+                },
+                Ok(Async::Ready(None)) => {
+                    // FIXME: first flush our buffer and _then_ signal that there will be no more messages available
+                    return Ok(Async::Ready(None))
+                },
+                Ok(Async::NotReady) => {
+                    break
+                },
                 Err(e) => {
-                    println!("Error condition: {:?}", e);
-                    return Err(NimiqMessageStreamError::WebSocketError(e)) // FIXME: first flush our buffer and _then_ signal that there was an error
-                    },
+                    // FIXME: first flush our buffer and _then_ signal that there was an error
+                    return Err(NimiqMessageStreamError::WebSocketError(e))
+                }
             }
         }
 
         // If there are no web socket messages in the buffer, signal that we don't have anything yet
         // (i.e. we would need to block waiting, which is a no no in an async function)
-        if self.buf.len() == 0 {
+        if self.ws_queue.len() == 0 {
             return Ok(Async::NotReady);
         }
 
-        // Now let's try to process the web socket messages that we have in order to create
-        // a nimiq message
-        // FIXME: DRY: this should be integrated into the code in the loop below
-        let mut ws_message = self.buf.remove(0).into_data();
+        while let Some(ws_msg) = self.ws_queue.pop_front() {
+            let raw_msg = ws_msg.into_data();
+            let tag = raw_msg[0];
+            let chunk = &raw_msg[1..];
 
-        // Make sure the tag is the one we expect
-        let tag = ws_message.remove(0);
-        if self.processing_tag != tag {
-            println!("Tag mismatch!");
-            return Err(NimiqMessageStreamError::TagMismatch);
-        }
-
-        // look at length, if we don't have enough ws msgs to create a nimiq msg, return Ok(Async::NotReady)
-        // if we have enough, check their tags and if all of them match, remove them from buf and process them.
-        // FIXME: what happens if one or more of the tags don't match?
-
-        // Get the length of this message
-        // FIXME: support for message types > 253 is pending (it changes the length position in the chunk)
-        // The magic number is 4 bytes and the type is 1 byte, so we want to start at the 6th byte (index 5), and the length field is 4 bytes
-        let msg_length = &ws_message[5..9];
-        let msg_length = BigEndian::read_u32(msg_length) as usize;
-
-        // Update last chunk timestamp
-        self.last_chunk_received_at = Some(Instant::now());
-
-        // We have enough ws messages to create a nimiq message
-        // FIXME: validate formula
-        if msg_length < ((1 + self.buf.len()) * (MAX_CHUNK_SIZE + 1)) {
-            let mut binary_data = ws_message.clone(); // FIXME: clone is slow, fix the problem by figuring out how to do line 94 & 95 without borrow
-            let mut remaining_length = msg_length - binary_data.len();
-
-            // Get more ws messages until we have all the ones that compose this nimiq message
-            while remaining_length > 0 {
-                let mut ws_message = self.buf.remove(0).into_data(); // FIXME: slow, better to count how many are needed and remove them all at once
-
-                // If the tag is correct, then append the data to our buffer
-                let current_message_length: usize;
-                if self.processing_tag == ws_message.remove(0) {
-                    current_message_length = ws_message.len();
-                    binary_data.append(&mut ws_message);
-                } else {
-                    return Err(NimiqMessageStreamError::TagMismatch);
+            // Detect if this is a new message.
+            if self.msg_buf.is_none() {
+                let msg_size = NimiqMessage::peek_length(chunk);
+                if msg_size > MAX_MESSAGE_SIZE {
+                    error!("Max message size exceeded ({} > {})", msg_size, MAX_MESSAGE_SIZE);
+                    return Err(NimiqMessageStreamError::MessageSizeExceeded);
                 }
-                remaining_length -= current_message_length;
+
+                self.msg_buf = Some(Vec::with_capacity(msg_size));
+                // XXX JS implementation quirk: Already wrap at 255 instead of 256
+                self.receiving_tag = (self.receiving_tag + 1) % 255;
             }
 
-            assert_eq!(remaining_length, 0, "Data missing");
-
-            // XXX JS implementation quirk: Already wrap at 255 instead of 256...
-            self.processing_tag = (self.processing_tag + 1) % 255;
-
-            // At this point we already read all the messages we need into the binary_data variable
-            let nimiq_message = Deserialize::deserialize(&mut &binary_data[..]);
-            if let Err(e) = nimiq_message {
-                error!("Failed to parse message: {:?}", e);
-                return Ok(Async::NotReady);
+            if self.receiving_tag != tag {
+                error!("Tag mismatch: expected {}, got {}", self.receiving_tag, tag);
+                return Err(NimiqMessageStreamError::TagMismatch);
             }
 
-            return Ok(Async::Ready(Some(nimiq_message.unwrap())));
-        } else {
-            return Ok(Async::NotReady);
+            // Update last chunk timestamp
+            self.last_chunk_received_at = Some(Instant::now());
+
+            let msg_buf = self.msg_buf.as_mut().unwrap();
+            let mut remaining = msg_buf.capacity() - msg_buf.len();
+
+            let chunk_size = raw_msg.len() - 1;
+            if chunk_size > remaining {
+                error!("Final chunk size exceeded ({} > {})", chunk_size, remaining);
+                return Err(NimiqMessageStreamError::FinalChunkSizeExceeded);
+            }
+
+            msg_buf.extend_from_slice(chunk);
+            remaining -= chunk_size;
+
+            if remaining == 0 {
+                // Full message read, parse it.
+                let msg = Deserialize::deserialize(&mut &msg_buf[..]);
+
+                // Reset message buffer.
+                self.msg_buf = None;
+
+                if let Err(e) = msg {
+                    error!("Failed to parse message: {:?}", e);
+                    // FIXME Fail on message parse errors
+                    return Ok(Async::NotReady);
+                }
+
+                return Ok(Async::Ready(Some(msg.unwrap())));
+            }
         }
+
+        return Ok(Async::NotReady);
     }
 }
 
@@ -254,23 +259,25 @@ impl Debug for NimiqMessageStream {
 }
 
 /// Connect to a given URL and return a Future that will resolve to a NimiqMessageStream
-pub fn nimiq_connect_async(url: Url) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send>
-{
-    Box::new(connect_async(url).map(|(ws_stream,_)| NimiqMessageStream::new(ws_stream, true))
-    .map_err(|e| {
-        println!("Error while trying to connect to another node: {}", e);
-        io::Error::new(io::ErrorKind::Other, e)
-    }))
+pub fn nimiq_connect_async(url: Url) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send> {
+    Box::new(
+        connect_async(url).map(|(ws_stream,_)| NimiqMessageStream::new(ws_stream, true))
+        .map_err(|e| {
+            println!("Error while trying to connect to another node: {}", e);
+            io::Error::new(io::ErrorKind::Other, e)
+        })
+    )
 }
 
 /// Accept an incoming connection and return a Future that will resolve to a NimiqMessageStream
-pub fn nimiq_accept_async(stream: MaybeTlsStream<TcpStream>) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send>
-{
-    Box::new(accept_async(stream).map(|ws_stream| NimiqMessageStream::new(ws_stream, false))
-    .map_err(|e| {
-        println!("Error while accepting a connection from another node: {}", e);
-        io::Error::new(io::ErrorKind::Other, e)
-    }))
+pub fn nimiq_accept_async(stream: MaybeTlsStream<TcpStream>) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send> {
+    Box::new(
+        accept_async(stream).map(|ws_stream| NimiqMessageStream::new(ws_stream, false))
+        .map_err(|e| {
+            println!("Error while accepting a connection from another node: {}", e);
+            io::Error::new(io::ErrorKind::Other, e)
+        })
+    )
 }
 
 #[derive(Debug)]
