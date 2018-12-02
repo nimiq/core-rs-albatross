@@ -784,7 +784,7 @@ impl ConnectionPool {
                         debug!("Inbound connection #{:?} closed pre-handshake: {:?}", connection_id, ty);
                     },
                     Some(false) => {
-                        debug!("Connection #{:?} to {:?} closed pre-handshake: {:?}", connection_id, info.peer_address(), ty);
+                        debug!("Connection #{:?} to {} closed pre-handshake: {:?}", connection_id, info.peer_address().unwrap(), ty);
                         self.notifier.read().notify(ConnectionPoolEvent::ConnectError(info.peer_address().expect("PeerAddress not set").clone(), ty));
                     },
                     _ => unreachable!("Invalid state, closing connection with network connection not set"),

@@ -1,4 +1,5 @@
 use std::io;
+use std::io::Read;
 
 use rand::OsRng;
 use rand::Rng;
@@ -143,15 +144,18 @@ impl Deserialize for Message {
 
         impl<'a, T: ReadBytesExt> io::Read for ReaderComputeCrc32<'a, T> {
             fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-                self.nth_element += 1;
-                let res = self.reader.read(buf);
-                // checksum is the 4th element. Use 0's instead for checksum computation.
-                if self.nth_element != 4 {
-                    self.crc32.update(buf);
-                } else {
-                    self.crc32.update(&[0, 0, 0, 0]);
+                let size = self.reader.read(buf)?;
+                if size > 0 {
+                    self.nth_element += 1;
+
+                    // checksum is the 4th element. Use 0's instead for checksum computation.
+                    if self.nth_element != 4 {
+                        self.crc32.update(&buf[..size]);
+                    } else {
+                        self.crc32.update(&[0, 0, 0, 0]);
+                    }
                 }
-                return res;
+                return Ok(size);
             }
         }
 
@@ -188,6 +192,10 @@ impl Deserialize for Message {
             MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
             _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into())  // FIXME remove default case
         };
+
+        // XXX Consume any leftover bytes in the message before computing the checksum.
+        // This is consistent with the JS implementation.
+        crc32_reader.read_to_end(&mut Vec::new()).unwrap();
 
         let crc_comp = crc32_reader.crc32.result();
         if crc_comp != checksum {
