@@ -26,7 +26,7 @@ use crate::network::{
     message::Message as NimiqMessage
 };
 
-pub mod web_socket_connector;
+pub mod websocket_connector;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
 

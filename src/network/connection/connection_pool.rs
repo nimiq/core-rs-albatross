@@ -25,7 +25,7 @@ use crate::utils::observer::PassThroughNotifier;
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
 use crate::utils::unique_ptr::UniquePtr;
-use crate::network::websocket::web_socket_connector::{WebSocketConnector, WebSocketConnectorEvent};
+use crate::network::websocket::websocket_connector::{WebSocketConnector, WebSocketConnectorEvent};
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {

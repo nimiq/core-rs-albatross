@@ -6,7 +6,7 @@ use crate::network::Peer;
 use crate::network::peer_channel::PeerChannel;
 use crate::network::connection::network_agent::NetworkAgent;
 use parking_lot::RwLock;
-use crate::network::websocket::web_socket_connector::ConnectionHandle;
+use crate::network::websocket::websocket_connector::ConnectionHandle;
 use std::collections::HashMap;
 use crate::network::message::MessageType;
 use crate::network::message::Message;
