@@ -1,7 +1,5 @@
-use std::hash::Hash;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use std::time::Instant;
 
 use atomic::Atomic;
 use atomic::Ordering;
@@ -69,7 +67,7 @@ impl Network {
             network_time,
             auto_connect: Atomic::new(false),
             backed_off: Atomic::new(false),
-            backoff: Atomic::new(Network::CONNECT_BACKOFF_INITIAL),
+            backoff: Atomic::new(Self::CONNECT_BACKOFF_INITIAL),
             addresses: addresses.clone(),
             connections: connections.clone(),
             scorer: Arc::new(RwLock::new(PeerScorer::new(net_config, addresses, connections.clone()))),
@@ -107,8 +105,8 @@ impl Network {
         let scorer = Arc::clone(&self.scorer);
 
         self.timers.set_interval(NetworkTimer::Housekeeping, move || {
-            Network::housekeeping(Arc::clone(&connections), Arc::clone(&scorer));
-        }, Network::HOUSEKEEPING_INTERVAL);
+            Self::housekeeping(Arc::clone(&connections), Arc::clone(&scorer));
+        }, Self::HOUSEKEEPING_INTERVAL);
 
         // Start connecting to peers.
         self.check_peer_count();
@@ -137,7 +135,7 @@ impl Network {
         self.notifier.read().notify(NetworkEvent::PeersChanged);
         self.timers.set_delay(NetworkTimer::PeersChanged, move || {
             this.check_peer_count();
-        }, Network::CONNECT_THROTTLE);
+        }, Self::CONNECT_THROTTLE);
     }
 
     fn on_recycling_request(&self) {
@@ -145,7 +143,7 @@ impl Network {
 
         // set ability to exchange for new inbound connections
         self.connections.set_allow_inbound_exchange(match self.scorer.write().lowest_connection_score() {
-            Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
+            Some(lowest_connection_score) => lowest_connection_score < Self::SCORE_INBOUND_EXCHANGE,
             None => false
         });
     }
@@ -153,11 +151,11 @@ impl Network {
     fn on_connect_error(&self, this: Arc<Network>) {
         self.timers.set_delay(NetworkTimer::ConnectError, move || {
             this.check_peer_count();
-        }, Network::CONNECT_THROTTLE);
+        }, Self::CONNECT_THROTTLE);
     }
 
     fn check_peer_count(&self) {
-        if self.auto_connect.load(Ordering::Relaxed) && self.addresses.seeded() && !self.scorer.read().is_good_peer_set() && self.connections.connecting_count() < Network::CONNECTING_COUNT_MAX {
+        if self.auto_connect.load(Ordering::Relaxed) && self.addresses.seeded() && !self.scorer.read().is_good_peer_set() && self.connections.connecting_count() < Self::CONNECTING_COUNT_MAX {
             // Pick a peer address that we are not connected to yet.
             let peer_addr_opt = self.scorer.read().pick_address();
 
@@ -174,7 +172,7 @@ impl Network {
                 if !self.backed_off.load(Ordering::Relaxed) {
                     self.backed_off.store(true, Ordering::Relaxed);
                     let old_backoff = self.backoff.load(Ordering::Relaxed);
-                    Duration::min(Network::CONNECT_BACKOFF_MAX, old_backoff * 2);
+                    Duration::min(Self::CONNECT_BACKOFF_MAX, old_backoff * 2);
 
                     let weak = self.self_weak.read().clone();
                     self.timers.reset_delay(NetworkTimer::PeerCountCheck, move || {
@@ -203,7 +201,7 @@ impl Network {
                 }
             }
         }
-        self.backoff.store(Network::CONNECT_BACKOFF_INITIAL, Ordering::Relaxed);
+        self.backoff.store(Self::CONNECT_BACKOFF_INITIAL, Ordering::Relaxed);
     }
 
     fn update_time_offset(&self) {
@@ -235,25 +233,25 @@ impl Network {
 
         // Recycle.
         let peer_count = connections.peer_count();
-        if peer_count < Network::PEER_COUNT_RECYCLING_ACTIVE {
+        if peer_count < Self::PEER_COUNT_RECYCLING_ACTIVE {
             // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
-            let percentage_to_recycle = (peer_count as f32 - Network::PEER_COUNT_RECYCLING_ACTIVE as f32) * (Network::RECYCLING_PERCENTAGE_MAX - Network::RECYCLING_PERCENTAGE_MIN) / (Network::PEER_COUNT_MAX - Network::PEER_COUNT_RECYCLING_ACTIVE) as f32 + Network::RECYCLING_PERCENTAGE_MIN as f32;
+            let percentage_to_recycle = (peer_count as f32 - Self::PEER_COUNT_RECYCLING_ACTIVE as f32) * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN) / (Self::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f32 + Self::RECYCLING_PERCENTAGE_MIN as f32;
             let connections_to_recycle = f32::ceil(peer_count as f32 * percentage_to_recycle) as u32;
             scorer.write().recycle_connections(connections_to_recycle, CloseType::PeerConnectionRecycled, "Peer connection recycled");
         }
 
         // Set ability to exchange for new inbound connections.
         connections.set_allow_inbound_exchange(match scorer.write().lowest_connection_score() {
-            Some(lowest_connection_score) => lowest_connection_score < Network::SCORE_INBOUND_EXCHANGE,
+            Some(lowest_connection_score) => lowest_connection_score < Self::SCORE_INBOUND_EXCHANGE,
             None => false
         });
 
         // Request fresh addresses.
-        Network::refresh_addresses(connections, scorer);
+        Self::refresh_addresses(connections, scorer);
     }
 
     fn refresh_addresses(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
-        unimplemented!()
+        // TODO
     }
 
     pub fn peer_count(&self) -> usize {

@@ -30,13 +30,11 @@ impl<K: Eq + Hash + Debug> Timers<K> {
         let mut intervals = self.intervals.lock();
 
         for (_, sender) in delays.drain() {
-            // TODO Handle result
-            sender.send(());
+            sender.send(()).unwrap_or(());
         }
 
         for (_, sender) in intervals.drain() {
-            // TODO Handle result
-            sender.send(());
+            sender.send(()).unwrap_or(());
         }
     }
 
@@ -144,8 +142,7 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     fn clear_timer_guarded(&self, key: &K, guard: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>) {
         let handle = guard.remove(key);
         if let Some(handle) = handle {
-            // TODO Handle result
-            handle.send(());
+            handle.send(()).unwrap_or(());
         }
     }
 }

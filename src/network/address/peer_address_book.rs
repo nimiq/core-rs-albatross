@@ -237,7 +237,7 @@ enum PeerAddressBookTimer {
 
 impl PeerAddressBook {
     pub fn new(network_config: Arc<NetworkConfig>) -> Self {
-        let mut ret = Self {
+        let this = Self {
             state: RwLock::new(PeerAddressBookState {
                 info_by_address: HashMap::new(),
                 ws_addresses: HashSet::new(),
@@ -255,11 +255,11 @@ impl PeerAddressBook {
         // Init hardcoded seed peers.
         if let Some(network_info) = get_network_info(NetworkId::Main) {
             for peer_address in network_info.seed_peers.iter() {
-                ret.add_single(None, peer_address.clone());
+                this.add_single(None, peer_address.clone());
             }
         }
 
-        return ret;
+        return this;
     }
 
     /// Initialises necessary threads.
@@ -374,6 +374,7 @@ impl PeerAddressBook {
         let mut changed = false;
         if let Some(info) = state.info_by_address.get_mut(&addr_arc) {
             // Update address.
+            // FIXME this is never used!
             known_address = Some(info.peer_address.clone());
 
             // Ignore address if it is banned.
@@ -592,10 +593,10 @@ impl PeerAddressBook {
                 PeerAddressState::Established => {
                     // TODO Also update timestamp for RTC connections
                 },
-                _ => {
+                //_ => {
                     // TODO What about peers who are stuck connecting? Can this happen?
                     // Do nothing for CONNECTING peers.
-                },
+                //},
             }
         }
 

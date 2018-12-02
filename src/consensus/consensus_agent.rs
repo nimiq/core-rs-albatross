@@ -1,27 +1,14 @@
-use std::collections::HashSet;
-use std::sync::Arc;
-use crate::consensus::base::blockchain::Blockchain;
+use parking_lot::RwLock;
+use std::sync::{Arc, Weak};
+use std::time::Duration;
+
+use crate::consensus::base::blockchain::{Blockchain, PushResult};
 use crate::consensus::base::mempool::Mempool;
 use crate::consensus::base::primitive::hash::Blake2bHash;
+use crate::consensus::inventory::{InventoryManager, InventoryAgent, InventoryEvent};
 use crate::network::Peer;
-use crate::network::message::InvVector;
-use crate::consensus::inventory::InventoryManager;
-use parking_lot::RwLock;
-use crate::consensus::inventory::InventoryAgent;
-use crate::network::message::GetBlocksMessage;
-use crate::network::message::GetBlocksDirection;
 use crate::network::connection::close_type::CloseType;
 use crate::utils::observer::Notifier;
-use std::sync::Weak;
-use crate::consensus::inventory::InventoryEvent;
-use crate::utils::observer::weak_listener;
-use crate::consensus::base::blockchain::PushResult;
-use crate::utils::timers::Timers;
-use std::time::Duration;
-use futures::future;
-use futures::future::Future;
-use tokio::timer::Delay;
-use std::time::Instant;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConsensusAgentEvent {

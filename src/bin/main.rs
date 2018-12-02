@@ -19,7 +19,6 @@ use nimiq::consensus::networks::NetworkId;
 use nimiq::network::network_config::NetworkConfig;
 use nimiq::utils::db::Environment;
 use nimiq::utils::db::lmdb::LmdbEnvironment;
-use nimiq::utils::db::volatile::VolatileEnvironment;
 use nimiq::network::network::Network;
 use nimiq::consensus::consensus::Consensus;
 

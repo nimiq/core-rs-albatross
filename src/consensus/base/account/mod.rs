@@ -250,8 +250,7 @@ pub enum AccountError {
     InvalidPruning,
     InvalidSerialization(SerializingError),
     InvalidTransaction(TransactionError),
-    #[deprecated]
-    Any(String)
+    AccountsHashMismatch, // XXX This doesn't really belong here
 }
 
 impl fmt::Display for AccountError {

@@ -1,6 +1,5 @@
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::ptr;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 use weak_table::PtrWeakHashSet;
@@ -10,7 +9,6 @@ use crate::consensus::base::mempool::Mempool;
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
 use crate::network::message::{Message, InvVector, InvVectorType, TxMessage};
 use crate::network::Peer;
-use crate::network::peer_channel::PeerChannelEvent;
 use crate::utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use crate::utils::timers::Timers;
 use crate::network::message::GetBlocksMessage;
@@ -75,7 +73,7 @@ impl InventoryManager {
         self.timers.set_delay(InventoryManagerTimer::Request(vector.clone()), move || {
             let this = upgrade_weak!(weak);
             this.write().note_vector_not_received(&agent1, &vector1);
-        }, InventoryManager::REQUEST_TIMEOUT);
+        }, Self::REQUEST_TIMEOUT);
     }
 
     fn note_vector_received(&mut self, vector: &InvVector) {
@@ -190,7 +188,7 @@ impl InventoryAgent {
             timers: Timers::new(),
             mutex: Mutex::new(()),
         });
-        InventoryAgent::init_listeners(&this);
+        Self::init_listeners(&this);
         this
     }
 
@@ -314,7 +312,7 @@ impl InventoryAgent {
     }
 
     fn on_block(&self, block: Block) {
-        let lock = self.mutex.lock();
+        //let lock = self.mutex.lock();
 
         let hash = block.header.hash::<Blake2bHash>();
         //debug!("[BLOCK] #{} ({} txs) from {}", block.header.height, block.body.as_ref().unwrap().transactions.len(), self.peer.peer_address());
@@ -328,8 +326,6 @@ impl InventoryAgent {
 
         // TODO Reuse already known (verified) transactions from mempool.
 
-        // Mark object as received.
-        self.on_object_received(&vector);
         self.inv_mgr.write().note_vector_received(&vector);
 
         // TODO do this async
@@ -342,7 +338,9 @@ impl InventoryAgent {
 
         debug!("Block #{} ({} txs) took {}ms to process", height, num_txs, (Instant::now() - start).as_millis());
 
-        self.notifier.read().notify(InventoryEvent::BlockProcessed(vector.hash, result));
+        self.notifier.read().notify(InventoryEvent::BlockProcessed(vector.hash.clone(), result));
+
+        self.on_object_received(&vector);
     }
 
     fn on_header(&self, header: BlockHeader) {
@@ -400,7 +398,7 @@ impl InventoryAgent {
     fn request_vectors_throttled(&self, state: &mut InventoryAgentState) {
         self.timers.clear_delay(&InventoryAgentTimer::GetDataThrottle);
 
-        if state.blocks_to_request.len() + state.txs_to_request.len() > InventoryAgent::REQUEST_THRESHOLD {
+        if state.blocks_to_request.len() + state.txs_to_request.len() > Self::REQUEST_THRESHOLD {
             self.request_vectors(state);
         } else {
             let weak = self.self_weak.read().clone();
@@ -408,7 +406,7 @@ impl InventoryAgent {
                 let this = upgrade_weak!(weak);
                 let mut state = this.state.write();
                 this.request_vectors(&mut *state);
-            }, InventoryAgent::REQUEST_THROTTLE)
+            }, Self::REQUEST_THROTTLE)
         }
     }
 
@@ -424,8 +422,8 @@ impl InventoryAgent {
         }
 
         // Request queued objects from the peer. Only request up to VECTORS_MAX_COUNT objects at a time.
-        let num_blocks = state.blocks_to_request.len().min(InventoryAgent::REQUEST_VECTORS_MAX);
-        let num_txs = state.txs_to_request.len().min(InventoryAgent::REQUEST_VECTORS_MAX - num_blocks);
+        let num_blocks = state.blocks_to_request.len().min(Self::REQUEST_VECTORS_MAX);
+        let num_txs = state.txs_to_request.len().min(Self::REQUEST_VECTORS_MAX - num_blocks);
 
         let mut vectors = Vec::new();
         for vector in state.blocks_to_request.drain(..num_blocks) {
@@ -446,7 +444,7 @@ impl InventoryAgent {
         self.timers.set_delay(InventoryAgentTimer::GetData, move || {
             let this = upgrade_weak!(weak);
             this.no_more_data();
-        }, InventoryAgent::REQUEST_TIMEOUT);
+        }, Self::REQUEST_TIMEOUT);
     }
 
     fn on_object_received(&self, vector: &InvVector) {
@@ -465,7 +463,7 @@ impl InventoryAgent {
             self.timers.reset_delay(InventoryAgentTimer::GetData, move || {
                 let this = upgrade_weak!(weak);
                 this.no_more_data();
-            }, InventoryAgent::REQUEST_TIMEOUT);
+            }, Self::REQUEST_TIMEOUT);
         } else {
             drop(state);
             self.no_more_data();

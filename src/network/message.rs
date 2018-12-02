@@ -533,7 +533,7 @@ pub struct VerAckMessage {
 impl VerAckMessage {
     pub fn new(peer_id: &PeerId, peer_challence_nonce: &ChallengeNonce, key_pair: &KeyPair) -> Message {
         let mut data = peer_id.serialize_to_vec();
-        peer_challence_nonce.serialize(&mut data);
+        peer_challence_nonce.serialize(&mut data).unwrap();
         let signature = key_pair.sign(&data[..]);
         Message::VerAck(Self {
             public_key: key_pair.public.clone(),

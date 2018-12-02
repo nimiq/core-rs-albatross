@@ -6,7 +6,6 @@ use rand::OsRng;
 
 use crate::network::{
     Protocol,
-    ProtocolFlags,
     address::{
         peer_address::PeerAddress,
         peer_address_book::PeerAddressBook,

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, SystemTime};
 
-use parking_lot::{RwLock, RwLockWriteGuard, Mutex, MappedRwLockReadGuard, RwLockReadGuard};
+use parking_lot::{RwLock, Mutex, RwLockReadGuard};
 
 use crate::consensus::base::blockchain::Blockchain;
 use crate::network;

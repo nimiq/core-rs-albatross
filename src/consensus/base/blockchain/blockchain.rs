@@ -145,6 +145,12 @@ impl<'env> Blockchain<'env> {
         // We expect full blocks (with body).
         assert!(block.body.is_some(), "Block body expected");
 
+        // Check (sort of) intrinsic block invariants.
+        if let Err(e) = block.verify(self.network_time.now(), self.network_id) {
+            warn!("Rejecting block - verification failed ({:?})", e);
+            return PushResult::Invalid(PushError::InvalidBlock(e))
+        }
+
         // Only one push operation at a time.
         let lock = self.push_lock.lock();
 
@@ -152,12 +158,6 @@ impl<'env> Blockchain<'env> {
         let hash: Blake2bHash = block.header.hash();
         if self.chain_store.get_chain_info(&hash, false, None).is_some() {
             return PushResult::Known;
-        }
-
-        // Check (sort of) intrinsic block invariants.
-        if let Err(e) = block.verify(self.network_time.now(), self.network_id) {
-            warn!("Rejecting block - verification failed ({:?})", e);
-            return PushResult::Invalid(PushError::InvalidBlock(e))
         }
 
         // Check if the block's immediate predecessor is part of the chain.

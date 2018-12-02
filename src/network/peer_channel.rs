@@ -1,7 +1,6 @@
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use futures::prelude::*;
 use futures::sync::mpsc::*;

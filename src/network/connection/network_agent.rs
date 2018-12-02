@@ -20,8 +20,8 @@ use crate::network::message::*;
 use crate::network::message::MessageType;
 use crate::network::message::RejectMessage;
 use crate::network::network_config::NetworkConfig;
-use crate::network::peer_channel::{PeerChannel, PeerChannelEvent};
-use crate::utils::observer::{Listener, Notifier, weak_listener, weak_passthru_listener};
+use crate::network::peer_channel::PeerChannel;
+use crate::utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use crate::utils::systemtime_to_timestamp;
 use crate::utils::timers::Timers;
 use crate::utils::unique_ptr::UniquePtr;
@@ -112,7 +112,7 @@ impl NetworkAgent {
             
             timers: Timers::new(),
         }));
-        NetworkAgent::init_listeners(&agent);
+        Self::init_listeners(&agent);
         agent
     }
 
@@ -168,7 +168,7 @@ impl NetworkAgent {
             self.challenge_nonce.clone());
         if self.channel.send(msg).is_err() {
             self.version_attempts += 1;
-            if self.version_attempts >= NetworkAgent::VERSION_ATTEMPTS_MAX || self.channel.closed() {
+            if self.version_attempts >= Self::VERSION_ATTEMPTS_MAX || self.channel.closed() {
                 self.channel.close(CloseType::SendingOfVersionMessageFailed);
                 return;
             }
@@ -177,7 +177,7 @@ impl NetworkAgent {
             self.timers.reset_delay(NetworkAgentTimer::Handshake, move || {
                 let arc = upgrade_weak!(weak);
                 arc.write().handshake();
-            }, NetworkAgent::VERSION_RETRY_DELAY);
+            }, Self::VERSION_RETRY_DELAY);
             return;
         }
 
@@ -193,7 +193,7 @@ impl NetworkAgent {
                 let agent = arc.read();
                 agent.timers.clear_delay(&NetworkAgentTimer::Version);
                 agent.channel.close(CloseType::VersionTimeout);
-            }, NetworkAgent::HANDSHAKE_TIMEOUT);
+            }, Self::HANDSHAKE_TIMEOUT);
         } else if self.peer_address_verified {
             self.send_ver_ack();
         }
@@ -204,7 +204,7 @@ impl NetworkAgent {
             let agent = arc.read();
             agent.timers.clear_delay(&NetworkAgentTimer::VerAck);
             agent.channel.close(CloseType::VerackTimeout);
-        }, NetworkAgent::HANDSHAKE_TIMEOUT);
+        }, Self::HANDSHAKE_TIMEOUT);
     }
 
     fn send_ver_ack(&mut self) {
@@ -357,7 +357,7 @@ impl NetworkAgent {
 
         // Verify signature.
         let mut data = self.network_config.peer_id().serialize_to_vec();
-        self.challenge_nonce.serialize(&mut data);
+        self.challenge_nonce.serialize(&mut data).unwrap();
         if !msg.public_key.verify(&msg.signature, &data[..]) {
             self.channel.close(CloseType::InvalidSignatureInVerackMessage);
             return;
@@ -383,7 +383,7 @@ impl NetworkAgent {
             let arc = upgrade_weak!(weak);
             let mut agent = arc.write();
             agent.check_connectivity();
-        }, NetworkAgent::CONNECTIVITY_CHECK_INTERVAL);
+        }, Self::CONNECTIVITY_CHECK_INTERVAL);
 
         // Regularly announce our address.
         let weak = self.listener.clone();
@@ -391,7 +391,7 @@ impl NetworkAgent {
             let arc = upgrade_weak!(weak);
             let agent = arc.read();
             agent.channel.send(AddrMessage::new(vec![agent.network_config.peer_address()]));
-        }, NetworkAgent::ANNOUNCE_ADDR_INTERVAL);
+        }, Self::ANNOUNCE_ADDR_INTERVAL);
 
         // Tell listeners that the handshake with this peer succeeded.
         self.notifier.notify(NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
@@ -404,7 +404,7 @@ impl NetworkAgent {
         assert!(self.peer.is_some());
         debug!("Requesting addresses from {}", self.peer.as_ref().unwrap());
 
-        let max_results = max_results.unwrap_or(NetworkAgent::NUM_ADDR_PER_REQUEST);
+        let max_results = max_results.unwrap_or(Self::NUM_ADDR_PER_REQUEST);
 
         self.address_request = Some(AddressRequest {
            max_results
@@ -434,11 +434,11 @@ impl NetworkAgent {
         }
 
         let address_request = self.address_request.take().unwrap_or_else(|| AddressRequest {
-            max_results: NetworkAgent::MAX_ADDR_PER_REQUEST,
+            max_results: Self::MAX_ADDR_PER_REQUEST,
         });
 
         // Reject messages that contain more than 1000 addresses, ban peer (bitcoin).
-        if msg.addresses.len() > NetworkAgent::MAX_ADDR_PER_MESSAGE as usize {
+        if msg.addresses.len() > Self::MAX_ADDR_PER_MESSAGE as usize {
             warn!("Rejecting addr message - too many addresses");
             self.channel.close(CloseType::AddrMessageTooLarge);
             return;
@@ -485,7 +485,7 @@ impl NetworkAgent {
         // TODO Rate limiting
 
         // Find addresses that match the given protocolMask & serviceMask.
-        let num_results = cmp::min(msg.max_results, NetworkAgent::MAX_ADDR_PER_REQUEST);
+        let num_results = cmp::min(msg.max_results, Self::MAX_ADDR_PER_REQUEST);
         let addresses = self.addresses.query(
             msg.protocol_mask,
             msg.service_mask,
@@ -523,7 +523,7 @@ impl NetworkAgent {
                 agent.timers.clear_delay(&NetworkAgentTimer::Ping(nonce));
                 agent.ping_times.remove(&nonce);
                 agent.channel.close(CloseType::PingTimeout);
-            }, NetworkAgent::PING_TIMEOUT);
+            }, Self::PING_TIMEOUT);
         }
     }
 
