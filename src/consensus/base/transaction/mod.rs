@@ -108,14 +108,16 @@ impl Transaction {
     }
 
     pub fn format(&self) -> TransactionFormat {
-        if let Result::Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
-            if self.sender_type == AccountType::Basic &&
-                self.recipient_type == AccountType::Basic &&
-                self.data.len() == 0 &&
-                self.flags.is_empty() &&
-                self.sender == Address::from(&signature_proof.public_key) &&
-                signature_proof.merkle_path.len() == 0 {
-                return TransactionFormat::Basic;
+        if self.sender_type == AccountType::Basic
+            && self.recipient_type == AccountType::Basic
+            && self.data.len() == 0
+            && self.flags.is_empty() {
+
+            if let Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
+                if self.sender == Address::from(&signature_proof.public_key)
+                    && signature_proof.merkle_path.len() == 0 {
+                    return TransactionFormat::Basic;
+                }
             }
         }
         return TransactionFormat::Extended;
