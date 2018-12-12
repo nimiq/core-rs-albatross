@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
-#![feature(duration_as_u128)]
 
 extern crate beserial;
 #[macro_use]

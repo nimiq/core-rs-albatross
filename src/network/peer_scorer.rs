@@ -1,4 +1,7 @@
-use crate::utils::services::ServiceFlags;
+use crate::utils::{
+    self,
+    services::ServiceFlags,
+};
 
 use std::{cmp, time::Duration, sync::Arc};
 use rand::Rng;
@@ -254,15 +257,15 @@ impl PeerScorer {
     fn score_connection_age(connection_info: &ConnectionInfo) -> Score {
         let score = |age, best_age, max_age| { cmp::max(cmp::min(1 - (age - best_age) / max_age, 1), 0) };
 
-        let age = connection_info.age_established().as_millis();
+        let age = utils::duration_as_millis(&connection_info.age_established());
         let services = connection_info.peer_address().expect("No peer address").services;
 
         if services.is_full_node() {
-            return (age as f32/ (2.0 * Self::BEST_AGE_FULL.as_millis() as f32) + 0.5) as Score;
+            return (age as f32/ (2.0 * utils::duration_as_millis(&Self::BEST_AGE_FULL) as f32) + 0.5) as Score;
         } else if services.is_light_node() {
-            return score(age, Self::BEST_AGE_LIGHT.as_millis(), Self::MAX_AGE_LIGHT.as_millis()) as Score;
+            return score(age, utils::duration_as_millis(&Self::BEST_AGE_LIGHT), utils::duration_as_millis(&Self::MAX_AGE_LIGHT)) as Score;
         } else if services.is_nano_node() {
-            return score(age, Self::BEST_AGE_NANO.as_millis(), Self::MAX_AGE_NANO.as_millis()) as Score;
+            return score(age, utils::duration_as_millis(&Self::BEST_AGE_NANO), utils::duration_as_millis(&Self::MAX_AGE_NANO)) as Score;
         } else {
             unreachable!()
         }
