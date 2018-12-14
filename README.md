@@ -6,7 +6,7 @@
 
 **[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
 
-This repository is a **Work in Progress** and should only be used for testing purposes, it is not production ready yet. If you need a client implementation to run on a production environment, please use the [JavaScript implementation](https://github.com/nimiq-network/core/) instead. 
+This repository is **Work in Progress** and should only be used for testing purposes, it is not production ready yet. If you need a client implementation to run in a production environment, please use the [JavaScript implementation](https://github.com/nimiq-network/core/) instead. 
 
 ## Table of Contents
 
@@ -31,7 +31,7 @@ Besides [Rust](https://www.rust-lang.org/learn/get-started#installing-rust) itse
 - `pkg-config`
 - `libssl-dev` (in Debian/Ubuntu) or `openssl-dev` (in Fedora/Red Hat)
 
-Compiling the project is achieved through [`Cargo`](https://doc.rust-lang.org/cargo/):
+Compiling the project is achieved through [`cargo`](https://doc.rust-lang.org/cargo/):
 
 ```
 git clone https://github.com/nimiq/core-rs
@@ -41,11 +41,13 @@ cargo build
 
 ## Usage
 
-Once compiled, you can run the Nimiq Rust Client directly or through `Cargo`s `run` command:
+Once compiled, you can run the Nimiq Rust Client directly or through `cargo run`:
 
 ```
 cargo run --bin nimiq
 ```
+
+To display log output, set the `RUST_LOG` environment variable: `RUST_LOG=nimiq=debug`.
 
 ## Contributing
 
