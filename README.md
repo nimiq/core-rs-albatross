@@ -1,10 +1,10 @@
-# Nimiq Core implementation in Rust _(nimiq-rs)_
+# Nimiq Core implementation in Rust _(core-rs)_
 
 ![nimiq](docs/nimiq_logo_rgb_horizontal.png)
 
 > Rust implementation of the Nimiq Blockchain Core
 
-**[Nimiq](https://nimiq.com/)** aims to be the best performing and easiest to use web-based decentralized payment protocol & ecosystem.
+**[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
 
 This repository is a **Work in Progress** and should only be used for testing purposes, it is not production ready yet. If you need a client implementation to run on a production environment, please use the [JavaScript implementation](https://github.com/nimiq-network/core/) instead. 
 
@@ -34,7 +34,7 @@ Besides [Rust](https://www.rust-lang.org/learn/get-started#installing-rust) itse
 Compiling the project is achieved through [`Cargo`](https://doc.rust-lang.org/cargo/):
 
 ```
-git clone https://github.com/nimiq-network/core-rs
+git clone https://github.com/nimiq/core-rs
 cd core-rs
 cargo build
 ```
