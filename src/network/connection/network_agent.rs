@@ -165,7 +165,8 @@ impl NetworkAgent {
             self.network_config.peer_address(),
             self.blockchain.head_hash(),
             network_info.genesis_hash.clone(),
-            self.challenge_nonce.clone());
+            self.challenge_nonce.clone(),
+            None);
         if self.channel.send(msg).is_err() {
             self.version_attempts += 1;
             if self.version_attempts >= Self::VERSION_ATTEMPTS_MAX || self.channel.closed() {

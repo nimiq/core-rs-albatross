@@ -361,16 +361,19 @@ pub struct VersionMessage {
     pub genesis_hash: Blake2bHash,
     pub head_hash: Blake2bHash,
     pub challenge_nonce: ChallengeNonce,
+    #[beserial(len_type(u8))]
+    pub user_agent: String, // FIXME: older versions don't have this field at all, need to take care of that scenario
 }
 
 impl VersionMessage {
-    pub fn new(peer_address: PeerAddress, head_hash: Blake2bHash, genesis_hash: Blake2bHash, challenge_nonce: ChallengeNonce) -> Message {
+    pub fn new(peer_address: PeerAddress, head_hash: Blake2bHash, genesis_hash: Blake2bHash, challenge_nonce: ChallengeNonce, user_agent: Option<String>) -> Message {
         Message::Version(Self {
             version: version::CODE,
             peer_address,
             genesis_hash,
             head_hash,
             challenge_nonce,
+            user_agent: user_agent.unwrap_or_else(|| String::new())
         })
     }
 }
