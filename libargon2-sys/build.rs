@@ -6,7 +6,6 @@ fn main() {
     let mut config = gcc::Build::new();
     config.file("native/argon2.c")
         .file("native/core.c")
-        .file("native/encoding.c")
         .file("native/blake2/blake2b.c")
         .file("native/opt.c");
 

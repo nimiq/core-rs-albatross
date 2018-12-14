@@ -147,13 +147,7 @@ typedef enum Argon2_ErrorCodes {
 
     ARGON2_MISSING_ARGS = -30,
 
-    ARGON2_ENCODING_FAIL = -31,
-
-    ARGON2_DECODING_FAIL = -32,
-
     ARGON2_THREAD_FAIL = -33,
-
-    ARGON2_DECODING_LENGTH_FAIL = -34,
 
     ARGON2_VERIFY_MISMATCH = -35
 } argon2_error_codes;
@@ -248,29 +242,6 @@ ARGON2_PUBLIC const char *argon2_type2string(argon2_type type, int uppercase);
 ARGON2_PUBLIC int argon2_ctx(argon2_context *context, argon2_type type);
 
 /**
- * Hashes a password with Argon2i, producing an encoded hash
- * @param t_cost Number of iterations
- * @param m_cost Sets memory usage to m_cost kibibytes
- * @param parallelism Number of threads and compute lanes
- * @param pwd Pointer to password
- * @param pwdlen Password size in bytes
- * @param salt Pointer to salt
- * @param saltlen Salt size in bytes
- * @param hashlen Desired length of the hash in bytes
- * @param encoded Buffer where to write the encoded hash
- * @param encodedlen Size of the buffer (thus max size of the encoded hash)
- * @pre   Different parallelism levels will give different results
- * @pre   Returns ARGON2_OK if successful
- */
-ARGON2_PUBLIC int argon2i_hash_encoded(const uint32_t t_cost,
-                                       const uint32_t m_cost,
-                                       const uint32_t parallelism,
-                                       const void *pwd, const size_t pwdlen,
-                                       const void *salt, const size_t saltlen,
-                                       const size_t hashlen, char *encoded,
-                                       const size_t encodedlen);
-
-/**
  * Hashes a password with Argon2i, producing a raw hash at @hash
  * @param t_cost Number of iterations
  * @param m_cost Sets memory usage to m_cost kibibytes
@@ -290,14 +261,6 @@ ARGON2_PUBLIC int argon2i_hash_raw(const uint32_t t_cost, const uint32_t m_cost,
                                    const size_t saltlen, void *hash,
                                    const size_t hashlen);
 
-ARGON2_PUBLIC int argon2d_hash_encoded(const uint32_t t_cost,
-                                       const uint32_t m_cost,
-                                       const uint32_t parallelism,
-                                       const void *pwd, const size_t pwdlen,
-                                       const void *salt, const size_t saltlen,
-                                       const size_t hashlen, char *encoded,
-                                       const size_t encodedlen);
-
 ARGON2_PUBLIC int argon2d_hash_raw(const uint32_t t_cost, const uint32_t m_cost,
                                    const uint32_t parallelism, const void *pwd,
                                    const size_t pwdlen, const void *salt,
@@ -309,14 +272,6 @@ ARGON2_PUBLIC int argon2d_hash_raw_flags(const uint32_t t_cost, const uint32_t m
                                    const size_t pwdlen, const void *salt,
                                    const size_t saltlen, void *hash,
                                    const size_t hashlen, const uint32_t flags);
-
-ARGON2_PUBLIC int argon2id_hash_encoded(const uint32_t t_cost,
-                                        const uint32_t m_cost,
-                                        const uint32_t parallelism,
-                                        const void *pwd, const size_t pwdlen,
-                                        const void *salt, const size_t saltlen,
-                                        const size_t hashlen, char *encoded,
-                                        const size_t encodedlen);
 
 ARGON2_PUBLIC int argon2id_hash_raw(const uint32_t t_cost,
                                     const uint32_t m_cost,
@@ -330,29 +285,8 @@ ARGON2_PUBLIC int argon2_hash(const uint32_t t_cost, const uint32_t m_cost,
                               const uint32_t parallelism, const void *pwd,
                               const size_t pwdlen, const void *salt,
                               const size_t saltlen, void *hash,
-                              const size_t hashlen, char *encoded,
-                              const size_t encodedlen, argon2_type type,
+                              const size_t hashlen, argon2_type type,
                               const uint32_t version);
-
-/**
- * Verifies a password against an encoded string
- * Encoded string is restricted as in validate_inputs()
- * @param encoded String encoding parameters, salt, hash
- * @param pwd Pointer to password
- * @pre   Returns ARGON2_OK if successful
- */
-ARGON2_PUBLIC int argon2i_verify(const char *encoded, const void *pwd,
-                                 const size_t pwdlen);
-
-ARGON2_PUBLIC int argon2d_verify(const char *encoded, const void *pwd,
-                                 const size_t pwdlen);
-
-ARGON2_PUBLIC int argon2id_verify(const char *encoded, const void *pwd,
-                                  const size_t pwdlen);
-
-/* generic function underlying the above ones */
-ARGON2_PUBLIC int argon2_verify(const char *encoded, const void *pwd,
-                                const size_t pwdlen, argon2_type type);
 
 /**
  * Argon2d: Version of Argon2 that picks memory blocks depending
@@ -422,20 +356,6 @@ ARGON2_PUBLIC int argon2_verify_ctx(argon2_context *context, const char *hash,
  * @return  The error message associated with the given error code
  */
 ARGON2_PUBLIC const char *argon2_error_message(int error_code);
-
-/**
- * Returns the encoded hash length for the given input parameters
- * @param t_cost  Number of iterations
- * @param m_cost  Memory usage in kibibytes
- * @param parallelism  Number of threads; used to compute lanes
- * @param saltlen  Salt size in bytes
- * @param hashlen  Hash size in bytes
- * @param type The argon2_type that we want the encoded length for
- * @return  The encoded hash length in bytes
- */
-ARGON2_PUBLIC size_t argon2_encodedlen(uint32_t t_cost, uint32_t m_cost,
-                                       uint32_t parallelism, uint32_t saltlen,
-                                       uint32_t hashlen, argon2_type type);
 
 #if defined(__cplusplus)
 }
