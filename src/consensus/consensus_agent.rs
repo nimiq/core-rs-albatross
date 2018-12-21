@@ -18,7 +18,7 @@ pub enum ConsensusAgentEvent {
 pub struct ConsensusAgent {
     blockchain: Arc<Blockchain<'static>>,
     mempool: Arc<Mempool<'static>>,
-    peer: Arc<Peer>,
+    pub peer: Arc<Peer>,
 
     inv_agent: Arc<InventoryAgent>,
 
@@ -26,7 +26,7 @@ pub struct ConsensusAgent {
     syncing: bool,
 
     /// Flag indicating that we have synced our blockchain with the peer's.
-    synced: bool,
+    pub synced: bool,
 
     /// The hash of the block that we want to learn to consider the sync complete.
     sync_target: Blake2bHash,
@@ -43,7 +43,7 @@ pub struct ConsensusAgent {
     /// The number of failed blockchain sync attempts.
     failed_syncs: u32,
 
-    notifier: Notifier<'static, ConsensusAgentEvent>,
+    pub notifier: Notifier<'static, ConsensusAgentEvent>,
     self_weak: Weak<RwLock<ConsensusAgent>>,
 }
 
@@ -52,9 +52,9 @@ impl ConsensusAgent {
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Peer) -> Arc<RwLock<Self>> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<RwLock<Self>> {
         let sync_target = peer.head_hash.clone();
-        let peer_arc = Arc::new(peer);
+        let peer_arc = peer;
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());
         let this = Arc::new(RwLock::new(ConsensusAgent {
             blockchain,

@@ -18,6 +18,7 @@ use crate::network::message::GetBlocksMessage;
 use crate::network::message::GetBlocksDirection;
 use parking_lot::Mutex;
 use std::time::Instant;
+use crate::utils::mutable_once::MutableOnce;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {
@@ -50,7 +51,7 @@ impl InventoryManager {
             if current_opt.is_some() {
                 let current = current_opt.unwrap();
                 if !current.peer.channel.closed() {
-                    let agent_arc = agent.self_weak.read().upgrade().unwrap();
+                    let agent_arc = agent.self_weak.upgrade().unwrap();
                     if !Arc::ptr_eq(&agent_arc, &current) {
                         record.1.insert(agent_arc);
                     }
@@ -58,10 +59,10 @@ impl InventoryManager {
                 }
             }
 
-            record.0 = agent.self_weak.read().clone();
+            record.0 = agent.self_weak.clone();
             self.request_vector(agent, vector);
         } else {
-            let record = (agent.self_weak.read().clone(), PtrWeakHashSet::new());
+            let record = (agent.self_weak.clone(), PtrWeakHashSet::new());
             self.vectors_to_request.insert(vector.clone(), record);
             self.request_vector(agent, vector);
         }
@@ -71,7 +72,7 @@ impl InventoryManager {
         agent.queue_vector(vector.clone());
 
         let weak = self.self_weak.clone();
-        let agent1 = agent.self_weak.read().clone();
+        let agent1 = agent.self_weak.clone();
         let vector1 = vector.clone();
         self.timers.set_delay(InventoryManagerTimer::Request(vector.clone()), move || {
             let this = upgrade_weak!(weak);
@@ -162,7 +163,7 @@ pub struct InventoryAgent {
     inv_mgr: Arc<RwLock<InventoryManager>>,
     state: RwLock<InventoryAgentState>,
     pub notifier: RwLock<Notifier<'static, InventoryEvent>>,
-    self_weak: RwLock<Weak<InventoryAgent>>,
+    self_weak: MutableOnce<Weak<InventoryAgent>>,
     timers: Timers<InventoryAgentTimer>,
     mutex: Mutex<()>,
 }
@@ -187,7 +188,7 @@ impl InventoryAgent {
                 objects_in_flight: HashSet::new(),
             }),
             notifier: RwLock::new(Notifier::new()),
-            self_weak: RwLock::new(Weak::new()),
+            self_weak: MutableOnce::new(Weak::new()),
             timers: Timers::new(),
             mutex: Mutex::new(()),
         });
@@ -196,7 +197,7 @@ impl InventoryAgent {
     }
 
     fn init_listeners(this: &Arc<Self>) {
-        *this.self_weak.write() = Arc::downgrade(this);
+        unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
         let channel = &this.peer.channel;
         let msg_notifier = &channel.msg_notifier;
@@ -223,7 +224,7 @@ impl InventoryAgent {
     }
 
     pub fn get_blocks(&self, locators: Vec<Blake2bHash>, max_results: u16, timeout: Duration) {
-        let weak = self.self_weak.read().clone();
+        let weak = self.self_weak.clone();
         self.timers.set_delay(InventoryAgentTimer::GetBlocks, move || {
             let this = upgrade_weak!(weak);
             this.timers.clear_delay(&InventoryAgentTimer::GetBlocks);
@@ -357,7 +358,7 @@ impl InventoryAgent {
         debug!("[NOTFOUND] {} vectors", vectors.len());
 
         // Remove unknown objects from in-flight list.
-        let agent = &*self.self_weak.read();
+        let agent = &*self.self_weak;
         for vector in vectors {
             if !self.state.read().objects_in_flight.contains(&vector) {
                 continue;
@@ -404,7 +405,7 @@ impl InventoryAgent {
         if state.blocks_to_request.len() + state.txs_to_request.len() > Self::REQUEST_THRESHOLD {
             self.request_vectors(state);
         } else {
-            let weak = self.self_weak.read().clone();
+            let weak = self.self_weak.clone();
             self.timers.set_delay(InventoryAgentTimer::GetDataThrottle, move || {
                 let this = upgrade_weak!(weak);
                 let mut state = this.state.write();
@@ -443,7 +444,7 @@ impl InventoryAgent {
         self.peer.channel.send(Message::GetData(vectors));
 
         // Set timeout to detect end of request / missing objects.
-        let weak = self.self_weak.read().clone();
+        let weak = self.self_weak.clone();
         self.timers.set_delay(InventoryAgentTimer::GetData, move || {
             let this = upgrade_weak!(weak);
             this.no_more_data();
@@ -462,7 +463,7 @@ impl InventoryAgent {
 
         // Reset request timeout if we expect more objects.
         if !state.objects_in_flight.is_empty() {
-            let weak = self.self_weak.read().clone();
+            let weak = self.self_weak.clone();
             self.timers.reset_delay(InventoryAgentTimer::GetData, move || {
                 let this = upgrade_weak!(weak);
                 this.no_more_data();
@@ -482,7 +483,7 @@ impl InventoryAgent {
         {
             let inv_mgr_arc = self.inv_mgr.clone();
             let mut inv_mgr = inv_mgr_arc.write();
-            let agent = &*self.self_weak.read();
+            let agent = &*self.self_weak;
             for vector in state.objects_in_flight.drain() {
                 inv_mgr.note_vector_not_received(agent, &vector);
             }

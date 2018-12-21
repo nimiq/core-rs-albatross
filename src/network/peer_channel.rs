@@ -17,6 +17,8 @@ use crate::utils::observer::{Notifier, PassThroughNotifier};
 use crate::network::connection::network_connection::ClosingHelper;
 use crate::utils::unique_ptr::UniquePtr;
 use crate::network::message::MessageNotifier;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 #[derive(Clone)]
 pub struct PeerChannel {
@@ -66,6 +68,24 @@ impl PeerChannel {
 impl Debug for PeerChannel {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "PeerChannel {{}}")
+    }
+}
+
+impl PartialEq for PeerChannel {
+    fn eq(&self, other: &PeerChannel) -> bool {
+        self.peer_sink == other.peer_sink
+    }
+
+    fn ne(&self, other: &PeerChannel) -> bool {
+        self.peer_sink != other.peer_sink
+    }
+}
+
+impl Eq for PeerChannel {}
+
+impl Hash for PeerChannel {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.peer_sink.hash(state);
     }
 }
 
@@ -119,6 +139,29 @@ impl PeerSink {
 impl Debug for PeerSink {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "PeerSink {{}}")
+    }
+}
+
+impl PartialEq for PeerSink {
+    fn eq(&self, other: &PeerSink) -> bool {
+        Arc::ptr_eq(&self.closing_helper, &other.closing_helper)
+    }
+}
+
+impl Eq for PeerSink {}
+
+// There is a single closing helper per connection.
+// Thus, we use the hash value of its pointer here.
+impl Hash for PeerSink {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // FIXME: Cloning in `hash` seems inefficient to me...
+        let raw = Arc::into_raw(self.closing_helper.clone());
+        raw.hash(state);
+
+        unsafe {
+            // Convert back to an `Arc` to prevent leak.
+            let _ = Arc::from_raw(raw);
+        }
     }
 }
 

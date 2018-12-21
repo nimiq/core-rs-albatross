@@ -17,6 +17,7 @@ use crate::network::Peer;
 use crate::network::peer_scorer::PeerScorer;
 use crate::utils::timers::Timers;
 use crate::utils::observer::PassThroughNotifier;
+use crate::utils::mutable_once::MutableOnce;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {
@@ -43,7 +44,7 @@ pub struct Network {
     scorer: Arc<RwLock<PeerScorer>>,
     timers: Timers<NetworkTimer>,
     pub notifier: RwLock<PassThroughNotifier<'static, NetworkEvent>>,
-    self_weak: RwLock<Weak<Network>>,
+    self_weak: MutableOnce<Weak<Network>>,
 }
 
 impl Network {
@@ -62,7 +63,7 @@ impl Network {
         let net_config = Arc::new(network_config);
         let addresses = Arc::new(PeerAddressBook::new(net_config.clone()));
         let connections = ConnectionPool::new(addresses.clone(), net_config.clone(), blockchain);
-        let this = Arc::new(Network {
+        let mut this = Arc::new(Network {
             network_config: net_config.clone(),
             network_time,
             auto_connect: Atomic::new(false),
@@ -73,9 +74,9 @@ impl Network {
             scorer: Arc::new(RwLock::new(PeerScorer::new(net_config, addresses, connections.clone()))),
             timers: Timers::new(),
             notifier: RwLock::new(PassThroughNotifier::new()),
-            self_weak: RwLock::new(Weak::new()),
+            self_weak: MutableOnce::new(Weak::new()),
         });
-        *this.self_weak.write() = Arc::downgrade(&this);
+        unsafe { this.self_weak.replace(Arc::downgrade(&this)) };
 
         let weak = Arc::downgrade(&this);
         this.connections.notifier.write().register(move |event: ConnectionPoolEvent| {
@@ -175,7 +176,7 @@ impl Network {
                     let old_backoff = self.backoff.load(Ordering::Relaxed);
                     Duration::min(Self::CONNECT_BACKOFF_MAX, old_backoff * 2);
 
-                    let weak = self.self_weak.read().clone();
+                    let weak = self.self_weak.clone();
                     self.timers.reset_delay(NetworkTimer::PeerCountCheck, move || {
                         let this = upgrade_weak!(weak);
                         this.check_peer_count();
@@ -257,5 +258,9 @@ impl Network {
 
     pub fn peer_count(&self) -> usize {
         return self.connections.peer_count();
+    }
+
+    pub fn set_allow_inbound_connections(&self, allow_inbound_connections: bool) {
+        self.connections.set_allow_inbound_connections(allow_inbound_connections);
     }
 }

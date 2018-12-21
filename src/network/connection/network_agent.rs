@@ -49,7 +49,7 @@ pub struct NetworkAgent {
 
     challenge_nonce: ChallengeNonce,
 
-    listener: Weak<RwLock<NetworkAgent>>,
+    self_weak: Weak<RwLock<NetworkAgent>>,
     pub notifier: Notifier<'static, NetworkAgentEvent>,
     
     timers: Timers<NetworkAgentTimer>,
@@ -107,7 +107,7 @@ impl NetworkAgent {
 
             challenge_nonce: ChallengeNonce::generate(),
 
-            listener: Weak::new(),
+            self_weak: Weak::new(),
             notifier: Notifier::new(),
             
             timers: Timers::new(),
@@ -117,7 +117,7 @@ impl NetworkAgent {
     }
 
     fn init_listeners(agent: &Arc<RwLock<Self>>) {
-        agent.write().listener = Arc::downgrade(agent);
+        agent.write().self_weak = Arc::downgrade(agent);
 
         let channel = &agent.read().channel;
         let msg_notifier = &channel.msg_notifier;
@@ -174,7 +174,7 @@ impl NetworkAgent {
                 return;
             }
 
-            let weak = self.listener.clone();
+            let weak = self.self_weak.clone();
             self.timers.reset_delay(NetworkAgentTimer::Handshake, move || {
                 let arc = upgrade_weak!(weak);
                 arc.write().handshake();
@@ -188,7 +188,7 @@ impl NetworkAgent {
         // Only do this if we haven't received the peer's version message already.
         if !self.version_received {
             // TODO Should we ban instead?
-            let weak = self.listener.clone();
+            let weak = self.self_weak.clone();
             self.timers.set_delay(NetworkAgentTimer::Version, move || {
                 let arc = upgrade_weak!(weak);
                 let agent = arc.read();
@@ -199,7 +199,7 @@ impl NetworkAgent {
             self.send_ver_ack();
         }
 
-        let weak = self.listener.clone();
+        let weak = self.self_weak.clone();
         self.timers.set_delay(NetworkAgentTimer::VerAck, move || {
             let arc = upgrade_weak!(weak);
             let agent = arc.read();
@@ -379,7 +379,7 @@ impl NetworkAgent {
     fn finish_handshake(&mut self) {
         // Setup regular connectivity check.
         // TODO randomize interval?
-        let weak = self.listener.clone();
+        let weak = self.self_weak.clone();
         self.timers.set_interval(NetworkAgentTimer::Connectivity, move || {
             let arc = upgrade_weak!(weak);
             let mut agent = arc.write();
@@ -387,7 +387,7 @@ impl NetworkAgent {
         }, Self::CONNECTIVITY_CHECK_INTERVAL);
 
         // Regularly announce our address.
-        let weak = self.listener.clone();
+        let weak = self.self_weak.clone();
         self.timers.set_interval(NetworkAgentTimer::AnnounceAddr, move || {
             let arc = upgrade_weak!(weak);
             let agent = arc.read();
@@ -517,7 +517,7 @@ impl NetworkAgent {
         // within the last CONNECTIVITY_CHECK_INTERVAL. Drop the peer otherwise.
         // TODO last_message_received missing
         if false {
-            let weak = self.listener.clone();
+            let weak = self.self_weak.clone();
             self.timers.set_delay(NetworkAgentTimer::Ping(nonce), move || {
                 let arc = upgrade_weak!(weak);
                 let mut agent = arc.write();

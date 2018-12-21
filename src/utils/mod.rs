@@ -14,6 +14,7 @@ pub mod timers;
 pub mod version;
 pub mod unique_ptr;
 pub mod iterators;
+pub mod mutable_once;
 
 pub fn systemtime_to_timestamp(start : SystemTime) -> u64 {
     match start.duration_since(UNIX_EPOCH) {

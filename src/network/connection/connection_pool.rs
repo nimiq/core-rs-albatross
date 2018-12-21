@@ -26,6 +26,7 @@ use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
 use crate::utils::unique_ptr::UniquePtr;
 use crate::network::websocket::websocket_connector::{WebSocketConnector, WebSocketConnectorEvent};
+use crate::utils::mutable_once::MutableOnce;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -271,9 +272,12 @@ impl ConnectionPoolState {
     }
 
     /// Updates the number of connected peers.
-    fn update_connected_peer_count(&mut self, connection_id: ConnectionId, update: PeerCountUpdate) {
+    fn update_connected_peer_count(&mut self, connection: Connection, update: PeerCountUpdate) {
         // We assume the connection to be present and having a valid peer address/network connection.
-        let info = self.connections.get(connection_id).unwrap();
+        let info = match connection {
+            Connection::Id(connection_id) => self.connections.get(connection_id).unwrap(),
+            Connection::Info(info) => info,
+        };
         let peer_address = info.peer_address().unwrap();
         let network_connection = info.network_connection().unwrap();
 
@@ -301,6 +305,11 @@ impl ConnectionPoolState {
     }
 }
 
+enum Connection<'a> {
+    Id(ConnectionId),
+    Info(&'a ConnectionInfo),
+}
+
 pub struct ConnectionPool {
     blockchain: Arc<Blockchain<'static>>,
     network_config: Arc<NetworkConfig>,
@@ -312,7 +321,7 @@ pub struct ConnectionPool {
     change_lock: Mutex<()>,
 
     pub notifier: RwLock<PassThroughNotifier<'static, ConnectionPoolEvent>>,
-    listener: RwLock<Weak<ConnectionPool>>,
+    self_weak: MutableOnce<Weak<ConnectionPool>>,
 }
 
 impl ConnectionPool {
@@ -320,7 +329,7 @@ impl ConnectionPool {
 
     /// Constructor.
     pub fn new(peer_address_book: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
-        let pool = Arc::new(Self {
+        let mut pool = Arc::new(Self {
             blockchain,
             network_config: network_config.clone(),
             addresses: peer_address_book,
@@ -357,12 +366,12 @@ impl ConnectionPool {
             change_lock: Mutex::new(()),
 
             notifier: RwLock::new(PassThroughNotifier::new()),
-            listener: RwLock::new(Weak::new()),
+            self_weak: MutableOnce::new(Weak::new()),
         });
         // Initialise.
         {
-            *pool.listener.write() = Arc::downgrade(&pool);
-            let weak = pool.listener.read().clone();
+            unsafe { pool.self_weak.replace(Arc::downgrade(&pool)) };
+            let weak = pool.self_weak.clone();
             pool.websocket_connector.notifier.write().register(move |event| {
                 let pool = upgrade_weak!(weak);
                 match event {
@@ -527,7 +536,7 @@ impl ConnectionPool {
             // Register close listener early to clean up correctly in case _checkConnection() closes the connection.
             let info = state.connections.get(connection_id).expect("Missing connection");
             let peer_channel = PeerChannel::new(info.network_connection().unwrap());
-            let weak = self.listener.read().clone();
+            let weak = self.self_weak.clone();
             peer_channel.close_notifier.write().register(move |ty: &CloseType| {
                 let arc = upgrade_weak!(weak);
                 arc.on_close(connection_id, ty.clone());
@@ -560,7 +569,7 @@ impl ConnectionPool {
             // Create NetworkAgent.
             agent = NetworkAgent::new(self.blockchain.clone(), self.addresses.clone(), self.network_config.clone(), peer_channel);
             let mut locked_agent = agent.write();
-            let weak = self.listener.read().clone();
+            let weak = self.self_weak.clone();
             locked_agent.notifier.register(move |event: &NetworkAgentEvent| {
                 let pool = upgrade_weak!(weak);
                 match event {
@@ -717,7 +726,7 @@ impl ConnectionPool {
                 state.add_net_address(connection_id, &net_address);
             }
 
-            state.update_connected_peer_count(connection_id, PeerCountUpdate::Add);
+            state.update_connected_peer_count(Connection::Id(connection_id), PeerCountUpdate::Add);
         }
 
         // TODO Setup signal forwarding.
@@ -773,7 +782,7 @@ impl ConnectionPool {
                     }
                 }
 
-                state.update_connected_peer_count(connection_id, PeerCountUpdate::Remove);
+                state.update_connected_peer_count(Connection::Info(&info), PeerCountUpdate::Remove);
 
                 established_peer_left = true;
                 debug!("[PEER-LEFT] {} {} (version={:?}, closeType={:?})", info.peer_address().unwrap(), net_address.unwrap(), info.peer().map(|p| p.version), ty);
