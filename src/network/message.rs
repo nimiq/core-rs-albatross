@@ -426,6 +426,8 @@ pub struct GetBlocksMessage {
     direction: GetBlocksDirection,
 }
 impl GetBlocksMessage {
+    pub const LOCATORS_MAX_COUNT: usize = 128;
+
     pub fn new(locators: Vec<Blake2bHash>, max_inv_size: u16, direction: GetBlocksDirection) -> Message {
         Message::GetBlocks(Self {
             locators,

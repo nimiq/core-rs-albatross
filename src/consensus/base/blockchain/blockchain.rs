@@ -11,6 +11,8 @@ use crate::network::NetworkTime;
 use crate::utils::db::{Environment, ReadTransaction, WriteTransaction};
 use crate::utils::observer::Notifier;
 use crate::utils::unique_ptr::UniquePtr;
+use std::cmp;
+use crate::network::message::GetBlocksMessage;
 
 pub struct Blockchain<'env> {
     env: &'env Environment,
@@ -483,8 +485,52 @@ impl<'env> Blockchain<'env> {
 
     pub fn get_block_locators(&self) -> Vec<Blake2bHash> {
         // Push top 10 hashes first, then back off exponentially.
-        // TODO
-        vec![self.head_hash()]
+        let mut hash = self.head_hash();
+        let mut locators = vec![hash.clone()];
+
+        for i in 0..cmp::min(10, self.height()) {
+            let block = self.chain_store.get_block(&hash, false, None);
+            match block {
+                Some(block) => {
+                    hash = block.header.prev_hash.clone();
+                    locators.push(hash.clone());
+                },
+                None => break,
+            }
+        }
+
+        let mut step = 2;
+        let mut height = self.height() - 10 - step;
+        let mut opt_block = self.chain_store.get_block_at(height);
+        while let Some(block) = opt_block {
+            locators.push(block.header.hash());
+
+            // Respect max size for GetBlocksMessages
+            if locators.len() >= GetBlocksMessage::LOCATORS_MAX_COUNT {
+                break;
+            }
+
+            step *= 2;
+            height = match height.checked_sub(step) {
+                Some(0) => break, // 0 or underflow means we need to end the loop
+                Some(v) => v,
+                None => break,
+            };
+
+            opt_block = self.chain_store.get_block_at(height);
+        }
+
+        // Push the genesis block hash.
+        let network_info = get_network_info(self.network_id).unwrap();
+        if locators.len() == 0 || locators.last().unwrap() != &network_info.genesis_hash {
+            // Respect max size for GetBlocksMessages, make space for genesis hash if necessary
+            if locators.len() >= GetBlocksMessage::LOCATORS_MAX_COUNT {
+                locators.pop();
+            }
+            locators.push(network_info.genesis_hash.clone());
+        }
+
+        locators
     }
 
     pub fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {

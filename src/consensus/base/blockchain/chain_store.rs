@@ -138,7 +138,8 @@ impl<'env> ChainStore<'env> {
     }
 
     pub fn get_block_at(&self, block_height: u32) -> Option<Block> {
-        unimplemented!();
+        self.get_chain_info_at(block_height, true, None)
+            .map(|chain_info| chain_info.head)
     }
 
     pub fn get_blocks_backward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {
