@@ -129,7 +129,7 @@ impl Deserialize for Message {
         pub struct ReaderComputeCrc32<'a, T: 'a + ReadBytesExt> {
             reader: &'a mut T,
             crc32: Crc32Computer,
-            nth_element: u16
+            nth_element: u32
         }
 
         impl<'a, T: ReadBytesExt> ReaderComputeCrc32<'a, T> {
@@ -145,6 +145,7 @@ impl Deserialize for Message {
         impl<'a, T: ReadBytesExt> io::Read for ReaderComputeCrc32<'a, T> {
             fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
                 let size = self.reader.read(buf)?;
+                // println!("nth_element: {}", self.nth_element);
                 if size > 0 {
                     self.nth_element += 1;
 
