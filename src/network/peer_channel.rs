@@ -154,14 +154,8 @@ impl Eq for PeerSink {}
 // Thus, we use the hash value of its pointer here.
 impl Hash for PeerSink {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // FIXME: Cloning in `hash` seems inefficient to me...
-        let raw = Arc::into_raw(self.closing_helper.clone());
-        raw.hash(state);
-
-        unsafe {
-            // Convert back to an `Arc` to prevent leak.
-            let _ = Arc::from_raw(raw);
-        }
+        let ptr = self.closing_helper.as_ref() as *const ClosingHelper;
+        ptr.hash(state);
     }
 }
 
