@@ -134,6 +134,7 @@ impl Transaction {
             .then_with(|| self.recipient_type.cmp(&other.recipient_type))
             .then_with(|| self.sender_type.cmp(&other.sender_type))
             .then_with(|| self.flags.cmp(&other.flags))
+            .then_with(|| self.data.len().cmp(&other.data.len()))
             .then_with(|| self.data.cmp(&other.data));
     }
 
@@ -147,6 +148,7 @@ impl Transaction {
             .then_with(|| self.recipient_type.cmp(&other.recipient_type))
             .then_with(|| self.sender_type.cmp(&other.sender_type))
             .then_with(|| self.flags.cmp(&other.flags))
+            .then_with(|| self.data.len().cmp(&other.data.len()))
             .then_with(|| self.data.cmp(&other.data));
     }
 
