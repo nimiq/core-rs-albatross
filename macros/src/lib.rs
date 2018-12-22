@@ -69,6 +69,10 @@ macro_rules! add_hex_io_fns_typed_arr {
             }
         }
 
+        impl $name {
+            pub fn to_hex(&self) -> String { ::hex::encode(&self.0) }
+        }
+
         impl ::std::str::FromStr for $name {
             type Err = ::hex::FromHexError;
 
