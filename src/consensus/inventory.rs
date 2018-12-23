@@ -509,7 +509,7 @@ impl InventoryAgent {
     }
 
     fn on_get_blocks(&self, msg: GetBlocksMessage) {
-        trace!("{} block locators max_inv_size {} received from {:?}", msg.locators.len(), msg.max_inv_size, self.peer.peer_address());
+        trace!("[GETBLOCKS] {} block locators max_inv_size {} received from {}", msg.locators.len(), msg.max_inv_size, self.peer.peer_address());
 
         // A peer has requested blocks. Check all requested block locator hashes
         // in the given order and pick the first hash that is found on our main

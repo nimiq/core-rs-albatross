@@ -135,7 +135,7 @@ impl Consensus {
 
         // Reset syncPeer if it left during the sync.
         if self.state.read().sync_peer.as_ref().map_or(false, |sync_peer| sync_peer == &peer) {
-            debug!("Peer {:?} left during sync", peer.peer_address());
+            debug!("Peer {} left during sync", peer.peer_address());
             self.state.write().sync_peer = None;
             self.notifier.read().notify(ConsensusEvent::SyncFailed);
         }
@@ -147,7 +147,7 @@ impl Consensus {
     fn on_peer_synced(&self, peer: Arc<Peer>) {
         // Reset syncPeer if we finished syncing with it.
         if self.state.read().sync_peer.as_ref().map_or(false, |sync_peer| sync_peer == &peer) {
-            trace!("Finished sync with peer {:?}", peer.peer_address());
+            trace!("Finished sync with peer {}", peer.peer_address());
             self.state.write().sync_peer = None;
         }
 
@@ -203,7 +203,7 @@ impl Consensus {
                 self.notifier.read().notify(ConsensusEvent::Syncing);
             }
 
-            trace!("Syncing blockchain with peer {:?}", agent.peer.peer_address());
+            trace!("Syncing blockchain with peer {}", agent.peer.peer_address());
             drop(sync_guard);
             agent.sync();
         } else {
