@@ -3,7 +3,7 @@ use parking_lot::{RwLock, RwLockReadGuard, MappedRwLockReadGuard, Mutex};
 use std::sync::Arc;
 use crate::consensus::base::account::{Accounts, AccountError};
 use crate::consensus::base::block::{Block, BlockError, Target, TargetCompact};
-use crate::consensus::base::blockchain::{ChainInfo, ChainStore, TransactionCache};
+use crate::consensus::base::blockchain::{ChainInfo, ChainStore, TransactionCache, Direction};
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
 use crate::consensus::networks::{NetworkId, get_network_info};
 use crate::consensus::policy;
@@ -549,6 +549,10 @@ impl<'env> Blockchain<'env> {
             }
         }
         None
+    }
+
+    pub fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Block> {
+        self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
     pub fn head_hash(&self) -> Blake2bHash {

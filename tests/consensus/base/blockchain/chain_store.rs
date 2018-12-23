@@ -173,3 +173,80 @@ fn it_can_get_blocks_backward() {
     blocks = store.get_blocks_backward(&blocks[0].header.hash::<Blake2bHash>(), 20, false, None);
     assert_eq!(blocks.len(), 0);
 }
+
+#[test]
+fn it_can_get_blocks_forward() {
+    let env = VolatileEnvironment::new(3).unwrap();
+    let store = ChainStore::new(&env);
+
+    let mut txn = WriteTransaction::new(&env);
+    let network_info = get_network_info(NetworkId::Main).unwrap();
+    let mut block = network_info.genesis_block.clone();
+    let mut chain_infos = vec![ChainInfo::initial(block.clone())];
+
+    let mut hash;
+    for _ in 0..20 {
+        let mut b = block.clone();
+
+        b.header.prev_hash = block.header.hash();
+        b.header.height = block.header.height + 1;
+        hash = b.header.hash::<Blake2bHash>();
+        chain_infos.last_mut().unwrap().main_chain_successor = Some(hash);
+        chain_infos.push(ChainInfo::initial(b.clone()));
+        block = b;
+    }
+
+    for chain_info in chain_infos.iter() {
+        let hash = chain_info.head.header.hash();
+        store.put_chain_info(&mut txn, &hash, chain_info, true);
+    }
+    txn.commit();
+
+    let second_block_hash = chain_infos.first().unwrap().main_chain_successor.as_ref().unwrap();
+
+    let mut blocks = store.get_blocks_forward(second_block_hash, 10, true, None);
+    assert_eq!(blocks.len(), 10);
+    assert_eq!(blocks[0].header.height, 3);
+    assert_eq!(blocks[9].header.height, 12);
+    assert!(blocks[0].body.is_some());
+    assert!(blocks[9].body.is_some());
+
+    blocks = store.get_blocks_forward(second_block_hash, 18, false, None);
+    assert_eq!(blocks.len(), 18);
+    assert_eq!(blocks[0].header.height, 3);
+    assert_eq!(blocks[17].header.height, 20);
+    assert!(blocks[0].body.is_none());
+    assert!(blocks[17].body.is_none());
+
+    blocks = store.get_blocks_forward(second_block_hash, 19, true, None);
+    assert_eq!(blocks.len(), 19);
+    assert_eq!(blocks[0].header.height, 3);
+    assert_eq!(blocks[18].header.height, 21);
+    assert!(blocks[0].body.is_some());
+    assert!(blocks[18].body.is_some());
+
+    blocks = store.get_blocks_forward(second_block_hash, 20, false, None);
+    assert_eq!(blocks.len(), 19);
+    assert_eq!(blocks[0].header.height, 3);
+    assert_eq!(blocks[18].header.height, 21);
+    assert!(blocks[0].body.is_none());
+    assert!(blocks[18].body.is_none());
+
+    blocks = store.get_blocks_forward(&network_info.genesis_hash, 20, false, None);
+    assert_eq!(blocks.len(), 20);
+    assert_eq!(blocks[0].header.height, 2);
+    assert_eq!(blocks[19].header.height, 21);
+
+    blocks = store.get_blocks_forward(&network_info.genesis_hash, 20, false, None);
+    assert_eq!(blocks.len(), 20);
+    assert_eq!(blocks[0].header.height, 2);
+    assert_eq!(blocks[19].header.height, 21);
+
+    blocks = store.get_blocks_forward(&chain_infos[19].head.header.hash(), 20, true, None);
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].header.height, 21);
+    assert!(blocks[0].body.is_some());
+
+    blocks = store.get_blocks_forward(&chain_infos[20].head.header.hash(), 20, false, None);
+    assert_eq!(blocks.len(), 0);
+}

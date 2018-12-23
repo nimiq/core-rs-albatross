@@ -20,6 +20,7 @@ use crate::utils::services::ServiceFlags;
 use crate::network::ProtocolFlags;
 use crate::utils::version;
 use crate::utils::observer::PassThroughNotifier;
+use crate::consensus::base::primitive::hash::Hash;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u64)]
@@ -402,6 +403,10 @@ pub struct InvVector {
 impl InvVector {
     pub fn new(ty: InvVectorType, hash: Blake2bHash) -> Self {
         InvVector { ty, hash }
+    }
+
+    pub fn from_block(block: &Block) -> Self {
+        Self::new(InvVectorType::Block, block.header.hash())
     }
 }
 

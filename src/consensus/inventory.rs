@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 use weak_table::PtrWeakHashSet;
 use crate::consensus::base::block::{Block, BlockHeader};
-use crate::consensus::base::blockchain::{Blockchain, PushResult};
+use crate::consensus::base::blockchain::{Blockchain, PushResult, Direction};
 use crate::consensus::base::mempool::Mempool;
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
 use crate::consensus::base::transaction::Transaction;
@@ -17,6 +17,8 @@ use crate::utils::{
     timers::Timers,
     self,
 };
+use crate::consensus::networks::get_network_info;
+use std::cmp;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {
@@ -171,6 +173,7 @@ impl InventoryAgent {
     const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
     const REQUEST_THRESHOLD: usize = 50;
     const REQUEST_VECTORS_MAX: usize = 1000;
+    const GET_BLOCKS_VECTORS_MAX: u32 = 500;
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
@@ -506,6 +509,38 @@ impl InventoryAgent {
     }
 
     fn on_get_blocks(&self, msg: GetBlocksMessage) {
+        trace!("{} block locators max_inv_size {} received from {:?}", msg.locators.len(), msg.max_inv_size, self.peer.peer_address());
+
+        // A peer has requested blocks. Check all requested block locator hashes
+        // in the given order and pick the first hash that is found on our main
+        // chain, ignore the rest. If none of the requested hashes is found,
+        // pick the genesis block hash. Send the main chain starting from the
+        // picked hash back to the peer.
+        let network_info = get_network_info(self.blockchain.network_id).unwrap();
+        let mut start_block_hash = network_info.genesis_hash.clone();
+        for locator in msg.locators.iter() {
+            if let Some(block) = self.blockchain.get_block(locator, false, false) {
+                // We found a block, ignore remaining block locator hashes.
+                start_block_hash = locator.clone();
+                break;
+            }
+        }
+
+        // Collect up to GETBLOCKS_VECTORS_MAX inventory vectors for the blocks starting right
+        // after the identified block on the main chain.
+        let blocks = self.blockchain.get_blocks(
+            &start_block_hash,
+            cmp::min(msg.max_inv_size as u32, Self::GET_BLOCKS_VECTORS_MAX),
+            false,
+            Direction::from(msg.direction),
+        );
+
+        let vectors = blocks.iter().map(|block| {
+            InvVector::from_block(block)
+        }).collect();
+
+        // Send the vectors back to the requesting peer.
+        self.peer.channel.send_or_close(Message::Inv(vectors));
     }
 
     fn on_get_data(&self, vectors: Vec<InvVector>) {

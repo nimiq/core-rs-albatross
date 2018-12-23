@@ -2,6 +2,22 @@ use crate::consensus::base::block::Block;
 use crate::consensus::base::blockchain::ChainInfo;
 use crate::consensus::base::primitive::hash::Blake2bHash;
 use crate::utils::db::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};
+use crate::network::message::GetBlocksDirection;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum Direction {
+    Forward,
+    Backward,
+}
+
+impl From<GetBlocksDirection> for Direction {
+    fn from(direction: GetBlocksDirection) -> Self {
+        match direction {
+            GetBlocksDirection::Forward => Direction::Forward,
+            GetBlocksDirection::Backward => Direction::Backward,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct ChainStore<'env> {
@@ -171,5 +187,45 @@ impl<'env> ChainStore<'env> {
         }
 
         return blocks;
+    }
+
+    pub fn get_blocks_forward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(self.env);
+                &read_txn
+            }
+        };
+
+        let mut blocks= Vec::new();
+        let mut chain_info = match self.get_chain_info(start_block_hash, false, Some(&txn)) {
+            Some(chain_info) => chain_info,
+            None => return blocks
+        };
+
+        while (blocks.len() as u32) < count {
+            if let Some(ref successor) = chain_info.main_chain_successor {
+                let chain_info_opt = self.get_chain_info(successor, include_body, Some(&txn));
+                if chain_info_opt.is_none() {
+                    break;
+                }
+
+                chain_info = chain_info_opt.unwrap();
+                blocks.push(chain_info.head);
+            } else {
+                break;
+            }
+        }
+
+        return blocks;
+    }
+
+    pub fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction, txn_option: Option<&Transaction>) -> Vec<Block> {
+        match direction {
+            Direction::Forward => self.get_blocks_forward(start_block_hash, count, include_body, txn_option),
+            Direction::Backward => self.get_blocks_backward(start_block_hash, count, include_body, txn_option),
+        }
     }
 }
