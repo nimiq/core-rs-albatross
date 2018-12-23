@@ -9,19 +9,16 @@ use crate::consensus::inventory::{InventoryManager, InventoryAgent, InventoryEve
 use crate::network::Peer;
 use crate::network::connection::close_type::CloseType;
 use crate::utils::observer::Notifier;
+use crate::utils::mutable_once::MutableOnce;
+use parking_lot::Mutex;
+use parking_lot::MutexGuard;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConsensusAgentEvent {
     Synced
 }
 
-pub struct ConsensusAgent {
-    blockchain: Arc<Blockchain<'static>>,
-    mempool: Arc<Mempool<'static>>,
-    pub peer: Arc<Peer>,
-
-    inv_agent: Arc<InventoryAgent>,
-
+pub struct ConsensusAgentState {
     /// Flag indicating that we are currently syncing our blockchain with the peer's.
     syncing: bool,
 
@@ -42,9 +39,21 @@ pub struct ConsensusAgent {
 
     /// The number of failed blockchain sync attempts.
     failed_syncs: u32,
+}
 
-    pub notifier: Notifier<'static, ConsensusAgentEvent>,
-    self_weak: Weak<RwLock<ConsensusAgent>>,
+pub struct ConsensusAgent {
+    blockchain: Arc<Blockchain<'static>>,
+    mempool: Arc<Mempool<'static>>,
+    pub peer: Arc<Peer>,
+
+    inv_agent: Arc<InventoryAgent>,
+
+    state: RwLock<ConsensusAgentState>,
+
+    pub notifier: RwLock<Notifier<'static, ConsensusAgentEvent>>,
+    self_weak: MutableOnce<Weak<ConsensusAgent>>,
+
+    sync_lock: Mutex<()>,
 }
 
 impl ConsensusAgent {
@@ -52,45 +61,52 @@ impl ConsensusAgent {
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<RwLock<Self>> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());
-        let this = Arc::new(RwLock::new(ConsensusAgent {
+        let this = Arc::new(ConsensusAgent {
             blockchain,
             mempool,
             peer: peer_arc.clone(),
             inv_agent,
 
-            syncing: false,
-            synced: false,
-            sync_target,
-            fork_head: None,
-            // Initialize to 1 to not count the initial sync call as a failed attempt.
-            num_blocks_extending: 1,
-            num_blocks_forking: 0,
-            failed_syncs: 0,
+            state: RwLock::new(ConsensusAgentState {
+                syncing: false,
+                synced: false,
+                sync_target,
+                fork_head: None,
+                // Initialize to 1 to not count the initial sync call as a failed attempt.
+                num_blocks_extending: 1,
+                num_blocks_forking: 0,
+                failed_syncs: 0,
+            }),
 
-            notifier: Notifier::new(),
-            self_weak: Weak::new(),
-        }));
+            notifier: RwLock::new(Notifier::new()),
+            self_weak: MutableOnce::new(Weak::new()),
+
+            sync_lock: Mutex::new(()),
+        });
         ConsensusAgent::init_listeners(&this);
         this
     }
 
-    fn init_listeners(this: &Arc<RwLock<ConsensusAgent>>) {
-        this.write().self_weak = Arc::downgrade(this);
+    pub fn synced(&self) -> bool {
+        self.state.read().synced
+    }
+
+    fn init_listeners(this: &Arc<ConsensusAgent>) {
+        unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
         let weak = Arc::downgrade(this);
-        let agent = this.read();
-        agent.inv_agent.notifier.write().register(move |e: &InventoryEvent| {
+        this.inv_agent.notifier.write().register(move |e: &InventoryEvent| {
             let this = upgrade_weak!(weak);
-            this.write().on_inventory_event(e);
+            this.on_inventory_event(e);
         });
     }
 
-    pub fn sync(&mut self) {
-        self.syncing = true;
+    pub fn sync(&self) {
+        self.state.write().syncing = true;
 
         // Don't go through the InventoryManager when syncing.
         self.inv_agent.bypass_mgr(true);
@@ -98,26 +114,31 @@ impl ConsensusAgent {
         self.perform_sync();
     }
 
-    fn perform_sync(&mut self) {
+    fn perform_sync(&self) {
+        let sync_guard = self.sync_lock.lock();
+
         // Wait for ongoing requests to finish.
         if self.inv_agent.is_busy() {
             return;
         }
 
         // If we know our sync target block, the sync is finished.
-        if self.blockchain.contains(&self.sync_target, true) {
-            self.sync_finished();
+        if self.blockchain.contains(&self.state.read().sync_target, true) {
+            self.sync_finished(sync_guard);
             return;
         }
 
         // If the peer didn't send us any blocks that extended our chain, count it as a failed sync attempt.
         // This sets a maximum length for forks that the full client will accept:
         //   FullConsensusAgent.SYNC_ATTEMPTS_MAX * BaseInvectoryMessage.VECTORS_MAX_COUNT
-        if self.num_blocks_extending == 0 {
-            self.failed_syncs += 1;
-            if self.failed_syncs >= ConsensusAgent::SYNC_ATTEMPTS_MAX {
-                self.peer.channel.close(CloseType::BlockchainSyncFailed);
-                return;
+        {
+            let mut state = self.state.write();
+            if state.num_blocks_extending == 0 {
+                state.failed_syncs += 1;
+                if state.failed_syncs >= ConsensusAgent::SYNC_ATTEMPTS_MAX {
+                    self.peer.channel.close(CloseType::BlockchainSyncFailed);
+                    return;
+                }
             }
         }
 
@@ -125,7 +146,7 @@ impl ConsensusAgent {
         self.request_blocks();
     }
 
-    fn sync_finished(&mut self) {
+    fn sync_finished(&self, sync_guard: MutexGuard<()>) {
         // TODO Subscribe to all announcements from the peer.
 
         // TODO Request the peer's mempool.
@@ -133,29 +154,40 @@ impl ConsensusAgent {
 
         self.inv_agent.bypass_mgr(false);
 
-        self.syncing = false;
-        self.synced = true;
+        {
+            let mut state = self.state.write();
+            state.syncing = false;
+            state.synced = true;
 
-        self.num_blocks_extending = 1;
-        self.num_blocks_forking = 0;
-        self.fork_head = None;
-        self.failed_syncs = 0;
+            state.num_blocks_extending = 1;
+            state.num_blocks_forking = 0;
+            state.fork_head = None;
+            state.failed_syncs = 0;
+        }
 
-        self.notifier.notify(ConsensusAgentEvent::Synced);
+        drop(sync_guard);
+        self.notifier.read().notify(ConsensusAgentEvent::Synced);
     }
 
-    fn request_blocks(&mut self) {
-        // Check if the peer is sending us a fork.
-        let on_fork = self.fork_head.is_some() && self.num_blocks_extending == 0 && self.num_blocks_forking > 0;
+    fn request_blocks(&self) {
+        let locators;
+        {
+            let state = self.state.read();
+            // Check if the peer is sending us a fork.
+            let on_fork = state.fork_head.is_some() && state.num_blocks_extending == 0 && state.num_blocks_forking > 0;
 
-        let locators = match on_fork {
-            true => vec![self.fork_head.as_ref().unwrap().clone()],
-            false => self.blockchain.get_block_locators()
-        };
+            locators = match on_fork {
+                true => vec![state.fork_head.as_ref().unwrap().clone()],
+                false => self.blockchain.get_block_locators()
+            };
+        }
 
-        // Reset block counters.
-        self.num_blocks_extending = 0;
-        self.num_blocks_forking = 0;
+        {
+            let mut state = self.state.write();
+            // Reset block counters.
+            state.num_blocks_extending = 0;
+            state.num_blocks_forking = 0;
+        }
 
         // Request blocks from peer.
         self.inv_agent.get_blocks(
@@ -164,7 +196,7 @@ impl ConsensusAgent {
             ConsensusAgent::GET_BLOCKS_TIMEOUT);
     }
 
-    fn on_inventory_event(&mut self, event: &InventoryEvent) {
+    fn on_inventory_event(&self, event: &InventoryEvent) {
         match event {
             InventoryEvent::KnownBlockAnnounced(hash) => self.on_known_block_announced(hash),
             InventoryEvent::NoNewObjectsAnnounced => self.on_no_new_objects_announced(),
@@ -175,39 +207,42 @@ impl ConsensusAgent {
         }
     }
 
-    fn on_known_block_announced(&mut self, hash: &Blake2bHash) {
-        if self.syncing {
-            self.num_blocks_forking += 1;
-            self.fork_head = Some(hash.clone());
+    fn on_known_block_announced(&self, hash: &Blake2bHash) {
+        let mut state = self.state.write();
+        if state.syncing {
+            state.num_blocks_forking += 1;
+            state.fork_head = Some(hash.clone());
         }
     }
 
-    fn on_no_new_objects_announced(&mut self) {
-        if self.syncing {
+    fn on_no_new_objects_announced(&self) {
+        if self.state.read().syncing {
             self.perform_sync();
         }
     }
 
-    fn on_all_objects_received(&mut self) {
-        if self.syncing {
+    fn on_all_objects_received(&self) {
+        if self.state.read().syncing {
             self.perform_sync();
         }
     }
 
-    fn on_block_processed(&mut self, hash: &Blake2bHash, result: &PushResult) {
+    fn on_block_processed(&self, hash: &Blake2bHash, result: &PushResult) {
         match result {
             PushResult::Invalid(_) => {
                 self.peer.channel.close(CloseType::InvalidBlock);
             },
             PushResult::Extended | PushResult::Rebranched => {
-                if self.syncing {
-                    self.num_blocks_extending += 1;
+                let mut state = self.state.write();
+                if state.syncing {
+                    state.num_blocks_extending += 1;
                 }
             },
             PushResult::Forked => {
-                if self.syncing {
-                    self.num_blocks_forking += 1;
-                    self.fork_head = Some(hash.clone());
+                let mut state = self.state.write();
+                if state.syncing {
+                    state.num_blocks_forking += 1;
+                    state.fork_head = Some(hash.clone());
                 }
             }
             PushResult::Orphan => {
@@ -219,12 +254,12 @@ impl ConsensusAgent {
         }
     }
 
-    fn on_orphan_block(&mut self, hash: &Blake2bHash) {
+    fn on_orphan_block(&self, hash: &Blake2bHash) {
         debug!("Orphan block {} from {}", hash, self.peer.peer_address());
         // TODO
     }
 
-    fn on_get_blocks_timeout(&mut self) {
+    fn on_get_blocks_timeout(&self) {
         self.peer.channel.close(CloseType::GetBlocksTimeout);
     }
 }

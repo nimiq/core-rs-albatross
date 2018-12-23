@@ -49,7 +49,7 @@ enum ConsensusTimer {
 
 struct ConsensusState {
     established: bool,
-    agents: HashMap<Arc<Peer>, Arc<RwLock<ConsensusAgent>>>,
+    agents: HashMap<Arc<Peer>, Arc<ConsensusAgent>>,
 
     sync_peer: Option<Arc<Peer>>,
 }
@@ -110,18 +110,14 @@ impl Consensus {
             self.inv_mgr.clone(),
             peer_arc.clone());
 
-        // Locking scope.
-        {
-            let mut agent_locked = agent.write();
-            let weak = self.self_weak.clone();
-            let peer_arc = peer_arc.clone();
-            agent_locked.notifier.register(move |e: &ConsensusAgentEvent| {
-                let this = upgrade_weak!(weak);
-                match e {
-                    ConsensusAgentEvent::Synced => this.on_peer_synced(peer_arc.clone()),
-                }
-            });
-        }
+        let weak = self.self_weak.clone();
+        let peer_arc_moved = peer_arc.clone();
+        agent.notifier.write().register(move |e: &ConsensusAgentEvent| {
+            let this = upgrade_weak!(weak);
+            match e {
+                ConsensusAgentEvent::Synced => this.on_peer_synced(peer_arc_moved.clone()),
+            }
+        });
 
         // If no more peers connect within the specified timeout, start syncing.
         let weak = self.self_weak.clone();
@@ -162,20 +158,20 @@ impl Consensus {
         let sync_guard = self.sync_lock.lock();
 
         let mut num_synced_full_nodes: usize = 0;
-        let agent: Option<Arc<RwLock<ConsensusAgent>>>;
-        let mut consensus_lost: bool = false;
+        let agent: Option<Arc<ConsensusAgent>>;
+        let mut consensus_lost: bool;
         let established: bool;
         let num_agents: usize;
         {
             let mut state = self.state.read();
 
-            let candidates: Vec<&Arc<RwLock<ConsensusAgent>>> = state.agents.values()
+            let candidates: Vec<&Arc<ConsensusAgent>> = state.agents.values()
                 .filter(|&agent| {
-                    let agent_locked = agent.read();
-                    if agent_locked.synced && agent_locked.peer.peer_address().services.is_full_node() {
+                    let synced = agent.synced();
+                    if synced && agent.peer.peer_address().services.is_full_node() {
                         num_synced_full_nodes += 1;
                     }
-                    !agent_locked.synced
+                    !synced
                 }).collect();
 
             // Choose a random peer which we aren't sync'd with yet.
@@ -200,15 +196,16 @@ impl Consensus {
         }
 
         if let Some(agent) = agent {
-            self.state.write().sync_peer = Some(agent.read().peer.clone());
+            self.state.write().sync_peer = Some(agent.peer.clone());
 
             // Notify listeners when we start syncing and have not established consensus yet.
             if !established {
                 self.notifier.read().notify(ConsensusEvent::Syncing);
             }
 
-            trace!("Syncing blockchain with peer {:?}", agent.read().peer.peer_address());
-            agent.write().sync();
+            trace!("Syncing blockchain with peer {:?}", agent.peer.peer_address());
+            drop(sync_guard);
+            agent.sync();
         } else {
             // We are synced with all connected peers.
 
@@ -226,6 +223,7 @@ impl Consensus {
                     self.network.set_allow_inbound_connections(true);
                 }
             } else {
+                trace!("Waiting for more peer connections to be established.");
                 // Otherwise, wait until more peer connections are established.
                 self.notifier.read().notify(ConsensusEvent::Waiting);
             }
