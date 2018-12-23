@@ -134,7 +134,7 @@ impl Network {
 
     fn on_peers_changed(&self, this: Arc<Network>) {
         self.notifier.read().notify(NetworkEvent::PeersChanged);
-        self.timers.set_delay(NetworkTimer::PeersChanged, move || {
+        self.timers.reset_delay(NetworkTimer::PeersChanged, move || {
             this.check_peer_count();
         }, Self::CONNECT_THROTTLE);
     }

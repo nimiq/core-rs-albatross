@@ -149,12 +149,13 @@ impl PeerAddress {
         }
 
         if let Ok(duration_since_unix) = SystemTime::now().duration_since(UNIX_EPOCH) {
-            let age = duration_since_unix - Duration::from_millis(self.timestamp);
-            match self.protocol() {
-                Protocol::Ws =>  return age > network::address::peer_address_book::MAX_AGE_WEBSOCKET,
-                Protocol::Wss =>  return age > network::address::peer_address_book::MAX_AGE_WEBSOCKET,
-                Protocol::Rtc =>  return age > network::address::peer_address_book::MAX_AGE_WEBRTC,
-                Protocol::Dumb =>  return age > network::address::peer_address_book::MAX_AGE_DUMB,
+            let age = duration_since_unix.checked_sub(Duration::from_millis(self.timestamp));
+            match (age, self.protocol()) {
+                (Some(age), Protocol::Ws) =>  return age > network::address::peer_address_book::MAX_AGE_WEBSOCKET,
+                (Some(age), Protocol::Wss) =>  return age > network::address::peer_address_book::MAX_AGE_WEBSOCKET,
+                (Some(age), Protocol::Rtc) =>  return age > network::address::peer_address_book::MAX_AGE_WEBRTC,
+                (Some(age), Protocol::Dumb) =>  return age > network::address::peer_address_book::MAX_AGE_DUMB,
+                (None, _) => return false,
             }
         }
         return false;
