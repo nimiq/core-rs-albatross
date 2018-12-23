@@ -41,6 +41,7 @@ impl PeerChannel {
                 PeerStreamEvent::Message(msg) => msg_notifier1.notify(msg),
                 PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
                 PeerStreamEvent::Error(e) => {
+                    // TODO close channel
                     error!("Got peer stream error: {:?}", *e);
                 }
             }
@@ -55,11 +56,20 @@ impl PeerChannel {
         }
     }
 
-    pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> { self.peer_sink.send(msg) }
+    pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> {
+        self.peer_sink.send(msg)
+    }
+
+    pub fn send_or_close(&self, msg: Message) {
+        if self.peer_sink.send(msg).is_err() {
+            self.peer_sink.close(CloseType::SendFailed);
+        }
+    }
 
     pub fn closed(&self) -> bool {
         self.peer_sink.closed()
     }
+
     pub fn close(&self, ty: CloseType) -> bool {
         self.peer_sink.close(ty)
     }

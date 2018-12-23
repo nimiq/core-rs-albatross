@@ -410,6 +410,14 @@ pub struct TxMessage {
     transaction: Transaction,
     accounts_proof: Option<AccountsProof>,
 }
+impl TxMessage {
+    pub fn new(transaction: Transaction) -> Message {
+        Message::Tx(Self {
+            transaction,
+            accounts_proof: None
+        })
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[repr(u8)]
@@ -421,9 +429,9 @@ pub enum GetBlocksDirection {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetBlocksMessage {
     #[beserial(len_type(u16))]
-    locators: Vec<Blake2bHash>,
-    max_inv_size: u16,
-    direction: GetBlocksDirection,
+    pub locators: Vec<Blake2bHash>,
+    pub max_inv_size: u16,
+    pub direction: GetBlocksDirection,
 }
 impl GetBlocksMessage {
     pub const LOCATORS_MAX_COUNT: usize = 128;

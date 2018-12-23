@@ -170,7 +170,7 @@ impl NetworkAgent {
         if self.channel.send(msg).is_err() {
             self.version_attempts += 1;
             if self.version_attempts >= Self::VERSION_ATTEMPTS_MAX || self.channel.closed() {
-                self.channel.close(CloseType::SendingOfVersionMessageFailed);
+                self.channel.close(CloseType::SendingVersionMessageFailed);
                 return;
             }
 
@@ -212,12 +212,11 @@ impl NetworkAgent {
         assert!(self.peer_address_verified);
         assert!(self.peer_challenge_nonce.is_some());
 
-        // TODO Handle Err case?
         let msg = VerAckMessage::new(
             &self.channel.address_info.peer_address().unwrap().peer_id,
             self.peer_challenge_nonce.as_ref().unwrap(),
             self.network_config.key_pair());
-        self.channel.send(msg).unwrap();
+        self.channel.send_or_close(msg);
 
         self.verack_sent = true;
     }
@@ -243,7 +242,7 @@ impl NetworkAgent {
 
         // Check if the peer is running a compatible version.
         if !version::is_compatible(msg.version) {
-            self.channel.send(RejectMessage::new(
+            self.channel.send_or_close(RejectMessage::new(
                 MessageType::Version,
                 RejectMessageCode::Obsolete,
                 format!("incompatible version (ours={}, theirs={})", version::CODE, msg.version),
@@ -391,7 +390,7 @@ impl NetworkAgent {
         self.timers.set_interval(NetworkAgentTimer::AnnounceAddr, move || {
             let arc = upgrade_weak!(weak);
             let agent = arc.read();
-            agent.channel.send(AddrMessage::new(vec![agent.network_config.peer_address()]));
+            agent.channel.send_or_close(AddrMessage::new(vec![agent.network_config.peer_address()]));
         }, Self::ANNOUNCE_ADDR_INTERVAL);
 
         // Tell listeners that the handshake with this peer succeeded.
@@ -412,7 +411,7 @@ impl NetworkAgent {
         });
 
         // Request addresses from peer.
-        self.channel.send(GetAddrMessage::new(
+        self.channel.send_or_close(GetAddrMessage::new(
             self.network_config.protocol_mask(),
             self.network_config.services().accepted,
             max_results));
@@ -494,7 +493,7 @@ impl NetworkAgent {
         );
         let addresses = addresses
             .iter().map(|peer_address| peer_address.as_ref().clone()).collect();
-        self.channel.send(AddrMessage::new(addresses));
+        self.channel.send_or_close(AddrMessage::new(addresses));
     }
 
     fn check_connectivity(&mut self) {
@@ -535,7 +534,7 @@ impl NetworkAgent {
         }
 
         // Respond with a pong message.
-        self.channel.send(Message::Pong(nonce));
+        self.channel.send_or_close(Message::Pong(nonce));
     }
 
     fn on_pong(&mut self, nonce: u32) {

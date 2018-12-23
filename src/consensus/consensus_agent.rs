@@ -131,6 +131,8 @@ impl ConsensusAgent {
         // TODO Request the peer's mempool.
         // XXX Use a random delay here to prevent requests to multiple peers at once.
 
+        self.inv_agent.bypass_mgr(false);
+
         self.syncing = false;
         self.synced = true;
 

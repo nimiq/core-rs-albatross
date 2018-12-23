@@ -500,7 +500,7 @@ impl<'env> Blockchain<'env> {
         }
 
         let mut step = 2;
-        let mut height = self.height() - 10 - step;
+        let mut height = self.height().saturating_sub(10 + step);
         let mut opt_block = self.chain_store.get_block_at(height);
         while let Some(block) = opt_block {
             locators.push(block.header.hash());
@@ -522,7 +522,7 @@ impl<'env> Blockchain<'env> {
 
         // Push the genesis block hash.
         let network_info = get_network_info(self.network_id).unwrap();
-        if locators.len() == 0 || locators.last().unwrap() != &network_info.genesis_hash {
+        if locators.is_empty() || locators.last().unwrap() != &network_info.genesis_hash {
             // Respect max size for GetBlocksMessages, make space for genesis hash if necessary
             if locators.len() >= GetBlocksMessage::LOCATORS_MAX_COUNT {
                 locators.pop();
@@ -538,6 +538,17 @@ impl<'env> Blockchain<'env> {
             Some(chain_info) => include_forks || chain_info.on_main_chain,
             None => false
         }
+    }
+
+    pub fn get_block(&self, hash: &Blake2bHash, include_forks: bool, include_body: bool) -> Option<Block> {
+        let chain_info_opt = self.chain_store.get_chain_info(hash, include_body, None);
+        if chain_info_opt.is_some() {
+            let chain_info = chain_info_opt.unwrap();
+            if chain_info.on_main_chain || include_forks {
+                return Some(chain_info.head);
+            }
+        }
+        None
     }
 
     pub fn head_hash(&self) -> Blake2bHash {

@@ -157,7 +157,11 @@ impl Network {
     }
 
     fn check_peer_count(&self) {
-        if self.auto_connect.load(Ordering::Relaxed) && self.addresses.seeded() && !self.scorer.read().is_good_peer_set() && self.connections.connecting_count() < Self::CONNECTING_COUNT_MAX {
+        if self.auto_connect.load(Ordering::Relaxed)
+            && self.addresses.seeded()
+            && !self.scorer.read().is_good_peer_set()
+            && self.connections.connecting_count() < Self::CONNECTING_COUNT_MAX {
+
             // Pick a peer address that we are not connected to yet.
             let peer_addr_opt = self.scorer.read().pick_address();
 

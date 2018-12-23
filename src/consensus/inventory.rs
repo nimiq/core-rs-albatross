@@ -1,24 +1,22 @@
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use weak_table::PtrWeakHashSet;
 use crate::consensus::base::block::{Block, BlockHeader};
 use crate::consensus::base::blockchain::{Blockchain, PushResult};
 use crate::consensus::base::mempool::Mempool;
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
-use crate::network::message::{Message, InvVector, InvVectorType, TxMessage};
+use crate::consensus::base::transaction::Transaction;
+use crate::network::connection::close_type::CloseType;
+use crate::network::message::{Message, InvVector, InvVectorType, TxMessage, GetBlocksMessage, GetBlocksDirection};
 use crate::network::Peer;
 use crate::utils::{
+    mutable_once::MutableOnce,
     observer::{Notifier, weak_listener, weak_passthru_listener},
     timers::Timers,
     self,
 };
-use crate::network::message::GetBlocksMessage;
-use crate::network::message::GetBlocksDirection;
-use parking_lot::Mutex;
-use std::time::Instant;
-use crate::utils::mutable_once::MutableOnce;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {
@@ -217,6 +215,13 @@ impl InventoryAgent {
             Arc::downgrade(this),
             |this, vectors: Vec<InvVector>| this.on_not_found(vectors)));
 
+        msg_notifier.get_blocks.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg: GetBlocksMessage| this.on_get_blocks(msg)));
+        msg_notifier.get_data.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, vectors: Vec<InvVector>| this.on_get_data(vectors)));
+
         let mut close_notifier = channel.close_notifier.write();
         close_notifier.register(weak_listener(
             Arc::downgrade(this),
@@ -231,11 +236,11 @@ impl InventoryAgent {
             this.notifier.read().notify(InventoryEvent::GetBlocksTimeout);
         }, timeout);
 
-        self.peer.channel.send(GetBlocksMessage::new(
+        self.peer.channel.send_or_close(GetBlocksMessage::new(
             locators,
             max_results,
             GetBlocksDirection::Forward,
-        )).unwrap();
+        ));
     }
 
     fn on_inv(&self, vectors: Vec<InvVector>) {
@@ -439,16 +444,15 @@ impl InventoryAgent {
             vectors.push(vector);
         }
 
-        // Request data from peer.
-        // TODO handle result
-        self.peer.channel.send(Message::GetData(vectors));
-
         // Set timeout to detect end of request / missing objects.
         let weak = self.self_weak.clone();
         self.timers.set_delay(InventoryAgentTimer::GetData, move || {
             let this = upgrade_weak!(weak);
             this.no_more_data();
         }, Self::REQUEST_TIMEOUT);
+
+        // Request data from peer.
+        self.peer.channel.send_or_close(Message::GetData(vectors));
     }
 
     fn on_object_received(&self, vector: &InvVector) {
@@ -498,6 +502,57 @@ impl InventoryAgent {
             // Give up write lock before notifying.
             drop(state);
             self.notifier.read().notify(InventoryEvent::AllObjectsReceived);
+        }
+    }
+
+    fn on_get_blocks(&self, msg: GetBlocksMessage) {
+    }
+
+    fn on_get_data(&self, vectors: Vec<InvVector>) {
+        // Keep track of the objects the peer knows.
+        let mut state = self.state.write();
+        for vector in vectors.iter() {
+            state.known_objects.insert(vector.clone());
+        }
+
+        // Check which of the requested objects we know.
+        // Send back all known objects.
+        // Send notFound for unknown objects.
+        let mut unknown_objects = Vec::new();
+
+        for vector in vectors {
+            match vector.ty {
+                InvVectorType::Block => {
+                    // TODO raw blocks. Needed?
+                    let block_opt = self.blockchain.get_block(&vector.hash, false, true);
+                    if block_opt.is_some() {
+                        if self.peer.channel.send(Message::Block(block_opt.unwrap())).is_err() {
+                            self.peer.channel.close(CloseType::SendFailed);
+                            return;
+                        }
+                    } else {
+                        unknown_objects.push(vector);
+                    }
+                }
+                InvVectorType::Transaction => {
+                    let tx_opt = self.mempool.get_transaction(&vector.hash);
+                    if tx_opt.is_some() {
+                        let tx = Transaction::clone(tx_opt.as_ref().unwrap());
+                        if self.peer.channel.send(TxMessage::new(tx)).is_err() {
+                            self.peer.channel.close(CloseType::SendFailed);
+                            return;
+                        }
+                    } else {
+                        unknown_objects.push(vector);
+                    }
+                }
+                InvVectorType::Error => () // XXX Why do we have this??
+            }
+        }
+
+        // Report any unknown objects to the sender.
+        if !unknown_objects.is_empty() {
+            self.peer.channel.send_or_close(Message::NotFound(unknown_objects));
         }
     }
 

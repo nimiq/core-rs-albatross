@@ -22,8 +22,9 @@ pub enum CloseType {
     InvalidTransactionProof = 19,
     InvalidBlockProof = 20,
 
+    SendFailed = 21,
     SendingPingMessageFailed = 22,
-    SendingOfVersionMessageFailed = 23,
+    SendingVersionMessageFailed = 23,
 
     SimultaneousConnection = 29,
     DuplicateConnection = 30,
