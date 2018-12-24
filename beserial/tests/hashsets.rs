@@ -1,0 +1,38 @@
+extern crate beserial;
+
+use std::collections::HashSet;
+use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
+
+#[test]
+fn it_correctly_serializes_and_deserializes_hashsets() {
+    fn reserialize<T>(s: HashSet<T>) -> HashSet<T>
+    where T: Serialize + Deserialize + std::cmp::Eq + std::hash::Hash
+    {
+        let mut v = Vec::with_capacity(64);
+        SerializeWithLength::serialize::<u16, Vec<u8>>(&s, &mut v).unwrap();
+        let s2: HashSet<T> = DeserializeWithLength::deserialize::<u16, &[u8]>(&mut &v[..]).unwrap();
+        return s2;
+    }
+
+    let mut hashset = HashSet::new();
+    hashset.insert(18446744073709551615u64);
+    hashset.insert(9223372036854775807);
+    hashset.insert(381073568934759237);
+    hashset.insert(2131907967678687);
+    hashset.insert(255);
+    hashset.insert(16);
+
+    let reference_hashset = hashset.clone();
+    let processed_hashset = reserialize(hashset);
+
+    assert!(reference_hashset == processed_hashset);
+
+    assert!(processed_hashset.contains(&18446744073709551615) == true);
+    assert!(processed_hashset.contains(&9223372036854775807) == true);
+    assert!(processed_hashset.contains(&381073568934759237) == true);
+    assert!(processed_hashset.contains(&2131907967678687) == true);
+    assert!(processed_hashset.contains(&255) == true);
+    assert!(processed_hashset.contains(&16) == true);
+
+    assert!(processed_hashset.contains(&0) == false);
+}

@@ -3,6 +3,8 @@ extern crate num;
 #[macro_use]
 extern crate log;
 
+use std::collections::HashSet;
+
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 pub use num::ToPrimitive;
 pub use crate::types::uvar;
@@ -206,6 +208,42 @@ impl<T: Deserialize> DeserializeWithLength for Vec<T> {
 }
 
 impl<T: Serialize> SerializeWithLength for Vec<T> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
+        for t in self {
+            size += t.serialize(writer)?;
+        }
+        return Ok(size);
+    }
+
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        let mut size = S::from_usize(self.len()).unwrap().serialized_size();
+        for t in self {
+            size += t.serialized_size();
+        }
+        return size;
+    }
+}
+
+// HashSets
+
+impl<T> DeserializeWithLength for HashSet<T>
+    where T: Deserialize + std::cmp::Eq + std::hash::Hash
+{
+    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let len: D = Deserialize::deserialize(reader)?;
+        let len_u = len.to_usize().unwrap();
+        let mut v = HashSet::with_capacity(len_u);
+        for _ in 0..len_u {
+            v.insert(T::deserialize(reader)?);
+        }
+        return Ok(v);
+    }
+}
+
+impl<T> SerializeWithLength for HashSet<T>
+    where T: Serialize + std::cmp::Eq + std::hash::Hash
+{
     fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
         for t in self {
