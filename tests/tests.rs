@@ -36,7 +36,7 @@ pub fn mine_header(header: &mut BlockHeader) {
     println!("Found nonce {} for header {:?}", header.nonce, header);
 }
 
-pub fn next_block<'env, 'bc>(blockchain: &'bc Blockchain<'env>) -> BlockBuilder<'bc, 'env> {
+pub fn next_block<'env, 'bc>(blockchain: &'bc Blockchain<'env>) -> BlockBuilder<'env, 'bc> {
     BlockBuilder::new(blockchain)
 }
 

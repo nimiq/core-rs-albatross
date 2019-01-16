@@ -138,7 +138,7 @@ fn it_rejects_blocks_with_duplicate_transactions() {
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
 
     let miner = Address::from(&keypair.public);
     let block2 = crate::next_block(&blockchain)
@@ -183,7 +183,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
 
     let miner = Address::from(&keypair.public);
     let block2 = crate::next_block(&blockchain)
@@ -235,7 +235,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
 #[test]
 fn it_detects_fork_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
 
     let mut block = crate::next_block(&blockchain)
         .with_nonce(83054)
@@ -251,7 +251,7 @@ fn it_rebranches_to_the_harder_chain() {
     crate::setup();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
 
     let block1_2 = crate::next_block(&blockchain)
         .with_nonce(83054)
