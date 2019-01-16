@@ -13,7 +13,7 @@ impl Signature {
     #[inline]
     pub(crate) fn as_dalek(&self) -> &ed25519_dalek::Signature { &self.0 }
 
-    pub fn try_from(bytes: &[u8; Self::SIZE]) -> Result<Self, ed25519_dalek::DecodingError> {
+    pub fn try_from(bytes: &[u8; Self::SIZE]) -> Result<Self, ed25519_dalek::SignatureError> {
         Ok(Signature(ed25519_dalek::Signature::from_bytes(bytes)?))
     }
 }

@@ -4,7 +4,7 @@ use std::fmt::Formatter;
 use std::io;
 
 use ed25519_dalek;
-use rand::OsRng;
+use rand::rngs::OsRng;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
@@ -22,10 +22,10 @@ impl PrivateKey {
     }
 
     #[inline]
-    pub fn as_bytes<'a>(&'a self) -> &'a [u8; PrivateKey::SIZE] { self.0.as_bytes() }
+    pub fn as_bytes(&self) -> &[u8; PrivateKey::SIZE] { self.0.as_bytes() }
 
     #[inline]
-    pub (crate) fn as_dalek<'a>(&'a self) -> &'a ed25519_dalek::SecretKey { &self.0 }
+    pub (crate) fn as_dalek(&self) -> &ed25519_dalek::SecretKey { &self.0 }
 }
 
 impl<'a> From<&'a [u8; PrivateKey::SIZE]> for PrivateKey {

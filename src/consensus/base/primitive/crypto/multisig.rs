@@ -1,9 +1,10 @@
-use rand::{OsRng, Rng};
+use rand::{rngs::OsRng, Rng};
 use sha2::{self, Digest};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
 use curve25519_dalek::constants;
 use curve25519_dalek::traits::Identity;
+use ed25519_dalek::ExpandedSecretKey;
 use std::ops::Add;
 use std::fmt;
 use std::error;
@@ -99,7 +100,7 @@ impl CommitmentPair {
         // Create random 32 bytes.
         let mut cspring: OsRng = OsRng::new().unwrap();
         let mut randomness: [u8; RandomSecret::SIZE] = [0u8; RandomSecret::SIZE];
-        cspring.fill_bytes(&mut randomness);
+        cspring.fill(&mut randomness);
 
         // Decompress the 32 byte cryptographically secure random data to 64 byte.
         let mut h: sha2::Sha512 = sha2::Sha512::default();
@@ -195,12 +196,12 @@ impl KeyPair {
         // Compute H(C||P).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
-        h.input(public_keys_hash);
+        h.input(&public_keys_hash[..]);
         h.input(self.public.as_bytes());
         let s = Scalar::from_hash::<sha2::Sha512>(h);
 
         // Expand the private key.
-        let expanded_private_key = self.private.as_dalek().expand::<sha2::Sha512>();
+        let expanded_private_key = ExpandedSecretKey::from_secret_key::<sha2::Sha512>(self.private.as_dalek());
         let sk = expanded_private_key.to_scalar();
 
         // Compute H(C||P)*sk
@@ -221,7 +222,7 @@ impl PublicKey {
         // Compute H(C||P).
         let mut h: sha2::Sha512 = sha2::Sha512::default();
 
-        h.input(public_keys_hash);
+        h.input(&public_keys_hash[..]);
         h.input(self.as_bytes());
         let s = Scalar::from_hash::<sha2::Sha512>(h);
 

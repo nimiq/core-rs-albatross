@@ -1,5 +1,5 @@
 use ed25519_dalek;
-use rand::OsRng;
+use rand::rngs::OsRng;
 use sha2;
 
 use beserial::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ pub struct KeyPair {
 impl KeyPair {
     pub fn generate() -> Self {
         let mut cspring: OsRng = OsRng::new().unwrap();
-        let key_pair = ed25519_dalek::Keypair::generate::<sha2::Sha512>(&mut cspring);
+        let key_pair = ed25519_dalek::Keypair::generate::<sha2::Sha512, _>(&mut cspring);
         let priv_key = PrivateKey(key_pair.secret);
         let pub_key = PublicKey(key_pair.public);
         return KeyPair { private: priv_key, public: pub_key };

@@ -16,7 +16,7 @@ impl PublicKey {
     pub const SIZE: usize = 32;
 
     pub fn verify(&self, signature: &Signature, data: &[u8]) -> bool {
-        return self.as_dalek().verify::<sha2::Sha512>(data, signature.as_dalek());
+        return self.as_dalek().verify::<sha2::Sha512>(data, signature.as_dalek()).is_ok();
     }
 
     #[inline]

@@ -1,7 +1,7 @@
 use std::io;
 use std::io::Read;
 
-use rand::OsRng;
+use rand::rngs::OsRng;
 use rand::Rng;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
@@ -358,7 +358,7 @@ impl ChallengeNonce {
     pub fn generate() -> Self {
         let mut nonce = Self::default();
         let mut cspring: OsRng = OsRng::new().unwrap();
-        cspring.fill_bytes(&mut nonce.0);
+        cspring.fill(&mut nonce.0);
         nonce
     }
 }

@@ -5,7 +5,7 @@ use crate::utils::{
 
 use std::{cmp, time::Duration, sync::Arc};
 use rand::Rng;
-use rand::OsRng;
+use rand::rngs::OsRng;
 
 use crate::network::{
     Protocol,

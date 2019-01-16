@@ -5,7 +5,7 @@ use std::sync::Weak;
 use std::time::{Duration, Instant, SystemTime};
 
 use parking_lot::RwLock;
-use rand::{OsRng, Rng};
+use rand::{rngs::OsRng, Rng};
 
 use beserial::Serialize;
 
@@ -499,7 +499,7 @@ impl NetworkAgent {
     fn check_connectivity(&mut self) {
         // Generate random nonce.
         let mut cspring: OsRng = OsRng::new().unwrap();
-        let nonce = cspring.next_u32();
+        let nonce: u32 = cspring.gen();
 
         // Send ping message to peer.
         // If sending the ping message fails, assume the connection has died.

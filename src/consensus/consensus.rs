@@ -1,7 +1,7 @@
 use std::sync::{Arc, Weak};
 
 use parking_lot::{RwLock, Mutex};
-use rand::{OsRng, Rng};
+use rand::{rngs::OsRng, Rng};
 
 use crate::consensus::base::blockchain::Blockchain;
 use crate::consensus::base::mempool::Mempool;

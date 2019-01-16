@@ -2,8 +2,7 @@ use super::*;
 use lmdb_zero::traits::LmdbResultExt;
 use std::fs;
 use fs2;
-use rand::distributions::{IndependentSample, Range};
-use rand;
+use rand::{thread_rng, Rng};
 use std::cmp;
 use lmdb_zero;
 use parking_lot;
@@ -128,9 +127,8 @@ impl LmdbEnvironment {
             return true;
         }
 
-        let between = Range::new(0.6, 0.9);
-        let mut rng = rand::thread_rng();
-        let resize_percent = between.ind_sample(&mut rng);
+        let mut rng = thread_rng();
+        let resize_percent: f64 = rng.gen_range(0.6, 0.9);
 
         if (size_used as f64) / (info.mapsize as f64) > resize_percent {
             info!("DB resize (percent-based)");

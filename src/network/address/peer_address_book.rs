@@ -14,7 +14,7 @@ use std::time::{Duration, Instant, SystemTime};
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
-use rand::{OsRng, Rng};
+use rand::{rngs::OsRng, Rng};
 
 use crate::consensus::networks::{get_network_info, NetworkId};
 use crate::network::address::net_address::NetAddress;
