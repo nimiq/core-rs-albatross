@@ -9,7 +9,7 @@ use std::io;
 use std::cmp;
 use std::borrow::Cow;
 use hex;
-use crate::utils::db::AsDatabaseBytes;
+use database::AsDatabaseBytes;
 
 // Stores a compact representation of length nibbles.
 // Each u8 stores up to 2 nibbles.

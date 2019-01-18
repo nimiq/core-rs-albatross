@@ -3,7 +3,7 @@ use crate::consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Targ
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
 use crate::consensus::networks::NetworkId;
 use std::io;
-use crate::utils::db::{FromDatabaseValue, IntoDatabaseValue};
+use database::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize)]
 pub struct Block {

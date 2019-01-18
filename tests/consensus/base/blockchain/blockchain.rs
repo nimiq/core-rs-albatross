@@ -10,7 +10,7 @@ use nimiq::consensus::base::primitive::hash::Hash;
 use nimiq::consensus::base::transaction::{Transaction, SignatureProof};
 use nimiq::consensus::networks::NetworkId;
 use nimiq::network::NetworkTime;
-use nimiq::utils::db::volatile::VolatileEnvironment;
+use database::volatile::VolatileEnvironment;
 
 
 const BLOCK_2: &str = "0001264aaf8a4f9828a76c550635da078eb466306a189fcc03710bee9f649c869d120492e3986e75ac0d1466b5d6a7694c86839767a30980f8ba0d8c6e48631bc9cdd8a3eb957567d76963ad10d11e65453f763928fb9619e5f396a0906e946cce3ca7fcbb5fb2e35055de071e868381ba426a8d79d97cb48dab8345baeb9a9abb091f010000000000025ad23a98000046fe0180010000000000000000000000000000000000000000184d696e65642077697468206c6f766520627920526963687900000000";

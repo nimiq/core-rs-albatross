@@ -10,7 +10,7 @@ use crate::consensus::consensus_agent::ConsensusAgentEvent;
 use crate::consensus::inventory::InventoryManager;
 use crate::consensus::networks::NetworkId;
 use crate::network::{Network, NetworkConfig, NetworkEvent, NetworkTime, Peer};
-use crate::utils::db::Environment;
+use database::Environment;
 use crate::utils::observer::Notifier;
 use crate::utils::timers::Timers;
 use std::time::Duration;

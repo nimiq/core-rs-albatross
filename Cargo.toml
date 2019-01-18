@@ -25,14 +25,12 @@ ed25519-dalek = "1.0.0-pre.0"
 hex = "0.3.2"
 lazy_static = "1.0"
 libargon2-sys = { path = "libargon2-sys" }
+database = { path = "database" }
 log = "0.4.3"
 rand = "0.6.4"
 sha2 = "0.8.0"
-lmdb-zero = "0.4.4"
-fs2 = "0.4.3"
 parking_lot = "0.6"
 unicode-normalization = "0.1.7"
-tempdir = "0.3"
 bigdecimal = "0.0.14"
 num-traits = "0.2.6"
 num-bigint = "0.2.0"
@@ -55,4 +53,5 @@ members = [
     "libargon2-sys",
     "beserial",
     "extended-collections",
+    "database",
 ]

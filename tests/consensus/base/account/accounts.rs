@@ -5,8 +5,8 @@ use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair, hash::{B
 use nimiq::consensus::base::transaction::{SignatureProof, Transaction};
 use nimiq::consensus::networks::NetworkId;
 use nimiq::consensus::policy;
-use nimiq::utils::db::volatile::VolatileEnvironment;
-use nimiq::utils::db::WriteTransaction;
+use database::volatile::VolatileEnvironment;
+use database::WriteTransaction;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {

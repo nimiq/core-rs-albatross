@@ -1,7 +1,7 @@
 use super::{AccountsTreeNode, AddressNibbles, NO_CHILDREN};
 use super::super::{Address, Account};
 use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
-use crate::utils::db::{Database, Transaction, WriteTransaction, Environment};
+use database::{Database, Transaction, WriteTransaction, Environment};
 
 #[derive(Debug)]
 pub struct AccountsTree<'env> {

@@ -2,8 +2,8 @@ use hex;
 use nimiq::consensus::base::account::tree::AccountsTree;
 use nimiq::consensus::base::account::{Account, BasicAccount};
 use nimiq::consensus::base::primitive::{Address, Coin};
-use nimiq::utils::db::volatile::VolatileEnvironment;
-use nimiq::utils::db::WriteTransaction;
+use database::volatile::VolatileEnvironment;
+use database::WriteTransaction;
 
 #[test]
 fn it_can_put_and_get_a_balance() {

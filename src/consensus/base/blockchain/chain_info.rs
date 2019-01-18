@@ -1,7 +1,7 @@
 use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt};
 use crate::consensus::base::block::{Block, BlockBody, Difficulty};
 use crate::consensus::base::primitive::hash::Blake2bHash;
-use crate::utils::db::{FromDatabaseValue, IntoDatabaseValue};
+use database::{FromDatabaseValue, IntoDatabaseValue};
 use std::io;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize)]

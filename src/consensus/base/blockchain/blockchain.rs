@@ -8,7 +8,7 @@ use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
 use crate::consensus::networks::{NetworkId, get_network_info};
 use crate::consensus::policy;
 use crate::network::NetworkTime;
-use crate::utils::db::{Environment, ReadTransaction, WriteTransaction};
+use database::{Environment, ReadTransaction, WriteTransaction};
 use crate::utils::observer::Notifier;
 use crate::utils::unique_ptr::UniquePtr;
 use std::cmp;

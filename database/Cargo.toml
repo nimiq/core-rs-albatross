@@ -1,0 +1,15 @@
+[package]
+name = "database"
+version = "0.1.0"
+authors = ["Pascal B <git@paberr.net>"]
+edition = "2018"
+
+[dependencies]
+log = "0.4.3"
+lmdb-zero = "0.4.4"
+fs2 = "0.4.3"
+parking_lot = "0.6"
+tempdir = "0.3"
+rand = "0.6.4"
+bitflags = "1.0"
+beserial = { path = "../beserial" }

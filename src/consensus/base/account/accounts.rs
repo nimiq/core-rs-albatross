@@ -9,8 +9,8 @@ use crate::consensus::base::primitive::hash::Blake2bHash;
 use crate::consensus::base::transaction::{Transaction, TransactionFlags};
 use crate::consensus::networks::{NetworkId, get_network_info};
 use crate::consensus::policy;
-use crate::utils::db;
-use crate::utils::db::{Environment, ReadTransaction, WriteTransaction};
+use database::{Environment, ReadTransaction, WriteTransaction};
+use database as db;
 
 #[derive(Debug)]
 pub struct Accounts<'env> {

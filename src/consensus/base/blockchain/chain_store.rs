@@ -1,7 +1,7 @@
 use crate::consensus::base::block::Block;
 use crate::consensus::base::blockchain::ChainInfo;
 use crate::consensus::base::primitive::hash::Blake2bHash;
-use crate::utils::db::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};
+use database::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};
 use crate::network::message::GetBlocksDirection;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

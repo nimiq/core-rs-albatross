@@ -9,8 +9,8 @@ use nimiq::consensus::base::block::BlockBody;
 use nimiq::consensus::base::mempool::{Mempool, ReturnCode};
 use nimiq::consensus::base::transaction::{Transaction, SignatureProof};
 use nimiq::consensus::networks::NetworkId;
-use nimiq::utils::db::WriteTransaction;
-use nimiq::utils::db::volatile::VolatileEnvironment;
+use database::WriteTransaction;
+use database::volatile::VolatileEnvironment;
 use nimiq::consensus::base::blockchain::Blockchain;
 use nimiq::network::NetworkTime;
 

@@ -13,17 +13,16 @@ use std::sync::Arc;
 use futures::Async;
 use futures::future::Future;
 
-use lmdb_zero::open::Flags;
 
 use nimiq::consensus::networks::NetworkId;
 use nimiq::network::network_config::NetworkConfig;
-use nimiq::utils::db::Environment;
-use nimiq::utils::db::lmdb::LmdbEnvironment;
+use database::Environment;
+use database::lmdb::{LmdbEnvironment, open};
 use nimiq::network::network::Network;
 use nimiq::consensus::consensus::Consensus;
 
 lazy_static! {
-    static ref env: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, Flags::empty()).unwrap(); //VolatileEnvironment::new(10).unwrap();
+    static ref env: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, open::Flags::empty()).unwrap(); //VolatileEnvironment::new(10).unwrap();
 }
 
 pub fn main() {

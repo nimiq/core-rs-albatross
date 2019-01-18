@@ -21,16 +21,16 @@ impl VolatileEnvironment {
         let path = temp_dir.path().to_str().ok_or(VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
         return Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir,
-            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, lmdb_zero::open::NOSYNC | lmdb_zero::open::WRITEMAP).map_err(|e| VolatileDatabaseError::LmdbError(e))?,
+            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, open::NOSYNC | open::WRITEMAP).map_err(|e| VolatileDatabaseError::LmdbError(e))?,
         }));
     }
 
-    pub fn new_with_lmdb_flags(max_dbs: u32, flags: lmdb_zero::open::Flags) -> Result<Environment, VolatileDatabaseError> {
+    pub fn new_with_lmdb_flags(max_dbs: u32, flags: open::Flags) -> Result<Environment, VolatileDatabaseError> {
         let temp_dir = TempDir::new("volatile-core").map_err(|e| VolatileDatabaseError::IoError(e))?;
         let path = temp_dir.path().to_str().ok_or(VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
         return Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir,
-            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, flags | lmdb_zero::open::NOSYNC | lmdb_zero::open::WRITEMAP).map_err(|e| VolatileDatabaseError::LmdbError(e))?,
+            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, flags | open::NOSYNC | open::WRITEMAP).map_err(|e| VolatileDatabaseError::LmdbError(e))?,
         }));
     }
 
@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn isolation_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags( 1, lmdb_zero::open::NOTLS).unwrap();
+        let env = VolatileEnvironment::new_with_lmdb_flags( 1, open::NOTLS).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn duplicates_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags( 1, lmdb_zero::open::NOTLS).unwrap();
+        let env = VolatileEnvironment::new_with_lmdb_flags( 1, open::NOTLS).unwrap();
         {
             let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
 
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn cursor_test() {
-        let env = VolatileEnvironment::new_with_lmdb_flags( 1, lmdb_zero::open::NOTLS).unwrap();
+        let env = VolatileEnvironment::new_with_lmdb_flags( 1, open::NOTLS).unwrap();
         {
             let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
 

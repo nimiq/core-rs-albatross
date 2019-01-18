@@ -8,6 +8,8 @@ use lmdb_zero;
 use parking_lot;
 use std::fmt;
 
+pub use lmdb_zero::open;
+
 #[derive(Debug)]
 pub struct LmdbEnvironment {
     env: lmdb_zero::Environment,
@@ -15,11 +17,11 @@ pub struct LmdbEnvironment {
 }
 
 impl LmdbEnvironment {
-    pub fn new(path: &str, size: usize, max_dbs: u32, flags: lmdb_zero::open::Flags) -> Result<Environment, lmdb_zero::Error> {
+    pub fn new(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Environment, lmdb_zero::Error> {
         return Ok(Environment::Persistent(LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?));
     }
 
-    pub(in super) fn new_lmdb_environment(path: &str, size: usize, max_dbs: u32, flags: lmdb_zero::open::Flags) -> Result<Self, lmdb_zero::Error> {
+    pub(in super) fn new_lmdb_environment(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Self, lmdb_zero::Error> {
         fs::create_dir_all(path).unwrap();
 
         let mut env = lmdb_zero::EnvBuilder::new()?;
@@ -378,7 +380,7 @@ mod tests {
 
     #[test]
     fn it_can_save_basic_objects() {
-        let env = LmdbEnvironment::new("./test", 0, 1, lmdb_zero::open::Flags::empty()).unwrap();
+        let env = LmdbEnvironment::new("./test", 0, 1, open::Flags::empty()).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -432,7 +434,7 @@ mod tests {
 
     #[test]
     fn isolation_test() {
-        let env = LmdbEnvironment::new("./test2", 0, 1, lmdb_zero::open::NOTLS).unwrap();
+        let env = LmdbEnvironment::new("./test2", 0, 1, open::NOTLS).unwrap();
         {
             let db = env.open_database("test".to_string());
 
@@ -465,7 +467,7 @@ mod tests {
 
     #[test]
     fn duplicates_test() {
-        let env = LmdbEnvironment::new("./test3", 0, 1, lmdb_zero::open::NOTLS).unwrap();
+        let env = LmdbEnvironment::new("./test3", 0, 1, open::NOTLS).unwrap();
         {
             let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
 
@@ -528,7 +530,7 @@ mod tests {
 
     #[test]
     fn cursor_test() {
-        let env = LmdbEnvironment::new("./test4", 0, 1, lmdb_zero::open::NOTLS).unwrap();
+        let env = LmdbEnvironment::new("./test4", 0, 1, open::NOTLS).unwrap();
         {
             let db = env.open_database_with_flags("test".to_string(), DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_UINT_VALUES);
 
