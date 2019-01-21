@@ -1,16 +1,18 @@
 #[macro_use]
 pub mod macros;
 pub mod crypto;
-pub mod hash;
 pub mod coin;
 
 pub use self::coin::Coin;
 
 use self::crypto::PublicKey;
-use self::hash::{Blake2bHash, Blake2bHasher, Hasher, SerializeContent};
+use hash::{Blake2bHash, Blake2bHasher, Hasher, SerializeContent};
 use std::convert::From;
 use std::io;
 use hex::FromHex;
+use database::FromDatabaseValue;
+use database::AsDatabaseBytes;
+use std::borrow::Cow;
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
@@ -29,4 +31,3 @@ impl<'a> From<&'a PublicKey> for Address {
         return Address::from(hash);
     }
 }
-

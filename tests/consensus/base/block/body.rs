@@ -2,7 +2,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq::consensus::base::account::{Account, AccountType, PrunedAccount, VestingContract};
 use nimiq::consensus::base::block::{BlockBody, BlockError};
 use nimiq::consensus::base::primitive::{Address, Coin};
-use nimiq::consensus::base::primitive::hash::{Blake2bHash, Hash};
+use hash::{Blake2bHash, Hash};
 use nimiq::consensus::base::transaction::{TransactionFormat, TransactionFlags, TransactionError};
 use nimiq::consensus::networks::NetworkId;
 use hex;

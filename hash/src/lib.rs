@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate macros;
+
 pub mod hmac;
 pub mod pbkdf2;
 pub mod sha512;
@@ -7,15 +10,41 @@ use libargon2_sys::argon2d_hash;
 use sha2::{Sha256, Sha512, Digest};
 use beserial::{Serialize, Deserialize};
 use hex::FromHex;
-use database::{AsDatabaseBytes, FromDatabaseValue};
 
-use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
 use std::io;
 use std::str;
 
 pub use self::sha512::*;
+
+#[macro_export]
+macro_rules! add_hash_trait_arr {
+    ($t: ty) => {
+        impl SerializeContent for $t {
+            fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
+                state.write(&self[..])?;
+                return Ok(self.len());
+            }
+        }
+
+        impl Hash for $t {}
+    };
+}
+
+#[macro_export]
+macro_rules! hash_typed_array {
+    ($name: ident) => {
+        impl SerializeContent for $name {
+            fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
+                state.write(&self.0[..])?;
+                return Ok(Self::SIZE);
+            }
+        }
+
+        impl hash::Hash for $name {}
+    };
+}
 
 pub trait Hasher: Default + io::Write {
     type Output: HashOutput;
@@ -75,7 +104,7 @@ pub struct Blake2bHasher(Blake2b);
 impl HashOutput for Blake2bHash {
     type Builder = Blake2bHasher;
 
-    fn as_bytes<'a>(&'a self) -> &[u8] {
+    fn as_bytes(&self) -> &[u8] {
         return &self.0;
     }
     fn len() -> usize { BLAKE2B_LENGTH }
@@ -112,19 +141,6 @@ impl Hasher for Blake2bHasher {
         return Blake2bHash::from(result.as_bytes());
     }
 }
-
-impl AsDatabaseBytes for Blake2bHash {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
-        return Cow::Borrowed(&self.0);
-    }
-}
-
-impl FromDatabaseValue for Blake2bHash {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        return Ok(bytes.into());
-    }
-}
-
 
 // Argon2d
 

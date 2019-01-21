@@ -1,6 +1,6 @@
 use crate::consensus::base::block::Block;
 use crate::consensus::base::blockchain::ChainInfo;
-use crate::consensus::base::primitive::hash::Blake2bHash;
+use hash::Blake2bHash;
 use database::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};
 use crate::network::message::GetBlocksDirection;
 

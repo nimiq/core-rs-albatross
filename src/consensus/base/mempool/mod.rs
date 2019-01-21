@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::consensus::base::account::Accounts;
 use crate::consensus::base::block::Block;
 use crate::consensus::base::blockchain::{Blockchain, BlockchainEvent};
-use crate::consensus::base::primitive::hash::{Blake2bHash, Hash};
+use hash::{Blake2bHash, Hash};
 use crate::consensus::base::primitive::Address;
 use crate::consensus::base::transaction::Transaction;
 use crate::utils::observer::Notifier;

@@ -1,6 +1,6 @@
 use std::fmt;
 use std::sync::Arc;
-use crate::consensus::base::primitive::hash::Blake2bHash;
+use hash::Blake2bHash;
 use crate::network::address::peer_address::PeerAddress;
 use crate::network::address::net_address::NetAddress;
 use crate::network::peer_channel::PeerChannel;

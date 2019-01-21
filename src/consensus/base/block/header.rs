@@ -1,6 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use crate::consensus::base::block::{Target, TargetCompact};
-use crate::consensus::base::primitive::hash::{Argon2dHash, Blake2bHash, Hash, SerializeContent};
+use hash::{Argon2dHash, Blake2bHash, Hash, SerializeContent};
 use std::io;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]

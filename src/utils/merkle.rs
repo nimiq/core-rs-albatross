@@ -1,5 +1,5 @@
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializingError, SerializeWithLength, WriteBytesExt};
-use crate::consensus::base::primitive::hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
+use hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
 use bit_vec::BitVec;
 use std::borrow::Cow;
 use std::cmp::Ordering;

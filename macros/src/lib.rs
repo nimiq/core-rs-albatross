@@ -1,3 +1,4 @@
+#[macro_export]
 macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
         #[repr(C)]
@@ -59,19 +60,7 @@ macro_rules! create_typed_array {
     };
 }
 
-macro_rules! hash_typed_array {
-    ($name: ident) => {
-        impl SerializeContent for $name {
-            fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
-                state.write(&self.0[..])?;
-                return Ok(Self::SIZE);
-            }
-        }
-
-        impl crate::consensus::base::primitive::hash::Hash for $name {}
-    };
-}
-
+#[macro_export]
 macro_rules! add_hex_io_fns_typed_arr {
     ($name: ident, $len: expr) => {
         impl ::std::fmt::Display for $name {
@@ -101,6 +90,7 @@ macro_rules! add_hex_io_fns_typed_arr {
     };
 }
 
+#[macro_export]
 macro_rules! upgrade_weak {
     ($weak_ref: expr) => {
         if let Some(arc) = $weak_ref.upgrade() {

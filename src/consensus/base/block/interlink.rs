@@ -1,5 +1,5 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use crate::consensus::base::primitive::hash::{Blake2bHash, Hash};
+use hash::{Blake2bHash, Hash};
 use crate::consensus::networks::{get_network_info, NetworkId};
 use std::io;
 use crate::utils::merkle;

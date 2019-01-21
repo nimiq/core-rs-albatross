@@ -1,7 +1,7 @@
 use beserial::{Serialize, SerializingError, Deserialize, SerializeWithLength, DeserializeWithLength, WriteBytesExt, ReadBytesExt};
 use bigdecimal::BigDecimal;
 use num_bigint::{BigInt, Sign, ToBigInt};
-use crate::consensus::base::primitive::hash::Argon2dHash;
+use hash::Argon2dHash;
 use crate::consensus::policy;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::fmt;

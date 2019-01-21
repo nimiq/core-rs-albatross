@@ -13,7 +13,7 @@ use nimiq::consensus::base::account::PrunedAccount;
 use nimiq::consensus::base::block::{Block, BlockHeader, BlockBody, Difficulty, TargetCompact};
 use nimiq::consensus::base::blockchain::Blockchain;
 use nimiq::consensus::base::primitive::Address;
-use nimiq::consensus::base::primitive::hash::{Hash, Blake2bHash};
+use hash::{Hash, Blake2bHash};
 use nimiq::consensus::base::transaction::Transaction;
 use nimiq::consensus::policy;
 

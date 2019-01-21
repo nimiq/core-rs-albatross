@@ -6,7 +6,7 @@ use nimiq::consensus::base::block::{Block, BlockError};
 use nimiq::consensus::base::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
 use nimiq::consensus::base::primitive::Address;
 use nimiq::consensus::base::primitive::crypto::{KeyPair, PrivateKey};
-use nimiq::consensus::base::primitive::hash::Hash;
+use hash::Hash;
 use nimiq::consensus::base::transaction::{Transaction, SignatureProof};
 use nimiq::consensus::networks::NetworkId;
 use nimiq::network::NetworkTime;

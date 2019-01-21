@@ -1,12 +1,13 @@
 use beserial::Serialize;
-use nimiq::consensus::base::account::{AccountError, Accounts, Account, AccountType, PrunedAccount};
+use database::volatile::VolatileEnvironment;
+use database::WriteTransaction;
+use hash::{Blake2bHash, Hash};
+use nimiq::consensus::base::account::{Account, AccountError, Accounts, AccountType, PrunedAccount};
 use nimiq::consensus::base::block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
-use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair, hash::{Blake2bHash, Hash}};
+use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair};
 use nimiq::consensus::base::transaction::{SignatureProof, Transaction};
 use nimiq::consensus::networks::NetworkId;
 use nimiq::consensus::policy;
-use database::volatile::VolatileEnvironment;
-use database::WriteTransaction;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {

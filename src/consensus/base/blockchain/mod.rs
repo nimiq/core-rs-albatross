@@ -8,3 +8,5 @@ pub use self::chain_store::ChainStore;
 pub use self::chain_store::Direction;
 pub use self::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
 pub use self::transaction_cache::TransactionCache;
+use database::{AsDatabaseBytes, FromDatabaseValue};
+use std::io;

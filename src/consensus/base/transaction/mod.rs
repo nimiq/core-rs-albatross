@@ -2,7 +2,7 @@ use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, Seri
 use crate::consensus::base::account::{Account, AccountType};
 use crate::consensus::base::primitive::{Address, Coin};
 use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
-use crate::consensus::base::primitive::hash::{Hash, SerializeContent, Blake2bHash};
+use hash::{Hash, SerializeContent, Blake2bHash};
 use crate::consensus::networks::NetworkId;
 use crate::consensus::policy;
 use std::cmp::{Ord, Ordering};

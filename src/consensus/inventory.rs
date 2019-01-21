@@ -6,7 +6,7 @@ use weak_table::PtrWeakHashSet;
 use crate::consensus::base::block::{Block, BlockHeader};
 use crate::consensus::base::blockchain::{Blockchain, PushResult, Direction};
 use crate::consensus::base::mempool::Mempool;
-use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
+use hash::{Hash, Blake2bHash};
 use crate::consensus::base::transaction::Transaction;
 use crate::network::connection::close_type::CloseType;
 use crate::network::message::{Message, InvVector, InvVectorType, TxMessage, GetBlocksMessage, GetBlocksDirection};

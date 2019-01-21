@@ -5,7 +5,7 @@ use std::slice;
 
 use super::AddressNibbles;
 use super::super::Account;
-use crate::consensus::base::primitive::hash::{Hash, Blake2bHash, SerializeContent};
+use hash::{Hash, Blake2bHash, SerializeContent};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]

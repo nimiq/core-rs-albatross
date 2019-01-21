@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::consensus::base::account::{Accounts, AccountError};
 use crate::consensus::base::block::{Block, BlockError, Target, TargetCompact};
 use crate::consensus::base::blockchain::{ChainInfo, ChainStore, TransactionCache, Direction};
-use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
+use hash::{Hash, Blake2bHash};
 use crate::consensus::networks::{NetworkId, get_network_info};
 use crate::consensus::policy;
 use crate::network::NetworkTime;

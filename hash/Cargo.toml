@@ -1,0 +1,14 @@
+[package]
+name = "hash"
+version = "0.1.0"
+authors = ["Pascal B <git@paberr.net>"]
+edition = "2018"
+
+[dependencies]
+blake2-rfc = "0.2.18"
+libargon2-sys = { path = "../libargon2-sys" }
+hex = "0.3.2"
+sha2 = "0.8.0"
+beserial = { path = "../beserial" }
+macros = { path = "../macros" }
+byteorder = "1.2"

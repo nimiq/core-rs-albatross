@@ -11,7 +11,7 @@ use parking_lot::RwLock;
 use crate::consensus::base::account::tree::AccountsProof;
 use crate::consensus::base::block::{Block, BlockHeader};
 use crate::consensus::base::primitive::crypto::{PublicKey, Signature, KeyPair};
-use crate::consensus::base::primitive::hash::Blake2bHash;
+use hash::{Hash, Blake2bHash};
 use crate::consensus::base::Subscription;
 use crate::consensus::base::transaction::Transaction;
 use crate::network::address::{PeerAddress, PeerId};
@@ -20,7 +20,6 @@ use crate::utils::services::ServiceFlags;
 use crate::network::ProtocolFlags;
 use crate::utils::version;
 use crate::utils::observer::PassThroughNotifier;
-use crate::consensus::base::primitive::hash::Hash;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u64)]

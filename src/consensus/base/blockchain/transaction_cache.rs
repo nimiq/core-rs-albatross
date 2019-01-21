@@ -1,5 +1,5 @@
 use crate::consensus::base::block::Block;
-use crate::consensus::base::primitive::hash::{Hash, Blake2bHash};
+use hash::{Hash, Blake2bHash};
 use crate::consensus::policy;
 use std::collections::{HashSet, VecDeque};
 

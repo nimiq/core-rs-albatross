@@ -13,3 +13,8 @@ tempdir = "0.3"
 rand = "0.6.4"
 bitflags = "1.0"
 beserial = { path = "../beserial" }
+hash = { path = "../hash", optional = true }
+
+[features]
+# Compiles this package with all features needed for the nimiq client.
+full-nimiq = ["hash"]

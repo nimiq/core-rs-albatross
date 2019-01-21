@@ -1,5 +1,5 @@
 use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt, ReadBytesExt, SerializeWithLength, DeserializeWithLength};
-use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
+use hash::{Hash, SerializeContent};
 use crate::consensus::base::primitive::Address;
 use std::ops;
 use std::usize;

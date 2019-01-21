@@ -1,6 +1,6 @@
 use nimiq::consensus::base::block::Difficulty;
 use nimiq::consensus::base::blockchain::{ChainInfo, ChainStore};
-use nimiq::consensus::base::primitive::hash::{Hash, Blake2bHash};
+use hash::{Hash, Blake2bHash};
 use nimiq::consensus::networks::{NetworkId, get_network_info};
 use database::{WriteTransaction, volatile::VolatileEnvironment};
 

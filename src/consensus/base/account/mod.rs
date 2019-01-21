@@ -7,7 +7,7 @@ pub mod accounts;
 use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt, ReadBytesExt};
 use crate::consensus::base::transaction::{Transaction, TransactionError};
 use crate::consensus::base::primitive::{Address, Coin};
-use crate::consensus::base::primitive::hash::{Hash, HashOutput, Hasher, SerializeContent};
+use hash::{Hash, HashOutput, Hasher, SerializeContent};
 use std::cmp::Ordering;
 use std::io;
 use std::fmt;

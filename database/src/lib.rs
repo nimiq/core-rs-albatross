@@ -1,28 +1,19 @@
 #[macro_use]
-extern crate log;
-#[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate log;
+
+use std::borrow::Cow;
+use std::io;
+use std::ops::Deref;
+
+use lmdb_zero;
+
+pub use crate::traits::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
 pub mod lmdb;
 pub mod volatile;
-
-use lmdb_zero;
-use std::io;
-use std::borrow::Cow;
-use std::ops::Deref;
-
-pub trait IntoDatabaseValue {
-    fn database_byte_size(&self) -> usize;
-    fn copy_into_database(&self, bytes: &mut [u8]);
-}
-
-pub trait FromDatabaseValue {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized;
-}
-
-pub trait AsDatabaseBytes {
-    fn as_database_bytes(&self) -> Cow<[u8]>;
-}
+pub mod traits;
 
 bitflags! {
     #[derive(Default)]
@@ -333,59 +324,5 @@ impl<'txn, 'db> Cursor<'txn, 'db> {
 
     pub fn count_duplicates(&mut self) -> usize {
         gen_cursor_match!(self, count_duplicates)
-    }
-}
-
-impl IntoDatabaseValue for [u8] {
-    fn database_byte_size(&self) -> usize {
-        return self.len();
-    }
-
-    fn copy_into_database(&self, bytes: &mut [u8]) {
-        bytes.copy_from_slice(self);
-    }
-}
-
-impl FromDatabaseValue for Vec<u8> {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        return Ok(bytes.to_vec());
-    }
-}
-
-impl IntoDatabaseValue for str {
-    fn database_byte_size(&self) -> usize {
-        return self.len();
-    }
-
-    fn copy_into_database(&self, bytes: &mut [u8]) {
-        bytes.copy_from_slice(self.as_bytes());
-    }
-}
-
-impl FromDatabaseValue for String {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        return Ok(String::from_utf8(bytes.to_vec()).unwrap());
-    }
-}
-
-impl FromDatabaseValue for u32 {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        let lmdb_result: Result<&lmdb_zero::Unaligned<u32>, String> = lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
-        Ok(lmdb_result.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.get())
-    }
-}
-
-// Conflicting implementation:
-//impl<T> FromDatabaseValue for T
-//    where T: lmdb_zero::traits::FromLmdbBytes + ?Sized {
-//    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-//        Ok(lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.to_owned())
-//    }
-//}
-
-impl<T> AsDatabaseBytes for T
-    where T: lmdb_zero::traits::AsLmdbBytes + ?Sized {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
-        return Cow::Borrowed(self.as_lmdb_bytes());
     }
 }

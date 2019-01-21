@@ -1,7 +1,8 @@
-use beserial::{Serialize, SerializingError, Deserialize};
+use beserial::{Deserialize, Serialize, SerializingError};
+use hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq::consensus::base::account::{AccountError, AccountType, HashedTimeLockedContract};
-use nimiq::consensus::base::account::htlc_contract::{AnyHash, ProofType, HashAlgorithm};
-use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair, hash::{Blake2bHasher, Sha256Hasher, Hasher}};
+use nimiq::consensus::base::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
+use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair};
 use nimiq::consensus::base::transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
 use nimiq::consensus::networks::NetworkId;
 

@@ -1,4 +1,4 @@
-use nimiq::consensus::base::primitive::hash::{Blake2bHash, Hash};
+use hash::{Blake2bHash, Hash};
 use nimiq::consensus::networks::*;
 use hex;
 

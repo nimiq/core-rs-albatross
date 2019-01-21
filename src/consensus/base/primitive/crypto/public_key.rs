@@ -7,7 +7,7 @@ use sha2;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 use crate::consensus::base::primitive::crypto::{PrivateKey, Signature};
-use crate::consensus::base::primitive::hash::{Hash, SerializeContent};
+use hash::{Hash, SerializeContent};
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub struct PublicKey(pub(in super) ed25519_dalek::PublicKey);

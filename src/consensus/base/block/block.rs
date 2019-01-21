@@ -1,6 +1,6 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use crate::consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target, BlockError};
-use crate::consensus::base::primitive::hash::{Hash, Blake2bHash, Argon2dHash};
+use hash::{Hash, Blake2bHash, Argon2dHash};
 use crate::consensus::networks::NetworkId;
 use std::io;
 use database::{FromDatabaseValue, IntoDatabaseValue};

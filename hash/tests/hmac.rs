@@ -1,5 +1,5 @@
-use nimiq::consensus::base::primitive::hash::hmac::*;
-use nimiq::consensus::base::primitive::hash::Sha512Hash;
+use hash::hmac::*;
+use hash::Sha512Hash;
 use hex::FromHex;
 
 struct TestVector {

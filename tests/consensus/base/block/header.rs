@@ -1,6 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use nimiq::consensus::base::block::*;
-use nimiq::consensus::base::primitive::hash::{Argon2dHash, Blake2bHash, Hash};
+use hash::{Argon2dHash, Blake2bHash, Hash};
 use hex;
 
 const GENESIS_HEADER: &str = "0001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c1f010000000000015ad23a98000219d9";

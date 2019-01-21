@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::consensus::base::blockchain::{Blockchain, PushResult};
 use crate::consensus::base::mempool::Mempool;
-use crate::consensus::base::primitive::hash::Blake2bHash;
+use hash::Blake2bHash;
 use crate::consensus::inventory::{InventoryManager, InventoryAgent, InventoryEvent};
 use crate::network::Peer;
 use crate::network::connection::close_type::CloseType;
