@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use crate::consensus::base::account::PrunedAccount;
 use crate::consensus::base::block::BlockError;
-use crate::consensus::base::primitive::Address;
+use keys::Address;
 use hash::{Hash, HashOutput, SerializeContent};
 use crate::consensus::base::transaction::Transaction;
 use crate::consensus::networks::NetworkId;

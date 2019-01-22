@@ -1,6 +1,7 @@
 use beserial::{Deserialize, Serialize};
 
-use crate::consensus::base::primitive::{Address, Coin};
+use crate::consensus::base::primitive::Coin;
+use keys::Address;
 use crate::consensus::base::transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
 
 use super::{Account, AccountError, AccountType};

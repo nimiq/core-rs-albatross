@@ -1,5 +1,6 @@
 use nimiq::consensus::base::blockchain::TransactionCache;
-use nimiq::consensus::base::primitive::{Address, Coin};
+use nimiq::consensus::base::primitive::Coin;
+use keys::Address;
 use hash::{Hash, Blake2bHash};
 use nimiq::consensus::base::transaction::Transaction;
 use nimiq::consensus::networks::{NetworkId, get_network_info};

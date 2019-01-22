@@ -7,7 +7,7 @@ pub mod transaction;
 
 
 use beserial::{Deserialize, Serialize, ReadBytesExt, WriteBytesExt, SerializingError};
-use crate::consensus::base::primitive::Address;
+use keys::Address;
 
 
 

@@ -1,9 +1,6 @@
-extern crate curve25519_dalek;
 extern crate beserial;
-extern crate ed25519_dalek;
 extern crate hex;
 extern crate nimiq;
-extern crate sha2;
 extern crate bigdecimal;
 extern crate num_traits;
 extern crate num_bigint;
@@ -12,7 +9,7 @@ extern crate pretty_env_logger;
 use nimiq::consensus::base::account::PrunedAccount;
 use nimiq::consensus::base::block::{Block, BlockHeader, BlockBody, Difficulty, TargetCompact};
 use nimiq::consensus::base::blockchain::Blockchain;
-use nimiq::consensus::base::primitive::Address;
+use keys::Address;
 use hash::{Hash, Blake2bHash};
 use nimiq::consensus::base::transaction::Transaction;
 use nimiq::consensus::policy;

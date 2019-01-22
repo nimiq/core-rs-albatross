@@ -8,7 +8,7 @@ use ed25519_dalek::ExpandedSecretKey;
 use std::ops::Add;
 use std::fmt;
 use std::error;
-use super::{KeyPair, PublicKey, Signature};
+use crate::{KeyPair, PublicKey, Signature};
 use std::iter::Sum;
 use std::borrow::Borrow;
 
@@ -140,7 +140,7 @@ impl PartialSignature {
     }
 
     #[inline]
-    pub fn as_bytes<'a>(&'a self) -> &'a [u8; PartialSignature::SIZE] { self.0.as_bytes() }
+    pub fn as_bytes(&self) -> &[u8; PartialSignature::SIZE] { self.0.as_bytes() }
 }
 
 impl From<[u8; PartialSignature::SIZE]> for PartialSignature {
@@ -201,7 +201,7 @@ impl KeyPair {
         let s = Scalar::from_hash::<sha2::Sha512>(h);
 
         // Expand the private key.
-        let expanded_private_key = ExpandedSecretKey::from_secret_key::<sha2::Sha512>(self.private.as_dalek());
+        let expanded_private_key = ExpandedSecretKey::from(self.private.as_dalek());
         let sk = expanded_private_key.to_scalar();
 
         // Compute H(C||P)*sk

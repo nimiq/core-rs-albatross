@@ -1,10 +1,9 @@
 use ed25519_dalek;
 use rand::rngs::OsRng;
-use sha2;
 
 use beserial::{Deserialize, Serialize};
 
-use crate::consensus::base::primitive::crypto::{PrivateKey, PublicKey, Signature};
+use crate::{PrivateKey, PublicKey, Signature};
 
 #[derive(Serialize, Deserialize)]
 pub struct KeyPair {
@@ -15,14 +14,14 @@ pub struct KeyPair {
 impl KeyPair {
     pub fn generate() -> Self {
         let mut cspring: OsRng = OsRng::new().unwrap();
-        let key_pair = ed25519_dalek::Keypair::generate::<sha2::Sha512, _>(&mut cspring);
+        let key_pair = ed25519_dalek::Keypair::generate(&mut cspring);
         let priv_key = PrivateKey(key_pair.secret);
         let pub_key = PublicKey(key_pair.public);
         return KeyPair { private: priv_key, public: pub_key };
     }
 
     pub fn sign(&self, data: &[u8]) -> Signature {
-        let ext_signature = self.private.0.expand::<sha2::Sha512>().sign::<sha2::Sha512>(data, &self.public.0);
+        let ext_signature = ed25519_dalek::ExpandedSecretKey::from(&self.private.0).sign(data, &self.public.0);
         return Signature(ext_signature);
     }
 }

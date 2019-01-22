@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
-use crate::consensus::base::primitive::crypto::PublicKey;
+use crate::PublicKey;
 use hash::{Hash, SerializeContent};
 
 pub struct PrivateKey(pub(in super) ed25519_dalek::SecretKey);

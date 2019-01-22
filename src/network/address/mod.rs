@@ -6,7 +6,7 @@ pub mod peer_address_state;
 pub use self::net_address::*;
 pub use self::peer_address::*;
 
-use crate::consensus::base::primitive::crypto::{PublicKey};
+use keys::{PublicKey};
 use hash::{Blake2bHash, Blake2bHasher, Hasher};
 
 create_typed_array!(PeerId, u8, 16);

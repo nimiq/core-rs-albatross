@@ -1,5 +1,6 @@
 use ed25519_dalek;
 use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
+use crate::errors::KeysError;
 
 #[derive(Debug, Clone)]
 pub struct Signature(pub(in super) ed25519_dalek::Signature);
@@ -13,8 +14,9 @@ impl Signature {
     #[inline]
     pub(crate) fn as_dalek(&self) -> &ed25519_dalek::Signature { &self.0 }
 
-    pub fn try_from(bytes: &[u8; Self::SIZE]) -> Result<Self, ed25519_dalek::SignatureError> {
-        Ok(Signature(ed25519_dalek::Signature::from_bytes(bytes)?))
+    #[inline]
+    pub fn from_bytes(bytes: &[u8; Self::SIZE]) -> Result<Self, KeysError> {
+        Ok(Signature(ed25519_dalek::Signature::from_bytes(bytes).map_err(|e| KeysError(e))?))
     }
 }
 
@@ -42,7 +44,7 @@ impl Deserialize for Signature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let mut buf = [0u8; Signature::SIZE];
         reader.read_exact(&mut buf)?;
-        Self::try_from(&buf).map_err(|_| SerializingError::InvalidEncoding)
+        Self::from_bytes(&buf).map_err(|_| SerializingError::InvalidValue)
     }
 }
 

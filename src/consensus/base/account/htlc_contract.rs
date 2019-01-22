@@ -2,7 +2,8 @@ use beserial::{Serialize, Deserialize};
 use crate::consensus::base::account::{Account, AccountError, AccountType};
 use crate::consensus::base::transaction::{Transaction, TransactionError, TransactionFlags};
 use crate::consensus::base::transaction::SignatureProof;
-use crate::consensus::base::primitive::{Address, Coin};
+use crate::consensus::base::primitive::Coin;
+use keys::Address;
 use hash::{Hasher, Blake2bHasher, Sha256Hasher};
 use hex::FromHex;
 

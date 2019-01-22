@@ -3,7 +3,7 @@ use std::time::SystemTime;
 
 use beserial::{Deserialize, Serialize};
 
-use crate::consensus::base::primitive::crypto::{KeyPair, PublicKey};
+use keys::{KeyPair, PublicKey};
 use crate::network::address::net_address::NetAddress;
 use crate::network::address::peer_address::{PeerAddress, PeerAddressType};
 use crate::network::address::PeerId;

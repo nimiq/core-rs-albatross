@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use beserial::{Deserialize, Serialize};
 
 use crate::consensus::base::block::{Block, BlockBody, BlockHeader, BlockInterlink};
-use crate::consensus::base::primitive::Address;
-use crate::consensus::base::primitive::crypto::PublicKey;
+use keys::Address;
+use keys::PublicKey;
 use hash::Blake2bHash;
 use crate::network::address::net_address::NetAddress;
 use crate::network::address::peer_address::PeerAddress;

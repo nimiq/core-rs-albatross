@@ -2,9 +2,10 @@ use beserial::{Serialize, Deserialize};
 use hex;
 use std::sync::Arc;
 
-use nimiq::consensus::base::primitive::{Address, Coin};
+use nimiq::consensus::base::primitive::Coin;
+use keys::Address;
 use hash::Hash;
-use nimiq::consensus::base::primitive::crypto::KeyPair;
+use keys::KeyPair;
 use nimiq::consensus::base::block::BlockBody;
 use nimiq::consensus::base::mempool::{Mempool, ReturnCode};
 use nimiq::consensus::base::transaction::{Transaction, SignatureProof};

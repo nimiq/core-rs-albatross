@@ -1,6 +1,7 @@
 use beserial::{Serialize, SerializingError, Deserialize};
 use nimiq::consensus::base::account::{AccountError, AccountType, VestingContract};
-use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair};
+use nimiq::consensus::base::primitive::Coin;
+use keys::{Address, KeyPair, PrivateKey};
 use nimiq::consensus::base::transaction::{Transaction, TransactionError, TransactionFlags, SignatureProof};
 use nimiq::consensus::networks::NetworkId;
 
@@ -186,7 +187,9 @@ fn it_does_not_support_incoming_transactions() {
 
 #[test]
 fn it_can_verify_outgoing_transactions() {
-    let key_pair = KeyPair::generate();
+    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
+
+    let key_pair = KeyPair::from(sender_priv_key);
     let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from(1), Coin::from(1000), 1, NetworkId::Dummy);
     tx.sender_type = AccountType::Vesting;
 
@@ -199,13 +202,18 @@ fn it_can_verify_outgoing_transactions() {
     assert_eq!(VestingContract::verify_outgoing_transaction(&tx), Ok(()));
 
     tx.proof[22] = tx.proof[22] % 250 + 1;
-
     assert_eq!(VestingContract::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidProof));
+
+    tx.proof[22] = tx.proof[22] % 251 + 3;
+    // Proof is not a valid point, so Deserialize will result in an error.
+    assert_eq!(VestingContract::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidSerialization(SerializingError::InvalidValue)));
 }
 
 #[test]
 fn it_can_apply_and_revert_valid_transaction() {
-    let key_pair = KeyPair::generate();
+    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
+
+    let key_pair = KeyPair::from(sender_priv_key);
     let start_contract = VestingContract {
         balance: Coin::from(1000),
         owner: Address::from(&key_pair.public),
@@ -244,8 +252,11 @@ fn it_can_apply_and_revert_valid_transaction() {
 
 #[test]
 fn it_refuses_invalid_transaction() {
-    let key_pair = KeyPair::generate();
-    let key_pair_alt = KeyPair::generate();
+    let priv_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
+    let priv_key_alt: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap()).unwrap();
+
+    let key_pair = KeyPair::from(priv_key);
+    let key_pair_alt = KeyPair::from(priv_key_alt);
 
     let start_contract = VestingContract {
         balance: Coin::from(1000),

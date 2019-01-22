@@ -1,5 +1,5 @@
 use beserial::{Serialize, SerializingError, SerializeWithLength, Deserialize, DeserializeWithLength, ReadBytesExt, WriteBytesExt};
-use crate::consensus::base::primitive::crypto::{PublicKey, Signature};
+use keys::{PublicKey, Signature};
 use crate::network;
 use crate::network::Protocol;
 use crate::network::address::{NetAddress, PeerId};

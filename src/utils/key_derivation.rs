@@ -1,11 +1,11 @@
-use crate::consensus::base::primitive::crypto::{PrivateKey, PublicKey};
+use keys::{PrivateKey, PublicKey};
 use hash::pbkdf2::*;
 use hash::hmac::*;
 use crate::utils::mnemonic::Mnemonic;
 use byteorder::{BigEndian, WriteBytesExt};
 use beserial::Serialize;
 use hash::Sha512Hash;
-use crate::consensus::base::primitive::Address;
+use keys::Address;
 use regex::Regex;
 use std::borrow::Cow;
 

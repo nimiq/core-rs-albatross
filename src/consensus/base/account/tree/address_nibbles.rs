@@ -1,6 +1,6 @@
 use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt, ReadBytesExt, SerializeWithLength, DeserializeWithLength};
 use hash::{Hash, SerializeContent};
-use crate::consensus::base::primitive::Address;
+use keys::Address;
 use std::ops;
 use std::usize;
 use std::fmt;

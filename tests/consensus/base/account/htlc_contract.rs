@@ -2,7 +2,8 @@ use beserial::{Deserialize, Serialize, SerializingError};
 use hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq::consensus::base::account::{AccountError, AccountType, HashedTimeLockedContract};
 use nimiq::consensus::base::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
-use nimiq::consensus::base::primitive::{Address, Coin, crypto::KeyPair};
+use nimiq::consensus::base::primitive::Coin;
+use keys::{Address, KeyPair, PrivateKey};
 use nimiq::consensus::base::transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
 use nimiq::consensus::networks::NetworkId;
 
@@ -147,8 +148,11 @@ fn it_does_not_support_incoming_transactions() {
 }
 
 fn prepare_outgoing_transaction() -> (HashedTimeLockedContract, Transaction, AnyHash, SignatureProof, SignatureProof) {
-    let sender_key_pair = KeyPair::generate();
-    let recipient_key_pair = KeyPair::generate();
+    let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
+    let recipient_priv_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode("bd1cfcd49a81048c8c8d22a25766bd01bfa0f6b2eb0030f65241189393af96a2").unwrap()).unwrap();
+
+    let sender_key_pair = KeyPair::from(sender_priv_key);
+    let recipient_key_pair = KeyPair::from(recipient_priv_key);
     let sender = Address::from(&sender_key_pair.public);
     let recipient = Address::from(&recipient_key_pair.public);
     let pre_image = AnyHash::from([1u8; 32]);
@@ -226,7 +230,12 @@ fn it_can_verify_regular_transfer() {
     tx.proof[1] = HashAlgorithm::Sha256 as u8;
 
     // regular: invalid signature
+    // Proof is not a valid point, so Deserialize will result in an error.
     tx.proof[72] = tx.proof[72] % 250 + 1;
+    assert_eq!(HashedTimeLockedContract::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidSerialization(SerializingError::InvalidValue)));
+
+    // regular: invalid signature
+    tx.proof[72] = tx.proof[72] % 250 + 2;
     assert_eq!(HashedTimeLockedContract::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidProof));
 
     // regular: invalid over-long
@@ -256,9 +265,10 @@ fn it_can_verify_early_resolve() {
     assert_eq!(HashedTimeLockedContract::verify_outgoing_transaction(&tx), Ok(()));
 
     // early resolve: invalid signature 1
+    // Proof is not a valid point, so Deserialize will result in an error.
     let bak = tx.proof[4];
     tx.proof[4] = tx.proof[4] % 250 + 1;
-    assert_eq!(HashedTimeLockedContract::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidProof));
+    assert_eq!(HashedTimeLockedContract::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidSerialization(SerializingError::InvalidValue)));
     tx.proof[4] = bak;
 
     // early resolve: invalid signature 2
