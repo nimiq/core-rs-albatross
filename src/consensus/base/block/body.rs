@@ -6,7 +6,7 @@ use hash::{Hash, HashOutput, SerializeContent};
 use crate::consensus::base::transaction::Transaction;
 use crate::consensus::networks::NetworkId;
 use std::{cmp::Ordering, io};
-use crate::utils::merkle;
+use utils::merkle;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BlockBody {

@@ -44,7 +44,7 @@ use crate::network::{
         SharedNimiqMessageStream,
     },
 };
-use crate::utils::observer::PassThroughNotifier;
+use utils::observer::PassThroughNotifier;
 
 // This handle allows the ConnectionPool in the upper layer to signal if this
 // connection should be aborted (f.e. if we are connecting to the same peer,

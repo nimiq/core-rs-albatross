@@ -20,7 +20,7 @@ use tokio_tungstenite::{
     stream::PeerAddr
 };
 
-use crate::utils::locking::MultiLock;
+use utils::locking::MultiLock;
 use crate::network::{
     address::net_address::NetAddress,
     message::Message as NimiqMessage

@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 use std::time::Duration;
-use crate::utils::systemtime_to_timestamp;
+use utils::time::systemtime_to_timestamp;
 use atomic::Atomic;
 use atomic::Ordering;
 

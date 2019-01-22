@@ -1,13 +1,18 @@
-use crate::utils::crc::Crc8Computer;
+#[macro_use]
+extern crate macros;
+
+#[cfg(feature = "key-derivation")]
+pub mod key_derivation;
+
+use utils::crc::Crc8Computer;
 use hash::{Sha256Hasher, Hasher};
 use std::str;
 use bit_vec::BitVec;
-use crate::utils::bit_vec::IntoChunkedBitVecIterator;
+use utils::bit_vec::IntoChunkedBitVecIterator;
 use std::fmt;
 use hex::FromHex;
 use std::str::FromStr;
 use hash::pbkdf2::{Pbkdf2Error, compute_pbkdf2_sha512};
-use crate::utils::key_derivation::ExtendedPrivateKey;
 use unicode_normalization::UnicodeNormalization;
 
 /**
@@ -44,7 +49,7 @@ impl Entropy {
     }
 
     /// Creates a Mnemonic out of this entropy (BIP39 compatible).
-    pub fn to_mnemonic<'a>(&self, wordlist: Wordlist<'a>) -> Mnemonic {
+    pub fn to_mnemonic(&self, wordlist: Wordlist) -> Mnemonic {
         let mut entropy = BitVec::from_bytes(self.as_bytes());
         let checksum = self.sha256_checksum();
 
@@ -55,7 +60,7 @@ impl Entropy {
 
     /// Creates a Mnemonic out of this entropy using the legacy style checksum.
     #[deprecated(since="0.0.1", note="please use `to_mnemonic` instead")]
-    pub fn to_legacy_mnemonic<'a>(&self, wordlist: Wordlist<'a>) -> Mnemonic {
+    pub fn to_legacy_mnemonic(&self, wordlist: Wordlist) -> Mnemonic {
         let mut entropy = BitVec::from_bytes(self.as_bytes());
         let checksum = self.crc8_checksum();
 
@@ -84,7 +89,7 @@ impl Mnemonic {
     const NUM_BITS_PER_WORD: usize = 11;
 
     /// Creates a Mnemonic out of a BitVec.
-    fn from_bits<'a>(bits: BitVec, wordlist: Wordlist<'a>) -> Self {
+    fn from_bits(bits: BitVec, wordlist: Wordlist) -> Self {
         let mnemonic = bits.chunks(Self::NUM_BITS_PER_WORD)
             .map(|chunk| wordlist[chunk].to_string())
             .collect::<Vec<String>>();
@@ -94,7 +99,7 @@ impl Mnemonic {
     }
 
     /// Tries to convert a Mnemonic into a BitVec. This may fail if the Mnemonic doesn't match the wordlist.
-    fn to_bits<'a>(&self, wordlist: Wordlist<'a>) -> Option<BitVec> {
+    fn to_bits(&self, wordlist: Wordlist) -> Option<BitVec> {
         let mut bit_vec = BitVec::with_capacity(self.mnemonic.len() * Self::NUM_BITS_PER_WORD);
         for index in self.mnemonic.iter()
             .map(|word| wordlist.binary_search(&word.to_lowercase().as_ref()).ok()) {
@@ -107,7 +112,7 @@ impl Mnemonic {
     }
 
     /// Creates an entropy out of this mnemonic.
-    fn bits_to_entropy_generic<'a>(mut bits: BitVec, legacy: bool) -> Option<Entropy> {
+    fn bits_to_entropy_generic(mut bits: BitVec, legacy: bool) -> Option<Entropy> {
         // Split up bits into entropy and checksum.
         let mut checksum_len = bits.len() % 8;
         if checksum_len == 0 {
@@ -142,19 +147,19 @@ impl Mnemonic {
     }
 
     /// Creates an entropy out of this mnemonic.
-    pub fn to_entropy<'a>(&self, wordlist: Wordlist<'a>) -> Option<Entropy> {
+    pub fn to_entropy(&self, wordlist: Wordlist) -> Option<Entropy> {
         let bits = self.to_bits(wordlist)?;
         Mnemonic::bits_to_entropy_generic(bits, false)
     }
 
     /// Creates an entropy out of this legacy mnemonic.
-    pub fn to_entropy_legacy<'a>(&self, wordlist: Wordlist<'a>) -> Option<Entropy> {
+    pub fn to_entropy_legacy(&self, wordlist: Wordlist) -> Option<Entropy> {
         let bits = self.to_bits(wordlist)?;
         Mnemonic::bits_to_entropy_generic(bits, true)
     }
 
     /// Returns the type of this Mnemonic.
-    pub fn get_type<'a>(&self, wordlist: Wordlist<'a>) -> MnemonicType {
+    pub fn get_type(&self, wordlist: Wordlist) -> MnemonicType {
         let bits = self.to_bits(wordlist);
 
         if bits.is_none() {
@@ -184,11 +189,6 @@ impl Mnemonic {
         }
 
         compute_pbkdf2_sha512(mnemonic.as_bytes(), salt.as_bytes(), 2048, 64)
-    }
-
-    /// Returns the corresponding master extended private key for this mnemonic.
-    pub fn to_master_key(&self, password: Option<&str>) -> Result<ExtendedPrivateKey, Pbkdf2Error> {
-        Ok(ExtendedPrivateKey::from_seed(self.to_seed(password)?))
     }
 }
 

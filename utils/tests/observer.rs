@@ -1,4 +1,4 @@
-use nimiq::utils::observer::*;
+use utils::observer::*;
 use std::sync::Arc;
 use std::sync::RwLock;
 

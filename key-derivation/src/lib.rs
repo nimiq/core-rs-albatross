@@ -1,7 +1,6 @@
 use keys::{PrivateKey, PublicKey};
 use hash::pbkdf2::*;
 use hash::hmac::*;
-use crate::utils::mnemonic::Mnemonic;
 use byteorder::{BigEndian, WriteBytesExt};
 use beserial::Serialize;
 use hash::Sha512Hash;
@@ -36,11 +35,6 @@ impl ExtendedPrivateKey {
 
         // Overflow check.
         path.split("/").skip(1).all(|segment| segment.trim_right_matches("'").parse::<u32>().is_ok())
-    }
-
-    /// Converts a mnemonic into the corresponding master extended private key.
-    pub fn from_mnemonic(mnemonic: &Mnemonic, password: Option<&str>) -> Result<Self, Pbkdf2Error> {
-        Ok(ExtendedPrivateKey::from_seed(mnemonic.to_seed(password)?))
     }
 
     /// Returns the derived extended private key at a given index.

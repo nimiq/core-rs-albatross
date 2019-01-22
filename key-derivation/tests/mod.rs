@@ -1,4 +1,4 @@
-use nimiq::utils::key_derivation::*;
+use key_derivation::*;
 use keys::{PrivateKey, PublicKey};
 use hex;
 

@@ -21,10 +21,10 @@ use crate::network::message::MessageType;
 use crate::network::message::RejectMessage;
 use crate::network::network_config::NetworkConfig;
 use crate::network::peer_channel::PeerChannel;
-use crate::utils::observer::{Notifier, weak_listener, weak_passthru_listener};
-use crate::utils::systemtime_to_timestamp;
-use crate::utils::timers::Timers;
-use crate::utils::unique_ptr::UniquePtr;
+use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
+use utils::time::systemtime_to_timestamp;
+use utils::timers::Timers;
+use utils::unique_ptr::UniquePtr;
 use crate::utils::version;
 
 

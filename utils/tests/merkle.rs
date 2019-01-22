@@ -1,4 +1,4 @@
-use nimiq::utils::merkle::{compute_root_from_content, compute_root_from_content_slice, MerklePath, MerkleProof};
+use utils::merkle::{compute_root_from_content, compute_root_from_content_slice, MerklePath, MerkleProof};
 use hash::{Hasher, Blake2bHasher, Blake2bHash};
 use beserial::{Serialize, Deserialize};
 

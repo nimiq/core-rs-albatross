@@ -12,7 +12,7 @@ use crate::consensus::base::transaction::Transaction;
 use crate::network::connection::close_type::CloseType;
 use crate::network::message::{Message, InvVector, InvVectorType, TxMessage, GetBlocksMessage, GetBlocksDirection};
 use crate::network::Peer;
-use crate::utils::{
+use utils::{
     mutable_once::MutableOnce,
     observer::{Notifier, weak_listener, weak_passthru_listener},
     timers::Timers,
@@ -361,7 +361,7 @@ impl InventoryAgent {
 
         let result = self.blockchain.push(block);
 
-        debug!("Block #{} ({} txs) took {}ms to process", height, num_txs, utils::duration_as_millis(&(Instant::now() - start)));
+        debug!("Block #{} ({} txs) took {}ms to process", height, num_txs, utils::time::duration_as_millis(&(Instant::now() - start)));
 
         self.notifier.read().notify(InventoryEvent::BlockProcessed(vector.hash.clone(), result));
 

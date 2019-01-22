@@ -27,10 +27,10 @@ use crate::network::network_config::NetworkConfig;
 use crate::network::peer_channel::PeerChannel;
 use crate::network::Protocol;
 use crate::network::ProtocolFlags;
-use crate::utils::iterators::Alternate;
+use utils::iterators::Alternate;
 use crate::utils::services::ServiceFlags;
-use crate::utils::systemtime_to_timestamp;
-use crate::utils::timers::Timers;
+use utils::time::systemtime_to_timestamp;
+use utils::timers::Timers;
 
 pub struct PeerAddressBookState {
     info_by_address: HashMap<Arc<PeerAddress>, PeerAddressInfo>,

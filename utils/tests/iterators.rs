@@ -1,4 +1,4 @@
-use nimiq::utils::iterators::*;
+use utils::iterators::*;
 
 #[test]
 fn it_can_iterate_over_two_iterators() {

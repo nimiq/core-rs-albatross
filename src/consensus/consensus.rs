@@ -11,10 +11,10 @@ use crate::consensus::inventory::InventoryManager;
 use crate::consensus::networks::NetworkId;
 use crate::network::{Network, NetworkConfig, NetworkEvent, NetworkTime, Peer};
 use database::Environment;
-use crate::utils::observer::Notifier;
-use crate::utils::timers::Timers;
+use utils::observer::Notifier;
+use utils::timers::Timers;
 use std::time::Duration;
-use crate::utils::mutable_once::MutableOnce;
+use utils::mutable_once::MutableOnce;
 use std::collections::HashMap;
 
 pub struct Consensus {

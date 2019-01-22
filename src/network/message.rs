@@ -15,11 +15,11 @@ use hash::{Hash, Blake2bHash};
 use crate::consensus::base::Subscription;
 use crate::consensus::base::transaction::Transaction;
 use crate::network::address::{PeerAddress, PeerId};
-use crate::utils::crc::Crc32Computer;
+use utils::crc::Crc32Computer;
 use crate::utils::services::ServiceFlags;
 use crate::network::ProtocolFlags;
 use crate::utils::version;
-use crate::utils::observer::PassThroughNotifier;
+use utils::observer::PassThroughNotifier;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u64)]

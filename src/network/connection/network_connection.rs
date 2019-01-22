@@ -12,7 +12,7 @@ use crate::network::peer_channel::PeerStream;
 use crate::network::websocket::SharedNimiqMessageStream;
 use crate::network::address::peer_address::PeerAddress;
 use parking_lot::RwLock;
-use crate::utils::observer::PassThroughNotifier;
+use utils::observer::PassThroughNotifier;
 use crate::network::peer_channel::PeerStreamEvent;
 use futures::sync::oneshot;
 use parking_lot::Mutex;

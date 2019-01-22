@@ -2,7 +2,7 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use hash::{Blake2bHash, Hash};
 use crate::consensus::networks::{get_network_info, NetworkId};
 use std::io;
-use crate::utils::merkle;
+use utils::merkle;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub struct BlockInterlink {

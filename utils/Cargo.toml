@@ -1,0 +1,29 @@
+[package]
+name = "utils"
+version = "0.1.0"
+authors = ["Pascal B <git@paberr.net>"]
+edition = "2018"
+
+[dependencies]
+bit-vec = { version = "0.5.0", optional = true }
+futures = { version = "0.1", optional = true }
+parking_lot = { version = "0.6", optional = true }
+hash = { path = "../hash", optional = true }
+beserial = { path = "../beserial", optional = true }
+tokio = { version = "0.1", optional = true }
+log = { version = "0.4.3", optional = true }
+
+[features]
+crc = []
+iterators = []
+locking = ["futures", "parking_lot"]
+merkle = ["beserial", "hash", "bit-vec"]
+mutable-once = []
+observer = []
+time = []
+timers = ["futures", "parking_lot", "tokio", "log"]
+unique-ptr = []
+# Compiles this package with all features.
+all = ["bit-vec", "crc", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr"]
+# Compiles this package with the features needed for the nimiq client.
+full-nimiq = ["crc", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr"]

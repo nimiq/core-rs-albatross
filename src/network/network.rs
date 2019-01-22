@@ -16,9 +16,9 @@ use crate::consensus::networks::NetworkId;
 use crate::network::NetworkTime;
 use crate::network::Peer;
 use crate::network::peer_scorer::PeerScorer;
-use crate::utils::timers::Timers;
-use crate::utils::observer::PassThroughNotifier;
-use crate::utils::mutable_once::MutableOnce;
+use utils::timers::Timers;
+use utils::observer::PassThroughNotifier;
+use utils::mutable_once::MutableOnce;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {

@@ -9,8 +9,8 @@ use crate::consensus::networks::{NetworkId, get_network_info};
 use crate::consensus::policy;
 use crate::network::NetworkTime;
 use database::{Environment, ReadTransaction, WriteTransaction};
-use crate::utils::observer::Notifier;
-use crate::utils::unique_ptr::UniquePtr;
+use utils::observer::Notifier;
+use utils::unique_ptr::UniquePtr;
 use std::cmp;
 use crate::network::message::GetBlocksMessage;
 

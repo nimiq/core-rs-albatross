@@ -20,13 +20,13 @@ use crate::network::Peer;
 use crate::network::peer_channel::PeerChannel;
 use crate::network::peer_channel::PeerChannelEvent;
 use crate::network::Protocol;
-use crate::utils::observer::PassThroughNotifier;
+use utils::observer::PassThroughNotifier;
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
-use crate::utils::unique_ptr::UniquePtr;
+use utils::unique_ptr::UniquePtr;
 use crate::network::websocket::websocket_connector::{WebSocketConnector, WebSocketConnectorEvent};
-use crate::utils::mutable_once::MutableOnce;
+use utils::mutable_once::MutableOnce;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {

@@ -8,7 +8,7 @@ use crate::consensus::networks::NetworkId;
 use crate::consensus::policy;
 use std::cmp::{Ord, Ordering};
 use std::io;
-use crate::utils::merkle::Blake2bMerklePath;
+use utils::merkle::Blake2bMerklePath;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
