@@ -1,0 +1,275 @@
+#
+# Configuration for Nimiq core-rs node
+#
+#   WARNING !!
+#   This is a test configuration for development. DO NOT USE.
+#
+
+
+##############################################################################
+#
+# Network specific configuration
+#
+##############################################################################
+[network]
+# Configure hostname/IP address to announce to the network.
+# If the protocol is "wss", this must be a FQDN pointing to this node.
+# Possible values: any fully-qualified domain name or IP address (latter only for protocol "ws").
+host = "my.domain"
+
+# Specifies which port to listen on for connections.
+# Possible values: any valid port number
+# Default: 8443.
+port = 8443
+
+# Configure the protocol to be used. Options are:
+# - "wss": Requires host, port, and TLS certificate to be set.
+# - "ws": Only requires host (can be an IP address) and port to be set.
+# - "dumb": Discouraged as other nodes might set limits on the number of dumb connections.
+#           Other nodes will not be able to connect to this node, but you may connect to others.
+# Possible values: "wss", "ws", "dumb"
+# Default: "wss"
+protocol = "wss"
+
+# Run in passive mode: do not connect to other peers and wait for them to connect to you.
+# Possible values: "no", "yes"
+# Default: "no"
+passive = true
+
+# Details of additional seed node.
+# - host: the hostname of the websocket server to connect to.
+# - port: the port that the nimiq node runs on.
+# - publicKey (optional): the public part of the peer key of this seed node. Should always be set if the node
+#                         is accessed via the internet.
+seedNodes = [
+    { host = 'new-seed.nimiq.com', port = 8080, publicKey = 'e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837' },
+    { host = 'nimiq-seed.company-network.int', port = 8080 },
+]
+
+
+
+##############################################################################
+#
+# Certificate file and private key file to use for the TLS secured server.
+#
+##############################################################################
+[tls]
+cert = "./my.domain.cer"
+key = "./my.domain.key"
+
+
+
+##############################################################################
+#
+# Consensus specific configuration
+#
+##############################################################################
+[consensus]
+# Specify the type of node to run.
+# Possible values: "full", "light", "nano"
+# Default: "full"
+type = "full"
+
+# Specify the network to connect to.
+# Possible values: "main", "test", "dev", "bounty"
+# Default: "main"
+network = "test"
+
+
+
+##############################################################################
+#
+# Configure the miner on this node.
+#
+##############################################################################
+[miner]
+# Activate mining on this node.
+# Possible values: false, true
+# Default: false
+enabled = true
+
+# Number of threads to use for mining. Set to "auto" to automatically use number of cores
+# of the device's processor.
+# Possible values: "auto", any number of threads
+# Default: "auto"
+threads = 1
+
+# Number of seconds after which mining is throttled
+# Possible values: 0, positive integers, or "infinity"
+# Default: "infinity"
+#throttleAfter = "infinity"
+
+# Number of seconds the throttling lasts
+# Possible values: positive integers
+throttleWait = 100
+
+# Extra data to include in mined blocks
+# Possible values: strings with upto 255 bytes length
+# Default: ""
+extraData = "miner name"
+
+
+##############################################################################
+#
+# Configure pool mining on this node.
+#
+##############################################################################
+[poolMining]
+# Mine as part of a mining pool
+# Possible values: false, true
+# Default: false
+enabled = true
+
+# Hostname of the mining pool server
+# Possible values: any fully-qualified domain name.
+# Default: none
+host = "pool.domain"
+
+# Port of the mining pool server
+# Possible values: any valid port number
+# Default: none
+port = 8444
+
+# Mining Pool Mode. In Smart Mode, the miner actively syncs with the network.
+# Possible values: "smart", "nano"
+# Default: "smart"
+mode = "smart"
+
+# Optional data including stats about the device.
+# The format of this JSON object is defined by the pool operator.
+# Possible values: a valid JSON object
+# Default: none
+deviceData = { deviceGroup = 'foobar' }
+
+
+##############################################################################
+#
+# Configure the JSON-RPC server.
+#
+##############################################################################
+[rpcServer]
+# Start the JSON-RPC server.
+# Possible values: false, true
+# Default: false
+enabled = true
+
+# TCP-Port to use to create a listening socket for the JSON-RPC server.
+# Possible values: any valid port number
+# Default: 8648
+port = 8648
+
+# Allow Cross-Origin access to the JSON-RPC server from the specified origins. Use this option with caution.
+# Default: []
+corsdomain = []
+
+# Allow access from remote hosts (ip address) or subnet (network/CIDR). Use this option with caution.
+# Default: []
+allowip = ["192.168.0.0/24"]
+
+# Allow only the RPC methods listed here. All methods are allowed if this is empty.
+# Example: ["getBlockByNumber", "peerCount"],
+# Default: []
+methods = []
+
+# Declare a username and password required to access the JSON-RPC server.
+# Default: none
+username = "super"
+# Default: none
+password = "secret"
+
+
+
+##############################################################################
+#
+# Configure the node miner ui
+#
+##############################################################################
+[uiServer]
+# Possible values: false, true
+# Default: false
+enabled = true
+
+# TCP-Port to use to create a listening socket for the UI server.
+# The UI will be reachable at localhost:port, e.g. localhost:8650
+# Possible values: any valid port number
+# Default: 8650
+port = 8650
+
+
+
+##############################################################################
+#
+# Configure Prometheus-compatible metrics server.
+#
+##############################################################################
+[metricsServer]
+# TCP-Port to use to create a listening socket for the metrics server.
+# Possible values: any valid port number
+# Default: 8649
+port = 8649
+
+# Declare a password required to access the metrics server.
+# Default: none
+password = "secret"
+
+
+
+##############################################################################
+#
+# Specify the wallet to use.
+#
+##############################################################################
+[wallet]
+# Use a wallet initialized from a wallet seed.
+# Default: none
+seed = "e28012bef397821e80f8e4cbfa8e0330a62de00638a262abca02476072321b3591d634e1bca2509e0e4b96c703a009a1e72b57a7c407c971cdd58aae02d8363e"
+
+# Use a wallet by it's address. The specified wallet cannot be used to sign transactions.
+# Default: none
+address = "NQ57 QEE1 S3HY J5VX SBHS KUN5 7C11 BDJU PHEM"
+
+
+
+##############################################################################
+#
+# Configure support to run this node behind a reverse proxy.
+#
+##############################################################################
+[reverseProxy]
+# TCP-Port where the reverse proxy is listening.
+# Possible values: any valid port number
+# Default: 8444
+port = 8443
+
+# IP address of the reverse proxy that this node will "see" (i.e. the value of ws._socket.remoteAddress)
+# Possible values: any valid IP address
+# Default: "::ffff:127.0.0.1"
+address = "::ffff:192.168.10.40"
+
+# HTTP header where the reverse proxy will send the original IP address of the connecting client
+# Possible values: any valid HTTP header name
+# Default: "x-forwarded-for"
+header = "x-forwarded-for"
+
+
+
+##############################################################################
+#
+# Configure log output. All output will go to STDOUT.
+#
+##############################################################################
+[log]
+# Configure global log level.
+# Possible values: "trace", "verbose", "debug", "info", "warning", "error", "assert"
+# Default: "info"
+level = "verbose"
+
+# Define specific log levels for tags
+# Default: none
+tags = { BaseConsensus = "debug" }
+
+# Print statistics like mining hashrate, current account balance and mempool size
+# Possible values: the time interval (in seconds) between statistics, or 0 to disable
+# Default: 0
+statistics = 60
+

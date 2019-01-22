@@ -1,0 +1,16 @@
+#
+# Configuration for Nimiq core-rs node
+#
+#   WARNING !!
+#   This is a test configuration for development. DO NOT USE.
+#
+
+[network]
+host = "my.domain"
+
+[consensus]
+type = "full"
+network = "test"
+
+[log]
+level = "verbose"

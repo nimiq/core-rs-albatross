@@ -1,0 +1,14 @@
+[package]
+name = "nimiq_main"
+version = "0.1.0"
+authors = ["Janosch Gräf <janosch.graef@cispa.saarland>"]
+edition = "2018"
+
+[dependencies]
+nimiq = { path = "../"}
+serde = "1.0.85"
+serde_derive = "1.0.85"
+toml = "0.4.10"
+log = "0.4.6"
+pretty_env_logger = "0.2.3"
+dotenv = "0.13.0"
