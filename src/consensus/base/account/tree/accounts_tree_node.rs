@@ -4,7 +4,7 @@ use std::iter;
 use std::slice;
 
 use super::AddressNibbles;
-use super::super::Account;
+use primitives::account::Account;
 use hash::{Hash, Blake2bHash, SerializeContent};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 

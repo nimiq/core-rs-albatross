@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use nimiq::consensus::base::block::*;
+use primitives::block::*;
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use hex;
 

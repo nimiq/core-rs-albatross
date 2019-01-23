@@ -1,7 +1,8 @@
 use beserial::{Serialize, Deserialize};
 use nimiq::consensus::base::blockchain::ChainInfo;
-use nimiq::consensus::base::block::Difficulty;
-use nimiq::consensus::networks::{NetworkId, get_network_info};
+use primitives::block::Difficulty;
+use primitives::networks::NetworkId;
+use nimiq::consensus::networks::get_network_info;
 
 #[test]
 fn it_is_correctly_initialized() {

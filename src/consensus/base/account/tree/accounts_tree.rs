@@ -1,5 +1,6 @@
 use super::{AccountsTreeNode, AddressNibbles, NO_CHILDREN};
-use super::super::{Address, Account};
+use keys::Address;
+use primitives::account::Account;
 use hash::{Hash, Blake2bHash};
 use database::{Database, Transaction, WriteTransaction, Environment};
 

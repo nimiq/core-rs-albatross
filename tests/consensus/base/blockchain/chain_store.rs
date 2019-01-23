@@ -1,4 +1,4 @@
-use nimiq::consensus::base::block::Difficulty;
+use primitives::block::Difficulty;
 use nimiq::consensus::base::blockchain::{ChainInfo, ChainStore};
 use hash::{Hash, Blake2bHash};
 use nimiq::consensus::networks::{NetworkId, get_network_info};

@@ -1,10 +1,10 @@
 use beserial::{Deserialize, Serialize};
-use crate::consensus::base::account::PrunedAccount;
-use crate::consensus::base::block::BlockError;
+use crate::account::PrunedAccount;
+use crate::block::BlockError;
 use keys::Address;
 use hash::{Hash, HashOutput, SerializeContent};
-use crate::consensus::base::transaction::Transaction;
-use crate::consensus::networks::NetworkId;
+use crate::transaction::Transaction;
+use crate::networks::NetworkId;
 use std::{cmp::Ordering, io};
 use utils::merkle;
 

@@ -1,6 +1,6 @@
-use crate::consensus::base::block::Block;
+use primitives::block::Block;
 use hash::{Hash, Blake2bHash};
-use crate::consensus::policy;
+use primitives::policy;
 use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone)]

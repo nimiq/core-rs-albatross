@@ -1,13 +1,13 @@
 use atomic::{Atomic, Ordering};
 use beserial::{Deserialize, Serialize};
 use std::sync::Arc;
-use nimiq::consensus::base::account::{AccountType, AccountError};
-use nimiq::consensus::base::block::{Block, BlockError};
+use primitives::account::{AccountType, AccountError};
+use primitives::block::{Block, BlockError};
 use nimiq::consensus::base::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
 use keys::{KeyPair, PrivateKey, Address};
 use hash::Hash;
-use nimiq::consensus::base::transaction::{Transaction, SignatureProof};
-use nimiq::consensus::networks::NetworkId;
+use primitives::transaction::{Transaction, SignatureProof};
+use primitives::networks::NetworkId;
 use nimiq::network::NetworkTime;
 use database::volatile::VolatileEnvironment;
 

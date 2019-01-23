@@ -1,8 +1,8 @@
 use num_traits::pow;
 use num_bigint::BigInt;
 use bigdecimal::BigDecimal;
-use nimiq::consensus::base::block::*;
-use nimiq::consensus::policy;
+use primitives::block::*;
+use primitives::policy;
 
 #[test]
 fn it_correctly_calculates_target_from_compact() {

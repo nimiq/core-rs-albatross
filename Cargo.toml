@@ -34,6 +34,8 @@ weak-table = "0.2.3"
 hash = { path = "hash" }
 keys = { path = "keys" }
 macros = { path = "macros" }
+primitives = { path = "primitives", features = ["all"] }
+
 url = "1.7"
 tokio = "0.1"
 tokio-tls = "0.2"
@@ -58,5 +60,6 @@ members = [
     "key-derivation",
     "mnemonic",
     "utils",
+    "primitives",
     "nimiq_bin",
 ]

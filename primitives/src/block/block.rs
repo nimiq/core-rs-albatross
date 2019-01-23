@@ -1,9 +1,8 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
-use crate::consensus::base::block::{BlockBody, BlockHeader, BlockInterlink, Target, BlockError};
+use crate::block::{BlockBody, BlockHeader, BlockInterlink, Target, BlockError};
 use hash::{Hash, Blake2bHash, Argon2dHash};
-use crate::consensus::networks::NetworkId;
+use crate::networks::NetworkId;
 use std::io;
-use database::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize)]
 pub struct Block {
@@ -29,7 +28,7 @@ impl Block {
     const TIMESTAMP_DRIFT_MAX: u64 = 600 * 1000;
     const MAX_SIZE: usize = 100000; // 100 kb
 
-    pub fn verify(&self, timestamp_now: u64, network_id: NetworkId) -> Result<(), BlockError> {
+    pub fn verify(&self, timestamp_now: u64, network_id: NetworkId, genesis_hash: Blake2bHash) -> Result<(), BlockError> {
         // XXX Check that the block version is supported.
         if self.header.version != Block::VERSION {
             return Err(BlockError::UnsupportedVersion);
@@ -52,7 +51,7 @@ impl Block {
         }
 
         // Verify that the interlink is valid.
-        self.verify_interlink(network_id)?;
+        self.verify_interlink(genesis_hash)?;
 
         // Verify the body if it is present.
         if let Option::Some(ref body) = self.body {
@@ -63,14 +62,14 @@ impl Block {
         return Ok(());
     }
 
-    fn verify_interlink(&self, network_id: NetworkId) -> Result<(), BlockError> {
+    fn verify_interlink(&self, genesis_hash: Blake2bHash) -> Result<(), BlockError> {
         // Skip check for genesis block due to the cyclic dependency (since the interlink hash contains the genesis block hash).
         if self.header.height == 1 && self.header.interlink_hash == Blake2bHash::from([0u8; Blake2bHash::SIZE]) {
             return Ok(());
         }
 
         // Check that the interlink_hash given in the header matches the actual interlink_hash.
-        if self.header.interlink_hash != self.interlink.hash(network_id) {
+        if self.header.interlink_hash != self.interlink.hash(genesis_hash) {
             return Err(BlockError::InterlinkHashMismatch);
         }
 
@@ -133,22 +132,5 @@ impl Block {
         }
 
         return BlockInterlink::new(hashes, &hash);
-    }
-}
-
-impl IntoDatabaseValue for Block {
-    fn database_byte_size(&self) -> usize {
-        return self.serialized_size();
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for Block {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        let mut cursor = io::Cursor::new(bytes);
-        return Ok(Deserialize::deserialize(&mut cursor)?);
     }
 }

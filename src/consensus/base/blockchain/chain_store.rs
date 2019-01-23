@@ -1,4 +1,4 @@
-use crate::consensus::base::block::Block;
+use primitives::block::Block;
 use crate::consensus::base::blockchain::ChainInfo;
 use hash::Blake2bHash;
 use database::{Environment, Database, DatabaseFlags, Transaction, ReadTransaction, WriteTransaction};

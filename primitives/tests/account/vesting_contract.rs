@@ -1,9 +1,9 @@
 use beserial::{Serialize, SerializingError, Deserialize};
-use nimiq::consensus::base::account::{AccountError, AccountType, VestingContract};
-use nimiq::consensus::base::primitive::Coin;
+use primitives::account::{AccountError, AccountType, VestingContract, AccountTransactionInteraction};
+use primitives::coin::Coin;
 use keys::{Address, KeyPair, PrivateKey};
-use nimiq::consensus::base::transaction::{Transaction, TransactionError, TransactionFlags, SignatureProof};
-use nimiq::consensus::networks::NetworkId;
+use primitives::transaction::{Transaction, TransactionError, TransactionFlags, SignatureProof};
+use primitives::networks::NetworkId;
 
 const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22000000010003f480000002632e314a0000002fbf9bd9c800";
 

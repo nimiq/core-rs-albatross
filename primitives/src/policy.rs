@@ -2,7 +2,8 @@ use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
 use num_traits::pow;
 use parking_lot::RwLock;
-use crate::consensus::base::primitive::Coin;
+#[cfg(feature = "coin")]
+use crate::coin::Coin;
 
 /// The highest (easiest) block PoW target.
 lazy_static! {
@@ -91,6 +92,7 @@ fn compute_block_reward(current_supply: u64, block_height: u32) -> u64 {
     (remaining - remainder) / EMISSION_SPEED
 }
 
+#[cfg(feature = "coin")]
 pub fn block_reward_at(block_height: u32) -> Coin {
     assert!(block_height >= 1, "block_height must be >= 1");
     let current_supply = supply_after(block_height - 1);

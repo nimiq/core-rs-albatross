@@ -1,11 +1,11 @@
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializingError, SerializeWithLength, WriteBytesExt};
-use crate::consensus::base::account::{Account, AccountType};
-use crate::consensus::base::primitive::Coin;
+use crate::account::{Account, AccountTransactionInteraction, AccountType};
+use crate::coin::Coin;
 use keys::Address;
 use keys::{PublicKey, Signature};
 use hash::{Hash, SerializeContent, Blake2bHash};
-use crate::consensus::networks::NetworkId;
-use crate::consensus::policy;
+use crate::networks::NetworkId;
+use crate::policy;
 use std::cmp::{Ord, Ordering};
 use std::io;
 use utils::merkle::Blake2bMerklePath;

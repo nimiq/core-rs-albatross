@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use crate::consensus::base::block::{Target, TargetCompact};
+use crate::block::{Target, TargetCompact};
 use hash::{Argon2dHash, Blake2bHash, Hash, SerializeContent};
 use std::io;
 

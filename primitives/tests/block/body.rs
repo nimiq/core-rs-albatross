@@ -1,11 +1,11 @@
 use beserial::{Deserialize, Serialize};
-use nimiq::consensus::base::account::{Account, AccountType, PrunedAccount, VestingContract};
-use nimiq::consensus::base::block::{BlockBody, BlockError};
-use nimiq::consensus::base::primitive::Coin;
+use primitives::account::{Account, AccountType, PrunedAccount, VestingContract};
+use primitives::block::{BlockBody, BlockError};
+use primitives::coin::Coin;
 use keys::Address;
 use hash::{Blake2bHash, Hash};
-use nimiq::consensus::base::transaction::{TransactionFormat, TransactionFlags, TransactionError};
-use nimiq::consensus::networks::NetworkId;
+use primitives::transaction::{TransactionFormat, TransactionFlags, TransactionError};
+use primitives::networks::NetworkId;
 use hex;
 
 const GENESIS_BODY: &str = "0000000000000000000000000000000000000000836c6f766520616920616d6f72206d6f68616262617420687562756e2063696e7461206c7975626f76206268616c616261736120616d6f7572206b61756e6120706927617261206c696562652065736871207570656e646f207072656d6120616d6f7265206b61747265736e616e20736172616e6720616e7075207072656d612079657500000000";

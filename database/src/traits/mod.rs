@@ -7,6 +7,9 @@ use lmdb_zero::traits::{AsLmdbBytes, FromLmdbBytes};
 #[cfg(feature = "hash")]
 mod hash;
 
+#[cfg(feature = "primitives")]
+mod block;
+
 pub trait IntoDatabaseValue {
     fn database_byte_size(&self) -> usize;
     fn copy_into_database(&self, bytes: &mut [u8]);

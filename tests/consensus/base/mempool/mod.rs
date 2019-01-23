@@ -2,14 +2,14 @@ use beserial::{Serialize, Deserialize};
 use hex;
 use std::sync::Arc;
 
-use nimiq::consensus::base::primitive::Coin;
+use primitives::coin::Coin;
 use keys::Address;
 use hash::Hash;
 use keys::KeyPair;
-use nimiq::consensus::base::block::BlockBody;
+use primitives::block::BlockBody;
 use nimiq::consensus::base::mempool::{Mempool, ReturnCode};
-use nimiq::consensus::base::transaction::{Transaction, SignatureProof};
-use nimiq::consensus::networks::NetworkId;
+use primitives::transaction::{Transaction, SignatureProof};
+use primitives::networks::NetworkId;
 use database::WriteTransaction;
 use database::volatile::VolatileEnvironment;
 use nimiq::consensus::base::blockchain::Blockchain;

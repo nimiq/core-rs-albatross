@@ -9,11 +9,11 @@ use byteorder::{BigEndian, ByteOrder};
 use parking_lot::RwLock;
 
 use crate::consensus::base::account::tree::AccountsProof;
-use crate::consensus::base::block::{Block, BlockHeader};
+use primitives::block::{Block, BlockHeader};
 use keys::{PublicKey, Signature, KeyPair};
 use hash::{Hash, Blake2bHash};
 use crate::consensus::base::Subscription;
-use crate::consensus::base::transaction::Transaction;
+use primitives::transaction::Transaction;
 use crate::network::address::{PeerAddress, PeerId};
 use utils::crc::Crc32Computer;
 use crate::utils::services::ServiceFlags;

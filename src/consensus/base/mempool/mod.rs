@@ -5,11 +5,12 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 use crate::consensus::base::account::Accounts;
-use crate::consensus::base::block::Block;
+use primitives::block::Block;
+use primitives::account::AccountTransactionInteraction;
 use crate::consensus::base::blockchain::{Blockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use crate::consensus::base::transaction::Transaction;
+use primitives::transaction::Transaction;
 use utils::observer::Notifier;
 
 pub struct Mempool<'env> {

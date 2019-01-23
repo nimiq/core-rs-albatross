@@ -1,5 +1,5 @@
 use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt};
-use crate::consensus::base::block::{Block, BlockBody, Difficulty};
+use primitives::block::{Block, BlockBody, Difficulty};
 use hash::Blake2bHash;
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use std::io;

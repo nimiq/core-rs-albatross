@@ -6,13 +6,14 @@ extern crate num_traits;
 extern crate num_bigint;
 extern crate pretty_env_logger;
 
-use nimiq::consensus::base::account::PrunedAccount;
-use nimiq::consensus::base::block::{Block, BlockHeader, BlockBody, Difficulty, TargetCompact};
+use primitives::account::PrunedAccount;
+use primitives::block::{Block, BlockHeader, BlockBody, Difficulty, TargetCompact};
 use nimiq::consensus::base::blockchain::Blockchain;
 use keys::Address;
 use hash::{Hash, Blake2bHash};
-use nimiq::consensus::base::transaction::Transaction;
-use nimiq::consensus::policy;
+use primitives::transaction::Transaction;
+use primitives::policy;
+use nimiq::consensus::networks::get_network_info;
 
 mod consensus;
 mod network;
@@ -125,7 +126,8 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         self.header.body_hash = self.body.hash();
 
         let interlink = head.get_next_interlink(&next_target);
-        self.header.interlink_hash = interlink.hash(self.blockchain.network_id);
+        let info = get_network_info(self.blockchain.network_id).unwrap();
+        self.header.interlink_hash = interlink.hash(info.genesis_block.header.hash());
 
         // XXX Use default accounts hash if body fails to apply.
         let accounts = self.blockchain.accounts();

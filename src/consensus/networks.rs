@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use beserial::{Deserialize, Serialize};
 
-use crate::consensus::base::block::{Block, BlockBody, BlockHeader, BlockInterlink};
+use primitives::block::{Block, BlockBody, BlockHeader, BlockInterlink};
 use keys::Address;
 use keys::PublicKey;
 use hash::Blake2bHash;
@@ -12,15 +12,7 @@ use crate::network::address::peer_address::PeerAddressType;
 use crate::network::address::PeerId;
 use crate::utils::services::ServiceFlags;
 
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
-#[repr(u8)]
-pub enum NetworkId {
-    Test = 1,
-    Dev = 2,
-    Bounty = 3,
-    Dummy = 4,
-    Main = 42,
-}
+pub use primitives::networks::NetworkId;
 
 pub struct NetworkInfo {
     pub network_id: NetworkId,

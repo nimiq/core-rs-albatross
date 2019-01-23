@@ -1,12 +1,14 @@
 use bigdecimal::BigDecimal;
 use parking_lot::{RwLock, RwLockReadGuard, MappedRwLockReadGuard, Mutex};
 use std::sync::Arc;
-use crate::consensus::base::account::{Accounts, AccountError};
-use crate::consensus::base::block::{Block, BlockError, Target, TargetCompact};
+use crate::consensus::base::account::Accounts;
+use primitives::account::AccountError;
+use primitives::block::{Block, BlockError, Target, TargetCompact};
 use crate::consensus::base::blockchain::{ChainInfo, ChainStore, TransactionCache, Direction};
 use hash::{Hash, Blake2bHash};
-use crate::consensus::networks::{NetworkId, get_network_info};
-use crate::consensus::policy;
+use primitives::networks::NetworkId;
+use crate::consensus::networks::get_network_info;
+use primitives::policy;
 use crate::network::NetworkTime;
 use database::{Environment, ReadTransaction, WriteTransaction};
 use utils::observer::Notifier;
@@ -148,7 +150,8 @@ impl<'env> Blockchain<'env> {
         assert!(block.body.is_some(), "Block body expected");
 
         // Check (sort of) intrinsic block invariants.
-        if let Err(e) = block.verify(self.network_time.now(), self.network_id) {
+        let info = get_network_info(self.network_id).unwrap();
+        if let Err(e) = block.verify(self.network_time.now(), self.network_id, info.genesis_block.header.hash()) {
             warn!("Rejecting block - verification failed ({:?})", e);
             return PushResult::Invalid(PushError::InvalidBlock(e))
         }

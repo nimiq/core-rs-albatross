@@ -1,8 +1,10 @@
+use std::io;
+
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Blake2bHash, Hash};
-use crate::consensus::networks::{get_network_info, NetworkId};
-use std::io;
 use utils::merkle;
+
+use crate::networks::NetworkId;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub struct BlockInterlink {
@@ -82,11 +84,10 @@ impl Serialize for BlockInterlink {
 }
 
 impl BlockInterlink {
-    pub fn hash(&self, network_id: NetworkId) -> Blake2bHash {
-        let network_info = get_network_info(network_id).unwrap();
+    pub fn hash(&self, genesis_hash: Blake2bHash) -> Blake2bHash {
         let mut vec: Vec<Blake2bHash> = Vec::with_capacity(2 + self.compressed.len());
         vec.push(self.repeat_bits.hash());
-        vec.push(network_info.genesis_block.header.hash());
+        vec.push(genesis_hash);
         for h in &self.compressed {
             vec.push(h.clone());
         }
