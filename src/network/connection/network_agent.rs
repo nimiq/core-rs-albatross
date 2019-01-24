@@ -255,8 +255,6 @@ impl NetworkAgent {
         // Check if the peer is working on the same genesis block.
         let network_info = get_network_info(self.blockchain.network_id).unwrap();
         if network_info.genesis_hash != msg.genesis_hash {
-            debug!("My genesis hash ({}): {}", network_info.name, network_info.genesis_hash);
-            debug!("Other peer's genesis hash: {}", msg.genesis_hash);
             self.channel.close(CloseType::DifferentGenesisBlock);
             return;
         }
