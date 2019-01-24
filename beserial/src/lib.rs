@@ -42,8 +42,12 @@ pub enum SerializingError {
 
 impl std::fmt::Display for SerializingError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // TODO: Don't use debug formatter
-        write!(f, "{:?}", self)
+        match self {
+            IoError => write!(f, "IoError"),
+            InvalidEncoding => write!(f, "InvalidEncoding"),
+            InvalidValue => write!(f, "InvalidValue"),
+            Overflow => write!(f, "Overflow"),
+        }
     }
 }
 
