@@ -26,7 +26,8 @@ rust:
 
 matrix:
   allow_failures:
-    - rust: nightly
+    - rust: stable
+    - rust: beta
   fast_finish: true
 
 before_script:
