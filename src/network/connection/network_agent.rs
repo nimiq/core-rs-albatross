@@ -222,7 +222,7 @@ impl NetworkAgent {
     }
 
     fn on_version(&mut self, msg: VersionMessage) {
-        debug!("[VERSION] {} {}", &msg.peer_address, &msg.head_hash);
+        debug!("[VERSION] {} {} {}", &msg.peer_address, &msg.head_hash, &msg.user_agent.unwrap_or_else(|| String::from("None")));
 
         let now = SystemTime::now();
 
