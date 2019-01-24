@@ -236,7 +236,7 @@ enum PeerAddressBookTimer {
 }
 
 impl PeerAddressBook {
-    pub fn new(network_config: Arc<NetworkConfig>) -> Self {
+    pub fn new(network_config: Arc<NetworkConfig>, network_id: NetworkId) -> Self {
         let this = Self {
             state: RwLock::new(PeerAddressBookState {
                 info_by_address: HashMap::new(),
@@ -253,7 +253,7 @@ impl PeerAddressBook {
         };
 
         // Init hardcoded seed peers.
-        if let Some(network_info) = get_network_info(NetworkId::Main) {
+        if let Some(network_info) = get_network_info(network_id) {
             for peer_address in network_info.seed_peers.iter() {
                 this.add_single(None, peer_address.clone());
             }

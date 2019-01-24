@@ -43,7 +43,7 @@ lazy_static! {
 }
 
 
-// There is no really good way for a condition on the compilation envirnoment (dev, staging, prod)
+// There is no really good way for a condition on the compilation environment (dev, staging, prod)
 #[cfg(debug_assertions)]
 fn dev_init() {
     dotenv::dotenv().expect("Couldn't load dotenv");

@@ -62,7 +62,7 @@ impl Consensus {
         let network_time = Arc::new(NetworkTime::new());
         let blockchain = Arc::new(Blockchain::new(env, network_id, network_time.clone()));
         let mempool = Mempool::new(blockchain.clone());
-        let network = Network::new(blockchain.clone(), network_config, network_time);
+        let network = Network::new(blockchain.clone(), network_config, network_time, network_id);
 
         let this = Arc::new(Consensus {
             blockchain,

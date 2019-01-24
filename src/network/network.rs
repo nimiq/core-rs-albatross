@@ -12,6 +12,7 @@ use crate::network::connection::connection_info::ConnectionState;
 use crate::network::connection::connection_pool::ConnectionPool;
 use crate::network::connection::connection_pool::ConnectionPoolEvent;
 use crate::network::network_config::NetworkConfig;
+use crate::consensus::networks::NetworkId;
 use crate::network::NetworkTime;
 use crate::network::Peer;
 use crate::network::peer_scorer::PeerScorer;
@@ -59,9 +60,9 @@ impl Network {
     const SCORE_INBOUND_EXCHANGE: f32 = 0.5;
     const CONNECT_THROTTLE: Duration = Duration::from_secs(1);
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Arc<Self> {
         let net_config = Arc::new(network_config);
-        let addresses = Arc::new(PeerAddressBook::new(net_config.clone()));
+        let addresses = Arc::new(PeerAddressBook::new(net_config.clone(), network_id));
         let connections = ConnectionPool::new(addresses.clone(), net_config.clone(), blockchain);
         let mut this = Arc::new(Network {
             network_config: net_config.clone(),

@@ -7,10 +7,11 @@
 
 [network]
 host = "my.domain"
+protocol = "ws"
 
 [consensus]
 type = "full"
-#network = "test"
+network = "test"
 
 [log]
 level = "verbose"
