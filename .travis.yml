@@ -36,7 +36,11 @@ before_script:
   - cargo install-update -a # update outdated cached binaries
   - pip install --user python-coveralls
 
-after_success:
+script:
+  - cargo test --verbose --all
+
+# temporarily disabled, plan is to move to codecov
+#after_success:
 # measure code coverage and upload to coveralls.io
-  - cargo coveralls --exclude-pattern /libargon2-sys,/tests,/beserial -p nimiq
-  - coveralls --merge=target/kcov/merged-kcov-output/coveralls.out
+#  - cargo coveralls --exclude-pattern /libargon2-sys,/tests,/beserial -p nimiq
+#  - coveralls --merge=target/kcov/merged-kcov-output/coveralls.out
