@@ -110,7 +110,7 @@ impl<'env> Blockchain<'env> {
 
     fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Self {
         // Initialize chain & accounts with genesis block.
-        let network_info = get_network_info(network_id).unwrap();
+        let network_info = get_network_info(network_id).expect(&format!("No NetworkInfo for network {:?}", network_id));
         let main_chain = ChainInfo::initial(network_info.genesis_block.clone());
         let head_hash = network_info.genesis_hash.clone();
 

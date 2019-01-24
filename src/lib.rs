@@ -42,6 +42,7 @@ pub mod consensus;
 pub mod network;
 pub mod utils;
 
+// TODO: Remove?
 fn main() {
     println!("Hello, world!");
 }

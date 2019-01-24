@@ -2,6 +2,8 @@ use super::*;
 use super::lmdb::*;
 use tempdir::TempDir;
 use std::io;
+use std::error::Error;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct VolatileEnvironment {
@@ -14,6 +16,33 @@ pub enum VolatileDatabaseError {
     IoError(io::Error),
     LmdbError(lmdb_zero::Error),
 }
+
+
+impl fmt::Display for VolatileDatabaseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            VolatileDatabaseError::IoError(e) => e.fmt(f),
+            VolatileDatabaseError::LmdbError(e) => e.fmt(f)
+        }
+    }
+}
+
+impl Error for VolatileDatabaseError {
+    fn description(&self) -> &str {
+        match self {
+            VolatileDatabaseError::IoError(e) => e.description(),
+            VolatileDatabaseError::LmdbError(e) => e.description()
+        }
+    }
+
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            VolatileDatabaseError::IoError(e) => Some(e),
+            VolatileDatabaseError::LmdbError(e) => Some(e)
+        }
+    }
+}
+
 
 impl VolatileEnvironment {
     pub fn new(max_dbs: u32) -> Result<Environment, VolatileDatabaseError> {

@@ -4,20 +4,28 @@ use std::error::Error;
 use std::collections::HashMap;
 
 
+pub const DEFAULT_NETWORK_PORT: u16 = 8443;
+pub const DEFAULT_REVERSE_PROXY_PORT: u16 = 8444;
+
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Settings {
-    network: NetworkSettings,
-    tls: Option<TlsSettings>,
-    consensus: Option<ConsensusSettings>,
-    miner: Option<MinerSettings>,
-    pool_mining: Option<PoolMiningSettings>,
-    rpc_server: Option<RpcServerSettings>,
-    ui_server: Option<UiServerSettings>,
-    metrics_server: Option<MetricsServerSettings>,
-    wallet: Option<WalletSettings>,
-    reverse_proxy: Option<ReverseProxySettings>,
-    log: Option<LogSettings>,
+pub(crate) struct Settings {
+    pub network: NetworkSettings,
+    pub tls: Option<TlsSettings>,
+    #[serde(default)]
+    pub consensus: ConsensusSettings,
+    pub miner: Option<MinerSettings>,
+    pub pool_mining: Option<PoolMiningSettings>,
+    pub rpc_server: Option<RpcServerSettings>,
+    pub ui_server: Option<UiServerSettings>,
+    pub metrics_server: Option<MetricsServerSettings>,
+    pub wallet: Option<WalletSettings>,
+    pub reverse_proxy: Option<ReverseProxySettings>,
+    #[serde(default)]
+    pub log: LogSettings,
+    #[serde(default)]
+    pub database: DatabaseSettings
 }
 
 impl Settings {
@@ -29,155 +37,189 @@ impl Settings {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NetworkSettings {
-    host: String,
-    port: Option<u16>,
-    protocol: Option<Protocol>,
-    passive: Option<bool>,
-    seed_nodes: Option<Vec<SeedNode>>,
+pub(crate) struct NetworkSettings {
+    pub host: String,
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub protocol: Protocol,
+    #[serde(default)]
+    pub passive: bool,
+    #[serde(default)]
+    pub seed_nodes: Vec<SeedNode>,
 }
+
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum Protocol {
+pub(crate) enum Protocol {
     Wss,
     Ws,
     Dumb,
     Rtc,
 }
 
-/*
-impl From<crate::network::Protocol> for Protocol {
-    fn from(p: crate::network::Protocol) -> Self {
-        match p {
-            crate::network::Protocol::Wss => Self::Wss,
-            crate::network::Protocol::Ws => Self::Ws,
-            crate::network::Protocol::Dumb => Self::Dumb,
-            crate::network::Protocol::Rtc => Self::Rtc,
-        }
+impl Default for Protocol {
+    fn default() -> Self {
+        Protocol::Dumb
     }
 }
-*/
+
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SeedNode {
-    host: String,
-    port: u16,
-    public_key: Option<String>,
+pub(crate) struct SeedNode {
+    pub host: String,
+    pub port: u16,
+    pub public_key: Option<String>,
 }
 
 
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TlsSettings {
-    cert: String,
-    key: String,
+pub(crate) struct TlsSettings {
+    pub cert: String,
+    pub key: String,
 }
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct ConsensusSettings {
+pub(crate) struct ConsensusSettings {
     #[serde(rename = "type")]
-    node_type: Option<NodeType>,
-    network: Option<Network>,
+    #[serde(default)]
+    pub node_type: NodeType,
+    #[serde(default)]
+    pub network: Network,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum NodeType {
+pub(crate) enum NodeType {
     Full,
     Light,
     Nano,
 }
 
+impl Default for NodeType {
+    fn default() -> Self {
+        NodeType::Full
+    }
+}
+
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum Network {
+pub(crate) enum Network {
     Main,
     Test,
     Dev,
+    Dummy,
+    Bounty
 }
 
-/*
-impl From<crate::consensus::networks::NetworkId> for Network {
-    fn from(n: crate::consensus::networks::NetworkId) -> Self {
-        match n {
-            crate::consensus::networks::NetworkId::Test => Self::Test,
-            crate::consensus::networks::NetworkId::Dev => Self::Dev,
-            crate::consensus::networks::NetworkId::Bounty => Self::Bounty,
-            crate::consensus::networks::NetworkId::Dummy => Self::Dummy,
-            crate::consensus::networks::NetworkId::Main => Self::Main,
-        }
+impl Default for Network {
+    fn default() -> Self {
+        Network::Main
     }
 }
-*/
 
 
-#[derive(Debug, Deserialize)]
+
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct MinerSettings {
-    enabled: Option<bool>,
-    threads: Option<u64>,
-    throttle_after: Option<u64>, // TODO: Fix that this can take "infinity"
-    throttle_wait: Option<u64>,
-    extra_data: Option<String>,
+pub(crate) struct MinerSettings {
+    pub threads: Option<u64>,
+    pub throttle_after: Option<u64>, // TODO: Fix that this can take "infinity"
+    pub throttle_wait: Option<u64>,
+    pub extra_data: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct PoolMiningSettings {
-    enabled: Option<bool>,
-    host: Option<String>,
-    port: Option<u16>,
-    mode: Option<String>,
+#[derive(Debug, Deserialize, Default)]
+pub(crate) struct PoolMiningSettings {
+    pub host: String,
+    pub port: u16,
+    #[serde(default)]
+    pub mode: MiningPoolMode,
     // TODO: This only accepts String -> String.
-    device_data: Option<HashMap<String, String>>
+    #[serde(default)]
+    pub device_data: HashMap<String, String>
 }
 
-#[derive(Debug, Deserialize)]
+
+#[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum MiningPoolMode {
+    Smart,
+    Nano,
+}
+
+impl Default for MiningPoolMode {
+    fn default() -> Self {
+        MiningPoolMode::Smart
+    }
+}
+
+
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct RpcServerSettings {
-    enabled: Option<bool>,
-    port: Option<u16>,
-    corsdomain: Option<Vec<String>>,
-    allowip: Option<Vec<String>>,
-    methods: Option<Vec<String>>,
-    username: Option<String>,
-    password: Option<String>,
+pub(crate) struct RpcServerSettings {
+    pub port: u16,
+    #[serde(default)]
+    pub corsdomain: Vec<String>,
+    #[serde(default)]
+    pub allowip: Vec<String>,
+    #[serde(default)]
+    pub methods: Vec<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub(crate) struct UiServerSettings {
+    pub port: u16,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub(crate) struct MetricsServerSettings {
+    pub port: u16,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub(crate) struct WalletSettings {
+    pub seed: Option<String>,
+    pub address: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub(crate) struct ReverseProxySettings {
+    pub port: Option<u16>,
+    pub address: String,
+    pub header: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub(crate) struct LogSettings {
+    pub level: Option<String>,
+    #[serde(default)]
+    pub tags: HashMap<String, String>,
+    #[serde(default)]
+    pub statistics: u64,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct UiServerSettings {
-    enabled: Option<bool>,
-    port: Option<u16>,
+pub(crate) struct DatabaseSettings {
+    pub path: String,
+    pub size: usize,
+    pub max_dbs: u32
 }
 
-#[derive(Debug, Deserialize)]
-pub struct MetricsServerSettings {
-    enabled: Option<bool>,
-    port: Option<u16>,
-    password: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct WalletSettings {
-    seed: Option<String>,
-    address: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ReverseProxySettings {
-    enabled: Option<bool>,
-    port: Option<u16>,
-    address: Option<String>,
-    header: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LogSettings {
-    level: Option<String>,
-    tags: Option<HashMap<String, String>>,
-    statistics: Option<u64>,
+impl Default for DatabaseSettings {
+    fn default() -> Self {
+        DatabaseSettings {
+            path: String::from("./db/"),
+            size: 1024 * 1024 * 50,
+            max_dbs: 10
+        }
+    }
 }

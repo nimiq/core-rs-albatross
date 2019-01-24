@@ -156,9 +156,9 @@ impl NetworkConfig {
 
 #[derive(Debug, Clone)]
 pub struct ReverseProxyConfig {
-    port: u16,
-    address: String,
-    header: String,
+    pub port: u16,
+    pub address: String,
+    pub header: String,
 }
 
 #[derive(Debug, Clone)]
