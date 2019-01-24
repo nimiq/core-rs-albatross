@@ -362,15 +362,57 @@ impl ChallengeNonce {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct VersionMessage {
     pub version: u32,
     pub peer_address: PeerAddress,
     pub genesis_hash: Blake2bHash,
     pub head_hash: Blake2bHash,
     pub challenge_nonce: ChallengeNonce,
-    #[beserial(len_type(u8))]
-    pub user_agent: String, // FIXME: older versions don't have this field at all, need to take care of that scenario
+    pub user_agent: Option<String>,
+}
+
+impl Deserialize for VersionMessage {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        Ok(VersionMessage {
+            version: Deserialize::deserialize(reader)?,
+            peer_address: Deserialize::deserialize(reader)?,
+            genesis_hash: Deserialize::deserialize(reader)?,
+            head_hash: Deserialize::deserialize(reader)?,
+            challenge_nonce: Deserialize::deserialize(reader)?,
+            user_agent: DeserializeWithLength::deserialize::<u8, R>(reader).ok()
+        })
+    }
+}
+
+impl Serialize for VersionMessage {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        size += Serialize::serialize(&self.version, writer)?;
+        size += Serialize::serialize(&self.peer_address, writer)?;
+        size += Serialize::serialize(&self.genesis_hash, writer)?;
+        size += Serialize::serialize(&self.head_hash, writer)?;
+        size += Serialize::serialize(&self.challenge_nonce, writer)?;
+        match &self.user_agent {
+            Some(u) => size += SerializeWithLength::serialize::<u8, W>(u, writer)?,
+            _ => ()
+        };
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = 0;
+        size += Serialize::serialized_size(&self.version);
+        size += Serialize::serialized_size(&self.peer_address);
+        size += Serialize::serialized_size(&self.genesis_hash);
+        size += Serialize::serialized_size(&self.head_hash);
+        size += Serialize::serialized_size(&self.challenge_nonce);
+        match &self.user_agent {
+            Some(u) => size += SerializeWithLength::serialized_size::<u8>(u),
+            _ => ()
+        };
+        size
+    }
 }
 
 impl VersionMessage {
@@ -381,7 +423,7 @@ impl VersionMessage {
             genesis_hash,
             head_hash,
             challenge_nonce,
-            user_agent: user_agent.unwrap_or_else(|| String::new())
+            user_agent: user_agent
         })
     }
 }
