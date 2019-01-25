@@ -6,6 +6,7 @@ use weak_table::PtrWeakHashSet;
 use crate::consensus::base::block::{Block, BlockHeader};
 use crate::consensus::base::blockchain::{Blockchain, PushResult, Direction};
 use crate::consensus::base::mempool::Mempool;
+use crate::consensus::base::Subscription;
 use hash::{Hash, Blake2bHash};
 use crate::consensus::base::transaction::Transaction;
 use crate::network::connection::close_type::CloseType;
@@ -248,6 +249,10 @@ impl InventoryAgent {
 
     pub fn mempool(&self) {
         self.peer.channel.send_or_close(Message::Mempool);
+    }
+
+    pub fn subscribe(&self, subscription: Subscription) {
+        self.peer.channel.send_or_close(Message::Subscribe(subscription));
     }
 
     fn on_inv(&self, vectors: Vec<InvVector>) {

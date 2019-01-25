@@ -4,6 +4,7 @@ use std::time::{Instant, Duration};
 
 use crate::consensus::base::blockchain::{Blockchain, PushResult};
 use crate::consensus::base::mempool::Mempool;
+use crate::consensus::base::Subscription;
 use hash::Blake2bHash;
 use crate::consensus::inventory::{InventoryManager, InventoryAgent, InventoryEvent};
 use crate::network::Peer;
@@ -164,7 +165,8 @@ impl ConsensusAgent {
     }
 
     fn sync_finished(&self, sync_guard: MutexGuard<()>) {
-        // TODO Subscribe to all announcements from the peer.
+        // Subscribe to all announcements from the peer.
+        self.inv_agent.subscribe(Subscription::Any);
 
         // Request the peer's mempool.
         // XXX Use a random delay here to prevent requests to multiple peers at once.
@@ -174,7 +176,6 @@ impl ConsensusAgent {
             let agent = arc.read();
             agent.timers.clear_delay(&ConsensusAgentTimer::Mempool);
             agent.inv_agent.mempool();
-            debug!("Requesting mempool from peer");
         }, Duration::from_millis(rand::thread_rng()
             .gen_range(ConsensusAgent::MEMPOOL_DELAY_MIN, ConsensusAgent::MEMPOOL_DELAY_MAX)));
 
