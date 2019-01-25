@@ -687,7 +687,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nimiq_main"
+name = "nimiq_bin"
 version = "0.1.0"
 dependencies = [
  "database 0.1.0",

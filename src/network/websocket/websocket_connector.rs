@@ -118,6 +118,7 @@ impl WebSocketConnector {
             _ => panic!("Protocol not supported"),
         };
 
+        // TODO remove unwraps. If the port is already used, this will panic
         let addr = SocketAddr::new("::".parse().unwrap(), port);
         let socket = TcpListener::bind(&addr).unwrap();
         let notifier = Arc::clone(&self.notifier);

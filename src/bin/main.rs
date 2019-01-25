@@ -34,6 +34,7 @@ pub fn main() {
         "test.vcap.me".to_string(),
         13337,
         None,
+        None
     );
     network_config.init_volatile();
 

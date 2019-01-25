@@ -55,5 +55,5 @@ members = [
     "database",
     "hash",
     "macros",
-    "nimiq_main"
+    "nimiq_bin"
 ]
