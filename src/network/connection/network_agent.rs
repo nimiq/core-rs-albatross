@@ -27,6 +27,8 @@ use crate::utils::timers::Timers;
 use crate::utils::unique_ptr::UniquePtr;
 use crate::utils::version;
 
+
+
 pub struct NetworkAgent {
     blockchain: Arc<Blockchain<'static>>,
     addresses: Arc<PeerAddressBook>,
@@ -166,7 +168,7 @@ impl NetworkAgent {
             self.blockchain.head_hash(),
             network_info.genesis_hash.clone(),
             self.challenge_nonce.clone(),
-            None);
+            self.network_config.user_agent().clone());
         if self.channel.send(msg).is_err() {
             self.version_attempts += 1;
             if self.version_attempts >= Self::VERSION_ATTEMPTS_MAX || self.channel.closed() {

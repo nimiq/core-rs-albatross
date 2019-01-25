@@ -19,10 +19,11 @@ pub struct NetworkConfig {
     peer_id: Option<PeerId>,
     services: Services,
     protocol_config: ProtocolConfig,
+    user_agent: Option<String>
 }
 
 impl NetworkConfig {
-    pub fn new_ws_network_config(host: String, port: u16, reverse_proxy_config: Option<ReverseProxyConfig>) -> Self {
+    pub fn new_ws_network_config(host: String, port: u16, reverse_proxy_config: Option<ReverseProxyConfig>, user_agent: Option<String>) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -32,11 +33,12 @@ impl NetworkConfig {
                 host,
                 port,
                 reverse_proxy_config,
-            }
+            },
+            user_agent
         }
     }
 
-    pub fn new_wss_network_config(host: String, port: u16, identity_file: String) -> Self {
+    pub fn new_wss_network_config(host: String, port: u16, identity_file: String, user_agent: Option<String>) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -46,17 +48,19 @@ impl NetworkConfig {
                 host,
                 port,
                 identity_file,
-            }
+            },
+            user_agent
         }
     }
 
-    pub fn new_dumb_network_config() -> Self {
+    pub fn new_dumb_network_config(user_agent: Option<String>) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS, // TODO Browsers might not always support WS.
             key_pair: None,
             peer_id: None,
             services: Services::full(),
             protocol_config: ProtocolConfig::Dumb,
+            user_agent
         }
     }
 
@@ -111,6 +115,10 @@ impl NetworkConfig {
 
     pub fn can_connect(&self, protocol: Protocol) -> bool {
         self.protocol_mask.contains(ProtocolFlags::from(protocol))
+    }
+
+    pub fn user_agent(&self) -> &Option<String> {
+        &self.user_agent
     }
 
     pub fn protocol_config(&self) -> &ProtocolConfig {

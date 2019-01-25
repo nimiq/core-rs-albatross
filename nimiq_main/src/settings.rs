@@ -46,6 +46,8 @@ pub(crate) struct NetworkSettings {
     pub passive: bool,
     #[serde(default)]
     pub seed_nodes: Vec<SeedNode>,
+    #[serde(default)]
+    pub user_agent: Option<String>
 }
 
 

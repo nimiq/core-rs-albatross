@@ -8,6 +8,7 @@
 [network]
 host = "my.domain"
 protocol = "ws"
+user_agent = "core-rs/dev (native; Linux x64)"
 
 [consensus]
 type = "full"

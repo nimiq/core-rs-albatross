@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Start network
     let mut network_config = match settings.network.protocol {
-        s::Protocol::Dumb => NetworkConfig::new_dumb_network_config(),
+        s::Protocol::Dumb => NetworkConfig::new_dumb_network_config(settings.network.user_agent),
 
         s::Protocol::Ws => NetworkConfig::new_ws_network_config(
             settings.network.host,
@@ -86,14 +86,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             settings.reverse_proxy.map(|r| ReverseProxyConfig {
                 port: r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
                 address: r.address,
-                header: r.header
-            })),
+                header: r.header,
+            }), settings.network.user_agent),
 
         // TODO: What is a `identify_file`? Shouldn't this be a key and cert file?
         s::Protocol::Wss => NetworkConfig::new_wss_network_config(
             settings.network.host,
             settings.network.port.unwrap_or(s::DEFAULT_NETWORK_PORT),
-            unimplemented!()),
+            unimplemented!(), settings.network.user_agent),
 
         s::Protocol::Rtc => unimplemented!()
     };
