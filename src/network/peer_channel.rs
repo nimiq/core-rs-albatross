@@ -195,9 +195,11 @@ impl PeerStream {
         let close_notifier = self.notifier;
 
         let process_message = stream.for_each(move |msg| {
+            debug!("Message received: {:#?}", msg);
             msg_notifier.read().notify(PeerStreamEvent::Message(msg));
             Ok(())
         }).or_else(move |error| {
+            debug!("Message error: {:#?}", error);
             error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(&error)));
             Err(error)
         }).and_then(move |result| {

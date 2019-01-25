@@ -246,6 +246,10 @@ impl InventoryAgent {
         ));
     }
 
+    pub fn mempool(&self) {
+        self.peer.channel.send_or_close(Message::Mempool);
+    }
+
     fn on_inv(&self, vectors: Vec<InvVector>) {
         let lock = self.mutex.lock();
 
@@ -327,7 +331,7 @@ impl InventoryAgent {
         //let lock = self.mutex.lock();
 
         let hash = block.header.hash::<Blake2bHash>();
-        //debug!("[BLOCK] #{} ({} txs) from {}", block.header.height, block.body.as_ref().unwrap().transactions.len(), self.peer.peer_address());
+        debug!("[BLOCK] #{} ({} txs) from {}", block.header.height, block.body.as_ref().unwrap().transactions.len(), self.peer.peer_address());
 
         // Check if we have requested this block.
         let vector = InvVector::new(InvVectorType::Block, hash);

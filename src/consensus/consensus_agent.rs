@@ -1,6 +1,6 @@
 use parking_lot::RwLock;
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Instant, Duration};
 
 use crate::consensus::base::blockchain::{Blockchain, PushResult};
 use crate::consensus::base::mempool::Mempool;
@@ -10,8 +10,10 @@ use crate::network::Peer;
 use crate::network::connection::close_type::CloseType;
 use crate::utils::observer::Notifier;
 use crate::utils::mutable_once::MutableOnce;
+use crate::utils::timers::Timers;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
+use rand::Rng;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConsensusAgentEvent {
@@ -41,6 +43,12 @@ pub struct ConsensusAgentState {
     failed_syncs: u32,
 }
 
+#[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
+enum ConsensusAgentTimer {
+    Mempool,
+}
+
+
 pub struct ConsensusAgent {
     blockchain: Arc<Blockchain<'static>>,
     mempool: Arc<Mempool<'static>>,
@@ -51,9 +59,11 @@ pub struct ConsensusAgent {
     state: RwLock<ConsensusAgentState>,
 
     pub notifier: RwLock<Notifier<'static, ConsensusAgentEvent>>,
-    self_weak: MutableOnce<Weak<ConsensusAgent>>,
+    self_weak: Weak<RwLock<ConsensusAgent>>,
 
     sync_lock: Mutex<()>,
+
+    timers: Timers<ConsensusAgentTimer>
 }
 
 impl ConsensusAgent {
@@ -61,11 +71,16 @@ impl ConsensusAgent {
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
+    /// Minimum time to wait before triggering the initial mempool request.
+    const MEMPOOL_DELAY_MIN: u64 = 2 * 1000; // in ms
+    /// Maximum time to wait before triggering the initial mempool request.
+    const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
+
+    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<RwLock<Self>> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());
-        let this = Arc::new(ConsensusAgent {
+        let this = Arc::new(RwLock::new(ConsensusAgent {
             blockchain,
             mempool,
             peer: peer_arc.clone(),
@@ -82,11 +97,13 @@ impl ConsensusAgent {
                 failed_syncs: 0,
             }),
 
+            // TODO whole agent is locked, thus we can remove this lock
             notifier: RwLock::new(Notifier::new()),
-            self_weak: MutableOnce::new(Weak::new()),
+            self_weak: Weak::new(),
 
             sync_lock: Mutex::new(()),
-        });
+            timers: Timers::new()
+        }));
         ConsensusAgent::init_listeners(&this);
         this
     }
@@ -95,13 +112,13 @@ impl ConsensusAgent {
         self.state.read().synced
     }
 
-    fn init_listeners(this: &Arc<ConsensusAgent>) {
-        unsafe { this.self_weak.replace(Arc::downgrade(this)) };
+    fn init_listeners(this: &Arc<RwLock<Self>>) {
+        this.write().self_weak = Arc::downgrade(this);
 
         let weak = Arc::downgrade(this);
-        this.inv_agent.notifier.write().register(move |e: &InventoryEvent| {
+        this.read().inv_agent.notifier.write().register(move |e: &InventoryEvent| {
             let this = upgrade_weak!(weak);
-            this.on_inventory_event(e);
+            this.read().on_inventory_event(e);
         });
     }
 
@@ -149,8 +166,18 @@ impl ConsensusAgent {
     fn sync_finished(&self, sync_guard: MutexGuard<()>) {
         // TODO Subscribe to all announcements from the peer.
 
-        // TODO Request the peer's mempool.
+        // Request the peer's mempool.
         // XXX Use a random delay here to prevent requests to multiple peers at once.
+        let weak = self.self_weak.clone();
+        self.timers.set_delay(ConsensusAgentTimer::Mempool, move || {
+            let arc = upgrade_weak!(weak);
+            let agent = arc.read();
+            agent.timers.clear_delay(&ConsensusAgentTimer::Mempool);
+            agent.inv_agent.mempool();
+            debug!("Requesting mempool from peer");
+        }, Duration::from_millis(rand::thread_rng()
+            .gen_range(ConsensusAgent::MEMPOOL_DELAY_MIN, ConsensusAgent::MEMPOOL_DELAY_MAX)));
+
 
         self.inv_agent.bypass_mgr(false);
 
