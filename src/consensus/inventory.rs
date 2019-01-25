@@ -87,6 +87,7 @@ impl InventoryManager {
     }
 
     fn note_vector_not_received(&mut self, agent_weak: &Weak<InventoryAgent>, vector: &InvVector) {
+        self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
         let record_opt = self.vectors_to_request.get_mut(vector);
         if record_opt.is_none() {
             return;
@@ -225,6 +226,9 @@ impl InventoryAgent {
         msg_notifier.get_data.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, vectors: Vec<InvVector>| this.on_get_data(vectors)));
+        msg_notifier.mempool.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, _ | this.on_mempool()));
 
         let mut close_notifier = channel.close_notifier.write();
         close_notifier.register(weak_listener(
@@ -369,6 +373,11 @@ impl InventoryAgent {
     }
 
     fn on_tx(&self, msg: TxMessage) {
+        debug!("[TX] tx={:?}, accounts_proof={:?}", msg.transaction, msg.accounts_proof);
+    }
+
+    fn on_mempool(&self) {
+        debug!("[MEMPOOL]");
     }
 
     fn on_not_found(&self, vectors: Vec<InvVector>) {

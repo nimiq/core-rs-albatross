@@ -453,8 +453,8 @@ impl InvVector {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxMessage {
-    transaction: Transaction,
-    accounts_proof: Option<AccountsProof>,
+    pub transaction: Transaction,
+    pub accounts_proof: Option<AccountsProof>,
 }
 impl TxMessage {
     pub fn new(transaction: Transaction) -> Message {

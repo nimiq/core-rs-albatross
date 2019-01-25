@@ -130,7 +130,7 @@ impl PeerSink {
     }
 
     pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> {
-        debug!("[MESSAGE] >> {:#?}", msg);
+        //debug!("[MESSAGE] >> {:#?}", msg);
         self.sink.unbounded_send(msg)
     }
 
@@ -196,7 +196,7 @@ impl PeerStream {
         let close_notifier = self.notifier;
 
         let process_message = stream.for_each(move |msg| {
-            debug!("[MESSAGE] << {:#?}", msg);
+            //debug!("[MESSAGE] << {:#?}", msg);
             msg_notifier.read().notify(PeerStreamEvent::Message(msg));
             Ok(())
         }).or_else(move |error| {
