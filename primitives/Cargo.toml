@@ -21,7 +21,6 @@ macros = { path = "../macros", optional = true }
 utils = { path = "../utils", optional = true, features = ["merkle"] }
 
 [features]
-default = ["all"]
 all = ["coin", "account", "block", "policy", "transaction", "networks"]
 coin = []
 account = ["keys", "coin", "hash", "hex", "macros", "log"]

@@ -14,7 +14,7 @@ use futures::Async;
 use futures::future::Future;
 
 
-use nimiq::consensus::networks::NetworkId;
+use nimiq::network::networks::NetworkId;
 use nimiq::network::network_config::NetworkConfig;
 use database::Environment;
 use database::lmdb::{LmdbEnvironment, open};

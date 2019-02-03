@@ -18,6 +18,9 @@ pub mod basic_account;
 pub mod htlc_contract;
 pub mod vesting_contract;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountsProof {}
+
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum AccountType {

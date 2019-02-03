@@ -1,0 +1,27 @@
+[package]
+name = "network"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+edition = "2018"
+
+[dependencies]
+beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive"}
+datastructures = { path = "../datastructures" }
+keys = { path = "../keys" }
+hash = { path = "../hash" }
+macros = { path = "../macros" }
+network-primitives = { path = "../network-primitives", features = ["all"] }
+utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking"] }
+atomic = "0.4"
+parking_lot = "0.6"
+rand = "0.6.4"
+log = "0.4.3"
+
+url = "1.7"
+tokio = "0.1"
+tokio-tls = "0.2"
+native-tls = "0.2"
+futures = "0.1"
+tungstenite = "0.6"
+tokio-tungstenite = { git = "https://github.com/jeffesquivels/tokio-tungstenite", branch = "implement_peer_addr" }
