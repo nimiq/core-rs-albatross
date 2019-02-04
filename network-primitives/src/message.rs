@@ -4,11 +4,11 @@ use std::io::Read;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
 use byteorder::{BigEndian, ByteOrder};
 use hash::{Blake2bHash, Hash};
-use keys::{KeyPair, PublicKey, Signature};
+use keys::{Address, KeyPair, PublicKey, Signature};
 use parking_lot::RwLock;
-use primitives::account::AccountsProof;
+use primitives::{AccountsProof, AccountsTreeChunk};
 use primitives::block::{Block, BlockHeader};
-use primitives::transaction::Transaction;
+use primitives::transaction::{Transaction, TransactionsProof};
 use rand::Rng;
 use rand::rngs::OsRng;
 use utils::crc::Crc32Computer;
@@ -50,12 +50,12 @@ pub enum MessageType {
     AccountsProof = 43,
     GetAccountsTreeChunk = 44,
     AccountsTreeChunk = 45,
-    GetTransactionsProof = 46,
-    TransactionsProof = 47,
-    GetTransactionReceipts = 48,
-    TransactionReceipts = 49,
-    GetBlockProof = 50,
-    BlockProof = 51,
+    GetTransactionsProof = 47,
+    TransactionsProof = 48,
+    GetTransactionReceipts = 49,
+    TransactionReceipts = 50,
+    GetBlockProof = 51,
+    BlockProof = 52,
 
     GetHead = 60,
     Head = 61,
@@ -83,10 +83,25 @@ pub enum Message {
     Ping(/*nonce*/ u32),
     Pong(/*nonce*/ u32),
 
-    VerAck(VerAckMessage),
+    Signal(SignalMessage),
+
+    GetChainProof,
+    ChainProof(ChainProofMessage),
+    GetAccountsProof(GetAccountsProofMessage),
+    AccountsProof(AccountsProofMessage),
+    GetAccountsTreeChunk(GetAccountsTreeChunkMessage),
+    AccountsTreeChunk(AccountsTreeChunkMessage),
+    GetTransactionsProof(GetTransactionsProofMessage),
+    TransactionsProof(TransactionsProofMessage),
+    GetTransactionReceipts(GetTransactionReceiptsMessage),
+    TransactionReceipts(TransactionReceiptsMessage),
+    GetBlockProof(GetBlockProofMessage),
+    BlockProof(BlockProofMessage),
 
     GetHead,
     Head(BlockHeader),
+
+    VerAck(VerAckMessage),
 }
 
 impl Message {
@@ -108,9 +123,22 @@ impl Message {
             Message::GetAddr(_) => MessageType::GetAddr,
             Message::Ping(_) => MessageType::Ping,
             Message::Pong(_) => MessageType::Pong,
-            Message::VerAck(_) => MessageType::VerAck,
+            Message::Signal(_) => MessageType::Signal,
+            Message::GetChainProof => MessageType::GetChainProof,
+            Message::ChainProof(_) => MessageType::ChainProof,
+            Message::GetAccountsProof(_) => MessageType::GetAccountsProof,
+            Message::AccountsProof(_) => MessageType::AccountsProof,
+            Message::GetAccountsTreeChunk(_) => MessageType::GetAccountsTreeChunk,
+            Message::AccountsTreeChunk(_) => MessageType::AccountsTreeChunk,
+            Message::GetTransactionsProof(_) => MessageType::GetTransactionsProof,
+            Message::TransactionsProof(_) => MessageType::TransactionsProof,
+            Message::GetTransactionReceipts(_) => MessageType::GetTransactionReceipts,
+            Message::TransactionReceipts(_) => MessageType::TransactionReceipts,
+            Message::GetBlockProof(_) => MessageType::GetBlockProof,
+            Message::BlockProof(_) => MessageType::BlockProof,
             Message::GetHead => MessageType::GetHead,
             Message::Head(_) => MessageType::Head,
+            Message::VerAck(_) => MessageType::VerAck,
         }
     }
 
@@ -186,9 +214,22 @@ impl Deserialize for Message {
             MessageType::GetAddr => Message::GetAddr(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Ping => Message::Ping(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Pong => Message::Pong(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::Signal => Message::Signal(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetChainProof => Message::GetChainProof,
+            MessageType::ChainProof => Message::ChainProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetAccountsProof => Message::GetAccountsProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::AccountsProof => Message::AccountsProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetAccountsTreeChunk => Message::GetAccountsTreeChunk(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::AccountsTreeChunk => Message::AccountsTreeChunk(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetTransactionsProof => Message::GetTransactionsProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::TransactionsProof => Message::TransactionsProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetTransactionReceipts => Message::GetTransactionReceipts(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::TransactionReceipts => Message::TransactionReceipts(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetBlockProof => Message::GetBlockProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::BlockProof => Message::BlockProof(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::GetHead => Message::GetHead,
             MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
             _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into())  // FIXME remove default case
         };
 
@@ -233,9 +274,22 @@ impl Serialize for Message {
             Message::GetAddr(get_addr_message) => get_addr_message.serialize(&mut v)?,
             Message::Ping(nonce) => nonce.serialize(&mut v)?,
             Message::Pong(nonce) => nonce.serialize(&mut v)?,
-            Message::VerAck(verack_message) => verack_message.serialize(&mut v)?,
+            Message::Signal(signal_message) => signal_message.serialize(&mut v)?,
+            Message::GetChainProof => 0,
+            Message::ChainProof(msg) => msg.serialize(&mut v)?,
+            Message::GetAccountsProof(get_accounts_proof_message) => get_accounts_proof_message.serialize(&mut v)?,
+            Message::AccountsProof(accounts_proof_message) => accounts_proof_message.serialize(&mut v)?,
+            Message::GetAccountsTreeChunk(get_accounts_tree_chunk_message) => get_accounts_tree_chunk_message.serialize(&mut v)?,
+            Message::AccountsTreeChunk(accounts_tree_chunk_message) => accounts_tree_chunk_message.serialize(&mut v)?,
+            Message::GetTransactionsProof(msg) => msg.serialize(&mut v)?,
+            Message::TransactionsProof(msg) => msg.serialize(&mut v)?,
+            Message::GetTransactionReceipts(msg) => msg.serialize(&mut v)?,
+            Message::TransactionReceipts(msg) => msg.serialize(&mut v)?,
+            Message::GetBlockProof(msg) => msg.serialize(&mut v)?,
+            Message::BlockProof(msg) => msg.serialize(&mut v)?,
             Message::GetHead => 0,
             Message::Head(header) => header.serialize(&mut v)?,
+            Message::VerAck(verack_message) => verack_message.serialize(&mut v)?,
         };
 
         // write checksum to placeholder
@@ -269,9 +323,22 @@ impl Serialize for Message {
             Message::GetAddr(get_addr_message) => get_addr_message.serialized_size(),
             Message::Ping(nonce) => nonce.serialized_size(),
             Message::Pong(nonce) => nonce.serialized_size(),
-            Message::VerAck(verack_message) => verack_message.serialized_size(),
+            Message::Signal(signal_message) => signal_message.serialized_size(),
+            Message::GetChainProof => 0,
+            Message::ChainProof(chain_proof_message) => chain_proof_message.serialized_size(),
+            Message::GetAccountsProof(get_accounts_proof_message) => get_accounts_proof_message.serialized_size(),
+            Message::AccountsProof(accounts_proof_message) => accounts_proof_message.serialized_size(),
+            Message::GetAccountsTreeChunk(get_accounts_tree_chunk_message) => get_accounts_tree_chunk_message.serialized_size(),
+            Message::AccountsTreeChunk(accounts_tree_chunk_message) => accounts_tree_chunk_message.serialized_size(),
+            Message::GetTransactionsProof(msg) => msg.serialized_size(),
+            Message::TransactionsProof(msg) => msg.serialized_size(),
+            Message::GetTransactionReceipts(msg) => msg.serialized_size(),
+            Message::TransactionReceipts(msg) => msg.serialized_size(),
+            Message::GetBlockProof(msg) => msg.serialized_size(),
+            Message::BlockProof(msg) => msg.serialized_size(),
             Message::GetHead => 0,
             Message::Head(header) => header.serialized_size(),
+            Message::VerAck(verack_message) => verack_message.serialized_size(),
         };
         return size;
     }
@@ -295,6 +362,19 @@ pub struct MessageNotifier {
     pub get_addr: RwLock<PassThroughNotifier<'static, GetAddrMessage>>,
     pub ping: RwLock<PassThroughNotifier<'static, /*nonce*/ u32>>,
     pub pong: RwLock<PassThroughNotifier<'static, /*nonce*/ u32>>,
+    pub signal: RwLock<PassThroughNotifier<'static, SignalMessage>>,
+    pub get_chain_proof: RwLock<PassThroughNotifier<'static, ()>>,
+    pub chain_proof: RwLock<PassThroughNotifier<'static, ChainProofMessage>>,
+    pub get_accounts_proof: RwLock<PassThroughNotifier<'static, GetAccountsProofMessage>>,
+    pub get_accounts_tree_chunk: RwLock<PassThroughNotifier<'static, GetAccountsTreeChunkMessage>>,
+    pub accounts_tree_chunk: RwLock<PassThroughNotifier<'static, AccountsTreeChunkMessage>>,
+    pub accounts_proof: RwLock<PassThroughNotifier<'static, AccountsProofMessage>>,
+    pub get_transactions_proof: RwLock<PassThroughNotifier<'static, GetTransactionsProofMessage>>,
+    pub transactions_proof: RwLock<PassThroughNotifier<'static, TransactionsProofMessage>>,
+    pub get_transaction_receipts: RwLock<PassThroughNotifier<'static, GetTransactionReceiptsMessage>>,
+    pub transaction_receipts: RwLock<PassThroughNotifier<'static, TransactionReceiptsMessage>>,
+    pub get_block_proof: RwLock<PassThroughNotifier<'static, GetBlockProofMessage>>,
+    pub block_proof: RwLock<PassThroughNotifier<'static, BlockProofMessage>>,
     pub get_head: RwLock<PassThroughNotifier<'static, ()>>,
     pub head: RwLock<PassThroughNotifier<'static, BlockHeader>>,
 }
@@ -319,6 +399,19 @@ impl MessageNotifier {
             get_addr: RwLock::new(PassThroughNotifier::new()),
             ping: RwLock::new(PassThroughNotifier::new()),
             pong: RwLock::new(PassThroughNotifier::new()),
+            signal: RwLock::new(PassThroughNotifier::new()),
+            get_chain_proof: RwLock::new(PassThroughNotifier::new()),
+            chain_proof: RwLock::new(PassThroughNotifier::new()),
+            get_accounts_proof: RwLock::new(PassThroughNotifier::new()),
+            accounts_proof: RwLock::new(PassThroughNotifier::new()),
+            get_accounts_tree_chunk: RwLock::new(PassThroughNotifier::new()),
+            accounts_tree_chunk: RwLock::new(PassThroughNotifier::new()),
+            get_transactions_proof: RwLock::new(PassThroughNotifier::new()),
+            transactions_proof: RwLock::new(PassThroughNotifier::new()),
+            get_transaction_receipts: RwLock::new(PassThroughNotifier::new()),
+            transaction_receipts: RwLock::new(PassThroughNotifier::new()),
+            get_block_proof: RwLock::new(PassThroughNotifier::new()),
+            block_proof: RwLock::new(PassThroughNotifier::new()),
             get_head: RwLock::new(PassThroughNotifier::new()),
             head: RwLock::new(PassThroughNotifier::new()),
         }
@@ -343,6 +436,19 @@ impl MessageNotifier {
             Message::GetAddr(msg) => self.get_addr.read().notify(msg),
             Message::Ping(nonce) => self.ping.read().notify(nonce),
             Message::Pong(nonce) => self.pong.read().notify(nonce),
+            Message::Signal(msg) => self.signal.read().notify(msg),
+            Message::GetChainProof => self.get_chain_proof.read().notify(()),
+            Message::ChainProof(msg) => self.chain_proof.read().notify((msg)),
+            Message::GetAccountsProof(msg) => self.get_accounts_proof.read().notify(msg),
+            Message::AccountsProof(msg) => self.accounts_proof.read().notify(msg),
+            Message::GetAccountsTreeChunk(msg) => self.get_accounts_tree_chunk.read().notify(msg),
+            Message::AccountsTreeChunk(msg) => self.accounts_tree_chunk.read().notify(msg),
+            Message::GetTransactionsProof(msg) => self.get_transactions_proof.read().notify(msg),
+            Message::TransactionsProof(msg) => self.transactions_proof.read().notify(msg),
+            Message::GetTransactionReceipts(msg) => self.get_transaction_receipts.read().notify(msg),
+            Message::TransactionReceipts(msg) => self.transaction_receipts.read().notify(msg),
+            Message::GetBlockProof(msg) => self.get_block_proof.read().notify(msg),
+            Message::BlockProof(msg) => self.block_proof.read().notify(msg),
             Message::GetHead => self.get_head.read().notify(()),
             Message::Head(header) => self.head.read().notify(header),
         }
@@ -536,12 +642,6 @@ impl AddrMessage {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsProofMessage {
-    block_hash: Blake2bHash,
-    accounts_proof: Option<AccountsProof>,
-}
-
 #[derive(Clone, Debug)]
 pub struct GetAddrMessage {
     pub protocol_mask: ProtocolFlags,
@@ -588,6 +688,86 @@ impl Deserialize for GetAddrMessage {
             max_results,
         })
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignalMessage {
+    pub sender_id: PeerId,
+    pub recipient_id: PeerId,
+    pub nonce: u32,
+    pub ttl: u8,
+    pub flags: u8,
+    pub length: u16,
+    #[beserial(len_type(u16))]
+    pub payload: Vec<u8>,
+    pub sender_public_key: Option<PublicKey>,
+    pub signature: Option<Signature>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChainProofMessage {
+
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetAccountsProofMessage {
+    pub block_hash: Blake2bHash,
+    #[beserial(len_type(u16))]
+    pub addresses: Vec<Address>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountsProofMessage {
+    pub block_hash: Blake2bHash,
+    pub proof: Option<AccountsProof>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetAccountsTreeChunkMessage {
+    pub block_hash: Blake2bHash,
+    #[beserial(len_type(u8))]
+    pub start_prefix: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountsTreeChunkMessage {
+    pub block_hash: Blake2bHash,
+    pub accounts_tree_chunk: Option<AccountsTreeChunk>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetTransactionsProofMessage {
+    pub block_hash: Blake2bHash,
+    #[beserial(len_type(u16))]
+    pub addresses: Vec<Address>
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransactionsProofMessage {
+    pub block_hash: Blake2bHash,
+    pub transactions_proof: Option<TransactionsProof>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetTransactionReceiptsMessage {
+    pub address: Address,
+    pub offset: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransactionReceiptsMessage {
+
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetBlockProofMessage {
+    pub block_hash_to_prove: Blake2bHash,
+    pub known_block_hash: Blake2bHash,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BlockProofMessage {
+
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -10,6 +10,12 @@ use std::cmp::{Ord, Ordering};
 use std::io;
 use nimiq_utils::merkle::Blake2bMerklePath;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransactionsProof {}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransactionReceipt {}
+
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum TransactionFormat {

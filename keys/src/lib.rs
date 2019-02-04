@@ -11,6 +11,7 @@ use hex::FromHex;
 
 use hash::{Blake2bHash, Blake2bHasher, Hasher, SerializeContent};
 
+pub use self::address::*;
 pub use self::key_pair::*;
 pub use self::private_key::*;
 pub use self::public_key::*;
@@ -63,26 +64,9 @@ macro_rules! implement_simple_add_sum_traits {
 
 pub mod multisig;
 
+mod address;
 mod errors;
 mod key_pair;
 mod private_key;
 mod public_key;
 mod signature;
-
-create_typed_array!(Address, u8, 20);
-hash_typed_array!(Address);
-add_hex_io_fns_typed_arr!(Address, Address::SIZE);
-
-impl From<Blake2bHash> for Address {
-    fn from(hash: Blake2bHash) -> Self {
-        let hash_arr: [u8; 32] = hash.into();
-        return Address::from(&hash_arr[0..Address::len()]);
-    }
-}
-
-impl<'a> From<&'a PublicKey> for Address {
-    fn from(public_key: &'a PublicKey) -> Self {
-        let hash = Blake2bHasher::default().digest(public_key.as_bytes());
-        return Address::from(hash);
-    }
-}
