@@ -41,13 +41,19 @@ cargo build
 
 ## Usage
 
-Once compiled, you can run the Nimiq Rust Client directly or through `cargo run`:
+To run the Nimiq Rust Client, navigate into the `nimiq_bin` folder and run:
 
-```
-cargo run --bin nimiq
+```bash
+cargo run
 ```
 
-To display log output, set the `RUST_LOG` environment variable: `RUST_LOG=nimiq=debug`.
+Dependencies and binaries will be downloaded and compiled automatically by Cargo.
+To display log output, set the `RUST_LOG` environment variable by sourcing the `nimiq_bin/.env` file before:
+
+```bash
+# in nimiq_bin:
+source .env
+```
 
 ## Contributing
 
