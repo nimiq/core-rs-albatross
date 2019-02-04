@@ -6,8 +6,9 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use weak_table::PtrWeakHashSet;
 
-use datastructures::blockchain::{Blockchain, Direction, PushResult};
+use blockchain::{Blockchain, Direction, PushResult};
 use hash::{Blake2bHash, Hash};
+use mempool::Mempool;
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_primitives::message::{GetBlocksDirection, GetBlocksMessage, InvVector, InvVectorType, Message, TxMessage};
@@ -21,8 +22,6 @@ use utils::{
     observer::{Notifier, weak_listener, weak_passthru_listener},
     timers::Timers,
 };
-
-use crate::mempool::Mempool;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {

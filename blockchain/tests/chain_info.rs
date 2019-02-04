@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use datastructures::blockchain::ChainInfo;
+use blockchain::ChainInfo;
 use network_primitives::networks::get_network_info;
 use primitives::block::Difficulty;
 use primitives::networks::NetworkId;

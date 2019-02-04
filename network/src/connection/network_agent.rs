@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use rand::{Rng, rngs::OsRng};
 
 use beserial::Serialize;
-use datastructures::blockchain::Blockchain;
+use blockchain::Blockchain;
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::PeerId;
 use network_primitives::message::*;

@@ -5,8 +5,9 @@ use std::time::Duration;
 use parking_lot::{Mutex, RwLock};
 use rand::{Rng, rngs::OsRng};
 
+use blockchain::Blockchain;
 use database::Environment;
-use datastructures::blockchain::Blockchain;
+use mempool::Mempool;
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
@@ -17,7 +18,6 @@ use utils::timers::Timers;
 use crate::consensus_agent::ConsensusAgent;
 use crate::consensus_agent::ConsensusAgentEvent;
 use crate::inventory::InventoryManager;
-use crate::mempool::Mempool;
 
 pub struct Consensus {
     pub blockchain: Arc<Blockchain<'static>>,

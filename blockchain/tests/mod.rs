@@ -1,4 +1,4 @@
-use datastructures::blockchain::Blockchain;
+use ::blockchain::Blockchain;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use network_primitives::networks::get_network_info;
@@ -7,8 +7,10 @@ use primitives::block::*;
 use primitives::policy;
 use primitives::transaction::Transaction;
 
-mod account;
 mod blockchain;
+mod chain_info;
+mod chain_store;
+mod transaction_cache;
 
 pub fn setup() {
     pretty_env_logger::try_init().unwrap_or(());

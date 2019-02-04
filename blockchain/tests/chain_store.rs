@@ -1,5 +1,5 @@
 use database::{volatile::VolatileEnvironment, WriteTransaction};
-use datastructures::blockchain::{ChainInfo, ChainStore};
+use blockchain::{ChainInfo, ChainStore};
 use hash::{Blake2bHash, Hash};
 use network_primitives::networks::{get_network_info, NetworkId};
 use primitives::block::Difficulty;

@@ -1,3 +1,8 @@
+#[macro_use]
+extern crate beserial_derive;
+#[macro_use]
+extern crate log;
+
 pub mod chain_info;
 pub mod chain_store;
 pub mod blockchain;
@@ -8,5 +13,3 @@ pub use self::chain_store::ChainStore;
 pub use self::chain_store::Direction;
 pub use self::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
 pub use self::transaction_cache::TransactionCache;
-use database::{AsDatabaseBytes, FromDatabaseValue};
-use std::io;

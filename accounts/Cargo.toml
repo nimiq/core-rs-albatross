@@ -1,5 +1,5 @@
 [package]
-name = "datastructures"
+name = "accounts"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"

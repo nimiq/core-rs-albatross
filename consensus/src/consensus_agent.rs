@@ -6,8 +6,9 @@ use parking_lot::MutexGuard;
 use parking_lot::RwLock;
 use rand::Rng;
 
-use datastructures::blockchain::{Blockchain, PushResult};
+use blockchain::{Blockchain, PushResult};
 use hash::Blake2bHash;
+use mempool::Mempool;
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_primitives::subscription::Subscription;
@@ -16,7 +17,6 @@ use utils::observer::Notifier;
 use utils::timers::Timers;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
-use crate::mempool::Mempool;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConsensusAgentEvent {

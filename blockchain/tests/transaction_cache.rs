@@ -1,4 +1,4 @@
-use datastructures::blockchain::TransactionCache;
+use blockchain::TransactionCache;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use network_primitives::networks::get_network_info;

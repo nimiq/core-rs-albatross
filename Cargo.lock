@@ -7,6 +7,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "accounts"
+version = "0.1.0"
+dependencies = [
+ "atomic 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "beserial 0.1.0",
+ "beserial_derive 0.1.0",
+ "bigdecimal 0.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "database 0.1.0",
+ "hash 0.1.0",
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "keys 0.1.0",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "network-primitives 0.1.0",
+ "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pretty_env_logger 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitives 0.1.0",
+ "utils 0.1.0",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -152,6 +172,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "blockchain"
+version = "0.1.0"
+dependencies = [
+ "accounts 0.1.0",
+ "atomic 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "beserial 0.1.0",
+ "beserial_derive 0.1.0",
+ "bigdecimal 0.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "database 0.1.0",
+ "hash 0.1.0",
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "keys 0.1.0",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "network-primitives 0.1.0",
+ "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pretty_env_logger 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitives 0.1.0",
+ "utils 0.1.0",
+]
+
+[[package]]
 name = "byte-tools"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -212,13 +253,14 @@ version = "0.1.0"
 dependencies = [
  "beserial 0.1.0",
  "bigdecimal 0.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blockchain 0.1.0",
  "database 0.1.0",
- "datastructures 0.1.0",
  "hash 0.1.0",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "keys 0.1.0",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "macros 0.1.0",
+ "mempool 0.1.0",
  "network 0.1.0",
  "network-primitives 0.1.0",
  "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -331,26 +373,6 @@ dependencies = [
  "primitives 0.1.0",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "datastructures"
-version = "0.1.0"
-dependencies = [
- "atomic 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "beserial 0.1.0",
- "beserial_derive 0.1.0",
- "bigdecimal 0.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "database 0.1.0",
- "hash 0.1.0",
- "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "keys 0.1.0",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "network-primitives 0.1.0",
- "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "pretty_env_logger 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "primitives 0.1.0",
- "utils 0.1.0",
 ]
 
 [[package]]
@@ -673,6 +695,24 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "mempool"
+version = "0.1.0"
+dependencies = [
+ "accounts 0.1.0",
+ "beserial 0.1.0",
+ "blockchain 0.1.0",
+ "database 0.1.0",
+ "hash 0.1.0",
+ "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "keys 0.1.0",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "network-primitives 0.1.0",
+ "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitives 0.1.0",
+ "utils 0.1.0",
+]
+
+[[package]]
 name = "mio"
 version = "0.6.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -759,7 +799,7 @@ dependencies = [
  "atomic 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "beserial 0.1.0",
  "beserial_derive 0.1.0",
- "datastructures 0.1.0",
+ "blockchain 0.1.0",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash 0.1.0",
  "keys 0.1.0",

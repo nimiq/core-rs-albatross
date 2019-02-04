@@ -1,9 +1,9 @@
 use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
+use network_primitives::message::GetBlocksDirection;
 use primitives::block::Block;
 
-use crate::blockchain::ChainInfo;
-use network_primitives::message::GetBlocksDirection;
+use crate::ChainInfo;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Direction {

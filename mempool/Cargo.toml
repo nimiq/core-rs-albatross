@@ -1,25 +1,21 @@
 [package]
-name = "consensus"
+name = "mempool"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 
 [dependencies]
 parking_lot = "0.6"
-rand = "0.6.4"
 log = "0.4.3"
 beserial = { path = "../beserial" }
 hash = { path = "../hash" }
 keys = { path = "../keys" }
-macros = { path = "../macros" }
 primitives = { path = "../primitives" }
-mempool = { path = "../mempool" }
-network-primitives = { path = "../network-primitives", features = ["networks", "message", "time"] }
-network = { path = "../network" }
-database = { path = "../database", features = ["full-nimiq"] }
 utils = { path = "../utils", features = ["observer", "timers", "mutable-once"] }
+accounts = { path = "../accounts" }
 blockchain = { path = "../blockchain" }
-weak-table = "0.2.3"
 
+[dev-dependencies]
+database = { path = "../database" }
+network-primitives = { path = "../network-primitives" }
 hex = "0.3.2"
-bigdecimal = "0.0.14"

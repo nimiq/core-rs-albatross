@@ -3,7 +3,7 @@ use std::sync::Arc;
 use atomic::{Atomic, Ordering};
 use beserial::{Deserialize, Serialize};
 use database::volatile::VolatileEnvironment;
-use datastructures::blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
+use blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
 use hash::Hash;
 use keys::{Address, KeyPair, PrivateKey};
 use network_primitives::time::NetworkTime;

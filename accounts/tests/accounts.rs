@@ -1,7 +1,7 @@
 use beserial::Serialize;
 use database::volatile::VolatileEnvironment;
 use database::WriteTransaction;
-use datastructures::account::Accounts;
+use accounts::Accounts;
 use hash::{Blake2bHash, Hash};
 use keys::{Address, KeyPair};
 use primitives::account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount};

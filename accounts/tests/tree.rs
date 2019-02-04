@@ -2,7 +2,7 @@ use hex;
 
 use database::volatile::VolatileEnvironment;
 use database::WriteTransaction;
-use datastructures::account::tree::AccountsTree;
+use accounts::tree::AccountsTree;
 use keys::Address;
 use primitives::account::{Account, BasicAccount};
 use primitives::coin::Coin;

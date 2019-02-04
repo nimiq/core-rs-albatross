@@ -4,6 +4,7 @@ use std::sync::Arc;
 use bigdecimal::BigDecimal;
 use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 
+use accounts::Accounts;
 use database::{Environment, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
 use network_primitives::message::GetBlocksMessage;
@@ -16,8 +17,7 @@ use primitives::policy;
 use utils::observer::Notifier;
 use utils::unique_ptr::UniquePtr;
 
-use crate::account::Accounts;
-use crate::blockchain::{ChainInfo, ChainStore, Direction, TransactionCache};
+use crate::{ChainInfo, ChainStore, Direction, TransactionCache};
 
 pub struct Blockchain<'env> {
     env: &'env Environment,

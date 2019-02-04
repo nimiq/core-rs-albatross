@@ -3,10 +3,10 @@ use std::sync::Arc;
 use hex;
 
 use beserial::{Deserialize, Serialize};
-use consensus::mempool::{Mempool, ReturnCode};
+use mempool::{Mempool, ReturnCode};
 use database::volatile::VolatileEnvironment;
 use database::WriteTransaction;
-use datastructures::blockchain::Blockchain;
+use blockchain::Blockchain;
 use hash::Hash;
 use keys::Address;
 use keys::KeyPair;

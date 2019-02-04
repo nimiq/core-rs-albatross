@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -6,8 +9,8 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock};
 
 use beserial::Serialize;
-use datastructures::account::Accounts;
-use datastructures::blockchain::{Blockchain, BlockchainEvent};
+use accounts::Accounts;
+use blockchain::{Blockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use primitives::account::AccountTransactionInteraction;

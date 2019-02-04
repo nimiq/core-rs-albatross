@@ -15,7 +15,7 @@ use primitives::networks::NetworkId;
 use primitives::policy;
 use primitives::transaction::{Transaction, TransactionFlags};
 
-use crate::account::tree::AccountsTree;
+use crate::tree::AccountsTree;
 
 #[derive(Debug)]
 pub struct Accounts<'env> {

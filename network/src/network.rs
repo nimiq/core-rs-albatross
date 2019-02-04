@@ -5,7 +5,7 @@ use atomic::Atomic;
 use atomic::Ordering;
 use parking_lot::RwLock;
 
-use datastructures::blockchain::Blockchain;
+use blockchain::Blockchain;
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
 use utils::mutable_once::MutableOnce;

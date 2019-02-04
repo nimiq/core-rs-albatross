@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 
-use datastructures::blockchain::Blockchain;
+use blockchain::Blockchain;
 use network_primitives::address::net_address::{NetAddress, NetAddressType};
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::protocol::Protocol;
