@@ -6,11 +6,13 @@ extern crate pretty_env_logger;
 extern crate log;
 extern crate futures;
 extern crate nimiq_database as database;
+extern crate nimiq_network as network;
+extern crate nimiq_consensus as consensus;
+extern crate nimiq_primitives as primitives;
 extern crate tokio;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate nimiq;
 
 #[cfg(debug_assertions)]
 extern crate dotenv;
@@ -24,11 +26,11 @@ use std::sync::Arc;
 use futures::Async;
 use futures::future::Future;
 
-use nimiq::network::network_config::NetworkConfig;
-use nimiq::network::networks::NetworkId;
-use nimiq::consensus::consensus::Consensus;
-use nimiq::network::network::Network;
-use nimiq::network::network_config::ReverseProxyConfig;
+use network::network_config::NetworkConfig;
+use primitives::networks::NetworkId;
+use consensus::consensus::Consensus;
+use network::network::Network;
+use network::network_config::ReverseProxyConfig;
 use database::Environment;
 use database::lmdb::{LmdbEnvironment, open};
 use database::volatile::VolatileEnvironment;

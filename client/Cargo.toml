@@ -1,11 +1,10 @@
 [package]
-name = "nimiq_bin"
+name = "nimiq-client"
 version = "0.1.0"
 authors = ["Janosch Gräf <janosch.graef@cispa.saarland>"]
 edition = "2018"
 
 [dependencies]
-nimiq = { path = "../"}
 serde = "1.0.85"
 serde_derive = "1.0.85"
 toml = "0.4.10"
@@ -13,6 +12,9 @@ log = "0.4.6"
 pretty_env_logger = "0.2.3"
 dotenv = "0.13.0"
 futures = "0.1"
-nimiq-database = { path = "../database"}
+nimiq-database = { path = "../database" }
+nimiq-network = { path = "../network" }
+nimiq-consensus = { path = "../consensus" }
+nimiq-primitives = { path = "../primitives" }
 tokio = "0.1"
 lazy_static = "1.0"
