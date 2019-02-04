@@ -4,7 +4,7 @@ version = "0.0.1"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 license = "Apache-2.0"
 description = "Nimiq Core implementation in Rust"
-repository = "https://github.com/nimiq-network/core-rs"
+repository = "https://github.com/nimiq/core-rs"
 homepage = "https://nimiq.com"
 edition = "2018"
 
