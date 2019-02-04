@@ -33,7 +33,7 @@ Besides [Rust](https://www.rust-lang.org/learn/get-started#installing-rust) itse
 
 Compiling the project is achieved through [`cargo`](https://doc.rust-lang.org/cargo/):
 
-```
+```bash
 git clone https://github.com/nimiq/core-rs
 cd core-rs
 cargo build
@@ -41,19 +41,13 @@ cargo build
 
 ## Usage
 
-To run the Nimiq Rust Client, navigate into the `nimiq_bin` folder and run:
+To run the Nimiq Rust Client, navigate into the `client` folder and run:
 
 ```bash
 cargo run
 ```
 
 Dependencies and binaries will be downloaded and compiled automatically by Cargo.
-To display log output, set the `RUST_LOG` environment variable by sourcing the `nimiq_bin/.env` file before:
-
-```bash
-# in nimiq_bin:
-source .env
-```
 
 ## Contributing
 

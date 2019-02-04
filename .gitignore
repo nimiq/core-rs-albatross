@@ -4,5 +4,6 @@
 /.idea
 *.iml
 .DS_Store
-/db
+client/db
+client/key.db
 Cargo.lock
