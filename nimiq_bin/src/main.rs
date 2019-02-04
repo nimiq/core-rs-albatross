@@ -25,7 +25,7 @@ use futures::Async;
 use futures::future::Future;
 
 use nimiq::network::network_config::NetworkConfig;
-use nimiq::consensus::networks::NetworkId;
+use nimiq::network::networks::NetworkId;
 use nimiq::consensus::consensus::Consensus;
 use nimiq::network::network::Network;
 use nimiq::network::network_config::ReverseProxyConfig;

@@ -16,6 +16,7 @@ publish = false
 [dependencies]
 network = { path = "network" }
 network-primitives = { path = "network-primitives" }
+primitives = { path = "primitives" }
 consensus = { path = "consensus" }
 database = { path = "database" }
 log = "0.4.3"
