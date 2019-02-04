@@ -1,5 +1,5 @@
 [package]
-name = "key-derivation"
+name = "nimiq-key-derivation"
 version = "0.1.0"
 authors = ["Pascal B <git@paberr.net>"]
 edition = "2018"
@@ -8,8 +8,8 @@ edition = "2018"
 regex = "1"
 byteorder = "1.2"
 beserial = { path = "../beserial" }
-hash = { path = "../hash" }
-keys = { path = "../keys" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
 
 [dev-dependencies]
 hex = "0.3.2"

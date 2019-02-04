@@ -4,10 +4,10 @@ use std::io;
 
 use lmdb_zero::traits::{AsLmdbBytes, FromLmdbBytes};
 
-#[cfg(feature = "hash")]
+#[cfg(feature = "nimiq-hash")]
 mod hash;
 
-#[cfg(feature = "primitives")]
+#[cfg(feature = "nimiq-primitives")]
 mod block;
 
 pub trait IntoDatabaseValue {

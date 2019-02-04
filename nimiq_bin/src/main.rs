@@ -5,7 +5,7 @@ extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 extern crate futures;
-extern crate database;
+extern crate nimiq_database as database;
 extern crate tokio;
 #[macro_use]
 extern crate lazy_static;

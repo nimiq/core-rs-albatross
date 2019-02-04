@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
-extern crate hash;
+extern crate nimiq_hash as hash;
 #[macro_use]
-extern crate macros;
+extern crate nimiq_macros as macros;
 
 use std::io;
 

@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate macros;
+extern crate nimiq_macros as macros;
 
 pub mod hmac;
 pub mod pbkdf2;
@@ -42,7 +42,7 @@ macro_rules! hash_typed_array {
             }
         }
 
-        impl hash::Hash for $name {}
+        impl nimiq_hash::Hash for $name {}
     };
 }
 

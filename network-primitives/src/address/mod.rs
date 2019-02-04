@@ -4,8 +4,8 @@ pub mod peer_address;
 pub use self::net_address::*;
 pub use self::peer_address::*;
 
-use keys::{PublicKey};
-use hash::{Blake2bHash, Blake2bHasher, Hasher};
+use nimiq_keys::{PublicKey};
+use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 
 create_typed_array!(PeerId, u8, 16);
 

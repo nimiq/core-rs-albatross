@@ -3,6 +3,13 @@ extern crate beserial_derive;
 #[macro_use]
 extern crate log;
 
+extern crate nimiq_accounts as accounts;
+extern crate nimiq_primitives as primitives;
+extern crate nimiq_hash as hash;
+extern crate nimiq_database as database;
+extern crate nimiq_network_primitives as network_primitives;
+extern crate nimiq_utils as utils;
+
 pub mod chain_info;
 pub mod chain_store;
 pub mod blockchain;

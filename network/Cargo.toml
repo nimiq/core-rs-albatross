@@ -1,5 +1,5 @@
 [package]
-name = "network"
+name = "nimiq-network"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
@@ -7,12 +7,12 @@ edition = "2018"
 [dependencies]
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
-blockchain = { path = "../blockchain" }
-keys = { path = "../keys" }
-hash = { path = "../hash" }
-macros = { path = "../macros" }
-network-primitives = { path = "../network-primitives", features = ["all"] }
-utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking"] }
+nimiq-blockchain = { path = "../blockchain" }
+nimiq-keys = { path = "../keys" }
+nimiq-hash = { path = "../hash" }
+nimiq-macros = { path = "../macros" }
+nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
+nimiq-utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking"] }
 atomic = "0.4"
 parking_lot = "0.6"
 rand = "0.6.4"

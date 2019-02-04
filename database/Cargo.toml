@@ -1,5 +1,5 @@
 [package]
-name = "database"
+name = "nimiq-database"
 version = "0.1.0"
 authors = ["Pascal B <git@paberr.net>"]
 edition = "2018"
@@ -13,9 +13,9 @@ tempdir = "0.3"
 rand = "0.6.4"
 bitflags = "1.0"
 beserial = { path = "../beserial" }
-hash = { path = "../hash", optional = true }
-primitives = { path = "../primitives", optional = true, features = ["block"] }
+nimiq-hash = { path = "../hash", optional = true }
+nimiq-primitives = { path = "../primitives", optional = true, features = ["block"] }
 
 [features]
 # Compiles this package with all features needed for the nimiq client.
-full-nimiq = ["hash", "primitives"]
+full-nimiq = ["nimiq-hash", "nimiq-primitives"]

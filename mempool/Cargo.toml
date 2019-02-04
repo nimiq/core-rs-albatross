@@ -1,5 +1,5 @@
 [package]
-name = "mempool"
+name = "nimiq-mempool"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
@@ -8,14 +8,14 @@ edition = "2018"
 parking_lot = "0.6"
 log = "0.4.3"
 beserial = { path = "../beserial" }
-hash = { path = "../hash" }
-keys = { path = "../keys" }
-primitives = { path = "../primitives" }
-utils = { path = "../utils", features = ["observer", "timers", "mutable-once"] }
-accounts = { path = "../accounts" }
-blockchain = { path = "../blockchain" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once"] }
+nimiq-accounts = { path = "../accounts" }
+nimiq-blockchain = { path = "../blockchain" }
 
 [dev-dependencies]
-database = { path = "../database" }
-network-primitives = { path = "../network-primitives" }
+nimiq-database = { path = "../database" }
+nimiq-network-primitives = { path = "../network-primitives" }
 hex = "0.3.2"

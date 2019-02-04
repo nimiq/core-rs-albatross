@@ -1,5 +1,5 @@
 [package]
-name = "network-primitives"
+name = "nimiq-network-primitives"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
@@ -7,11 +7,11 @@ edition = "2018"
 [dependencies]
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
-keys = { path = "../keys" }
-hash = { path = "../hash" }
-primitives = { path = "../primitives", features = ["account", "block", "transaction"] }
-utils = { path = "../utils", features = ["observer", "crc", "time"] }
-macros = { path = "../macros" }
+nimiq-keys = { path = "../keys" }
+nimiq-hash = { path = "../hash" }
+nimiq-primitives = { path = "../primitives", features = ["account", "block", "transaction"] }
+nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
+nimiq-macros = { path = "../macros" }
 bitflags = "1.0"
 log = "0.4.3"
 rand = "0.6.4"

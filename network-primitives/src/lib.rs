@@ -5,7 +5,11 @@ extern crate log;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
-extern crate macros;
+extern crate nimiq_macros as macros;
+extern crate nimiq_utils as utils;
+extern crate nimiq_keys as keys;
+extern crate nimiq_primitives as primitives;
+extern crate nimiq_hash as hash;
 #[macro_use]
 extern crate lazy_static;
 

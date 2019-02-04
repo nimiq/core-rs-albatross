@@ -1,5 +1,5 @@
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializingError, SerializeWithLength, WriteBytesExt};
-use hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
+use nimiq_hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
 use bit_vec::BitVec;
 use std::borrow::Cow;
 use std::cmp::Ordering;

@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate macros;
+extern crate nimiq_macros as macros;
 
 #[cfg(feature = "key-derivation")]
 pub mod key_derivation;

@@ -1,5 +1,5 @@
 [package]
-name = "keys"
+name = "nimiq-keys"
 version = "0.1.0"
 authors = ["Pascal B <git@paberr.net>"]
 edition = "2018"
@@ -10,7 +10,7 @@ ed25519-dalek = "1.0.0-pre.1"
 sha2 = "0.8.0"
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
-hash = { path = "../hash" }
-macros = { path = "../macros" }
+nimiq-hash = { path = "../hash" }
+nimiq-macros = { path = "../macros" }
 rand = "0.6.4"
 hex = "0.3.2"

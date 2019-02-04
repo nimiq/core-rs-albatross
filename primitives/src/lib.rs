@@ -7,7 +7,10 @@ extern crate lazy_static;
 
 #[cfg(feature = "account")]
 #[macro_use]
-extern crate macros;
+extern crate nimiq_macros as macros;
+
+extern crate nimiq_hash as hash;
+extern crate nimiq_keys as keys;
 
 #[cfg(feature = "account")]
 #[macro_use]

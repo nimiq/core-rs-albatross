@@ -1,15 +1,15 @@
 [package]
-name = "mnemonic"
+name = "nimiq-mnemonic"
 version = "0.1.0"
 authors = ["Pascal B <git@paberr.net>"]
 edition = "2018"
 
 [dependencies]
-hash = { path = "../hash" }
+nimiq-hash = { path = "../hash" }
 beserial = { path = "../beserial" }
-macros = { path = "../macros" }
-utils = { path = "../utils", features = ["bit-vec", "crc"] }
+nimiq-macros = { path = "../macros" }
+nimiq-utils = { path = "../utils", features = ["bit-vec", "crc"] }
 bit-vec = "0.5.0"
 hex = "0.3.2"
-key-derivation = { path = "../key-derivation", optional = true }
+nimiq-key-derivation = { path = "../key-derivation", optional = true }
 unicode-normalization = "0.1.7"

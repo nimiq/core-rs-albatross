@@ -1,3 +1,5 @@
+extern crate nimiq_hash as hash;
+extern crate nimiq_primitives as primitives;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]

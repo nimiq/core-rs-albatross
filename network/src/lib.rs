@@ -3,7 +3,12 @@ extern crate beserial_derive;
 #[macro_use]
 extern crate log;
 #[macro_use]
-extern crate macros;
+extern crate nimiq_macros as macros;
+extern crate nimiq_network_primitives as network_primitives;
+extern crate nimiq_utils as utils;
+extern crate nimiq_blockchain as blockchain;
+extern crate nimiq_hash as hash;
+extern crate nimiq_keys as keys;
 
 pub mod address;
 pub mod websocket;

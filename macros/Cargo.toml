@@ -1,5 +1,5 @@
 [package]
-name = "macros"
+name = "nimiq-macros"
 version = "0.1.0"
 authors = ["Pascal B <git@paberr.net>"]
 edition = "2018"

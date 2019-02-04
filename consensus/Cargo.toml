@@ -1,5 +1,5 @@
 [package]
-name = "consensus"
+name = "nimiq-consensus"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
@@ -9,16 +9,16 @@ parking_lot = "0.6"
 rand = "0.6.4"
 log = "0.4.3"
 beserial = { path = "../beserial" }
-hash = { path = "../hash" }
-keys = { path = "../keys" }
-macros = { path = "../macros" }
-primitives = { path = "../primitives" }
-mempool = { path = "../mempool" }
-network-primitives = { path = "../network-primitives", features = ["networks", "message", "time"] }
-network = { path = "../network" }
-database = { path = "../database", features = ["full-nimiq"] }
-utils = { path = "../utils", features = ["observer", "timers", "mutable-once"] }
-blockchain = { path = "../blockchain" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-macros = { path = "../macros" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-mempool = { path = "../mempool" }
+nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "message", "time"] }
+nimiq-network = { path = "../network" }
+nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once"] }
+nimiq-blockchain = { path = "../blockchain" }
 weak-table = "0.2.3"
 
 hex = "0.3.2"

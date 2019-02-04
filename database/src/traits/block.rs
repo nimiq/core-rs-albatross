@@ -1,5 +1,3 @@
-extern crate primitives;
-
 use std::io;
 
 use beserial::{Deserialize, Serialize};

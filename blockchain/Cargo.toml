@@ -1,5 +1,5 @@
 [package]
-name = "blockchain"
+name = "nimiq-blockchain"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
@@ -7,17 +7,17 @@ edition = "2018"
 [dependencies]
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
-keys = { path = "../keys" }
-primitives = { path = "../primitives" }
-hash = { path = "../hash" }
-accounts = { path = "../accounts" }
-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-keys = { path = "../keys" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-hash = { path = "../hash" }
+nimiq-accounts = { path = "../accounts" }
+nimiq-database = { path = "../database", features = ["full-nimiq"] }
 hex = "0.3.2"
 bigdecimal = "0.0.14"
 parking_lot = "0.6"
-utils = { path = "../utils", features = ["observer", "unique-ptr"] }
+nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr"] }
 log = "0.4.3"
-network-primitives = { path = "../network-primitives", features = ["networks", "time", "message"] }
+nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time", "message"] }
 
 [dev-dependencies]
 atomic = "0.4"
