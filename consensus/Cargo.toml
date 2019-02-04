@@ -3,6 +3,14 @@ name = "nimiq-consensus"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
+description = "Consensus implementation of Nimiq in Rust"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs"
+license = "Apache-2.0"
+
+[badges]
+travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 parking_lot = "0.6"

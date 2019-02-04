@@ -3,6 +3,14 @@ name = "nimiq-blockchain"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
+description = "Persistent block storage for Nimiq's Rust implementation"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs"
+license = "Apache-2.0"
+
+[badges]
+travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 beserial = { path = "../beserial" }

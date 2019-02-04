@@ -1,8 +1,15 @@
 [package]
 name = "nimiq-hash"
 version = "0.1.0"
-authors = ["Pascal B <git@paberr.net>"]
+authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
+description = "Common wrapper around hash implementations used in Nimiq"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs"
+license = "Apache-2.0"
+
+[badges]
+travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 
 [dependencies]
 blake2-rfc = "0.2.18"

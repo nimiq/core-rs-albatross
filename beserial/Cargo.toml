@@ -3,6 +3,13 @@ name = "beserial"
 version = "0.1.0"
 authors = ["Marvin W <git@larma.de>"]
 edition = "2018"
+description = "A serializer that uses BigEndian encoding that also allows to specify types for length fields"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs"
+license = "Apache-2.0"
+
+[badges]
+travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 
 [dependencies]
 byteorder = "1.2.3"
