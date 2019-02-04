@@ -35,7 +35,7 @@ tokio-tungstenite = { git = "https://github.com/jeffesquivels/tokio-tungstenite"
 members = [
     "libargon2-sys",
     "beserial",
-    "extended-collections",
+    "collections",
     "database",
     "hash",
     "macros",
@@ -50,5 +50,5 @@ members = [
     "network-primitives",
     "consensus",
     "network",
-    "nimiq_bin",
+    "client",
 ]

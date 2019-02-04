@@ -1,6 +1,6 @@
 mod multisig;
 
-use keys::{PrivateKey,PublicKey,Signature,KeyPair};
+use nimiq_keys::{PrivateKey,PublicKey,Signature,KeyPair};
 
 #[test]
 fn verify_created_signature() {

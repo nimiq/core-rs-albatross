@@ -18,7 +18,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut dl = UniqueLinkedList::new();
     /// assert!(dl.is_empty());
@@ -35,7 +35,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut dl = UniqueLinkedList::new();
     ///
@@ -57,7 +57,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut dl = UniqueLinkedList::new();
     ///
@@ -78,7 +78,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut dl = UniqueLinkedList::new();
     /// assert_eq!(dl.peek(), None);
@@ -96,7 +96,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut d = UniqueLinkedList::new();
     /// assert_eq!(d.dequeue(), None);
@@ -118,7 +118,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut d = UniqueLinkedList::new();
     /// assert_eq!(d.dequeue_multi(1), vec![]);
@@ -136,7 +136,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut d = UniqueLinkedList::new();
     /// d.enqueue(1);
@@ -155,7 +155,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut queue1 = UniqueLinkedList::new();
     /// queue1.enqueue('a');
@@ -181,7 +181,7 @@ pub trait Queue<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::{UniqueLinkedList, Queue};
+    /// use nimiq_collections::{UniqueLinkedList, Queue};
     ///
     /// let mut d = UniqueLinkedList::new();
     /// d.enqueue(1);

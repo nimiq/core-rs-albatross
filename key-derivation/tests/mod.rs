@@ -1,5 +1,5 @@
-use key_derivation::*;
-use keys::{PrivateKey, PublicKey};
+use nimiq_key_derivation::*;
+use nimiq_keys::{PrivateKey, PublicKey};
 use hex;
 
 struct TestVector {

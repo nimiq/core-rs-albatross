@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
-use keys::{PrivateKey,PublicKey,Signature,KeyPair};
-use keys::multisig::{RandomSecret,Commitment,PartialSignature};
+use nimiq_keys::{PrivateKey,PublicKey,Signature,KeyPair};
+use nimiq_keys::multisig::{RandomSecret,Commitment,PartialSignature};
 use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
 use hex;
-use keys::multisig::*;
+use nimiq_keys::multisig::*;
 use sha2::Digest;
 
 struct StrTestVector {

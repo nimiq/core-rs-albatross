@@ -1,3 +1,5 @@
+extern crate nimiq_primitives as primitives;
+
 use std::io;
 
 use beserial::{Deserialize, Serialize};

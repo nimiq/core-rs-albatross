@@ -1,8 +1,8 @@
-use database::{volatile::VolatileEnvironment, WriteTransaction};
-use blockchain::{ChainInfo, ChainStore};
-use hash::{Blake2bHash, Hash};
-use network_primitives::networks::{get_network_info, NetworkId};
-use primitives::block::Difficulty;
+use nimiq_blockchain::{ChainInfo, ChainStore};
+use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_network_primitives::networks::{get_network_info, NetworkId};
+use nimiq_primitives::block::Difficulty;
 
 #[test]
 fn it_can_store_the_chain_head() {

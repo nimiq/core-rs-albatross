@@ -1,4 +1,4 @@
-use hash::pbkdf2::*;
+use nimiq_hash::pbkdf2::*;
 use hex::FromHex;
 
 struct TestVector {

@@ -13,3 +13,6 @@ bit-vec = "0.5.0"
 hex = "0.3.2"
 nimiq-key-derivation = { path = "../key-derivation", optional = true }
 unicode-normalization = "0.1.7"
+
+[features]
+key-derivation = ["nimiq-key-derivation"]

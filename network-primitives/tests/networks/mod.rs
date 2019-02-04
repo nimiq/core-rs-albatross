@@ -1,5 +1,5 @@
-use hash::{Blake2bHash, Hash};
-use network_primitives::networks::*;
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_network_primitives::networks::*;
 use hex;
 
 #[test]

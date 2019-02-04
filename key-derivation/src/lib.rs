@@ -1,3 +1,6 @@
+extern crate nimiq_keys as keys;
+extern crate nimiq_hash as hash;
+
 use keys::{PrivateKey, PublicKey};
 use hash::pbkdf2::*;
 use hash::hmac::*;

@@ -1,10 +1,13 @@
-use beserial::{Serialize, SerializingError, Deserialize, SerializeWithLength, DeserializeWithLength, WriteBytesExt, ReadBytesExt};
+use std::fmt;
+use std::ops::{Add, AddAssign, Sub, SubAssign};
+
 use bigdecimal::BigDecimal;
 use num_bigint::{BigInt, Sign, ToBigInt};
+
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use hash::Argon2dHash;
+
 use crate::policy;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
-use std::fmt;
 
 #[derive(Default, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct TargetCompact(u32);

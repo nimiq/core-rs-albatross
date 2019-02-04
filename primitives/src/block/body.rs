@@ -1,12 +1,14 @@
+use std::{cmp::Ordering, io};
+
 use beserial::{Deserialize, Serialize};
+use hash::{Hash, HashOutput, SerializeContent};
+use keys::Address;
+use utils::merkle;
+
 use crate::account::PrunedAccount;
 use crate::block::BlockError;
-use keys::Address;
-use hash::{Hash, HashOutput, SerializeContent};
-use crate::transaction::Transaction;
 use crate::networks::NetworkId;
-use std::{cmp::Ordering, io};
-use utils::merkle;
+use crate::transaction::Transaction;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BlockBody {

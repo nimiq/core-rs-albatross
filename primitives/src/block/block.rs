@@ -1,8 +1,10 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
-use crate::block::{BlockBody, BlockHeader, BlockInterlink, Target, BlockError};
-use hash::{Hash, Blake2bHash, Argon2dHash};
-use crate::networks::NetworkId;
 use std::io;
+
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
+use hash::{Argon2dHash, Blake2bHash, Hash};
+
+use crate::block::{BlockBody, BlockError, BlockHeader, BlockInterlink, Target};
+use crate::networks::NetworkId;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize)]
 pub struct Block {

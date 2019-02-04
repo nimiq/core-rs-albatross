@@ -9,8 +9,12 @@ extern crate lazy_static;
 #[macro_use]
 extern crate nimiq_macros as macros;
 
+#[cfg(feature = "nimiq-hash")]
 extern crate nimiq_hash as hash;
+#[cfg(feature = "nimiq-keys")]
 extern crate nimiq_keys as keys;
+#[cfg(feature = "nimiq-utils")]
+extern crate nimiq_utils as utils;
 
 #[cfg(feature = "account")]
 #[macro_use]

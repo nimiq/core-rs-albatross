@@ -1,11 +1,11 @@
-use blockchain::TransactionCache;
-use hash::{Blake2bHash, Hash};
-use keys::Address;
-use network_primitives::networks::get_network_info;
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
-use primitives::policy;
-use primitives::transaction::Transaction;
+use nimiq_blockchain::TransactionCache;
+use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
+use nimiq_network_primitives::networks::get_network_info;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::policy;
+use nimiq_primitives::transaction::Transaction;
 
 #[test]
 fn it_can_push_blocks() {

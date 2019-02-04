@@ -101,7 +101,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let list: UniqueLinkedList<u32> = UniqueLinkedList::new();
     /// ```
@@ -123,7 +123,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut list1 = UniqueLinkedList::new();
     /// list1.push_back('a');
@@ -153,7 +153,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut list: UniqueLinkedList<u32> = UniqueLinkedList::new();
     ///
@@ -179,7 +179,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut dl = UniqueLinkedList::new();
     /// assert!(dl.is_empty());
@@ -199,7 +199,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut dl = UniqueLinkedList::new();
     ///
@@ -224,7 +224,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut dl = UniqueLinkedList::new();
     ///
@@ -249,7 +249,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut list: UniqueLinkedList<u32> = UniqueLinkedList::new();
     ///
@@ -272,7 +272,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut list: UniqueLinkedList<u32> = UniqueLinkedList::new();
     ///
@@ -302,7 +302,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut dl = UniqueLinkedList::new();
     /// assert_eq!(dl.front(), None);
@@ -321,7 +321,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut dl = UniqueLinkedList::new();
     /// assert_eq!(dl.back(), None);
@@ -341,7 +341,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut dl = UniqueLinkedList::new();
     ///
@@ -370,7 +370,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut d = UniqueLinkedList::new();
     /// assert_eq!(d.pop_front(), None);
@@ -395,7 +395,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut d = UniqueLinkedList::new();
     /// d.push_back(1);
@@ -419,7 +419,7 @@ impl<T> UniqueLinkedList<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::UniqueLinkedList;
+    /// use nimiq_collections::UniqueLinkedList;
     ///
     /// let mut d = UniqueLinkedList::new();
     /// assert_eq!(d.pop_back(), None);

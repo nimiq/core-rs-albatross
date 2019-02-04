@@ -35,7 +35,7 @@ use crate::unique_linked_list::{IntoIter, Iter, UniqueLinkedList};
 /// # Examples
 ///
 /// ```
-/// use extended_collections::LimitHashSet;
+/// use nimiq_collections::LimitHashSet;
 /// // Type inference lets us omit an explicit type signature (which
 /// // would be `LimitHashSet<String>` in this example).
 /// let mut books = LimitHashSet::new(3);
@@ -66,7 +66,7 @@ use crate::unique_linked_list::{IntoIter, Iter, UniqueLinkedList};
 /// future be implied by `Eq`.
 ///
 /// ```
-/// use extended_collections::LimitHashSet;
+/// use nimiq_collections::LimitHashSet;
 /// #[derive(Hash, Eq, PartialEq, Debug)]
 /// struct Viking {
 ///     name: String,
@@ -100,7 +100,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     /// let set: LimitHashSet<i32> = LimitHashSet::new(10);
     /// ```
     #[inline]
@@ -120,7 +120,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     /// let mut set = LimitHashSet::new(10);
     /// set.insert("a");
     /// set.insert("b");
@@ -139,7 +139,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let mut v = LimitHashSet::new(10);
     /// assert_eq!(v.len(), 0);
@@ -155,7 +155,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let mut v = LimitHashSet::new(10);
     /// assert!(v.is_empty());
@@ -171,7 +171,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let mut v = LimitHashSet::new(10);
     /// v.insert(1);
@@ -188,7 +188,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     /// let a: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// let b: LimitHashSet<_> = [4, 2, 3, 4].iter().cloned().collect();
     ///
@@ -218,7 +218,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     /// let a: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// let b: LimitHashSet<_> = [4, 2, 3, 4].iter().cloned().collect();
     ///
@@ -245,7 +245,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     /// let a: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// let b: LimitHashSet<_> = [4, 2, 3, 4].iter().cloned().collect();
     ///
@@ -270,7 +270,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     /// let a: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// let b: LimitHashSet<_> = [4, 2, 3, 4].iter().cloned().collect();
     ///
@@ -295,7 +295,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let set: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// assert_eq!(set.contains(&1), true);
@@ -317,7 +317,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let set: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// assert_eq!(set.get(&2), Some(&2));
@@ -340,7 +340,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let a: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// let mut b = LimitHashSet::new(10);
@@ -361,7 +361,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let sup: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// let mut set = LimitHashSet::new(10);
@@ -382,7 +382,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let sub: LimitHashSet<_> = [1, 2].iter().cloned().collect();
     /// let mut set = LimitHashSet::new(10);
@@ -410,7 +410,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let mut set = LimitHashSet::new(10);
     ///
@@ -433,7 +433,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let mut set = LimitHashSet::new(10);
     /// set.insert(Vec::<i32>::new());
@@ -457,7 +457,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let mut set = LimitHashSet::new(2);
     /// assert_eq!(set.insert_and_get_removed(4), None);
@@ -483,7 +483,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let mut set = LimitHashSet::new(10);
     ///
@@ -507,7 +507,7 @@ impl<T> LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let mut set: LimitHashSet<_> = [1, 2, 3].iter().cloned().collect();
     /// assert_eq!(set.take(&2), Some(2));
@@ -590,7 +590,7 @@ impl<'a, 'b, T> BitOr<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let a: LimitHashSet<_> = vec![1, 2, 3].into_iter().collect();
     /// let b: LimitHashSet<_> = vec![3, 4, 5].into_iter().collect();
@@ -620,7 +620,7 @@ impl<'a, 'b, T> BitAnd<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let a: LimitHashSet<_> = vec![1, 2, 3].into_iter().collect();
     /// let b: LimitHashSet<_> = vec![2, 3, 4].into_iter().collect();
@@ -650,7 +650,7 @@ impl<'a, 'b, T> BitXor<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let a: LimitHashSet<_> = vec![1, 2, 3].into_iter().collect();
     /// let b: LimitHashSet<_> = vec![3, 4, 5].into_iter().collect();
@@ -680,7 +680,7 @@ impl<'a, 'b, T> Sub<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     ///
     /// let a: LimitHashSet<_> = vec![1, 2, 3].into_iter().collect();
     /// let b: LimitHashSet<_> = vec![3, 4, 5].into_iter().collect();
@@ -778,7 +778,7 @@ impl<T> IntoIterator for LimitHashSet<T>
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LimitHashSet;
+    /// use nimiq_collections::LimitHashSet;
     /// let mut set = LimitHashSet::new(10);
     /// set.insert("a".to_string());
     /// set.insert("b".to_string());

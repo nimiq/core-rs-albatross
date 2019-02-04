@@ -1,5 +1,5 @@
-use utils::merkle::{compute_root_from_content, compute_root_from_content_slice, MerklePath, MerkleProof};
-use hash::{Hasher, Blake2bHasher, Blake2bHash};
+use nimiq_utils::merkle::{compute_root_from_content, compute_root_from_content_slice, MerklePath, MerkleProof};
+use nimiq_hash::{Hasher, Blake2bHasher, Blake2bHash};
 use beserial::{Serialize, Deserialize};
 
 const VALUE: &'static str = "merkletree";

@@ -1,16 +1,17 @@
 use std::sync::Arc;
 
 use atomic::{Atomic, Ordering};
+
 use beserial::{Deserialize, Serialize};
-use database::volatile::VolatileEnvironment;
-use blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
-use hash::Hash;
-use keys::{Address, KeyPair, PrivateKey};
-use network_primitives::time::NetworkTime;
-use primitives::account::{AccountError, AccountType};
-use primitives::block::{Block, BlockError};
-use primitives::networks::NetworkId;
-use primitives::transaction::{SignatureProof, Transaction};
+use nimiq_blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
+use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_hash::Hash;
+use nimiq_keys::{Address, KeyPair, PrivateKey};
+use nimiq_network_primitives::time::NetworkTime;
+use nimiq_primitives::account::{AccountError, AccountType};
+use nimiq_primitives::block::{Block, BlockError};
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::transaction::{SignatureProof, Transaction};
 
 const BLOCK_2: &str = "0001264aaf8a4f9828a76c550635da078eb466306a189fcc03710bee9f649c869d120492e3986e75ac0d1466b5d6a7694c86839767a30980f8ba0d8c6e48631bc9cdd8a3eb957567d76963ad10d11e65453f763928fb9619e5f396a0906e946cce3ca7fcbb5fb2e35055de071e868381ba426a8d79d97cb48dab8345baeb9a9abb091f010000000000025ad23a98000046fe0180010000000000000000000000000000000000000000184d696e65642077697468206c6f766520627920526963687900000000";
 const BLOCK_3: &str = "0001bab534467866d83060b1af0b3493dd0f97d7071b16e1562cf4b18bdf73e71ccb4aa1fea2b8cdf2a63411776c6391a7659aef4dd25317a615499c7b461e9a0405385dbed68e76f74317cc6f4cd40db832eb71b8338fad024ddbb88f9abc79f199dd6a3500aeb5479eb460afeab3363783e243a6e551536c3c01c8fca21d7afbbb1f00fddd000000035ad23a980000968102c0010000000000000000000000000000000000000000184d696e65642077697468206c6f76652062792054616d6d6f00000000";

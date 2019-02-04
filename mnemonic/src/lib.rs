@@ -1,19 +1,23 @@
+extern crate nimiq_hash as hash;
 #[macro_use]
 extern crate nimiq_macros as macros;
+extern crate nimiq_utils as utils;
+
+use std::fmt;
+use std::str;
+use std::str::FromStr;
+
+use bit_vec::BitVec;
+use hex::FromHex;
+use unicode_normalization::UnicodeNormalization;
+
+use hash::{Hasher, Sha256Hasher};
+use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
+use utils::bit_vec::IntoChunkedBitVecIterator;
+use utils::crc::Crc8Computer;
 
 #[cfg(feature = "key-derivation")]
 pub mod key_derivation;
-
-use utils::crc::Crc8Computer;
-use hash::{Sha256Hasher, Hasher};
-use std::str;
-use bit_vec::BitVec;
-use utils::bit_vec::IntoChunkedBitVecIterator;
-use std::fmt;
-use hex::FromHex;
-use std::str::FromStr;
-use hash::pbkdf2::{Pbkdf2Error, compute_pbkdf2_sha512};
-use unicode_normalization::UnicodeNormalization;
 
 /**
  * Our entropy implementation is fixed to 32 bytes.

@@ -3,18 +3,18 @@ use std::sync::Arc;
 use hex;
 
 use beserial::{Deserialize, Serialize};
-use mempool::{Mempool, ReturnCode};
-use database::volatile::VolatileEnvironment;
-use database::WriteTransaction;
-use blockchain::Blockchain;
-use hash::Hash;
-use keys::Address;
-use keys::KeyPair;
-use network_primitives::time::NetworkTime;
-use primitives::block::BlockBody;
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
-use primitives::transaction::{SignatureProof, Transaction};
+use nimiq_blockchain::Blockchain;
+use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::WriteTransaction;
+use nimiq_hash::Hash;
+use nimiq_keys::Address;
+use nimiq_keys::KeyPair;
+use nimiq_mempool::{Mempool, ReturnCode};
+use nimiq_network_primitives::time::NetworkTime;
+use nimiq_primitives::block::BlockBody;
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_primitives::transaction::{SignatureProof, Transaction};
 
 const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c32348d294eab582f14a0754d1260f15bea0e8fb07ab18f45301483599e34000000000000c350000000000000008a00019640023fecb82d3aef4be76853d5c5b263754b7d495d9838f6ae5df60cf3addd3512a82988db0056059c7a52ae15285983ef0db8229ae446c004559147686d28f0a30a";
 

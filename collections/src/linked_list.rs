@@ -294,7 +294,7 @@ impl<T> LinkedList<T> {
     /// # Examples
     ///
     /// ```
-    /// use extended_collections::LinkedList;
+    /// use nimiq_collections::LinkedList;
     ///
     /// let mut list1 = LinkedList::new();
     /// list1.push_back('a');

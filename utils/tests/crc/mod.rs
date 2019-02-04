@@ -1,4 +1,4 @@
-use utils::crc::*;
+use nimiq_utils::crc::*;
 
 #[test]
 fn compute_crc32() {

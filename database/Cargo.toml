@@ -18,4 +18,6 @@ nimiq-primitives = { path = "../primitives", optional = true, features = ["block
 
 [features]
 # Compiles this package with all features needed for the nimiq client.
-full-nimiq = ["nimiq-hash", "nimiq-primitives"]
+full-nimiq = ["hash", "primitives"]
+hash = ["nimiq-hash"]
+primitives = ["nimiq-primitives"]

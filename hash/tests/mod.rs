@@ -1,6 +1,6 @@
 mod hmac;
 mod pbkdf2;
-use hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash,Sha512Hasher,Sha512Hash};
+use nimiq_hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash,Sha512Hasher,Sha512Hash};
 use std::io::Write;
 
 #[test]

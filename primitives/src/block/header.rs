@@ -1,7 +1,9 @@
-use beserial::{Deserialize, Serialize};
-use crate::block::{Target, TargetCompact};
-use hash::{Argon2dHash, Blake2bHash, Hash, SerializeContent};
 use std::io;
+
+use beserial::{Deserialize, Serialize};
+use hash::{Argon2dHash, Blake2bHash, Hash, SerializeContent};
+
+use crate::block::{Target, TargetCompact};
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BlockHeader {

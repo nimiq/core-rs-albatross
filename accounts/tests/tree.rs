@@ -1,11 +1,11 @@
 use hex;
 
-use database::volatile::VolatileEnvironment;
-use database::WriteTransaction;
-use accounts::tree::AccountsTree;
-use keys::Address;
-use primitives::account::{Account, BasicAccount};
-use primitives::coin::Coin;
+use nimiq_accounts::tree::AccountsTree;
+use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_database::WriteTransaction;
+use nimiq_keys::Address;
+use nimiq_primitives::account::{Account, BasicAccount};
+use nimiq_primitives::coin::Coin;
 
 #[test]
 fn it_can_put_and_get_a_balance() {
