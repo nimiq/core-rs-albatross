@@ -6,9 +6,6 @@ edition = "2018"
 
 [dependencies]
 nimiq = { path = "../"}
-network = { path = "../network" }
-consensus = { path = "../consensus" }
-network-primitives = { path = "../network-primitives" }
 serde = "1.0.85"
 serde_derive = "1.0.85"
 toml = "0.4.10"

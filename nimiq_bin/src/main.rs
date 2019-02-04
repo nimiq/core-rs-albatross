@@ -10,9 +10,7 @@ extern crate tokio;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate network;
-extern crate consensus;
-extern crate network_primitives;
+extern crate nimiq;
 
 #[cfg(debug_assertions)]
 extern crate dotenv;
@@ -26,11 +24,11 @@ use std::sync::Arc;
 use futures::Async;
 use futures::future::Future;
 
-use network::network_config::NetworkConfig;
-use network_primitives::networks::NetworkId;
-use consensus::consensus::Consensus;
-use network::network::Network;
-use network::network_config::ReverseProxyConfig;
+use nimiq::network::network_config::NetworkConfig;
+use nimiq::network::networks::NetworkId;
+use nimiq::consensus::consensus::Consensus;
+use nimiq::network::network::Network;
+use nimiq::network::network_config::ReverseProxyConfig;
 use database::Environment;
 use database::lmdb::{LmdbEnvironment, open};
 use database::volatile::VolatileEnvironment;
@@ -48,7 +46,6 @@ lazy_static! {
 // There is no really good way for a condition on the compilation environment (dev, staging, prod)
 #[cfg(debug_assertions)]
 fn dev_init() {
-    // This loads the file .env and takes environment variables from it. Useful for debugging
     dotenv::dotenv(); /*.expect("Couldn't load dotenv");*/
 }
 
