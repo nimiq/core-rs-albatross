@@ -7,6 +7,7 @@ use parking_lot::{Mutex, RwLock};
 use weak_table::PtrWeakHashSet;
 
 use blockchain::{Blockchain, Direction, PushResult};
+use collections::{LimitHashSet, UniqueLinkedList};
 use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
 use network::connection::close_type::CloseType;
@@ -22,6 +23,8 @@ use utils::{
     observer::{Notifier, weak_listener, weak_passthru_listener},
     timers::Timers,
 };
+use utils::throttled_queue::ThrottledQueue;
+use collections::queue::Queue;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {
@@ -150,11 +153,11 @@ struct InventoryAgentState {
     bypass_mgr: bool,
 
     /// Set of all objects (InvVectors) that we think the remote peer knows.
-    known_objects: /*LimitInclusionHashSet*/HashSet<InvVector>,
+    known_objects: LimitHashSet<InvVector>,
 
     /// InvVectors we want to request via getData are collected here and periodically requested.
-    blocks_to_request: /*UniqueQueue*/VecDeque<InvVector>,
-    txs_to_request: /*ThrottledQueue*/VecDeque<InvVector>,
+    blocks_to_request: UniqueLinkedList<InvVector>,
+    txs_to_request: ThrottledQueue<InvVector>,
 
     /// Objects that are currently being requested from the peer.
     objects_in_flight: HashSet<InvVector>,
@@ -178,6 +181,15 @@ impl InventoryAgent {
     const REQUEST_THRESHOLD: usize = 50;
     const REQUEST_VECTORS_MAX: usize = 1000;
     const GET_BLOCKS_VECTORS_MAX: u32 = 500;
+    const KNOWN_OBJECTS_COUNT_MAX: usize = 40000;
+    const TRANSACTION_RELAY_INTERVAL: Duration = Duration::from_millis(5000);
+    const TRANSACTIONS_AT_ONCE: usize = 100;
+    const TRANSACTIONS_PER_SECOND: usize = 10;
+    const FREE_TRANSACTION_RELAY_INTERVAL: Duration = Duration::from_millis(6000);
+    const FREE_TRANSACTIONS_AT_ONCE: usize = 10;
+    const FREE_TRANSACTIONS_PER_SECOND: usize = 1;
+    const TRANSACTION_REQUEST_THROTTLE: Duration = Duration::from_millis(1000);
+    const REQUEST_TRANSACTIONS_WAITING_MAX: usize = 5000;
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
@@ -187,9 +199,14 @@ impl InventoryAgent {
             inv_mgr,
             state: RwLock::new(InventoryAgentState {
                 bypass_mgr: false,
-                known_objects: HashSet::new(),
-                blocks_to_request: VecDeque::new(),
-                txs_to_request: VecDeque::new(),
+                known_objects: LimitHashSet::new(Self::KNOWN_OBJECTS_COUNT_MAX),
+                blocks_to_request: UniqueLinkedList::new(),
+                txs_to_request: ThrottledQueue::new(
+                    Self::TRANSACTIONS_AT_ONCE + Self::FREE_TRANSACTIONS_AT_ONCE,
+                    Self::TRANSACTION_REQUEST_THROTTLE,
+                    Self::TRANSACTIONS_PER_SECOND + Self::FREE_TRANSACTIONS_PER_SECOND,
+                    Some(Self::REQUEST_TRANSACTIONS_WAITING_MAX),
+                ),
                 objects_in_flight: HashSet::new(),
             }),
             notifier: RwLock::new(Notifier::new()),
@@ -406,22 +423,20 @@ impl InventoryAgent {
     fn queue_vector(&self, vector: InvVector) {
         let mut state = self.state.write();
         match vector.ty {
-            InvVectorType::Block => state.blocks_to_request.push_back(vector),
-            InvVectorType::Transaction => state.txs_to_request.push_back(vector),
+            InvVectorType::Block => state.blocks_to_request.enqueue(vector),
+            InvVectorType::Transaction => state.txs_to_request.enqueue(vector),
             InvVectorType::Error => () // XXX Get rid of this!
         }
         self.request_vectors_throttled(&mut *state);
     }
 
     fn queue_vectors(&self, state: &mut InventoryAgentState, block_vectors: Vec<InvVector>, tx_vectors: Vec<InvVector>) {
-        state.blocks_to_request.reserve(block_vectors.len());
         for vector in block_vectors {
-            state.blocks_to_request.push_back(vector);
+            state.blocks_to_request.enqueue(vector);
         }
 
-        state.txs_to_request.reserve(tx_vectors.len());
         for vector in tx_vectors {
-            state.txs_to_request.push_back(vector);
+            state.txs_to_request.enqueue(vector);
         }
 
         self.request_vectors_throttled(state);
@@ -430,7 +445,7 @@ impl InventoryAgent {
     fn request_vectors_throttled(&self, state: &mut InventoryAgentState) {
         self.timers.clear_delay(&InventoryAgentTimer::GetDataThrottle);
 
-        if state.blocks_to_request.len() + state.txs_to_request.len() > Self::REQUEST_THRESHOLD {
+        if state.blocks_to_request.len() + state.txs_to_request.num_available() > Self::REQUEST_THRESHOLD {
             self.request_vectors(state);
         } else {
             let weak = self.self_weak.clone();
@@ -449,20 +464,20 @@ impl InventoryAgent {
         }
 
         // Don't do anything if there are no objects queued to request.
-        if state.blocks_to_request.is_empty() && state.txs_to_request.is_empty() {
+        if state.blocks_to_request.is_empty() && state.txs_to_request.is_available() {
             return;
         }
 
         // Request queued objects from the peer. Only request up to VECTORS_MAX_COUNT objects at a time.
         let num_blocks = state.blocks_to_request.len().min(Self::REQUEST_VECTORS_MAX);
-        let num_txs = state.txs_to_request.len().min(Self::REQUEST_VECTORS_MAX - num_blocks);
+        let num_txs = Self::REQUEST_VECTORS_MAX - num_blocks; // `dequeue_multi` takes care of the above comparison
 
         let mut vectors = Vec::new();
-        for vector in state.blocks_to_request.drain(..num_blocks) {
+        for vector in state.blocks_to_request.dequeue_multi(num_blocks) {
             state.objects_in_flight.insert(vector.clone());
             vectors.push(vector);
         }
-        for vector in state.txs_to_request.drain(..num_txs) {
+        for vector in state.txs_to_request.dequeue_multi(num_txs) {
             state.objects_in_flight.insert(vector.clone());
             vectors.push(vector);
         }
@@ -519,7 +534,7 @@ impl InventoryAgent {
         // TODO objects_that_flew
 
         // If there are more objects to request, request them.
-        if !state.blocks_to_request.is_empty() || !state.txs_to_request.is_empty() {
+        if !state.blocks_to_request.is_empty() || !state.txs_to_request.is_available() {
             self.request_vectors(&mut *state);
         } else {
             // Give up write lock before notifying.

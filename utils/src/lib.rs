@@ -22,3 +22,5 @@ pub mod iterators;
 pub mod mutable_once;
 #[cfg(feature = "time")]
 pub mod time;
+#[cfg(feature = "throttled-queue")]
+pub mod throttled_queue;

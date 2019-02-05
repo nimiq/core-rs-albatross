@@ -11,6 +11,7 @@ extern crate nimiq_network as network;
 extern crate nimiq_database as database;
 extern crate nimiq_hash as hash;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_collections as collections;
 
 pub mod consensus;
 pub mod consensus_agent;

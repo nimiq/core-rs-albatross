@@ -6,3 +6,5 @@ pub mod merkle;
 pub mod observer;
 #[cfg(feature = "iterators")]
 pub mod iterators;
+#[cfg(feature = "throttled-queue")]
+pub mod throttled_queue;
