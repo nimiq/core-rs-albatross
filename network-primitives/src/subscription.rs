@@ -1,7 +1,8 @@
 use beserial::{Deserialize, Serialize, ReadBytesExt, WriteBytesExt, SerializingError};
 use keys::Address;
-
-
+use primitives::block::Block;
+use primitives::transaction::Transaction;
+use primitives::coin::Coin;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -17,8 +18,8 @@ pub enum SubscriptionType {
 pub enum Subscription {
     None,
     Any,
-    Addresses(Vec<Address>),
-    MinFee(u64),
+    Addresses(Vec<Address>), // TODO: Use a HashSet here
+    MinFee(Coin),
 }
 
 
@@ -29,6 +30,28 @@ impl Subscription {
             Subscription::Any => SubscriptionType::Any,
             Subscription::Addresses(_) => SubscriptionType::Addresses,
             Subscription::MinFee(_) => SubscriptionType::MinFee
+        }
+    }
+
+    pub fn matches_block(&self, block: Block) -> bool {
+        match self {
+            Subscription::None => false,
+            _ => true
+        }
+    }
+
+    pub fn matches_transaction(&self, transaction: Transaction) -> bool {
+        match self {
+            Subscription::None => false,
+            Subscription::Any => true,
+            Subscription::Addresses(addresses) => addresses.contains(&transaction.sender),
+            Subscription::MinFee(min_fee) => {
+                // TODO: Unchecked type conversion
+                // NOTE: If the fee for this block overflows an u64, it's definetly worth mining it ;)
+                min_fee.checked_factor(transaction.serialized_size() as u64)
+                    .map(|block_fee| transaction.fee >= block_fee)
+                    .unwrap_or(true)
+            }
         }
     }
 }
@@ -57,7 +80,7 @@ impl Deserialize for Subscription {
             },
 
             SubscriptionType::MinFee => {
-                let min_fee: u64 = Deserialize::deserialize(reader)?;
+                let min_fee: Coin = Deserialize::deserialize(reader)?;
                 Ok(Subscription::MinFee(min_fee))
             },
 

@@ -50,21 +50,14 @@ impl Deserialize for Coin {
 
 impl Coin {
     pub fn checked_add(self, rhs: Coin) -> Option<Coin> {
-        let value: u64 = match self.0.checked_add(rhs.0) {
-            Some(value) => value,
-            None => return None
-        };
-        return match value <= Coin::MAX_SAFE_VALUE {
-            true => Some(Coin(value)),
-            false => None
-        };
+        self.0.checked_add(rhs.0).map(|v| Coin(v))
     }
 
     pub fn checked_sub(self, rhs: Coin) -> Option<Coin> {
-        return match self.0.checked_sub(rhs.0) {
-            Some(value) => Some(Coin(value)),
-            None => None
-        };
+        self.0.checked_sub(rhs.0).map(|v| Coin(v))
     }
 
+    pub fn checked_factor(self, times: u64) -> Option<Coin> {
+        self.0.checked_mul(times).map(|v| Coin(v))
+    }
 }
