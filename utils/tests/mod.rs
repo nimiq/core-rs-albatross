@@ -8,3 +8,5 @@ pub mod observer;
 pub mod iterators;
 #[cfg(feature = "throttled-queue")]
 pub mod throttled_queue;
+#[cfg(feature = "rate-limit")]
+pub mod rate_limit;

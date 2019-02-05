@@ -14,8 +14,8 @@ pub struct ThrottledQueue<T>
     where T: Hash + Eq {
     queue: UniqueLinkedList<T>,
     max_size: Option<usize>,
-    max_at_once: usize,
-    allowance: usize,
+    max_allowance: usize,
+    allowance_per_interval: usize,
     allowance_interval: Duration,
     last_allowance: Instant,
     available_now: usize,
@@ -25,22 +25,22 @@ impl<T> ThrottledQueue<T>
     where T: Hash + Eq {
     /// Creates an empty `ThrottledQueue`.
     ///
-    /// * `max_at_once` - The total maximum of potentially available elements at any point in time.
-    /// * `allowance_interval` - The interval at which the number of potentially available elements will be increased by `allowance_num` to at most `max_at_once`.
-    /// * `allowance` - The allowance to increase the number of potentially available elements by at the given `allowance_interval`.
+    /// * `max_allowance` - The total maximum of potentially available elements at any point in time.
+    /// * `allowance_interval` - The interval at which the number of potentially available elements will be increased by `allowance_per_interval` to at most `max_allowance`.
+    /// * `allowance_per_interval` - The allowance to increase the number of potentially available elements by at the given `allowance_interval`.
     /// * `max_size` - This parameter can be used to limit the size of the queue. When exceeding this number, elements will be dequeued.
     ///
-    /// It will be enforced that `allowance` < `max_at_once`.
+    /// It will be enforced that `allowance` < `max_allowance`.
     #[inline]
-    pub fn new(max_at_once: usize, allowance_interval: Duration, allowance: usize, max_size: Option<usize>) -> Self {
+    pub fn new(max_allowance: usize, allowance_interval: Duration, allowance_per_interval: usize, max_size: Option<usize>) -> Self {
         ThrottledQueue {
             queue: UniqueLinkedList::new(),
             max_size,
-            max_at_once,
-            allowance: cmp::min(max_at_once, allowance),
+            max_allowance,
+            allowance_per_interval: cmp::min(max_allowance, allowance_per_interval),
             allowance_interval,
             last_allowance: Instant::now(),
-            available_now: max_at_once,
+            available_now: max_allowance,
         }
     }
 
@@ -58,7 +58,7 @@ impl<T> ThrottledQueue<T>
                 duration = left;
             }
             if num_intervals > 0 {
-                self.available_now = cmp::min(self.max_at_once, self.available_now + (num_intervals as usize) * self.allowance);
+                self.available_now = cmp::min(self.max_allowance, self.available_now + (num_intervals as usize) * self.allowance_per_interval);
             }
             self.last_allowance = now;
         }
