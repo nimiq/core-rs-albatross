@@ -3,6 +3,7 @@ use keys::Address;
 use primitives::block::Block;
 use primitives::transaction::Transaction;
 use primitives::coin::Coin;
+use std::collections::HashSet;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -18,7 +19,7 @@ pub enum SubscriptionType {
 pub enum Subscription {
     None,
     Any,
-    Addresses(Vec<Address>), // TODO: Use a HashSet here
+    Addresses(HashSet<Address>),
     MinFee(Coin),
 }
 
@@ -70,10 +71,10 @@ impl Deserialize for Subscription {
                 let num_addresses = (num_addresses as usize);
 
                 // parse addresses and push them into vector
-                let mut addresses = Vec::with_capacity(num_addresses);
+                let mut addresses = HashSet::with_capacity(num_addresses);
                 for i in 0..num_addresses {
                     let address: Address = Deserialize::deserialize(reader)?;
-                    addresses.push(address)
+                    addresses.insert(address);
                 }
 
                 Ok(Subscription::Addresses(addresses))
