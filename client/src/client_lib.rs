@@ -56,8 +56,6 @@ impl Future for ClientInitializeFuture {
     fn poll(&mut self) -> Poll<InitializedClient, ClientError> {
         // NOTE: This is practically Future::fuse, but this way the types are cleaner
         if !self.initialized {
-            // TODO: This is blocking! See https://docs.rs/futures/0.1.25/futures/future/trait.Future.html#required-methods
-            debug!("Initializing client");
             self.network.initialize();
             Ok(Async::Ready(InitializedClient { network: Arc::clone(&self.network) }))
         }
@@ -75,7 +73,6 @@ pub struct InitializedClient {
 
 impl InitializedClient {
     pub fn connect(mut self) -> ClientConnectFuture {
-        debug!("Returning ClientConnectFuture");
         ClientConnectFuture { network: Arc::clone(&self.network), initialized: false }
     }
 }
@@ -107,8 +104,6 @@ impl Future for ClientConnectFuture {
 
     fn poll(&mut self) -> Poll<ConnectedClient, ClientError> {
         if !self.initialized {
-            // TODO: This is blocking!
-            debug!("Connecting client");
             self.network.connect();
             Ok(Async::Ready(ConnectedClient { network: Arc::clone(&self.network) }))
         }
