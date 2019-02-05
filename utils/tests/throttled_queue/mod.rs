@@ -10,9 +10,12 @@ fn it_can_enqueue_dequeue() {
 
     queue.enqueue(1);
     queue.enqueue(2);
+    queue.enqueue(8);
+    queue.remove(&8);
     queue.enqueue(3);
     queue.enqueue(4);
 
+    assert_eq!(queue.len(), 4);
     assert_eq!(queue.dequeue(), Some(1));
     assert_eq!(queue.dequeue_multi(2), vec![2, 3]);
     assert!(queue.is_available());

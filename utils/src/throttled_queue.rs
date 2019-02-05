@@ -3,6 +3,8 @@ use std::time::Duration;
 use std::time::Instant;
 use std::cmp;
 use std::hash::Hash;
+use std::rc::Rc;
+use std::borrow::Borrow;
 
 /// A `ThrottledQueue` is a `Queue` that only allows unique elements and
 /// limits the number of elements that can be retrieved over a period of time.
@@ -90,6 +92,19 @@ impl<T> ThrottledQueue<T>
         }
 
         None
+    }
+
+    /// Removes and returns the element equal to the
+    /// given value if present, otherwise returns `None`.
+    pub fn remove<Q: ?Sized>(&mut self, x: &Q) -> Option<T>
+        where Rc<T>: Borrow<Q>, Q: Hash + Eq
+    {
+        self.queue.remove(x)
+    }
+
+    /// Returns the length of the queue.
+    pub fn len(&self) -> usize {
+        self.queue.len()
     }
 }
 

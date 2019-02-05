@@ -12,10 +12,12 @@ use mempool::Mempool;
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_primitives::subscription::Subscription;
+use primitives::block::Block;
+use primitives::transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
-use utils::timers::Timers;
 use utils::rate_limit::RateLimit;
+use utils::timers::Timers;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 
@@ -292,5 +294,18 @@ impl ConsensusAgent {
 
     fn on_get_blocks_timeout(&self) {
         self.peer.channel.close(CloseType::GetBlocksTimeout);
+    }
+
+    pub fn relay_block(&self, block: &Block) -> bool {
+        // Don't relay block if have not synced with the peer yet.
+        if !self.state.read().synced {
+            return false;
+        }
+
+        self.inv_agent.relay_block(block)
+    }
+
+    pub fn relay_transaction(&self, transaction: &Transaction) -> bool {
+        self.inv_agent.relay_transaction(transaction)
     }
 }

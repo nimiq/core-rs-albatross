@@ -26,6 +26,7 @@ use utils::{
 use utils::throttled_queue::ThrottledQueue;
 use collections::queue::Queue;
 use utils::rate_limit::RateLimit;
+use beserial::Serialize;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {
@@ -146,6 +147,54 @@ enum InventoryAgentTimer {
     GetDataThrottle,
     GetData,
     GetBlocks,
+    TxInvVectors,
+    FreeTxInvVectors,
+}
+
+#[derive(Debug, Clone)]
+struct FreeTransactionVector {
+    vector: InvVector,
+    serialized_size: usize,
+}
+
+impl FreeTransactionVector {
+    fn from_transaction(transaction: &Transaction) -> Self {
+        FreeTransactionVector {
+            vector: InvVector::from_transaction(transaction),
+            serialized_size: transaction.serialized_size(),
+        }
+    }
+
+    fn from_vector(vector: &InvVector, serialized_size: usize) -> Self {
+        FreeTransactionVector {
+            vector: vector.clone(),
+            serialized_size,
+        }
+    }
+}
+
+impl PartialEq for FreeTransactionVector {
+    fn eq(&self, other: &FreeTransactionVector) -> bool {
+        self.vector == other.vector
+    }
+
+    fn ne(&self, other: &FreeTransactionVector) -> bool {
+        self.vector != other.vector
+    }
+}
+
+impl Eq for FreeTransactionVector {}
+
+impl std::hash::Hash for FreeTransactionVector {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.vector, state);
+    }
+}
+
+impl From<FreeTransactionVector> for InvVector {
+    fn from(vector: FreeTransactionVector) -> Self {
+        vector.vector
+    }
 }
 
 struct InventoryAgentState {
@@ -160,11 +209,18 @@ struct InventoryAgentState {
     blocks_to_request: UniqueLinkedList<InvVector>,
     txs_to_request: ThrottledQueue<InvVector>,
 
+    /// Queue of transaction inv vectors waiting to be sent out.
+    waiting_tx_inv_vectors: ThrottledQueue<InvVector>,
+    /// Queue of "free" transaction inv vectors waiting to be sent out.
+    waiting_free_tx_inv_vectors: ThrottledQueue<FreeTransactionVector>,
+
     /// Objects that are currently being requested from the peer.
     objects_in_flight: HashSet<InvVector>,
 
     /// The rate limit for getblocks messages.
     get_blocks_limit: RateLimit,
+
+    remote_subscription: Subscription,
 }
 
 pub struct InventoryAgent {
@@ -180,21 +236,30 @@ pub struct InventoryAgent {
 }
 
 impl InventoryAgent {
+    /// Time to wait after the last received inv message before sending get-data.
     const REQUEST_THROTTLE: Duration = Duration::from_millis(500);
+    /// Maximum time to wait after sending out get-data or receiving the last object for this request.
     const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+    /// Number of InvVectors in invToRequest pool to automatically trigger a get-data request.
     const REQUEST_THRESHOLD: usize = 50;
     const REQUEST_VECTORS_MAX: usize = 1000;
     const GET_BLOCKS_VECTORS_MAX: u32 = 500;
     const KNOWN_OBJECTS_COUNT_MAX: usize = 40000;
+    /// Time interval to wait between sending out transactions.
     const TRANSACTION_RELAY_INTERVAL: Duration = Duration::from_millis(5000);
     const TRANSACTIONS_AT_ONCE: usize = 100;
     const TRANSACTIONS_PER_SECOND: usize = 10;
+    /// Time interval to wait between sending out "free" transactions.
     const FREE_TRANSACTION_RELAY_INTERVAL: Duration = Duration::from_millis(6000);
     const FREE_TRANSACTIONS_AT_ONCE: usize = 10;
     const FREE_TRANSACTIONS_PER_SECOND: usize = 1;
-    const TRANSACTION_REQUEST_THROTTLE: Duration = Duration::from_millis(1000);
+    /// Soft limit for the total size (bytes) of free transactions per relay interval.
+    const FREE_TRANSACTION_SIZE_PER_INTERVAL: usize = 15000; // ~100 legacy transactions
+    const TRANSACTION_THROTTLE: Duration = Duration::from_millis(1000);
     const REQUEST_TRANSACTIONS_WAITING_MAX: usize = 5000;
     const GET_BLOCKS_RATE_LIMIT: usize = 30; // per minute
+    /// Minimum fee per byte (sat/byte) such that a transaction is not considered free.
+    const TRANSACTION_RELAY_FEE_MIN: u64 = 1;
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
@@ -208,13 +273,29 @@ impl InventoryAgent {
                 blocks_to_request: UniqueLinkedList::new(),
                 txs_to_request: ThrottledQueue::new(
                     Self::TRANSACTIONS_AT_ONCE + Self::FREE_TRANSACTIONS_AT_ONCE,
-                    Self::TRANSACTION_REQUEST_THROTTLE,
+                    Self::TRANSACTION_THROTTLE,
                     Self::TRANSACTIONS_PER_SECOND + Self::FREE_TRANSACTIONS_PER_SECOND,
                     Some(Self::REQUEST_TRANSACTIONS_WAITING_MAX),
                 ),
+
+                waiting_tx_inv_vectors: ThrottledQueue::new(
+                    Self::TRANSACTIONS_AT_ONCE,
+                    Self::TRANSACTION_THROTTLE,
+                    Self::TRANSACTIONS_PER_SECOND,
+                    Some(Self::REQUEST_TRANSACTIONS_WAITING_MAX),
+                ),
+                waiting_free_tx_inv_vectors: ThrottledQueue::new(
+                    Self::FREE_TRANSACTIONS_AT_ONCE,
+                    Self::TRANSACTION_THROTTLE,
+                    Self::FREE_TRANSACTIONS_PER_SECOND,
+                    Some(Self::REQUEST_TRANSACTIONS_WAITING_MAX),
+                ),
+
                 objects_in_flight: HashSet::new(),
 
                 get_blocks_limit: RateLimit::new_per_minute(Self::GET_BLOCKS_RATE_LIMIT),
+
+                remote_subscription: Subscription::None,
             }),
             notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
@@ -256,10 +337,25 @@ impl InventoryAgent {
             Arc::downgrade(this),
             |this, _ | this.on_mempool()));
 
+        msg_notifier.subscribe.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, subscription: Subscription| this.on_subscribe(subscription)));
+
         let mut close_notifier = channel.close_notifier.write();
         close_notifier.register(weak_listener(
             Arc::downgrade(this),
             |this, _| this.on_close()));
+
+        let weak = Arc::downgrade(this);
+        this.timers.set_interval(InventoryAgentTimer::TxInvVectors, move || {
+            let this = upgrade_weak!(weak);
+            this.send_waiting_tx_inv_vectors();
+        }, Self::TRANSACTION_RELAY_INTERVAL);
+        let weak = Arc::downgrade(this);
+        this.timers.set_interval(InventoryAgentTimer::TxInvVectors, move || {
+            let this = upgrade_weak!(weak);
+            this.send_waiting_free_tx_inv_vectors();
+        }, Self::FREE_TRANSACTION_RELAY_INTERVAL);
     }
 
     pub fn get_blocks(&self, locators: Vec<Blake2bHash>, max_results: u16, timeout: Duration) {
@@ -285,6 +381,10 @@ impl InventoryAgent {
         self.peer.channel.send_or_close(Message::Subscribe(subscription));
     }
 
+    fn on_subscribe(&self, subscription: Subscription) {
+        self.state.write().remote_subscription = subscription;
+    }
+
     fn on_inv(&self, vectors: Vec<InvVector>) {
         let lock = self.mutex.lock();
 
@@ -292,6 +392,9 @@ impl InventoryAgent {
         let mut state = self.state.write();
         for vector in vectors.iter() {
             state.known_objects.insert(vector.clone());
+            state.waiting_tx_inv_vectors.remove(vector);
+            // Serialized size does not matter here due to the implementation of Hash and Eq.
+            state.waiting_free_tx_inv_vectors.remove(&FreeTransactionVector::from_vector(vector, 0));
         }
 
         // XXX Clear get_blocks timeout.
@@ -638,6 +741,101 @@ impl InventoryAgent {
         // Report any unknown objects to the sender.
         if !unknown_objects.is_empty() {
             self.peer.channel.send_or_close(Message::NotFound(unknown_objects));
+        }
+    }
+
+    pub fn relay_block(&self, block: &Block) -> bool {
+        // Only relay block if it matches the peer's subscription.
+        if !self.state.read().remote_subscription.matches_block(block) {
+            return false;
+        }
+
+        let vector = InvVector::from_block(block);
+
+        // Don't relay block to this peer if it already knows it.
+        if self.state.read().known_objects.contains(&vector) {
+            return false;
+        }
+
+        let mut state = self.state.write();
+        // Relay block to peer.
+        let mut vectors = state.waiting_tx_inv_vectors.dequeue_multi(InvVector::VECTORS_MAX_COUNT - 1);
+        vectors.insert(0, vector.clone());
+        self.peer.channel.send(Message::Inv(vectors));
+
+        // Assume that the peer knows this block now.
+        state.known_objects.insert(vector);
+
+        true
+    }
+
+    pub fn relay_transaction(&self, transaction: &Transaction) -> bool {
+        // Only relay transaction if it matches the peer's subscription.
+        if !self.state.read().remote_subscription.matches_transaction(transaction) {
+            return false;
+        }
+
+        let vector = InvVector::from_transaction(transaction);
+
+        // Don't relay transaction to this peer if it already knows it.
+        if self.state.read().known_objects.contains(&vector) {
+            return false;
+        }
+
+        let mut state = self.state.write();
+        if (transaction.fee_per_byte() as u64) < Self::TRANSACTION_RELAY_FEE_MIN {
+            state.waiting_free_tx_inv_vectors.enqueue(
+                FreeTransactionVector::from_vector(&vector, transaction.serialized_size())
+            );
+        } else {
+            state.waiting_tx_inv_vectors.enqueue(vector.clone());
+        }
+
+        // Assume that the peer knows this block now.
+        state.known_objects.insert(vector);
+
+        true
+    }
+
+    pub fn remove_transaction(&self, transaction: &Transaction) {
+        let vector = InvVector::from_transaction(transaction);
+        let mut state = self.state.write();
+
+        // Remove transaction from relay queues.
+        state.waiting_tx_inv_vectors.remove(&vector);
+        // Serialized size does not matter here due to the implementation of Eq and Hash.
+        state.waiting_free_tx_inv_vectors.remove(&FreeTransactionVector::from_vector(&vector, 0));
+    }
+
+    fn send_waiting_tx_inv_vectors(&self) {
+        let mut state = self.state.write();
+
+        let mut vectors = state.waiting_tx_inv_vectors.dequeue_multi(InvVector::VECTORS_MAX_COUNT);
+        let num_vectors = vectors.len();
+        if num_vectors > 0 {
+            self.peer.channel.send(Message::Inv(vectors));
+            debug!("[INV] Sent {} vectors to {:?}", num_vectors, self.peer.peer_address());
+        }
+    }
+
+    fn send_waiting_free_tx_inv_vectors(&self) {
+        let mut state = self.state.write();
+
+        let mut size: usize = 0;
+        let mut vectors = Vec::new();
+        while vectors.len() <= InvVector::VECTORS_MAX_COUNT && size < Self::FREE_TRANSACTIONS_PER_SECOND {
+            if let Some(vector) = state.waiting_free_tx_inv_vectors.dequeue() {
+                size += vector.serialized_size;
+                vectors.push(InvVector::from(vector));
+            } else {
+                break;
+            }
+        }
+
+        let num_vectors = vectors.len();
+        if num_vectors > 0 {
+            self.peer.channel.send(Message::Inv(vectors));
+            debug!("[INV] Sent {} vectors to {:?}", num_vectors, self.peer.peer_address());
         }
     }
 

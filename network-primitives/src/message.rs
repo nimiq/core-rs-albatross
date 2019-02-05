@@ -547,12 +547,18 @@ pub struct InvVector {
     pub hash: Blake2bHash,
 }
 impl InvVector {
+    pub const VECTORS_MAX_COUNT: usize = 1000;
+
     pub fn new(ty: InvVectorType, hash: Blake2bHash) -> Self {
         InvVector { ty, hash }
     }
 
     pub fn from_block(block: &Block) -> Self {
         Self::new(InvVectorType::Block, block.header.hash())
+    }
+
+    pub fn from_transaction(transaction: &Transaction) -> Self {
+        Self::new(InvVectorType::Transaction, transaction.hash())
     }
 }
 

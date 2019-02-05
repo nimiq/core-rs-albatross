@@ -5,12 +5,14 @@ use std::time::Duration;
 use parking_lot::{Mutex, RwLock};
 use rand::{Rng, rngs::OsRng};
 
-use blockchain::Blockchain;
+use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
-use mempool::Mempool;
+use hash::Blake2bHash;
+use mempool::{Mempool, MempoolEvent};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
+use primitives::transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::timers::Timers;
@@ -102,6 +104,25 @@ impl Consensus {
                 _ => {}
             }
         });
+
+        // Relay new (verified) transactions to peers.
+        let weak = Arc::downgrade(this);
+        this.mempool.notifier.write().register(move |e: &MempoolEvent| {
+            let this = upgrade_weak!(weak);
+            match e {
+                MempoolEvent::TransactionAdded(hash, transaction) => this.on_transaction_added(hash, transaction),
+                // TODO: Remove removed transactions
+                // => this.on_transaction_removed(transaction),
+                _ => {},
+            }
+        });
+
+        // Notify peers when our blockchain head changes.
+        let weak = Arc::downgrade(this);
+        this.blockchain.notifier.write().register(move |e: &BlockchainEvent| {
+            let this = upgrade_weak!(weak);
+            this.on_blockchain_event(e);
+        });
     }
 
     fn on_peer_joined(&self, peer: Peer) {
@@ -154,6 +175,47 @@ impl Consensus {
         }
 
         self.sync_blockchain();
+    }
+
+    fn on_blockchain_event(&self, event: &BlockchainEvent) {
+        let state = self.state.read();
+
+        // Don't relay transactions if we are not synced yet.
+        if !state.established {
+            return;
+        }
+
+        let blocks;
+        match event {
+            BlockchainEvent::Extended(_, ref block) => {
+                blocks = vec![block.as_ref()];
+            },
+            BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
+                blocks = adopted_blocks.iter().map(|(_, block)| block).collect();
+            },
+            _ => {
+                return;
+            },
+        }
+
+        for agent in state.agents.values() {
+            for &block in blocks.iter() {
+                agent.read().relay_block(block);
+            }
+        }
+    }
+
+    fn on_transaction_added(&self, hash: &Blake2bHash, transaction: &Arc<Transaction>) {
+        let state = self.state.read();
+
+        // Don't relay transactions if we are not synced yet.
+        if !state.established {
+            return;
+        }
+
+        for agent in state.agents.values() {
+            agent.read().relay_transaction(transaction.as_ref());
+        }
     }
 
     fn sync_blockchain(&self) {
