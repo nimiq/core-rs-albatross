@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 pub const DEFAULT_NETWORK_PORT: u16 = 8443;
 pub const DEFAULT_REVERSE_PROXY_PORT: u16 = 8444;
-
+pub const DEFAULT_RPC_PORT: u16 = 8648;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -165,7 +165,7 @@ impl Default for MiningPoolMode {
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RpcServerSettings {
-    pub port: u16,
+    pub port: Option<u16>,
     #[serde(default)]
     pub corsdomain: Vec<String>,
     #[serde(default)]

@@ -33,13 +33,15 @@ use primitives::block::{Block, Difficulty};
 use primitives::networks::NetworkId;
 use primitives::transaction::Transaction;
 
-mod jsonrpc;
+pub mod jsonrpc;
 
+/*
 lazy_static! {
     static ref env: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, Flags::empty()).unwrap(); //VolatileEnvironment::new(10).unwrap();
 }
+*/
 
-struct JsonRpcHandler {
+pub struct JsonRpcHandler {
     consensus: Arc<Consensus>,
     consensus_state: &'static str
 }
@@ -130,6 +132,23 @@ impl jsonrpc::Handler for JsonRpcHandler {
     }
 }
 
+/*
+TODO: Need to know the return type of Sevrer::bind().serve()
+pub fn rpc_server<F>(consensus: Arc<Consensus>) -> ()
+    where F: (Fn() -> JsonRpcHandler)
+{
+    let x: Server<AddrIncoming, F> = Server::bind(&([127, 0, 0, 1], rpc_port).into())
+        .serve(move || {
+            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&rpc_consensus)))
+        });
+    // Server<AddrIncoming, [closure@rpc-server/src/lib.rs:137:16: 139:10]>
+    // Server<AddrIncoming, Fn
+}*/
+pub fn rpc_server(consensus: Arc<Consensus>) -> ! {
+    unimplemented!()
+}
+
+/*
 // TODO replace by nimiq library?
 pub fn main() {
     pretty_env_logger::try_init().unwrap_or(());
@@ -185,3 +204,4 @@ impl<S> Future for Runner<S> where S: Future, S::Item: std::fmt::Debug, S::Error
         self.server.poll()
     }
 }
+*/
