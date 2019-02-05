@@ -15,6 +15,7 @@ use network_primitives::subscription::Subscription;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::timers::Timers;
+use utils::rate_limit::RateLimit;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 

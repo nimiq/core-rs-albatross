@@ -11,6 +11,8 @@ pub struct RateLimit {
 }
 
 impl RateLimit {
+    const ONE_MINUTE: Duration = Duration::from_secs(60);
+
     /// Creates a `RateLimit`.
     ///
     /// * `allowed_occurrences` - The limit on occurrences of an action within the defined `time_period`.
@@ -25,6 +27,14 @@ impl RateLimit {
         }
     }
 
+    /// Creates a `RateLimit` with a `time_period` of one minute.
+    ///
+    /// * `allowed_occurrences` - The limit on occurrences of an action within the defined `time_period`.
+    #[inline]
+    pub fn new_per_minute(allowed_occurrences: usize) -> Self {
+        Self::new(allowed_occurrences, Self::ONE_MINUTE)
+    }
+
     /// Internally reset counter if necessary.
     #[inline]
     fn check_reset(&mut self) {
@@ -33,6 +43,12 @@ impl RateLimit {
             self.last_reset = now;
             self.counter = 0;
         }
+    }
+
+    /// Determine whether a single action is still within the current rate limit.
+    #[inline]
+    pub fn note_single(&mut self) -> bool {
+        self.note(1)
     }
 
     /// Determine whether `number` actions are still within the current rate limit.

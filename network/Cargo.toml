@@ -20,7 +20,7 @@ nimiq-keys = { path = "../keys" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
-nimiq-utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking"] }
+nimiq-utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit"] }
 atomic = "0.4"
 parking_lot = "0.6"
 rand = "0.6.4"

@@ -5,10 +5,10 @@ use nimiq_utils::rate_limit::*;
 
 #[test]
 fn it_limits_access() {
-    let mut limit = RateLimit::new(3, Duration::from_secs(1000));
+    let mut limit = RateLimit::new_per_minute(3);
 
     assert_eq!(limit.num_allowed(), 3);
-    assert!(limit.note(1));
+    assert!(limit.note_single());
     assert_eq!(limit.num_allowed(), 2);
     assert!(limit.note(2));
     assert_eq!(limit.num_allowed(), 0);
@@ -24,7 +24,7 @@ fn it_frees_limit_after_time() {
     assert_eq!(limit.num_allowed(), 1);
     assert!(limit.note(1));
     assert_eq!(limit.num_allowed(), 0);
-    assert!(!limit.note(1));
+    assert!(!limit.note_single());
 
     sleep(time_period);
 

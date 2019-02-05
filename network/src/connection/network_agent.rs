@@ -18,6 +18,7 @@ use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use utils::time::systemtime_to_timestamp;
 use utils::timers::Timers;
 use utils::unique_ptr::UniquePtr;
+use utils::rate_limit::RateLimit;
 
 use crate::address::peer_address_book::PeerAddressBook;
 use crate::connection::close_type::CloseType;
@@ -46,6 +47,7 @@ pub struct NetworkAgent {
 
     peer_challenge_nonce: Option<ChallengeNonce>,
     address_request: Option<AddressRequest>,
+    get_address_limit: RateLimit,
 
     challenge_nonce: ChallengeNonce,
 
@@ -104,6 +106,7 @@ impl NetworkAgent {
 
             peer_challenge_nonce: None,
             address_request: None,
+            get_address_limit: RateLimit::new_per_minute(Self::GETADDR_RATE_LIMIT),
 
             challenge_nonce: ChallengeNonce::generate(),
 
@@ -482,7 +485,10 @@ impl NetworkAgent {
             return;
         }
 
-        // TODO Rate limiting
+        if !self.get_address_limit.note_single() {
+            warn!("Rejecting GetAddr message - rate limit exceeded");
+            return;
+        }
 
         // Find addresses that match the given protocolMask & serviceMask.
         let num_results = cmp::min(msg.max_results, Self::MAX_ADDR_PER_REQUEST);

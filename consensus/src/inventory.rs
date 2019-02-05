@@ -25,6 +25,7 @@ use utils::{
 };
 use utils::throttled_queue::ThrottledQueue;
 use collections::queue::Queue;
+use utils::rate_limit::RateLimit;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {
@@ -161,6 +162,9 @@ struct InventoryAgentState {
 
     /// Objects that are currently being requested from the peer.
     objects_in_flight: HashSet<InvVector>,
+
+    /// The rate limit for getblocks messages.
+    get_blocks_limit: RateLimit,
 }
 
 pub struct InventoryAgent {
@@ -190,6 +194,7 @@ impl InventoryAgent {
     const FREE_TRANSACTIONS_PER_SECOND: usize = 1;
     const TRANSACTION_REQUEST_THROTTLE: Duration = Duration::from_millis(1000);
     const REQUEST_TRANSACTIONS_WAITING_MAX: usize = 5000;
+    const GET_BLOCKS_RATE_LIMIT: usize = 30; // per minute
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
@@ -208,6 +213,8 @@ impl InventoryAgent {
                     Some(Self::REQUEST_TRANSACTIONS_WAITING_MAX),
                 ),
                 objects_in_flight: HashSet::new(),
+
+                get_blocks_limit: RateLimit::new_per_minute(Self::GET_BLOCKS_RATE_LIMIT),
             }),
             notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
@@ -544,6 +551,14 @@ impl InventoryAgent {
     }
 
     fn on_get_blocks(&self, msg: GetBlocksMessage) {
+        {
+            let mut state = self.state.write();
+            if !state.get_blocks_limit.note_single() {
+                warn!("Rejecting GetBlocks message - rate limit exceeded");
+                return;
+            }
+        }
+
         trace!("[GETBLOCKS] {} block locators max_inv_size {} received from {}", msg.locators.len(), msg.max_inv_size, self.peer.peer_address());
 
         // A peer has requested blocks. Check all requested block locator hashes
