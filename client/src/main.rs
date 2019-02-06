@@ -24,6 +24,10 @@ mod settings;
 mod client_lib;
 
 use std::error::Error;
+use std::sync::{Arc, Mutex};
+use std::net::IpAddr;
+use std::str::FromStr;
+
 use network::network_config::NetworkConfig;
 use primitives::networks::NetworkId;
 use consensus::consensus::Consensus;
@@ -32,10 +36,8 @@ use database::Environment;
 use database::lmdb::{LmdbEnvironment, open};
 use database::volatile::VolatileEnvironment;
 use futures::{Future, future};
-use std::sync::Arc;
 
 use crate::client_lib::{initialize, ClientInitializeFuture, ClientConnectFuture, ClientError};
-
 use crate::settings::Settings;
 use crate::settings as s;
 
@@ -118,22 +120,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     let consensus = Consensus::new(&env, network_id, network_config);
     info!("Blockchain state: height={}, head={}", consensus.blockchain.height(), consensus.blockchain.head_hash());
 
+    // Additional futures we want to run.
+    let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
+
     // start RPC server if enabled
-    /*#[cfg(feature = "rpc-server")] {
+    #[cfg(feature = "rpc-server")] {
         let rpc_server = settings.rpc_server.map(|rpc_settings| {
-            let rpc_port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
-            info!("Starting RPC server listening on port {}", rpc_port);
-            /* TODO: Fix `rpc_server` method
-            rpc_server(Arc::clone(&consensus))
-                .map_err(|e| {
-                    error!("server error: {}", e);
-                });
-            */
-            None
+            // TODO: Replace with parsing from config file
+            let ip = IpAddr::from_str("127.0.0.1").unwrap();
+            let port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
+            info!("Starting RPC server listening on port {}", port);
+            other_futures.push(rpc_server(Arc::clone(&consensus), ip, port))
         });
-    }*/
+    }
+    // If the RPC server is enabled, but the client is not compiled with it, inform the user
     #[cfg(not(feature = "rpc-server"))] {
-        // If the RPC server is enabled, but the client is not compiled with it, inform the user
         if settings.rpc_server.is_some() {
             info!("RPC server feature not enabled.");
         }
@@ -144,22 +145,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let client_future = initialize(Arc::clone(&consensus.network))
         .and_then(|mut client| client.connect());
 
-    // Additional futures we want to run.
-    let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()>>> = Vec::new();
-
-    // if available add the rpc-server to the client future
-    /*#[cfg(feature = "rpc-server")] {
-        if let rpc_server = Some(rpc_server) {
-            other_futures.push(rpc_server
-                .map(|_| info!("RPC server finished"))
-                .map_err(|e| error!("RPC server failed: {}", e)));
-        }
-    }*/
 
     tokio::run(
-        client_future
+        client_future // Run Nimiq client
             .map(|_| info!("Client finished")) // Map Result to None
             .map_err(|e| error!("Client failed: {}", e))
+            .and_then( move |_| future::join_all(other_futures)) // Run other futures (e.g. RPC server)
+            .map(|_| info!("Other futures finished"))
     );
 
     Ok(())
