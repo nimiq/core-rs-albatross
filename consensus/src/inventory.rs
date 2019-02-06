@@ -574,7 +574,7 @@ impl InventoryAgent {
         }
 
         // Don't do anything if there are no objects queued to request.
-        if state.blocks_to_request.is_empty() && state.txs_to_request.is_available() {
+        if state.blocks_to_request.is_empty() && !state.txs_to_request.is_available() {
             return;
         }
 
@@ -644,7 +644,7 @@ impl InventoryAgent {
         // TODO objects_that_flew
 
         // If there are more objects to request, request them.
-        if !state.blocks_to_request.is_empty() || !state.txs_to_request.is_available() {
+        if !state.blocks_to_request.is_empty() || state.txs_to_request.is_available() {
             self.request_vectors(&mut *state);
         } else {
             // Give up write lock before notifying.
