@@ -5,28 +5,30 @@ extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 extern crate futures;
+extern crate tokio;
+#[macro_use]
+extern crate lazy_static;
+#[cfg(debug_assertions)]
+extern crate dotenv;
+
 extern crate nimiq_database as database;
 extern crate nimiq_network as network;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_primitives as primitives;
-extern crate tokio;
-#[macro_use]
-extern crate lazy_static;
-
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
+extern crate nimiq_lib as lib;
 
-
-#[cfg(debug_assertions)]
-extern crate dotenv;
 
 mod settings;
-mod client_lib;
+
 
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::net::IpAddr;
 use std::str::FromStr;
+
+use futures::{Future, future};
 
 use network::network_config::NetworkConfig;
 use primitives::networks::NetworkId;
@@ -35,15 +37,12 @@ use network::network_config::ReverseProxyConfig;
 use database::Environment;
 use database::lmdb::{LmdbEnvironment, open};
 use database::volatile::VolatileEnvironment;
-use futures::{Future, future};
-
-use crate::client_lib::{initialize, ClientInitializeFuture, ClientConnectFuture, ClientError};
-use crate::settings::Settings;
-use crate::settings as s;
-
-
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
+use lib::client::{initialize, ClientInitializeFuture, ClientConnectFuture, ClientError};
+
+use crate::settings::Settings;
+use crate::settings as s;
 
 
 
@@ -136,7 +135,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // If the RPC server is enabled, but the client is not compiled with it, inform the user
     #[cfg(not(feature = "rpc-server"))] {
         if settings.rpc_server.is_some() {
-            info!("RPC server feature not enabled.");
+            warn!("RPC server feature not enabled.");
         }
     }
 
