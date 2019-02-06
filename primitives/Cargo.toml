@@ -29,7 +29,7 @@ nimiq-utils = { path = "../utils", optional = true, features = ["merkle"] }
 
 [features]
 all = ["coin", "account", "block", "policy", "transaction", "networks"]
-coin = []
+coin = ["hex"]
 account = ["nimiq-keys", "coin", "nimiq-hash", "hex", "nimiq-macros", "log"]
 block = ["bigdecimal", "num-bigint", "nimiq-hash", "policy", "nimiq-utils", "account", "nimiq-keys", "transaction", "networks"]
 policy = ["bigdecimal", "num-bigint", "num-traits", "parking_lot", "lazy_static"]
