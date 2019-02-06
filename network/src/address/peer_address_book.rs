@@ -527,7 +527,7 @@ impl PeerAddressBook {
 
         let mut state = self.state.write();
         let mut peer_address_to_remove = None;
-        if let Some(info) = state.info_by_address.get(&peer_address) {
+        if let Some(info) = state.info_by_address.get_mut(&peer_address) {
 
             // TODO
             if let Some(best_route) = &info.signal_router.best_route {

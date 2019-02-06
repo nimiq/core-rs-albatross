@@ -1,8 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use network_primitives::address::peer_address::PeerAddress;
+use network_primitives::address::{
+    net_address::NetAddress,
+    peer_address::PeerAddress
+};
 use crate::connection::close_type::CloseType;
 use crate::peer_channel::PeerChannel;
 use network_primitives::protocol::Protocol;
@@ -17,6 +22,7 @@ pub struct PeerAddressInfo {
     pub ban_backoff: Duration,
 
     pub close_types: HashMap<CloseType, usize>,
+    pub added_by: HashSet<Arc<NetAddress>>,
 }
 
 impl PeerAddressInfo {
@@ -30,6 +36,7 @@ impl PeerAddressInfo {
             banned_until: None,
             ban_backoff: super::peer_address_book::INITIAL_FAILED_BACKOFF,
             close_types: HashMap::new(),
+            added_by: HashSet::new(),
         };
     }
 
@@ -69,22 +76,31 @@ pub enum PeerAddressState {
 }
 
 pub struct SignalRouter {
+    peer_address: Arc<PeerAddress>,
     pub best_route: Option<SignalRouteInfo>,
-    peer_address: Arc<PeerAddress>
+    routes: HashSet<SignalRouteInfo>
 }
 
 impl SignalRouter {
     pub fn new(peer_address: Arc<PeerAddress>) -> Self {
         return SignalRouter {
+            peer_address,
             best_route: None,
-            peer_address
+            routes: HashSet::new()
         };
     }
 
-    pub fn add_route(&mut self, signal_channel: Arc<PeerChannel>, distance: u8, timestamp: u64) -> bool {
-        let new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
+    /// Adds a new route and returns whether we have a new best route
+    pub fn add_route(&mut self, signal_channel: &PeerChannel, distance: u8, timestamp: u64) -> bool {
+        let mut new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
+        // SignalRouteInfo matches only on signal_channel, so this will get us the old route with the same channel
+        let old_route = self.routes.get(&new_route);
 
-        // TODO old route
+        if let Some(old_route) = old_route {
+            // Do not reset failed attempts.
+            new_route.failed_attempts = old_route.failed_attempts;
+        }
+        self.routes.replace(new_route.clone());
 
         let is_new_best = match &self.best_route {
             Some(route) => new_route.score() > route.score()
@@ -96,38 +112,76 @@ impl SignalRouter {
                 peer_addr_mut.distance = new_route.distance;
             }
             self.best_route = Some(new_route);
+            return true;
         }
 
         return false;
     }
 
-    pub fn delete_best_route(&self) {
-        unimplemented!()
+    pub fn delete_best_route(&mut self) {
+        if let Some(best_route) = &self.best_route {
+            self.delete_route(&best_route.signal_channel.clone());
+        }
     }
 
-    pub fn delete_route(&self, signal_channel: Arc<PeerChannel>) {
-        unimplemented!()
+    pub fn delete_route(&mut self, signal_channel: &PeerChannel) {
+        let route = SignalRouteInfo::new(signal_channel, 0, 0); // Equality is determined by comparing signal_channel only
+        self.routes.remove(&route);
+        if let Some(best_route) = &self.best_route {
+            if *best_route == route {
+                self.update_best_route();
+            }
+        }
     }
 
     pub fn delete_all_routes(&mut self) {
         self.best_route = None;
-        // TODO
+        self.routes.clear();
     }
 
     pub fn has_route(&self) -> bool {
-        unimplemented!()
+        !self.routes.is_empty()
+    }
+
+    pub fn update_best_route(&mut self) {
+        let mut best_route: Option<SignalRouteInfo> = None;
+
+        // Choose the route with minimal distance and maximal timestamp.
+        for route in self.routes.iter() {
+            match best_route {
+                Some(ref mut best_route) => {
+                    if route.score() > best_route.score() ||
+                     (route.score() == best_route.score() && route.timestamp > best_route.timestamp) {
+                        *best_route = route.clone()
+                    }
+                },
+                None => best_route = Some(route.clone()),
+            }
+        }
+        self.best_route = best_route;
+
+        let mut distance = super::peer_address_book::MAX_DISTANCE + 1;
+        if let Some(ref best_route) = self.best_route {
+            distance = best_route.distance;
+        }
+
+        if let Some(peer_address) = Arc::get_mut(&mut self.peer_address) {
+            peer_address.distance = distance;
+        }
     }
 }
 
+#[derive(Clone)]
 pub struct SignalRouteInfo {
     failed_attempts: u32,
     pub timestamp: u64,
-    pub signal_channel: Arc<PeerChannel>,
+    pub signal_channel: PeerChannel,
     distance: u8
 }
 
 impl SignalRouteInfo {
-    pub fn new(signal_channel: Arc<PeerChannel>, distance: u8, timestamp: u64) -> Self {
+    pub fn new(signal_channel: &PeerChannel, distance: u8, timestamp: u64) -> Self {
+        let signal_channel = signal_channel.clone();
         return SignalRouteInfo {
             failed_attempts: 0,
             timestamp,
@@ -138,5 +192,23 @@ impl SignalRouteInfo {
 
     pub fn score(&self) -> u32 {
         ((super::peer_address_book::MAX_DISTANCE - self.distance) / 2) as u32 * (1 - self.failed_attempts / super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC)
+    }
+}
+
+impl PartialEq for SignalRouteInfo {
+    fn eq(&self, other: &SignalRouteInfo) -> bool {
+        // We consider signal route infos to be equal if their signal_channel is equal
+        return self.signal_channel == other.signal_channel
+            /* failed_attempts is ignored */
+            /* timestamp is ignored */
+            /* distance is ignored */;
+    }
+}
+
+impl Eq for SignalRouteInfo {}
+
+impl Hash for SignalRouteInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.signal_channel.hash(state);
     }
 }
