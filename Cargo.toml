@@ -19,4 +19,5 @@ members = [
     "network",
     "client",
     "rpc-server",
+    "lib",
 ]
