@@ -1,7 +1,7 @@
 [package]
 name = "nimiq-client"
 version = "0.1.0"
-authors = ["Janosch Gräf <janosch.graef@cispa.saarland>", "The Nimiq Core Development Team <info@nimiq.com>"]
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 description = "Nimiq's Rust client"
 homepage = "https://nimiq.com"
@@ -26,3 +26,11 @@ nimiq-consensus = { path = "../consensus" }
 nimiq-primitives = { path = "../primitives" }
 tokio = "0.1"
 lazy_static = "1.0"
+
+nimiq-rpc-server = { path = "../rpc-server", optional = true }
+hyper = { version = "0.12.19", optional = true }
+
+
+[features]
+default = ["rpc-server"]
+rpc-server = ["nimiq-rpc-server", "hyper"]

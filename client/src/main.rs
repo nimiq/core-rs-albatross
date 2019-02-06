@@ -13,30 +13,37 @@ extern crate tokio;
 #[macro_use]
 extern crate lazy_static;
 
+#[cfg(feature = "rpc-server")]
+extern crate nimiq_rpc_server as rpc_server;
+
 
 #[cfg(debug_assertions)]
 extern crate dotenv;
 
 mod settings;
+mod client_lib;
 
-use std::path::Path;
 use std::error::Error;
-use std::sync::Arc;
-
-use futures::Async;
-use futures::future::Future;
+use std::sync::{Arc, Mutex};
+use std::net::IpAddr;
+use std::str::FromStr;
 
 use network::network_config::NetworkConfig;
 use primitives::networks::NetworkId;
 use consensus::consensus::Consensus;
-use network::network::Network;
 use network::network_config::ReverseProxyConfig;
 use database::Environment;
 use database::lmdb::{LmdbEnvironment, open};
 use database::volatile::VolatileEnvironment;
+use futures::{Future, future};
 
+use crate::client_lib::{initialize, ClientInitializeFuture, ClientConnectFuture, ClientError};
 use crate::settings::Settings;
 use crate::settings as s;
+
+
+#[cfg(feature = "rpc-server")]
+use rpc_server::rpc_server;
 
 
 
@@ -113,30 +120,39 @@ fn main() -> Result<(), Box<dyn Error>> {
     let consensus = Consensus::new(&env, network_id, network_config);
     info!("Blockchain state: height={}, head={}", consensus.blockchain.height(), consensus.blockchain.head_hash());
 
-    tokio::run(Runner {
-        network: consensus.network.clone(),
-        initialized: false,
-    });
+    // Additional futures we want to run.
+    let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
+
+    // start RPC server if enabled
+    #[cfg(feature = "rpc-server")] {
+        let rpc_server = settings.rpc_server.map(|rpc_settings| {
+            // TODO: Replace with parsing from config file
+            let ip = IpAddr::from_str("127.0.0.1").unwrap();
+            let port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
+            info!("Starting RPC server listening on port {}", port);
+            other_futures.push(rpc_server(Arc::clone(&consensus), ip, port))
+        });
+    }
+    // If the RPC server is enabled, but the client is not compiled with it, inform the user
+    #[cfg(not(feature = "rpc-server"))] {
+        if settings.rpc_server.is_some() {
+            info!("RPC server feature not enabled.");
+        }
+    }
+
+    // Setup client future to initialize and connect
+    // TODO: We might ass well pass an Arc of the whole consensus
+    let client_future = initialize(Arc::clone(&consensus.network))
+        .and_then(|mut client| client.connect());
+
+
+    tokio::run(
+        client_future // Run Nimiq client
+            .map(|_| info!("Client finished")) // Map Result to None
+            .map_err(|e| error!("Client failed: {}", e))
+            .and_then( move |_| future::join_all(other_futures)) // Run other futures (e.g. RPC server)
+            .map(|_| info!("Other futures finished"))
+    );
 
     Ok(())
-}
-
-
-pub struct Runner {
-    network: Arc<Network>,
-    initialized: bool,
-}
-
-impl Future for Runner {
-    type Item = ();
-    type Error = ();
-
-    fn poll(&mut self) -> Result<Async<<Self as Future>::Item>, <Self as Future>::Error> {
-        if !self.initialized {
-            self.network.initialize();
-            self.network.connect();
-            self.initialized = true;
-        }
-        Ok(Async::Ready(()))
-    }
 }

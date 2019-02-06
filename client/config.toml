@@ -16,3 +16,6 @@ network = "test"
 
 [log]
 level = "verbose"
+
+[rpcServer]
+port = 8648

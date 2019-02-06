@@ -15,6 +15,8 @@ extern crate nimiq_primitives as primitives;
 
 use std::str::FromStr;
 use std::sync::Arc;
+use std::error::Error;
+use std::net::{SocketAddr, IpAddr};
 
 use futures::{Async, future::Future, stream::Stream};
 use hyper::Server;
@@ -33,13 +35,10 @@ use primitives::block::{Block, Difficulty};
 use primitives::networks::NetworkId;
 use primitives::transaction::Transaction;
 
-mod jsonrpc;
+pub mod jsonrpc;
 
-lazy_static! {
-    static ref env: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, Flags::empty()).unwrap(); //VolatileEnvironment::new(10).unwrap();
-}
 
-struct JsonRpcHandler {
+pub struct JsonRpcHandler {
     consensus: Arc<Consensus>,
     consensus_state: &'static str
 }
@@ -130,58 +129,11 @@ impl jsonrpc::Handler for JsonRpcHandler {
     }
 }
 
-// TODO replace by nimiq library?
-pub fn main() {
-    pretty_env_logger::try_init().unwrap_or(());
 
-    let network_id = NetworkId::Main;
-
-    let mut network_config = NetworkConfig::new_ws_network_config(
-        "test.vcap.me".to_string(),
-        13337,
-        None,
-        None
-    );
-    network_config.init_persistent();
-
-    info!("Nimiq Core starting: network={:?}, peer_address={}", network_id, network_config.peer_address());
-
-    let consensus = Consensus::new(&env, network_id, network_config);
-
-    info!("Blockchain state: height={}, head={}", consensus.blockchain.height(), consensus.blockchain.head_hash());
-
-    let inner_consensus = Arc::clone(&consensus);
-    let server = Server::bind(&([127, 0, 0, 1], 8648).into())
+pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16) -> Box<dyn Future<Item=(), Error=()> + Send + Sync> {
+    Box::new(Server::bind(&SocketAddr::new(ip, port))
         .serve(move || {
-            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&inner_consensus)))
+            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&consensus)))
         })
-        .map_err(|e| {
-            error!("server error: {}", e);
-        });
-
-    tokio::run(Runner {
-        network: consensus.network.clone(),
-        initialized: false,
-        server,
-    });
-}
-
-pub struct Runner<S> where S: Future {
-    network: Arc<Network>,
-    initialized: bool,
-    server: S,
-}
-
-impl<S> Future for Runner<S> where S: Future, S::Item: std::fmt::Debug, S::Error: std::fmt::Debug {
-    type Item = S::Item;
-    type Error = S::Error;
-
-    fn poll(&mut self) -> Result<Async<<Self as Future>::Item>, <Self as Future>::Error> {
-        if !self.initialized {
-            self.network.initialize();
-            self.network.connect();
-            self.initialized = true;
-        }
-        self.server.poll()
-    }
+        .map_err(|e| error!("RPC server failed: {}", e))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
 }
