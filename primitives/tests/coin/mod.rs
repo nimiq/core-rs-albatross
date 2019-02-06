@@ -1,7 +1,8 @@
 extern crate hex;
 
 use beserial::{Serialize, Deserialize, SerializingError};
-use primitives::coin::Coin;
+use primitives::coin::{Coin, CoinParseError};
+use std::str::FromStr;
 
 
 struct NonFailingTest {
@@ -65,4 +66,173 @@ fn test_deserialize_out_of_bounds() {
             }
         }
     }
+}
+
+#[test]
+fn test_format() {
+    let s = format!("{}", Coin::from(123456789u64));
+    assert_eq!("1234.56789", s);
+}
+
+#[test]
+fn test_format_int_zero() {
+    let s = format!("{}", Coin::from(56789u64));
+    assert_eq!("0.56789", s);
+}
+
+#[test]
+fn test_format_frac_zero() {
+    let s = format!("{}", Coin::from(123400000u64));
+    assert_eq!("1234", s);
+}
+
+#[test]
+fn test_format_zero() {
+    let s = format!("{}", Coin::from(0u64));
+    assert_eq!("0", s);
+}
+
+
+
+
+#[test]
+fn test_parse_valid_one_part() {
+    let coin = Coin::from_str("1234").unwrap();
+    assert_eq!(Coin::from(123400000), coin);
+}
+
+#[test]
+fn test_parse_valid_two_parts() {
+    let coin = Coin::from_str("1234.56789").unwrap();
+    assert_eq!(Coin::from(123456789), coin);
+}
+
+#[test]
+fn test_parse_zero1() {
+    let coin = Coin::from_str("0").unwrap();
+    assert_eq!(Coin::from(0), coin);
+}
+
+#[test]
+fn test_parse_zero2() {
+    let coin = Coin::from_str("0.0").unwrap();
+    assert_eq!(Coin::from(0), coin);
+}
+
+#[test]
+fn test_parse_zero3() {
+    let coin = Coin::from_str("0000.0000").unwrap();
+    assert_eq!(Coin::from(0), coin);
+}
+
+#[test]
+fn test_parse_empty_string() {
+    let coin = Coin::from_str("");
+    match coin {
+        Ok(_) => assert!(false, "Expected error"),
+        Err(e) => match e {
+            CoinParseError::InvalidString => (),
+            _ => assert!(false, "Expected CoinParseError::InvalidString")
+        }
+    }
+}
+
+#[test]
+fn test_parse_too_many_dots() {
+    let coin = Coin::from_str("1234.456.789");
+    match coin {
+        Ok(_) => assert!(false, "Expected error"),
+        Err(e) => match e {
+            CoinParseError::InvalidString => (),
+            _ => assert!(false, "Expected CoinParseError::InvalidString")
+        }
+    }
+}
+
+#[test]
+fn test_parse_too_many_frac_digits() {
+    let coin = Coin::from_str("123.456789");
+    match coin {
+        Ok(_) => assert!(false, "Expected error"),
+        Err(e) => match e {
+            CoinParseError::TooManyFractionalDigits => (),
+            _ => assert!(false, "Expected CoinParseError::TooManyFractionalDigits")
+        }
+    }
+}
+
+#[test]
+// NOTE: This is open for discussion, if `1234.56789000` is a value amount of NIM
+// I don't think so - Janosch
+fn test_parse_frac_more_zeros() {
+    let coin = Coin::from_str("1234.56789000");
+    match &coin {
+        Err(e) => { println!("{:#}", e); },
+        _ => ()
+    };
+
+    assert!(coin.is_err());
+}
+
+#[test]
+fn test_int_part_overflow() {
+    let coin = Coin::from_str("900719925474");
+    match coin {
+        Ok(_) => assert!(false, "Expected error"),
+        Err(e) => match e {
+            CoinParseError::Overflow => (),
+            _ => assert!(false, "Expected CoinParseError::Overflow")
+        }
+    }
+}
+
+
+// Max safe value in fractional format: 90071992547.40991
+#[test]
+fn test_frac_part_overflow() {
+    let coin = Coin::from_str("90071992547.40992");
+    match coin {
+        Ok(_) => assert!(false, "Expected error"),
+        Err(e) => {
+            match e {
+                CoinParseError::Overflow => (),
+                _ => assert!(false, "Expected CoinParseError::Overflow")
+            }
+        }
+    }
+}
+
+#[test]
+fn test_max_value() {
+    let coin = Coin::from_str("90071992547.40991").unwrap();
+    assert_eq!(Coin::from(9007199254740991u64), coin)
+}
+
+#[test]
+fn test_empty_int_part() {
+    let coin = Coin::from_str(".56789");
+    match coin {
+        Ok(_) => assert!(false, "Expected error"),
+        Err(e) => match e {
+            CoinParseError::InvalidString => (),
+            _ => assert!(false, "Expected CoinParseError::InvalidString")
+        }
+    }
+}
+
+#[test]
+fn test_empty_frac_part() {
+    let coin = Coin::from_str("1234.");
+    match coin {
+        Ok(_) => assert!(false, "Expected error"),
+        Err(e) => match e {
+            CoinParseError::InvalidString => (),
+            _ => assert!(false, "Expected CoinParseError::InvalidString")
+        }
+    }
+}
+
+#[test]
+fn test_integrity_frac_digits_and_lunas_per_coin() {
+    assert_eq!(10u64.pow(Coin::FRAC_DIGITS), Coin::LUNAS_PER_COIN);
 }
