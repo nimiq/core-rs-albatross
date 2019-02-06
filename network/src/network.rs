@@ -97,7 +97,7 @@ impl Network {
     }
 
     pub fn initialize(&self) {
-        self.addresses.initialize();
+        PeerAddressBook::initialize(&self.addresses);
         self.connections.initialize();
     }
 

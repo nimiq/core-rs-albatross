@@ -24,6 +24,7 @@ use network_primitives::protocol::Protocol;
 use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
 use utils::iterators::Alternate;
+use utils::observer::Notifier;
 use utils::time::systemtime_to_timestamp;
 use utils::timers::Timers;
 
@@ -120,9 +121,10 @@ impl PeerAddressBookState {
     }
 
     fn add_to_store(&mut self, info: PeerAddressInfo) {
-        // Index by peerId.
+        // Index by peer id.
         self.address_by_peer_id.insert(info.peer_address.peer_id.clone(), Arc::clone(&info.peer_address));
 
+        // Index by protocol.
         match info.peer_address.protocol() {
             Protocol::Ws => {
                 self.ws_addresses.insert(Arc::clone(&info.peer_address));
@@ -136,6 +138,7 @@ impl PeerAddressBookState {
             Protocol::Dumb => { } // Dumb addresses are ignored.
         };
 
+        // Index peer address info by peer address.
         self.info_by_address.insert(Arc::clone(&info.peer_address), info);
     }
 
@@ -148,10 +151,17 @@ impl PeerAddressBookState {
             }
         }
 
-        // Delete from peerId index.
+        // Delete from peer id index.
         self.address_by_peer_id.remove(&peer_address.peer_id);
 
-        // TODO Delete from net_address index.
+        // Delete from net address index.
+        if let Some(info) = self.info_by_address.get_mut(&peer_address) {
+            for net_address in &info.added_by {
+                if let Some(addresses) = self.addresses_by_net_address.get_mut(&net_address) {
+                    addresses.remove(&peer_address);
+                }
+            }
+        }
 
         // Remove from protocol index.
         match peer_address.protocol() {
@@ -178,17 +188,34 @@ impl PeerAddressBookState {
         }
     }
 
+    /// Delete all RTC-only routes that are signalable over the given peer.
+    fn remove_by_signal_channel(&mut self, channel: &PeerChannel) {
+        // XXX inefficient linear scan
+        let addresses = self.address_iter()
+            .filter(|&peer_address| peer_address.protocol() == Protocol::Rtc)
+            .map(|peer_address| peer_address.clone())
+            .collect::<Vec<Arc<PeerAddress>>>();
+
+        for peer_address in addresses {
+            let info = self.info_by_address.get_mut(&peer_address).expect("Since this was returned by `address_iter()` it should never be None");
+            info.signal_router.delete_route(channel);
+            if !info.signal_router.has_route() {
+                self.remove_from_store(peer_address);
+            }
+        }
+    }
+
     fn track_by_net_address(&mut self, peer_address: Arc<PeerAddress>, net_address: Option<Arc<NetAddress>>) {
-        // TODO
-//        if let Some(net_address) = net_address {
-//            if let Some(info) = self.info_by_address.get_mut(&peer_address) {
-//                // TODO Store added_by
-//            }
-//
-//            self.addresses_by_net_address.entry(net_address.as_ref().clone())
-//                .or_insert_with(HashSet::new)
-//                .insert(peer_address);
-//        }
+        if let Some(net_address) = net_address {
+
+           self.addresses_by_net_address.entry(net_address.as_ref().clone())
+               .or_insert_with(HashSet::new)
+               .insert(peer_address.clone());
+
+            if let Some(info) = self.info_by_address.get_mut(&peer_address) {
+                info.added_by.insert(net_address);
+            }
+        }
     }
 
     fn ban(&mut self, peer_address: Arc<PeerAddress>, duration: Duration) {
@@ -230,11 +257,16 @@ pub struct PeerAddressBook {
     network_config: Arc<NetworkConfig>,
     timers: Timers<PeerAddressBookTimer>,
     change_lock: Mutex<()>,
+    pub notifier: Notifier<'static, PeerAddressBookEvent>,
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 enum PeerAddressBookTimer {
     Housekeeping,
+}
+
+pub enum PeerAddressBookEvent {
+    Added(Vec<PeerAddress>),
 }
 
 impl PeerAddressBook {
@@ -252,23 +284,29 @@ impl PeerAddressBook {
             network_config,
             timers: Timers::new(),
             change_lock: Mutex::new(()),
+            notifier: Notifier::new(),
         };
 
         // Init hardcoded seed peers.
         if let Some(network_info) = get_network_info(network_id) {
-            for peer_address in network_info.seed_peers.iter() {
-                this.add_single(None, peer_address.clone());
-            }
+            // TODO: This may be optimized by using Vec<Arc<>> instead of cloning
+            this.add(None, network_info.seed_peers.clone());
         }
+
+        // TODO: Collect more seed peers from seed lists.
+        // Wait at most PeerAddressBook.SEEDING_TIMEOUT for seeding.
+        // this.seeded.store(true, Ordering::Release);
 
         return this;
     }
 
-    /// Initialises necessary threads.
-    pub fn initialize(&self) {
+    /// Initialises async stuff.
+    pub fn initialize(this: &Arc<Self>) {
         // Setup housekeeping interval.
-        self.timers.set_interval(PeerAddressBookTimer::Housekeeping, || {
-            // TODO Call housekeeping.
+        let weak = Arc::downgrade(this);
+        this.timers.set_interval(PeerAddressBookTimer::Housekeeping, move || {
+            let this = upgrade_weak!(weak);
+            this.housekeeping();
         }, HOUSEKEEPING_INTERVAL);
     }
 
@@ -312,7 +350,10 @@ impl PeerAddressBook {
                         return false;
                     }
 
-                    // TODO Exclude RTC addresses that are already at MAX_DISTANCE.
+                    // Exclude RTC addresses that are already at MAX_DISTANCE.
+                    if peer_address.protocol() == Protocol::Rtc && peer_address.distance >= MAX_DISTANCE {
+                        return false;
+                    }
 
                     // Never return addresses that are too old.
                     if peer_address.exceeds_age() {
@@ -328,13 +369,16 @@ impl PeerAddressBook {
     }
 
     pub fn add(&self, channel: Option<&PeerChannel>, peer_addresses: Vec<PeerAddress>) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
 
+        let mut new_addresses: Vec<PeerAddress> = Vec::new();
         for peer_address in peer_addresses {
-            self.add_single(channel, peer_address);
+            if self.add_single(channel, peer_address.clone()) {
+                new_addresses.push(peer_address);
+            }
         }
 
-        // TODO Tell listeners that we have learned new addresses.
+        self.notifier.notify(PeerAddressBookEvent::Added(new_addresses));
     }
 
     fn add_single(&self, channel: Option<&PeerChannel>, peer_address: PeerAddress) -> bool {
@@ -344,11 +388,9 @@ impl PeerAddressBook {
         }
 
         // Ignore address if it is too old.
-        // Special case: allow seed addresses (timestamp == 0) via null channel.
+        // NOTE: `exceeds_age()` is always false for seed addresses
         if peer_address.exceeds_age() {
-            if let Some(_) = channel {
-                return false;
-            }
+            return false;
         }
 
         // Ignore address if its timestamp is too far in the future.
@@ -356,8 +398,23 @@ impl PeerAddressBook {
             return false;
         }
 
+        let mut addr_arc = Arc::new(peer_address);
+        let mut state = self.state.write();
         // Increment distance values of RTC addresses.
-        // TODO
+        if addr_arc.protocol() == Protocol::Rtc {
+            let peer_address = Arc::get_mut(&mut addr_arc).expect("We should always have access to peer address here");
+
+            peer_address.distance += 1;
+
+            // Ignore address if it exceeds max distance.
+            if peer_address.distance > MAX_DISTANCE {
+                // Drop any route to this peer over the current channel. This may prevent loops.
+                if let Some(info) = state.info_by_address.get_mut(&addr_arc) {
+                    info.signal_router.delete_route(channel.expect("RTC peers should always have a channel"));
+                }
+                return false;
+            }
+        }
 
         // Get the (reliable) netAddress of the peer that sent us this address.
         let net_address = channel.and_then(|channel| {
@@ -370,8 +427,6 @@ impl PeerAddressBook {
         });
 
         // Check if we already know this address.
-        let mut state = self.state.write();
-        let mut addr_arc = Arc::new(peer_address);
         let mut known_address: Option<Arc<PeerAddress>> = None;
         let mut changed = false;
         if let Some(info) = state.info_by_address.get_mut(&addr_arc) {
@@ -394,12 +449,15 @@ impl PeerAddressBook {
                 let peer_address = Arc::get_mut(&mut addr_arc);
                 if let Some(peer_address) = peer_address {
                     peer_address.net_address = info.peer_address.net_address.clone();
+                } else {
+                    unreachable!();
                 }
             }
 
             // Update address if it has a more recent timestamp.
             if info.peer_address.timestamp < addr_arc.timestamp {
                 info.peer_address = addr_arc.clone();
+                changed = true;
             }
         } else {
             // New address, check max book size.
@@ -426,9 +484,9 @@ impl PeerAddressBook {
 
             // If we know the IP address of the sender, check that we don't exceed the maximum number of addresses per IP.
             if let Some(ref net_address) = net_address {
-                let states = state.addresses_by_net_address.get(&net_address);
-                if let Some(states) = states {
-                    if states.len() >= MAX_SIZE_PER_IP {
+                let addresses = state.addresses_by_net_address.get(net_address);
+                if let Some(addresses) = addresses {
+                    if addresses.len() >= MAX_SIZE_PER_IP {
                         return false;
                     }
                 }
@@ -440,8 +498,12 @@ impl PeerAddressBook {
             changed = true;
         }
 
-        // TODO Add route.
-
+        // Add route.
+        if addr_arc.protocol() == Protocol::Rtc {
+            if let Some(info) = state.info_by_address.get_mut(&addr_arc) {
+                changed = info.signal_router.add_route(channel.expect("RTC peers should always have a channel"), addr_arc.distance, addr_arc.timestamp) || changed;
+            }
+       }
 
         // Track which IP address send us this address.
         state.track_by_net_address(addr_arc, net_address);
@@ -453,48 +515,51 @@ impl PeerAddressBook {
     /// The connection might have been initiated by the other peer, so address may not be known previously.
     /// If it is already known, it has been updated by a previous version message.
     pub fn established(&self, channel: &PeerChannel, peer_address: Arc<PeerAddress>) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
 
+        // Make sure that there is always a PeerAddressInfo for this peer_address
         let mut state = self.state.write();
         if state.info_by_address.get(&Arc::clone(&peer_address)).is_none() {
             state.add_to_store(PeerAddressInfo::new(Arc::clone(&peer_address)));
         }
 
-        if let Some(info) = state.info_by_address.get_mut(&peer_address) {
-            // Get the (reliable) netAddress of the peer that sent us this address.
-            let net_address: Option<Arc<NetAddress>> = channel.address_info.net_address().and_then(|net_address| {
-                if net_address.is_reliable() {
-                    Some(net_address)
-                } else {
-                    None
-                }
-            });
-            // TODO self.track_by_net_address(peer_address.clone(), net_address);
-
-            info.state = PeerAddressState::Established;
-            info.last_connected = Some(SystemTime::now());
-            info.failed_attempts = 0;
-            info.banned_until = None;
-            info.ban_backoff = INITIAL_FAILED_BACKOFF;
-
-            if !info.peer_address.is_seed() {
-                info.peer_address = Arc::clone(&peer_address);
+        // Get the (reliable) netAddress of the peer that sent us this address.
+        let net_address: Option<Arc<NetAddress>> = channel.address_info.net_address().and_then(|net_address| {
+            if net_address.is_reliable() {
+                Some(net_address)
+            } else {
+                None
             }
+        });
+        state.track_by_net_address(peer_address.clone(), net_address);
 
-            // TODO Add route.
+        let info = state.info_by_address.get_mut(&peer_address).expect("Code above guarantees that this will never be None");
+
+        info.state = PeerAddressState::Established;
+        info.last_connected = Some(SystemTime::now());
+        info.failed_attempts = 0;
+        info.banned_until = None;
+        info.ban_backoff = INITIAL_FAILED_BACKOFF;
+
+        if !info.peer_address.is_seed() {
+            info.peer_address = Arc::clone(&peer_address);
         }
+
+        // Add route.
+        if peer_address.protocol() == Protocol::Rtc {
+            info.signal_router.add_route(channel, peer_address.distance, peer_address.timestamp);
+        }
+
     }
 
     /// Called when a connection to this peerAddress is closed.
     pub fn close(&self, channel: Option<&PeerChannel>, peer_address: Arc<PeerAddress>, ty: CloseType) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
 
         let mut state = self.state.write();
         if let Some(info) = state.info_by_address.get_mut(&peer_address) {
             // Register the type of disconnection.
             info.close(ty);
-
-            // TODO Delete all addresses that were signalable over the disconnected peer.
 
             if ty.is_failing_type() {
                 info.failed_attempts += 1;
@@ -510,6 +575,11 @@ impl PeerAddressBook {
                 }
             }
 
+            // Delete all addresses that were signalable over the disconnected peer.
+            if let Some(channel) = channel {
+                state.remove_by_signal_channel(channel);
+            }
+
             if ty.is_banning_type() {
                 state.ban(Arc::clone(&peer_address), DEFAULT_BAN_TIME);
             }
@@ -522,16 +592,19 @@ impl PeerAddressBook {
     }
 
     /// Called when a message has been returned as unroutable.
-    pub fn unroutable(&self, channel: &PeerChannel, peer_address: Arc<PeerAddress>) {
-        let guard = self.change_lock.lock();
+    pub fn unroutable(&self, channel: PeerChannel, peer_address: Arc<PeerAddress>) {
+        let _guard = self.change_lock.lock();
 
         let mut state = self.state.write();
         let mut peer_address_to_remove = None;
         if let Some(info) = state.info_by_address.get_mut(&peer_address) {
 
-            // TODO
             if let Some(best_route) = &info.signal_router.best_route {
-                unimplemented!()
+                if channel != best_route.signal_channel {
+                    return;
+                }
+            } else {
+                return;
             }
 
             info.signal_router.delete_best_route();
@@ -546,11 +619,11 @@ impl PeerAddressBook {
     }
 
     fn housekeeping(&self) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
 
         let mut state = self.state.write();
         let now = Instant::now();
-        let mut unbanned_addresses: Vec<Arc<PeerAddress>> = Vec::new();
+        let mut unbanned_addresses: Vec<PeerAddress> = Vec::new();
 
         let mut to_remove_from_store= Vec::new();
 
@@ -570,7 +643,7 @@ impl PeerAddressBook {
                             if banned_until <= &now {
                                 info.banned_until = None;
                                 info.failed_attempts = 0;
-                                unbanned_addresses.push(peer_address.clone());
+                                unbanned_addresses.push(peer_address.as_ref().clone());
                             }
                         }
                     }
@@ -584,7 +657,7 @@ impl PeerAddressBook {
                                 info.state = PeerAddressState::New;
                                 info.failed_attempts = 0;
                                 info.banned_until = None;
-                                unbanned_addresses.push(peer_address.clone());
+                                unbanned_addresses.push(peer_address.as_ref().clone());
                             } else {
                                 // Delete expired bans.
                                 to_remove_from_store.push(peer_address.clone());
@@ -593,7 +666,10 @@ impl PeerAddressBook {
                     }
                 },
                 PeerAddressState::Established => {
-                    // TODO Also update timestamp for RTC connections
+                    // Also update timestamp for RTC connections
+                    if let Some(ref mut best_route) = info.signal_router.best_route {
+                        best_route.timestamp = systemtime_to_timestamp(SystemTime::now());
+                    }
                 },
                 //_ => {
                     // TODO What about peers who are stuck connecting? Can this happen?
@@ -608,7 +684,7 @@ impl PeerAddressBook {
         }
 
         if unbanned_addresses.len() > 0 {
-            // TODO Fire Added event.
+            self.notifier.notify(PeerAddressBookEvent::Added(unbanned_addresses));
         }
     }
 
