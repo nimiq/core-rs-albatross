@@ -25,7 +25,7 @@ pub enum Subscription {
 
 
 impl Subscription {
-    pub fn get_subscription_type(&self) -> SubscriptionType {
+    pub fn subscription_type(&self) -> SubscriptionType {
         match self {
             Subscription::None => SubscriptionType::None,
             Subscription::Any => SubscriptionType::Any,
@@ -99,7 +99,7 @@ impl Serialize for Subscription {
         let mut size: usize = 0;
 
         // Serialize subscription type
-        size += Serialize::serialize(&self.get_subscription_type(), writer)?;
+        size += Serialize::serialize(&self.subscription_type(), writer)?;
 
         match self {
             Subscription::Addresses(addresses) => {
