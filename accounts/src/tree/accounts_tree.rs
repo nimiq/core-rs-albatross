@@ -4,8 +4,9 @@ use hash::{Hash, Blake2bHash};
 use keys::Address;
 use primitives::account::Account;
 use std::cmp::min;
+use std::str::FromStr;
 use std::sync::Arc;
-use super::{AccountsTreeNode, AddressNibbles, NO_CHILDREN};
+use super::{AccountsTreeChunk, AccountsTreeNode, AddressNibbles, NO_CHILDREN};
 
 #[derive(Debug)]
 pub struct AccountsTree<'env> {
@@ -230,6 +231,43 @@ impl<'env> AccountsTree<'env> {
         return None;
     }
 
+    pub(crate) fn get_chunk(&self, txn: &Transaction, start: &str, size: usize) -> Option<AccountsTreeChunk> {
+        let mut chunk = self.get_terminal_nodes(txn, &AddressNibbles::from_str(start).ok()?, size)?;
+        let last_node = chunk.pop();
+        let proof = if let Some(node) = last_node {
+            self.get_accounts_proof(txn, &vec![node.prefix().to_address()?])
+        } else {
+            self.get_accounts_proof(txn, &vec![Address::from_str("ffffffffffffffffffffffffffffffffffffffff").ok()?])
+        };
+        return Some(AccountsTreeChunk::new(chunk, proof));
+    }
+
+    pub(crate) fn get_terminal_nodes(&self, txn: &Transaction, start: &AddressNibbles, size: usize) -> Option<Vec<AccountsTreeNode>> {
+        let mut vec = Vec::new();
+        let mut stack = Vec::new();
+        stack.push(self.get_root(txn)?);
+        while let Some(item) = stack.pop() {
+            match item {
+                AccountsTreeNode::BranchNode { children, prefix } => {
+                    for child in children.iter().flat_map(|opt| opt).rev() {
+                        let combined = &prefix + &child.suffix;
+                        if combined.is_prefix_of(start) ||
+                            start <= &combined {
+                            stack.push(txn.get(&self.db, &combined)?);
+                        }
+                    }
+                }
+                AccountsTreeNode::TerminalNode { .. } => {
+                    vec.push(item);
+                    if vec.len() >= size {
+                        return Some(vec);
+                    }
+                }
+            }
+        }
+        return Some(vec);
+    }
+
     fn get_root(&self, txn: &Transaction) -> Option<AccountsTreeNode> {
         let node = txn.get(&self.db, &AddressNibbles::empty());
         return node;
@@ -239,4 +277,27 @@ impl<'env> AccountsTree<'env> {
         let node = self.get_root(txn).unwrap();
         return node.hash();
     }
+}
+
+#[test]
+fn it_can_create_valid_chunk() {
+    let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
+    let account1 = Account::Basic(primitives::account::BasicAccount { balance: 5.into() });
+    let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
+    let account2 = Account::Basic(primitives::account::BasicAccount { balance: 55.into() });
+    let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
+    let account3 = Account::Basic(primitives::account::BasicAccount { balance: 55555555.into() });
+
+    let env = database::volatile::VolatileEnvironment::new(10).unwrap();
+    let tree = AccountsTree::new(&env);
+    let mut txn = WriteTransaction::new(&env);
+
+    // Put accounts and check.
+    tree.put(&mut txn, &address1, account1.clone());
+    tree.put(&mut txn, &address2, account2.clone());
+    tree.put(&mut txn, &address3, account3.clone());
+
+    let mut chunk = tree.get_chunk(&txn, "", 100).unwrap();
+    assert_eq!(chunk.len(), 3);
+    assert_eq!(chunk.verify(), true);
 }

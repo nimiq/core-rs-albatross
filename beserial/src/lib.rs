@@ -135,6 +135,18 @@ primitive_serialize!(i16, 2, read_i16, write_i16);
 primitive_serialize!(i32, 4, read_i32, write_i32);
 primitive_serialize!(i64, 8, read_i64, write_i64);
 
+// Unit
+
+impl Deserialize for () {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> { Ok(()) }
+}
+
+impl Serialize for () {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> { Ok(0) }
+
+    fn serialized_size(&self) -> usize { 0 }
+}
+
 
 // Boolean
 

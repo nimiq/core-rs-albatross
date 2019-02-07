@@ -16,8 +16,4 @@ pub mod accounts_proof;
 
 pub use self::accounts::Accounts;
 pub use self::accounts_proof::AccountsProof;
-
-use beserial::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsTreeChunk {}
+pub use self::tree::AccountsTreeChunk;

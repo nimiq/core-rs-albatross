@@ -115,6 +115,15 @@ impl AddressNibbles {
     pub(crate) fn suffix(&self, start: u8) -> AddressNibbles {
         return self.slice(start as usize, self.len());
     }
+
+    pub(crate) fn to_address(&self) -> Option<Address> {
+        if self.length != 40 {
+            return None;
+        }
+        let mut addr = [0u8; 20];
+        addr.copy_from_slice(&self.bytes);
+        return Some(Address::from(addr));
+    }
 }
 
 impl<'a> From<&'a Address> for AddressNibbles {

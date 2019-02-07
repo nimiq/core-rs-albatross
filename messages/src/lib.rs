@@ -6,6 +6,7 @@ extern crate bitflags;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
+extern crate nimiq_accounts as accounts;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 #[macro_use]
@@ -23,6 +24,7 @@ use rand::Rng;
 use rand::rngs::OsRng;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
+use accounts::{AccountsProof, AccountsTreeChunk};
 use hash::{Blake2bHash, Hash};
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
@@ -30,7 +32,6 @@ use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
 use network_primitives::subscription::Subscription;
 use network_primitives::version;
-use nimiq_accounts::accounts_proof::AccountsProof;
 use nimiq_blockchain::chain_proof::ChainProof;
 use primitives::block::{Block, BlockHeader};
 use primitives::transaction::{Transaction, TransactionsProof};
@@ -822,9 +823,4 @@ impl VerAckMessage {
             signature,
         })
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsTreeChunk {
-
 }

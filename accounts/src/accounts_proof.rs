@@ -11,7 +11,7 @@ use keys::Address;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsProof {
     #[beserial(len_type(u16))]
-    nodes: Vec<AccountsTreeNode>,
+    pub (crate) nodes: Vec<AccountsTreeNode>,
     #[beserial(skip)]
     verified: bool
 }

@@ -15,6 +15,7 @@ use primitives::networks::NetworkId;
 use primitives::policy;
 use primitives::transaction::{Transaction, TransactionFlags};
 
+use crate::AccountsTreeChunk;
 use crate::tree::AccountsTree;
 use crate::accounts_proof::AccountsProof;
 
@@ -56,6 +57,13 @@ impl<'env> Accounts<'env> {
             Some(txn) => self.tree.get(txn, address),
             None => self.tree.get(&ReadTransaction::new(self.env), address)
         }.unwrap_or(Account::INITIAL);
+    }
+
+    pub fn get_chunk(&self, prefix: &str, size: usize, txn_option: Option<&db::Transaction>) -> Option<AccountsTreeChunk> {
+        match txn_option {
+            Some(txn) => self.tree.get_chunk(txn, prefix, size),
+            None => self.tree.get_chunk(&ReadTransaction::new(self.env), prefix, size),
+        }
     }
 
     pub fn hash(&self, txn_option: Option<&db::Transaction>) -> Blake2bHash {
