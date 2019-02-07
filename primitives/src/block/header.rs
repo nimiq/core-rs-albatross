@@ -28,7 +28,11 @@ impl BlockHeader {
     pub fn verify_proof_of_work(&self) -> bool {
         let pow: Argon2dHash = self.hash();
         let target: Target = self.n_bits.into();
-        return target.is_met_by(&pow);
+        return target.is_met_by(&self.pow());
+    }
+
+    pub fn pow(&self) -> Argon2dHash {
+        self.hash()
     }
 
     pub fn is_immediate_successor_of(&self, prev_header: &BlockHeader) -> bool {

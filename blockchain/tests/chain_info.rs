@@ -1,15 +1,23 @@
+extern crate bigdecimal;
+
+use std::str::FromStr;
+
+use bigdecimal::BigDecimal;
+
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain::ChainInfo;
 use nimiq_network_primitives::networks::get_network_info;
 use nimiq_primitives::block::Difficulty;
 use nimiq_primitives::networks::NetworkId;
 
+
 #[test]
 fn it_is_correctly_initialized() {
     let genesis_block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
     let chain_info = ChainInfo::initial(genesis_block.clone());
     assert_eq!(chain_info.head, genesis_block);
-    assert_eq!(chain_info.total_difficulty, genesis_block.header.n_bits.into());
+    assert_eq!(chain_info.total_difficulty, Difficulty::from(1));
+    assert_eq!(BigDecimal::from(chain_info.total_work).with_prec(11), BigDecimal::from_str("1.8842573476").unwrap());
     assert_eq!(chain_info.on_main_chain, true);
     assert_eq!(chain_info.main_chain_successor, None);
 }

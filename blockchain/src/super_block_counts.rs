@@ -42,7 +42,7 @@ impl SuperBlockCounts {
     }
 
     /// Decrements the superblock count for `depth` and returns the result in a new `SuperBlockCounts`
-    pub fn sub_and_add(&self, depth: u8) -> SuperBlockCounts {
+    pub fn copy_and_substract(&self, depth: u8) -> SuperBlockCounts {
         let mut c = self.clone();
         c.substract(depth);
         c

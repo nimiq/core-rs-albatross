@@ -10,7 +10,9 @@ use nimiq_primitives::transaction::Transaction;
 mod blockchain;
 mod chain_info;
 mod chain_store;
+mod super_block_counts;
 mod transaction_cache;
+
 
 pub fn setup() {
     pretty_env_logger::try_init().unwrap_or(());
