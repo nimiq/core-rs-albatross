@@ -12,5 +12,11 @@ extern crate nimiq_network_primitives as network_primitives;
 
 pub mod tree;
 pub mod accounts;
+pub mod accounts_proof;
 
 pub use self::accounts::Accounts;
+
+use beserial::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountsTreeChunk {}

@@ -38,9 +38,3 @@ pub mod transaction;
 pub mod networks;
 
 use beserial::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsProof {}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsTreeChunk {}

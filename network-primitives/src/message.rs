@@ -6,7 +6,6 @@ use byteorder::{BigEndian, ByteOrder};
 use hash::{Blake2bHash, Hash};
 use keys::{Address, KeyPair, PublicKey, Signature};
 use parking_lot::RwLock;
-use primitives::{AccountsProof, AccountsTreeChunk};
 use primitives::block::{Block, BlockHeader};
 use primitives::transaction::{Transaction, TransactionsProof};
 use rand::Rng;
@@ -792,4 +791,14 @@ impl VerAckMessage {
             signature,
         })
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountsProof {
+
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountsTreeChunk {
+
 }
