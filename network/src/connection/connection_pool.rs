@@ -329,7 +329,7 @@ impl ConnectionPool {
 
     /// Constructor.
     pub fn new(peer_address_book: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
-        let mut pool = Arc::new(Self {
+        let pool = Arc::new(Self {
             blockchain,
             network_config: network_config.clone(),
             addresses: peer_address_book,
@@ -898,7 +898,7 @@ impl ConnectionPool {
 
         let state = self.state.read();
         let info = state.get_connection_by_peer_address(&peer_address);
-        if let Some(info) = info {
+        if info.is_some() {
             error!("Duplicate connection to {}", peer_address);
             return false;
         }

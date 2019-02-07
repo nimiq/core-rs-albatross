@@ -34,7 +34,7 @@ impl<'env> Accounts<'env> {
         let reader = &mut &account_bytes[..];
         let count = u16::deserialize(reader).unwrap();
 
-        for i in 0..count {
+        for _ in 0..count {
             let address = Address::deserialize(reader).unwrap();
             let account = Account::deserialize(reader).unwrap();
             self.tree.put_batch(txn, &address, account);

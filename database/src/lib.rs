@@ -56,7 +56,7 @@ impl Environment {
 
     pub fn drop_database(self) -> io::Result<()> {
         match self {
-            Environment::Volatile(env) => { return Ok(()); }
+            Environment::Volatile(_) => { return Ok(()); }
             Environment::Persistent(env) => { return env.drop_database(); }
         }
     }

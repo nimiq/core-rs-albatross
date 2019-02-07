@@ -1,5 +1,5 @@
 use std::sync::{Arc, Weak};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
@@ -14,9 +14,7 @@ use network::Peer;
 use network_primitives::subscription::Subscription;
 use primitives::block::Block;
 use primitives::transaction::Transaction;
-use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
-use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};

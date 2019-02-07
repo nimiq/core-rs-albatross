@@ -4,8 +4,6 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use hash::{Blake2bHash, Hash};
 use utils::merkle;
 
-use crate::networks::NetworkId;
-
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub struct BlockInterlink {
     pub hashes: Vec<Blake2bHash>,

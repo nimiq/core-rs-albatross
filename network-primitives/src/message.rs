@@ -293,7 +293,7 @@ impl Serialize for Message {
 
         // write checksum to placeholder
         let mut v_crc = Vec::with_capacity(4);
-        let crc32 = Crc32Computer::default().update(v.as_slice()).result().serialize(&mut v_crc);
+        Crc32Computer::default().update(v.as_slice()).result().serialize(&mut v_crc);
         for i in 0..4 {
             v[checksum_start + i] = v_crc[i];
         }
@@ -437,7 +437,7 @@ impl MessageNotifier {
             Message::Pong(nonce) => self.pong.read().notify(nonce),
             Message::Signal(msg) => self.signal.read().notify(msg),
             Message::GetChainProof => self.get_chain_proof.read().notify(()),
-            Message::ChainProof(msg) => self.chain_proof.read().notify((msg)),
+            Message::ChainProof(msg) => self.chain_proof.read().notify(msg),
             Message::GetAccountsProof(msg) => self.get_accounts_proof.read().notify(msg),
             Message::AccountsProof(msg) => self.accounts_proof.read().notify(msg),
             Message::GetAccountsTreeChunk(msg) => self.get_accounts_tree_chunk.read().notify(msg),
@@ -527,7 +527,7 @@ impl VersionMessage {
             genesis_hash,
             head_hash,
             challenge_nonce,
-            user_agent: user_agent
+            user_agent
         })
     }
 }
@@ -782,9 +782,9 @@ pub struct VerAckMessage {
 }
 
 impl VerAckMessage {
-    pub fn new(peer_id: &PeerId, peer_challence_nonce: &ChallengeNonce, key_pair: &KeyPair) -> Message {
+    pub fn new(peer_id: &PeerId, peer_challenge_nonce: &ChallengeNonce, key_pair: &KeyPair) -> Message {
         let mut data = peer_id.serialize_to_vec();
-        peer_challence_nonce.serialize(&mut data).unwrap();
+        peer_challenge_nonce.serialize(&mut data).unwrap();
         let signature = key_pair.sign(&data[..]);
         Message::VerAck(Self {
             public_key: key_pair.public.clone(),

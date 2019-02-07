@@ -494,7 +494,7 @@ impl<'env> Blockchain<'env> {
         let mut hash = self.head_hash();
         let mut locators = vec![hash.clone()];
 
-        for i in 0..cmp::min(10, self.height()) {
+        for _ in 0..cmp::min(10, self.height()) {
             let block = self.chain_store.get_block(&hash, false, None);
             match block {
                 Some(block) => {

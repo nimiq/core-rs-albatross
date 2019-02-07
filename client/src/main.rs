@@ -47,7 +47,7 @@ use crate::settings as s;
 
 
 lazy_static! {
-    static ref env: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, open::Flags::empty()).unwrap();
+    static ref ENV: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, open::Flags::empty()).unwrap();
 }
 
 
@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     info!("Nimiq Core starting: network={:?}, peer_address={}", network_id, network_config.peer_address());
 
     // Start consensus
-    let consensus = Consensus::new(&env, network_id, network_config);
+    let consensus = Consensus::new(&ENV, network_id, network_config);
     info!("Blockchain state: height={}, head={}", consensus.blockchain.height(), consensus.blockchain.head_hash());
 
     // Additional futures we want to run.
@@ -142,7 +142,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Setup client future to initialize and connect
     // TODO: We might ass well pass an Arc of the whole consensus
     let client_future = initialize(Arc::clone(&consensus.network))
-        .and_then(|mut client| client.connect());
+        .and_then(|client| client.connect());
 
 
     tokio::run(

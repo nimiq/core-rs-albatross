@@ -1,5 +1,3 @@
-use std::io;
-
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use hash::{Argon2dHash, Blake2bHash, Hash};
 
@@ -119,7 +117,7 @@ impl Block {
         let num_occurrences = (this_pow_depth - next_target_depth + 1).max(0);
 
         // Push this blockHash numOccurrences times onto the next interlink.
-        for i in 0..num_occurrences {
+        for _ in 0..num_occurrences {
             hashes.push(hash.clone());
         }
 

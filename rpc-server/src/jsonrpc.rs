@@ -1,7 +1,6 @@
-use futures::{Async, future, Future, IntoFuture, stream::Stream};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use futures::{future, Future, IntoFuture, stream::Stream};
+use hyper::{Body, Method, Request, Response, StatusCode};
 use json::{Array, JsonValue, Null};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 pub trait Handler: Send + Sync {

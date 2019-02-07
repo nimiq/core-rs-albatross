@@ -5,12 +5,6 @@ extern crate nimiq_hash as hash;
 #[macro_use]
 extern crate nimiq_macros as macros;
 
-use std::io;
-
-use hex::FromHex;
-
-use hash::{Blake2bHash, Blake2bHasher, Hasher, SerializeContent};
-
 pub use self::address::*;
 pub use self::key_pair::*;
 pub use self::private_key::*;

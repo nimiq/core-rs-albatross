@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::ffi::CStr;
 use std::io;
 
-use lmdb_zero::traits::{AsLmdbBytes, FromLmdbBytes};
+use lmdb_zero::traits::AsLmdbBytes;
 
 #[cfg(feature = "hash")]
 mod hash;

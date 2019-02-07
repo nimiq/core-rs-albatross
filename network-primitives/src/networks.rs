@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
 use keys::Address;
 use keys::PublicKey;

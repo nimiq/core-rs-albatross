@@ -3,7 +3,8 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use parking_lot::{Mutex, RwLock};
-use rand::{Rng, rngs::OsRng};
+use rand::thread_rng;
+use rand::seq::SliceRandom;
 
 use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
@@ -20,6 +21,7 @@ use utils::timers::Timers;
 use crate::consensus_agent::ConsensusAgent;
 use crate::consensus_agent::ConsensusAgentEvent;
 use crate::inventory::InventoryManager;
+
 
 pub struct Consensus {
     pub blockchain: Arc<Blockchain<'static>>,
@@ -192,10 +194,7 @@ impl Consensus {
             },
             BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
                 blocks = adopted_blocks.iter().map(|(_, block)| block).collect();
-            },
-            _ => {
-                return;
-            },
+            }
         }
 
         for agent in state.agents.values() {
@@ -223,11 +222,11 @@ impl Consensus {
 
         let mut num_synced_full_nodes: usize = 0;
         let agent: Option<Arc<RwLock<ConsensusAgent>>>;
-        let mut consensus_lost: bool;
+        let consensus_lost: bool;
         let established: bool;
         let num_agents: usize;
         {
-            let mut state = self.state.read();
+            let state = self.state.read();
 
             let candidates: Vec<&Arc<RwLock<ConsensusAgent>>> = state.agents.values()
                 .filter(|&agent| {
@@ -240,8 +239,8 @@ impl Consensus {
                 }).collect();
 
             // Choose a random peer which we aren't sync'd with yet.
-            let mut cspring: OsRng = OsRng::new().unwrap();
-            agent = cspring.choose(&candidates).map(|&agent| agent.clone());
+            let mut rng = thread_rng();
+            agent = candidates.choose(&mut rng).map(|&agent| agent.clone());
 
             // Report consensus-lost if we are synced with less than the minimum number of full nodes or have no connections at all.
             consensus_lost = state.established && (num_synced_full_nodes < Self::MIN_FULL_NODES || state.agents.is_empty());

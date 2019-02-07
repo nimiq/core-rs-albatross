@@ -72,7 +72,7 @@ pub struct InitializedClient {
 }
 
 impl InitializedClient {
-    pub fn connect(mut self) -> ClientConnectFuture {
+    pub fn connect(&self) -> ClientConnectFuture {
         ClientConnectFuture { network: Arc::clone(&self.network), initialized: false }
     }
 }

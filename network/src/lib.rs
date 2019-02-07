@@ -19,8 +19,6 @@ pub mod peer;
 pub mod network_config;
 pub mod network;
 
-use beserial::{Serialize, Deserialize};
-
 pub use crate::peer::Peer;
 pub use crate::network::{Network, NetworkEvent};
 pub use crate::network_config::NetworkConfig;

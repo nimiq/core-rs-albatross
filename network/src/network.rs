@@ -65,7 +65,7 @@ impl Network {
         let net_config = Arc::new(network_config);
         let addresses = Arc::new(PeerAddressBook::new(net_config.clone(), network_id));
         let connections = ConnectionPool::new(addresses.clone(), net_config.clone(), blockchain);
-        let mut this = Arc::new(Network {
+        let this = Arc::new(Network {
             network_config: net_config.clone(),
             network_time,
             auto_connect: Atomic::new(false),
@@ -89,7 +89,7 @@ impl Network {
                 ConnectionPoolEvent::PeersChanged => this.on_peers_changed(this.clone()),
                 ConnectionPoolEvent::RecyclingRequest => this.on_recycling_request(),
                 ConnectionPoolEvent::ConnectError(_, _) => this.on_connect_error(this.clone()),
-                default => {}
+                _ => {}
             }
         });
 

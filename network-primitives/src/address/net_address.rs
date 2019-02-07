@@ -110,8 +110,8 @@ impl Serialize for NetAddress {
         let mut size = 0;
         size += self.get_type().serialized_size();
         size += match self {
-            NetAddress::IPv4(ipv4) => 4,
-            NetAddress::IPv6(ipv6) => 16,
+            NetAddress::IPv4(_) => 4,
+            NetAddress::IPv6(_) => 16,
             NetAddress::Unspecified => 0,
             NetAddress::Unknown => 0
         };

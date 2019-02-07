@@ -15,24 +15,16 @@ extern crate nimiq_primitives as primitives;
 
 use std::str::FromStr;
 use std::sync::Arc;
-use std::error::Error;
 use std::net::{SocketAddr, IpAddr};
 
-use futures::{Async, future::Future, stream::Stream};
+use futures::{future::Future};
 use hyper::Server;
 use json::{Array, JsonValue, Null};
-use lmdb_zero::open::Flags;
 
 use beserial::Serialize;
 use consensus::consensus::Consensus;
-use database::Environment;
-use database::lmdb::LmdbEnvironment;
 use hash::{Argon2dHash, Blake2bHash, Hash};
-use network::network::Network;
-use network::network_config::NetworkConfig;
-use network_primitives::networks::get_network_info;
 use primitives::block::{Block, Difficulty};
-use primitives::networks::NetworkId;
 use primitives::transaction::Transaction;
 
 pub mod jsonrpc;

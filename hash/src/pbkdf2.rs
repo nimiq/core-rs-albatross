@@ -29,8 +29,7 @@ pub fn compute_pbkdf2_sha512(password: &[u8], salt: &[u8], iterations: usize, de
 
         let mut t: [u8; SHA512_LENGTH] = compute_hmac_sha512(password, u.as_slice()).into();
         let mut u = t;
-        for j in 1..iterations {
-            let tmp_hash =
+        for _ in 1..iterations {
             u = compute_hmac_sha512(password, &u[..]).into();
             for k in 0..Sha512Hash::len() {
                 t[k] ^= u[k];

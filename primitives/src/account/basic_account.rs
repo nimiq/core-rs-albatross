@@ -9,8 +9,6 @@ use crate::transaction::{Transaction, TransactionError};
 use crate::transaction::SignatureProof;
 #[cfg(feature = "transaction")]
 use crate::account::AccountTransactionInteraction;
-#[cfg(feature = "transaction")]
-use crate::account::AccountType;
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BasicAccount {

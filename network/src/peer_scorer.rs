@@ -150,7 +150,7 @@ impl PeerScorer {
                         // Don't pick failed addresses when they have failed the maximum number of times.
                         (1 - ((peer_address_info.failed_attempts + 1) as i32 / peer_address_info.max_failed_attempts() as i32)) * score
                     },
-                    default => -1
+                    _ => -1
                 }
             }
         }

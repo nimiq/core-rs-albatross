@@ -36,5 +36,3 @@ pub mod policy;
 pub mod transaction;
 #[cfg(feature = "networks")]
 pub mod networks;
-
-use beserial::{Deserialize, Serialize};

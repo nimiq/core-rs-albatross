@@ -6,7 +6,6 @@ use primitives::account::BasicAccount;
 use primitives::account::Account;
 use hash::Hash;
 use hash::Blake2bHash;
-use std::collections::HashMap;
 use keys::Address;
 
 pub struct AccountsProof {

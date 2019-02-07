@@ -137,7 +137,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                     return Err(TransactionError::InvalidProof);
                 }
 
-                for i in 0..hash_depth {
+                for _ in 0..hash_depth {
                     match hash_algorithm {
                         HashAlgorithm::Blake2b => {
                             pre_image = Blake2bHasher::default().digest(&pre_image[..]).into();

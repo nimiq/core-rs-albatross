@@ -5,7 +5,6 @@ use std::char;
 use std::io;
 use std::iter::Iterator;
 use hex::FromHex;
-use std::io::Error;
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
@@ -39,7 +38,7 @@ impl Address {
         }
 
         let mut spec = data_encoding::Specification::new();
-        spec.symbols.push_str("0123456789ABCDEFGHJKLMNPQRSTUVXY");
+        spec.symbols.push_str(Address::NIMIQ_ALPHABET);
         let encoding = spec.encoding().unwrap();
 
         let b_vec = encoding.decode(friendly_addr_wospace[4..].as_bytes()).unwrap();
@@ -50,7 +49,7 @@ impl Address {
 
     pub fn to_user_friendly_address(&self) -> String {
         let mut spec = data_encoding::Specification::new();
-        spec.symbols.push_str("0123456789ABCDEFGHJKLMNPQRSTUVXY");
+        spec.symbols.push_str(Address::NIMIQ_ALPHABET);
         let encoding = spec.encoding().unwrap();
 
         let base32 = encoding.encode(&self.0);
@@ -116,7 +115,7 @@ fn it_computes_friendly_addresses() {
     addr = Address::from(addr_bytes);
     assert_eq!(addr.to_user_friendly_address(), "NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR");
 
-    let mut addr2 = Address::from_user_friendly_address(&"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string()).unwrap();
+    let addr2 = Address::from_user_friendly_address(&"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string()).unwrap();
     assert_eq!(addr.0, addr2.0);
     assert_eq!(addr.to_user_friendly_address(), addr2.to_user_friendly_address());
 }

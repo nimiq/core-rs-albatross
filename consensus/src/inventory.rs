@@ -1,5 +1,5 @@
 use std::cmp;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
@@ -683,7 +683,7 @@ impl InventoryAgent {
         let network_info = get_network_info(self.blockchain.network_id).unwrap();
         let mut start_block_hash = network_info.genesis_hash.clone();
         for locator in msg.locators.iter() {
-            if let Some(block) = self.blockchain.get_block(locator, false, false) {
+            if self.blockchain.get_block(locator, false, false).is_some() {
                 // We found a block, ignore remaining block locator hashes.
                 start_block_hash = locator.clone();
                 break;
@@ -821,7 +821,7 @@ impl InventoryAgent {
     fn send_waiting_tx_inv_vectors(&self) {
         let mut state = self.state.write();
 
-        let mut vectors = state.waiting_tx_inv_vectors.dequeue_multi(InvVector::VECTORS_MAX_COUNT);
+        let vectors = state.waiting_tx_inv_vectors.dequeue_multi(InvVector::VECTORS_MAX_COUNT);
         let num_vectors = vectors.len();
         if num_vectors > 0 {
             self.peer.channel.send(Message::Inv(vectors));

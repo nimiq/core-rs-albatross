@@ -44,7 +44,7 @@ impl PeerAddressInfo {
         match self.peer_address.protocol() {
             Protocol::Rtc => super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC,
             Protocol::Ws | Protocol::Wss => super::peer_address_book::MAX_FAILED_ATTEMPTS_WS,
-            default => 0
+            _ => 0
         }
     }
 

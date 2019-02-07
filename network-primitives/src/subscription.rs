@@ -67,11 +67,11 @@ impl Deserialize for Subscription {
                 // parse number of addresses and cast to usize
                 // FIXME We should check for an overflow
                 let num_addresses: u16 = Deserialize::deserialize(reader)?;
-                let num_addresses = (num_addresses as usize);
+                let num_addresses = num_addresses as usize;
 
                 // parse addresses and push them into vector
                 let mut addresses = HashSet::with_capacity(num_addresses);
-                for i in 0..num_addresses {
+                for _ in 0..num_addresses {
                     let address: Address = Deserialize::deserialize(reader)?;
                     addresses.insert(address);
                 }

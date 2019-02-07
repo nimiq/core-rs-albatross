@@ -208,7 +208,7 @@ impl Deserialize for AccountsTreeNode {
             AccountsTreeNodeType::BranchNode => {
                 let child_count: u8 = Deserialize::deserialize(reader)?;
                 let mut children = NO_CHILDREN;
-                for i in 0..child_count {
+                for _ in 0..child_count {
                     let child: AccountsTreeNodeChild = Deserialize::deserialize(reader)?;
                     if let Some(i) = child.suffix.get(0) {
                         children[i] = Some(child);
