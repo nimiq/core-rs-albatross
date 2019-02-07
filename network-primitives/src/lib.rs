@@ -19,8 +19,6 @@ pub mod address;
 pub mod services;
 #[cfg(feature = "version")]
 pub mod version;
-#[cfg(feature = "message")]
-pub mod message;
 #[cfg(feature = "networks")]
 pub mod networks;
 #[cfg(feature = "protocol")]

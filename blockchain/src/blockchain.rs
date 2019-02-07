@@ -7,7 +7,7 @@ use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use accounts::Accounts;
 use database::{Environment, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
-use network_primitives::message::GetBlocksMessage;
+use network_messages::GetBlocksMessage;
 use network_primitives::networks::get_network_info;
 use network_primitives::time::NetworkTime;
 use primitives::account::AccountError;

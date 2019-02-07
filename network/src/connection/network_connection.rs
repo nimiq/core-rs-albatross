@@ -9,7 +9,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use network_primitives::address::net_address::NetAddress;
-use network_primitives::message::Message;
+use network_messages::Message;
 use network_primitives::address::peer_address::PeerAddress;
 use utils::observer::PassThroughNotifier;
 

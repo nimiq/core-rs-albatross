@@ -12,7 +12,7 @@ use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
 use network::connection::close_type::CloseType;
 use network::Peer;
-use network_primitives::message::{GetBlocksDirection, GetBlocksMessage, InvVector, InvVectorType, Message, TxMessage};
+use network_messages::{GetBlocksDirection, GetBlocksMessage, InvVector, InvVectorType, Message, TxMessage};
 use network_primitives::networks::get_network_info;
 use network_primitives::subscription::Subscription;
 use primitives::block::{Block, BlockHeader};

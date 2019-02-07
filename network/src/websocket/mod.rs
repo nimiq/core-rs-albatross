@@ -18,10 +18,8 @@ use tungstenite::{
 use url::Url;
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use network_primitives::{
-    address::net_address::NetAddress,
-    message::Message as NimiqMessage
-};
+use network_primitives::address::net_address::NetAddress;
+use network_messages::Message as NimiqMessage;
 use utils::locking::MultiLock;
 
 pub mod websocket_connector;

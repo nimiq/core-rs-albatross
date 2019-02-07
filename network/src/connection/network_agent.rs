@@ -11,7 +11,7 @@ use beserial::Serialize;
 use blockchain::Blockchain;
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::PeerId;
-use network_primitives::message::*;
+use network_messages::*;
 use network_primitives::networks::get_network_info;
 use network_primitives::version;
 use utils::observer::{Notifier, weak_listener, weak_passthru_listener};

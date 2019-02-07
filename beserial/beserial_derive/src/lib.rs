@@ -8,9 +8,9 @@ extern crate syn;
 use proc_macro::TokenStream;
 
 // This will return a tuple once we have more options
-fn parse_field_attribs(field: &syn::Field) -> (Option<&syn::Ident>, bool, bool) {
+fn parse_field_attribs(field: &syn::Field) -> (Option<&syn::Ident>, Option<Option<&syn::Lit>>, bool) {
     let mut len_type = Option::None;
-    let mut skip = false;
+    let mut skip = Option::None;
     let mut uvar = false;
     for attr in &field.attrs {
         if let syn::MetaItem::List(ref attr_ident, ref nesteds) = attr.value {
@@ -31,10 +31,22 @@ fn parse_field_attribs(field: &syn::Field) -> (Option<&syn::Ident>, bool, bool) 
                                         }
                                     }
                                 }
+                                if attr_ident == "skip" {
+                                    skip = Option::Some(Option::None);
+                                    for nested in nesteds {
+                                        if let syn::NestedMetaItem::MetaItem(ref item) = nested {
+                                            if let syn::MetaItem::NameValue(name, value) = item {
+                                                if name == "default" {
+                                                    skip = Option::Some(Option::Some(value));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             syn::MetaItem::Word(ref attr_ident) => {
                                 if attr_ident == "skip" {
-                                    skip = true;
+                                    skip = Option::Some(Option::None);
                                 } else if attr_ident == "uvar" {
                                     uvar = true;
                                 } else {
@@ -112,7 +124,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
                 syn::VariantData::Struct(ref fields) => {
                     for field in fields {
                         let (len_type, skip, _) = parse_field_attribs(&field);
-                        if skip { continue; };
+                        if skip.is_some() { continue; };
                         match field.ident {
                             None => panic!(),
                             Some(ref ident) => {
@@ -134,7 +146,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> quote::Tokens {
                     let mut i = 0;
                     for field in fields {
                         let (len_type, skip, _) = parse_field_attribs(&field);
-                        if skip { continue; };
+                        if skip.is_some() { continue; };
                         match len_type {
                             Some(ty) => {
                                 serialize_body.append(quote! { size += ::beserial::SerializeWithLength::serialize::<#ty, W>(&self.#i, writer)?; }.as_str());
@@ -232,7 +244,14 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                             None => panic!(),
                             Some(ref ident) => {
                                 let (len_type, skip, _) = parse_field_attribs(&field);
-                                if skip { continue; };
+                                if let Option::Some(Option::Some(default_value)) = skip {
+                                    field_cases.append(quote! { #ident: #default_value });
+                                    continue;
+                                } else if let Option::Some(Option::None) = skip {
+                                    let ty = &field.ty;
+                                    field_cases.append(quote! { #ident: <#ty>::default() });
+                                    continue;
+                                }
                                 match len_type {
                                     Some(ty) => {
                                         field_cases.append(quote! { #ident: ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, })
@@ -254,7 +273,14 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> quote::Tokens {
                     let mut field_cases = quote::Tokens::new();
                     for field in fields {
                         let (len_type, skip, _) = parse_field_attribs(&field);
-                        if skip { continue; };
+                        if let Option::Some(Option::Some(default_value)) = skip {
+                            field_cases.append(quote! { #default_value, });
+                            continue;
+                        } else if let Option::Some(Option::None) = skip {
+                            let ty = &field.ty;
+                            field_cases.append(quote! { <#ty>::default(), });
+                            continue;
+                        }
                         match len_type {
                             Some(ty) =>
                                 field_cases.append(quote! { ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, }),

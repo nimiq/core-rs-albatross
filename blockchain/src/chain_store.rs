@@ -1,6 +1,6 @@
 use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
-use network_primitives::message::GetBlocksDirection;
+use network_messages::GetBlocksDirection;
 use primitives::block::Block;
 
 use crate::ChainInfo;

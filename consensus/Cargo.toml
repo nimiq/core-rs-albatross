@@ -23,7 +23,8 @@ nimiq-macros = { path = "../macros" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-collections = { path = "../collections" }
-nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "message", "time"] }
+nimiq-messages = { path = "../messages" }
+nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
 nimiq-network = { path = "../network" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }

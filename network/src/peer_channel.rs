@@ -9,8 +9,7 @@ use futures::sync::mpsc::*;
 use parking_lot::RwLock;
 use tokio::prelude::Stream;
 
-use network_primitives::message::Message;
-use network_primitives::message::MessageNotifier;
+use network_messages::{Message, MessageNotifier};
 use utils::observer::{Notifier, PassThroughNotifier};
 use utils::unique_ptr::UniquePtr;
 

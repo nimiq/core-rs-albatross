@@ -19,6 +19,7 @@ nimiq-blockchain = { path = "../blockchain" }
 nimiq-keys = { path = "../keys" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
+nimiq-messages = { path = "../messages" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
 nimiq-utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit"] }
 atomic = "0.4"

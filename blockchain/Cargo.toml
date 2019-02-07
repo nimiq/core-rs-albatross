@@ -25,7 +25,8 @@ bigdecimal = "0.0.14"
 parking_lot = "0.6"
 nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr"] }
 log = "0.4.3"
-nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time", "message"] }
+nimiq-messages = { path = "../messages" }
+nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
 
 [dev-dependencies]
 atomic = "0.4"

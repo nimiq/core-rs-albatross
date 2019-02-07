@@ -1,39 +1,28 @@
 [package]
-name = "nimiq-network-primitives"
+name = "nimiq-messages"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
-description = "Network primitives and constants for Nimiq"
+description = "Messages send over the nimiq network"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs"
 license = "Apache-2.0"
 
-[badges]
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-
 [dependencies]
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
-nimiq-keys = { path = "../keys" }
+nimiq-accounts = { path = "../accounts" }
 nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-macros = { path = "../macros" }
+nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "subscription", "version"] }
 nimiq-primitives = { path = "../primitives", features = ["account", "block", "transaction"] }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
-nimiq-macros = { path = "../macros" }
+
 bitflags = "1.0"
-log = "0.4.3"
-rand = "0.6.4"
-parking_lot = "0.6"
 byteorder = "1.2"
 hex = "0.3.2"
+log = "0.4.3"
 lazy_static = "1.0"
-atomic = "0.4"
-
-[features]
-all = ["networks", "time", "address", "services", "version", "protocol", "subscription"]
-networks = ["address", "services", "protocol"]
-time = []
-address = ["services", "protocol"]
-services = []
-version = []
-protocol = []
-subscription = []
+parking_lot = "0.6"
+rand = "0.6.4"

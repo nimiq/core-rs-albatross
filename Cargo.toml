@@ -20,4 +20,5 @@ members = [
     "client",
     "rpc-server",
     "lib",
+    "messages",
 ]

@@ -1,3 +1,19 @@
+#[macro_use]
+extern crate beserial_derive;
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate bitflags;
+#[macro_use]
+extern crate nimiq_macros as macros;
+extern crate nimiq_utils as utils;
+extern crate nimiq_keys as keys;
+extern crate nimiq_primitives as primitives;
+extern crate nimiq_hash as hash;
+extern crate nimiq_network_primitives as network_primitives;
+#[macro_use]
+extern crate lazy_static;
+
 use std::io;
 use std::io::Read;
 
@@ -13,11 +29,12 @@ use rand::rngs::OsRng;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
 
-use crate::address::{PeerAddress, PeerId};
-use crate::protocol::ProtocolFlags;
-use crate::subscription::Subscription;
-use crate::services::ServiceFlags;
-use crate::version;
+use nimiq_accounts::accounts_proof::AccountsProof;
+use network_primitives::address::{PeerAddress, PeerId};
+use network_primitives::protocol::ProtocolFlags;
+use network_primitives::subscription::Subscription;
+use network_primitives::services::ServiceFlags;
+use network_primitives::version;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u64)]
@@ -791,11 +808,6 @@ impl VerAckMessage {
             signature,
         })
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsProof {
-
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
