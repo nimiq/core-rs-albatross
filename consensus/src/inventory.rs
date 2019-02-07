@@ -217,6 +217,9 @@ struct InventoryAgentState {
     /// Objects that are currently being requested from the peer.
     objects_in_flight: HashSet<InvVector>,
 
+    /// All objects that were requested from the peer but not received yet.
+    objects_that_flew: HashSet<InvVector>,
+
     /// The rate limit for getblocks messages.
     get_blocks_limit: RateLimit,
 
@@ -292,6 +295,8 @@ impl InventoryAgent {
                 ),
 
                 objects_in_flight: HashSet::new(),
+
+                objects_that_flew: HashSet::new(),
 
                 get_blocks_limit: RateLimit::new_per_minute(Self::GET_BLOCKS_RATE_LIMIT),
 
@@ -473,10 +478,13 @@ impl InventoryAgent {
 
         // Check if we have requested this block.
         let vector = InvVector::new(InvVectorType::Block, hash);
-        if !self.state.read().objects_in_flight.contains(&vector) {
+        let state = self.state.read();
+        if !state.objects_in_flight.contains(&vector) && !state.objects_that_flew.contains(&vector) {
             warn!("Unsolicited block from {} - discarding", self.peer.peer_address());
             return;
         }
+        // Give up read lock before notifying.
+        drop(state);
 
         // TODO Reuse already known (verified) transactions from mempool.
 
@@ -627,21 +635,24 @@ impl InventoryAgent {
     }
 
     fn no_more_data(&self) {
+        // Cancel the request timeout timer.
         self.timers.clear_delay(&InventoryAgentTimer::GetData);
 
         let mut state = self.state.write();
 
         // TODO optimize
-        {
-            let inv_mgr_arc = self.inv_mgr.clone();
-            let mut inv_mgr = inv_mgr_arc.write();
-            let agent = &*self.self_weak;
-            for vector in state.objects_in_flight.drain() {
-                inv_mgr.note_vector_not_received(agent, &vector);
-            }
+        let inv_mgr_arc = self.inv_mgr.clone();
+        let mut inv_mgr = inv_mgr_arc.write();
+        let agent = &*self.self_weak;
+        let mut vectors = Vec::new();
+        for vector in state.objects_in_flight.drain() {
+            inv_mgr.note_vector_not_received(agent, &vector);
+            vectors.push(vector);
         }
 
-        // TODO objects_that_flew
+        for vector in vectors {
+            state.objects_that_flew.insert(vector);
+        }
 
         // If there are more objects to request, request them.
         if !state.blocks_to_request.is_empty() || state.txs_to_request.is_available() {
