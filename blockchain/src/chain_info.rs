@@ -4,7 +4,7 @@ use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
 use primitives::block::{Block, BlockBody, Difficulty, Target};
-use crate::super_block_counts::SuperBlockCounts;
+use crate::SuperBlockCounts;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize)]
 pub struct ChainInfo {

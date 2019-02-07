@@ -21,3 +21,4 @@ pub use self::chain_store::ChainStore;
 pub use self::chain_store::Direction;
 pub use self::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
 pub use self::transaction_cache::TransactionCache;
+pub use self::super_block_counts::SuperBlockCounts;
