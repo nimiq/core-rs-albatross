@@ -1,3 +1,5 @@
+#![feature(crate_visibility_modifier)]
+
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]

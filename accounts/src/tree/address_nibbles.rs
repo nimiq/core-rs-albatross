@@ -14,13 +14,13 @@ use database::AsDatabaseBytes;
 // Stores a compact representation of length nibbles.
 // Each u8 stores up to 2 nibbles.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
-pub (in super) struct AddressNibbles {
+pub(crate) struct AddressNibbles {
     bytes: Vec<u8>,
     length: u8
 }
 
 impl AddressNibbles {
-    pub (in super) fn empty() -> AddressNibbles {
+    pub(crate) fn empty() -> AddressNibbles {
         return AddressNibbles {
             bytes: Vec::new(),
             length: 0,
@@ -28,11 +28,11 @@ impl AddressNibbles {
     }
 
     #[inline]
-    pub (in super) fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         return self.length as usize;
     }
 
-    pub (in super) fn get(&self, index: usize) -> Option<usize> {
+    pub(crate) fn get(&self, index: usize) -> Option<usize> {
         if index >= self.len() {
             return None;
         }
@@ -41,7 +41,7 @@ impl AddressNibbles {
         return Some(((self.bytes[byte] >> ((1 - nibble) * 4)) & 0xf) as usize);
     }
 
-    pub (in super) fn is_prefix_of(&self, other: &AddressNibbles) -> bool {
+    pub(crate) fn is_prefix_of(&self, other: &AddressNibbles) -> bool {
         // Prefix must be shorter or equal in length.
         if self.length > other.length {
             return false;
@@ -51,7 +51,7 @@ impl AddressNibbles {
         // If prefix ends in the middle of a byte, compare that part as well.
         if ends_in_byte {
             let own_nibble = (self.bytes[end] >> 4) & 0xf;
-            let other_nibble = (self.bytes[end] >> 4) & 0xf;
+            let other_nibble = (other.bytes[end] >> 4) & 0xf;
             if own_nibble != other_nibble {
                 return false;
             }
@@ -59,7 +59,7 @@ impl AddressNibbles {
         return self.bytes[..end] == other.bytes[..end];
     }
 
-    pub (in super) fn common_prefix(&self, other: &AddressNibbles) -> AddressNibbles {
+    pub(crate) fn common_prefix(&self, other: &AddressNibbles) -> AddressNibbles {
         let min_len = cmp::min(self.len(), other.len());
         let byte_len = min_len / 2 + (min_len % 2);
 
@@ -74,7 +74,7 @@ impl AddressNibbles {
         return self.slice(0, first_difference_nibble);
     }
 
-    pub (in super) fn slice(&self, start: usize, end: usize) -> AddressNibbles {
+    pub(crate) fn slice(&self, start: usize, end: usize) -> AddressNibbles {
         if start >= self.len() || end <= start {
             return AddressNibbles::empty();
         }
@@ -112,7 +112,7 @@ impl AddressNibbles {
         };
     }
 
-    pub (in super) fn suffix(&self, start: u8) -> AddressNibbles {
+    pub(crate) fn suffix(&self, start: u8) -> AddressNibbles {
         return self.slice(start as usize, self.len());
     }
 }

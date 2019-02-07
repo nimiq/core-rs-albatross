@@ -9,12 +9,12 @@ use hash::{Hash, Blake2bHash, SerializeContent};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
-pub (in super) struct AccountsTreeNodeChild {
-    pub (in super) suffix: AddressNibbles,
-    pub (in super) hash: Blake2bHash,
+pub(crate) struct AccountsTreeNodeChild {
+    pub suffix: AddressNibbles,
+    pub hash: Blake2bHash,
 }
 
-pub (in super) const NO_CHILDREN: [Option<AccountsTreeNodeChild>; 16] = [None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None];
+pub(crate) const NO_CHILDREN: [Option<AccountsTreeNodeChild>; 16] = [None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None];
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -24,7 +24,7 @@ enum AccountsTreeNodeType {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub (in super) enum AccountsTreeNode {
+pub(crate) enum AccountsTreeNode {
     BranchNode {
         prefix: AddressNibbles,
         children: [Option<AccountsTreeNodeChild>; 16],
@@ -36,16 +36,16 @@ pub (in super) enum AccountsTreeNode {
 }
 
 impl AccountsTreeNode {
-    pub (in super) fn new_terminal(prefix: AddressNibbles, account: Account) -> Self {
+    pub(crate) fn new_terminal(prefix: AddressNibbles, account: Account) -> Self {
         return AccountsTreeNode::TerminalNode { prefix, account };
     }
 
-    pub (in super) fn new_branch(prefix: AddressNibbles, children: [Option<AccountsTreeNodeChild>; 16]) -> Self {
+    pub(crate) fn new_branch(prefix: AddressNibbles, children: [Option<AccountsTreeNodeChild>; 16]) -> Self {
         return AccountsTreeNode::BranchNode { prefix, children };
     }
 
     #[inline]
-    pub (in super) fn is_terminal(&self) -> bool {
+    pub(crate) fn is_terminal(&self) -> bool {
         return match *self {
             AccountsTreeNode::TerminalNode { .. } => true,
             AccountsTreeNode::BranchNode { .. } => false,
@@ -53,14 +53,14 @@ impl AccountsTreeNode {
     }
 
     #[inline]
-    pub (in super) fn is_branch(&self) -> bool {
+    pub(crate) fn is_branch(&self) -> bool {
         return match *self {
             AccountsTreeNode::TerminalNode { .. } => false,
             AccountsTreeNode::BranchNode { .. } => true,
         };
     }
 
-    pub (in super) fn get_child_hash(&self, prefix: &AddressNibbles) -> Option<&Blake2bHash> {
+    pub(crate) fn get_child_hash(&self, prefix: &AddressNibbles) -> Option<&Blake2bHash> {
         match *self {
             AccountsTreeNode::TerminalNode { .. } => return None,
             AccountsTreeNode::BranchNode { ref children, .. } => {
@@ -72,7 +72,7 @@ impl AccountsTreeNode {
         };
     }
 
-    pub (in super) fn get_child_prefix(&self, prefix: &AddressNibbles) -> Option<AddressNibbles> {
+    pub(crate) fn get_child_prefix(&self, prefix: &AddressNibbles) -> Option<AddressNibbles> {
         match *self {
             AccountsTreeNode::TerminalNode { .. } => return None,
             AccountsTreeNode::BranchNode { ref children, .. } => {
@@ -85,7 +85,7 @@ impl AccountsTreeNode {
     }
 
     #[inline]
-    pub (in super) fn prefix(&self) -> &AddressNibbles {
+    pub(crate) fn prefix(&self) -> &AddressNibbles {
         return match *self {
             AccountsTreeNode::TerminalNode { ref prefix, .. } => &prefix,
             AccountsTreeNode::BranchNode { ref prefix, .. } => &prefix,
@@ -101,12 +101,12 @@ impl AccountsTreeNode {
     }
 
     #[inline]
-    pub (in super) fn get_child_index(&self, prefix: &AddressNibbles) -> Option<usize> {
+    pub(crate) fn get_child_index(&self, prefix: &AddressNibbles) -> Option<usize> {
         assert!(self.prefix().is_prefix_of(prefix), "prefix {} is not a child of the current node {}", prefix, self.prefix());
         return prefix.get(self.prefix().len());
     }
 
-    pub (in super) fn with_child(mut self, prefix: &AddressNibbles, hash: Blake2bHash) -> Option<Self> {
+    pub(crate) fn with_child(mut self, prefix: &AddressNibbles, hash: Blake2bHash) -> Option<Self> {
         let child_index = self.get_child_index(&prefix)?;
         let suffix = prefix.suffix(self.prefix().len() as u8);
         match self {
@@ -119,7 +119,7 @@ impl AccountsTreeNode {
         return Some(self);
     }
 
-    pub (in super) fn without_child(mut self, suffix: AddressNibbles) -> Option<Self> {
+    pub(crate) fn without_child(mut self, suffix: AddressNibbles) -> Option<Self> {
         let child_index = self.get_child_index(&suffix)?;
         match self {
             AccountsTreeNode::TerminalNode { .. } => { return None; },
@@ -130,7 +130,7 @@ impl AccountsTreeNode {
         return Some(self);
     }
 
-    pub (in super) fn with_account(mut self, new_account: Account) -> Option<Self> {
+    pub(crate) fn with_account(mut self, new_account: Account) -> Option<Self> {
         match &mut self {
             AccountsTreeNode::TerminalNode { ref mut account, .. } => {
                 *account = new_account;
@@ -140,11 +140,11 @@ impl AccountsTreeNode {
         return Some(self);
     }
 
-    pub (in super) fn iter_children(&self) -> Iter {
+    pub(crate) fn iter_children(&self) -> Iter {
         return self.into_iter();
     }
 
-    pub (in super) fn iter_children_mut(&mut self) -> IterMut {
+    pub(crate) fn iter_children_mut(&mut self) -> IterMut {
         return self.into_iter();
     }
 }
@@ -245,7 +245,7 @@ impl FromDatabaseValue for AccountsTreeNode {
 
 impl Hash for AccountsTreeNode {}
 
-pub (in super) struct Iter<'a> {
+pub(crate) struct Iter<'a> {
     it: Option<iter::FilterMap<slice::Iter<'a, Option<AccountsTreeNodeChild>>, fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>>>,
 }
 
@@ -272,7 +272,7 @@ impl<'a> iter::IntoIterator for &'a AccountsTreeNode {
     }
 }
 
-pub (in super) struct IterMut<'a> {
+pub(crate) struct IterMut<'a> {
     it: Option<iter::FilterMap<slice::IterMut<'a, Option<AccountsTreeNodeChild>>, fn(&mut Option<AccountsTreeNodeChild>) -> Option<&mut AccountsTreeNodeChild>>>,
 }
 
