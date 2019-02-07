@@ -12,7 +12,7 @@ pub struct SuperBlockCounts {
 }
 
 impl SuperBlockCounts {
-    const NUM_COUNTS: usize = 256; // There are 256 levels for Blake2
+    pub const NUM_COUNTS: usize = 256; // There are 256 levels for Blake2
 
     /// Create a new SuperBlockCounts with all levels set to 0
     pub fn zero() -> SuperBlockCounts {
@@ -21,14 +21,14 @@ impl SuperBlockCounts {
 
     /// Increments the superblock count for `depth`
     pub fn add(&mut self, depth: u8) {
-        for i in 0..(depth as usize){
+        for i in 0..=(depth as usize) {
             self.counts[i] += 1;
         }
     }
 
     /// Decrements the superblock count for `depth`
     pub fn substract(&mut self, depth: u8) {
-        for i in 0..(depth as usize) {
+        for i in 0..=(depth as usize) {
             assert!(self.counts[i] >= 0, "Superblock count is already 0 and can't be decreased");
             self.counts[i] -= 1;
         }
@@ -55,11 +55,13 @@ impl SuperBlockCounts {
 
     pub fn get_candidate_depth(&self, m: u64) -> u8 {
         // NOTE: The cast to u8 is safe, since our indices only go until 255
-        assert!(Self::NUM_COUNTS < (std::u8::MAX as usize));
+        assert!(Self::NUM_COUNTS - 1 <= (std::u8::MAX as usize));
 
-        (0..Self::NUM_COUNTS).map(|i| Self::NUM_COUNTS - i - 1)
-            .find(|i| self.counts[i.clone()] >= m)
-            .unwrap_or(0) as u8
+        (0..Self::NUM_COUNTS)
+            .map(|i| Self::NUM_COUNTS - i - 1)
+            .map(|i| (i, self.counts[i]))
+            .find(|&(i, d)| d >= m)
+            .unwrap_or((0, 0)).0 as u8
     }
 }
 
