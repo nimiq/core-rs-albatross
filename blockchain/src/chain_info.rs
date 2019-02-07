@@ -4,13 +4,17 @@ use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
 use primitives::block::{Block, BlockBody, Difficulty};
+use crate::super_block_counts::SuperBlockCounts;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize)]
 pub struct ChainInfo {
     pub head: Block,
     pub total_difficulty: Difficulty,
+    //pub total_work: (), // TODO: type, BigDecimal? Encapsulated in `Work` type?
+    //pub super_block_counts: SuperBlockCounts,
     pub on_main_chain: bool,
-    pub main_chain_successor: Option<Blake2bHash>
+    pub main_chain_successor: Option<Blake2bHash>,
+    //pub height: u64
 }
 
 impl ChainInfo {
@@ -19,6 +23,7 @@ impl ChainInfo {
         return ChainInfo {
             head: block,
             total_difficulty,
+            //super_block_counts: SuperBlockCounts::zero(),
             on_main_chain: true,
             main_chain_successor: None
         };
@@ -29,6 +34,7 @@ impl ChainInfo {
         return ChainInfo {
             head: block,
             total_difficulty,
+            //super_block_counts: self.super_block_counts.clone(), // TODO: get level of block and increment for that depth
             on_main_chain: false,
             main_chain_successor: None
         };
@@ -44,6 +50,7 @@ impl Serialize for ChainInfo {
         size += Serialize::serialize(&self.head.interlink, writer)?;
         size += Serialize::serialize(&None::<BlockBody>, writer)?;
         size += Serialize::serialize(&self.total_difficulty, writer)?;
+        //size += Serialize::serialize(&self.super_block_counts, writer)?;
         size += Serialize::serialize(&self.on_main_chain, writer)?;
         size += Serialize::serialize(&self.main_chain_successor, writer)?;
         return Ok(size);
@@ -55,6 +62,7 @@ impl Serialize for ChainInfo {
         size += Serialize::serialized_size(&self.head.interlink);
         size += Serialize::serialized_size(&None::<BlockBody>);
         size += Serialize::serialized_size(&self.total_difficulty);
+        //size += Serialize::serialized_size(&self.super_block_counts);
         size += Serialize::serialized_size(&self.on_main_chain);
         size += Serialize::serialized_size(&self.main_chain_successor);
         return size;
