@@ -21,7 +21,7 @@ impl MempoolMetrics {
 
 impl server::Metrics for MempoolMetrics {
     fn metrics(&self, serializer: &mut server::MetricsSerializer<SerializationType>) -> Result<(), io::Error> {
-        let txs = self.mempool.get_transactions(SIZE_MAX, 0.);
+        let txs = self.mempool.get_transactions(SIZE_MAX, 0f64);
         let group = [0usize, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
         for i in 1..group.len() {
             let lower_bound = group[i - 1];

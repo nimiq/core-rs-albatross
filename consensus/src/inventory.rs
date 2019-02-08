@@ -16,6 +16,7 @@ use network_messages::{GetBlocksDirection, GetBlocksMessage, InvVector, InvVecto
 use network_primitives::networks::get_network_info;
 use network_primitives::subscription::Subscription;
 use primitives::block::{Block, BlockHeader};
+use primitives::coin::Coin;
 use primitives::transaction::Transaction;
 use utils::{
     self,
@@ -261,6 +262,9 @@ impl InventoryAgent {
     const TRANSACTION_THROTTLE: Duration = Duration::from_millis(1000);
     const REQUEST_TRANSACTIONS_WAITING_MAX: usize = 5000;
     const GET_BLOCKS_RATE_LIMIT: usize = 30; // per minute
+    /// Time {ms} to wait between sending full inv vectors of transactions during Mempool request
+    const MEMPOOL_THROTTLE: Duration = Duration::from_millis(1000); // 1 second
+    const MEMPOOL_ENTRIES_MAX: usize = 10_000;
     /// Minimum fee per byte (sat/byte) such that a transaction is not considered free.
     const TRANSACTION_RELAY_FEE_MIN: u64 = 1;
 
@@ -515,6 +519,42 @@ impl InventoryAgent {
 
     fn on_mempool(&self) {
         debug!("[MEMPOOL]");
+
+        let state = self.state.read();
+        // Query mempool for transactions
+        let mut transactions = match &state.remote_subscription {
+           Subscription::Addresses(addresses) => self.mempool.get_transactions_by_addresses(addresses.clone(), Self::MEMPOOL_ENTRIES_MAX),
+           Subscription::MinFee(min_fee_per_byte) => {
+                // NOTE: every integer up to (2^53 - 1) should have an exact representation as f64 (IEEE 754 64-bit double)
+                // TODO: Should we incorporate this guarantee as part of the Coin type?
+                let min_fee_per_byte: f64 = if *min_fee_per_byte < Coin::from(Coin::MAX_SAFE_VALUE) { u64::from(*min_fee_per_byte) as f64 } else { Coin::MAX_SAFE_VALUE as f64 };
+                let mut txs = self.mempool.get_transactions(mempool::SIZE_MAX, min_fee_per_byte);
+                txs.truncate(Self::MEMPOOL_ENTRIES_MAX);
+                txs
+            },
+           Subscription::Any => {
+                let mut txs = self.mempool.get_transactions(mempool::SIZE_MAX, 0f64);
+                txs.truncate(Self::MEMPOOL_ENTRIES_MAX);
+                txs
+           },
+           Subscription::None => return,
+        };
+
+        // Send an InvVector for each transaction in the mempool.
+        // Split into multiple Inv messages if the mempool is large.
+        while transactions.len() > 0 {
+            let max_vectors = std::cmp::min(transactions.len(), InvVector::VECTORS_MAX_COUNT);
+            let vectors: Vec<InvVector> = transactions.drain(..max_vectors).
+                map(|tx| InvVector::from_transaction(tx.as_ref())).
+                collect();
+
+            // TODO: Check the result from this
+            self.peer.channel.send(Message::Inv(vectors));
+
+            if max_vectors == InvVector::VECTORS_MAX_COUNT {
+                std::thread::sleep(Self::MEMPOOL_THROTTLE);
+            }
+        }
     }
 
     fn on_not_found(&self, vectors: Vec<InvVector>) {

@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate log;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_blockchain as blockchain;
@@ -8,8 +7,7 @@ extern crate nimiq_utils as utils;
 extern crate nimiq_keys as keys;
 
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
@@ -69,7 +67,7 @@ impl<'env> Mempool<'env> {
         let hash: Blake2bHash = transaction.hash();
 
         // Only one mutating operation at a time.
-        let lock = self.mut_lock.lock();
+        let _lock = self.mut_lock.lock();
 
         // Transactions that are invalidated by the new transaction are stored here.
         let mut txs_to_remove = Vec::new();
@@ -235,7 +233,8 @@ impl<'env> Mempool<'env> {
         let mut size = 0;
 
         let state = self.state.read();
-        for tx in &state.transactions_sorted_fee {
+        let valid_txs: Vec<&Arc<Transaction>> = state.transactions_sorted_fee.iter().filter(|tx| tx.fee_per_byte() >= min_fee_per_byte).collect();
+        for tx in valid_txs {
             let tx_size = tx.serialized_size();
             if size + tx_size <= max_size {
                 txs.push(tx.clone());
@@ -255,7 +254,7 @@ impl<'env> Mempool<'env> {
         unimplemented!();
     }
 
-    pub fn get_transactions_by_addresses(&self, addresses: Vec<Address>, max_transactions: u32) -> Vec<Arc<Transaction>> {
+    pub fn get_transactions_by_addresses(&self, addresses: HashSet<Address>, max_transactions: usize) -> Vec<Arc<Transaction>> {
         let mut txs = Vec::new();
 
         let state = self.state.read();
@@ -273,7 +272,8 @@ impl<'env> Mempool<'env> {
                 }
             }
         }
-
+        // TODO: optimize this to not push txs that are going to be discarded anyways
+        txs.truncate(max_transactions);
         return txs;
     }
 
@@ -288,7 +288,7 @@ impl<'env> Mempool<'env> {
     /// account state (i.e. typically because the were included in a newly mined block). No need to re-check signatures.
     fn evict_transactions(&self) {
         // Only one mutating operation at a time.
-        let lock = self.mut_lock.lock();
+        let _lock = self.mut_lock.lock();
 
         let mut txs_mined = Vec::new();
         let mut txs_evicted = Vec::new();
@@ -352,7 +352,7 @@ impl<'env> Mempool<'env> {
 
     fn restore_transactions(&self, reverted_blocks: &Vec<(Blake2bHash, Block)>) {
         // Only one mutating operation at a time.
-        let lock = self.mut_lock.lock();
+        let _lock = self.mut_lock.lock();
 
         // Acquire blockchain read lock.
         let accounts = self.blockchain.accounts();

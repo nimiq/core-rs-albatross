@@ -20,7 +20,7 @@ pub enum Subscription {
     None,
     Any,
     Addresses(HashSet<Address>),
-    MinFee(Coin),
+    MinFee(Coin), // Fee per byte
 }
 
 
