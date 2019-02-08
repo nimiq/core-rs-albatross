@@ -5,7 +5,7 @@ use atomic::{Atomic, Ordering};
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::Hash;
+use nimiq_hash::{Hash, Blake2bHash};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_primitives::time::NetworkTime;
 use nimiq_primitives::account::{AccountError, AccountType};
@@ -288,4 +288,38 @@ fn it_rebranches_to_the_harder_chain() {
 
     assert_eq!(blockchain.push(block2_4), PushResult::Rebranched);
     assert!(listener_called.load(Ordering::Relaxed));
+}
+
+#[test]
+fn it_can_compute_chain_proofs() {
+    crate::setup();
+
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
+
+    let proof = blockchain.get_chain_proof();
+    assert_eq!(proof.prefix.len(), 1);
+    assert_eq!(proof.prefix[0].header.hash::<Blake2bHash>(), blockchain.head_hash());
+    assert!(proof.suffix.is_empty());
+
+    let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
+    let mut status = blockchain.push(block);
+    assert_eq!(status, PushResult::Extended);
+
+    let proof = blockchain.get_chain_proof();
+    assert_eq!(proof.prefix.len(), 1);
+    assert_eq!(proof.prefix[0].header.height, 1);
+    assert_eq!(proof.suffix.len(), 1);
+    assert_eq!(proof.suffix[0].hash::<Blake2bHash>(), blockchain.head_hash());
+
+    block = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
+    status = blockchain.push(block);
+    assert_eq!(status, PushResult::Extended);
+
+    let proof = blockchain.get_chain_proof();
+    assert_eq!(proof.prefix.len(), 1);
+    assert_eq!(proof.prefix[0].header.height, 1);
+    assert_eq!(proof.suffix.len(), 2);
+    assert_eq!(proof.suffix[0].height, 2);
+    assert_eq!(proof.suffix[1].hash::<Blake2bHash>(), blockchain.head_hash());
 }
