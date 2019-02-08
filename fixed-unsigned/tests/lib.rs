@@ -76,7 +76,6 @@ fn test_div_round_down() {
     let b = FixedUnsigned4::from_str("3.1234").unwrap();
     let res = a / b;
     let expected = FixedUnsigned4::from_str("0.4624").unwrap();
-    println!("int_value = {}", res.get_int_value());
     assert_eq!(res, expected);
 }
 
@@ -96,3 +95,50 @@ fn test_parse_emtpy_string() {
         Err(_) => ()
     }
 }
+
+#[test]
+fn test_parse_dot() {
+    let res = FixedUnsigned4::from_str(".");
+    match res {
+        Ok(v) => assert!(false, "Expected error, not value: {}", v),
+        Err(_) => ()
+    }
+}
+
+#[test]
+fn test_parse_zero_dot() {
+    let res = FixedUnsigned4::from_str("0.");
+    match res {
+        Ok(v) => assert_eq!(v, FixedUnsigned4::from(0u32)),
+        Err(_) => assert!(false, "Didn't expect an error")
+    }
+}
+
+#[test]
+fn test_parse_dot_zero() {
+    let res = FixedUnsigned4::from_str(".0");
+    match res {
+        Ok(v) => assert_eq!(v, FixedUnsigned4::from(0u32)),
+        Err(_) => assert!(false, "Didn't expect an error")
+    }
+}
+
+#[test]
+fn test_parse_one_dot() {
+    let res = FixedUnsigned4::from_str("1.");
+    match res {
+        Ok(v) => assert_eq!(v, FixedUnsigned4::from(1u32)),
+        Err(_) => assert!(false, "Didn't expect an error")
+    }
+}
+
+#[test]
+fn test_parse_dot_one() {
+    let res = FixedUnsigned4::from_str(".1");
+    match res {
+        Ok(v) => assert_eq!(v, FixedUnsigned4::from_str("0.1").unwrap()),
+        Err(_) => assert!(false, "Didn't expect an error")
+    }
+}
+
+

@@ -13,6 +13,8 @@ use std::char::from_digit;
 use std::cmp::Ordering;
 
 pub mod types;
+#[cfg(feature = "bigdecimal")]
+pub mod bigdecimal;
 
 
 /// Maximum number of digits a decimal number can have in a `u64`
@@ -53,6 +55,12 @@ impl Error for ParseError {
     }
 }
 
+/// A trait to convert between `FixedUnsigned`s of different scale
+trait ConvertScale<S, T>
+    where S: FixedScale, T: FixedScale
+{
+    fn convert_scale(from: &FixedUnsigned<S>) -> FixedUnsigned<T>;
+}
 
 /// A fixed point unsigned integer
 ///
@@ -186,9 +194,6 @@ impl<S> FixedUnsigned<S>
         if radix == 0 || radix > 36 {
             panic!("Radix too large: {}", radix);
         }
-        if string.is_empty() {
-            return Err(ParseError::Invalid);
-        }
         let mut digits: Vec<u8> = Vec::new();
         let mut decimal_place = None;
         for (i, c) in string.chars().enumerate() {
@@ -201,6 +206,9 @@ impl<S> FixedUnsigned<S>
             else {
                 digits.push(c.to_digit(radix as u32).unwrap() as u8)
             }
+        }
+        if digits.is_empty() {
+            return Err(ParseError::Invalid);
         }
         // unscaled `int_value`
         let int_value = BigUint::from_radix_be(digits.as_slice(), radix as u32)
@@ -227,9 +235,8 @@ impl<S> FixedUnsigned<S>
         Self::new(Self::scale_up(int_value, S::SCALE))
     }
 
-    /// !!! Only for debugging
-    pub fn get_int_value(&self) -> BigUint {
-        self.int_value.clone()
+    pub fn into_biguint_without_scale(self) -> BigUint {
+        self.int_value
     }
 }
 
@@ -388,11 +395,18 @@ impl<S> From<BigUint> for FixedUnsigned<S>
 }
 */
 
-
 impl<S, T> From<T> for FixedUnsigned<S>
     where S: FixedScale, BigUint: From<T>
 {
     fn from(x: T) -> Self {
         Self::from_biguint(BigUint::from(x))
+    }
+}
+
+impl<S, T> ConvertScale<S, T> for FixedUnsigned<S>
+    where S: FixedScale, T: FixedScale
+{
+    fn convert_scale(from: &FixedUnsigned<S>) -> FixedUnsigned<T> {
+        unimplemented!();
     }
 }

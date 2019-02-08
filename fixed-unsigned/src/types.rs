@@ -14,7 +14,7 @@ use crate::{FixedUnsigned, FixedScale};
 }*/
 
 
-/// A fixed point Uint with 16 decimal places
+/// A fixed point Uint with 4 decimal places
 pub struct FixedScale4 {}
 impl FixedScale for FixedScale4 {
     const SCALE: u64 = 4;
