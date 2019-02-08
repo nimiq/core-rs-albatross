@@ -14,8 +14,9 @@ use network_primitives::time::NetworkTime;
 use primitives::account::AccountError;
 use primitives::block::{Block, BlockHeader, BlockError, Target, TargetCompact, Difficulty};
 use primitives::networks::NetworkId;
-use primitives::ChainProof;
+use primitives::proof::ChainProof;
 use primitives::policy;
+use utils::iterators::Merge;
 use utils::observer::Notifier;
 use utils::unique_ptr::UniquePtr;
 
@@ -662,15 +663,18 @@ impl<'env> Blockchain<'env> {
         let max_depth = head_info.super_block_counts.get_candidate_depth(m);
 
         for depth in (0..=max_depth).rev() {
-            let alpha = self.get_super_chain(depth, &head_info, start_height, Some(&txn));
-
-            if alpha.is_good(depth, m, delta) {
-                assert!(alpha.0.len() >= m as usize, "Good superchain too short");
-                trace!("Found good superchain at depth {} with length {} (#{} - #{})", depth, alpha.0.len(), start_height, head_info.head.header.height);
-                start_height = alpha.0[alpha.0.len() - m as usize].head.header.height;
+            let super_chain = self.get_super_chain(depth, &head_info, start_height, Some(&txn));
+            if super_chain.is_good(depth, m, delta) {
+                assert!(super_chain.0.len() >= m as usize, "Good superchain too short");
+                trace!("Found good superchain at depth {} with length {} (#{} - #{})", depth, super_chain.0.len(), start_height, head_info.head.header.height);
+                start_height = super_chain.0[super_chain.0.len() - m as usize].head.header.height;
             }
 
-            prefix = Blockchain::merge(prefix, alpha.into_light_chain())
+            let merged = Merge::new(
+                prefix.into_iter(),
+                super_chain.0.into_iter().map(|chain_info| chain_info.head),
+                |l, r| u32::cmp(&l.header.height, &r.header.height));
+            prefix = merged.collect();
         }
 
         let suffix = self.get_header_chain(head.header.height - head_info.head.header.height, &head, Some(&txn));
@@ -741,48 +745,6 @@ impl<'env> Blockchain<'env> {
         headers.reverse();
         headers
     }
-
-    fn merge(chain1: Vec<Block>, chain2: Vec<Block>) -> Vec<Block> {
-        let mut merged = vec![];
-        let mut iter1 = chain1.into_iter();
-        let mut iter2 = chain2.into_iter();
-
-        let mut block_opt1 = iter1.next();
-        let mut block_opt2 = iter2.next();
-        while block_opt1.is_some() && block_opt2.is_some() {
-            let block1 = block_opt1.as_ref().unwrap();
-            let block2 = block_opt2.as_ref().unwrap();
-
-            if block1.header.height == block2.header.height {
-                assert_eq!(block1, block2);
-                merged.push(block_opt1.unwrap());
-                block_opt1 = iter1.next();
-                block_opt2 = iter2.next();
-            } else if block1.header.height < block2.header.height {
-                merged.push(block_opt1.unwrap());
-                block_opt1 = iter1.next();
-            } else {
-                merged.push(block_opt2.unwrap());
-                block_opt2 = iter2.next();
-            }
-        }
-
-        if block_opt1.is_some() {
-            merged.push(block_opt1.unwrap());
-        }
-        for block in iter1 {
-            merged.push(block);
-        }
-
-        if block_opt2.is_some() {
-            merged.push(block_opt2.unwrap());
-        }
-        for block in iter2 {
-            merged.push(block);
-        }
-
-        merged
-    }
 }
 
 struct SuperChain(Vec<ChainInfo>);
@@ -835,9 +797,5 @@ impl SuperChain {
 
     fn is_locally_good(super_length: u32, underlying_length: u32, depth: u8, delta: f64) -> bool {
         super_length as f64 > (1f64 - delta) * 2f64.powi(-(depth as i32)) * underlying_length as f64
-    }
-
-    pub fn into_light_chain(self) -> Vec<Block> {
-        self.0.into_iter().map(|chain_info| chain_info.head).collect()
     }
 }

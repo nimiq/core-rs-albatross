@@ -317,7 +317,7 @@ impl ConsensusAgent {
     }
 
     fn on_get_chain_proof(&self) {
-        debug!("[GET_CHAIN_PROOF]");
+        debug!("[GET-CHAIN-PROOF]");
 
         // TODO rate limit
         let chain_proof = self.blockchain.get_chain_proof();

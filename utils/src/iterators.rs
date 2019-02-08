@@ -1,3 +1,6 @@
+use std::iter::Peekable;
+use std::cmp::Ordering;
+
 /// An iterator that alternates between two iterators.
 ///
 /// [`Iterator`]: trait.Iterator.html
@@ -99,6 +102,55 @@ impl<A, B> Iterator for Alternate<A, B> where
             ChainState::BothA | ChainState::BothB => self.a.count() + self.b.count(),
             ChainState::OnlyA => self.a.count(),
             ChainState::OnlyB => self.b.count(),
+        }
+    }
+}
+
+/// An iterator that merges two iterators, removing duplicates.
+pub struct Merge<L, R, C> where
+    L: Iterator,
+    R: Iterator<Item = L::Item>,
+    C: Fn(&L::Item, &R::Item) -> Ordering,
+{
+    left: Peekable<L>,
+    right: Peekable<R>,
+    cmp: C,
+}
+
+impl<L, R, C> Merge<L, R, C> where
+    L: Iterator,
+    R: Iterator<Item = L::Item>,
+    C: Fn(&L::Item, &R::Item) -> Ordering,
+{
+    pub fn new(left: L, right: R, cmp: C) -> Self {
+        Merge {
+            left: left.peekable(),
+            right: right.peekable(),
+            cmp,
+        }
+    }
+}
+
+impl<L, R, C> Iterator for Merge<L, R, C> where
+    L: Iterator,
+    R: Iterator<Item = L::Item>,
+    C: Fn(&L::Item, &R::Item) -> Ordering,
+{
+    type Item = L::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ordering = match (self.left.peek(), self.right.peek()) {
+            (Some(l), Some(r))  => Some((self.cmp)(l, r)),
+            (Some(_), None)     => Some(Ordering::Less),
+            (None, Some(_))     => Some(Ordering::Greater),
+            (None, None)        => None,
+        };
+
+        match ordering {
+            Some(Ordering::Less)    => self.left.next(),
+            Some(Ordering::Greater) => self.right.next(),
+            Some(Ordering::Equal)   => { self.left.next(); self.right.next() },
+            None                    => None,
         }
     }
 }
