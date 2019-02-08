@@ -1,4 +1,5 @@
 use nimiq_blockchain::SuperBlockCounts;
+use beserial::{Deserialize, Serialize};
 
 
 fn assert_range(sbc: &SuperBlockCounts, left: u8, right: u8, expected: u64) {
@@ -72,4 +73,64 @@ pub fn test_get_candidate_depth() {
     assert_eq!(sbc.get_candidate_depth(1), 13);
     assert_eq!(sbc.get_candidate_depth(2), 7);
     assert_eq!(sbc.get_candidate_depth(3), 5);
+}
+
+#[test]
+pub fn test_serialize_empty() {
+    let sbc = SuperBlockCounts::zero();
+    let expected = "00";
+    assert_eq!(Serialize::serialize_to_vec(&sbc), hex::decode(expected).unwrap());
+}
+
+#[test]
+pub fn test_serialize_count() {
+    let mut sbc = SuperBlockCounts::zero();
+    sbc.add(0);
+    let expected = "010000000000000001";
+    assert_eq!(Serialize::serialize_to_vec(&sbc), hex::decode(expected).unwrap());
+}
+
+#[test]
+pub fn test_serialize_counts() {
+    // 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 .. 255
+    //  3  3  3  3  3  3  2  2  1  1  1  1  1  1  0  0      0
+    let mut sbc = SuperBlockCounts::zero();
+    sbc.add(13);
+    sbc.add(7);
+    sbc.add(5);
+    let expected = "0e00000000000000030000000000000003000000000000000300000000000000030000000000000003000000000000000300000000000000020000000000000002000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001";
+    assert_eq!(Serialize::serialize_to_vec(&sbc), hex::decode(expected).unwrap());
+}
+
+#[test]
+pub fn test_parse_zeros() {
+    // NOTE: `Vec`s that are empty or only contain zeros are equal
+    let expected = SuperBlockCounts::zero();
+
+    // completely empty
+    let vec = hex::decode("00").unwrap();
+    let sbc: SuperBlockCounts = Deserialize::deserialize(&mut &vec[..]).unwrap();
+    assert_eq!(sbc, expected);
+
+    // 1 count which is 0
+    let vec = hex::decode("010000000000000000").unwrap();
+    let sbc: SuperBlockCounts = Deserialize::deserialize(&mut &vec[..]).unwrap();
+    assert_eq!(sbc, expected);
+
+    // 3 counts which are 0
+    let vec = hex::decode("03000000000000000000000000000000000000000000000000").unwrap();
+    let sbc: SuperBlockCounts = Deserialize::deserialize(&mut &vec[..]).unwrap();
+    assert_eq!(sbc, expected);
+}
+
+#[test]
+fn test_parse_counts() {
+    let mut expected = SuperBlockCounts::zero();
+    expected.add(13);
+    expected.add(7);
+    expected.add(5);
+
+    let vec = hex::decode("0e00000000000000030000000000000003000000000000000300000000000000030000000000000003000000000000000300000000000000020000000000000002000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001").unwrap();
+    let sbc: SuperBlockCounts = Deserialize::deserialize(&mut &vec[..]).unwrap();
+    assert_eq!(sbc, expected);
 }

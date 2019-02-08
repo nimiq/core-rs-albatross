@@ -2,13 +2,13 @@ use std::io;
 use std::fmt;
 
 use database::{FromDatabaseValue, IntoDatabaseValue};
-use beserial::{Deserialize, Serialize, SerializingError, ReadBytesExt, WriteBytesExt};
+use beserial::{Deserialize, Serialize, DeserializeWithLength, SerializeWithLength, SerializingError, ReadBytesExt, WriteBytesExt};
 
 
 /// Keeps track of the number of superblocks at each level
 #[derive(Clone)]
 pub struct SuperBlockCounts {
-    counts: [u64; Self::NUM_COUNTS]
+    counts: Vec<u64>
 }
 
 impl SuperBlockCounts {
@@ -16,11 +16,20 @@ impl SuperBlockCounts {
 
     /// Create a new SuperBlockCounts with all levels set to 0
     pub fn zero() -> SuperBlockCounts {
-        SuperBlockCounts::from([0; Self::NUM_COUNTS])
+        SuperBlockCounts { counts: Vec::new() }
+    }
+
+    /// Expands the internal `counts` vector to the desired length `depth`
+    fn expand(&mut self, depth: u8) {
+        while self.counts.len() <= depth as usize {
+            self.counts.push(0);
+        }
     }
 
     /// Increments the superblock count for `depth`
+    /// NOTE: `u64` with 1 min block-time lasts 35 billion years. So no checked or saturating add needed.
     pub fn add(&mut self, depth: u8) {
+        self.expand(depth);
         for i in 0..=(depth as usize) {
             self.counts[i] += 1;
         }
@@ -28,8 +37,10 @@ impl SuperBlockCounts {
 
     /// Decrements the superblock count for `depth`
     pub fn substract(&mut self, depth: u8) {
+        // NOTE: The `counts` vector must already be longer, otherwise the non-existing entry counts as 0, which we can't substract
+        assert!((depth as usize) < self.counts.len());
         for i in 0..=(depth as usize) {
-            assert!(self.counts[i] >= 0, "Superblock count is already 0 and can't be decreased");
+            assert!(self.counts[i] >= 0, format!("Superblock count for level {} is already 0 and can't be decreased", i));
             self.counts[i] -= 1;
         }
     }
@@ -50,18 +61,34 @@ impl SuperBlockCounts {
 
     /// Returns the super block count at `depth`
     pub fn get(&self, depth: u8) -> u64 {
-        self.counts[depth as usize]
+        if (depth as usize) < self.counts.len() { self.counts[depth as usize] }
+        else { 0 } // If the entry is not allocated it the vector it is 0.
     }
 
     pub fn get_candidate_depth(&self, m: u64) -> u8 {
-        // NOTE: The cast to u8 is safe, since our indices only go until 255
+        // Check that we can actually assume that the result will fit into `u8`
         assert!(Self::NUM_COUNTS - 1 <= (std::u8::MAX as usize));
 
-        (0..Self::NUM_COUNTS)
-            .map(|i| Self::NUM_COUNTS - i - 1)
-            .map(|i| (i, self.counts[i]))
-            .find(|&(i, d)| d >= m)
-            .unwrap_or((0, 0)).0 as u8
+        if m == 0 {
+            return (Self::NUM_COUNTS - 1) as u8;
+        }
+
+        /*
+        // Get an enumerated iterator over counts and reverse it. This walks backwards over counts
+        // and gives us (index, count). Then find the first where count is greater or equal m
+        self.counts
+            .iter().enumerate().rev()
+            .find(|(i, count)| count >= m)
+            .unwrap_or(0) as u8
+        */
+
+        for (i, count) in self.counts.iter().enumerate().rev() {
+            if *count >= m {
+                return i as u8;
+            }
+        }
+        // If we haven't returned, there is no candidate -> return 0
+        0u8
     }
 }
 
@@ -73,7 +100,16 @@ impl Default for SuperBlockCounts {
 
 impl PartialEq for SuperBlockCounts {
     fn eq(&self, other: &SuperBlockCounts) -> bool {
-        (0..Self::NUM_COUNTS).all(|i| self.counts[i] == other.counts[i])
+        // check if the parts that exists in both, are equal
+        self.counts.iter()
+            .zip(&other.counts)
+            .all(|(&left, right)| left == *right)
+
+        && // then get the remainder which is in one of the both `Vec`s
+        if self.counts.len() < other.counts.len() { &other.counts[self.counts.len()..] }
+        else { &self.counts[other.counts.len()..] }.iter()
+            // and check that those items are 0
+            .all(|count| *count == 0)
     }
 }
 
@@ -81,45 +117,40 @@ impl Eq for SuperBlockCounts {}
 
 impl fmt::Debug for SuperBlockCounts {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[{}]", self.counts[0])?;
-        for i in 1..Self::NUM_COUNTS {
-            write!(f, ",{}", self.counts[i])?;
+        write!(f, "[")?;
+        for (i, count) in self.counts.iter().enumerate() {
+            write!(f, "{}", count)?;
+            if i < Self::NUM_COUNTS - 1 {
+                write!(f, ",")?;
+            }
+        }
+        if self.counts.len() < Self::NUM_COUNTS - 1 {
+            write!(f, "...");
         }
         write!(f, "]")
     }
 }
 
-impl From<[u64; Self::NUM_COUNTS]> for SuperBlockCounts {
-    fn from(counts: [u64; SuperBlockCounts::NUM_COUNTS]) -> SuperBlockCounts {
+impl From<Vec<u64>> for SuperBlockCounts {
+    fn from(counts: Vec<u64>) -> SuperBlockCounts {
+        assert!(counts.len() < Self::NUM_COUNTS, "Vector must not be larger than {} items.", Self::NUM_COUNTS);
         SuperBlockCounts { counts }
     }
 }
 
 impl Serialize for SuperBlockCounts {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-        for i in 0..Self::NUM_COUNTS {
-            size += Serialize::serialize(&self.counts[i], writer)?;
-        }
-        Ok(size)
+        SerializeWithLength::serialize::<u8, W>(&self.counts, writer)
     }
 
     fn serialized_size(&self) -> usize {
-        let mut size = 0;
-        for i in 0..Self::NUM_COUNTS {
-            size += Serialize::serialized_size(&self.counts[i]);
-        }
-        size
+        SerializeWithLength::serialized_size::<u8>(&self.counts)
     }
 }
 
 impl Deserialize for SuperBlockCounts {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut counts: [u64; Self::NUM_COUNTS] = [0; Self::NUM_COUNTS];
-        for i in 0..Self::NUM_COUNTS {
-            counts[i] = Deserialize::deserialize(reader)?;
-        }
-        Ok(SuperBlockCounts::from(counts))
+        Ok(SuperBlockCounts { counts: DeserializeWithLength::deserialize::<u8, R>(reader)? })
     }
 }
 

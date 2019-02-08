@@ -1,3 +1,5 @@
+extern crate hex;
+
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
