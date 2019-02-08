@@ -170,7 +170,7 @@ fn parse_get_accounts_proof_message() {
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
     match message {
         Message::GetAccountsProof(get_accounts_proof_message) => {
-            assert!(get_accounts_proof_message.addresses.len() == 2);
+            assert_eq!(get_accounts_proof_message.addresses.len(), 2);
         },
         _ => assert!(false)
     };
@@ -183,6 +183,7 @@ fn parse_accounts_proof_message_wproof() {
     match message {
         Message::AccountsProof(accounts_proof_message) => {
             assert!(accounts_proof_message.proof.is_some());
+            assert!(accounts_proof_message.proof.verify());
         },
         _ => assert!(false)
     };

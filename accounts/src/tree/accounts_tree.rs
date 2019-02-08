@@ -1,8 +1,11 @@
-use super::{AccountsTreeNode, AddressNibbles, NO_CHILDREN};
+use crate::accounts_proof::AccountsProof;
+use database::{Database, Transaction, WriteTransaction, Environment};
+use hash::{Hash, Blake2bHash};
 use keys::Address;
 use primitives::account::Account;
-use hash::{Hash, Blake2bHash};
-use database::{Database, Transaction, WriteTransaction, Environment};
+use std::cmp::min;
+use std::sync::Arc;
+use super::{AccountsTreeNode, AddressNibbles, NO_CHILDREN};
 
 #[derive(Debug)]
 pub struct AccountsTree<'env> {
@@ -41,18 +44,14 @@ impl<'env> AccountsTree<'env> {
     }
 
     fn insert_batch(&self, txn: &mut WriteTransaction, node_prefix: AddressNibbles, prefix: AddressNibbles, account: Account, mut root_path: Vec<AccountsTreeNode>) {
-        // Find common prefix between node and new address.
-        let common_prefix = node_prefix.common_prefix(&prefix);
-        //println!("Common Prefix between {} and {}: {}", node_prefix.to_string(), prefix.to_string(), common_prefix.to_string());
-
         // If the node prefix does not fully match the new address, split the node.
-        if common_prefix.len() != node_prefix.len() {
+        if !node_prefix.is_prefix_of(&prefix) {
             // Insert the new account node.
-            let new_child = AccountsTreeNode::new_terminal(prefix, account);
+            let new_child = AccountsTreeNode::new_terminal(prefix.clone(), account);
             txn.put_reserve(&self.db, new_child.prefix(), &new_child);
 
             // Insert the new parent node.
-            let new_parent = AccountsTreeNode::new_branch(common_prefix, NO_CHILDREN)
+            let new_parent = AccountsTreeNode::new_branch(node_prefix.common_prefix(&prefix), NO_CHILDREN)
                 .with_child(&node_prefix, Blake2bHash::default()).unwrap()
                 .with_child(new_child.prefix(), Blake2bHash::default()).unwrap();
             txn.put_reserve(&self.db, new_parent.prefix(), &new_parent);
@@ -62,7 +61,7 @@ impl<'env> AccountsTree<'env> {
 
         // If the commonPrefix is the specified address, we have found an (existing) node
         // with the given address. Update the account.
-        if common_prefix == prefix {
+        if node_prefix == prefix {
             // XXX How does this generalize to more than one account type?
             // Special case: If the new balance is the initial balance
             // (i.e. balance=0, nonce=0), it is like the account never existed
@@ -156,6 +155,72 @@ impl<'env> AccountsTree<'env> {
         }
         txn.put_reserve(&self.db, node.prefix(), &node);
         return node.hash();
+    }
+
+    pub fn get_accounts_proof(&self, txn: &Transaction, addresses: &Vec<Address>) -> AccountsProof {
+        let mut prefixes = Vec::new();
+        for address in addresses {
+            prefixes.push(AddressNibbles::from(address));
+        }
+        // We sort the addresses to simplify traversal in post order (leftmost addresses first).
+        prefixes.sort();
+
+        let mut nodes = Vec::new();
+        self.get_accounts_proof_rec(&txn, &self.get_root(txn).unwrap(), &prefixes, &mut nodes);
+        return AccountsProof::new(nodes);
+    }
+
+    fn get_accounts_proof_rec(&self, txn: &Transaction, node: &AccountsTreeNode, prefixes: &Vec<AddressNibbles>, nodes: &mut Vec<AccountsTreeNode>) -> bool {
+        // For each prefix, descend the tree individually.
+        let mut include_node = false;
+        let mut i = 0;
+        while i < prefixes.len() {
+            let prefix = &prefixes[i];
+
+            // If the prefix fully matches, we have found the requested node.
+            // If the prefix does not fully match, the requested address is not part of this node.
+            // Include the node in the proof nevertheless to prove that the account doesn't exist.
+            if node.prefix().is_prefix_of(prefix) || node.prefix() == prefix {
+                include_node = true;
+                i += 1;
+                continue;
+            }
+
+            if let Some(child_prefix) = node.get_child_prefix(prefix) {
+                let mut child_node: AccountsTreeNode = txn.get(&self.db, &child_prefix).unwrap();
+
+                // Group addresses with same prefix:
+                // Because of our ordering, they have to be located next to the current prefix.
+                // Hence, we iterate over the next prefixes, until we don't find commonalities anymore.
+                // In the next main iteration we can skip those we already requested here.
+                let mut sub_prefixes = vec![ prefixes[0].clone() ];
+                // Find other prefixes to descend into this tree as well.
+                for j in i+1..prefixes.len() {
+                    // Since we ordered prefixes, there can't be any other prefixes with commonalities.
+                    if !child_prefix.is_prefix_of(&prefixes[j]) {
+                        break;
+                    }
+                    // But if there is a commonality, add it to the list.
+                    sub_prefixes.push(prefixes[j].clone());
+                    // Move j forward. As soon as j is the last index which doesn't have commonalities,
+                    // we continue from there in the next iteration.
+                    i = j;
+                }
+                include_node = self.get_accounts_proof_rec(txn, &child_node, &sub_prefixes, nodes) || include_node;
+            } else {
+                // No child node exists with the requested prefix. Include the current node to prove the absence of the requested account.
+                include_node = true;
+                i += 1;
+            }
+            i += 1;
+        }
+
+        // If this branch contained at least one account, we add this node.
+        if include_node {
+            nodes.push(node.clone());
+        }
+
+        return include_node;
     }
 
     pub fn get(&self, txn: &Transaction, address: &Address) -> Option<Account> {

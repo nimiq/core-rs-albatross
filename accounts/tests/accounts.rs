@@ -1,5 +1,6 @@
 use beserial::Serialize;
 use nimiq_accounts::Accounts;
+use nimiq_database::ReadTransaction;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -326,4 +327,27 @@ fn it_correctly_prunes_account() {
     let account_after_prune = accounts.get(&contract_address, None);
     assert_eq!(account_after_prune.account_type(), AccountType::Basic);
     assert_eq!(account_after_prune.balance(), Coin::from(0));
+}
+
+#[test]
+fn can_generate_accounts_proof() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let accounts = Accounts::new(&env);
+    let address_miner1 = Address::from([1u8; Address::SIZE]);
+    let address_miner2 = Address::from([2u8; Address::SIZE]);
+    let address_recipient1 = Address::from([3u8; Address::SIZE]);
+    let address_recipient2 = Address::from([4u8; Address::SIZE]);
+
+    let tx1 = Transaction::new_basic(address_miner1.clone(), address_recipient1.clone(), Coin::from(5), Coin::from(3), 1, NetworkId::Main);
+    let tx2 = Transaction::new_basic(address_miner1.clone(), address_recipient2.clone(), Coin::from(7), Coin::from(11), 1, NetworkId::Main);
+    let tx3 = Transaction::new_basic(address_miner1.clone(), address_recipient2.clone(), Coin::from(9), Coin::from(8), 1, NetworkId::Main);
+    let mut body = BlockBody { miner: address_miner1.clone(), extra_data: Vec::new(), transactions: vec![tx1, tx2, tx3], pruned_accounts: Vec::new() };
+
+    let mut write_block_txn = WriteTransaction::new(&env);
+    accounts.commit_block_body(&mut write_block_txn, &body, 1);
+    write_block_txn.commit();
+
+    let mut read_accs_txn = ReadTransaction::new(&env);
+    assert!(accounts.get_accounts_proof(&mut read_accs_txn, &vec![ address_miner1.clone() ]).verify());
+    assert!(accounts.get_accounts_proof(&mut read_accs_txn, &vec![ address_miner1.clone(), address_miner2.clone(), address_recipient1 ]).verify());
 }

@@ -16,6 +16,7 @@ use primitives::policy;
 use primitives::transaction::{Transaction, TransactionFlags};
 
 use crate::tree::AccountsTree;
+use crate::accounts_proof::AccountsProof;
 
 #[derive(Debug)]
 pub struct Accounts<'env> {
@@ -258,5 +259,9 @@ impl<'env> Accounts<'env> {
             self.tree.put_batch(txn, &pruned_account.address, pruned_account.account.clone());
         }
         return Ok(());
+    }
+
+    pub fn get_accounts_proof(&self, txn: &db::Transaction, addresses: &Vec<Address>) -> AccountsProof {
+        self.tree.get_accounts_proof(txn, addresses)
     }
 }

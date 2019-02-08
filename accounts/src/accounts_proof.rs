@@ -26,19 +26,15 @@ impl AccountsProof {
         for node in &self.nodes {
             // If node is a branch node, validate its children.
             if node.is_branch() {
-                loop {
-                    if let Some(child) = children.pop() {
-                        if node.prefix().is_prefix_of(child.prefix()) {
-                            let hash = child.hash::<Blake2bHash>();
-                            // If the child is not valid, return false.
-                            if node.get_child_hash(child.prefix()).unwrap() != &hash || &node.get_child_prefix(child.prefix()).unwrap() != child.prefix() {
-                                return false;
-                            }
-                        } else {
-                            children.push(child);
-                            break;
+                while let Some(child) = children.pop() {
+                    if node.prefix().is_prefix_of(child.prefix()) {
+                        let hash = child.hash::<Blake2bHash>();
+                        // If the child is not valid, return false.
+                        if node.get_child_hash(child.prefix()).unwrap() != &hash || &node.get_child_prefix(child.prefix()).unwrap() != child.prefix() {
+                            return false;
                         }
                     } else {
+                        children.push(child);
                         break;
                     }
                 }
