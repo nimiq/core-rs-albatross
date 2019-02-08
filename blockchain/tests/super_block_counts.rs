@@ -36,24 +36,24 @@ pub fn test_add2() {
 
 
 #[test]
-pub fn test_substract() {
+pub fn test_subtract() {
     let mut sbc = SuperBlockCounts::zero();
     sbc.add(15);
-    sbc.substract(5);
+    sbc.subtract(5);
     assert_range(&sbc, 0, 5, 0);
     assert_range(&sbc, 6, 15, 1);
 }
 
 
 #[test]
-pub fn test_substract2() {
+pub fn test_subtract2() {
     let mut sbc = SuperBlockCounts::zero();
     sbc.add(15);
     sbc.add(15);
     sbc.add(15);
-    sbc.substract(13);
-    sbc.substract(7);
-    sbc.substract(5);
+    sbc.subtract(13);
+    sbc.subtract(7);
+    sbc.subtract(5);
     assert_range(&sbc, 0, 5, 0);
     assert_range(&sbc, 6, 7, 1);
     assert_range(&sbc, 8, 13, 2);

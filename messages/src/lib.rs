@@ -22,6 +22,7 @@ use byteorder::{BigEndian, ByteOrder};
 use hash::{Blake2bHash, Hash};
 use keys::{Address, KeyPair, PublicKey, Signature};
 use parking_lot::RwLock;
+use primitives::ChainProof;
 use primitives::block::{Block, BlockHeader};
 use primitives::transaction::{Transaction, TransactionsProof};
 use rand::Rng;
@@ -102,7 +103,7 @@ pub enum Message {
     Signal(SignalMessage),
 
     GetChainProof,
-    ChainProof(ChainProofMessage),
+    ChainProof(ChainProof),
     GetAccountsProof(GetAccountsProofMessage),
     AccountsProof(AccountsProofMessage),
     GetAccountsTreeChunk(GetAccountsTreeChunkMessage),
@@ -380,7 +381,7 @@ pub struct MessageNotifier {
     pub pong: RwLock<PassThroughNotifier<'static, /*nonce*/ u32>>,
     pub signal: RwLock<PassThroughNotifier<'static, SignalMessage>>,
     pub get_chain_proof: RwLock<PassThroughNotifier<'static, ()>>,
-    pub chain_proof: RwLock<PassThroughNotifier<'static, ChainProofMessage>>,
+    pub chain_proof: RwLock<PassThroughNotifier<'static, ChainProof>>,
     pub get_accounts_proof: RwLock<PassThroughNotifier<'static, GetAccountsProofMessage>>,
     pub get_accounts_tree_chunk: RwLock<PassThroughNotifier<'static, GetAccountsTreeChunkMessage>>,
     pub accounts_tree_chunk: RwLock<PassThroughNotifier<'static, AccountsTreeChunkMessage>>,
@@ -454,7 +455,7 @@ impl MessageNotifier {
             Message::Pong(nonce) => self.pong.read().notify(nonce),
             Message::Signal(msg) => self.signal.read().notify(msg),
             Message::GetChainProof => self.get_chain_proof.read().notify(()),
-            Message::ChainProof(msg) => self.chain_proof.read().notify(msg),
+            Message::ChainProof(proof) => self.chain_proof.read().notify(proof),
             Message::GetAccountsProof(msg) => self.get_accounts_proof.read().notify(msg),
             Message::AccountsProof(msg) => self.accounts_proof.read().notify(msg),
             Message::GetAccountsTreeChunk(msg) => self.get_accounts_tree_chunk.read().notify(msg),
@@ -724,11 +725,6 @@ pub struct SignalMessage {
     pub payload: Vec<u8>,
     pub sender_public_key: Option<PublicKey>,
     pub signature: Option<Signature>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ChainProofMessage {
-
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

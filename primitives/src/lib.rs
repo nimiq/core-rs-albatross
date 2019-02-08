@@ -36,3 +36,15 @@ pub mod policy;
 pub mod transaction;
 #[cfg(feature = "networks")]
 pub mod networks;
+
+
+use beserial::{Deserialize, Serialize};
+use block::{Block, BlockHeader};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChainProof {
+    #[beserial(len_type(u16))]
+    prefix: Vec<Block>,
+    #[beserial(len_type(u16))]
+    suffix: Vec<BlockHeader>
+}

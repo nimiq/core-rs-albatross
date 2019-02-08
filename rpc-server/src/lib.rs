@@ -63,7 +63,7 @@ impl JsonRpcHandler {
         if block_number == 0 {
             block_number = 1;
         }
-        self.consensus.blockchain.block_at(block_number, true).ok_or_else(|| object!{"message" => "Block not found"})
+        self.consensus.blockchain.get_block_at(block_number, true).ok_or_else(|| object!{"message" => "Block not found"})
     }
     
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> Result<JsonValue, JsonValue> {

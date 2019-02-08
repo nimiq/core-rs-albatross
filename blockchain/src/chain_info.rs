@@ -14,7 +14,6 @@ pub struct ChainInfo {
     pub super_block_counts: SuperBlockCounts,
     pub on_main_chain: bool,
     pub main_chain_successor: Option<Blake2bHash>,
-    //pub height: u64
 }
 
 impl ChainInfo {
@@ -54,7 +53,7 @@ impl ChainInfo {
     pub fn prev(&self, block: Block) -> Self {
         assert!(self.total_difficulty > Difficulty::from(0u64));
         let target = Target::from(&block.header.pow());
-        let super_block_counts = self.super_block_counts.copy_and_substract(target.get_depth());
+        let super_block_counts = self.super_block_counts.copy_and_subtract(target.get_depth());
         let total_difficulty = &self.total_difficulty - &Difficulty::from(block.header.n_bits);
         let total_work = &self.total_work - &Difficulty::from(target);
         ChainInfo {

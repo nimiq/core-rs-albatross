@@ -35,7 +35,7 @@ impl SuperBlockCounts {
     }
 
     /// Decrements the superblock count for `depth`
-    pub fn substract(&mut self, depth: u8) {
+    pub fn subtract(&mut self, depth: u8) {
         // NOTE: The `counts` vector must already be longer, otherwise the non-existing entry counts as 0, which we can't substract
         assert!((depth as usize) < self.counts.len());
         for i in 0..=(depth as usize) {
@@ -52,9 +52,9 @@ impl SuperBlockCounts {
     }
 
     /// Decrements the superblock count for `depth` and returns the result in a new `SuperBlockCounts`
-    pub fn copy_and_substract(&self, depth: u8) -> SuperBlockCounts {
+    pub fn copy_and_subtract(&self, depth: u8) -> SuperBlockCounts {
         let mut c = self.clone();
-        c.substract(depth);
+        c.subtract(depth);
         c
     }
 
