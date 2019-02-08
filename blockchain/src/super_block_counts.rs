@@ -8,7 +8,7 @@ use beserial::{Deserialize, Serialize, DeserializeWithLength, SerializeWithLengt
 /// Keeps track of the number of superblocks at each level
 #[derive(Clone)]
 pub struct SuperBlockCounts {
-    counts: Vec<u64>
+    counts: Vec<u32>
 }
 
 impl SuperBlockCounts {
@@ -27,7 +27,6 @@ impl SuperBlockCounts {
     }
 
     /// Increments the superblock count for `depth`
-    /// NOTE: `u64` with 1 min block-time lasts 35 billion years. So no checked or saturating add needed.
     pub fn add(&mut self, depth: u8) {
         self.expand(depth);
         for i in 0..=(depth as usize) {
@@ -60,12 +59,12 @@ impl SuperBlockCounts {
     }
 
     /// Returns the super block count at `depth`
-    pub fn get(&self, depth: u8) -> u64 {
+    pub fn get(&self, depth: u8) -> u32 {
         if (depth as usize) < self.counts.len() { self.counts[depth as usize] }
         else { 0 } // If the entry is not allocated it the vector it is 0.
     }
 
-    pub fn get_candidate_depth(&self, m: u64) -> u8 {
+    pub fn get_candidate_depth(&self, m: u32) -> u8 {
         // Check that we can actually assume that the result will fit into `u8`
         assert!(Self::NUM_COUNTS - 1 <= (std::u8::MAX as usize));
 
@@ -131,8 +130,8 @@ impl fmt::Debug for SuperBlockCounts {
     }
 }
 
-impl From<Vec<u64>> for SuperBlockCounts {
-    fn from(counts: Vec<u64>) -> SuperBlockCounts {
+impl From<Vec<u32>> for SuperBlockCounts {
+    fn from(counts: Vec<u32>) -> SuperBlockCounts {
         assert!(counts.len() < Self::NUM_COUNTS, "Vector must not be larger than {} items.", Self::NUM_COUNTS);
         SuperBlockCounts { counts }
     }
