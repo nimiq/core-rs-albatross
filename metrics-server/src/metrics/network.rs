@@ -19,14 +19,6 @@ impl NetworkMetrics {
     }
 }
 
-//match self {
-//PeerProtocol::Dumb => "dumb",
-//PeerProtocol::Wss => "websocket-secure",
-//PeerProtocol::Ws => "websocket",
-//PeerProtocol::Rtc => "webrtc",
-//PeerProtocol::Unknown => "unknown",
-//}
-
 impl server::Metrics for NetworkMetrics {
     fn metrics(&self, serializer: &mut server::MetricsSerializer<SerializationType>) -> Result<(), io::Error> {
         let (message_metrics, network_metrics, peer_metrics) = self.network.connections.metrics();

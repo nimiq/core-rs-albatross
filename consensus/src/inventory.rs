@@ -357,7 +357,7 @@ impl InventoryAgent {
             this.send_waiting_tx_inv_vectors();
         }, Self::TRANSACTION_RELAY_INTERVAL);
         let weak = Arc::downgrade(this);
-        this.timers.set_interval(InventoryAgentTimer::TxInvVectors, move || {
+        this.timers.set_interval(InventoryAgentTimer::FreeTxInvVectors, move || {
             let this = upgrade_weak!(weak);
             this.send_waiting_free_tx_inv_vectors();
         }, Self::FREE_TRANSACTION_RELAY_INTERVAL);

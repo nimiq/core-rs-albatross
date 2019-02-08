@@ -62,6 +62,7 @@ fn dev_init() {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    #[cfg(debug_assertions)]
     dev_init();
 
     pretty_env_logger::init();
