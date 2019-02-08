@@ -1,0 +1,9 @@
+[package]
+name = "fixed-unsigned"
+version = "0.1.0"
+authors = ["Janosch Gräf <janosch.graef@cispa.saarland>"]
+edition = "2018"
+
+[dependencies]
+num-bigint = "0.2"
+num-traits = "0.2"

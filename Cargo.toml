@@ -22,4 +22,5 @@ members = [
     "metrics-server",
     "lib",
     "messages",
+    "fixed-unsigned"
 ]
