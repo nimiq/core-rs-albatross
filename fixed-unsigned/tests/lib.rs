@@ -141,4 +141,9 @@ fn test_parse_dot_one() {
     }
 }
 
-
+#[test]
+fn test_bytes_length_matches() {
+    let fixed = FixedUnsigned4::from_str("1234.56789").unwrap();
+    let bytes = fixed.to_bytes_be();
+    assert_eq!(bytes.len(), fixed.bytes());
+}

@@ -2,7 +2,8 @@ extern crate num_bigint;
 extern crate num_traits;
 
 use num_bigint::BigUint;
-use num_traits::cast::ToPrimitive;
+use num_traits::identities::{One, Zero};
+use num_traits::ToPrimitive;
 
 use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign, MulAssign, DivAssign};
 use std::marker::PhantomData;
@@ -24,13 +25,11 @@ const U64_MAX_DIGITS: u64 = 19u64;
 /// NOTE: If we go with 15 decimal places, this can safely fit a Javascript Integer
 const U64_MAX_DECIMAL: u64 = 10000000000000000000u64;
 
-
 /// Trait for a fixed scale. It only has one associated constant that must be implemented:
 /// `SCALE`, which defines the place of the decimal point.
 pub trait FixedScale {
     const SCALE: u64;
 }
-
 
 /// Error returned when a string representation can't be parse into a FixedUnsigned.
 /// TODO: Attach string to it for error message
@@ -238,8 +237,16 @@ impl<S> FixedUnsigned<S>
     pub fn into_biguint_without_scale(self) -> BigUint {
         self.int_value
     }
-}
 
+    pub fn bits(&self) -> usize {
+        self.int_value.bits()
+    }
+
+    pub fn bytes(&self) -> usize {
+        let bits = self.bits();
+        return bits / 8 + if bits % 8 == 0 {0} else {1};
+    }
+}
 
 impl<S> Add for FixedUnsigned<S>
     where S: FixedScale
@@ -355,7 +362,6 @@ impl<S> ToString for FixedUnsigned<S>
 }
 */
 
-
 impl<S> FromStr for FixedUnsigned<S>
     where S: FixedScale
 {
@@ -408,5 +414,33 @@ impl<S, T> ConvertScale<S, T> for FixedUnsigned<S>
 {
     fn convert_scale(from: &FixedUnsigned<S>) -> FixedUnsigned<T> {
         unimplemented!();
+    }
+}
+
+impl<S> Zero for FixedUnsigned<S>
+    where S: FixedScale
+{
+    fn zero() -> Self {
+        Self::new(BigUint::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.int_value.is_zero()
+    }
+}
+
+impl<S> One for FixedUnsigned<S>
+    where S: FixedScale
+{
+    fn one() -> Self {
+        Self::from(1u64)
+    }
+}
+
+impl<S> Default for FixedUnsigned<S>
+    where S: FixedScale
+{
+    fn default() -> Self {
+        Self::zero()
     }
 }
