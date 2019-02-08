@@ -8,19 +8,17 @@ use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use accounts::Accounts;
 use database::{Environment, Transaction, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
-use network_messages::GetBlocksMessage;
 use network_primitives::networks::get_network_info;
 use network_primitives::time::NetworkTime;
 use primitives::account::AccountError;
 use primitives::block::{Block, BlockHeader, BlockError, Target, TargetCompact, Difficulty};
 use primitives::networks::NetworkId;
-use primitives::proof::ChainProof;
 use primitives::policy;
 use utils::iterators::Merge;
 use utils::observer::Notifier;
 use utils::unique_ptr::UniquePtr;
 
-use crate::{ChainInfo, ChainStore, Direction, TransactionCache};
+use crate::{chain_info::ChainInfo, chain_store::ChainStore, chain_store::Direction, chain_proof::ChainProof, transaction_cache::TransactionCache};
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
 
@@ -72,6 +70,10 @@ pub enum BlockchainEvent {
 }
 
 impl<'env> Blockchain<'env> {
+    const NIPOPOW_M: u32 = 240;
+    const NIPOPOW_K: u32 = 120;
+    const NIPOPOW_DELTA: f64 = 0.15;
+
     pub fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Self {
         let chain_store = ChainStore::new(env);
         match chain_store.get_head(None) {
@@ -535,7 +537,7 @@ impl<'env> Blockchain<'env> {
         return Target::from(n_bits);
     }
 
-    pub fn get_block_locators(&self) -> Vec<Blake2bHash> {
+    pub fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
         // Push top 10 hashes first, then back off exponentially.
         let mut hash = self.head_hash();
         let mut locators = vec![hash.clone()];
@@ -557,8 +559,8 @@ impl<'env> Blockchain<'env> {
         while let Some(block) = opt_block {
             locators.push(block.header.hash());
 
-            // Respect max size for GetBlocksMessages
-            if locators.len() >= GetBlocksMessage::LOCATORS_MAX_COUNT {
+            // Respect max count.
+            if locators.len() >= max_count {
                 break;
             }
 
@@ -575,8 +577,8 @@ impl<'env> Blockchain<'env> {
         // Push the genesis block hash.
         let network_info = get_network_info(self.network_id).unwrap();
         if locators.is_empty() || locators.last().unwrap() != &network_info.genesis_hash {
-            // Respect max size for GetBlocksMessages, make space for genesis hash if necessary
-            if locators.len() >= GetBlocksMessage::LOCATORS_MAX_COUNT {
+            // Respect max count, make space for genesis hash if necessary
+            if locators.len() >= max_count {
                 locators.pop();
             }
             locators.push(network_info.genesis_hash.clone());
@@ -643,16 +645,18 @@ impl<'env> Blockchain<'env> {
     /* NiPoPoW prover */
 
     pub fn get_chain_proof(&self) -> ChainProof {
-        // TODO caching
-        let start = Instant::now();
-        let chain_proof = self.prove(240, 120, 0.15);
-        trace!("Chain proof took {}ms to compute (prefix={}, suffix={})", utils::time::duration_as_millis(&(Instant::now() - start)), chain_proof.prefix.len(), chain_proof.suffix.len());
-        chain_proof
+        let mut state = self.state.write();
+        if state.chain_proof.is_none() {
+            let start = Instant::now();
+            let chain_proof = self.prove(&state.main_chain.head, Self::NIPOPOW_M, Self::NIPOPOW_K, Self::NIPOPOW_DELTA);
+            trace!("Chain proof took {}ms to compute (prefix={}, suffix={})", utils::time::duration_as_millis(&(Instant::now() - start)), chain_proof.prefix.len(), chain_proof.suffix.len());
+            state.chain_proof = Some(chain_proof);
+        }
+        // XXX Get rid of the clone here? ChainProof is typically >1mb.
+        state.chain_proof.as_ref().unwrap().clone()
     }
 
-    fn prove(&self, m: u32, k: u32, delta: f64) -> ChainProof {
-        let head = self.head();
-
+    fn prove(&self, head: &Block, m: u32, k: u32, delta: f64) -> ChainProof {
         let mut prefix = vec![];
         let mut start_height = 1u32;
 

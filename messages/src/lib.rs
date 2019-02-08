@@ -24,13 +24,13 @@ use keys::{Address, KeyPair, PublicKey, Signature};
 use parking_lot::RwLock;
 use primitives::block::{Block, BlockHeader};
 use primitives::transaction::{Transaction, TransactionsProof};
-use primitives::proof::ChainProof;
 use rand::Rng;
 use rand::rngs::OsRng;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
 
 use nimiq_accounts::accounts_proof::AccountsProof;
+use nimiq_blockchain::chain_proof::ChainProof;
 use network_primitives::address::{PeerAddress, PeerId};
 use network_primitives::protocol::ProtocolFlags;
 use network_primitives::subscription::Subscription;

@@ -1,4 +1,4 @@
-use nimiq_blockchain::{ChainInfo, ChainStore};
+use nimiq_blockchain::{chain_info::ChainInfo, chain_store::ChainStore};
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_primitives::networks::{get_network_info, NetworkId};

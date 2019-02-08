@@ -12,6 +12,7 @@ license = "Apache-2.0"
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
 nimiq-accounts = { path = "../accounts" }
+nimiq-blockchain = { path = "../blockchain" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }

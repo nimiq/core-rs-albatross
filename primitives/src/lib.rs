@@ -36,5 +36,3 @@ pub mod policy;
 pub mod transaction;
 #[cfg(feature = "networks")]
 pub mod networks;
-#[cfg(feature = "proof")]
-pub mod proof;

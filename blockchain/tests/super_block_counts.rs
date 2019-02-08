@@ -1,4 +1,4 @@
-use nimiq_blockchain::SuperBlockCounts;
+use nimiq_blockchain::super_block_counts::SuperBlockCounts;
 use beserial::{Deserialize, Serialize};
 
 

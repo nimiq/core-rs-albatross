@@ -11,7 +11,7 @@ use hash::Blake2bHash;
 use mempool::Mempool;
 use network::connection::close_type::CloseType;
 use network::Peer;
-use network_messages::Message;
+use network_messages::{Message, GetBlocksMessage};
 use network_primitives::subscription::Subscription;
 use primitives::block::Block;
 use primitives::transaction::Transaction;
@@ -231,7 +231,7 @@ impl ConsensusAgent {
 
             locators = match on_fork {
                 true => vec![state.fork_head.as_ref().unwrap().clone()],
-                false => self.blockchain.get_block_locators()
+                false => self.blockchain.get_block_locators(GetBlocksMessage::LOCATORS_MAX_COUNT),
             };
         }
 

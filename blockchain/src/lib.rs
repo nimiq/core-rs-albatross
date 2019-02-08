@@ -7,7 +7,6 @@ extern crate nimiq_accounts as accounts;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_hash as hash;
 extern crate nimiq_database as database;
-extern crate nimiq_messages as network_messages;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_utils as utils;
 
@@ -18,10 +17,7 @@ pub mod super_block_counts;
 pub mod transaction_cache;
 #[cfg(feature = "metrics")]
 pub mod chain_metrics;
+pub mod chain_proof;
 
-pub use self::chain_info::ChainInfo;
-pub use self::chain_store::ChainStore;
-pub use self::chain_store::Direction;
 pub use self::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
-pub use self::transaction_cache::TransactionCache;
-pub use self::super_block_counts::SuperBlockCounts;
+pub use self::chain_store::Direction;

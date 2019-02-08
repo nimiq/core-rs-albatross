@@ -1,4 +1,4 @@
-use nimiq_blockchain::TransactionCache;
+use nimiq_blockchain::transaction_cache::TransactionCache;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_primitives::networks::get_network_info;

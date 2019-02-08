@@ -696,7 +696,10 @@ impl InventoryAgent {
             &start_block_hash,
             cmp::min(msg.max_inv_size as u32, Self::GET_BLOCKS_VECTORS_MAX),
             false,
-            Direction::from(msg.direction),
+            match msg.direction {
+                GetBlocksDirection::Forward => Direction::Forward,
+                GetBlocksDirection::Backward => Direction::Backward,
+            },
         );
 
         let vectors = blocks.iter().map(|block| {

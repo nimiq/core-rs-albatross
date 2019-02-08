@@ -1,23 +1,13 @@
 use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
-use network_messages::GetBlocksDirection;
 use primitives::block::Block;
 
-use crate::ChainInfo;
+use crate::chain_info::ChainInfo;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Direction {
     Forward,
     Backward,
-}
-
-impl From<GetBlocksDirection> for Direction {
-    fn from(direction: GetBlocksDirection) -> Self {
-        match direction {
-            GetBlocksDirection::Forward => Direction::Forward,
-            GetBlocksDirection::Backward => Direction::Backward,
-        }
-    }
 }
 
 #[derive(Debug)]

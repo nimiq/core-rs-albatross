@@ -1,6 +1,5 @@
 use beserial::{Deserialize, Serialize};
-#[cfg(feature = "block")]
-use crate::block::{Block, BlockHeader};
+use primitives::block::{Block, BlockHeader};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChainProof {

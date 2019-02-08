@@ -5,7 +5,7 @@ use std::str::FromStr;
 use bigdecimal::BigDecimal;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_blockchain::{SuperBlockCounts, ChainInfo};
+use nimiq_blockchain::{super_block_counts::SuperBlockCounts, chain_info::ChainInfo};
 use nimiq_network_primitives::networks::get_network_info;
 use nimiq_primitives::block::Difficulty;
 use nimiq_primitives::networks::NetworkId;
