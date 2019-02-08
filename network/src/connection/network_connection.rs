@@ -87,15 +87,12 @@ impl NetworkConnection {
 pub struct ClosingHelper {
     closing_tx: Mutex<Option<oneshot::Sender<CloseType>>>,
     closed: AtomicBool,
-    notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
 }
 
 impl ClosingHelper {
-    pub fn new(closing_tx: oneshot::Sender<CloseType>,
-               notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>) -> Self {
+    pub fn new(closing_tx: oneshot::Sender<CloseType>) -> Self {
         Self {
             closing_tx: Mutex::new(Some(closing_tx)),
-            notifier,
             closed: AtomicBool::new(false),
         }
     }
@@ -121,8 +118,6 @@ impl ClosingHelper {
             return false;
         }
 
-        // Now send out notifications.
-        self.notifier.read().notify(PeerStreamEvent::Close(ty));
         return true;
     }
 }
@@ -149,20 +144,25 @@ impl ProcessConnectionFuture {
         // If the connection is to be dropped because of a forceful close, CloseType != `CloseType::Regular`.
         // So, in these cases, send the WS CloseFrame.
         // Set Item=() and map Error=().
-        let connection = connection.and_then(move |(ty, _)| {
-            // Specifically send close frame if CloseType is not Regular.
-            if ty != CloseType::Regular {
-                shared_stream.close();
-            }
-            debug!("ProcessConnectionFuture terminated {:?}", ty);
+        let connection = connection.then(move |result| {
+            let ty = match result {
+                Ok((ty, _)) => ty,
+                Err(_) => CloseType::ClosedByRemote,
+            };
+
+            // XXX Specifically send close frame if CloseType is not Regular. (???)
+            //if ty != CloseType::Regular {}
+            shared_stream.close();
+
+            // Now send out notifications.
+            notifier.read().notify(PeerStreamEvent::Close(ty));
+
             Ok(())
-        }).map_err(|_| {
-            error!("ProcessConnectionFuture errored");
         });
 
         (Self {
             inner: Box::new(connection)
-        }, ClosingHelper::new(closing_tx, notifier))
+        }, ClosingHelper::new(closing_tx))
     }
 }
 

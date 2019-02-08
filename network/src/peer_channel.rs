@@ -55,10 +55,7 @@ impl PeerChannel {
                     msg_notifier1.notify(msg)
                 },
                 PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
-                PeerStreamEvent::Error(e) => {
-                    // TODO close channel
-                    error!("Got peer stream error: {:?}", *e);
-                }
+                PeerStreamEvent::Error(e) => {}
             }
         });
 
@@ -217,7 +214,6 @@ impl PeerStream {
             msg_notifier.read().notify(PeerStreamEvent::Message(msg));
             Ok(())
         }).or_else(move |error| {
-            debug!("[MESSAGE] Error: {:#?}", error);
             error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(&error)));
             Err(error)
         }).and_then(move |result| {

@@ -487,16 +487,6 @@ impl ConnectionPool {
         return true;
     }
 
-    fn on_peer_channel_event(&self, connection_id: ConnectionId, event: &PeerChannelEvent) {
-        match event {
-            PeerChannelEvent::Close(ty) => self.on_close(connection_id, ty.clone()),
-            PeerChannelEvent::Error(err) => {
-                warn!("Connection {} has been closed, because of {:?}", connection_id, err.as_ref());
-            },
-            _ => {},
-        }
-    }
-
     /// Callback upon connection establishment.
     fn on_connection(&self, connection: NetworkConnection) {
         let guard = self.change_lock.lock();
