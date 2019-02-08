@@ -1,4 +1,5 @@
 use std::cmp;
+use std::time::Instant;
 use std::sync::Arc;
 
 use bigdecimal::BigDecimal;
@@ -40,6 +41,7 @@ struct BlockchainState<'env> {
     transaction_cache: TransactionCache,
     main_chain: ChainInfo,
     head_hash: Blake2bHash,
+    chain_proof: Option<ChainProof>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -114,6 +116,7 @@ impl<'env> Blockchain<'env> {
                 transaction_cache,
                 main_chain,
                 head_hash,
+                chain_proof: None,
             }),
             push_lock: Mutex::new(()),
 
@@ -151,7 +154,8 @@ impl<'env> Blockchain<'env> {
                 accounts,
                 transaction_cache,
                 main_chain,
-                head_hash
+                head_hash,
+                chain_proof: None,
             }),
             push_lock: Mutex::new(()),
 
@@ -275,6 +279,8 @@ impl<'env> Blockchain<'env> {
 
             state.main_chain = chain_info;
             state.head_hash = block_hash;
+
+            state.chain_proof = None;
 
             txn.commit();
         }
@@ -418,6 +424,9 @@ impl<'env> Blockchain<'env> {
 
             state.main_chain = fork_chain[0].1.clone();
             state.head_hash = fork_chain[0].0.clone();
+
+            // Reset chain proof.
+            state.chain_proof = None;
         }
 
         // Give up write lock before notifying.
@@ -633,73 +642,43 @@ impl<'env> Blockchain<'env> {
     /* NiPoPoW prover */
 
     pub fn get_chain_proof(&self) -> ChainProof {
-        self.prove(240, 120, 0.15)
+        // TODO caching
+        let start = Instant::now();
+        let chain_proof = self.prove(240, 120, 0.15);
+        trace!("Chain proof took {}ms to compute (prefix={}, suffix={})", utils::time::duration_as_millis(&(Instant::now() - start)), chain_proof.prefix.len(), chain_proof.suffix.len());
+        chain_proof
     }
 
     fn prove(&self, m: u32, k: u32, delta: f64) -> ChainProof {
+        let head = self.head();
+
         let mut prefix = vec![];
         let mut start_height = 1u32;
 
         let txn = ReadTransaction::new(self.env);
         let head_info = self.chain_store
-            .get_chain_info_at(u32::max(self.height().saturating_sub(k), 1), false, Some(&txn))
+            .get_chain_info_at(u32::max(head.header.height.saturating_sub(k), 1), false, Some(&txn))
             .expect("Failed to compute chain proof - prefix head block not found");
         let max_depth = head_info.super_block_counts.get_candidate_depth(m);
 
         for depth in (0..=max_depth).rev() {
-            let alpha = self.get_super_chain(depth, head_info, start_height, Some(&txn));
+            let alpha = self.get_super_chain(depth, &head_info, start_height, Some(&txn));
 
             if alpha.is_good(depth, m, delta) {
                 assert!(alpha.0.len() >= m as usize, "Good superchain too short");
-                debug!("Found good superchain at depth {} with length {} (#{} - #{})", depth, alpha.0.len(), start_height, head_info.head.header.height);
+                trace!("Found good superchain at depth {} with length {} (#{} - #{})", depth, alpha.0.len(), start_height, head_info.head.header.height);
                 start_height = alpha.0[alpha.0.len() - m as usize].head.header.height;
             }
 
             prefix = Blockchain::merge(prefix, alpha.into_light_chain())
         }
 
-        let suffix = self.get_header_chain(self.height() - head_info.head.header.height, &head_info.head, Some(&txn));
+        let suffix = self.get_header_chain(head.header.height - head_info.head.header.height, &head, Some(&txn));
 
         ChainProof { prefix, suffix }
     }
 
-    fn merge(chain1: Vec<Block>, chain2: Vec<Block>) -> Vec<Block> {
-        let mut merged = vec![];
-        let mut iter1 = chain1.into_iter();
-        let mut iter2 = chain2.into_iter();
-
-        let mut block_opt1 = iter1.next();
-        let mut block_opt2 = iter2.next();
-        while block_opt1.is_some() && block_opt2.is_some() {
-            let block1 = block_opt1.unwrap();
-            let block2 = block_opt2.unwrap();
-
-            if block1.header.height == block2.header.height {
-                assert_eq!(block1, block2);
-                merged.push(block1);
-                block_opt1 = iter1.next();
-                block_opt2 = iter2.next();
-            } else if block1.header.height < block2.header.height {
-                merged.push(block1);
-                block_opt1 = iter1.next();
-            } else {
-                merged.push(block2);
-                block_opt2 = iter2.next();
-            }
-
-            for block in iter1 {
-                merged.push(block);
-            }
-
-            for block in iter2 {
-                merged.push(block);
-            }
-        }
-
-        merged
-    }
-
-    fn get_super_chain(&self, depth: u8, head_info: ChainInfo, tail_height: u32, txn_option: Option<&Transaction>) -> SuperChain {
+    fn get_super_chain(&self, depth: u8, head_info: &ChainInfo, tail_height: u32, txn_option: Option<&Transaction>) -> SuperChain {
         assert!(tail_height >= 1, "Tail height must be >= 1");
         let mut chain = vec![];
 
@@ -709,7 +688,8 @@ impl<'env> Blockchain<'env> {
             chain.push(head_info.clone());
         }
 
-        let mut head = head_info.head;
+        let mut block;
+        let mut head = &head_info.head;
         let mut j = i16::max(depth as i16 - Target::from(head.header.n_bits).get_depth() as i16, -1);
         while j < head.interlink.hashes.len() as i16 && head.header.height > tail_height {
             let reference = if j < 0 {
@@ -721,14 +701,16 @@ impl<'env> Blockchain<'env> {
             let chain_info = self.chain_store
                 .get_chain_info(reference, false, txn_option)
                 .expect("Failed to construct superchain - missing block");
-            head = chain_info.head.clone();
+            block = chain_info.head.clone();
             chain.push(chain_info);
 
+            head = &block;
             j = i16::max(depth as i16 - Target::from(head.header.n_bits).get_depth() as i16, -1);
         }
 
         if (chain.is_empty() || chain[chain.len() - 1].head.header.height > 1) && tail_height == 1 {
-            let genesis_block = get_network_info(self.network_id).unwrap().genesis_block.clone();
+            let mut genesis_block = get_network_info(self.network_id).unwrap().genesis_block.clone();
+            genesis_block.body = None;
             chain.push(ChainInfo::initial(genesis_block));
         }
 
@@ -758,6 +740,48 @@ impl<'env> Blockchain<'env> {
 
         headers.reverse();
         headers
+    }
+
+    fn merge(chain1: Vec<Block>, chain2: Vec<Block>) -> Vec<Block> {
+        let mut merged = vec![];
+        let mut iter1 = chain1.into_iter();
+        let mut iter2 = chain2.into_iter();
+
+        let mut block_opt1 = iter1.next();
+        let mut block_opt2 = iter2.next();
+        while block_opt1.is_some() && block_opt2.is_some() {
+            let block1 = block_opt1.as_ref().unwrap();
+            let block2 = block_opt2.as_ref().unwrap();
+
+            if block1.header.height == block2.header.height {
+                assert_eq!(block1, block2);
+                merged.push(block_opt1.unwrap());
+                block_opt1 = iter1.next();
+                block_opt2 = iter2.next();
+            } else if block1.header.height < block2.header.height {
+                merged.push(block_opt1.unwrap());
+                block_opt1 = iter1.next();
+            } else {
+                merged.push(block_opt2.unwrap());
+                block_opt2 = iter2.next();
+            }
+        }
+
+        if block_opt1.is_some() {
+            merged.push(block_opt1.unwrap());
+        }
+        for block in iter1 {
+            merged.push(block);
+        }
+
+        if block_opt2.is_some() {
+            merged.push(block_opt2.unwrap());
+        }
+        for block in iter2 {
+            merged.push(block);
+        }
+
+        merged
     }
 }
 
@@ -799,7 +823,7 @@ impl SuperChain {
                 for j in (0..=mu - 1).rev() {
                     let lower_chain_length = head_info.super_block_counts.get(j) - tail_info.super_block_counts.get(j);
                     if !SuperChain::is_locally_good(upper_chain_length, lower_chain_length, mu - j, delta) {
-                        debug!("Chain badness detected at depth {}[{}:{}], failing at {}/{}", depth, i, i + k1 as usize, mu, j);
+                        trace!("Chain badness detected at depth {}[{}:{}], failing at {}/{}", depth, i, i + k1 as usize, mu, j);
                         return false;
                     }
                 }

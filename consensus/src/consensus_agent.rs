@@ -11,9 +11,11 @@ use hash::Blake2bHash;
 use mempool::Mempool;
 use network::connection::close_type::CloseType;
 use network::Peer;
+use network_messages::Message;
 use network_primitives::subscription::Subscription;
 use primitives::block::Block;
 use primitives::transaction::Transaction;
+use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::timers::Timers;
 
@@ -63,7 +65,7 @@ pub struct ConsensusAgent {
     state: RwLock<ConsensusAgentState>,
 
     pub notifier: RwLock<Notifier<'static, ConsensusAgentEvent>>,
-    self_weak: Weak<RwLock<ConsensusAgent>>,
+    self_weak: MutableOnce<Weak<ConsensusAgent>>,
 
     sync_lock: Mutex<()>,
 
@@ -80,11 +82,11 @@ impl ConsensusAgent {
     /// Maximum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<RwLock<Self>> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());
-        let this = Arc::new(RwLock::new(ConsensusAgent {
+        let this = Arc::new(ConsensusAgent {
             blockchain,
             mempool,
             peer: peer_arc.clone(),
@@ -103,27 +105,48 @@ impl ConsensusAgent {
 
             // TODO whole agent is locked, thus we can remove this lock
             notifier: RwLock::new(Notifier::new()),
-            self_weak: Weak::new(),
+            self_weak: MutableOnce::new(Weak::new()),
 
             sync_lock: Mutex::new(()),
             timers: Timers::new()
-        }));
+        });
         ConsensusAgent::init_listeners(&this);
         this
     }
 
-    pub fn synced(&self) -> bool {
-        self.state.read().synced
-    }
-
-    fn init_listeners(this: &Arc<RwLock<Self>>) {
-        this.write().self_weak = Arc::downgrade(this);
+    fn init_listeners(this: &Arc<Self>) {
+        unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
         let weak = Arc::downgrade(this);
-        this.read().inv_agent.notifier.write().register(move |e: &InventoryEvent| {
+        this.inv_agent.notifier.write().register(move |e: &InventoryEvent| {
             let this = upgrade_weak!(weak);
-            this.read().on_inventory_event(e);
+            this.on_inventory_event(e);
         });
+
+
+        let weak = Arc::downgrade(this);
+        let msg_notifier = &this.peer.channel.msg_notifier;
+        msg_notifier.get_chain_proof.write().register(move |_e| {
+            let this = upgrade_weak!(weak);
+            this.on_get_chain_proof();
+        });
+    }
+
+    pub fn relay_block(&self, block: &Block) -> bool {
+        // Don't relay block if have not synced with the peer yet.
+        if !self.state.read().synced {
+            return false;
+        }
+
+        self.inv_agent.relay_block(block)
+    }
+
+    pub fn relay_transaction(&self, transaction: &Transaction) -> bool {
+        self.inv_agent.relay_transaction(transaction)
+    }
+
+    pub fn synced(&self) -> bool {
+        self.state.read().synced
     }
 
     pub fn sync(&self) {
@@ -175,8 +198,7 @@ impl ConsensusAgent {
         // XXX Use a random delay here to prevent requests to multiple peers at once.
         let weak = self.self_weak.clone();
         self.timers.set_delay(ConsensusAgentTimer::Mempool, move || {
-            let arc = upgrade_weak!(weak);
-            let agent = arc.read();
+            let agent = upgrade_weak!(weak);
             agent.timers.clear_delay(&ConsensusAgentTimer::Mempool);
             agent.inv_agent.mempool();
         }, Duration::from_millis(rand::thread_rng()
@@ -294,16 +316,11 @@ impl ConsensusAgent {
         self.peer.channel.close(CloseType::GetBlocksTimeout);
     }
 
-    pub fn relay_block(&self, block: &Block) -> bool {
-        // Don't relay block if have not synced with the peer yet.
-        if !self.state.read().synced {
-            return false;
-        }
+    fn on_get_chain_proof(&self) {
+        debug!("[GET_CHAIN_PROOF]");
 
-        self.inv_agent.relay_block(block)
-    }
-
-    pub fn relay_transaction(&self, transaction: &Transaction) -> bool {
-        self.inv_agent.relay_transaction(transaction)
+        // TODO rate limit
+        let chain_proof = self.blockchain.get_chain_proof();
+        self.peer.channel.send_or_close(Message::ChainProof(chain_proof));
     }
 }
