@@ -528,12 +528,12 @@ impl InventoryAgent {
                 // NOTE: every integer up to (2^53 - 1) should have an exact representation as f64 (IEEE 754 64-bit double)
                 // TODO: Should we incorporate this guarantee as part of the Coin type?
                 let min_fee_per_byte: f64 = if *min_fee_per_byte < Coin::from(Coin::MAX_SAFE_VALUE) { u64::from(*min_fee_per_byte) as f64 } else { Coin::MAX_SAFE_VALUE as f64 };
-                let mut txs = self.mempool.get_transactions(mempool::SIZE_MAX, min_fee_per_byte);
+                let mut txs = self.mempool.get_transactions(usize::max_value(), min_fee_per_byte);
                 txs.truncate(Self::MEMPOOL_ENTRIES_MAX);
                 txs
             },
            Subscription::Any => {
-                let mut txs = self.mempool.get_transactions(mempool::SIZE_MAX, 0f64);
+                let mut txs = self.mempool.get_transactions(usize::max_value(), 0f64);
                 txs.truncate(Self::MEMPOOL_ENTRIES_MAX);
                 txs
            },
