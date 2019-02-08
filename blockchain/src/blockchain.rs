@@ -11,7 +11,7 @@ use network_messages::GetBlocksMessage;
 use network_primitives::networks::get_network_info;
 use network_primitives::time::NetworkTime;
 use primitives::account::AccountError;
-use primitives::block::{Block, BlockError, Target, TargetCompact};
+use primitives::block::{Block, BlockError, Target, TargetCompact, Difficulty};
 use primitives::networks::NetworkId;
 use primitives::policy;
 use utils::observer::Notifier;
@@ -611,6 +611,11 @@ impl<'env> Blockchain<'env> {
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| &s.main_chain.head)
+    }
+
+    pub fn total_work(&self) -> MappedRwLockReadGuard<Difficulty> {
+        let guard = self.state.read();
+        RwLockReadGuard::map(guard, |s| &s.main_chain.total_work)
     }
 
     pub fn accounts(&self) -> MappedRwLockReadGuard<Accounts<'env>> {

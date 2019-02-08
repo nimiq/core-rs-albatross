@@ -12,7 +12,7 @@ use crate::Peer;
 use crate::peer_channel::PeerChannel;
 use crate::websocket::websocket_connector::ConnectionHandle;
 
-#[derive(Copy, Clone, Debug, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 pub enum ConnectionState {
     New,
     Connecting,
@@ -115,37 +115,25 @@ impl Eq for ConnectionInfo {}
 
 pub struct ConnectionStatistics {
     latencies: Vec<f32>,
-    messages: HashMap<MessageType, u32>,
 }
 
 impl ConnectionStatistics {
     pub fn new() -> Self {
         Self {
             latencies: Vec::new(),
-            messages: HashMap::new(),
         }
     }
 
     pub fn reset(&mut self) {
-        // FIXME: This should be optimized
-        self.latencies = Vec::new();
-        self.messages = HashMap::new();
+        self.latencies.clear();
     }
 
     pub fn add_latency(&mut self, latency: f32) {
         self.latencies.push(latency);
     }
 
-    pub fn add_message(&mut self, message: Message) {
-        unimplemented!()
-    }
-
-    pub fn message_count(&self, message_type: MessageType) {
-        unimplemented!()
-    }
-
     pub fn latency_median(&self) -> f32 {
-        // FIXME: Cloning is slow but needed to sort this vector without requiring &mut self (which we dont have in PeerScorer use)
+        // FIXME: Cloning is slow but needed to sort this vector without requiring &mut self (which we don't have in PeerScorer use)
         let mut latencies = self.latencies.clone();
         let length = self.latencies.len();
 

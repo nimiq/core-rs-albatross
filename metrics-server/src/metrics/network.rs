@@ -2,6 +2,7 @@ use std::io;
 use std::sync::Arc;
 
 use network::network::Network;
+use network::connection::connection_info::ConnectionState;
 
 use crate::server;
 use crate::server::SerializationType;
@@ -18,24 +19,33 @@ impl NetworkMetrics {
     }
 }
 
+//match self {
+//PeerProtocol::Dumb => "dumb",
+//PeerProtocol::Wss => "websocket-secure",
+//PeerProtocol::Ws => "websocket",
+//PeerProtocol::Rtc => "webrtc",
+//PeerProtocol::Unknown => "unknown",
+//}
+
 impl server::Metrics for NetworkMetrics {
     fn metrics(&self, serializer: &mut server::MetricsSerializer<SerializationType>) -> Result<(), io::Error> {
-        // TODO: Add useful peer metrics.
-        serializer.metric_with_attributes(
-            "network_peers",
-            self.network.connections.peer_count(),
-            attributes!{"type" => "unknown"}
-        )?;
-        serializer.metric_with_attributes(
-            "network_peers",
-            self.network.connections.peer_count_outbound(),
-            attributes!{"type" => "unknown", "state" => "outbound"}
-        )?;
-        serializer.metric_with_attributes(
-            "network_peers",
-            self.network.connections.connecting_count(),
-            attributes!{"type" => "unknown", "state" => "connecting"}
-        )?;
+        let (message_metrics, network_metrics, peer_metrics) = self.network.connections.metrics();
+
+        for ((protocol, state), count) in peer_metrics.peer_metrics() {
+            let str_state = match state {
+                ConnectionState::Established => "established",
+                ConnectionState::Connecting => "connecting",
+                ConnectionState::Closed => "closed",
+                ConnectionState::Connected => "connected",
+                ConnectionState::Negotiating => "negotiating",
+                ConnectionState::New => "new",
+            };
+            serializer.metric_with_attributes(
+                "network_peers",
+                count,
+                attributes!{"type" => protocol, "state" => str_state}
+            )?;
+        }
 
         let num_addresses = self.network.addresses.known_addresses_count();
         let num_ws_addresses = self.network.addresses.known_ws_addresses_count();
@@ -64,9 +74,24 @@ impl server::Metrics for NetworkMetrics {
         )?;
 
         serializer.metric("network_time_now", self.network.network_time.now())?;
+        serializer.metric_with_attributes(
+            "network_bytes",
+            network_metrics.bytes_sent(),
+            attributes!{"direction" => "sent"}
+        )?;
+        serializer.metric_with_attributes(
+            "network_bytes",
+            network_metrics.bytes_received(),
+            attributes!{"direction" => "received"}
+        )?;
 
-        // TODO: Measure bytes.
-        // TODO: Measure messages.
+        for &ty in message_metrics.message_types() {
+            serializer.metric_with_attributes(
+                "message_rx_count",
+                message_metrics.message_occurences(ty).unwrap_or(0),
+                attributes!{"type" => format!("{:?}", ty)} // TODO: implement Display for it.
+            )?;
+        }
 
         Ok(())
     }

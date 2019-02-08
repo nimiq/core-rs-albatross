@@ -19,6 +19,8 @@ use crate::connection::network_connection::ClosingHelper;
 use crate::connection::network_connection::NetworkConnection;
 use crate::websocket::NimiqMessageStreamError;
 use crate::websocket::SharedNimiqMessageStream;
+#[cfg(feature = "metrics")]
+use crate::network_metrics::MessageMetrics;
 
 #[derive(Clone)]
 pub struct PeerChannel {
@@ -27,6 +29,8 @@ pub struct PeerChannel {
     pub close_notifier: Arc<RwLock<Notifier<'static, CloseType>>>,
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
+    #[cfg(feature = "metrics")]
+    pub message_metrics: Arc<MessageMetrics>,
 }
 
 impl PeerChannel {
@@ -34,11 +38,22 @@ impl PeerChannel {
         let msg_notifier = Arc::new(MessageNotifier::new());
         let close_notifier = Arc::new(RwLock::new(Notifier::new()));
 
+        #[cfg(feature = "metrics")]
+        let message_metrics = Arc::new(MessageMetrics::new());
+
         let msg_notifier1 = msg_notifier.clone();
         let close_notifier1 = close_notifier.clone();
+
+        #[cfg(feature = "metrics")]
+        let message_metrics1 = message_metrics.clone();
+
         network_connection.notifier.write().register(move |e: PeerStreamEvent| {
             match e {
-                PeerStreamEvent::Message(msg) => msg_notifier1.notify(msg),
+                PeerStreamEvent::Message(msg) => {
+                    #[cfg(feature = "metrics")]
+                    message_metrics1.note_message(msg.ty());
+                    msg_notifier1.notify(msg)
+                },
                 PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
                 PeerStreamEvent::Error(e) => {
                     // TODO close channel
@@ -53,6 +68,8 @@ impl PeerChannel {
             close_notifier,
             peer_sink: network_connection.peer_sink(),
             address_info: network_connection.address_info(),
+            #[cfg(feature = "metrics")]
+            message_metrics,
         }
     }
 

@@ -8,12 +8,14 @@ use futures::sync::oneshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use network_primitives::address::net_address::NetAddress;
 use network_messages::Message;
+use network_primitives::address::net_address::NetAddress;
 use network_primitives::address::peer_address::PeerAddress;
 use utils::observer::PassThroughNotifier;
 
 use crate::connection::close_type::CloseType;
+#[cfg(feature = "metrics")]
+use crate::network_metrics::NetworkMetrics;
 use crate::peer_channel::PeerSink;
 use crate::peer_channel::PeerStream;
 use crate::peer_channel::PeerStreamEvent;
@@ -74,6 +76,11 @@ impl NetworkConnection {
     pub fn peer_sink(&self) -> PeerSink { self.peer_sink.clone() }
     pub fn address_info(&self) -> AddressInfo {
         self.address_info.clone()
+    }
+
+    #[cfg(feature = "metrics")]
+    pub fn metrics(&self) -> &Arc<NetworkMetrics> {
+        self.stream.network_metrics()
     }
 }
 

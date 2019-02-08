@@ -34,3 +34,6 @@ native-tls = "0.2"
 futures = "0.1"
 tungstenite = "0.6"
 tokio-tungstenite = { git = "https://github.com/jeffesquivels/tokio-tungstenite", branch = "implement_peer_addr" }
+
+[features]
+metrics = []

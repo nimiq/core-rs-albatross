@@ -1,4 +1,5 @@
 use std::{collections::VecDeque, fmt, fmt::Debug, io, net, time::Instant};
+use std::sync::Arc;
 
 use futures::prelude::*;
 use tokio::{
@@ -18,9 +19,12 @@ use tungstenite::{
 use url::Url;
 
 use beserial::{Deserialize, Serialize, SerializingError};
-use network_primitives::address::net_address::NetAddress;
 use network_messages::Message as NimiqMessage;
+use network_primitives::address::net_address::NetAddress;
 use utils::locking::MultiLock;
+
+#[cfg(feature = "metrics")]
+use crate::network_metrics::NetworkMetrics;
 
 pub mod websocket_connector;
 
@@ -58,6 +62,8 @@ pub struct NimiqMessageStream {
     net_address: NetAddress,
     outbound: bool,
     last_chunk_received_at: Option<Instant>,
+    #[cfg(feature = "metrics")]
+    network_metrics: Arc<NetworkMetrics>,
 }
 
 impl NimiqMessageStream {
@@ -75,6 +81,8 @@ impl NimiqMessageStream {
             },
             outbound,
             last_chunk_received_at: None,
+            #[cfg(feature = "metrics")]
+            network_metrics: Arc::new(NetworkMetrics::default()),
         };
     }
 
@@ -89,6 +97,11 @@ impl NimiqMessageStream {
     pub fn last_chunk_received_at(&self) -> &Option<Instant> {
         &self.last_chunk_received_at
     }
+
+    #[cfg(feature = "metrics")]
+    pub fn network_metrics(&self) -> &Arc<NetworkMetrics> {
+        &self.network_metrics
+    }
 }
 
 impl Sink for NimiqMessageStream {
@@ -102,6 +115,9 @@ impl Sink for NimiqMessageStream {
         self.sending_tag = (self.sending_tag + 1) % 255;
 
         let msg = item.serialize_to_vec();
+
+        #[cfg(feature = "metrics")]
+        self.network_metrics.note_bytes_sent(msg.len());
 
         // Send chunks to underlying layer.
         let mut remaining = msg.len();
@@ -162,6 +178,9 @@ impl Stream for NimiqMessageStream {
         loop {
             match self.inner.poll() {
                 Ok(Async::Ready(Some(m))) => {
+                    #[cfg(feature = "metrics")]
+                    self.network_metrics.note_bytes_received(m.len());
+
                     // Check max chunk size.
                     if m.len() > MAX_CHUNK_SIZE {
                         error!("Max chunk size exceeded ({} > {})", m.len(), MAX_CHUNK_SIZE);
@@ -282,6 +301,8 @@ pub struct SharedNimiqMessageStream {
     net_address: NetAddress,
     outbound: bool,
     last_chunk_received_at: Option<Instant>,
+    #[cfg(feature = "metrics")]
+    network_metrics: Arc<NetworkMetrics>,
 }
 
 impl SharedNimiqMessageStream {
@@ -296,6 +317,11 @@ impl SharedNimiqMessageStream {
     pub fn last_chunk_received_at(&self) -> Option<&Instant> {
         self.last_chunk_received_at.as_ref()
     }
+
+    #[cfg(feature = "metrics")]
+    pub fn network_metrics(&self) -> &Arc<NetworkMetrics> {
+        &self.network_metrics
+    }
 }
 
 impl From<NimiqMessageStream> for SharedNimiqMessageStream {
@@ -303,11 +329,15 @@ impl From<NimiqMessageStream> for SharedNimiqMessageStream {
         let net_address = stream.net_address().clone();
         let outbound = stream.outbound();
         let last_chunk_received_at = stream.last_chunk_received_at().clone();
+        #[cfg(feature = "metrics")]
+        let network_metrics = stream.network_metrics().clone();
         SharedNimiqMessageStream {
             net_address,
             outbound,
             last_chunk_received_at,
             inner: MultiLock::new(stream),
+            #[cfg(feature = "metrics")]
+            network_metrics,
         }
     }
 }
@@ -319,7 +349,9 @@ impl Clone for SharedNimiqMessageStream {
             net_address: self.net_address.clone(),
             outbound: self.outbound,
             last_chunk_received_at: self.last_chunk_received_at.clone(),
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
+            #[cfg(feature = "metrics")]
+            network_metrics: self.network_metrics.clone(),
         }
     }
 }

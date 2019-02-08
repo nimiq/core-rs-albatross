@@ -19,6 +19,8 @@ pub mod connection;
 pub mod peer;
 pub mod network_config;
 pub mod network;
+#[cfg(feature = "metrics")]
+mod network_metrics;
 
 pub use crate::peer::Peer;
 pub use crate::network::{Network, NetworkEvent};
