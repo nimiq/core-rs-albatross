@@ -17,6 +17,8 @@ extern crate nimiq_consensus as consensus;
 extern crate nimiq_primitives as primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
+#[cfg(feature = "metrics-server")]
+extern crate nimiq_metrics_server as metrics_server;
 extern crate nimiq_lib as lib;
 
 
@@ -39,6 +41,8 @@ use database::lmdb::{LmdbEnvironment, open};
 use database::volatile::VolatileEnvironment;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
+#[cfg(feature = "metrics-server")]
+use metrics_server::metrics_server;
 use lib::client::{initialize, ClientInitializeFuture, ClientConnectFuture, ClientError};
 
 use crate::settings::Settings;
@@ -136,6 +140,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(not(feature = "rpc-server"))] {
         if settings.rpc_server.is_some() {
             warn!("RPC server feature not enabled.");
+        }
+    }
+    // start metrics server if enabled
+    #[cfg(feature = "metrics-server")] {
+        let metrics_server = settings.metrics_server.map(|metrics_settings| {
+            // TODO: Replace with parsing from config file
+            let ip = IpAddr::from_str("127.0.0.1").unwrap();
+            let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);
+            info!("Starting metrics server listening on port {}", port);
+            other_futures.push(metrics_server(Arc::clone(&consensus), ip, port, metrics_settings.password))
+        });
+    }
+    // If the metrics server is enabled, but the client is not compiled with it, inform the user
+    #[cfg(not(feature = "metrics-server"))] {
+        if settings.metrics_server.is_some() {
+            warn!("Metrics server feature not enabled.");
         }
     }
 

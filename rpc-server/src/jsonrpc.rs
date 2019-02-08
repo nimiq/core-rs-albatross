@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use futures::{future, Future, IntoFuture, stream::Stream};
 use hyper::{Body, Method, Request, Response, StatusCode};
 use json::{Array, JsonValue, Null};
-use std::sync::Arc;
 
 pub trait Handler: Send + Sync {
     fn get_method(&self, name: &str) -> Option<fn(&Self, params: Array) -> Result<JsonValue, JsonValue>>;

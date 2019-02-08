@@ -18,6 +18,8 @@ use utils::observer::Notifier;
 use utils::unique_ptr::UniquePtr;
 
 use crate::{ChainInfo, ChainStore, Direction, TransactionCache};
+#[cfg(feature = "metrics")]
+use crate::chain_metrics::BlockchainMetrics;
 
 pub struct Blockchain<'env> {
     env: &'env Environment,
@@ -27,6 +29,9 @@ pub struct Blockchain<'env> {
     chain_store: ChainStore<'env>,
     state: RwLock<BlockchainState<'env>>,
     push_lock: Mutex<()>,
+
+    #[cfg(feature = "metrics")]
+    pub metrics: BlockchainMetrics,
 }
 
 struct BlockchainState<'env> {
@@ -107,9 +112,12 @@ impl<'env> Blockchain<'env> {
                 accounts,
                 transaction_cache,
                 main_chain,
-                head_hash
+                head_hash,
             }),
-            push_lock: Mutex::new(())
+            push_lock: Mutex::new(()),
+
+            #[cfg(feature = "metrics")]
+            metrics: BlockchainMetrics::default(),
         }
     }
 
@@ -144,7 +152,10 @@ impl<'env> Blockchain<'env> {
                 main_chain,
                 head_hash
             }),
-            push_lock: Mutex::new(())
+            push_lock: Mutex::new(()),
+
+            #[cfg(feature = "metrics")]
+            metrics: BlockchainMetrics::default(),
         }
     }
 
@@ -156,6 +167,8 @@ impl<'env> Blockchain<'env> {
         let info = get_network_info(self.network_id).unwrap();
         if let Err(e) = block.verify(self.network_time.now(), self.network_id, info.genesis_block.header.hash()) {
             warn!("Rejecting block - verification failed ({:?})", e);
+            #[cfg(feature = "metrics")]
+            self.metrics.note_invalid_block();
             return PushResult::Invalid(PushError::InvalidBlock(e))
         }
 
@@ -165,6 +178,8 @@ impl<'env> Blockchain<'env> {
         // Check if we already know this block.
         let hash: Blake2bHash = block.header.hash();
         if self.chain_store.get_chain_info(&hash, false, None).is_some() {
+            #[cfg(feature = "metrics")]
+            self.metrics.note_known_block();
             return PushResult::Known;
         }
 
@@ -172,6 +187,8 @@ impl<'env> Blockchain<'env> {
         let prev_info_opt = self.chain_store.get_chain_info(&block.header.prev_hash, false, None);
         if prev_info_opt.is_none() {
             warn!("Rejecting block - unknown predecessor");
+            #[cfg(feature = "metrics")]
+            self.metrics.note_orphan_block();
             return PushResult::Orphan;
         }
 
@@ -179,6 +196,8 @@ impl<'env> Blockchain<'env> {
         let prev_info = prev_info_opt.unwrap();
         if !block.is_immediate_successor_of(&prev_info.head) {
             warn!("Rejecting block - not a valid successor");
+            #[cfg(feature = "metrics")]
+            self.metrics.note_invalid_block();
             return PushResult::Invalid(PushError::InvalidSuccessor);
         }
 
@@ -186,6 +205,8 @@ impl<'env> Blockchain<'env> {
         let next_target = self.get_next_target(Some(&block.header.prev_hash));
         if block.header.n_bits != TargetCompact::from(next_target) {
             warn!("Rejecting block - difficulty mismatch");
+            #[cfg(feature = "metrics")]
+            self.metrics.note_invalid_block();
             return PushResult::Invalid(PushError::DifficultyMismatch);
         }
 
@@ -209,6 +230,8 @@ impl<'env> Blockchain<'env> {
         self.chain_store.put_chain_info(&mut txn, &hash, &chain_info, true);
         txn.commit();
 
+        #[cfg(feature = "metrics")]
+        self.metrics.note_forked_block();
         return PushResult::Forked;
     }
 
@@ -221,6 +244,8 @@ impl<'env> Blockchain<'env> {
             if state.transaction_cache.contains_any(&chain_info.head) {
                 warn!("Rejecting block - transaction already included");
                 txn.abort();
+                #[cfg(feature = "metrics")]
+                self.metrics.note_invalid_block();
                 return PushResult::Invalid(PushError::DuplicateTransaction);
             }
 
@@ -228,6 +253,8 @@ impl<'env> Blockchain<'env> {
             if let Err(e) = state.accounts.commit_block(&mut txn, &chain_info.head) {
                 warn!("Rejecting block - commit failed: {}", e);
                 txn.abort();
+                #[cfg(feature = "metrics")]
+                self.metrics.note_invalid_block();
                 return PushResult::Invalid(PushError::AccountsError(e));
             }
         }
@@ -256,6 +283,8 @@ impl<'env> Blockchain<'env> {
         let event = BlockchainEvent::Extended(state.head_hash.clone(), UniquePtr::new(&state.main_chain.head));
         self.notifier.read().notify(event);
 
+        #[cfg(feature = "metrics")]
+        self.metrics.note_extended_block();
         return PushResult::Extended;
     }
 
@@ -332,6 +361,8 @@ impl<'env> Blockchain<'env> {
                     warn!("Failed to apply fork block while rebranching - transaction already included");
                     // TODO delete invalid fork from store
                     write_txn.abort();
+                    #[cfg(feature = "metrics")]
+                    self.metrics.note_invalid_block();
                     return PushResult::Invalid(PushError::InvalidFork);
                 }
 
@@ -339,6 +370,8 @@ impl<'env> Blockchain<'env> {
                     warn!("Failed to apply fork block while rebranching - {}", e);
                     // TODO delete invalid fork from store
                     write_txn.abort();
+                    #[cfg(feature = "metrics")]
+                    self.metrics.note_invalid_block();
                     return PushResult::Invalid(PushError::InvalidFork);
                 }
 
@@ -398,6 +431,8 @@ impl<'env> Blockchain<'env> {
         let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
         self.notifier.read().notify(event);
 
+        #[cfg(feature = "metrics")]
+        self.metrics.note_rebranched_block();
         return PushResult::Rebranched;
     }
 

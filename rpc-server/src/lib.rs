@@ -1,14 +1,11 @@
 #[macro_use]
 extern crate json;
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 extern crate log;
 extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_network as network;
-extern crate nimiq_database as database;
 extern crate nimiq_hash as hash;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
@@ -17,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::net::{SocketAddr, IpAddr};
 
-use futures::{future::Future};
+use futures::future::Future;
 use hyper::Server;
 use json::{Array, JsonValue, Null};
 

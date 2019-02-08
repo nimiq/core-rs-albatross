@@ -31,3 +31,6 @@ nimiq-network-primitives = { path = "../network-primitives", features = ["networ
 [dev-dependencies]
 atomic = "0.4"
 pretty_env_logger = "0.2.3"
+
+[features]
+metrics = []

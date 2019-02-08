@@ -1,10 +1,10 @@
 [package]
-name = "nimiq-rpc-server"
+name = "nimiq-metrics-server"
 version = "0.0.1"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 license = "Apache-2.0"
 edition = "2018"
-description = "JSON RPC server for the Nimiq Rust implementation"
+description = "Prometheus metrics server for the Nimiq Rust implementation"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs"
 
@@ -13,17 +13,15 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 maintenance = { status = "experimental" }
 
 [dependencies]
-nimiq-blockchain = { path = "../blockchain" }
-nimiq-accounts = { path = "../accounts" }
+nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
 nimiq-consensus = { path = "../consensus" }
 nimiq-network = { path = "../network" }
-nimiq-hash = { path = "../hash" }
+nimiq-mempool = { path = "../mempool" }
 nimiq-network-primitives = { path = "../network-primitives" }
 nimiq-primitives = { path = "../primitives", features = ["all"] }
 beserial = { path = "../beserial" }
 
 hyper = "0.12.19"
-json = "0.11.13"
 futures = "0.1"
 log = "0.4.3"
-hex = "0.3.2"
+base64 = "0.10.1"

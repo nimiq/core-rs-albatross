@@ -36,13 +36,13 @@ pub enum NetworkEvent {
 }
 
 pub struct Network {
-    network_config: Arc<NetworkConfig>,
-    network_time: Arc<NetworkTime>,
+    pub network_config: Arc<NetworkConfig>,
+    pub network_time: Arc<NetworkTime>,
     auto_connect: Atomic<bool>,
     backed_off: Atomic<bool>,
     backoff: Atomic<Duration>,
-    addresses: Arc<PeerAddressBook>,
-    connections: Arc<ConnectionPool>,
+    pub addresses: Arc<PeerAddressBook>,
+    pub connections: Arc<ConnectionPool>,
     scorer: Arc<RwLock<PeerScorer>>,
     timers: Timers<NetworkTimer>,
     pub notifier: RwLock<PassThroughNotifier<'static, NetworkEvent>>,

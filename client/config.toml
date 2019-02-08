@@ -19,3 +19,5 @@ level = "verbose"
 
 [rpcServer]
 port = 8648
+
+[metricsServer]

@@ -28,9 +28,11 @@ nimiq-network = { path = "../network" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-rpc-server = { path = "../rpc-server", optional = true }
+nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-lib = { path = "../lib" }
 
 [features]
 default = ["all"]
-all = ["rpc-server"]
+all = ["rpc-server", "metrics-server"]
 rpc-server = ["nimiq-rpc-server", "hyper"]
+metrics-server = ["nimiq-metrics-server", "hyper"]

@@ -19,6 +19,7 @@ members = [
     "network",
     "client",
     "rpc-server",
+    "metrics-server",
     "lib",
     "messages",
 ]

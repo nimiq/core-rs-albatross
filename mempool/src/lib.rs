@@ -531,4 +531,4 @@ const TRANSACTIONS_PER_SENDER_MAX : u32 = 500;
 const FREE_TRANSACTIONS_PER_SENDER_MAX : u32 = 10;
 
 /// Maximum number of transactions in the mempool.
-const SIZE_MAX : usize = 100000;
+pub const SIZE_MAX : usize = 100000;

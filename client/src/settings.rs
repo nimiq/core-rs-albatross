@@ -7,6 +7,7 @@ use std::collections::HashMap;
 pub const DEFAULT_NETWORK_PORT: u16 = 8443;
 pub const DEFAULT_REVERSE_PROXY_PORT: u16 = 8444;
 pub const DEFAULT_RPC_PORT: u16 = 8648;
+pub const DEFAULT_METRICS_PORT: u16 = 8649;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -183,7 +184,7 @@ pub(crate) struct UiServerSettings {
 
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct MetricsServerSettings {
-    pub port: u16,
+    pub port: Option<u16>,
     pub password: Option<String>,
 }
 
