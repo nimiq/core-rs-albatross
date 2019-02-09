@@ -218,7 +218,7 @@ impl<'env> Accounts<'env> {
         return Ok(());
     }
 
-    fn revert_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
+    fn revert_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
         assert!(transaction.flags.contains(TransactionFlags::CONTRACT_CREATION));
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));

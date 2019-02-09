@@ -192,7 +192,7 @@ impl<'env> Blockchain<'env> {
         }
 
         // Only one push operation at a time.
-        let lock = self.push_lock.lock();
+        let _lock = self.push_lock.lock();
 
         // Check if we already know this block.
         let hash: Blake2bHash = block.header.hash();

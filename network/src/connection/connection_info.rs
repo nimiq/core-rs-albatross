@@ -1,10 +1,8 @@
 use std::{sync::Arc, time::{Duration, Instant}};
-use std::collections::HashMap;
 
 use parking_lot::RwLock;
 
 use network_primitives::address::peer_address::PeerAddress;
-use network_messages::{Message, MessageType};
 
 use crate::connection::network_agent::NetworkAgent;
 use crate::connection::NetworkConnection;

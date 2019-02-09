@@ -1,9 +1,7 @@
-extern crate gcc;
+extern crate cc;
 
 fn main() {
-//    let target = std::env::var("TARGET").unwrap();
-
-    let mut config = gcc::Build::new();
+    let mut config = cc::Build::new();
     config.file("native/argon2.c")
         .file("native/core.c")
         .file("native/blake2/blake2b.c")

@@ -1,10 +1,10 @@
-use std::path::Path;
 use std::error::Error;
-use std::sync::Arc;
 use std::fmt;
-use futures::{Future, Async, Poll, future};
-use network::network::Network;
+use std::sync::Arc;
 
+use futures::{Async, Future, Poll};
+
+use network::network::Network;
 
 /// Prototype for a Error returned by these futures
 /// Errors can occur, when e.g. the bind port is already used

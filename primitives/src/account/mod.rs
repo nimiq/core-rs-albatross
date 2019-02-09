@@ -138,7 +138,7 @@ impl Account {
 
 #[cfg(feature = "transaction")]
 impl AccountTransactionInteraction for Account {
-    fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn create(_balance: Coin, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 

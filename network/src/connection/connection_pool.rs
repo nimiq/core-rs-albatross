@@ -23,7 +23,6 @@ use crate::connection::NetworkConnection;
 use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_channel::PeerChannel;
-use crate::peer_channel::PeerChannelEvent;
 use crate::websocket::websocket_connector::{WebSocketConnector, WebSocketConnectorEvent};
 
 use super::close_type::CloseType;
@@ -267,7 +266,7 @@ impl ConnectionPoolState {
     /// Called to regularly unban IPs.
     fn check_unban_ips(&mut self) {
         let mut now = SystemTime::now();
-        self.banned_ips.retain(|net_address, unban_time| {
+        self.banned_ips.retain(|_net_address, unban_time| {
             unban_time > &mut now
         });
     }
@@ -410,7 +409,7 @@ impl ConnectionPool {
 
     /// Initiates a outbound connection.
     pub fn connect_outbound(&self, peer_address: Arc<PeerAddress>) -> bool {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
         // All checks in one step.
         if !self.check_outbound_connection_request(peer_address.clone()) {
             return false;
@@ -504,7 +503,7 @@ impl ConnectionPool {
 
     /// Callback upon connection establishment.
     fn on_connection(&self, connection: NetworkConnection) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
 
         let agent;
         let connection_id;
@@ -598,7 +597,7 @@ impl ConnectionPool {
 
     /// Checks the validity of a handshake.
     fn check_handshake(&self, connection_id: ConnectionId, peer: &UniquePtr<Peer>) -> bool {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
 
         // Read lock.
         {
@@ -640,7 +639,7 @@ impl ConnectionPool {
 
     /// Callback during handshake.
     fn on_handshake(&self, connection_id: ConnectionId, peer: &UniquePtr<Peer>) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
 
         let peer_address = peer.peer_address();
         let mut is_inbound = false;
@@ -756,7 +755,7 @@ impl ConnectionPool {
 
     /// Callback upon closing of connection.
     fn on_close(&self, connection_id: ConnectionId, ty: CloseType) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
 
         // Only propagate the close type (i.e. track fails/bans) if the peerAddress is set.
         // This is true for
@@ -850,17 +849,17 @@ impl ConnectionPool {
     }
 
     pub fn set_allow_inbound_exchange(&self, allow_inbound_exchange: bool) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
         self.state.write().allow_inbound_exchange = allow_inbound_exchange;
     }
     pub fn set_allow_inbound_connections(&self, allow_inbound_connections: bool) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
         self.state.write().allow_inbound_connections = allow_inbound_connections;
     }
 
     /// Callback on connect error.
     fn on_connect_error(&self, peer_address: Arc<PeerAddress>) {
-        let guard = self.change_lock.lock();
+        let _guard = self.change_lock.lock();
         debug!("Connection to {} failed", peer_address);
 
         // Aquire write lock and release it again before notifying listeners.
@@ -951,13 +950,6 @@ impl<T> SparseVec<T> {
     pub fn new() -> Self {
         SparseVec {
             inner: Vec::new(),
-            free_indices: LinkedList::new(),
-        }
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        SparseVec {
-            inner: Vec::with_capacity(capacity),
             free_indices: LinkedList::new(),
         }
     }

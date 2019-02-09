@@ -108,7 +108,7 @@ impl HashedTimeLockedContract {
 
 #[cfg(feature = "transaction")]
 impl AccountTransactionInteraction for HashedTimeLockedContract {
-    fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn create(balance: Coin, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let (sender, recipient, hash_algorithm, hash_root, hash_count, timeout) = HashedTimeLockedContract::parse_and_verify_creation_transaction(transaction)?;
         return Ok(HashedTimeLockedContract::new(balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value));
     }
@@ -189,11 +189,11 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         Ok(())
     }
 
-    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn with_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         return Err(AccountError::InvalidForRecipient);
     }
 
-    fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn without_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         return Err(AccountError::InvalidForRecipient);
     }
 
@@ -219,7 +219,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 }
 
                 // Ignore pre_image.
-                let pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
+                let _pre_image: AnyHash = Deserialize::deserialize(proof_buf)?;
 
                 // Check that the transaction is signed by the authorized recipient.
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
@@ -260,7 +260,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         Ok(self.with_balance(balance))
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
         return Ok(self.with_balance(balance));
     }

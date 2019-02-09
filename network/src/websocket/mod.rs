@@ -145,7 +145,7 @@ impl Sink for NimiqMessageStream {
                     // This should be improved, e.g. using https://docs.rs/futures/0.2.1/futures/sink/struct.Buffer.html.
                     AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(item)),
                 },
-                Err(error) => return Err(()),
+                Err(_) => return Err(()),
             };
 
             remaining -= chunk.len();
@@ -156,15 +156,15 @@ impl Sink for NimiqMessageStream {
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
         match self.inner.poll_complete() {
-            Ok(r#async) => Ok(r#async),
-            Err(error) => Err(()),
+            Ok(r_async) => Ok(r_async),
+            Err(_) => Err(()),
         }
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
         match self.inner.close() {
-            Ok(r#async) => Ok(r#async),
-            Err(error) => Err(()),
+            Ok(r_async) => Ok(r_async),
+            Err(_) => Err(()),
         }
     }
 }

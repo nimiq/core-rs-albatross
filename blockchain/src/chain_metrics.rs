@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::default::Default;
+
 use crate::PushResult;
 
 #[derive(Default)]

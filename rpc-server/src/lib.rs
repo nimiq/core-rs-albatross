@@ -97,11 +97,11 @@ impl JsonRpcHandler {
         Ok(self.consensus.blockchain.height().into())
     }
 
-    fn peer_count(&self, params: Array) -> Result<JsonValue, JsonValue> {
+    fn peer_count(&self, _params: Array) -> Result<JsonValue, JsonValue> {
         Ok(self.consensus.network.peer_count().into())
     }
 
-    fn consensus(&self, params: Array) -> Result<JsonValue, JsonValue> {
+    fn consensus(&self, _params: Array) -> Result<JsonValue, JsonValue> {
         Ok(self.consensus_state.into())
     }
 }

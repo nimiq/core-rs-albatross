@@ -48,9 +48,9 @@ impl LmdbEnvironment {
         return Ok(lmdb);
     }
 
-    pub(in super) fn open_database<'env>(&'env self, name: String, flags: DatabaseFlags) -> LmdbDatabase<'env> {
+    pub(in super) fn open_database(&self, name: String, flags: DatabaseFlags) -> LmdbDatabase {
         // This is an implicit transaction, so take the lock first.
-        let guard = self.creation_gate.read();
+        let _guard = self.creation_gate.read();
         let mut db_flags = lmdb_zero::db::CREATE;
 
         // Translate flags.
@@ -82,7 +82,7 @@ impl LmdbEnvironment {
 
     pub fn do_resize(&self, increase_size: usize) {
         // Lock creation of new transactions until resize is finished.
-        let guard = self.creation_gate.write();
+        let _guard = self.creation_gate.write();
         let add_size: usize = cmp::max(1 << 30, increase_size);
 
         let available_space = fs2::available_space(self.path().as_ref());
@@ -152,6 +152,7 @@ pub struct LmdbDatabase<'env> {
 
 pub struct LmdbReadTransaction<'env> {
     txn: lmdb_zero::ReadTransaction<'env>,
+    #[allow(dead_code)]
     guard: parking_lot::RwLockReadGuard<'env, ()>,
 }
 
@@ -185,6 +186,7 @@ impl<'env> fmt::Debug for LmdbReadTransaction<'env> {
 
 pub struct LmdbWriteTransaction<'env> {
     txn: lmdb_zero::WriteTransaction<'env>,
+    #[allow(dead_code)]
     guard: parking_lot::RwLockReadGuard<'env, ()>,
 }
 

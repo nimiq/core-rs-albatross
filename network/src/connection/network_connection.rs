@@ -151,8 +151,8 @@ impl ProcessConnectionFuture {
             };
 
             // XXX Specifically send close frame if CloseType is not Regular. (???)
-            //if ty != CloseType::Regular {}
-            shared_stream.close();
+            //if ty != CloseType::Regular
+            shared_stream.close().expect("Could not properly close connection");
 
             // Now send out notifications.
             notifier.read().notify(PeerStreamEvent::Close(ty));

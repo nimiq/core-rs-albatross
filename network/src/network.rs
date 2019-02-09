@@ -227,10 +227,10 @@ impl Network {
         offsets.sort_by(|a, b| { i64::cmp(a, b) } );
 
         let offsets_len = offsets.len();
-        let time_offset = if offsets.len() % 2 == 0 {
-            (offsets[(offsets.len() / 2) - 1] + offsets[(offsets.len() / 2) - 1]) / 2
+        let time_offset = if offsets_len % 2 == 0 {
+            (offsets[(offsets_len / 2) - 1] + offsets[(offsets_len / 2) - 1]) / 2
         } else {
-            offsets[(offsets.len() - 1) / 2]
+            offsets[(offsets_len - 1) / 2]
         };
 
         self.network_time.set_offset(time_offset);
@@ -260,6 +260,7 @@ impl Network {
 
     fn refresh_addresses(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
         // TODO
+        unimplemented!()
     }
 
     pub fn peer_count(&self) -> usize {

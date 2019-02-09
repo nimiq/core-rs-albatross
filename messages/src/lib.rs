@@ -1,11 +1,5 @@
 #[macro_use]
 extern crate beserial_derive;
-#[macro_use]
-extern crate bitflags;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
@@ -213,7 +207,8 @@ impl Deserialize for Message {
         }
 
         let ty: MessageType = Deserialize::deserialize(&mut crc32_reader)?;
-        let length: u32 = Deserialize::deserialize(&mut crc32_reader)?;
+        // Length is ignored (just like in JS implementation).
+        let _length: u32 = Deserialize::deserialize(&mut crc32_reader)?;
         let checksum: u32 = Deserialize::deserialize(&mut crc32_reader)?;
 
         let message: Message = match ty {
@@ -249,7 +244,6 @@ impl Deserialize for Message {
             MessageType::GetHead => Message::GetHead,
             MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
-            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Unimplemented message type").into())  // FIXME remove default case
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
@@ -313,7 +307,7 @@ impl Serialize for Message {
 
         // write checksum to placeholder
         let mut v_crc = Vec::with_capacity(4);
-        Crc32Computer::default().update(v.as_slice()).result().serialize(&mut v_crc);
+        Crc32Computer::default().update(v.as_slice()).result().serialize(&mut v_crc)?;
         for i in 0..4 {
             v[checksum_start + i] = v_crc[i];
         }

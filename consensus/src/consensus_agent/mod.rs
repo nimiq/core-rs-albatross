@@ -75,7 +75,6 @@ enum ConsensusAgentTimer {
 
 pub struct ConsensusAgent {
     pub(crate) blockchain: Arc<Blockchain<'static>>,
-    mempool: Arc<Mempool<'static>>,
     pub peer: Arc<Peer>,
 
     inv_agent: Arc<InventoryAgent>,
@@ -108,7 +107,6 @@ impl ConsensusAgent {
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone(), Subscription::Any);
         let this = Arc::new(ConsensusAgent {
             blockchain,
-            mempool,
             peer: peer_arc.clone(),
             inv_agent,
 

@@ -427,13 +427,8 @@ impl PeerAddressBook {
         });
 
         // Check if we already know this address.
-        let mut known_address: Option<Arc<PeerAddress>> = None;
         let mut changed = false;
         if let Some(info) = state.info_by_address.get_mut(&addr_arc) {
-            // Update address.
-            // FIXME this is never used!
-            known_address = Some(info.peer_address.clone());
-
             // Ignore address if it is banned.
             if info.state == PeerAddressState::Banned {
                 return false;

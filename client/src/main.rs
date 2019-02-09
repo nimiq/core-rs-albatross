@@ -1,53 +1,49 @@
-extern crate toml;
-#[macro_use]
-extern crate serde_derive;
-extern crate pretty_env_logger;
-#[macro_use]
-extern crate log;
-extern crate futures;
-extern crate tokio;
-#[macro_use]
-extern crate lazy_static;
 #[cfg(debug_assertions)]
 extern crate dotenv;
-
-extern crate nimiq_database as database;
-extern crate nimiq_network as network;
+extern crate futures;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate log;
 extern crate nimiq_consensus as consensus;
+extern crate nimiq_database as database;
+extern crate nimiq_lib as lib;
+#[cfg(feature = "metrics-server")]
+extern crate nimiq_metrics_server as metrics_server;
+extern crate nimiq_network as network;
 extern crate nimiq_primitives as primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
-#[cfg(feature = "metrics-server")]
-extern crate nimiq_metrics_server as metrics_server;
-extern crate nimiq_lib as lib;
-
-
-mod settings;
+extern crate pretty_env_logger;
+#[macro_use]
+extern crate serde_derive;
+extern crate tokio;
+extern crate toml;
 
 
 use std::error::Error;
-use std::sync::{Arc, Mutex};
 use std::net::IpAddr;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use futures::{Future, future};
 
-use network::network_config::NetworkConfig;
-use primitives::networks::NetworkId;
 use consensus::consensus::Consensus;
-use network::network_config::ReverseProxyConfig;
 use database::Environment;
 use database::lmdb::{LmdbEnvironment, open};
-use database::volatile::VolatileEnvironment;
-#[cfg(feature = "rpc-server")]
-use rpc_server::rpc_server;
+use lib::client::initialize;
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
-use lib::client::{initialize, ClientInitializeFuture, ClientConnectFuture, ClientError};
+use network::network_config::NetworkConfig;
+use network::network_config::ReverseProxyConfig;
+use primitives::networks::NetworkId;
+#[cfg(feature = "rpc-server")]
+use rpc_server::rpc_server;
 
-use crate::settings::Settings;
 use crate::settings as s;
+use crate::settings::Settings;
 
+mod settings;
 
 
 lazy_static! {
@@ -129,7 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // start RPC server if enabled
     #[cfg(feature = "rpc-server")] {
-        let rpc_server = settings.rpc_server.map(|rpc_settings| {
+        settings.rpc_server.map(|rpc_settings| {
             // TODO: Replace with parsing from config file
             let ip = IpAddr::from_str("127.0.0.1").unwrap();
             let port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
@@ -145,7 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     // start metrics server if enabled
     #[cfg(feature = "metrics-server")] {
-        let metrics_server = settings.metrics_server.map(|metrics_settings| {
+        settings.metrics_server.map(|metrics_settings| {
             // TODO: Replace with parsing from config file
             let ip = IpAddr::from_str("127.0.0.1").unwrap();
             let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);

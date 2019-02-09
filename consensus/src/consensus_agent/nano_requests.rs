@@ -27,7 +27,6 @@ impl ConsensusAgent {
             return;
         }
 
-        let limit: usize = TransactionReceiptsMessage::RECEIPTS_MAX_COUNT / 2;
         let addresses = HashSet::from_iter(msg.addresses);
         let proof = self.blockchain.get_transactions_proof(&msg.block_hash, &addresses);
         self.peer.channel.send_or_close(TransactionsProofMessage::new(msg.block_hash, proof));

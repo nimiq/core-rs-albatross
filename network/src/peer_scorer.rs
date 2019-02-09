@@ -201,6 +201,7 @@ impl PeerScorer {
 
             if connection_info.state() == ConnectionState::Established {
                 connection_info.peer_channel().expect("Missing PeerChannel").close(ty); // FIXME: what about `reason`?
+                debug!("Closed connection with reason: {}", reason);
                 count -= 1;
             }
         }

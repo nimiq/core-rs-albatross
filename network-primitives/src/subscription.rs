@@ -34,7 +34,7 @@ impl Subscription {
         }
     }
 
-    pub fn matches_block(&self, block: &Block) -> bool {
+    pub fn matches_block(&self, _block: &Block) -> bool {
         match self {
             Subscription::None => false,
             _ => true

@@ -1,12 +1,11 @@
-use beserial::{Serialize, Deserialize};
-use crate::tree::AccountsTreeNode;
-use crate::tree::AccountsTreeNodeChild;
-use crate::tree::AddressNibbles;
-use primitives::account::BasicAccount;
-use primitives::account::Account;
-use hash::Hash;
+use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
+use hash::Hash;
 use keys::Address;
+use primitives::account::Account;
+
+use crate::tree::AccountsTreeNode;
+use crate::tree::AddressNibbles;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsProof {

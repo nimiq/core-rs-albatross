@@ -68,8 +68,9 @@ impl TransactionCache {
 
     pub fn revert_block(&mut self, block: &Block) {
         let descriptor = self.block_order.pop_back();
-        if descriptor.is_some() {
-            for hash in &descriptor.unwrap().transaction_hashes {
+        if let Some(descriptor) = descriptor {
+            assert_eq!(descriptor.hash, block.header.hash());
+            for hash in &descriptor.transaction_hashes {
                 self.transaction_hashes.remove(hash);
             }
         }

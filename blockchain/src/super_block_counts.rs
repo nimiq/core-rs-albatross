@@ -39,8 +39,7 @@ impl SuperBlockCounts {
         // NOTE: The `counts` vector must already be longer, otherwise the non-existing entry counts as 0, which we can't substract
         assert!((depth as usize) < self.counts.len());
         for i in 0..=(depth as usize) {
-            assert!(self.counts[i] >= 0, format!("Superblock count for level {} is already 0 and can't be decreased", i));
-            self.counts[i] -= 1;
+            self.counts[i] = self.counts[i].checked_sub(1).expect(&format!("Superblock count for level {} is already 0 and can't be decreased", i));
         }
     }
 
@@ -124,7 +123,7 @@ impl fmt::Debug for SuperBlockCounts {
             }
         }
         if self.counts.len() < Self::NUM_COUNTS - 1 {
-            write!(f, "...");
+            write!(f, "...")?;
         }
         write!(f, "]")
     }

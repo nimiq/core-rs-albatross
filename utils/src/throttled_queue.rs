@@ -158,6 +158,6 @@ impl<T> Queue<T> for ThrottledQueue<T>
     }
 
     fn requeue(&mut self, elt: T) {
-        self.requeue(elt)
+        self.queue.requeue(elt)
     }
 }

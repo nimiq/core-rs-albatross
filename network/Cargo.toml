@@ -14,7 +14,6 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 beserial = { path = "../beserial" }
-beserial_derive = { path = "../beserial/beserial_derive"}
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-keys = { path = "../keys" }
 nimiq-hash = { path = "../hash" }

@@ -20,7 +20,6 @@ nimiq-primitives = { path = "../primitives", features = ["account", "block", "tr
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 nimiq-macros = { path = "../macros" }
 bitflags = "1.0"
-log = "0.4.3"
 rand = "0.6.4"
 parking_lot = "0.6"
 byteorder = "1.2"

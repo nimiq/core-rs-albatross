@@ -21,6 +21,7 @@ pub struct NetworkInfo {
     pub genesis_accounts: String, // FIXME
 }
 
+#[allow(dead_code)]
 fn create_seed_peer_addr(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
     let mut public_key_bytes : [u8; PublicKey::SIZE] = [0; PublicKey::SIZE];
     public_key_bytes.clone_from_slice(&::hex::decode(pubkey_hex.to_string()).unwrap()[0..]);
@@ -28,6 +29,7 @@ fn create_seed_peer_addr(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress 
     PeerAddress { ty: PeerAddressType::Wss(url.to_string(), port), services: ServiceFlags::FULL, timestamp: 0, net_address: NetAddress::Unspecified, public_key, distance: 0, signature: None, peer_id: PeerId::from(&public_key)}
 }
 
+#[allow(dead_code)]
 fn create_seed_peer_addr_ws(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
     let mut public_key_bytes : [u8; PublicKey::SIZE] = [0; PublicKey::SIZE];
     public_key_bytes.clone_from_slice(&::hex::decode(pubkey_hex.to_string()).unwrap()[0..]);

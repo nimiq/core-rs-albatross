@@ -167,13 +167,6 @@ struct FreeTransactionVector {
 }
 
 impl FreeTransactionVector {
-    fn from_transaction(transaction: &Transaction) -> Self {
-        FreeTransactionVector {
-            vector: InvVector::from_transaction(transaction),
-            serialized_size: transaction.serialized_size(),
-        }
-    }
-
     fn from_vector(vector: &InvVector, serialized_size: usize) -> Self {
         FreeTransactionVector {
             vector: vector.clone(),
@@ -419,7 +412,7 @@ impl InventoryAgent {
     }
 
     fn on_inv(&self, vectors: Vec<InvVector>) {
-        let lock = self.mutex.lock();
+        let _lock = self.mutex.lock();
 
         // Keep track of the objects the peer knows.
         let mut state = self.state.write();
@@ -599,8 +592,7 @@ impl InventoryAgent {
                 map(|tx| InvVector::from_transaction(tx.as_ref())).
                 collect();
 
-            // TODO: Check the result from this
-            self.peer.channel.send(Message::Inv(vectors));
+            self.peer.channel.send_or_close(Message::Inv(vectors));
 
             if max_vectors == InvVector::VECTORS_MAX_COUNT {
                 std::thread::sleep(Self::MEMPOOL_THROTTLE);
@@ -866,7 +858,7 @@ impl InventoryAgent {
         // Relay block to peer.
         let mut vectors = state.waiting_tx_inv_vectors.dequeue_multi(InvVector::VECTORS_MAX_COUNT - 1);
         vectors.insert(0, vector.clone());
-        self.peer.channel.send(Message::Inv(vectors));
+        self.peer.channel.send_or_close(Message::Inv(vectors));
 
         // Assume that the peer knows this block now.
         state.known_objects.insert(vector);
@@ -915,10 +907,19 @@ impl InventoryAgent {
     fn send_waiting_tx_inv_vectors(&self) {
         let mut state = self.state.write();
 
-        let vectors = state.waiting_tx_inv_vectors.dequeue_multi(InvVector::VECTORS_MAX_COUNT);
+        let mut vectors = Vec::new();
+        let mut size: usize = 0;
+        while vectors.len() <= InvVector::VECTORS_MAX_COUNT && size < Self::FREE_TRANSACTION_SIZE_PER_INTERVAL {
+            if let Some(tx) = state.waiting_free_tx_inv_vectors.dequeue() {
+                vectors.push(tx.vector);
+                size += tx.serialized_size;
+            } else {
+                break;
+            }
+        }
         let num_vectors = vectors.len();
         if num_vectors > 0 {
-            self.peer.channel.send(Message::Inv(vectors));
+            self.peer.channel.send_or_close(Message::Inv(vectors));
             debug!("[INV] Sent {} vectors to {:?}", num_vectors, self.peer.peer_address());
         }
     }
@@ -939,7 +940,7 @@ impl InventoryAgent {
 
         let num_vectors = vectors.len();
         if num_vectors > 0 {
-            self.peer.channel.send(Message::Inv(vectors));
+            self.peer.channel.send_or_close(Message::Inv(vectors));
             debug!("[INV] Sent {} vectors to {:?}", num_vectors, self.peer.peer_address());
         }
     }

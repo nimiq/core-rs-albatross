@@ -208,7 +208,7 @@ impl Consensus {
         }
     }
 
-    fn on_transaction_added(&self, hash: &Blake2bHash, transaction: &Arc<Transaction>) {
+    fn on_transaction_added(&self, _hash: &Blake2bHash, transaction: &Arc<Transaction>) {
         let state = self.state.read();
 
         // Don't relay transactions if we are not synced yet.

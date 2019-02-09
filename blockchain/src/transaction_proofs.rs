@@ -1,10 +1,12 @@
-use primitives::transaction::TransactionsProof;
-use keys::Address;
-use crate::Blockchain;
 use std::collections::HashSet;
-use hash::{Blake2bHash, Blake2bHasher};
-use utils::merkle::Blake2bMerkleProof;
+
+use hash::Blake2bHash;
 use hash::Hash;
+use keys::Address;
+use primitives::transaction::TransactionsProof;
+use utils::merkle::Blake2bMerkleProof;
+
+use crate::Blockchain;
 
 impl<'env> Blockchain<'env> {
     pub fn get_transactions_proof(&self, block_hash: &Blake2bHash, addresses: &HashSet<Address>) -> Option<TransactionsProof> {

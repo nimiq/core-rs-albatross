@@ -3,9 +3,7 @@ use database::{Database, Transaction, WriteTransaction, Environment};
 use hash::{Hash, Blake2bHash};
 use keys::Address;
 use primitives::account::Account;
-use std::cmp::min;
 use std::str::FromStr;
-use std::sync::Arc;
 use super::{AccountsTreeChunk, AccountsTreeNode, AddressNibbles, NO_CHILDREN};
 
 #[derive(Debug)]
@@ -188,7 +186,7 @@ impl<'env> AccountsTree<'env> {
             }
 
             if let Some(child_prefix) = node.get_child_prefix(prefix) {
-                let mut child_node: AccountsTreeNode = txn.get(&self.db, &child_prefix).unwrap();
+                let child_node: AccountsTreeNode = txn.get(&self.db, &child_prefix).unwrap();
 
                 // Group addresses with same prefix:
                 // Because of our ordering, they have to be located next to the current prefix.

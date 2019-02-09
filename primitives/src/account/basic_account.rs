@@ -17,11 +17,11 @@ pub struct BasicAccount {
 
 #[cfg(feature = "transaction")]
 impl AccountTransactionInteraction for BasicAccount {
-    fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn create(_balance: Coin, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
+    fn verify_incoming_transaction(_transaction: &Transaction) -> Result<(), TransactionError> {
         Ok(())
     }
 
@@ -36,22 +36,22 @@ impl AccountTransactionInteraction for BasicAccount {
         Ok(())
     }
 
-    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn with_incoming_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_add(self.balance, transaction.value)?;
         return Ok(BasicAccount { balance });
     }
 
-    fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn without_incoming_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.value)?;
         return Ok(BasicAccount { balance });
     }
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn with_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
         return Ok(BasicAccount { balance });
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
         return Ok(BasicAccount { balance });
     }
