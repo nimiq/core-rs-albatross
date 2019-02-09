@@ -768,6 +768,15 @@ pub struct TransactionsProofMessage {
     pub transactions_proof: Option<TransactionsProof>,
 }
 
+impl TransactionsProofMessage {
+    pub fn new(block_hash: Blake2bHash, transactions_proof: Option<TransactionsProof>) -> Message {
+        Message::TransactionsProof(TransactionsProofMessage {
+            block_hash,
+            transactions_proof,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetTransactionReceiptsMessage {
     pub address: Address,

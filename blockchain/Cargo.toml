@@ -23,7 +23,7 @@ nimiq-database = { path = "../database", features = ["full-nimiq"] }
 hex = "0.3.2"
 bigdecimal = "0.0.14"
 parking_lot = "0.6"
-nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr"] }
+nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr", "iterators"] }
 log = "0.4.3"
 nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
 

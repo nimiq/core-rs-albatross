@@ -1,24 +1,24 @@
 use std::cmp;
-use std::time::Instant;
 use std::sync::Arc;
+use std::time::Instant;
 
 use bigdecimal::BigDecimal;
 use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 
 use accounts::Accounts;
-use database::{Environment, Transaction, ReadTransaction, WriteTransaction};
+use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
 use network_primitives::networks::get_network_info;
 use network_primitives::time::NetworkTime;
 use primitives::account::AccountError;
-use primitives::block::{Block, BlockHeader, BlockError, Target, TargetCompact, Difficulty};
+use primitives::block::{Block, BlockError, BlockHeader, Difficulty, Target, TargetCompact};
 use primitives::networks::NetworkId;
 use primitives::policy;
 use utils::iterators::Merge;
 use utils::observer::Notifier;
 use utils::unique_ptr::UniquePtr;
 
-use crate::{chain_info::ChainInfo, chain_store::ChainStore, chain_store::Direction, chain_proof::ChainProof, transaction_cache::TransactionCache};
+use crate::{chain_info::ChainInfo, chain_proof::ChainProof, chain_store::ChainStore, chain_store::Direction, transaction_cache::TransactionCache};
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
 #[cfg(feature = "transaction-store")]

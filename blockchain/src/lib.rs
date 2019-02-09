@@ -17,6 +17,7 @@ pub mod blockchain;
 pub mod super_block_counts;
 pub mod transaction_cache;
 pub mod chain_proof;
+pub mod transaction_proofs;
 #[cfg(feature = "metrics")]
 pub mod chain_metrics;
 #[cfg(feature = "transaction-store")]

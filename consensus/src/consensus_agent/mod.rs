@@ -11,7 +11,7 @@ use hash::Blake2bHash;
 use mempool::Mempool;
 use network::connection::close_type::CloseType;
 use network::Peer;
-use network_messages::{GetBlocksMessage, Message, GetTransactionReceiptsMessage, TransactionReceiptsMessage};
+use network_messages::{GetBlocksMessage, Message, GetTransactionReceiptsMessage, GetTransactionsProofMessage};
 use network_primitives::subscription::Subscription;
 use primitives::block::Block;
 use primitives::transaction::Transaction;
@@ -21,6 +21,8 @@ use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
+
+pub mod nano_requests;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConsensusAgentEvent {
@@ -51,6 +53,9 @@ pub struct ConsensusAgentState {
 
     /// Rate limit for GetTransactionReceipts messages.
     transaction_receipts_limit: RateLimit,
+
+    /// Rate limit for GetTransactionsProof messages.
+    transactions_proof_limit: RateLimit,
 }
 
 #[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -60,13 +65,13 @@ enum ConsensusAgentTimer {
 
 
 pub struct ConsensusAgent {
-    blockchain: Arc<Blockchain<'static>>,
+    pub(crate) blockchain: Arc<Blockchain<'static>>,
     mempool: Arc<Mempool<'static>>,
     pub peer: Arc<Peer>,
 
     inv_agent: Arc<InventoryAgent>,
 
-    state: RwLock<ConsensusAgentState>,
+    pub(crate) state: RwLock<ConsensusAgentState>,
 
     pub notifier: RwLock<Notifier<'static, ConsensusAgentEvent>>,
     self_weak: MutableOnce<Weak<ConsensusAgent>>,
@@ -81,6 +86,7 @@ impl ConsensusAgent {
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
     const TRANSACTION_RECEIPTS_RATE_LIMIT: usize = 30; // per minute
+    const TRANSACTIONS_PROOF_RATE_LIMIT: usize = 60; // per minute
 
     /// Minimum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MIN: u64 = 2 * 1000; // in ms
@@ -108,6 +114,7 @@ impl ConsensusAgent {
                 failed_syncs: 0,
 
                 transaction_receipts_limit: RateLimit::new_per_minute(Self::TRANSACTION_RECEIPTS_RATE_LIMIT),
+                transactions_proof_limit: RateLimit::new_per_minute(Self::TRANSACTIONS_PROOF_RATE_LIMIT),
             }),
 
             // TODO whole agent is locked, thus we can remove this lock
@@ -142,6 +149,12 @@ impl ConsensusAgent {
         msg_notifier.get_transaction_receipts.write().register(move |msg: GetTransactionReceiptsMessage| {
             let this = upgrade_weak!(weak);
             this.on_get_transaction_receipts(msg);
+        });
+
+        let weak = Arc::downgrade(this);
+        msg_notifier.get_transactions_proof.write().register(move |msg: GetTransactionsProofMessage| {
+            let this = upgrade_weak!(weak);
+            this.on_get_transactions_proof(msg);
         });
     }
 
@@ -335,18 +348,5 @@ impl ConsensusAgent {
         // TODO rate limit
         let chain_proof = self.blockchain.get_chain_proof();
         self.peer.channel.send_or_close(Message::ChainProof(chain_proof));
-    }
-
-    fn on_get_transaction_receipts(&self, msg: GetTransactionReceiptsMessage) {
-        debug!("[GET-TRANSACTION-RECEIPTS]");
-        if !self.state.write().transaction_receipts_limit.note_single() {
-            warn!("Rejecting GetTransactionReceipts message - rate-limit exceeded");
-            self.peer.channel.send_or_close(TransactionReceiptsMessage::empty());
-            return;
-        }
-
-        let limit: usize = TransactionReceiptsMessage::RECEIPTS_MAX_COUNT / 2;
-        let receipts = self.blockchain.get_transaction_receipts_by_address(&msg.address, limit, limit);
-        self.peer.channel.send_or_close(TransactionReceiptsMessage::new(receipts));
     }
 }

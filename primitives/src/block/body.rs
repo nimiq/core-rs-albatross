@@ -27,15 +27,7 @@ impl SerializeContent for BlockBody {
 
 impl Hash for BlockBody {
     fn hash<H: HashOutput>(&self) -> H {
-        let mut vec: Vec<H> = Vec::with_capacity(2 + self.transactions.len() + self.pruned_accounts.len());
-        vec.push(self.miner.hash());
-        vec.push(self.extra_data.hash());
-        for t in &self.transactions {
-            vec.push(t.hash());
-        }
-        for p in &self.pruned_accounts {
-            vec.push(p.hash());
-        }
+        let vec = self.get_merkle_leaves();
         return merkle::compute_root_from_hashes::<H>(&vec);
     }
 }
@@ -94,5 +86,18 @@ impl BlockBody {
 
         // Everything checks out.
         return Ok(());
+    }
+
+    pub fn get_merkle_leaves<H: HashOutput>(&self) -> Vec<H> {
+        let mut vec: Vec<H> = Vec::with_capacity(2 + self.transactions.len() + self.pruned_accounts.len());
+        vec.push(self.miner.hash());
+        vec.push(self.extra_data.hash());
+        for t in &self.transactions {
+            vec.push(t.hash());
+        }
+        for p in &self.pruned_accounts {
+            vec.push(p.hash());
+        }
+        vec
     }
 }

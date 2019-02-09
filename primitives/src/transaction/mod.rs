@@ -8,10 +8,14 @@ use crate::networks::NetworkId;
 use crate::policy;
 use std::cmp::{Ord, Ordering};
 use std::io;
-use nimiq_utils::merkle::Blake2bMerklePath;
+use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionsProof {}
+pub struct TransactionsProof {
+    #[beserial(len_type(u16))]
+    pub transactions: Vec<Transaction>,
+    pub proof: Blake2bMerkleProof,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionReceipt {
