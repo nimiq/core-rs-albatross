@@ -180,7 +180,7 @@ impl<'env> AccountsTree<'env> {
             // If the prefix fully matches, we have found the requested node.
             // If the prefix does not fully match, the requested address is not part of this node.
             // Include the node in the proof nevertheless to prove that the account doesn't exist.
-            if node.prefix().is_prefix_of(prefix) || node.prefix() == prefix {
+            if !node.prefix().is_prefix_of(prefix) || node.prefix() == prefix {
                 include_node = true;
                 i += 1;
                 continue;

@@ -1,5 +1,6 @@
 use beserial::Serialize;
 use nimiq_accounts::Accounts;
+use nimiq_accounts::AccountsProof;
 use nimiq_database::ReadTransaction;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
@@ -11,6 +12,7 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::transaction::{SignatureProof, Transaction};
+use nimiq_primitives::account::BasicAccount;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
@@ -338,16 +340,41 @@ fn can_generate_accounts_proof() {
     let address_recipient1 = Address::from([3u8; Address::SIZE]);
     let address_recipient2 = Address::from([4u8; Address::SIZE]);
 
-    let tx1 = Transaction::new_basic(address_miner1.clone(), address_recipient1.clone(), Coin::from(5), Coin::from(3), 1, NetworkId::Main);
-    let tx2 = Transaction::new_basic(address_miner1.clone(), address_recipient2.clone(), Coin::from(7), Coin::from(11), 1, NetworkId::Main);
-    let tx3 = Transaction::new_basic(address_miner1.clone(), address_recipient2.clone(), Coin::from(9), Coin::from(8), 1, NetworkId::Main);
-    let mut body = BlockBody { miner: address_miner1.clone(), extra_data: Vec::new(), transactions: vec![tx1, tx2, tx3], pruned_accounts: Vec::new() };
+    let mut body = BlockBody { miner: address_miner1.clone(), extra_data: Vec::new(), transactions: Vec::new(), pruned_accounts: Vec::new() };
 
-    let mut write_block_txn = WriteTransaction::new(&env);
-    accounts.commit_block_body(&mut write_block_txn, &body, 1);
-    write_block_txn.commit();
+    {
+        let mut txn = WriteTransaction::new(&env);
+        assert!(accounts.commit_block_body(&mut txn, &body, 1).is_ok());
+        txn.commit();
+    }
+    let value1 = Coin::from(5);
+    let fee1 = Coin::from(3);
+    let value2 = Coin::from(7);
+    let fee2 = Coin::from(11);
+    let tx1 = Transaction::new_basic(address_miner1.clone(), address_recipient1.clone(), value1, fee1, 2, NetworkId::Main);
+    let tx2 = Transaction::new_basic(address_miner1.clone(), address_recipient2.clone(), value2, fee2, 2, NetworkId::Main);
+
+    body.miner = address_miner2.clone();
+    body.transactions = vec![tx1, tx2];
+
+    {
+        let mut txn = WriteTransaction::new(&env);
+        assert!(accounts.commit_block_body(&mut txn, &body, 2).is_ok());
+        txn.commit();
+    }
 
     let mut read_accs_txn = ReadTransaction::new(&env);
-    assert!(accounts.get_accounts_proof(&mut read_accs_txn, &vec![ address_miner1.clone() ]).verify());
-    assert!(accounts.get_accounts_proof(&mut read_accs_txn, &vec![ address_miner1.clone(), address_miner2.clone(), address_recipient1 ]).verify());
+    let mut proof1 = accounts.get_accounts_proof(&mut read_accs_txn, &vec![ address_miner1.clone() ]);
+    assert!(proof1.verify());
+    assert_eq!(Account::Basic(BasicAccount { balance: policy::block_reward_at(1) - value1 - fee1 - value2 - fee2 }), proof1.get_account(&address_miner1).unwrap());
+    assert_eq!(None, proof1.get_account(&address_miner2));
+    assert_eq!(None, proof1.get_account(&address_recipient1));
+    assert_eq!(None, proof1.get_account(&address_recipient2));
+
+    let mut proof2 = accounts.get_accounts_proof(&mut read_accs_txn, &vec![ address_recipient2.clone(), address_miner2.clone() ]);
+    assert!(proof2.verify());
+    assert_eq!(Account::Basic(BasicAccount { balance: policy::block_reward_at(2) + fee1 + fee2 }), proof2.get_account(&address_miner2).unwrap());
+    assert_eq!(None, proof2.get_account(&address_miner1));
+    assert_eq!(None, proof2.get_account(&address_recipient1));
+    assert_eq!(Account::Basic(BasicAccount { balance: value2 }), proof2.get_account(&address_recipient2).unwrap());
 }
