@@ -2,9 +2,9 @@ use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
 use hash::Hash;
 use keys::Address;
-use primitives::account::Account;
+use primitives::account::{Account, BasicAccount};
 
-use crate::tree::AccountsTreeNode;
+use crate::tree::{AccountsTreeNode, AccountsTreeNodeChild};
 use crate::tree::AddressNibbles;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
