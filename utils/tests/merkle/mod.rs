@@ -168,13 +168,13 @@ fn it_correctly_serializes_and_deserializes_path() {
 #[test]
 fn it_correctly_computes_an_empty_proof() {
     let root = compute_root_from_content::<Blake2bHasher, &str>(&Vec::new());
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&[], &["0"]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&[], &["0"]);
     assert_eq!(proof.len(), 1);
-    assert!(proof.compute_root(&["0"]).is_err());
+    assert!(proof.compute_root_from_values(&["0"]).is_err());
 
-    let proof: MerkleProof<Blake2bHash> = MerkleProof::new::<Blake2bHasher, &str>(&[], &[]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&[], &[]);
     assert_eq!(proof.len(), 1);
-    let proof_root = proof.compute_root::<&str>(&[]);
+    let proof_root = proof.compute_root_from_values::<&str>(&[]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 }
@@ -194,15 +194,15 @@ fn it_correctly_computes_a_simple_proof() {
      *  v0  *v1*    v2   v3
      */
     let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values, &[values[1]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[values[1]]);
     assert_eq!(proof.len(), 2);
-    let proof_root = proof.compute_root(&[values[1]]);
+    let proof_root = proof.compute_root_from_values(&[values[1]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values, &[]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[]);
     assert_eq!(proof.len(), 1);
-    let proof_root = proof.compute_root::<&str>(&[]);
+    let proof_root = proof.compute_root_from_values::<&str>(&[]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 }
@@ -220,9 +220,9 @@ fn it_correctly_computes_more_complex_proofs() {
      *  v0  *v1*   *v2*  v3
      */
     let root = compute_root_from_content_slice::<Blake2bHasher, &str>(&values[..4]);
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values[..4], &[values[1], values[2]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values[..4], &[values[1], values[2]]);
     assert_eq!(proof.len(), 2);
-    let proof_root = proof.compute_root(&[values[1], values[2]]);
+    let proof_root = proof.compute_root_from_values(&[values[1], values[2]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -235,9 +235,9 @@ fn it_correctly_computes_more_complex_proofs() {
      *   |    |      |    |
      * *v0* *v1*    v2   v3
      */
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values[..4], &[values[0], values[1]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values[..4], &[values[0], values[1]]);
     assert_eq!(proof.len(), 1);
-    let proof_root = proof.compute_root(&[values[0], values[1]]);
+    let proof_root = proof.compute_root_from_values(&[values[0], values[1]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -251,9 +251,9 @@ fn it_correctly_computes_more_complex_proofs() {
      * *v0* *v1*
      */
     let root = compute_root_from_content_slice::<Blake2bHasher, &str>(&values[..3]);
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values[..3], &[values[0], values[1]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values[..3], &[values[0], values[1]]);
     assert_eq!(proof.len(), 1);
-    let proof_root = proof.compute_root(&[values[0], values[1]]);
+    let proof_root = proof.compute_root_from_values(&[values[0], values[1]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -266,9 +266,9 @@ fn it_correctly_computes_more_complex_proofs() {
      *   |    |
      *  v0  *v1*
      */
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values[..3], &[values[1], values[2]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values[..3], &[values[1], values[2]]);
     assert_eq!(proof.len(), 1);
-    let proof_root = proof.compute_root(&[values[1], values[2]]);
+    let proof_root = proof.compute_root_from_values(&[values[1], values[2]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -282,9 +282,9 @@ fn it_correctly_computes_more_complex_proofs() {
      *  v0   v1   v2   v3   v4   v5  *v6*
      */
     let root = compute_root_from_content_slice::<Blake2bHasher, &str>(&values);
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values, &[values[6]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[values[6]]);
     assert_eq!(proof.len(), 2);
-    let proof_root = proof.compute_root(&[values[6]]);
+    let proof_root = proof.compute_root_from_values(&[values[6]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -297,9 +297,9 @@ fn it_correctly_computes_more_complex_proofs() {
      *   /   \     /   \     /   \    |
      *  v0   v1  *v2* (v3)  v4   v5  *v6*
      */
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values, &[values[2], values[6]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[values[2], values[6]]);
     assert_eq!(proof.len(), 3);
-    let proof_root = proof.compute_root(&[values[2], values[6]]);
+    let proof_root = proof.compute_root_from_values(&[values[2], values[6]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -312,9 +312,9 @@ fn it_correctly_computes_more_complex_proofs() {
      *   /   \     /   \     /   \    |
      *  v0   v1  (v2) *v3* *v4* (v5)  v6
      */
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values, &[values[3], values[4]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[values[3], values[4]]);
     assert_eq!(proof.len(), 4);
-    let proof_root = proof.compute_root(&[values[3], values[4]]);
+    let proof_root = proof.compute_root_from_values(&[values[3], values[4]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 }
@@ -333,9 +333,9 @@ fn it_correctly_computes_absence_proofs() {
      * *v0*  v1    *v2*  v3
      */
     let root = compute_root_from_content_slice::<Blake2bHasher, &str>(&values[..4]);
-    let proof = MerkleProof::new_with_absence::<Blake2bHasher, &str>(&values[..4], &[missing_values[0], values[2]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::with_absence::<&str>(&values[..4], &[missing_values[0], values[2]]);
     assert_eq!(proof.len(), 2);
-    let proof_root = proof.compute_root(&[values[0], values[2]]);
+    let proof_root = proof.compute_root_from_values(&[values[0], values[2]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -348,9 +348,9 @@ fn it_correctly_computes_absence_proofs() {
      *   |    |      |    |
      * *v0*  v1     v2  *v3*
      */
-    let proof = MerkleProof::new_with_absence::<Blake2bHasher, &str>(&values[..4], &[missing_values[0], values[4]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::with_absence::<&str>(&values[..4], &[missing_values[0], values[4]]);
     assert_eq!(proof.len(), 2);
-    let proof_root = proof.compute_root(&[values[0], values[3]]);
+    let proof_root = proof.compute_root_from_values(&[values[0], values[3]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -364,9 +364,9 @@ fn it_correctly_computes_absence_proofs() {
      *  v0   v1
      */
     let root = compute_root_from_content_slice::<Blake2bHasher, &str>(&values[..3]);
-    let proof = MerkleProof::new_with_absence::<Blake2bHasher, &str>(&values[..3], &[values[4]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::with_absence::<&str>(&values[..3], &[values[4]]);
     assert_eq!(proof.len(), 1);
-    let proof_root = proof.compute_root(&[values[2]]);
+    let proof_root = proof.compute_root_from_values(&[values[2]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -380,9 +380,9 @@ fn it_correctly_computes_absence_proofs() {
      *  v0   v1  *v2* *v3*  v4   v5   v6
      */
     let root = compute_root_from_content_slice::<Blake2bHasher, &str>(&values);
-    let proof = MerkleProof::new_with_absence::<Blake2bHasher, &str>(&values, &[missing_values[1]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::with_absence::<&str>(&values, &[missing_values[1]]);
     assert_eq!(proof.len(), 2);
-    let proof_root = proof.compute_root(&[values[2], values[3]]);
+    let proof_root = proof.compute_root_from_values(&[values[2], values[3]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -395,9 +395,9 @@ fn it_correctly_computes_absence_proofs() {
      *   /   \     /   \     /   \    |
      *  v0   v1  (v2) *v3* *v4* (v5)  v6
      */
-    let proof = MerkleProof::new_with_absence::<Blake2bHasher, &str>(&values, &[missing_values[2]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::with_absence::<&str>(&values, &[missing_values[2]]);
     assert_eq!(proof.len(), 4);
-    let proof_root = proof.compute_root(&[values[3], values[4]]);
+    let proof_root = proof.compute_root_from_values(&[values[3], values[4]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 
@@ -410,9 +410,9 @@ fn it_correctly_computes_absence_proofs() {
      *   /   \     /   \     /   \    |
      * *v0* (v1) *v2* *v3* *v4* (v5)  v6
      */
-    let proof = MerkleProof::new_with_absence::<Blake2bHasher, &str>(&values, &[values[0], missing_values[1], missing_values[2]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::with_absence::<&str>(&values, &[values[0], missing_values[1], missing_values[2]]);
     assert_eq!(proof.len(), 3);
-    let proof_root = proof.compute_root(&[values[0], values[2], values[3], values[4]]);
+    let proof_root = proof.compute_root_from_values(&[values[0], values[2], values[3], values[4]]);
     assert!(proof_root.is_ok());
     assert_eq!(proof_root.unwrap(), root);
 }
@@ -432,20 +432,20 @@ fn it_correctly_discards_invalid_proofs() {
      *  v0  *v1*    v2   v3
      */
     let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values, &[values[1]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[values[1]]);
 
-    let proof_root = proof.compute_root(&[values[0]]);
+    let proof_root = proof.compute_root_from_values(&[values[0]]);
     assert!(proof_root.is_ok());
     assert_ne!(proof_root.unwrap(), root);
 
-    assert!(proof.compute_root::<&str>(&[]).is_err());
+    assert!(proof.compute_root_from_values::<&str>(&[]).is_err());
 }
 
 #[test]
 fn it_correctly_serializes_and_deserializes_proof() {
     let values = vec!["1", "2", "3", "5", "7", "8", "9"];
 
-    let proof = MerkleProof::new::<Blake2bHasher, &str>(&values, &[values[2], values[6]]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[values[2], values[6]]);
     let mut serialization: Vec<u8> = Vec::with_capacity(proof.serialized_size());
     let size = proof.serialize(&mut serialization).unwrap();
     assert_eq!(size, proof.serialized_size());

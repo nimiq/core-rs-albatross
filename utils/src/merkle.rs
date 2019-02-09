@@ -47,7 +47,7 @@ pub fn compute_root_from_slice<T: HashOutput>(values: &[T]) -> Cow<T> {
     return Cow::Owned(hasher.finish());
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MerklePath<H: HashOutput> {
     nodes: Vec<MerklePathNode<H>>
 }
@@ -177,33 +177,38 @@ impl<H: HashOutput> Deserialize for MerklePath<H> {
 
 pub type Blake2bMerklePath = MerklePath<Blake2bHash>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct MerklePathNode<H: HashOutput> {
     hash: H,
     left: bool,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MerkleProof<H: HashOutput> {
     nodes: Vec<H>,
     operations: Vec<MerkleProofOperation>,
 }
 
 impl<H> MerkleProof<H> where H: HashOutput {
-    pub fn new<D: Hasher<Output=H>, T: SerializeContent>(values: &[T], values_to_proof: &[T]) -> Self {
-        let hashes_to_proof: Vec<D::Output> = values_to_proof.iter().map(|v| { D::default().chain(v).finish() }).collect();
-        let mut nodes: Vec<D::Output> = Vec::new();
+    pub fn new(hashes: Vec<H>, hashes_to_proof: Vec<H>) -> Self {
+        let mut nodes: Vec<H> = Vec::new();
         let mut operations: Vec<MerkleProofOperation> = Vec::new();
-        MerkleProof::compute::<D, T>(values, hashes_to_proof.as_slice(), &mut nodes, &mut operations);
+        MerkleProof::compute(hashes.as_slice(), hashes_to_proof.as_slice(), &mut nodes, &mut operations);
         return MerkleProof {
             nodes,
             operations,
         };
     }
 
-    pub fn new_with_absence<D: Hasher<Output=H>, T: SerializeContent + Ord + Clone>(values: &[T], values_to_proof: &[T]) -> Self {
+    pub fn from_values<T: SerializeContent>(values: &[T], values_to_proof: &[T]) -> Self {
+        let hashes: Vec<H> = values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+        let hashes_to_proof: Vec<H> = values_to_proof.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+        MerkleProof::new(hashes, hashes_to_proof)
+    }
+
+    pub fn with_absence<T: SerializeContent + Ord + Clone>(values: &[T], values_to_proof: &[T]) -> Self {
         let mut final_values_to_proof: Vec<T> = Vec::new();
-        let mut values_to_proof: Vec<&T> = values_to_proof.iter().map(|v| { v }).collect();
+        let mut values_to_proof: Vec<&T> = values_to_proof.iter().collect();
         values_to_proof.sort();
         let mut leaf_index: usize = 0;
         let mut value_index: usize = 0;
@@ -235,12 +240,15 @@ impl<H> MerkleProof<H> where H: HashOutput {
         if leaf_index < values_to_proof.len() && values.len() > 0 {
             final_values_to_proof.push(values[values.len() - 1].clone());
         }
-        return MerkleProof::new::<D, T>(values, final_values_to_proof.as_slice());
+
+        let hashes: Vec<H> = values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+        let hashes_to_proof: Vec<H> = final_values_to_proof.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+        return MerkleProof::new(hashes, hashes_to_proof);
     }
 
-    fn compute<D: Hasher<Output=H>, T: SerializeContent>(values: &[T], hashes_to_proof: &[D::Output], path: &mut Vec<H>, operations: &mut Vec<MerkleProofOperation>) -> (bool, H) {
-        let mut hasher = D::default();
-        match values.len() {
+    fn compute(hashes: &[H], hashes_to_proof: &[H], path: &mut Vec<H>, operations: &mut Vec<MerkleProofOperation>) -> (bool, H) {
+        let mut hasher = H::Builder::default();
+        match hashes.len() {
             0 => {
                 hasher.write(&[]).unwrap();
                 let hash = hasher.finish();
@@ -249,24 +257,24 @@ impl<H> MerkleProof<H> where H: HashOutput {
                 return (false, hash);
             }
             1 => {
-                hasher.hash(&values[0]);
-                let hash = hasher.finish();
+                let hash = hashes[0].clone(); // We assume all values to be hashed once already.
                 let is_leaf = hashes_to_proof.contains(&hash);
                 if is_leaf {
                     operations.push(MerkleProofOperation::ConsumeInput);
+                    return (is_leaf, hash);
                 } else {
                     path.push(hash.clone());
                     operations.push(MerkleProofOperation::ConsumeProof);
+                    return (is_leaf,  hash);
                 }
-                return (is_leaf, hash);
             }
             len => {
-                let mut sub_path: Vec<D::Output> = Vec::new();
+                let mut sub_path: Vec<H> = Vec::new();
                 let mut sub_operations: Vec<MerkleProofOperation> = Vec::new();
 
                 let mid = (len + 1) / 2; // Equivalent to round(len / 2.0)
-                let (contains_left, left_hash) = MerkleProof::<D::Output>::compute::<D, T>(&values[..mid], &hashes_to_proof, &mut sub_path, &mut sub_operations);
-                let (contains_right, right_hash) = MerkleProof::<D::Output>::compute::<D, T>(&values[mid..], &hashes_to_proof, &mut sub_path, &mut sub_operations);
+                let (contains_left, left_hash) = MerkleProof::<H>::compute(&hashes[..mid], &hashes_to_proof, &mut sub_path, &mut sub_operations);
+                let (contains_right, right_hash) = MerkleProof::<H>::compute(&hashes[mid..], &hashes_to_proof, &mut sub_path, &mut sub_operations);
                 hasher.hash(&left_hash);
                 hasher.hash(&right_hash);
 
@@ -285,8 +293,12 @@ impl<H> MerkleProof<H> where H: HashOutput {
         };
     }
 
-    pub fn compute_root<T: SerializeContent>(&self, leaf_values: &[T]) -> Result<H, InvalidMerkleProofError> {
-        let inputs: Vec<H> = leaf_values.iter().map(|v| { H::Builder::default().chain(v).finish() }).collect();
+    pub fn compute_root_from_values<T: SerializeContent>(&self, leaf_values: &[T]) -> Result<H, InvalidMerkleProofError> {
+        let hashes: Vec<H> = leaf_values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+        self.compute_root(hashes)
+    }
+
+    pub fn compute_root(&self, leaf_hashes: Vec<H>) -> Result<H, InvalidMerkleProofError> {
         let mut stack: Vec<Cow<H>> = Vec::new();
         let mut input_index: usize = 0;
         let mut proof_index: usize = 0;
@@ -301,10 +313,10 @@ impl<H> MerkleProof<H> where H: HashOutput {
                     proof_index += 1;
                 }
                 MerkleProofOperation::ConsumeInput => {
-                    if input_index >= inputs.len() {
+                    if input_index >= leaf_hashes.len() {
                         return Err(InvalidMerkleProofError("Found invalid operation.".to_string()));
                     }
-                    stack.push(Cow::Borrowed(&inputs[input_index]));
+                    stack.push(Cow::Borrowed(&leaf_hashes[input_index]));
                     input_index += 1;
                 }
                 MerkleProofOperation::Hash => {
@@ -327,7 +339,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
         }
 
         // Everything but the root needs to be consumed.
-        if stack.len() != 1 || proof_index < self.len() || input_index < inputs.len() {
+        if stack.len() != 1 || proof_index < self.len() || input_index < leaf_hashes.len() {
             return Err(InvalidMerkleProofError("Did not consume all nodes.".to_string()));
         }
 
@@ -411,7 +423,7 @@ impl<H: HashOutput> Deserialize for MerkleProof<H> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum MerkleProofOperation {
     ConsumeProof,
     ConsumeInput,
@@ -436,3 +448,5 @@ impl error::Error for InvalidMerkleProofError {
         None
     }
 }
+
+pub type Blake2bMerkleProof = MerkleProof<Blake2bHash>;
