@@ -26,10 +26,9 @@ use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
 use network_primitives::subscription::Subscription;
 use network_primitives::version;
-use nimiq_blockchain::chain_proof::ChainProof;
 use primitives::block::{Block, BlockHeader};
-use primitives::transaction::{Transaction, TransactionsProof};
-use primitives::transaction::TransactionReceipt;
+use primitives::block::proof::ChainProof;
+use primitives::transaction::{Transaction, TransactionsProof, TransactionReceipt};
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
 
@@ -807,7 +806,22 @@ pub struct GetBlockProofMessage {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockProofMessage {
+    #[beserial(len_type(u16))]
+    pub proof: Option<Vec<Block>>,
+}
 
+impl BlockProofMessage {
+    pub fn new(proof: Option<Vec<Block>>) -> Message {
+        Message::BlockProof(BlockProofMessage {
+            proof,
+        })
+    }
+
+    pub fn empty() -> Message {
+        Message::BlockProof(BlockProofMessage {
+            proof: None,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

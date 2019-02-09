@@ -13,9 +13,6 @@ use network::connection::close_type::CloseType;
 use network::Peer;
 use network_messages::{
     GetBlocksMessage,
-    GetTransactionReceiptsMessage,
-    GetTransactionsProofMessage,
-    Message,
     MessageType,
     RejectMessage,
     RejectMessageCode
@@ -31,7 +28,7 @@ use beserial::Serialize;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 
-pub mod nano_requests;
+pub mod requests;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConsensusAgentEvent {
@@ -60,14 +57,17 @@ pub struct ConsensusAgentState {
     /// The number of failed blockchain sync attempts.
     failed_syncs: u32,
 
+    /// Rate limit for GetChainProof messages.
+    chain_proof_limit: RateLimit,
+
+    /// Rate limit for GetBlockProof messages.
+    block_proof_limit: RateLimit,
+
     /// Rate limit for GetTransactionReceipts messages.
     transaction_receipts_limit: RateLimit,
 
     /// Rate limit for GetTransactionsProof messages.
     transactions_proof_limit: RateLimit,
-
-    /// Rate limit for GetChainProof messages.
-    chain_proof_limit: RateLimit,
 }
 
 #[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -96,9 +96,10 @@ impl ConsensusAgent {
     const SYNC_ATTEMPTS_MAX: u32 = 25;
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
+    const CHAIN_PROOF_RATE_LIMIT: usize = 3; // per minute
+    const BLOCK_PROOF_RATE_LIMIT: usize = 60; // per minute
     const TRANSACTION_RECEIPTS_RATE_LIMIT: usize = 30; // per minute
     const TRANSACTIONS_PROOF_RATE_LIMIT: usize = 60; // per minute
-    const CHAIN_PROOF_RATE_LIMIT: usize = 3; // per minute
 
     /// Minimum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MIN: u64 = 2 * 1000; // in ms
@@ -124,9 +125,10 @@ impl ConsensusAgent {
                 num_blocks_forking: 0,
                 failed_syncs: 0,
 
+                chain_proof_limit: RateLimit::new_per_minute(Self::CHAIN_PROOF_RATE_LIMIT),
+                block_proof_limit: RateLimit::new_per_minute(Self::BLOCK_PROOF_RATE_LIMIT),
                 transaction_receipts_limit: RateLimit::new_per_minute(Self::TRANSACTION_RECEIPTS_RATE_LIMIT),
                 transactions_proof_limit: RateLimit::new_per_minute(Self::TRANSACTIONS_PROOF_RATE_LIMIT),
-                chain_proof_limit: RateLimit::new_per_minute(Self::CHAIN_PROOF_RATE_LIMIT),
             }),
 
             notifier: RwLock::new(Notifier::new()),
@@ -156,13 +158,13 @@ impl ConsensusAgent {
         });
 
         let weak = Arc::downgrade(this);
-        msg_notifier.get_transaction_receipts.write().register(move |msg: GetTransactionReceiptsMessage| {
+        msg_notifier.get_transaction_receipts.write().register(move |msg| {
             let this = upgrade_weak!(weak);
             this.on_get_transaction_receipts(msg);
         });
 
         let weak = Arc::downgrade(this);
-        msg_notifier.get_transactions_proof.write().register(move |msg: GetTransactionsProofMessage| {
+        msg_notifier.get_transactions_proof.write().register(move |msg| {
             let this = upgrade_weak!(weak);
             this.on_get_transactions_proof(msg);
         });
@@ -384,26 +386,5 @@ impl ConsensusAgent {
 
     fn on_get_blocks_timeout(&self) {
         self.peer.channel.close(CloseType::GetBlocksTimeout);
-    }
-
-    fn on_get_chain_proof(&self) {
-        debug!("[GET-CHAIN-PROOF]");
-        if !self.state.write().chain_proof_limit.note_single() {
-            warn!("Rejecting GetChainProof message - rate-limit exceeded");
-            self.peer.channel.close(CloseType::RateLimitExceeded);
-            return;
-        }
-
-        let chain_proof = self.blockchain.get_chain_proof();
-        self.peer.channel.send_or_close(Message::ChainProof(chain_proof));
-    }
-
-    fn on_get_block_proof(&self, msg: GetBlockProofMessage) {
-        debug!("[GET-BLOCK-PROOF]");
-
-        // TODO rate limit
-
-        let block_proof = self.blockchain.get_block_proof(&msg.block_hash_to_prove, &msg.known_block_hash);
-
     }
 }

@@ -3,6 +3,7 @@ mod body;
 mod header;
 mod interlink;
 mod target;
+pub mod proof;
 
 pub use self::block::Block;
 pub use self::body::BlockBody;
