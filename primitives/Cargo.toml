@@ -14,7 +14,6 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 [dependencies]
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
-bigdecimal = { version = "0.0.14", optional = true }
 num-bigint = { version = "0.2.0", optional = true }
 num-traits = { version = "0.2.6", optional = true }
 fixed-unsigned = { path = "../fixed-unsigned", optional = true }
@@ -35,7 +34,7 @@ lazy_static = "1.0"
 all = ["coin", "account", "block", "policy", "transaction", "networks"]
 coin = ["hex"]
 account = ["nimiq-keys", "coin", "nimiq-hash", "hex", "nimiq-macros", "log"]
-block = ["fixed-unsigned", "bigdecimal", "num-bigint", "nimiq-hash", "policy", "nimiq-utils", "account", "nimiq-keys", "transaction", "networks"]
-policy = ["bigdecimal", "num-bigint", "num-traits", "parking_lot", "lazy_static"]
+block = ["fixed-unsigned", "num-bigint", "nimiq-hash", "policy", "nimiq-utils", "account", "nimiq-keys", "transaction", "networks"]
+policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static"]
 transaction = ["fixed-unsigned", "nimiq-hash", "nimiq-utils", "policy", "networks", "bitflags", "log", "nimiq-keys", "account"]
 networks = []

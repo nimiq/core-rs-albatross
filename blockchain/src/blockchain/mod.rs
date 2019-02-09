@@ -1,7 +1,6 @@
 use std::cmp;
 use std::sync::Arc;
 
-use bigdecimal::BigDecimal;
 use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 
 use accounts::Accounts;
@@ -226,9 +225,6 @@ impl<'env> Blockchain<'env> {
 
         // Check that the difficulty is correct.
         let next_target = self.get_next_target(Some(&block.header.prev_hash));
-        println!("next_target = {:?}", &next_target);
-        println!("block.header.n_bits = {:?}", &block.header.n_bits);
-        println!("TargetCompact::from(next_target) = {:?}", TargetCompact::from(next_target.clone()));
         if block.header.n_bits != TargetCompact::from(next_target) {
             warn!("Rejecting block - difficulty mismatch");
             #[cfg(feature = "metrics")]

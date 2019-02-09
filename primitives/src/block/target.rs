@@ -1,7 +1,6 @@
 use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign, Mul, Div};
 
-use bigdecimal::BigDecimal;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use fixed_unsigned::{FixedUnsigned, FixedScale};
 use fixed_unsigned::types::FixedUnsigned10;
@@ -42,17 +41,12 @@ impl From<u32> for TargetCompact {
 /// Convert `TargetCompact` to `Target`
 impl From<TargetCompact> for Target {
     fn from(target_compact: TargetCompact) -> Self {
-        //println!("[`From<TargetCompact> for Target`] {}", ">>>>");
-        //println!("[`From<TargetCompact> for Target`] `target_compact = {:?}`", target_compact);
         let mut val = [0u8; 32];
         let shift_bytes = (target_compact.0 >> 24).saturating_sub(3) as usize;
-        //println!("[`From<TargetCompact> for Target`] `shift_bytes = {:?}`", shift_bytes);
         let value = target_compact.0 & 0xffffff; // TODO: This step is unnecessary, since we mask the bytes later anyway.
         val[32 - shift_bytes - 1] = (value & 0xff) as u8;
         val[32 - shift_bytes - 2] = ((value >> 8) & 0xff) as u8;
         val[32 - shift_bytes - 3] = ((value >> 16) & 0xff) as u8;
-        //println!("[`From<TargetCompact> for Target`] `target = {:?}`", val);
-        //println!("[`From<TargetCompact> for Target`] {}\n", "<<<<");
         Target(val)
     }
 }
@@ -70,8 +64,6 @@ impl From<Target> for TargetCompact {
 impl<'a> From<&'a Target> for TargetCompact {
     fn from(target: &'a Target) -> Self {
         // Determine where the first byte in target is.
-        //println!("[`From<Target> for TargetCompact`] {}", ">>>>");
-        //println!("[`From<Target> for TargetCompact`] `target = {:?}`", &target);
         let mut first_byte = 0;
         for i in 0..target.0.len() {
             if target.0[i] > 0 {
@@ -81,25 +73,16 @@ impl<'a> From<&'a Target> for TargetCompact {
         }
 
         // The significant is signed and therefore can't be > 0x80. If it is, we take the byte before it as first byte
-        //println!("[`From<Target> for TargetCompact`] Condition for `first_byte -= 1`: `{} && {}`", target.0[first_byte] >= 0x80, first_byte <= 29);
         if target.0[first_byte] >= 0x80 && first_byte <= 29 {
-            //println!(" first_byte = {}", first_byte);
-            //println!(" target.0[first_byte] = {}", target.0[first_byte]);
             first_byte -= 1;
         }
 
-        //println!("[`From<Target> for TargetCompact`] `first_byte = {:?}`", first_byte);
         let shift_bytes = 32 - first_byte;
-        //println!("[`From<Target> for TargetCompact`] `shift_bytes = {:?}`", shift_bytes);
         let start_byte = first_byte.min(29);
-        //println!("[`From<Target> for TargetCompact`] `start_byte = {:?}`", start_byte);
-        let res = TargetCompact(((shift_bytes as u32) << 24)
+        TargetCompact(((shift_bytes as u32) << 24)
             | ((target.0[start_byte] as u32) << 16)
             | ((target.0[start_byte + 1] as u32) << 8)
-            | (target.0[start_byte + 2] as u32));
-        //println!("[`From<Target> for TargetCompact`] `return {:?}`", res);
-        //println!("[`From<Target> for TargetCompact`] {}\n", "<<<<");
-        res
+            | (target.0[start_byte + 2] as u32))
     }
 }
 
