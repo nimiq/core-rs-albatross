@@ -33,3 +33,4 @@ pretty_env_logger = "0.2.3"
 
 [features]
 metrics = []
+transaction-store = []

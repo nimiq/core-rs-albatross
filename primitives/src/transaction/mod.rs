@@ -14,7 +14,11 @@ use nimiq_utils::merkle::Blake2bMerklePath;
 pub struct TransactionsProof {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionReceipt {}
+pub struct TransactionReceipt {
+    pub transaction_hash: Blake2bHash,
+    pub block_hash: Blake2bHash,
+    pub block_height: u32,
+}
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
