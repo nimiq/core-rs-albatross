@@ -133,4 +133,13 @@ impl Block {
 
         return BlockInterlink::new(hashes, &hash);
     }
+
+    pub fn into_light(mut self) -> Block {
+        self.body = None;
+        self
+    }
+
+    pub fn is_light(&self) -> bool {
+        self.body.is_none()
+    }
 }

@@ -148,10 +148,9 @@ impl ConsensusAgent {
             this.on_inventory_event(e);
         });
 
-
-        let weak = Arc::downgrade(this);
         let msg_notifier = &this.peer.channel.msg_notifier;
-        msg_notifier.get_chain_proof.write().register(move |_e| {
+        let weak = Arc::downgrade(this);
+        msg_notifier.get_chain_proof.write().register(move |_| {
             let this = upgrade_weak!(weak);
             this.on_get_chain_proof();
         });
@@ -166,6 +165,12 @@ impl ConsensusAgent {
         msg_notifier.get_transactions_proof.write().register(move |msg: GetTransactionsProofMessage| {
             let this = upgrade_weak!(weak);
             this.on_get_transactions_proof(msg);
+        });
+
+        let weak = Arc::downgrade(this);
+        msg_notifier.get_block_proof.write().register(move |msg| {
+            let this = upgrade_weak!(weak);
+            this.on_get_block_proof(msg);
         });
     }
 
@@ -391,5 +396,14 @@ impl ConsensusAgent {
 
         let chain_proof = self.blockchain.get_chain_proof();
         self.peer.channel.send_or_close(Message::ChainProof(chain_proof));
+    }
+
+    fn on_get_block_proof(&self, msg: GetBlockProofMessage) {
+        debug!("[GET-BLOCK-PROOF]");
+
+        // TODO rate limit
+
+        let block_proof = self.blockchain.get_block_proof(&msg.block_hash_to_prove, &msg.known_block_hash);
+
     }
 }

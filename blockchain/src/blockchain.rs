@@ -738,8 +738,7 @@ impl<'env> Blockchain<'env> {
 
         if (chain.is_empty() || chain[chain.len() - 1].head.header.height > 1) && tail_height == 1 {
             let mut genesis_block = get_network_info(self.network_id).unwrap().genesis_block.clone();
-            genesis_block.body = None;
-            chain.push(ChainInfo::initial(genesis_block));
+            chain.push(ChainInfo::initial(genesis_block.into_light()));
         }
 
         chain.reverse();
@@ -768,6 +767,66 @@ impl<'env> Blockchain<'env> {
 
         headers.reverse();
         headers
+    }
+
+
+    /* Block inclusion proof */
+
+    pub fn get_block_proof(&self, hash_to_prove: &Blake2bHash, known_hash: &Blake2bHash) -> Option<Vec<Block>> {
+        let txn = ReadTransaction::new(self.env);
+
+        let block_to_prove = self.chain_store
+            .get_block(hash_to_prove, false, Some(&txn))?;
+
+        let mut block = self.chain_store
+            .get_block(known_hash, false, Some(&txn))?;
+
+        let mut blocks = vec![];
+        let mut depth = Target::from(block.header.n_bits).get_depth() as i16 + block.interlink.len() as i16 - 1;
+        let prove_depth = Target::from(&block_to_prove.header.pow()).get_depth() as i16;
+
+        let index = i16::min(depth - Target::from(block.header.n_bits).get_depth() as i16, block.interlink.len() as i16 - 1);
+        let mut reference = if index < 0 {
+            &block.header.prev_hash
+        } else {
+            &block.interlink.hashes[index as usize]
+        };
+
+        while hash_to_prove != reference {
+            let next_block = self.chain_store
+                .get_block(reference, false, Some(&txn))
+                .expect("Failed to construct block proof - missing block");
+
+            if next_block.header.height < block_to_prove.header.height {
+                // We have gone past the blockToProve, but are already at proveDepth, fail.
+                if depth <= prove_depth {
+                    return None;
+                }
+
+                // Decrease depth and thereby step size.
+                depth -= 1;
+            } else if next_block.header.height > block_to_prove.header.height {
+                // We are still in front of block_to_prove, add block to result and advance.
+                blocks.push(next_block.clone());
+                block = next_block;
+            } else {
+                // We found a reference to a different block than blockToProve at its height.
+                warn!("Failed to prove block {} - different block {} at its height {}", hash_to_prove, reference, block_to_prove.header.height);
+                return None;
+            }
+
+            let index = i16::min(depth - Target::from(block.header.n_bits).get_depth() as i16, block.interlink.len() as i16 - 1);
+            reference = if index < 0 {
+                &block.header.prev_hash
+            } else {
+                &block.interlink.hashes[index as usize]
+            };
+        }
+
+        // Include the block_to_prove in the result.
+        blocks.push(block_to_prove);
+        blocks.reverse();
+        Some(blocks)
     }
 }
 
