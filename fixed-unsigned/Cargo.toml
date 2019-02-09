@@ -7,7 +7,3 @@ edition = "2018"
 [dependencies]
 num-bigint = "0.2"
 num-traits = "0.2"
-bigdecimal = { version = "0.0.14", optional = true }
-
-[features]
-all = ["bigdecimal"]

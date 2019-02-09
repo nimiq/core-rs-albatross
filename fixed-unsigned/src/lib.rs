@@ -26,8 +26,6 @@ use std::char::from_digit;
 use std::cmp::Ordering;
 
 pub mod types;
-#[cfg(feature = "bigdecimal")]
-pub mod bigdecimal;
 
 
 /// Maximum number of digits a decimal number can have in a `u64`
@@ -62,7 +60,7 @@ impl RoundingMode for RoundHalfUp{
 struct RoundDown {}
 impl RoundingMode for RoundDown {
     #[inline]
-    fn round(int_value: BigUint, carrier: u8) -> BigUint {
+    fn round(int_value: BigUint, _: u8) -> BigUint {
         int_value
     }
 }
