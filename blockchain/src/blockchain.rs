@@ -21,9 +21,11 @@ use utils::unique_ptr::UniquePtr;
 use crate::{chain_info::ChainInfo, chain_store::ChainStore, chain_store::Direction, chain_proof::ChainProof, transaction_cache::TransactionCache};
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
+#[cfg(feature = "transaction-store")]
+use crate::transaction_store::TransactionStore;
 
 pub struct Blockchain<'env> {
-    env: &'env Environment,
+    pub(crate) env: &'env Environment,
     pub network_id: NetworkId,
     network_time: Arc<NetworkTime>,
     pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
@@ -33,6 +35,9 @@ pub struct Blockchain<'env> {
 
     #[cfg(feature = "metrics")]
     pub metrics: BlockchainMetrics,
+
+    #[cfg(feature = "transaction-store")]
+    pub(crate) transaction_store: TransactionStore<'env>,
 }
 
 struct BlockchainState<'env> {
@@ -125,6 +130,9 @@ impl<'env> Blockchain<'env> {
 
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default(),
+
+            #[cfg(feature = "transaction-store")]
+            transaction_store: TransactionStore::new(env),
         }
     }
 
@@ -164,6 +172,9 @@ impl<'env> Blockchain<'env> {
 
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default(),
+
+            #[cfg(feature = "transaction-store")]
+            transaction_store: TransactionStore::new(env),
         }
     }
 
@@ -279,6 +290,9 @@ impl<'env> Blockchain<'env> {
             let mut state = self.state.write();
 
             state.transaction_cache.push_block(&chain_info.head);
+
+            #[cfg(feature = "transaction-store")]
+            self.transaction_store.put(&chain_info.head, &mut txn);
 
             state.main_chain = chain_info;
             state.head_hash = block_hash;
@@ -400,6 +414,9 @@ impl<'env> Blockchain<'env> {
                 reverted_block.1.on_main_chain = false;
                 reverted_block.1.main_chain_successor = None;
                 self.chain_store.put_chain_info(&mut write_txn, &reverted_block.0, &reverted_block.1, false);
+
+                #[cfg(feature = "transaction-store")]
+                self.transaction_store.remove(&reverted_block.1.head, &mut write_txn);
             }
 
             // Update the mainChainSuccessor of the common ancestor block.
@@ -419,6 +436,9 @@ impl<'env> Blockchain<'env> {
 
                 // Include the body of the new block (at position 0).
                 self.chain_store.put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
+
+                #[cfg(feature = "transaction-store")]
+                self.transaction_store.put(&fork_block.1.head, &mut write_txn);
             }
 
             // Commit transaction & update head.

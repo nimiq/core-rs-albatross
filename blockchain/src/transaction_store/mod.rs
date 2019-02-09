@@ -1,4 +1,4 @@
-use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction, FromDatabaseValue, IntoDatabaseValue, AsDatabaseBytes};
+use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction, FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
 use primitives::block::Block;
 use primitives::transaction::Transaction as NimiqTransaction;
@@ -6,9 +6,10 @@ use primitives::transaction::Transaction as NimiqTransaction;
 use beserial::{Serialize, Deserialize};
 use std::os::raw::c_uint;
 use std::io;
-use std::borrow::Cow;
 use keys::Address;
 use hash::Hash;
+
+pub mod blockchain;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TransactionInfo {
@@ -190,7 +191,7 @@ impl<'env> TransactionStore<'env> {
 
     pub fn put(&self, block: &Block, txn: &mut WriteTransaction<'env>) {
         // Insert all transactions.
-        let mut transactions = TransactionInfo::from_block(block);
+        let transactions = TransactionInfo::from_block(block);
         let mut current_id = self.get_head(Some(txn));
         for (tx, info) in transactions.iter() {
             txn.put_reserve(&self.transaction_db, &current_id, info);
