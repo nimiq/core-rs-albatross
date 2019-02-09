@@ -14,6 +14,7 @@ use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::protocol::Protocol;
 use utils::mutable_once::MutableOnce;
 use utils::observer::PassThroughNotifier;
+use utils::timers::Timers;
 use utils::unique_ptr::UniquePtr;
 
 use crate::address::peer_address_book::PeerAddressBook;
@@ -310,6 +311,11 @@ enum Connection<'a> {
     Info(&'a ConnectionInfo),
 }
 
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
+enum ConnectionPoolTimer {
+    UnbanIps,
+}
+
 pub struct ConnectionPool {
     blockchain: Arc<Blockchain<'static>>,
     network_config: Arc<NetworkConfig>,
@@ -321,11 +327,13 @@ pub struct ConnectionPool {
     change_lock: Mutex<()>,
 
     pub notifier: RwLock<PassThroughNotifier<'static, ConnectionPoolEvent>>,
+    timers: Timers<ConnectionPoolTimer>,
     self_weak: MutableOnce<Weak<ConnectionPool>>,
 }
 
 impl ConnectionPool {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
+    const UNBAN_IPS_INTERVAL: Duration = Duration::from_secs(60); // seconds
 
     /// Constructor.
     pub fn new(peer_address_book: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
@@ -366,6 +374,7 @@ impl ConnectionPool {
             change_lock: Mutex::new(()),
 
             notifier: RwLock::new(PassThroughNotifier::new()),
+            timers: Timers::new(),
             self_weak: MutableOnce::new(Weak::new()),
         });
         // Initialise.
@@ -391,6 +400,12 @@ impl ConnectionPool {
     pub fn initialize(&self) {
         // Start accepting incoming connections.
         self.websocket_connector.start();
+
+        let weak = self.self_weak.clone();
+        self.timers.set_interval(ConnectionPoolTimer::UnbanIps, move || {
+            let this = upgrade_weak!(weak);
+            this.state.write().check_unban_ips();
+        }, Self::UNBAN_IPS_INTERVAL);
     }
 
     /// Initiates a outbound connection.
