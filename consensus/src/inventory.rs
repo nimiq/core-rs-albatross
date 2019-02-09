@@ -9,10 +9,20 @@ use weak_table::PtrWeakHashSet;
 use blockchain::{Blockchain, Direction, PushResult};
 use collections::{LimitHashSet, UniqueLinkedList};
 use hash::{Blake2bHash, Hash};
-use mempool::Mempool;
+use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
-use network_messages::{GetBlocksDirection, GetBlocksMessage, InvVector, InvVectorType, Message, TxMessage};
+use network_messages::{
+    GetBlocksDirection,
+    GetBlocksMessage,
+    InvVector,
+    InvVectorType,
+    Message,
+    MessageType,
+    TxMessage,
+    RejectMessage,
+    RejectMessageCode
+};
 use network_primitives::networks::get_network_info;
 use network_primitives::subscription::Subscription;
 use primitives::block::{Block, BlockHeader};
@@ -224,7 +234,14 @@ struct InventoryAgentState {
     /// The rate limit for getblocks messages.
     get_blocks_limit: RateLimit,
 
+    /// A Subscription object specifying which objects should be announced to the peer.
     remote_subscription: Subscription,
+
+    local_subscription: Subscription,
+
+    last_subscription_change: Instant,
+
+    target_subscription: Subscription,
 }
 
 pub struct InventoryAgent {
@@ -268,7 +285,9 @@ impl InventoryAgent {
     /// Minimum fee per byte (sat/byte) such that a transaction is not considered free.
     const TRANSACTION_RELAY_FEE_MIN: u64 = 1;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
+    const SUBSCRIPTION_CHANGE_GRACE_PERIOD: Duration = Duration::from_secs(2);
+
+    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>, target_subscription: Subscription) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
             blockchain,
             mempool,
@@ -304,7 +323,14 @@ impl InventoryAgent {
 
                 get_blocks_limit: RateLimit::new_per_minute(Self::GET_BLOCKS_RATE_LIMIT),
 
+                // Initially, we don't announce anything to the peer until it tells us otherwise.
                 remote_subscription: Subscription::None,
+
+                local_subscription: Subscription::None,
+
+                last_subscription_change: Instant::now(),
+
+                target_subscription,
             }),
             notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
@@ -506,6 +532,7 @@ impl InventoryAgent {
 
         self.notifier.read().notify(InventoryEvent::BlockProcessed(vector.hash.clone(), result));
 
+        // Mark object as received.
         self.on_object_received(&vector);
     }
 
@@ -514,7 +541,54 @@ impl InventoryAgent {
     }
 
     fn on_tx(&self, msg: TxMessage) {
+        let hash = msg.transaction.hash::<Blake2bHash>();
         debug!("[TX] tx={:?}, accounts_proof={:?}", msg.transaction, msg.accounts_proof);
+
+        // Check if we have requested this transaction.
+        let vector = InvVector::new(InvVectorType::Transaction, hash.clone());
+        let state = self.state.read();
+        if !state.objects_in_flight.contains(&vector) && !state.objects_that_flew.contains(&vector) {
+            warn!("Unsolicited transaction from {} - discarding", self.peer.peer_address());
+            return;
+        }
+        // Give up read lock before notifying.
+        drop(state);
+
+        self.inv_mgr.write().note_vector_received(&vector);
+
+        // Mark object as received.
+        self.on_object_received(&vector);
+
+        let state = self.state.read();
+        let mut result = ReturnCode::Accepted;
+        // Check whether we subscribed for this transaction.
+        if state.local_subscription.matches_transaction(&msg.transaction) {
+            result = self.mempool.push_transaction(msg.transaction);
+        } else if state.last_subscription_change + Self::SUBSCRIPTION_CHANGE_GRACE_PERIOD > Instant::now() {
+            self.peer.channel.close(CloseType::ReceivedTransactionNotMatchingOurSubscription);
+        }
+
+        // Process the result.
+        match result {
+            ReturnCode::Accepted => {},
+            ReturnCode::Known => {},
+            ReturnCode::FeeTooLow => {
+                self.peer.channel.send_or_close(RejectMessage::new(
+                    MessageType::Tx,
+                    RejectMessageCode::InsufficientFee,
+                    String::from("Sender has too many free transactions)"),
+                    Some(hash.serialize_to_vec())
+                ));
+            },
+            ReturnCode::Invalid => {
+                self.peer.channel.send_or_close(RejectMessage::new(
+                    MessageType::Tx,
+                    RejectMessageCode::Invalid,
+                    String::from("Invalid transaction"),
+                    Some(hash.serialize_to_vec())
+                ));
+            },
+        }
     }
 
     fn on_mempool(&self) {

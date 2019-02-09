@@ -90,7 +90,7 @@ impl ConsensusAgent {
     pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
-        let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());
+        let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone(), Subscription::Any);
         let this = Arc::new(ConsensusAgent {
             blockchain,
             mempool,
