@@ -1,5 +1,5 @@
 use nimiq_blockchain::transaction_store::*;
-use nimiq_database::{ReadTransaction, WriteTransaction};
+use nimiq_database::WriteTransaction;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;

@@ -1,18 +1,17 @@
 use beserial::Serialize;
 use nimiq_accounts::Accounts;
-use nimiq_accounts::AccountsProof;
 use nimiq_database::ReadTransaction;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::{Address, KeyPair};
 use nimiq_primitives::account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount};
+use nimiq_primitives::account::BasicAccount;
 use nimiq_primitives::block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::transaction::{SignatureProof, Transaction};
-use nimiq_primitives::account::BasicAccount;
 
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
