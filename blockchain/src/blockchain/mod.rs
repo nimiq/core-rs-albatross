@@ -16,6 +16,7 @@ use primitives::networks::NetworkId;
 use primitives::policy;
 use utils::observer::Notifier;
 use utils::unique_ptr::UniquePtr;
+use fixed_unsigned::types::FixedUnsigned10;
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::{ChainStore, Direction};
@@ -210,6 +211,10 @@ impl<'env> Blockchain<'env> {
             return PushResult::Orphan;
         }
 
+        ///
+        ///  FIXME Test Fail originates here
+        ///
+
         // Check that the block is a valid successor of its predecessor.
         let prev_info = prev_info_opt.unwrap();
         if !block.is_immediate_successor_of(&prev_info.head) {
@@ -221,6 +226,9 @@ impl<'env> Blockchain<'env> {
 
         // Check that the difficulty is correct.
         let next_target = self.get_next_target(Some(&block.header.prev_hash));
+        println!("next_target = {:?}", &next_target);
+        println!("block.header.n_bits = {:?}", &block.header.n_bits);
+        println!("TargetCompact::from(next_target) = {:?}", TargetCompact::from(next_target.clone()));
         if block.header.n_bits != TargetCompact::from(next_target) {
             warn!("Rejecting block - difficulty mismatch");
             #[cfg(feature = "metrics")]
@@ -524,7 +532,7 @@ impl<'env> Blockchain<'env> {
         // a sliding window that starts before the genesis block. Assume difficulty = 1 for these blocks.
         if head.height <= policy::DIFFICULTY_BLOCK_WINDOW {
             actual_time += (policy::DIFFICULTY_BLOCK_WINDOW - head.height + 1) * policy::BLOCK_TIME;
-            delta_total_difficulty += BigDecimal::from(policy::DIFFICULTY_BLOCK_WINDOW - head.height + 1).into();
+            delta_total_difficulty += policy::DIFFICULTY_BLOCK_WINDOW - head.height + 1;
         }
 
         // Compute the target adjustment factor.
@@ -536,16 +544,16 @@ impl<'env> Blockchain<'env> {
         adjustment = adjustment.min(policy::DIFFICULTY_MAX_ADJUSTMENT_FACTOR);
 
         // Compute the next target.
-        let average_difficulty = BigDecimal::from(delta_total_difficulty) / BigDecimal::from(policy::DIFFICULTY_BLOCK_WINDOW);
-        let average_target = &*policy::BLOCK_TARGET_MAX / average_difficulty; // Do not use Difficulty -> Target conversion here to preserve precision.
-        let mut next_target = average_target * BigDecimal::from(adjustment);
+        let average_difficulty: Difficulty = delta_total_difficulty / policy::DIFFICULTY_BLOCK_WINDOW;
+        let average_target: FixedUnsigned10 = &*policy::BLOCK_TARGET_MAX / &average_difficulty.into(); // Do not use Difficulty -> Target conversion here to preserve precision.
+        let mut next_target = average_target * FixedUnsigned10::from(adjustment);
 
         // Make sure the target is below or equal the maximum allowed target (difficulty 1).
         // Also enforce a minimum target of 1.
         if next_target > *policy::BLOCK_TARGET_MAX {
             next_target = policy::BLOCK_TARGET_MAX.clone();
         }
-        let min_target = BigDecimal::from(1);
+        let min_target = FixedUnsigned10::from(1u64);
         if next_target < min_target {
             next_target = min_target;
         }

@@ -39,3 +39,14 @@ impl FixedScale for FixedScale16 {
     const SCALE: u64 = 16;
 }
 pub type FixedUnsigned16 = FixedUnsigned<FixedScale16>;
+
+
+/// A fixed point Uint with 10 decimal places
+///
+/// NOTE: This should have the same behaviour as bignumber.js (default config with 10 decimal places)
+#[derive(Clone, Debug)]
+pub struct FixedScale10 {}
+impl FixedScale for FixedScale10 {
+    const SCALE: u64 = 10;
+}
+pub type FixedUnsigned10 = FixedUnsigned<FixedScale10>;

@@ -22,6 +22,7 @@ nimiq-accounts = { path = "../accounts" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
 hex = "0.3.2"
 bigdecimal = "0.0.14"
+fixed-unsigned = { path = "../fixed-unsigned" }
 parking_lot = "0.6"
 nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr", "iterators"] }
 log = "0.4.3"

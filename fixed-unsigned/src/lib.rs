@@ -1,9 +1,21 @@
+///
+/// fixed-unsigned - A crate for fixed-point unsigned big integers
+///
+/// This was written to behave like bignumber.js
+///
+/// Not all traits you would expect for a number are implemented. Some things are implemented
+/// just to work with Nimiq.
+///
+/// TODO: Parameterize all functions that use scale_down with the rounding mode.
+///
+
+
 extern crate num_bigint;
 extern crate num_traits;
 
 use num_bigint::BigUint;
 use num_traits::identities::{One, Zero};
-use num_traits::ToPrimitive;
+use num_traits::{ToPrimitive, pow};
 
 use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign, MulAssign, DivAssign};
 use std::marker::PhantomData;
@@ -30,6 +42,32 @@ const U64_MAX_DECIMAL: u64 = 10000000000000000000u64;
 pub trait FixedScale {
     const SCALE: u64;
 }
+
+/// A trait for rounding when scaling down
+pub trait RoundingMode {
+    /// Scale on `int_value` where `carrier` is the last digit that was already dropped.
+    fn round(int_value: BigUint, carrier: u8) -> BigUint;
+}
+
+/// Round half up - i.e. 0.4 -> 0 and 0.5 -> 1
+struct RoundHalfUp {}
+impl RoundingMode for RoundHalfUp{
+    #[inline]
+    fn round(int_value: BigUint, carrier: u8) -> BigUint {
+        int_value + if carrier >= 5u8 { 1u64 } else { 0u64 }
+    }
+}
+
+/// Round down - i.e. truncate
+struct RoundDown {}
+impl RoundingMode for RoundDown {
+    #[inline]
+    fn round(int_value: BigUint, carrier: u8) -> BigUint {
+        int_value
+    }
+}
+
+
 
 /// Error returned when a string representation can't be parse into a FixedUnsigned.
 /// TODO: Attach string to it for error message
@@ -67,7 +105,7 @@ trait ConvertScale<S, T>
 ///
 /// The fixed scale is determined by the generic `S` which implements `FixedScale` and
 /// provides the constant `FixedScale::SCALE`.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct FixedUnsigned<S>
     where S: FixedScale
 {
@@ -101,7 +139,7 @@ impl<S> FixedUnsigned<S>
     /// Scales down a `BigUint` by `scale`
     /// TODO: Rounding?
     #[inline]
-    pub fn scale_down(mut int_value: BigUint, mut scale: u64) -> BigUint {
+    pub fn scale_down<R: RoundingMode>(mut int_value: BigUint, mut scale: u64) -> BigUint {
         // scale down by 10<sup>19</sup> as long as possible
         while scale >= U64_MAX_DIGITS {
             int_value /= U64_MAX_DECIMAL;
@@ -117,16 +155,14 @@ impl<S> FixedUnsigned<S>
             // unwrap is safe, since `(int_value % 10u64)` < 10
             let carrier = (&int_value % 10u64).to_u8().unwrap();
             int_value /= 10u64;
-            if carrier >= 5u8 {
-                int_value += 1u64;
-            }
+            int_value = R::round(int_value, carrier);
         }
         int_value
     }
 
     /// Returns the integer part as `BigUint` (i.e. the part before the decimal point)
     pub fn int_part(&self) -> BigUint {
-        Self::scale_down(self.int_value.clone(), S::SCALE)
+        Self::scale_down::<RoundDown>(self.int_value.clone(), S::SCALE)
     }
 
     pub fn frac_part(&self) -> BigUint {
@@ -220,7 +256,7 @@ impl<S> FixedUnsigned<S>
             Self::scale_up(int_value, S::SCALE - scale)
         }
         else if scale > S::SCALE {
-            Self::scale_down(int_value, scale - S::SCALE)
+            Self::scale_down::<RoundDown>(int_value, scale - S::SCALE)
         }
         else {
             int_value
@@ -232,6 +268,13 @@ impl<S> FixedUnsigned<S>
     /// result will have 0 for decimal places.
     fn from_biguint(int_value: BigUint) -> Self {
         Self::new(Self::scale_up(int_value, S::SCALE))
+    }
+
+    /// Converts to a BigUint losing the decimal places
+    ///
+    /// NOTE: This is not implemented as a `Into`/`From` trait to make the loss of precision implicit
+    pub fn into_biguint(self) -> BigUint {
+        Self::scale_down::<RoundDown>(self.int_value, S::SCALE)
     }
 
     pub fn into_biguint_without_scale(self) -> BigUint {
@@ -258,6 +301,16 @@ impl<S> Add for FixedUnsigned<S>
     }
 }
 
+impl<'a, 'b, S> Add<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
+    where S: FixedScale
+{
+    type Output = FixedUnsigned<S>;
+
+    fn add(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S> {
+        FixedUnsigned::new(&self.int_value + &rhs.int_value)
+    }
+}
+
 impl<S> AddAssign for FixedUnsigned<S>
     where S: FixedScale
 {
@@ -276,6 +329,16 @@ impl<S> Sub for FixedUnsigned<S>
     }
 }
 
+impl<'a, 'b, S> Sub<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
+    where S: FixedScale
+{
+    type Output = FixedUnsigned<S>;
+
+    fn sub(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
+        FixedUnsigned::new(&self.int_value - &rhs.int_value)
+    }
+}
+
 impl<S> SubAssign for FixedUnsigned<S>
     where S: FixedScale
 {
@@ -290,7 +353,17 @@ impl<S> Mul for FixedUnsigned<S>
     type Output = Self;
 
     fn mul(self, rhs: FixedUnsigned<S>) -> Self::Output {
-        Self::new(Self::scale_down(self.int_value * rhs.int_value, S::SCALE))
+        Self::new(Self::scale_down::<RoundHalfUp>(self.int_value * rhs.int_value, S::SCALE))
+    }
+}
+
+impl<'a, 'b, S> Mul<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
+    where S: FixedScale
+{
+    type Output = FixedUnsigned<S>;
+
+    fn mul(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
+        FixedUnsigned::new(Self::Output::scale_down::<RoundHalfUp>(&self.int_value * &rhs.int_value, S::SCALE))
     }
 }
 
@@ -298,7 +371,7 @@ impl<S> MulAssign for FixedUnsigned<S>
     where S: FixedScale
 {
     fn mul_assign(&mut self, other: Self) {
-        self.int_value = Self::scale_down(&self.int_value * other.int_value, S::SCALE);
+        self.int_value = Self::scale_down::<RoundHalfUp>(&self.int_value * other.int_value, S::SCALE);
     }
 }
 
@@ -309,6 +382,16 @@ impl<S> Div for FixedUnsigned<S>
 
     fn div(self, rhs: FixedUnsigned<S>) -> Self::Output {
         Self::new(Self::scale_up(self.int_value, S::SCALE) / rhs.int_value)
+    }
+}
+
+impl<'a, 'b, S> Div<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
+    where S: FixedScale
+{
+    type Output = FixedUnsigned<S>;
+
+    fn div(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
+        FixedUnsigned::new(Self::Output::scale_up(self.int_value.clone(), S::SCALE) / &rhs.int_value)
     }
 }
 
@@ -376,7 +459,7 @@ impl<S> fmt::Debug for FixedUnsigned<S>
     where S: FixedScale
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}_scale_{}", self.to_radix_string(10, false), S::SCALE)
+        write!(f, "FixedUnsigned({}, scale={})", self.to_radix_string(10, false), S::SCALE)
     }
 }
 
@@ -388,23 +471,46 @@ impl<S> fmt::Display for FixedUnsigned<S>
     }
 }
 
-/*
-NOTE: Conflicts with From<T> for FixedUnsigned<S> where T: Into<BigUInt>
-      Therefore we use a private `from_biguint` to convert from `BigUint` to `FixedUnsinged`.
-
 impl<S> From<BigUint> for FixedUnsigned<S>
     where S: FixedScale
 {
     fn from(int_value: BigUint) -> Self {
-        Self::new(Self::scale_up(int_value))
+        Self::from_biguint(int_value)
+    }
+}
+
+/*
+    XXX While this is a nice thing to have, it causes a lot of conflicts
+
+impl<S, T> From<T> for FixedUnsigned<S>
+    where S: FixedScale, BigUint: From<T>, T:
+{
+    fn from(x: T) -> Self {
+        Self::from_biguint(BigUint::from(x))
     }
 }
 */
 
-impl<S, T> From<T> for FixedUnsigned<S>
-    where S: FixedScale, BigUint: From<T>
-{
-    fn from(x: T) -> Self {
+impl<S: FixedScale> From<u64> for FixedUnsigned<S> {
+    fn from(x: u64) -> Self {
+        Self::from_biguint(BigUint::from(x))
+    }
+}
+
+impl<S: FixedScale> From<u32> for FixedUnsigned<S> {
+    fn from(x: u32) -> Self {
+        Self::from_biguint(BigUint::from(x))
+    }
+}
+
+impl<S: FixedScale> From<u16> for FixedUnsigned<S> {
+    fn from(x: u16) -> Self {
+        Self::from_biguint(BigUint::from(x))
+    }
+}
+
+impl<S: FixedScale> From<u8> for FixedUnsigned<S> {
+    fn from(x: u8) -> Self {
         Self::from_biguint(BigUint::from(x))
     }
 }
@@ -442,5 +548,17 @@ impl<S> Default for FixedUnsigned<S>
 {
     fn default() -> Self {
         Self::zero()
+    }
+}
+
+/// Converts a `f64` to a `FixedUnsigned`
+///
+/// TODO: Do checked operations and panic if anything fails or return an Option
+impl<S: FixedScale> From<f64> for FixedUnsigned<S> {
+    fn from(x: f64) -> Self {
+        // scale up the float and drop the decimals (i.e. cast to u64)
+        // let scaled = x * 10f64.powi(S::SCALE as i32);
+        let scaled = x * pow(10f64, S::SCALE as usize);
+        Self::new(BigUint::from(scaled as u64))
     }
 }

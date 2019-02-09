@@ -1,8 +1,9 @@
 use num_traits::pow;
-use num_bigint::BigInt;
-use bigdecimal::BigDecimal;
+use num_bigint::BigUint;
+use fixed_unsigned::types::FixedUnsigned10;
 use primitives::block::*;
 use primitives::policy;
+use std::str::FromStr;
 
 #[test]
 fn it_correctly_calculates_target_from_compact() {
@@ -28,33 +29,33 @@ fn it_correctly_calculates_compact_from_target() {
 }
 
 #[test]
-fn it_correctly_converts_from_big_decimal_to_target() {
-    assert_eq!(Target::from(BigDecimal::new(pow(BigInt::from(2), 240), 0)), [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
-    assert_eq!(Target::from(BigDecimal::from(1)), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1].into());
-    assert_eq!(Target::from(BigDecimal::from(65535.923382)), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff].into());
+fn it_correctly_converts_from_fixed_unsigned_to_target() {
+    assert_eq!(Target::from(FixedUnsigned10::from(pow(BigUint::from(2u64), 240))), [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
+    assert_eq!(Target::from(FixedUnsigned10::from(1u64)), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1].into());
+    assert_eq!(Target::from(FixedUnsigned10::from_str("65535.923382").unwrap()), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff].into());
 }
 
 #[test]
-fn it_correctly_converts_from_target_to_bigdecimal() {
-    assert_eq!(BigDecimal::new(pow(BigInt::from(2), 240), 0), Target::from([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).into());
-    assert_eq!(BigDecimal::from(1), Target::from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]).into());
-    assert_eq!(BigDecimal::from(65535), Target::from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff]).into());
+fn it_correctly_converts_from_target_to_fixed_unsigned() {
+    assert_eq!(FixedUnsigned10::from(pow(BigUint::from(2u64), 240)), Target::from([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).into());
+    assert_eq!(FixedUnsigned10::from(1u64), Target::from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]).into());
+    assert_eq!(FixedUnsigned10::from(65535u64), Target::from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff]).into());
 }
 
 #[test]
 fn it_correctly_calculates_target_from_difficulty() {
-    assert_eq!(Target::from(Difficulty::from(1)), [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
-    assert_eq!(Target::from(Difficulty::from(256)), [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
+    assert_eq!(Target::from(Difficulty::from(1u64)), [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
+    assert_eq!(Target::from(Difficulty::from(256u64)), [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into());
     assert_eq!(Target::from(Difficulty::from(policy::BLOCK_TARGET_MAX.clone())), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1].into());
 }
 
 #[test]
 fn it_correctly_calculates_compact_from_difficulty() {
-    assert_eq!(TargetCompact::from(Difficulty::from(1)), 0x1f010000.into());
-    assert_eq!(TargetCompact::from(Difficulty::from(250)), 0x1e010624.into());
-    assert_eq!(TargetCompact::from(Difficulty::from(256)), 0x1e010000.into());
-    assert_eq!(TargetCompact::from(Difficulty::from(BigDecimal::new(pow(BigInt::from(2), 32) - 1, 0))), 0x1b010000.into());
-    assert_eq!(TargetCompact::from(Difficulty::from(BigDecimal::new(pow(BigInt::from(2), 53) - 1, 0))), 0x18080000.into());
+    assert_eq!(TargetCompact::from(Difficulty::from(1u64)), 0x1f010000.into());
+    assert_eq!(TargetCompact::from(Difficulty::from(250u64)), 0x1e010624.into());
+    assert_eq!(TargetCompact::from(Difficulty::from(256u64)), 0x1e010000.into());
+    assert_eq!(TargetCompact::from(Difficulty::from(FixedUnsigned10::from(pow(BigUint::from(2u64), 32) - 1u64))), 0x1b010000.into());
+    assert_eq!(TargetCompact::from(Difficulty::from(FixedUnsigned10::from(pow(BigUint::from(2u64), 53) - 1u64))), 0x18080000.into());
     assert_eq!(TargetCompact::from(Difficulty::from(policy::BLOCK_TARGET_MAX.clone())), 0x01000001.into());
 }
 

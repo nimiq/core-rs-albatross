@@ -1,8 +1,7 @@
-extern crate bigdecimal;
+extern crate fixed_unsigned;
 
 use std::str::FromStr;
-
-use bigdecimal::BigDecimal;
+use fixed_unsigned::types::FixedUnsigned10;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain::{super_block_counts::SuperBlockCounts, chain_info::ChainInfo};
@@ -18,8 +17,7 @@ fn it_is_correctly_initialized() {
     super_block_counts.add(0); // Depth for target is 0
     assert_eq!(chain_info.head, genesis_block);
     assert_eq!(chain_info.total_difficulty, Difficulty::from(1));
-    /// NOTE Javascript reference implementation has only 11 digits precision?
-    assert_eq!(BigDecimal::from(chain_info.total_work).with_prec(11), BigDecimal::from_str("1.8842573476").unwrap());
+    assert_eq!(FixedUnsigned10::from(chain_info.total_work), FixedUnsigned10::from_str("1.8842573476").unwrap());
     assert_eq!(chain_info.on_main_chain, true);
     assert_eq!(chain_info.main_chain_successor, None);
     assert_eq!(chain_info.super_block_counts, super_block_counts);
@@ -60,8 +58,7 @@ fn it_calculates_successor_correctly() {
     super_block_counts.add(0); // Two genesis blocks means two superblocks at depth 0
     assert_eq!(next_info.head, genesis_block);
     assert_eq!(next_info.total_difficulty, Difficulty::from(2));
-    /// NOTE Javascript reference implementation has only 11 digits precision?
-    assert_eq!(BigDecimal::from(next_info.total_work).with_prec(11), BigDecimal::from_str("3.7685146953").unwrap());
+    assert_eq!(FixedUnsigned10::from(next_info.total_work), FixedUnsigned10::from_str("3.7685146952").unwrap());
     assert_eq!(next_info.on_main_chain, false);
     assert_eq!(next_info.main_chain_successor, None);
     assert_eq!(next_info.super_block_counts, super_block_counts);

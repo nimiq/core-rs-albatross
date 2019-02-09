@@ -1,14 +1,15 @@
 use bigdecimal::BigDecimal;
-use num_bigint::BigInt;
+use num_bigint::BigUint;
 use num_traits::pow;
 use parking_lot::RwLock;
 #[cfg(feature = "coin")]
 use crate::coin::Coin;
+use fixed_unsigned::types::FixedUnsigned10;
 
 /// The highest (easiest) block PoW target.
 lazy_static! {
-    pub static ref BLOCK_TARGET_MAX: BigDecimal = {
-        BigDecimal::new(pow(BigInt::from(2), 240), 0)
+    pub static ref BLOCK_TARGET_MAX: FixedUnsigned10  = {
+        FixedUnsigned10::from(pow(BigUint::from(2u64), 240))
     };
 }
 

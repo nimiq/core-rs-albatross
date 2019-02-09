@@ -4,8 +4,11 @@ use std::str::FromStr;
 use std::string::ToString;
 
 use fixed_unsigned::FixedUnsigned;
-use fixed_unsigned::types::FixedUnsigned4;
+use fixed_unsigned::types::{FixedUnsigned4, FixedUnsigned10};
 
+
+
+// TODO: Test serialization
 
 #[test]
 fn test_parse_zero() {
@@ -34,6 +37,9 @@ fn test_from_to_string_scale_up() {
     assert_eq!(f.to_string(), String::from("123.4500"));
 }
 
+/*
+  NOTE obsolete, since `from_str` drop digits, no rounding done
+
 #[test]
 fn test_from_to_string_scale_up_round_down() {
     let f = FixedUnsigned4::from_str("123.456749").expect("Parse failed");
@@ -45,6 +51,7 @@ fn test_from_to_string_scale_up_round_up() {
     let f = FixedUnsigned4::from_str("123.456789").expect("Parse failed");
     assert_eq!(f.to_string(), String::from("123.4568"));
 }
+*/
 
 #[test]
 fn test_add() {
@@ -143,7 +150,26 @@ fn test_parse_dot_one() {
 
 #[test]
 fn test_bytes_length_matches() {
-    let fixed = FixedUnsigned4::from_str("1234.56789").unwrap();
+    let fixed = FixedUnsigned4::from_str("1234.5678").unwrap();
     let bytes = fixed.to_bytes_be();
     assert_eq!(bytes.len(), fixed.bytes());
+}
+
+#[test]
+fn test_from_f64() {
+    let float = 1234.56789f64;
+    let fixed = FixedUnsigned4::from(float);
+    assert_eq!(fixed, FixedUnsigned::from_str("1234.5678").unwrap());
+}
+
+#[test]
+fn test_mul_borrow() {
+    let res = &FixedUnsigned4::from_str("12.34").unwrap() * &FixedUnsigned4::from_str("56.78").unwrap();
+    assert_eq!(res, FixedUnsigned4::from_str("700.6652").unwrap());
+}
+
+#[test]
+fn test_div_borrow() {
+    let res = &FixedUnsigned4::from_str("12.34").unwrap() / &FixedUnsigned4::from_str("56.78").unwrap();
+    assert_eq!(res, FixedUnsigned4::from_str("0.2173").unwrap());
 }

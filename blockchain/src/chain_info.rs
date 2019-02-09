@@ -35,7 +35,6 @@ impl ChainInfo {
     }
 
     pub fn next(&self, block: Block) -> Self {
-        assert!(self.total_difficulty > Difficulty::from(0u64));
         let target = Target::from(&block.header.pow());
         let super_block_counts = self.super_block_counts.copy_and_add(target.get_depth());
         let total_difficulty = &self.total_difficulty + &Difficulty::from(block.header.n_bits);
@@ -51,7 +50,6 @@ impl ChainInfo {
     }
 
     pub fn prev(&self, block: Block) -> Self {
-        assert!(self.total_difficulty > Difficulty::from(0u64));
         let target = Target::from(&block.header.pow());
         let super_block_counts = self.super_block_counts.copy_and_subtract(target.get_depth());
         let total_difficulty = &self.total_difficulty - &Difficulty::from(block.header.n_bits);
