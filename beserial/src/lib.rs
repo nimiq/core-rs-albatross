@@ -284,6 +284,17 @@ impl<T: Deserialize> Deserialize for Option<T> {
     }
 }
 
+impl<T: DeserializeWithLength> DeserializeWithLength for Option<T> {
+    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let is_present: u8 = Deserialize::deserialize(reader)?;
+        return match is_present {
+            0 => Ok(Option::None),
+            1 => Ok(Option::Some(DeserializeWithLength::deserialize::<D, R>(reader)?)),
+            _ => Err(SerializingError::InvalidValue),
+        }
+    }
+}
+
 impl<T: Serialize> Serialize for Option<T> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         return match self {
@@ -300,6 +311,27 @@ impl<T: Serialize> Serialize for Option<T> {
     fn serialized_size(&self) -> usize {
         return match self {
             Option::Some(one) => 1 + Serialize::serialized_size(one),
+            Option::None => 1
+        };
+    }
+}
+
+impl<T: SerializeWithLength> SerializeWithLength for Option<T> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        return match self {
+            Option::Some(one) => {
+                1u8.serialize(writer)?;
+                Ok(SerializeWithLength::serialize::<S, W>(one, writer)? + 1)
+            }
+            Option::None => {
+                0u8.serialize(writer)
+            }
+        };
+    }
+
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        return match self {
+            Option::Some(one) => 1 + SerializeWithLength::serialized_size::<S>(one),
             Option::None => 1
         };
     }
