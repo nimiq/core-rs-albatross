@@ -121,7 +121,7 @@ impl Error for CoinParseError {
     fn description(&self) -> &str {
         match self {
             CoinParseError::InvalidString => "Invalid String",
-            CoinParseError::TooManyFractionalDigits => "Too may fractional digits",
+            CoinParseError::TooManyFractionalDigits => "Too many fractional digits",
             CoinParseError::Overflow => "Overflow"
         }
     }
