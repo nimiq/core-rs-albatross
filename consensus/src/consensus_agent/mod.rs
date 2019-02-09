@@ -65,6 +65,9 @@ pub struct ConsensusAgentState {
 
     /// Rate limit for GetTransactionsProof messages.
     transactions_proof_limit: RateLimit,
+
+    /// Rate limit for GetChainProof messages.
+    chain_proof_limit: RateLimit,
 }
 
 #[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -95,6 +98,7 @@ impl ConsensusAgent {
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
     const TRANSACTION_RECEIPTS_RATE_LIMIT: usize = 30; // per minute
     const TRANSACTIONS_PROOF_RATE_LIMIT: usize = 60; // per minute
+    const CHAIN_PROOF_RATE_LIMIT: usize = 3; // per minute
 
     /// Minimum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MIN: u64 = 2 * 1000; // in ms
@@ -122,9 +126,9 @@ impl ConsensusAgent {
 
                 transaction_receipts_limit: RateLimit::new_per_minute(Self::TRANSACTION_RECEIPTS_RATE_LIMIT),
                 transactions_proof_limit: RateLimit::new_per_minute(Self::TRANSACTIONS_PROOF_RATE_LIMIT),
+                chain_proof_limit: RateLimit::new_per_minute(Self::CHAIN_PROOF_RATE_LIMIT),
             }),
 
-            // TODO whole agent is locked, thus we can remove this lock
             notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
 
@@ -379,8 +383,12 @@ impl ConsensusAgent {
 
     fn on_get_chain_proof(&self) {
         debug!("[GET-CHAIN-PROOF]");
+        if !self.state.write().chain_proof_limit.note_single() {
+            warn!("Rejecting GetChainProof message - rate-limit exceeded");
+            self.peer.channel.close(CloseType::RateLimitExceeded);
+            return;
+        }
 
-        // TODO rate limit
         let chain_proof = self.blockchain.get_chain_proof();
         self.peer.channel.send_or_close(Message::ChainProof(chain_proof));
     }
