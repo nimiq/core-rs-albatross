@@ -18,10 +18,7 @@ use network_messages::{
     InvVector,
     InvVectorType,
     Message,
-    MessageType,
-    TxMessage,
-    RejectMessage,
-    RejectMessageCode
+    TxMessage
 };
 use network_primitives::networks::get_network_info;
 use network_primitives::subscription::Subscription;
@@ -150,6 +147,7 @@ pub enum InventoryEvent {
     NoNewObjectsAnnounced,
     AllObjectsReceived,
     BlockProcessed(Blake2bHash, PushResult),
+    TransactionProcessed(Blake2bHash, ReturnCode),
     GetBlocksTimeout,
 }
 
@@ -560,34 +558,13 @@ impl InventoryAgent {
         self.on_object_received(&vector);
 
         let state = self.state.read();
-        let mut result = ReturnCode::Accepted;
         // Check whether we subscribed for this transaction.
         if state.local_subscription.matches_transaction(&msg.transaction) {
-            result = self.mempool.push_transaction(msg.transaction);
-        } else if state.last_subscription_change + Self::SUBSCRIPTION_CHANGE_GRACE_PERIOD > Instant::now() {
+            let result = self.mempool.push_transaction(msg.transaction);
+            self.notifier.read().notify(InventoryEvent::TransactionProcessed(vector.hash.clone(), result));
+        } else if state.last_subscription_change.elapsed() > Self::SUBSCRIPTION_CHANGE_GRACE_PERIOD {
+            warn!("We're not subscribed to this transaction from {} - discarding and closing the channel", self.peer.peer_address());
             self.peer.channel.close(CloseType::ReceivedTransactionNotMatchingOurSubscription);
-        }
-
-        // Process the result.
-        match result {
-            ReturnCode::Accepted => {},
-            ReturnCode::Known => {},
-            ReturnCode::FeeTooLow => {
-                self.peer.channel.send_or_close(RejectMessage::new(
-                    MessageType::Tx,
-                    RejectMessageCode::InsufficientFee,
-                    String::from("Sender has too many free transactions)"),
-                    Some(hash.serialize_to_vec())
-                ));
-            },
-            ReturnCode::Invalid => {
-                self.peer.channel.send_or_close(RejectMessage::new(
-                    MessageType::Tx,
-                    RejectMessageCode::Invalid,
-                    String::from("Invalid transaction"),
-                    Some(hash.serialize_to_vec())
-                ));
-            },
         }
     }
 

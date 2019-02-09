@@ -8,10 +8,18 @@ use rand::Rng;
 
 use blockchain::{Blockchain, PushResult};
 use hash::Blake2bHash;
-use mempool::Mempool;
+use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
-use network_messages::{GetBlocksMessage, Message, GetTransactionReceiptsMessage, GetTransactionsProofMessage};
+use network_messages::{
+    GetBlocksMessage,
+    GetTransactionReceiptsMessage,
+    GetTransactionsProofMessage,
+    Message,
+    MessageType,
+    RejectMessage,
+    RejectMessageCode
+};
 use network_primitives::subscription::Subscription;
 use primitives::block::Block;
 use primitives::transaction::Transaction;
@@ -19,6 +27,7 @@ use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
+use beserial::Serialize;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 
@@ -281,6 +290,7 @@ impl ConsensusAgent {
             InventoryEvent::NoNewObjectsAnnounced => self.on_no_new_objects_announced(),
             InventoryEvent::AllObjectsReceived => self.on_all_objects_received(),
             InventoryEvent::BlockProcessed(hash, result) => self.on_block_processed(hash, result),
+            InventoryEvent::TransactionProcessed(hash, result) => self.on_tx_processed(hash, result),
             InventoryEvent::GetBlocksTimeout => self.on_get_blocks_timeout(),
             _ => {}
         }
@@ -330,6 +340,33 @@ impl ConsensusAgent {
             PushResult::Known => {
                 debug!("Known block {} from {}", hash, self.peer.peer_address());
             }
+        }
+    }
+
+    fn on_tx_processed(&self, hash: &Blake2bHash, result: &ReturnCode) {
+        match result {
+            ReturnCode::Accepted => {
+                debug!("Accepted tx {} from {}", hash, self.peer.peer_address());
+            },
+            ReturnCode::Known => {
+                debug!("Known tx {} from {}", hash, self.peer.peer_address());
+            },
+            ReturnCode::FeeTooLow => {
+                self.peer.channel.send_or_close(RejectMessage::new(
+                    MessageType::Tx,
+                    RejectMessageCode::InsufficientFee,
+                    String::from("Sender has too many free transactions)"),
+                    Some(hash.serialize_to_vec())
+                ));
+            },
+            ReturnCode::Invalid => {
+                self.peer.channel.send_or_close(RejectMessage::new(
+                    MessageType::Tx,
+                    RejectMessageCode::Invalid,
+                    String::from("Invalid transaction"),
+                    Some(hash.serialize_to_vec())
+                ));
+            },
         }
     }
 
