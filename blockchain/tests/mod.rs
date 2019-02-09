@@ -17,10 +17,6 @@ mod transaction_cache;
 #[cfg(feature = "transaction-store")]
 mod transaction_store;
 
-pub fn setup() {
-    pretty_env_logger::try_init().unwrap_or(());
-}
-
 pub fn mine_header(header: &mut BlockHeader) {
     println!("Mining block at height {} with difficulty {}", header.height, Difficulty::from(header.n_bits));
     while !header.verify_proof_of_work() {

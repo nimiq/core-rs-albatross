@@ -125,6 +125,10 @@ impl<'env> Blockchain<'env> {
         let block_to_prove = self.chain_store
             .get_block(hash_to_prove, false, Some(&txn))?;
 
+        if hash_to_prove == known_hash || block_to_prove.header.height == 1 {
+            return Some(vec![]);
+        }
+
         let mut block = self.chain_store
             .get_block(known_hash, false, Some(&txn))?;
 
@@ -139,7 +143,7 @@ impl<'env> Blockchain<'env> {
             &block.interlink.hashes[index as usize]
         };
 
-        while hash_to_prove != reference {
+        while hash_to_prove != reference && block.header.height > 1 {
             let next_block = self.chain_store
                 .get_block(reference, false, Some(&txn))
                 .expect("Failed to construct block proof - missing block");

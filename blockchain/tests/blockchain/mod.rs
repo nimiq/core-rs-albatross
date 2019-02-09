@@ -5,13 +5,15 @@ use atomic::{Atomic, Ordering};
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::{Hash, Blake2bHash};
+use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_primitives::time::NetworkTime;
 use nimiq_primitives::account::{AccountError, AccountType};
 use nimiq_primitives::block::{Block, BlockError};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::transaction::{SignatureProof, Transaction};
+
+mod nipopow;
 
 const BLOCK_2: &str = "0001264aaf8a4f9828a76c550635da078eb466306a189fcc03710bee9f649c869d120492e3986e75ac0d1466b5d6a7694c86839767a30980f8ba0d8c6e48631bc9cdd8a3eb957567d76963ad10d11e65453f763928fb9619e5f396a0906e946cce3ca7fcbb5fb2e35055de071e868381ba426a8d79d97cb48dab8345baeb9a9abb091f010000000000025ad23a98000046fe0180010000000000000000000000000000000000000000184d696e65642077697468206c6f766520627920526963687900000000";
 const BLOCK_3: &str = "0001bab534467866d83060b1af0b3493dd0f97d7071b16e1562cf4b18bdf73e71ccb4aa1fea2b8cdf2a63411776c6391a7659aef4dd25317a615499c7b461e9a0405385dbed68e76f74317cc6f4cd40db832eb71b8338fad024ddbb88f9abc79f199dd6a3500aeb5479eb460afeab3363783e243a6e551536c3c01c8fca21d7afbbb1f00fddd000000035ad23a980000968102c0010000000000000000000000000000000000000000184d696e65642077697468206c6f76652062792054616d6d6f00000000";
@@ -20,8 +22,6 @@ const BLOCK_5: &str = "000184d5a44ba5ae9961837e7fb19c176a19f77b2e065587314901735
 
 #[test]
 fn it_can_load_a_stored_chain() {
-    crate::setup();
-
     let env = VolatileEnvironment::new(10).unwrap();
     let block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     let hash = block.header.hash();
@@ -39,8 +39,6 @@ fn it_can_load_a_stored_chain() {
 
 #[test]
 fn it_can_extend_the_main_chain() {
-    crate::setup();
-
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
 
@@ -63,8 +61,6 @@ fn it_can_extend_the_main_chain() {
 
 #[test]
 fn it_detects_known_blocks() {
-    crate::setup();
-
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
 
@@ -78,8 +74,6 @@ fn it_detects_known_blocks() {
 
 #[test]
 fn it_rejects_orphan_blocks() {
-    crate::setup();
-
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
 
@@ -90,8 +84,6 @@ fn it_rejects_orphan_blocks() {
 
 #[test]
 fn it_rejects_intrisically_invalid_blocks() {
-    crate::setup();
-
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
 
@@ -103,8 +95,6 @@ fn it_rejects_intrisically_invalid_blocks() {
 
 #[test]
 fn it_rejects_invalid_successors() {
-    crate::setup();
-
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
 
@@ -118,8 +108,6 @@ fn it_rejects_invalid_successors() {
 
 #[test]
 fn it_rejects_blocks_with_invalid_difficulty() {
-    crate::setup();
-
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
 
@@ -133,8 +121,6 @@ fn it_rejects_blocks_with_invalid_difficulty() {
 
 #[test]
 fn it_rejects_blocks_with_duplicate_transactions() {
-    crate::setup();
-
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
@@ -178,8 +164,6 @@ fn it_rejects_blocks_with_duplicate_transactions() {
 
 #[test]
 fn it_rejects_blocks_if_body_cannot_be_applied() {
-    crate::setup();
-
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
@@ -248,8 +232,6 @@ fn it_detects_fork_blocks() {
 
 #[test]
 fn it_rebranches_to_the_harder_chain() {
-    crate::setup();
-
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
 
@@ -288,38 +270,4 @@ fn it_rebranches_to_the_harder_chain() {
 
     assert_eq!(blockchain.push(block2_4), PushResult::Rebranched);
     assert!(listener_called.load(Ordering::Relaxed));
-}
-
-#[test]
-fn it_can_compute_chain_proofs() {
-    crate::setup();
-
-    let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
-
-    let proof = blockchain.get_chain_proof();
-    assert_eq!(proof.prefix.len(), 1);
-    assert_eq!(proof.prefix[0].header.hash::<Blake2bHash>(), blockchain.head_hash());
-    assert!(proof.suffix.is_empty());
-
-    let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
-    let mut status = blockchain.push(block);
-    assert_eq!(status, PushResult::Extended);
-
-    let proof = blockchain.get_chain_proof();
-    assert_eq!(proof.prefix.len(), 1);
-    assert_eq!(proof.prefix[0].header.height, 1);
-    assert_eq!(proof.suffix.len(), 1);
-    assert_eq!(proof.suffix[0].hash::<Blake2bHash>(), blockchain.head_hash());
-
-    block = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
-    status = blockchain.push(block);
-    assert_eq!(status, PushResult::Extended);
-
-    let proof = blockchain.get_chain_proof();
-    assert_eq!(proof.prefix.len(), 1);
-    assert_eq!(proof.prefix[0].header.height, 1);
-    assert_eq!(proof.suffix.len(), 2);
-    assert_eq!(proof.suffix[0].height, 2);
-    assert_eq!(proof.suffix[1].hash::<Blake2bHash>(), blockchain.head_hash());
 }
