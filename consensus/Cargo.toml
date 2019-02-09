@@ -28,7 +28,7 @@ nimiq-network-primitives = { path = "../network-primitives", features = ["networ
 nimiq-network = { path = "../network" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
-nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain = { path = "../blockchain", features = ["transaction-store"] }
 weak-table = "0.2.3"
 
 hex = "0.3.2"

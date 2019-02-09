@@ -11,12 +11,13 @@ use hash::Blake2bHash;
 use mempool::Mempool;
 use network::connection::close_type::CloseType;
 use network::Peer;
-use network_messages::{Message, GetBlocksMessage};
+use network_messages::{GetBlocksMessage, Message, GetTransactionReceiptsMessage, TransactionReceiptsMessage};
 use network_primitives::subscription::Subscription;
 use primitives::block::Block;
 use primitives::transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
+use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
@@ -47,6 +48,9 @@ pub struct ConsensusAgentState {
 
     /// The number of failed blockchain sync attempts.
     failed_syncs: u32,
+
+    /// Rate limit for GetTransactionReceipts messages.
+    transaction_receipts_limit: RateLimit,
 }
 
 #[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -69,13 +73,14 @@ pub struct ConsensusAgent {
 
     sync_lock: Mutex<()>,
 
-    timers: Timers<ConsensusAgentTimer>
+    timers: Timers<ConsensusAgentTimer>,
 }
 
 impl ConsensusAgent {
     const SYNC_ATTEMPTS_MAX: u32 = 25;
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
+    const TRANSACTION_RECEIPTS_RATE_LIMIT: usize = 30; // per minute
 
     /// Minimum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MIN: u64 = 2 * 1000; // in ms
@@ -101,6 +106,8 @@ impl ConsensusAgent {
                 num_blocks_extending: 1,
                 num_blocks_forking: 0,
                 failed_syncs: 0,
+
+                transaction_receipts_limit: RateLimit::new_per_minute(Self::TRANSACTION_RECEIPTS_RATE_LIMIT),
             }),
 
             // TODO whole agent is locked, thus we can remove this lock
@@ -129,6 +136,12 @@ impl ConsensusAgent {
         msg_notifier.get_chain_proof.write().register(move |_e| {
             let this = upgrade_weak!(weak);
             this.on_get_chain_proof();
+        });
+
+        let weak = Arc::downgrade(this);
+        msg_notifier.get_transaction_receipts.write().register(move |msg: GetTransactionReceiptsMessage| {
+            let this = upgrade_weak!(weak);
+            this.on_get_transaction_receipts(msg);
         });
     }
 
@@ -322,5 +335,18 @@ impl ConsensusAgent {
         // TODO rate limit
         let chain_proof = self.blockchain.get_chain_proof();
         self.peer.channel.send_or_close(Message::ChainProof(chain_proof));
+    }
+
+    fn on_get_transaction_receipts(&self, msg: GetTransactionReceiptsMessage) {
+        debug!("[GET-TRANSACTION-RECEIPTS]");
+        if !self.state.write().transaction_receipts_limit.note_single() {
+            warn!("Rejecting GetTransactionReceipts message - rate-limit exceeded");
+            self.peer.channel.send_or_close(TransactionReceiptsMessage::empty());
+            return;
+        }
+
+        let limit: usize = TransactionReceiptsMessage::RECEIPTS_MAX_COUNT / 2;
+        let receipts = self.blockchain.get_transaction_receipts_by_address(&msg.address, limit, limit);
+        self.peer.channel.send_or_close(TransactionReceiptsMessage::new(receipts));
     }
 }

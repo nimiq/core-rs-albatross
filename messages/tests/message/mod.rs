@@ -183,7 +183,7 @@ fn parse_accounts_proof_message_wproof() {
     match message {
         Message::AccountsProof(accounts_proof_message) => {
             assert!(accounts_proof_message.proof.is_some());
-            assert!(accounts_proof_message.proof.verify());
+            assert!(accounts_proof_message.proof.unwrap().verify());
         },
         _ => assert!(false)
     };

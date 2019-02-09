@@ -1,41 +1,42 @@
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
-extern crate log;
-#[macro_use]
 extern crate bitflags;
 #[macro_use]
-extern crate nimiq_macros as macros;
-extern crate nimiq_utils as utils;
-extern crate nimiq_keys as keys;
-extern crate nimiq_primitives as primitives;
-extern crate nimiq_hash as hash;
-extern crate nimiq_network_primitives as network_primitives;
-#[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
+extern crate nimiq_hash as hash;
+extern crate nimiq_keys as keys;
+#[macro_use]
+extern crate nimiq_macros as macros;
+extern crate nimiq_network_primitives as network_primitives;
+extern crate nimiq_primitives as primitives;
+extern crate nimiq_utils as utils;
 
 use std::io;
 use std::io::Read;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
 use byteorder::{BigEndian, ByteOrder};
-use hash::{Blake2bHash, Hash};
-use keys::{Address, KeyPair, PublicKey, Signature};
 use parking_lot::RwLock;
-use primitives::block::{Block, BlockHeader};
-use primitives::transaction::{Transaction, TransactionsProof};
 use rand::Rng;
 use rand::rngs::OsRng;
-use utils::crc::Crc32Computer;
-use utils::observer::PassThroughNotifier;
 
-use nimiq_accounts::accounts_proof::AccountsProof;
-use nimiq_blockchain::chain_proof::ChainProof;
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
+use hash::{Blake2bHash, Hash};
+use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
 use network_primitives::protocol::ProtocolFlags;
-use network_primitives::subscription::Subscription;
 use network_primitives::services::ServiceFlags;
+use network_primitives::subscription::Subscription;
 use network_primitives::version;
+use nimiq_accounts::accounts_proof::AccountsProof;
+use nimiq_blockchain::chain_proof::ChainProof;
+use primitives::block::{Block, BlockHeader};
+use primitives::transaction::{Transaction, TransactionsProof};
+use primitives::transaction::TransactionReceipt;
+use utils::crc::Crc32Computer;
+use utils::observer::PassThroughNotifier;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u64)]
@@ -774,7 +775,24 @@ pub struct GetTransactionReceiptsMessage {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionReceiptsMessage {
+    #[beserial(len_type(u16))]
+    pub receipts: Option<Vec<TransactionReceipt>>,
+}
 
+impl TransactionReceiptsMessage {
+    pub const RECEIPTS_MAX_COUNT: usize = 500;
+
+    pub fn new(receipts: Vec<TransactionReceipt>) -> Message {
+        Message::TransactionReceipts(TransactionReceiptsMessage {
+            receipts: Some(receipts),
+        })
+    }
+
+    pub fn empty() -> Message {
+        Message::TransactionReceipts(TransactionReceiptsMessage {
+            receipts: None,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
