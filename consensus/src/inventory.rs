@@ -231,8 +231,6 @@ struct InventoryAgentState {
     local_subscription: Subscription,
 
     last_subscription_change: Instant,
-
-    target_subscription: Subscription,
 }
 
 pub struct InventoryAgent {
@@ -278,7 +276,7 @@ impl InventoryAgent {
 
     const SUBSCRIPTION_CHANGE_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>, target_subscription: Subscription) -> Arc<Self> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
             blockchain,
             mempool,
@@ -320,8 +318,6 @@ impl InventoryAgent {
                 local_subscription: Subscription::None,
 
                 last_subscription_change: Instant::now(),
-
-                target_subscription,
             }),
             notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
@@ -404,6 +400,9 @@ impl InventoryAgent {
     }
 
     pub fn subscribe(&self, subscription: Subscription) {
+        let mut state = self.state.write();
+        state.local_subscription = subscription.clone();
+        state.last_subscription_change = Instant::now();
         self.peer.channel.send_or_close(Message::Subscribe(subscription));
     }
 
@@ -529,6 +528,7 @@ impl InventoryAgent {
 
     fn on_header(&self, header: BlockHeader) {
         debug!("[HEADER] #{} {}", header.height, header.hash::<Blake2bHash>());
+        warn!("Unsolicited header message received from {}, discarding", self.peer.peer_address());
     }
 
     fn on_tx(&self, msg: TxMessage) {
