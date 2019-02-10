@@ -1,9 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
-
-use crate::accounts_proof::AccountsProof;
-
-use super::AccountsTreeNode;
+use primitives::account::accounts_tree_node::AccountsTreeNode;
+use primitives::account::accounts_proof::AccountsProof;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsTreeChunk {
@@ -50,7 +48,7 @@ impl AccountsTreeChunk {
     }
 
     #[inline]
-    pub(crate) fn tail(&self) -> &AccountsTreeNode { self.proof.nodes.get(0).unwrap() }
+    pub(crate) fn tail(&self) -> &AccountsTreeNode { self.proof.nodes().get(0).unwrap() }
 
     pub fn root(&self) -> Blake2bHash { self.proof.root_hash() }
 }

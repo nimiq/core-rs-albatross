@@ -1,8 +1,10 @@
 use std::collections::HashSet;
 
+use database::ReadTransaction;
 use hash::Blake2bHash;
 use hash::Hash;
 use keys::Address;
+use primitives::account::accounts_proof::AccountsProof;
 use primitives::transaction::TransactionsProof;
 use utils::merkle::Blake2bMerkleProof;
 
@@ -27,5 +29,15 @@ impl<'env> Blockchain<'env> {
             transactions: matches,
             proof,
         })
+    }
+
+    pub fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &Vec<Address>) -> Option<AccountsProof> {
+        let state = self.state.read();
+        // We only support accounts proofs for the head hash.
+        if block_hash != &state.head_hash {
+            return None;
+        }
+        let txn = ReadTransaction::new(self.env);
+        Some(state.accounts.get_accounts_proof(&txn, addresses))
     }
 }

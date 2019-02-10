@@ -1,14 +1,17 @@
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
+use hash::Blake2bHash;
 use network_messages::{
     Message,
     GetBlockProofMessage,
     BlockProofMessage,
     GetTransactionReceiptsMessage,
-    TransactionReceiptsMessage,
     GetTransactionsProofMessage,
-    TransactionsProofMessage
+    TransactionReceiptsMessage,
+    TransactionsProofMessage,
+    GetAccountsProofMessage,
+    AccountsProofMessage,
 };
 use network::connection::close_type::CloseType;
 
@@ -63,5 +66,23 @@ impl ConsensusAgent {
         let addresses = HashSet::from_iter(msg.addresses);
         let proof = self.blockchain.get_transactions_proof(&msg.block_hash, &addresses);
         self.peer.channel.send_or_close(TransactionsProofMessage::new(msg.block_hash, proof));
+    }
+
+    pub(super) fn on_get_accounts_proof(&self, msg: GetAccountsProofMessage) {
+        debug!("[GET-ACCOUNTS-PROOF]");
+        if !self.state.write().accounts_proof_limit.note_single() {
+            warn!("Rejecting GetAccountsProof message - rate-limit exceeded");
+            self.peer.channel.send_or_close(AccountsProofMessage::new(msg.block_hash, None));
+            return;
+        }
+
+        // TODO: This is a deviation from the JavaScript client. If the given hash is the 0 hash, assume the current head.
+        let mut hash = msg.block_hash;
+        if hash == Blake2bHash::default() {
+            hash = self.blockchain.head_hash();
+        }
+
+        let proof = self.blockchain.get_accounts_proof(&hash, &msg.addresses);
+        self.peer.channel.send_or_close(AccountsProofMessage::new(hash, proof));
     }
 }

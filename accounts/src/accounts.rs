@@ -9,6 +9,7 @@ use hash::Blake2bHash;
 use keys::Address;
 use network_primitives::networks::get_network_info;
 use primitives::account::{Account, AccountError, AccountTransactionInteraction, AccountType};
+use primitives::account::accounts_proof::AccountsProof;
 use primitives::block::{Block, BlockBody};
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
@@ -17,7 +18,6 @@ use primitives::transaction::{Transaction, TransactionFlags};
 
 use crate::AccountsTreeChunk;
 use crate::tree::AccountsTree;
-use crate::accounts_proof::AccountsProof;
 
 #[derive(Debug)]
 pub struct Accounts<'env> {

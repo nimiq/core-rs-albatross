@@ -27,6 +27,9 @@ nimiq-keys = { path = "../keys", optional = true }
 nimiq-macros = { path = "../macros", optional = true }
 nimiq-utils = { path = "../utils", optional = true, features = ["merkle"] }
 
+[dev-dependencies]
+lazy_static = "1.0"
+
 [features]
 all = ["coin", "account", "block", "policy", "transaction", "networks"]
 coin = ["hex"]

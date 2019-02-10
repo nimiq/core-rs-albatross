@@ -1,30 +1,30 @@
-use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt, ReadBytesExt};
 use std::io;
 use std::iter;
 use std::slice;
 
-use super::AddressNibbles;
-use primitives::account::Account;
-use hash::{Hash, Blake2bHash, SerializeContent};
-use database::{FromDatabaseValue, IntoDatabaseValue};
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use hash::{Blake2bHash, Hash, SerializeContent};
+
+use crate::account::Account;
+use crate::account::address_nibbles::AddressNibbles;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct AccountsTreeNodeChild {
+pub struct AccountsTreeNodeChild {
     pub suffix: AddressNibbles,
     pub hash: Blake2bHash,
 }
 
-pub(crate) const NO_CHILDREN: [Option<AccountsTreeNodeChild>; 16] = [None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None];
+pub const NO_CHILDREN: [Option<AccountsTreeNodeChild>; 16] = [None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None];
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
-enum AccountsTreeNodeType {
+pub enum AccountsTreeNodeType {
     BranchNode = 0x00,
     TerminalNode = 0xff,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub(crate) enum AccountsTreeNode {
+pub enum AccountsTreeNode {
     BranchNode {
         prefix: AddressNibbles,
         children: [Option<AccountsTreeNodeChild>; 16],
@@ -36,16 +36,16 @@ pub(crate) enum AccountsTreeNode {
 }
 
 impl AccountsTreeNode {
-    pub(crate) fn new_terminal(prefix: AddressNibbles, account: Account) -> Self {
+    pub fn new_terminal(prefix: AddressNibbles, account: Account) -> Self {
         return AccountsTreeNode::TerminalNode { prefix, account };
     }
 
-    pub(crate) fn new_branch(prefix: AddressNibbles, children: [Option<AccountsTreeNodeChild>; 16]) -> Self {
+    pub fn new_branch(prefix: AddressNibbles, children: [Option<AccountsTreeNodeChild>; 16]) -> Self {
         return AccountsTreeNode::BranchNode { prefix, children };
     }
 
     #[inline]
-    pub(crate) fn is_terminal(&self) -> bool {
+    pub fn is_terminal(&self) -> bool {
         return match *self {
             AccountsTreeNode::TerminalNode { .. } => true,
             AccountsTreeNode::BranchNode { .. } => false,
@@ -53,14 +53,14 @@ impl AccountsTreeNode {
     }
 
     #[inline]
-    pub(crate) fn is_branch(&self) -> bool {
+    pub fn is_branch(&self) -> bool {
         return match *self {
             AccountsTreeNode::TerminalNode { .. } => false,
             AccountsTreeNode::BranchNode { .. } => true,
         };
     }
 
-    pub(crate) fn get_child_hash(&self, prefix: &AddressNibbles) -> Option<&Blake2bHash> {
+    pub fn get_child_hash(&self, prefix: &AddressNibbles) -> Option<&Blake2bHash> {
         match *self {
             AccountsTreeNode::TerminalNode { .. } => return None,
             AccountsTreeNode::BranchNode { ref children, .. } => {
@@ -72,7 +72,7 @@ impl AccountsTreeNode {
         };
     }
 
-    pub(crate) fn get_child_prefix(&self, prefix: &AddressNibbles) -> Option<AddressNibbles> {
+    pub fn get_child_prefix(&self, prefix: &AddressNibbles) -> Option<AddressNibbles> {
         match *self {
             AccountsTreeNode::TerminalNode { .. } => return None,
             AccountsTreeNode::BranchNode { ref children, .. } => {
@@ -85,7 +85,7 @@ impl AccountsTreeNode {
     }
 
     #[inline]
-    pub(crate) fn prefix(&self) -> &AddressNibbles {
+    pub fn prefix(&self) -> &AddressNibbles {
         return match *self {
             AccountsTreeNode::TerminalNode { ref prefix, .. } => &prefix,
             AccountsTreeNode::BranchNode { ref prefix, .. } => &prefix,
@@ -101,12 +101,12 @@ impl AccountsTreeNode {
     }
 
     #[inline]
-    pub(crate) fn get_child_index(&self, prefix: &AddressNibbles) -> Option<usize> {
+    pub fn get_child_index(&self, prefix: &AddressNibbles) -> Option<usize> {
         assert!(self.prefix().is_prefix_of(prefix), "prefix {} is not a child of the current node {}", prefix, self.prefix());
         return prefix.get(self.prefix().len());
     }
 
-    pub(crate) fn with_child(mut self, prefix: &AddressNibbles, hash: Blake2bHash) -> Option<Self> {
+    pub fn with_child(mut self, prefix: &AddressNibbles, hash: Blake2bHash) -> Option<Self> {
         let child_index = self.get_child_index(&prefix)?;
         let suffix = prefix.suffix(self.prefix().len() as u8);
         match self {
@@ -119,7 +119,7 @@ impl AccountsTreeNode {
         return Some(self);
     }
 
-    pub(crate) fn without_child(mut self, suffix: AddressNibbles) -> Option<Self> {
+    pub fn without_child(mut self, suffix: AddressNibbles) -> Option<Self> {
         let child_index = self.get_child_index(&suffix)?;
         match self {
             AccountsTreeNode::TerminalNode { .. } => { return None; },
@@ -130,7 +130,7 @@ impl AccountsTreeNode {
         return Some(self);
     }
 
-    pub(crate) fn with_account(mut self, new_account: Account) -> Option<Self> {
+    pub fn with_account(mut self, new_account: Account) -> Option<Self> {
         match &mut self {
             AccountsTreeNode::TerminalNode { ref mut account, .. } => {
                 *account = new_account;
@@ -140,11 +140,11 @@ impl AccountsTreeNode {
         return Some(self);
     }
 
-    pub(crate) fn iter_children(&self) -> Iter {
+    pub fn iter_children(&self) -> Iter {
         return self.into_iter();
     }
 
-    pub(crate) fn iter_children_mut(&mut self) -> IterMut {
+    pub fn iter_children_mut(&mut self) -> IterMut {
         return self.into_iter();
     }
 }
@@ -226,26 +226,9 @@ impl SerializeContent for AccountsTreeNode {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
-impl IntoDatabaseValue for AccountsTreeNode {
-    fn database_byte_size(&self) -> usize {
-        return self.serialized_size();
-    }
-
-    fn copy_into_database(&self, mut bytes: &mut [u8]) {
-        Serialize::serialize(&self, &mut bytes).unwrap();
-    }
-}
-
-impl FromDatabaseValue for AccountsTreeNode {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        let mut cursor = io::Cursor::new(bytes);
-        return Ok(Deserialize::deserialize(&mut cursor)?);
-    }
-}
-
 impl Hash for AccountsTreeNode {}
 
-pub(crate) struct Iter<'a> {
+pub struct Iter<'a> {
     it: Option<iter::FilterMap<slice::Iter<'a, Option<AccountsTreeNodeChild>>, fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>>>,
 }
 
@@ -272,7 +255,7 @@ impl<'a> iter::IntoIterator for &'a AccountsTreeNode {
     }
 }
 
-pub(crate) struct IterMut<'a> {
+pub struct IterMut<'a> {
     it: Option<iter::FilterMap<slice::IterMut<'a, Option<AccountsTreeNodeChild>>, fn(&mut Option<AccountsTreeNodeChild>) -> Option<&mut AccountsTreeNodeChild>>>,
 }
 

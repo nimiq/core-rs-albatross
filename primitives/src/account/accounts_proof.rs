@@ -2,20 +2,21 @@ use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
 use hash::Hash;
 use keys::Address;
-use primitives::account::Account;
 
-use crate::tree::{AccountsTreeNode, AddressNibbles};
+use crate::account::Account;
+use crate::account::accounts_tree_node::AccountsTreeNode;
+use crate::account::address_nibbles::AddressNibbles;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsProof {
     #[beserial(len_type(u16))]
-    pub (crate) nodes: Vec<AccountsTreeNode>,
+    nodes: Vec<AccountsTreeNode>,
     #[beserial(skip)]
     verified: bool
 }
 
 impl AccountsProof {
-    pub(crate) fn new(nodes : Vec<AccountsTreeNode>) -> AccountsProof {
+    pub fn new(nodes : Vec<AccountsTreeNode>) -> AccountsProof {
         return AccountsProof { nodes, verified: false };
     }
 
@@ -62,13 +63,14 @@ impl AccountsProof {
     pub fn root_hash(&self) -> Blake2bHash {
         return (&self.nodes[self.nodes.len() - 1]).hash();
     }
+
+    pub fn nodes(&self) -> &Vec<AccountsTreeNode> { &self.nodes }
 }
 
 #[cfg(test)]
 mod tests {
-    use primitives::account::BasicAccount;
-
-    use crate::tree::AccountsTreeNodeChild;
+    use crate::account::accounts_tree_node::AccountsTreeNodeChild;
+    use crate::account::BasicAccount;
 
     use super::*;
 

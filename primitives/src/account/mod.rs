@@ -17,9 +17,9 @@ pub use self::vesting_contract::VestingContract;
 pub mod basic_account;
 pub mod htlc_contract;
 pub mod vesting_contract;
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsProof {}
+pub mod accounts_proof;
+pub mod accounts_tree_node;
+pub mod address_nibbles;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]

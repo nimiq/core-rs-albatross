@@ -1,10 +1,14 @@
-use crate::accounts_proof::AccountsProof;
-use database::{Database, Transaction, WriteTransaction, Environment};
-use hash::{Hash, Blake2bHash};
+use std::str::FromStr;
+
+use database::{Database, Environment, Transaction, WriteTransaction};
+use hash::{Blake2bHash, Hash};
 use keys::Address;
 use primitives::account::Account;
-use std::str::FromStr;
-use super::{AccountsTreeChunk, AccountsTreeNode, AddressNibbles, NO_CHILDREN};
+use primitives::account::accounts_proof::AccountsProof;
+use primitives::account::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
+use primitives::account::address_nibbles::AddressNibbles;
+
+use super::AccountsTreeChunk;
 
 #[derive(Debug)]
 pub struct AccountsTree<'env> {

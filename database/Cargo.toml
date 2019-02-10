@@ -22,7 +22,7 @@ bitflags = "1.0"
 beserial = { path = "../beserial" }
 nimiq-hash = { path = "../hash", optional = true }
 nimiq-keys = { path = "../keys", optional = true }
-nimiq-primitives = { path = "../primitives", optional = true, features = ["block"] }
+nimiq-primitives = { path = "../primitives", optional = true, features = ["block", "account"] }
 
 [features]
 # Compiles this package with all features needed for the nimiq client.

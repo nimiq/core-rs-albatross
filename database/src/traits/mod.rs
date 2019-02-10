@@ -9,6 +9,8 @@ mod hash;
 
 #[cfg(feature = "primitives")]
 mod block;
+#[cfg(feature = "primitives")]
+mod accounts;
 
 #[cfg(feature = "keys")]
 mod keys;

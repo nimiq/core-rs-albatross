@@ -1,0 +1,33 @@
+use std::borrow::Cow;
+use std::io;
+
+use beserial::{Deserialize, Serialize};
+use nimiq_primitives::account::accounts_tree_node::AccountsTreeNode;
+use nimiq_primitives::account::address_nibbles::AddressNibbles;
+
+use crate::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
+
+impl AsDatabaseBytes for AddressNibbles {
+    fn as_database_bytes(&self) -> Cow<[u8]> {
+        // TODO: Improve AddressNibbles, so that no serialization is needed.
+        let v = Serialize::serialize_to_vec(&self);
+        return Cow::Owned(v);
+    }
+}
+
+impl IntoDatabaseValue for AccountsTreeNode {
+    fn database_byte_size(&self) -> usize {
+        return self.serialized_size();
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl FromDatabaseValue for AccountsTreeNode {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+        let mut cursor = io::Cursor::new(bytes);
+        return Ok(Deserialize::deserialize(&mut cursor)?);
+    }
+}

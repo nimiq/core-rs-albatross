@@ -15,7 +15,8 @@ use network_messages::{
     GetBlocksMessage,
     MessageType,
     RejectMessage,
-    RejectMessageCode
+    RejectMessageCode,
+    GetAccountsProofMessage,
 };
 use network_primitives::subscription::Subscription;
 use primitives::block::Block;
@@ -68,6 +69,9 @@ pub struct ConsensusAgentState {
 
     /// Rate limit for GetTransactionsProof messages.
     transactions_proof_limit: RateLimit,
+
+    /// Rate limit for AccountsProof messages.
+    accounts_proof_limit: RateLimit,
 }
 
 #[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -100,6 +104,7 @@ impl ConsensusAgent {
     const BLOCK_PROOF_RATE_LIMIT: usize = 60; // per minute
     const TRANSACTION_RECEIPTS_RATE_LIMIT: usize = 30; // per minute
     const TRANSACTIONS_PROOF_RATE_LIMIT: usize = 60; // per minute
+    const ACCOUNTS_PROOF_RATE_LIMIT: usize = 60; // per minute
 
     /// Minimum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MIN: u64 = 2 * 1000; // in ms
@@ -129,6 +134,7 @@ impl ConsensusAgent {
                 block_proof_limit: RateLimit::new_per_minute(Self::BLOCK_PROOF_RATE_LIMIT),
                 transaction_receipts_limit: RateLimit::new_per_minute(Self::TRANSACTION_RECEIPTS_RATE_LIMIT),
                 transactions_proof_limit: RateLimit::new_per_minute(Self::TRANSACTIONS_PROOF_RATE_LIMIT),
+                accounts_proof_limit: RateLimit::new_per_minute(Self::ACCOUNTS_PROOF_RATE_LIMIT),
             }),
 
             notifier: RwLock::new(Notifier::new()),
@@ -167,6 +173,12 @@ impl ConsensusAgent {
         msg_notifier.get_transactions_proof.write().register(move |msg| {
             let this = upgrade_weak!(weak);
             this.on_get_transactions_proof(msg);
+        });
+
+        let weak = Arc::downgrade(this);
+        msg_notifier.get_accounts_proof.write().register(move |msg: GetAccountsProofMessage| {
+            let this = upgrade_weak!(weak);
+            this.on_get_accounts_proof(msg);
         });
 
         let weak = Arc::downgrade(this);

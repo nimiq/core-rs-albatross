@@ -17,8 +17,8 @@ use parking_lot::RwLock;
 use rand::Rng;
 use rand::rngs::OsRng;
 
+use accounts::AccountsTreeChunk;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
-use accounts::{AccountsProof, AccountsTreeChunk};
 use hash::{Blake2bHash, Hash};
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
@@ -26,6 +26,7 @@ use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
 use network_primitives::subscription::Subscription;
 use network_primitives::version;
+use primitives::account::accounts_proof::AccountsProof;
 use primitives::block::{Block, BlockHeader};
 use primitives::block::proof::ChainProof;
 use primitives::transaction::{Transaction, TransactionsProof, TransactionReceipt};
@@ -733,6 +734,15 @@ pub struct GetAccountsProofMessage {
 pub struct AccountsProofMessage {
     pub block_hash: Blake2bHash,
     pub proof: Option<AccountsProof>,
+}
+
+impl AccountsProofMessage {
+    pub fn new(block_hash: Blake2bHash, proof: Option<AccountsProof>) -> Message {
+        Message::AccountsProof(AccountsProofMessage {
+            block_hash,
+            proof,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

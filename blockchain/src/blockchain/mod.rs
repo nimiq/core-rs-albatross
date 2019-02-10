@@ -25,6 +25,8 @@ use crate::chain_metrics::BlockchainMetrics;
 #[cfg(feature = "transaction-store")]
 use crate::transaction_store::TransactionStore;
 
+pub mod transaction_proofs;
+
 pub struct Blockchain<'env> {
     pub(crate) env: &'env Environment,
     pub network_id: NetworkId,

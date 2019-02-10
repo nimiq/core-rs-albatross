@@ -1,26 +1,24 @@
-use beserial::{Serialize, SerializingError, Deserialize, WriteBytesExt, ReadBytesExt, SerializeWithLength, DeserializeWithLength};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
-use keys::Address;
-use std::ops;
-use std::usize;
-use std::fmt;
-use std::str;
-use std::io;
-use std::cmp;
-use std::borrow::Cow;
 use hex;
-use database::AsDatabaseBytes;
+use keys::Address;
+use std::cmp;
+use std::fmt;
+use std::io;
+use std::ops;
+use std::str;
+use std::usize;
 
 // Stores a compact representation of length nibbles.
 // Each u8 stores up to 2 nibbles.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
-pub(crate) struct AddressNibbles {
+pub struct AddressNibbles {
     bytes: Vec<u8>,
     length: u8
 }
 
 impl AddressNibbles {
-    pub(crate) fn empty() -> AddressNibbles {
+    pub fn empty() -> AddressNibbles {
         return AddressNibbles {
             bytes: Vec::new(),
             length: 0,
@@ -28,11 +26,11 @@ impl AddressNibbles {
     }
 
     #[inline]
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         return self.length as usize;
     }
 
-    pub(crate) fn get(&self, index: usize) -> Option<usize> {
+    pub fn get(&self, index: usize) -> Option<usize> {
         if index >= self.len() {
             return None;
         }
@@ -41,7 +39,7 @@ impl AddressNibbles {
         return Some(((self.bytes[byte] >> ((1 - nibble) * 4)) & 0xf) as usize);
     }
 
-    pub(crate) fn is_prefix_of(&self, other: &AddressNibbles) -> bool {
+    pub fn is_prefix_of(&self, other: &AddressNibbles) -> bool {
         // Prefix must be shorter or equal in length.
         if self.length > other.length {
             return false;
@@ -59,7 +57,7 @@ impl AddressNibbles {
         return self.bytes[..end] == other.bytes[..end];
     }
 
-    pub(crate) fn common_prefix(&self, other: &AddressNibbles) -> AddressNibbles {
+    pub fn common_prefix(&self, other: &AddressNibbles) -> AddressNibbles {
         let min_len = cmp::min(self.len(), other.len());
         let byte_len = min_len / 2 + (min_len % 2);
 
@@ -74,7 +72,7 @@ impl AddressNibbles {
         return self.slice(0, first_difference_nibble);
     }
 
-    pub(crate) fn slice(&self, start: usize, end: usize) -> AddressNibbles {
+    pub fn slice(&self, start: usize, end: usize) -> AddressNibbles {
         if start >= self.len() || end <= start {
             return AddressNibbles::empty();
         }
@@ -112,11 +110,11 @@ impl AddressNibbles {
         };
     }
 
-    pub(crate) fn suffix(&self, start: u8) -> AddressNibbles {
+    pub fn suffix(&self, start: u8) -> AddressNibbles {
         return self.slice(start as usize, self.len());
     }
 
-    pub(crate) fn to_address(&self) -> Option<Address> {
+    pub fn to_address(&self) -> Option<Address> {
         if self.length != 40 {
             return None;
         }
@@ -254,18 +252,10 @@ impl Deserialize for AddressNibbles {
     }
 }
 
-impl AsDatabaseBytes for AddressNibbles {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
-        // TODO: Improve AddressNibbles, so that no serialization is needed.
-        let v = Serialize::serialize_to_vec(&self);
-        return Cow::Owned(v);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn it_can_convert_and_access_nibbles() {
         let address = Address::from(hex::decode("cfb98637bcae43c13323eaa1731ced2b716962fd").unwrap().as_slice());
