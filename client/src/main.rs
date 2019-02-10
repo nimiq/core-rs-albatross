@@ -19,6 +19,7 @@ extern crate parking_lot;
 extern crate serde_derive;
 extern crate tokio;
 extern crate toml;
+extern crate clap;
 
 
 use std::error::Error;
@@ -49,6 +50,7 @@ use crate::settings::Settings;
 mod deadlock;
 mod logging;
 mod settings;
+mod cmdline;
 
 
 lazy_static! {

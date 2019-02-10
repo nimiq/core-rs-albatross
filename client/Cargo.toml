@@ -21,8 +21,9 @@ fern = { version = "0.5", features = ["colored"] }
 futures = "0.1"
 tokio = "0.1"
 lazy_static = "1.0"
-hyper = { version = "0.12.19", optional = true } # Remove?
 parking_lot = { version = "0.6", optional = true, features = ["deadlock_detection"] }
+hyper = { version = "0.12.19", optional = true }
+clap = "2.32"
 nimiq-database = { path = "../database" }
 nimiq-network = { path = "../network" }
 nimiq-consensus = { path = "../consensus" }

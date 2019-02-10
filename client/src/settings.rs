@@ -2,7 +2,7 @@ use std::path::Path;
 use std::fs::read_to_string;
 use std::error::Error;
 use std::collections::HashMap;
-
+use std::str::FromStr;
 
 pub const DEFAULT_NETWORK_PORT: u16 = 8443;
 pub const DEFAULT_REVERSE_PROXY_PORT: u16 = 8444;
@@ -110,6 +110,19 @@ impl Default for NodeType {
     }
 }
 
+impl FromStr for NodeType {
+    type Err = (); // TODO: proper Error type
+
+    fn from_str(s: &str) -> Result<NodeType, ()> {
+        Ok(match s.to_lowercase().as_str() {
+            "full" => NodeType::Full,
+            "light" => NodeType::Light,
+            "nano" => NodeType::Nano,
+            _ => Err(())?
+        })
+    }
+}
+
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Network {
@@ -123,6 +136,21 @@ pub(crate) enum Network {
 impl Default for Network {
     fn default() -> Self {
         Network::Main
+    }
+}
+
+impl FromStr for Network {
+    type Err = (); // TODO: proper Error type
+
+    fn from_str(s: &str) -> Result<Network, ()> {
+        Ok(match s.to_lowercase().as_str() {
+            "main" => Network::Main,
+            "test" => Network::Test,
+            "dev" => Network::Dev,
+            "dummy" => Network::Dummy,
+            "bounty" => Network::Bounty,
+            _ => Err(())?
+        })
     }
 }
 
