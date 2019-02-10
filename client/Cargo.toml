@@ -30,6 +30,7 @@ nimiq-rpc-server = { path = "../rpc-server", optional = true }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-lib = { path = "../lib" }
 colored = "1.7.0"
+chrono = "0.4.6"
 
 [features]
 default = ["all"]

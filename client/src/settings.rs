@@ -205,6 +205,8 @@ pub(crate) struct ReverseProxySettings {
 pub(crate) struct LogSettings {
     pub level: Option<String>,
     #[serde(default)]
+    pub timestamps: bool,
+    #[serde(default)]
     pub tags: HashMap<String, String>,
     #[serde(default)]
     pub statistics: u64,

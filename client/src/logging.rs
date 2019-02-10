@@ -7,6 +7,8 @@ use fern::Dispatch;
 use log::LevelFilter;
 use log::ParseLevelError;
 
+use chrono::Local;
+
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(0);
 
 const NIMIQ_MODULES: [&'static str; 22] = [
@@ -53,7 +55,7 @@ pub fn to_level(level: &str) -> Result<LevelFilter, ParseLevelError> {
 /// Trait that implements Nimiq specific behavior for fern's Dispatch.
 pub trait NimiqDispatch {
     /// Setup logging in pretty_env_logger style.
-    fn pretty_logging(self) -> Self;
+    fn pretty_logging(self, show_timestamps: bool) -> Self;
 
     /// Setup nimiq modules log level.
     fn level_for_nimiq(self, level: LevelFilter) -> Self;
@@ -63,8 +65,35 @@ pub trait NimiqDispatch {
     fn only_nimiq(self) -> Self;
 }
 
+fn pretty_logging(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispatch {
+    dispatch.format(move |out, message, record| {
+        let max_width = max_module_width(record.target());
+        let target = format!("{: <width$}", record.target(), width=max_width);
+        out.finish(format_args!(
+            " {level} {target} > {message}",
+            target = target.bold(),
+            level = colors_level.color(record.level()),
+            message = message,
+        ));
+    })
+}
+
+fn pretty_logging_with_timestamps(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispatch {
+    dispatch.format(move |out, message, record| {
+        let max_width = max_module_width(record.target());
+        let target = format!("{: <width$}", record.target(), width=max_width);
+        out.finish(format_args!(
+            " {timestamp} {level} {target} > {message}",
+            timestamp = Local::now().format("%Y-%m-%d %H:%M:%S"),
+            target = target.bold(),
+            level = colors_level.color(record.level()),
+            message = message,
+        ));
+    })
+}
+
 impl NimiqDispatch for Dispatch {
-    fn pretty_logging(self) -> Self {
+    fn pretty_logging(self, show_timestamps: bool) -> Self {
         let colors_level = ColoredLevelConfig::new()
             .error(Color::Red)
             .warn(Color::Yellow)
@@ -72,16 +101,10 @@ impl NimiqDispatch for Dispatch {
             .debug(Color::Blue)
             .trace(Color::Magenta);
 
-        self.format(move |out, message, record| {
-            let max_width = max_module_width(record.target());
-            let target = format!("{: <width$}", record.target(), width=max_width);
-            out.finish(format_args!(
-                " {level} {target} > {message}",
-                target = target.bold(),
-                level = colors_level.color(record.level()),
-                message = message,
-            ));
-        })
+        match show_timestamps {
+            true => pretty_logging_with_timestamps(self, colors_level),
+            false => pretty_logging(self, colors_level),
+        }
     }
 
     fn level_for_nimiq(self, level: LevelFilter) -> Self {

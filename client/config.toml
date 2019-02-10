@@ -16,6 +16,7 @@ network = "test"
 
 [log]
 level = "trace"
+timestamps = true
 
 [rpcServer]
 port = 8648

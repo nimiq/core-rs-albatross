@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Setup logging.
     let mut dispatch = fern::Dispatch::new()
-        .pretty_logging()
+        .pretty_logging(settings.log.timestamps)
         .level(DEFAULT_LEVEL)
         .level_for_nimiq(settings.log.level.as_ref().map(|level| to_level(level)).unwrap_or(Ok(DEFAULT_LEVEL))?);
     for (module, level) in settings.log.tags.iter() {
