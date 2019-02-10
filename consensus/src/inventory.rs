@@ -355,6 +355,9 @@ impl InventoryAgent {
         msg_notifier.get_data.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, vectors: Vec<InvVector>| this.on_get_data(vectors)));
+        msg_notifier.get_header.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, vectors: Vec<InvVector>| this.on_get_header(vectors)));
         msg_notifier.mempool.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, _ | this.on_mempool()));
@@ -832,6 +835,43 @@ impl InventoryAgent {
                     }
                 }
                 InvVectorType::Error => () // XXX Why do we have this??
+            }
+        }
+
+        // Report any unknown objects to the sender.
+        if !unknown_objects.is_empty() {
+            self.peer.channel.send_or_close(Message::NotFound(unknown_objects));
+        }
+    }
+
+    fn on_get_header(&self, vectors: Vec<InvVector>) {
+        // Keep track of the objects the peer knows.
+        let mut state = self.state.write();
+        for vector in vectors.iter() {
+            state.known_objects.insert(vector.clone());
+        }
+
+        // Check which of the requested objects we know.
+        // Send back all known objects.
+        // Send notFound for unknown objects.
+        let mut unknown_objects = Vec::new();
+
+        for vector in vectors {
+            match vector.ty {
+                InvVectorType::Block => {
+                    // TODO raw blocks. Needed?
+                    let block_opt = self.blockchain.get_block(&vector.hash, false, true);
+                    if block_opt.is_some() {
+                        if self.peer.channel.send(Message::Header(block_opt.unwrap().header)).is_err() {
+                            self.peer.channel.close(CloseType::SendFailed);
+                            return;
+                        }
+                    } else {
+                        unknown_objects.push(vector);
+                    }
+                }
+                InvVectorType::Transaction => {} // XXX JavaScript client errors here
+                InvVectorType::Error => {} // XXX Why do we have this??
             }
         }
 
