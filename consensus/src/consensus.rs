@@ -8,7 +8,6 @@ use rand::seq::SliceRandom;
 
 use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
-use hash::Blake2bHash;
 use mempool::{Mempool, MempoolEvent};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
 use network_primitives::networks::NetworkId;
@@ -108,10 +107,11 @@ impl Consensus {
         this.mempool.notifier.write().register(move |e: &MempoolEvent| {
             let this = upgrade_weak!(weak);
             match e {
-                MempoolEvent::TransactionAdded(hash, transaction) => this.on_transaction_added(hash, transaction),
-                // TODO: Remove removed transactions
-                // => this.on_transaction_removed(transaction),
-                _ => {},
+                MempoolEvent::TransactionAdded(_, transaction) => this.on_transaction_added(transaction),
+                // TODO: Relay on restore?
+                MempoolEvent::TransactionRestored(transaction) => this.on_transaction_added(transaction),
+                MempoolEvent::TransactionEvicted(transaction) => this.on_transaction_removed(transaction),
+                MempoolEvent::TransactionMined(transaction) => this.on_transaction_removed(transaction),
             }
         });
 
@@ -208,7 +208,7 @@ impl Consensus {
         }
     }
 
-    fn on_transaction_added(&self, _hash: &Blake2bHash, transaction: &Arc<Transaction>) {
+    fn on_transaction_added(&self, transaction: &Arc<Transaction>) {
         let state = self.state.read();
 
         // Don't relay transactions if we are not synced yet.
@@ -218,6 +218,13 @@ impl Consensus {
 
         for agent in state.agents.values() {
             agent.relay_transaction(transaction.as_ref());
+        }
+    }
+
+    fn on_transaction_removed(&self, transaction: &Arc<Transaction>) {
+        let state = self.state.read();
+        for agent in state.agents.values() {
+            agent.remove_transaction(transaction.as_ref());
         }
     }
 

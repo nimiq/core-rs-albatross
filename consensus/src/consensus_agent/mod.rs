@@ -201,6 +201,10 @@ impl ConsensusAgent {
         self.inv_agent.relay_transaction(transaction)
     }
 
+    pub fn remove_transaction(&self, transaction: &Transaction) {
+        self.inv_agent.remove_transaction(transaction);
+    }
+
     pub fn synced(&self) -> bool {
         self.state.read().synced
     }

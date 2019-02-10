@@ -39,9 +39,9 @@ struct MempoolState {
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub enum MempoolEvent {
     TransactionAdded(Blake2bHash, Arc<Transaction>),
-    TransactionRestored,
-    TransactionMined,
-    TransactionEvicted,
+    TransactionRestored(Arc<Transaction>),
+    TransactionMined(Arc<Transaction>),
+    TransactionEvicted(Arc<Transaction>),
 }
 
 impl<'env> Mempool<'env> {
@@ -195,27 +195,35 @@ impl<'env> Mempool<'env> {
 
         let tx_arc = Arc::new(transaction);
 
+        let mut removed_transactions;
         {
             // Transaction is valid, add it to the mempool.
             let mut state = self.state.write();
             Mempool::add_transaction(&mut state, hash.clone(), tx_arc.clone());
 
             // Evict transactions that were invalidated by the new transaction.
-            for tx in txs_to_remove {
-                Mempool::remove_transaction(&mut *state, &tx);
+            for tx in txs_to_remove.iter() {
+                Mempool::remove_transaction(&mut *state, tx);
             }
+
+            // Rename variable.
+            removed_transactions = txs_to_remove;
 
             // Remove the lowest fee transaction if mempool max size is reached.
             if state.transactions_sorted_fee.len() > SIZE_MAX {
                 let tx = state.transactions_sorted_fee.iter().next().unwrap().clone();
                 Mempool::remove_transaction(&mut state, &tx);
+                removed_transactions.push(tx);
             }
         }
 
         // Tell listeners about the new transaction we received.
         self.notifier.read().notify(MempoolEvent::TransactionAdded(hash, tx_arc));
 
-        // TODO Tell listeners about the transactions we evicted.
+        // Tell listeners about the transactions we evicted.
+        for tx in removed_transactions {
+            self.notifier.read().notify(MempoolEvent::TransactionEvicted(tx));
+        }
 
         return ReturnCode::Accepted;
     }
@@ -339,15 +347,22 @@ impl<'env> Mempool<'env> {
         {
             // Evict transactions.
             let mut state = self.state.write();
-            for tx in txs_mined {
-                Mempool::remove_transaction(&mut state, &tx);
+            for tx in txs_mined.iter() {
+                Mempool::remove_transaction(&mut state, tx);
             }
-            for tx in txs_evicted {
-                Mempool::remove_transaction(&mut state, &tx);
+            for tx in txs_evicted.iter() {
+                Mempool::remove_transaction(&mut state, tx);
             }
         }
 
-        // TODO notify listeners
+        // Notify listeners.
+        for tx in txs_mined {
+            self.notifier.read().notify(MempoolEvent::TransactionMined(tx));
+        }
+
+        for tx in txs_evicted {
+            self.notifier.read().notify(MempoolEvent::TransactionEvicted(tx));
+        }
     }
 
     fn restore_transactions(&self, reverted_blocks: &Vec<(Blake2bHash, Block)>) {
@@ -392,6 +407,9 @@ impl<'env> Mempool<'env> {
         // Merge the new transaction sets per sender with the existing ones.
         let mut state = self.state.write();
 
+        let mut removed_transactions = Vec::new();
+        let mut restored_transactions = Vec::new();
+
         for (sender, restored_txs) in txs_by_sender {
             let empty_btree;
             let existing_txs = match state.transactions_by_sender.get(&sender) {
@@ -404,10 +422,13 @@ impl<'env> Mempool<'env> {
 
             let (txs_to_add, txs_to_remove) = Mempool::merge_transactions(&accounts, sender, block_height, existing_txs, &restored_txs);
             for tx in txs_to_add {
-                Mempool::add_transaction(&mut state, tx.hash(), Arc::new(tx.clone()));
+                let transaction = Arc::new(tx.clone());
+                Mempool::add_transaction(&mut state, tx.hash(), transaction.clone());
+                restored_transactions.push(transaction);
             }
             for tx in txs_to_remove {
                 Mempool::remove_transaction(&mut state, &tx);
+                removed_transactions.push(tx);
             }
         }
 
@@ -419,9 +440,19 @@ impl<'env> Mempool<'env> {
             for _ in 0..size - SIZE_MAX {
                 txs_to_remove.push(iter.next().unwrap().clone());
             }
-            for tx in txs_to_remove {
-                Mempool::remove_transaction(&mut state, &tx);
+            for tx in txs_to_remove.iter() {
+                Mempool::remove_transaction(&mut state, tx);
             }
+            removed_transactions.extend(txs_to_remove);
+        }
+
+        // Notify listeners.
+        for tx in removed_transactions {
+            self.notifier.read().notify(MempoolEvent::TransactionEvicted(tx));
+        }
+
+        for tx in restored_transactions {
+            self.notifier.read().notify(MempoolEvent::TransactionRestored(tx));
         }
     }
 
