@@ -22,6 +22,7 @@ futures = "0.1"
 tokio = "0.1"
 lazy_static = "1.0"
 hyper = { version = "0.12.19", optional = true } # Remove?
+parking_lot = { version = "0.6", optional = true, features = ["deadlock_detection"] }
 nimiq-database = { path = "../database" }
 nimiq-network = { path = "../network" }
 nimiq-consensus = { path = "../consensus" }
@@ -34,6 +35,7 @@ chrono = "0.4.6"
 
 [features]
 default = ["all"]
-all = ["rpc-server", "metrics-server"]
+all = ["rpc-server", "metrics-server", "deadlock-detection"]
 rpc-server = ["nimiq-rpc-server", "hyper"]
 metrics-server = ["nimiq-metrics-server", "hyper"]
+deadlock-detection = ["parking_lot"]

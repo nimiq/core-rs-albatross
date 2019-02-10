@@ -13,6 +13,8 @@ extern crate nimiq_network as network;
 extern crate nimiq_primitives as primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
+#[cfg(feature = "deadlock-detection")]
+extern crate parking_lot;
 #[macro_use]
 extern crate serde_derive;
 extern crate tokio;
@@ -43,8 +45,10 @@ use crate::logging::{DEFAULT_LEVEL, NimiqDispatch, to_level};
 use crate::settings as s;
 use crate::settings::Settings;
 
-mod settings;
+#[cfg(feature = "deadlock-detection")]
+mod deadlock;
 mod logging;
+mod settings;
 
 
 lazy_static! {
@@ -52,6 +56,9 @@ lazy_static! {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    #[cfg(feature = "deadlock-detection")]
+    deadlock::deadlock_detection();
+
     let argv: Vec<String> = std::env::args().collect();
     let path = argv.get(1).map(|p| p.as_str()).unwrap_or("config.toml");
 
