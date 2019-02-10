@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{sync::Arc, time::{Duration, Instant}, fmt};
 
 use parking_lot::RwLock;
 
@@ -113,6 +113,15 @@ impl Eq for ConnectionInfo {}
 
 pub struct ConnectionStatistics {
     latencies: Vec<f32>,
+}
+
+impl fmt::Display for ConnectionInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{{ peer_address: {}, state: {:?} }}", match self.peer_address {
+            Some(ref peer_address) => peer_address.to_string(),
+            None => "None".to_string(),
+        }, self.state)
+    }
 }
 
 impl ConnectionStatistics {

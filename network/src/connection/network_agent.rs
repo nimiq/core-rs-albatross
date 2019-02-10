@@ -403,7 +403,7 @@ impl NetworkAgent {
         self.request_addresses(None);
     }
 
-    fn request_addresses(&mut self, max_results: Option<u16>) {
+    pub fn request_addresses(&mut self, max_results: Option<u16>) {
         assert!(self.peer.is_some());
         debug!("Requesting addresses from {}", self.peer.as_ref().unwrap());
 

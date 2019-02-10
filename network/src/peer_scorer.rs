@@ -302,7 +302,7 @@ impl PeerScorer {
         }
     }
 
-    pub fn connection_scores(&self) -> &Vec<(usize, f32)> {
+    pub fn connection_scores(&self) -> &Vec<(ConnectionId, f32)> {
         &self.connection_scores
     }
 }

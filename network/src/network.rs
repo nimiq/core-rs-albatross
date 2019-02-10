@@ -20,6 +20,11 @@ use crate::connection::connection_pool::ConnectionPoolEvent;
 use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_scorer::PeerScorer;
+use parking_lot::RwLockReadGuard;
+use std::cmp;
+use rand::Rng;
+use rand::rngs::OsRng;
+use crate::connection::connection_pool::ConnectionId;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {
@@ -60,6 +65,8 @@ impl Network {
     const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(5 * 60);
     const SCORE_INBOUND_EXCHANGE: f32 = 0.5;
     const CONNECT_THROTTLE: Duration = Duration::from_secs(1);
+    const ADDRESS_REQUEST_CUTOFF: usize = 250;
+    const ADDRESS_REQUEST_PEERS: usize = 2;
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Arc<Self> {
         let net_config = Arc::new(network_config);
@@ -237,7 +244,7 @@ impl Network {
     }
 
     fn housekeeping(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
-        // TODO Score connections.
+        scorer.write().score_connections();
 
         // Recycle.
         let peer_count = connections.peer_count();
@@ -259,8 +266,51 @@ impl Network {
     }
 
     fn refresh_addresses(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
-        // TODO
-        unimplemented!()
+        let connection_scores = RwLockReadGuard::map(scorer.read(), |scorer| scorer.connection_scores());
+        let mut randrng: OsRng = OsRng::new().unwrap();
+        if !connection_scores.is_empty() {
+            let state = connections.state();
+            let cutoff = cmp::min(
+                (state.peer_count_ws + state.peer_count_wss) * 2,
+                Self::ADDRESS_REQUEST_CUTOFF
+            );
+            let len = cmp::min(
+                connection_scores.len(),
+                cutoff
+            );
+
+            for _ in 0..cmp::min(Self::ADDRESS_REQUEST_PEERS, connection_scores.len()) {
+                let index = randrng.gen_range(0, len);
+                let (id, _): &(ConnectionId, f32) = connection_scores.get(index).unwrap(); // Cannot fail, since len is at most the real length.
+                let peer_connection = state.get_connection(*id).expect("ConnectionInfo for scored connection is missing");
+                trace!("Requesting addresses from {} (score idx {})", peer_connection, index);
+                let agent = peer_connection.network_agent().expect("ConnectionInfo for scored connection is missing its NetworkAgent");
+                agent.write().request_addresses(None);
+            }
+        } else {
+            // Drop lock on connection_scores since it is empty.
+            drop(connection_scores);
+            let index = randrng.gen_range(0, cmp::min(connections.count(), 10));
+
+            let state = connections.state();
+            let mut peer_connection = None;
+            let mut i: usize = 0;
+            for conn in state.connection_iter() {
+                if conn.state() == ConnectionState::Established {
+                    peer_connection = Some(conn);
+                }
+                if i >= index && peer_connection.is_some() {
+                    break;
+                }
+                i += 1;
+            }
+
+            if let Some(peer_connection) = peer_connection {
+                trace!("Requesting addresses from {} (score idx {})", peer_connection, index);
+                let agent = peer_connection.network_agent().expect("ConnectionInfo for scored connection is missing its NetworkAgent");
+                agent.write().request_addresses(None);
+            }
+        }
     }
 
     pub fn peer_count(&self) -> usize {
