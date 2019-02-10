@@ -7,3 +7,4 @@
 client/db
 client/key.db
 Cargo.lock
+/fixed-unsigned/target

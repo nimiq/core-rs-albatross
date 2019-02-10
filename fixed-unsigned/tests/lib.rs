@@ -3,7 +3,6 @@ extern crate fixed_unsigned;
 use std::str::FromStr;
 use std::string::ToString;
 
-use fixed_unsigned::FixedUnsigned;
 use fixed_unsigned::types::{FixedUnsigned4, FixedUnsigned10};
 
 
@@ -90,7 +89,7 @@ fn test_div_round_down() {
 fn test_div_round_up() {
     let a = FixedUnsigned4::from_str("123.4567").unwrap();
     let b = FixedUnsigned4::from_str("135.7910").unwrap();
-    let expected = FixedUnsigned4::from_str("0.9091").unwrap();
+    let expected = FixedUnsigned4::from_str("0.9092").unwrap();
     assert_eq!(a / b, expected);
 }
 
@@ -159,7 +158,7 @@ fn test_bytes_length_matches() {
 fn test_from_f64() {
     let float = 1234.56789f64;
     let fixed = FixedUnsigned4::from(float);
-    assert_eq!(fixed, FixedUnsigned::from_str("1234.5678").unwrap());
+    assert_eq!(fixed, FixedUnsigned4::from_str("1234.5679").unwrap());
 }
 
 #[test]

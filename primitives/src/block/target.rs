@@ -225,17 +225,6 @@ impl Div<u32> for Difficulty {
     }
 }
 
-/// Multiply `Difficulty` by `u32`
-///
-/// This is used in `Blockchain::get_next_target`
-impl Mul<f64> for Difficulty {
-    type Output = Difficulty;
-
-    fn mul(self, rhs: f64) -> <Self as Mul<f64>>::Output {
-        unimplemented!()
-    }
-}
-
 impl Add<Difficulty> for Difficulty {
     type Output = Difficulty;
 

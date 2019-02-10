@@ -119,10 +119,8 @@ impl<S> FixedUnsigned<S>
     }
 
     /// Scales up a `BigUint` by `scale`
-    /// TODO: measure performance with/without inline
     /// TODO: We could start with scaling down 10^16, then 2^8, etc. to have logarithmic runtime
-    #[inline]
-    pub fn scale_up(mut int_value: BigUint, mut scale: u64) -> BigUint {
+    fn scale_up(mut int_value: BigUint, mut scale: u64) -> BigUint {
         while scale >= U64_MAX_DIGITS {
             int_value *= U64_MAX_DECIMAL;
             scale -= U64_MAX_DIGITS;
@@ -135,9 +133,7 @@ impl<S> FixedUnsigned<S>
     }
 
     /// Scales down a `BigUint` by `scale`
-    /// TODO: Rounding?
-    #[inline]
-    pub fn scale_down<R: RoundingMode>(mut int_value: BigUint, mut scale: u64) -> BigUint {
+    fn scale_down<R: RoundingMode>(mut int_value: BigUint, mut scale: u64) -> BigUint {
         // scale down by 10<sup>19</sup> as long as possible
         while scale >= U64_MAX_DIGITS {
             int_value /= U64_MAX_DECIMAL;
@@ -287,6 +283,31 @@ impl<S> FixedUnsigned<S>
         let bits = self.bits();
         return bits / 8 + if bits % 8 == 0 {0} else {1};
     }
+
+    /// Adds two `BigUint`s interpreted as `FixedUnsigned<S>` and returns the result.
+    #[inline]
+    fn add(a: &BigUint, b: &BigUint) -> BigUint {
+        a + b
+    }
+
+    /// Subtracts two `BigUint`s interpreted as `FixedUnsigned<S>` and returns the result.
+    #[inline]
+    fn sub(a: &BigUint, b: &BigUint) -> BigUint {
+        a - b
+    }
+
+    /// Multiplies two `BigUint`s interpreted as `FixedUnsigned<S>` and returns the result.
+    #[inline]
+    fn mul(a: &BigUint, b: &BigUint) -> BigUint {
+        Self::scale_down::<RoundHalfUp>((a * b).clone(), S::SCALE)
+    }
+
+    /// Divides two `BigUint`s interpreted as `FixedUnsigned<S>` and returns the result.
+    #[inline]
+    fn div(a: &BigUint, b: &BigUint) -> BigUint {
+        // scale up 1 digit more - to keep the carrier, then divide and scale down 1 digit. The scale down of 1 will round appropriately
+        Self::scale_down::<RoundHalfUp>(Self::scale_up(a.clone(), S::SCALE + 1u64) / b, 1u64)
+    }
 }
 
 impl<S> Add for FixedUnsigned<S>
@@ -295,7 +316,7 @@ impl<S> Add for FixedUnsigned<S>
     type Output = Self;
 
     fn add(self, rhs: FixedUnsigned<S>) -> Self::Output {
-        Self::new(self.int_value + rhs.int_value)
+        Self::new(Self::add(&(self.int_value), &(rhs.int_value)))
     }
 }
 
@@ -305,15 +326,15 @@ impl<'a, 'b, S> Add<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
     type Output = FixedUnsigned<S>;
 
     fn add(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S> {
-        FixedUnsigned::new(&self.int_value + &rhs.int_value)
+        FixedUnsigned::new(FixedUnsigned::<S>::add(&(self.int_value), &(rhs.int_value)))
     }
 }
 
 impl<S> AddAssign for FixedUnsigned<S>
     where S: FixedScale
 {
-    fn add_assign(&mut self, other: Self) {
-        self.int_value += other.int_value;
+    fn add_assign(&mut self, rhs: Self) {
+        self.int_value = FixedUnsigned::<S>::add(&(self.int_value), &(rhs.int_value))
     }
 }
 
@@ -323,7 +344,7 @@ impl<S> Sub for FixedUnsigned<S>
     type Output = Self;
 
     fn sub(self, rhs: FixedUnsigned<S>) -> Self::Output {
-        Self::new(self.int_value - rhs.int_value)
+        Self::new(Self::sub(&(self.int_value), &(rhs.int_value)))
     }
 }
 
@@ -333,15 +354,15 @@ impl<'a, 'b, S> Sub<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
     type Output = FixedUnsigned<S>;
 
     fn sub(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
-        FixedUnsigned::new(&self.int_value - &rhs.int_value)
+        FixedUnsigned::new(FixedUnsigned::<S>::sub(&(self.int_value), &(rhs.int_value)))
     }
 }
 
 impl<S> SubAssign for FixedUnsigned<S>
     where S: FixedScale
 {
-    fn sub_assign(&mut self, other: Self) {
-        self.int_value -= other.int_value;
+    fn sub_assign(&mut self, rhs: Self) {
+        self.int_value = FixedUnsigned::<S>::sub(&(self.int_value), &(rhs.int_value))
     }
 }
 
@@ -351,7 +372,7 @@ impl<S> Mul for FixedUnsigned<S>
     type Output = Self;
 
     fn mul(self, rhs: FixedUnsigned<S>) -> Self::Output {
-        Self::new(Self::scale_down::<RoundHalfUp>(self.int_value * rhs.int_value, S::SCALE))
+        Self::new(Self::mul(&(self.int_value), &(rhs.int_value)))
     }
 }
 
@@ -361,15 +382,15 @@ impl<'a, 'b, S> Mul<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
     type Output = FixedUnsigned<S>;
 
     fn mul(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
-        FixedUnsigned::new(Self::Output::scale_down::<RoundHalfUp>(&self.int_value * &rhs.int_value, S::SCALE))
+        FixedUnsigned::new(FixedUnsigned::<S>::mul(&(self.int_value), &(rhs.int_value)))
     }
 }
 
 impl<S> MulAssign for FixedUnsigned<S>
     where S: FixedScale
 {
-    fn mul_assign(&mut self, other: Self) {
-        self.int_value = Self::scale_down::<RoundHalfUp>(&self.int_value * other.int_value, S::SCALE);
+    fn mul_assign(&mut self, rhs: Self) {
+        self.int_value = FixedUnsigned::<S>::mul(&(self.int_value), &(rhs.int_value))
     }
 }
 
@@ -379,7 +400,7 @@ impl<S> Div for FixedUnsigned<S>
     type Output = Self;
 
     fn div(self, rhs: FixedUnsigned<S>) -> Self::Output {
-        Self::new(Self::scale_up(self.int_value, S::SCALE) / rhs.int_value)
+        Self::new(Self::div(&(self.int_value), &(rhs.int_value)))
     }
 }
 
@@ -389,15 +410,15 @@ impl<'a, 'b, S> Div<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
     type Output = FixedUnsigned<S>;
 
     fn div(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
-        FixedUnsigned::new(Self::Output::scale_up(self.int_value.clone(), S::SCALE) / &rhs.int_value)
+        FixedUnsigned::new(FixedUnsigned::<S>::div(&(self.int_value), &(rhs.int_value)))
     }
 }
 
 impl<S> DivAssign for FixedUnsigned<S>
     where S: FixedScale
 {
-    fn div_assign(&mut self, other: Self) {
-        self.int_value = Self::scale_up(&self.int_value * other.int_value, S::SCALE);
+    fn div_assign(&mut self, rhs: Self) {
+        self.int_value = FixedUnsigned::<S>::div(&(self.int_value), &(rhs.int_value))
     }
 }
 
@@ -556,7 +577,10 @@ impl<S: FixedScale> From<f64> for FixedUnsigned<S> {
     fn from(x: f64) -> Self {
         // scale up the float and drop the decimals (i.e. cast to u64)
         // let scaled = x * 10f64.powi(S::SCALE as i32);
-        let scaled = x * pow(10f64, S::SCALE as usize);
-        Self::new(BigUint::from(scaled as u64))
+        //let scaled = x * pow(10f64, (S::SCALE + 1) as usize);
+        //Self::new(Self::scale_down::<RoundHalfUp>(BigUint::from(scaled as u64), 1u64))
+
+        // `bignumber.js` takes the `toString` of a `Number` to convert to `BigNumber`
+        Self::from_str(&format!("{:.10}", x)).unwrap()
     }
 }
