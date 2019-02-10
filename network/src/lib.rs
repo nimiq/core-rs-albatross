@@ -10,6 +10,7 @@ extern crate nimiq_utils as utils;
 extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
+extern crate nimiq_collections as collections;
 
 pub mod address;
 pub mod websocket;

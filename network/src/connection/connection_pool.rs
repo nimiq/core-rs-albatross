@@ -2,8 +2,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::LinkedList;
-use std::sync::Arc;
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
@@ -12,14 +11,20 @@ use blockchain::Blockchain;
 use network_primitives::address::net_address::{NetAddress, NetAddressType};
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::protocol::Protocol;
+use network_messages::SignalMessage;
 use utils::mutable_once::MutableOnce;
 use utils::observer::PassThroughNotifier;
 use utils::timers::Timers;
 use utils::unique_ptr::UniquePtr;
 
 use crate::address::peer_address_book::PeerAddressBook;
-use crate::connection::network_agent::{NetworkAgent, NetworkAgentEvent};
-use crate::connection::NetworkConnection;
+use crate::connection::{
+    NetworkConnection,
+    network_agent::{NetworkAgent, NetworkAgentEvent},
+    signal_processor::SignalProcessor,
+};
+use crate::error::Error;
+use crate::Network;
 use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_channel::PeerChannel;
@@ -28,7 +33,6 @@ use crate::websocket::websocket_connector::{WebSocketConnector, WebSocketConnect
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
-use crate::error::Error;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -323,6 +327,8 @@ pub struct ConnectionPool {
 
     websocket_connector: WebSocketConnector,
 
+    signal_processor: SignalProcessor,
+
     state: RwLock<ConnectionPoolState>,
     change_lock: Mutex<()>,
 
@@ -344,9 +350,11 @@ impl ConnectionPool {
         let pool = Arc::new(Self {
             blockchain,
             network_config: network_config.clone(),
-            addresses: peer_address_book,
+            addresses: peer_address_book.clone(),
 
-            websocket_connector: WebSocketConnector::new(network_config),
+            websocket_connector: WebSocketConnector::new(network_config.clone()),
+
+            signal_processor: SignalProcessor::new(peer_address_book, network_config),
 
             state: RwLock::new(ConnectionPoolState {
                 connections: SparseVec::new(),
@@ -740,14 +748,22 @@ impl ConnectionPool {
             state.update_connected_peer_count(Connection::Id(connection_id), PeerCountUpdate::Add);
         }
 
-        // TODO Setup signal forwarding.
+        let state = self.state.read();
+        let info = state.get_connection(connection_id).expect("Missing connection");
+
+        // Setup signal forwarding.
+        if Network::SIGNALING_ENABLED {
+            let self_weak = self.self_weak.clone();
+            let weak_peer_channel = Arc::downgrade(&info.peer_channel().expect("Missing peer channel"));
+            peer.channel.msg_notifier.signal.write().register(move |msg: SignalMessage| {
+                let this = upgrade_weak!(self_weak);
+                let peer_channel = upgrade_weak!(weak_peer_channel);
+                this.signal_processor.on_signal(peer_channel.clone(), msg);
+            });
+        }
 
         // Mark address as established.
-        {
-            let state = self.state.read();
-            let info = state.get_connection(connection_id).expect("Missing connection");
-            self.addresses.established(info.peer_channel().unwrap(), peer_address.clone());
-        }
+        self.addresses.established(info.peer_channel().unwrap(), peer_address.clone());
 
         // Let listeners know about this peer.
         self.notifier.read().notify(ConnectionPoolEvent::PeerJoined(peer.as_ref().clone()));

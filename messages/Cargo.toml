@@ -20,6 +20,7 @@ nimiq-network-primitives = { path = "../network-primitives", features = ["networ
 nimiq-primitives = { path = "../primitives", features = ["account", "block", "transaction"] }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 
+bitflags = "1.0"
 byteorder = "1.2"
 hex = "0.3.2"
 parking_lot = "0.6"

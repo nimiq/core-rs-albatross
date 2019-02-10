@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate beserial_derive;
+#[macro_use]
+extern crate bitflags;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
@@ -684,7 +686,7 @@ impl GetAddrMessage {
 
 impl Serialize for GetAddrMessage {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size= 0;
+        let mut size = 0;
         size += self.protocol_mask.bits().serialize(writer)?;
         size += self.service_mask.bits().serialize(writer)?;
         size += self.max_results.serialize(writer)?;
@@ -692,7 +694,7 @@ impl Serialize for GetAddrMessage {
     }
 
     fn serialized_size(&self) -> usize {
-        let mut size= 0;
+        let mut size = 0;
         size += self.protocol_mask.bits().serialized_size();
         size += self.service_mask.bits().serialized_size();
         size += self.max_results.serialized_size();
@@ -713,18 +715,80 @@ impl Deserialize for GetAddrMessage {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct SignalMessage {
     pub sender_id: PeerId,
     pub recipient_id: PeerId,
     pub nonce: u32,
     pub ttl: u8,
-    pub flags: u8,
-    pub length: u16,
-    #[beserial(len_type(u16))]
+    pub flags: SignalMessageFlags,
     pub payload: Vec<u8>,
     pub sender_public_key: Option<PublicKey>,
     pub signature: Option<Signature>,
+}
+
+bitflags! {
+    #[derive(Default, Serialize, Deserialize)]
+    pub struct SignalMessageFlags: u8 {
+        const UNROUTABLE  = 0b00000001;
+        const TTL_EXCEEDED = 0b00000010;
+    }
+}
+
+impl Deserialize for SignalMessage {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let sender_id = Deserialize::deserialize(reader)?;
+        let recipient_id = Deserialize::deserialize(reader)?;
+        let nonce = Deserialize::deserialize(reader)?;
+        let ttl = Deserialize::deserialize(reader)?;
+        let flags = SignalMessageFlags::from_bits_truncate(Deserialize::deserialize(reader)?);
+        let payload: Vec<u8> = DeserializeWithLength::deserialize::<u16, R>(reader)?;
+        let sender_public_key = if payload.len() > 0 { Some(Deserialize::deserialize(reader)?) } else { None };
+        let signature = if payload.len() > 0 { Some(Deserialize::deserialize(reader)?) } else { None };
+
+        Ok(SignalMessage {
+            sender_id,
+            recipient_id,
+            nonce,
+            ttl,
+            flags,
+            payload,
+            sender_public_key,
+            signature,
+        })
+    }
+}
+
+impl Serialize for SignalMessage {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        size += Serialize::serialize(&self.sender_id, writer)?;
+        size += Serialize::serialize(&self.recipient_id, writer)?;
+        size += Serialize::serialize(&self.nonce, writer)?;
+        size += Serialize::serialize(&self.ttl, writer)?;
+        size += self.flags.bits().serialize(writer)?;
+        size += SerializeWithLength::serialize::<u16, W>(&self.payload, writer)?;
+        if self.payload.len() > 0 {
+            size += Serialize::serialize(&self.sender_public_key.clone().unwrap(), writer)?;
+            size += Serialize::serialize(&self.signature.clone().unwrap(), writer)?;
+        }
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = 0;
+        size += Serialize::serialized_size(&self.sender_id);
+        size += Serialize::serialized_size(&self.recipient_id);
+        size += Serialize::serialized_size(&self.nonce);
+        size += Serialize::serialized_size(&self.ttl);
+        size += self.flags.bits().serialized_size();
+        size += SerializeWithLength::serialized_size::<u16>(&self.payload);
+        if self.payload.len() > 0 {
+            size += Serialize::serialized_size(&self.sender_public_key.clone().unwrap());
+            size += Serialize::serialized_size(&self.signature.clone().unwrap());
+        }
+        size
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

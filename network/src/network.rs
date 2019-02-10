@@ -69,6 +69,9 @@ impl Network {
     const ADDRESS_REQUEST_CUTOFF: usize = 250;
     const ADDRESS_REQUEST_PEERS: usize = 2;
 
+    pub const SIGNALING_ENABLED: bool = true;
+    pub const SIGNAL_TTL_INITIAL: u8 = 3;
+
     pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Result<Arc<Self>, Error> {
         if !network_config.is_initialized() {
             return Err(Error::UninitializedPeerKey);
