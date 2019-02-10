@@ -16,13 +16,12 @@ use network_messages::{
     MessageType,
     RejectMessage,
     RejectMessageCode,
-    GetAccountsProofMessage,
 };
 use network_primitives::subscription::Subscription;
 use primitives::block::Block;
 use primitives::transaction::Transaction;
 use utils::mutable_once::MutableOnce;
-use utils::observer::Notifier;
+use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
 use beserial::Serialize;
@@ -150,42 +149,26 @@ impl ConsensusAgent {
     fn init_listeners(this: &Arc<Self>) {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
-        let weak = Arc::downgrade(this);
-        this.inv_agent.notifier.write().register(move |e: &InventoryEvent| {
-            let this = upgrade_weak!(weak);
-            this.on_inventory_event(e);
-        });
+        this.inv_agent.notifier.write().register(weak_listener(
+            Arc::downgrade(this),
+            |this, e| this.on_inventory_event(e)));
 
         let msg_notifier = &this.peer.channel.msg_notifier;
-        let weak = Arc::downgrade(this);
-        msg_notifier.get_chain_proof.write().register(move |_| {
-            let this = upgrade_weak!(weak);
-            this.on_get_chain_proof();
-        });
-
-        let weak = Arc::downgrade(this);
-        msg_notifier.get_transaction_receipts.write().register(move |msg| {
-            let this = upgrade_weak!(weak);
-            this.on_get_transaction_receipts(msg);
-        });
-
-        let weak = Arc::downgrade(this);
-        msg_notifier.get_transactions_proof.write().register(move |msg| {
-            let this = upgrade_weak!(weak);
-            this.on_get_transactions_proof(msg);
-        });
-
-        let weak = Arc::downgrade(this);
-        msg_notifier.get_accounts_proof.write().register(move |msg: GetAccountsProofMessage| {
-            let this = upgrade_weak!(weak);
-            this.on_get_accounts_proof(msg);
-        });
-
-        let weak = Arc::downgrade(this);
-        msg_notifier.get_block_proof.write().register(move |msg| {
-            let this = upgrade_weak!(weak);
-            this.on_get_block_proof(msg);
-        });
+        msg_notifier.get_chain_proof.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, _| this.on_get_chain_proof()));
+        msg_notifier.get_transaction_receipts.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg| this.on_get_transaction_receipts(msg)));
+        msg_notifier.get_transactions_proof.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg| this.on_get_transactions_proof(msg)));
+        msg_notifier.get_accounts_proof.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg| this.on_get_accounts_proof(msg)));
+        msg_notifier.get_block_proof.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg| this.on_get_block_proof(msg)));
     }
 
     pub fn relay_block(&self, block: &Block) -> bool {
