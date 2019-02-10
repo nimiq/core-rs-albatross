@@ -189,7 +189,7 @@ impl PeerAddressBookState {
     }
 
     /// Delete all RTC-only routes that are signalable over the given peer.
-    fn remove_by_signal_channel(&mut self, channel: &PeerChannel) {
+    fn remove_by_signal_channel(&mut self, channel: Arc<PeerChannel>) {
         // XXX inefficient linear scan
         let addresses = self.address_iter()
             .filter(|&peer_address| peer_address.protocol() == Protocol::Rtc)
@@ -198,7 +198,7 @@ impl PeerAddressBookState {
 
         for peer_address in addresses {
             let info = self.info_by_address.get_mut(&peer_address).expect("Since this was returned by `address_iter()` it should never be None");
-            info.signal_router.delete_route(channel);
+            info.signal_router.delete_route(channel.clone());
             if !info.signal_router.has_route() {
                 self.remove_from_store(peer_address);
             }
@@ -368,12 +368,12 @@ impl PeerAddressBook {
             .collect()
     }
 
-    pub fn add(&self, channel: Option<&PeerChannel>, peer_addresses: Vec<PeerAddress>) {
+    pub fn add(&self, channel: Option<Arc<PeerChannel>>, peer_addresses: Vec<PeerAddress>) {
         let _guard = self.change_lock.lock();
 
         let mut new_addresses: Vec<PeerAddress> = Vec::new();
         for peer_address in peer_addresses {
-            if self.add_single(channel, peer_address.clone()) {
+            if self.add_single(channel.clone(), peer_address.clone()) {
                 new_addresses.push(peer_address);
             }
         }
@@ -381,7 +381,7 @@ impl PeerAddressBook {
         self.notifier.notify(PeerAddressBookEvent::Added(new_addresses));
     }
 
-    fn add_single(&self, channel: Option<&PeerChannel>, peer_address: PeerAddress) -> bool {
+    fn add_single(&self, channel: Option<Arc<PeerChannel>>, peer_address: PeerAddress) -> bool {
         // Ignore our own address.
         if self.network_config.peer_address() == peer_address {
             return false;
@@ -417,7 +417,7 @@ impl PeerAddressBook {
         }
 
         // Get the (reliable) netAddress of the peer that sent us this address.
-        let net_address = channel.and_then(|channel| {
+        let net_address = channel.clone().and_then(|channel| {
             if let Some(net_address) = channel.address_info.net_address() {
                 if net_address.is_reliable() {
                     return Some(net_address);
@@ -509,7 +509,7 @@ impl PeerAddressBook {
     /// Called when a connection to this peerAddress has been established.
     /// The connection might have been initiated by the other peer, so address may not be known previously.
     /// If it is already known, it has been updated by a previous version message.
-    pub fn established(&self, channel: &PeerChannel, peer_address: Arc<PeerAddress>) {
+    pub fn established(&self, channel: Arc<PeerChannel>, peer_address: Arc<PeerAddress>) {
         let _guard = self.change_lock.lock();
 
         // Make sure that there is always a PeerAddressInfo for this peer_address
@@ -548,7 +548,7 @@ impl PeerAddressBook {
     }
 
     /// Called when a connection to this peerAddress is closed.
-    pub fn close(&self, channel: Option<&PeerChannel>, peer_address: Arc<PeerAddress>, ty: CloseType) {
+    pub fn close(&self, channel: Option<Arc<PeerChannel>>, peer_address: Arc<PeerAddress>, ty: CloseType) {
         let _guard = self.change_lock.lock();
 
         let mut state = self.state.write();
@@ -587,7 +587,7 @@ impl PeerAddressBook {
     }
 
     /// Called when a message has been returned as unroutable.
-    pub fn unroutable(&self, channel: PeerChannel, peer_address: Arc<PeerAddress>) {
+    pub fn unroutable(&self, channel: Arc<PeerChannel>, peer_address: Arc<PeerAddress>) {
         let _guard = self.change_lock.lock();
 
         let mut state = self.state.write();

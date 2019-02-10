@@ -91,7 +91,7 @@ impl SignalRouter {
     }
 
     /// Adds a new route and returns whether we have a new best route
-    pub fn add_route(&mut self, signal_channel: &PeerChannel, distance: u8, timestamp: u64) -> bool {
+    pub fn add_route(&mut self, signal_channel: Arc<PeerChannel>, distance: u8, timestamp: u64) -> bool {
         let mut new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
         // SignalRouteInfo matches only on signal_channel, so this will get us the old route with the same channel
         let old_route = self.routes.get(&new_route);
@@ -120,11 +120,11 @@ impl SignalRouter {
 
     pub fn delete_best_route(&mut self) {
         if let Some(best_route) = &self.best_route {
-            self.delete_route(&best_route.signal_channel.clone());
+            self.delete_route(best_route.signal_channel.clone());
         }
     }
 
-    pub fn delete_route(&mut self, signal_channel: &PeerChannel) {
+    pub fn delete_route(&mut self, signal_channel: Arc<PeerChannel>) {
         let route = SignalRouteInfo::new(signal_channel, 0, 0); // Equality is determined by comparing signal_channel only
         self.routes.remove(&route);
         if let Some(best_route) = &self.best_route {
@@ -175,12 +175,12 @@ impl SignalRouter {
 pub struct SignalRouteInfo {
     failed_attempts: u32,
     pub timestamp: u64,
-    pub signal_channel: PeerChannel,
+    pub signal_channel: Arc<PeerChannel>,
     distance: u8
 }
 
 impl SignalRouteInfo {
-    pub fn new(signal_channel: &PeerChannel, distance: u8, timestamp: u64) -> Self {
+    pub fn new(signal_channel: Arc<PeerChannel>, distance: u8, timestamp: u64) -> Self {
         let signal_channel = signal_channel.clone();
         return SignalRouteInfo {
             failed_attempts: 0,

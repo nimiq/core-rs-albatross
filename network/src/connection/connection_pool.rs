@@ -539,7 +539,7 @@ impl ConnectionPool {
 
             // Register close listener early to clean up correctly in case _checkConnection() closes the connection.
             let info = state.connections.get(connection_id).expect("Missing connection");
-            let peer_channel = PeerChannel::new(info.network_connection().unwrap());
+            let peer_channel = Arc::new(PeerChannel::new(info.network_connection().unwrap()));
             let weak = self.self_weak.clone();
             peer_channel.close_notifier.write().register(move |ty: &CloseType| {
                 let arc = upgrade_weak!(weak);

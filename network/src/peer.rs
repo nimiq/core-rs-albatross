@@ -11,14 +11,14 @@ use crate::peer_channel::PeerChannel;
 
 #[derive(Clone, Debug)]
 pub struct Peer {
-    pub channel: PeerChannel,
+    pub channel: Arc<PeerChannel>,
     pub version: u32,
     pub head_hash: Blake2bHash,
     pub time_offset: i64,
 }
 
 impl Peer {
-    pub fn new(channel: PeerChannel, version: u32, head_hash: Blake2bHash, time_offset: i64) -> Self {
+    pub fn new(channel: Arc<PeerChannel>, version: u32, head_hash: Blake2bHash, time_offset: i64) -> Self {
         Peer {
             channel,
             version,

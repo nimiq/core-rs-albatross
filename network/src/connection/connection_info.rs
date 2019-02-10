@@ -24,7 +24,7 @@ pub struct ConnectionInfo {
     peer_address: Option<Arc<PeerAddress>>,
     network_connection: Option<NetworkConnection>,
     peer: Option<Peer>,
-    peer_channel: Option<PeerChannel>,
+    peer_channel: Option<Arc<PeerChannel>>,
     state: ConnectionState,
     network_agent: Option<Arc<RwLock<NetworkAgent>>>,
     connection_handle: Option<Arc<ConnectionHandle>>,
@@ -70,7 +70,7 @@ impl ConnectionInfo {
     }
     pub fn network_connection(&self) -> Option<&NetworkConnection> { self.network_connection.as_ref() }
     pub fn peer(&self) -> Option<&Peer> { self.peer.as_ref() }
-    pub fn peer_channel(&self) -> Option<&PeerChannel> { self.peer_channel.as_ref() }
+    pub fn peer_channel(&self) -> Option<Arc<PeerChannel>> { self.peer_channel.clone() }
     pub fn network_agent(&self) -> Option<&Arc<RwLock<NetworkAgent>>> { self.network_agent.as_ref() }
     pub fn connection_handle(&self) -> Option<&Arc<ConnectionHandle>> { self.connection_handle.as_ref() }
     pub fn age_established(&self) -> Duration { self.established_since.expect("No peer has been set yet").elapsed() }
@@ -86,7 +86,7 @@ impl ConnectionInfo {
         self.state = ConnectionState::Established;
         self.established_since = Some(Instant::now());
     }
-    pub fn set_peer_channel(&mut self, peer_channel: PeerChannel) { self.peer_channel = Some(peer_channel); }
+    pub fn set_peer_channel(&mut self, peer_channel: Arc<PeerChannel>) { self.peer_channel = Some(peer_channel); }
     pub fn set_network_agent(&mut self, network_agent: Arc<RwLock<NetworkAgent>>) { self.network_agent = Some(network_agent); }
     pub fn set_connection_handle(&mut self, handle: Arc<ConnectionHandle>) { self.connection_handle = Some(handle); }
     pub fn drop_connection_handle(&mut self) { self.connection_handle = None; }

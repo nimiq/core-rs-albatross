@@ -32,7 +32,7 @@ pub struct NetworkAgent {
     blockchain: Arc<Blockchain<'static>>,
     addresses: Arc<PeerAddressBook>,
     network_config: Arc<NetworkConfig>,
-    channel: PeerChannel,
+    channel: Arc<PeerChannel>,
 
     peer: Option<Peer>,
 
@@ -86,7 +86,7 @@ impl NetworkAgent {
     const MAX_ADDR_PER_REQUEST: u16 = 500;
     const NUM_ADDR_PER_REQUEST: u16 = 200;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, addresses: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, channel: PeerChannel) -> Arc<RwLock<Self>> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, addresses: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, channel: Arc<PeerChannel>) -> Arc<RwLock<Self>> {
         let agent = Arc::new(RwLock::new(Self {
             blockchain,
             addresses,
@@ -473,7 +473,7 @@ impl NetworkAgent {
         }
 
         // Put the new addresses in the address pool.
-        self.addresses.add(Some(&self.channel), addresses);
+        self.addresses.add(Some(self.channel.clone()), addresses);
 
         // Tell listeners that we have received new addresses.
         self.notifier.notify(NetworkAgentEvent::Addr);
