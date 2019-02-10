@@ -38,7 +38,7 @@ impl AccountsTreeChunk {
     pub(crate) fn head(&self) -> &AccountsTreeNode { self.nodes.get(0).unwrap_or(self.tail()) }
 
     #[inline]
-    pub(crate) fn terminalNodes(&self) -> Vec<&AccountsTreeNode> {
+    pub(crate) fn terminal_nodes(&self) -> Vec<&AccountsTreeNode> {
         let mut vec = Vec::with_capacity(self.len());
         for node in &self.nodes {
             vec.push(node)

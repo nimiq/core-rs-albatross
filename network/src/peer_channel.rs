@@ -55,9 +55,7 @@ impl PeerChannel {
                     msg_notifier1.notify(msg)
                 },
                 PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
-                PeerStreamEvent::Error(e) => {
-                    warn!("PeerStreamEvent error {:?}", e);
-                }
+                PeerStreamEvent::Error(_) => {}
             }
         });
 

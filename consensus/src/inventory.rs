@@ -533,7 +533,7 @@ impl InventoryAgent {
 
     fn on_tx(&self, msg: TxMessage) {
         let hash = msg.transaction.hash::<Blake2bHash>();
-        debug!("[TX] tx={:?}, accounts_proof={:?}", msg.transaction, msg.accounts_proof);
+        debug!("[TX] from {} value {} fee {}", msg.transaction.sender, msg.transaction.value, msg.transaction.fee);
 
         // Check if we have requested this transaction.
         let vector = InvVector::new(InvVectorType::Transaction, hash.clone());
@@ -920,7 +920,7 @@ impl InventoryAgent {
         let num_vectors = vectors.len();
         if num_vectors > 0 {
             self.peer.channel.send_or_close(Message::Inv(vectors));
-            debug!("[INV] Sent {} vectors to {:?}", num_vectors, self.peer.peer_address());
+            debug!("[INV] Sent {} vectors to {}", num_vectors, self.peer.peer_address());
         }
     }
 
@@ -941,7 +941,7 @@ impl InventoryAgent {
         let num_vectors = vectors.len();
         if num_vectors > 0 {
             self.peer.channel.send_or_close(Message::Inv(vectors));
-            debug!("[INV] Sent {} vectors to {:?}", num_vectors, self.peer.peer_address());
+            debug!("[INV] Sent {} vectors to {}", num_vectors, self.peer.peer_address());
         }
     }
 

@@ -137,22 +137,20 @@ impl ProcessConnectionFuture {
         // `closing_rx` has Item=ClosingType, which we want to use. But Error will be set to ().
         let closing_future = closing_rx.map_err(|_| ());
         // `connection` currently has a tuple type, but we will soon call `select`, so unify Error to ()
-        // and set Item=CloseType with `CloseType::Regular` to identify a normal shutdown.
-        let connection = connection.map(|_| CloseType::Regular).map_err(|_| ());
+        // and set Item=CloseType with `CloseType::ClosedByRemote` to identify a normal shutdown.
+        let connection = connection.map(|_| CloseType::ClosedByRemote).map_err(|_| ());
         // Types have already been unified, so select over normal connection and `closing_future`.
         let connection = connection.select(closing_future);
-        // If the connection is to be dropped because of a forceful close, CloseType != `CloseType::Regular`.
-        // So, in these cases, send the WS CloseFrame.
-        // Set Item=() and map Error=().
+        // Notify listeners when the future terminates.
         let connection = connection.then(move |result| {
             let ty = match result {
                 Ok((ty, _)) => ty,
-                Err(_) => CloseType::ClosedByRemote,
+                // FIXME Connection closed by peer also reported as NetworkError
+                Err(_) => CloseType::NetworkError,
             };
 
-            // XXX Specifically send close frame if CloseType is not Regular. (???)
-            //if ty != CloseType::Regular
-            shared_stream.close().expect("Could not properly close connection");
+            // Send WS close frame, ignore result.
+            let _ = shared_stream.close();
 
             // Now send out notifications.
             notifier.read().notify(PeerStreamEvent::Close(ty));

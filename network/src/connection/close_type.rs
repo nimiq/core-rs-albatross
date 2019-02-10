@@ -1,7 +1,5 @@
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CloseType {
-    Regular = 0, // This one indicates a regular closing of the connection.
-
     GetBlocksTimeout = 1,
     GetChainProofTimeout = 2,
     GetAccountsTreeChunkTimeout = 3,
