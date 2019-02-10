@@ -29,7 +29,6 @@ nimiq-primitives = { path = "../primitives" }
 nimiq-rpc-server = { path = "../rpc-server", optional = true }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-lib = { path = "../lib" }
-syslog = {version = "4", optional = true }
 colored = "1.7.0"
 
 [features]
