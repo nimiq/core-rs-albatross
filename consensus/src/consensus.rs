@@ -137,6 +137,7 @@ impl Consensus {
             let this = upgrade_weak!(weak);
             match e {
                 ConsensusAgentEvent::Synced => this.on_peer_synced(peer_arc_moved.clone()),
+                ConsensusAgentEvent::OutOfSync => this.on_peer_out_of_sync(peer_arc_moved.clone()),
             }
         });
 
@@ -180,6 +181,11 @@ impl Consensus {
             }
         }
 
+        self.sync_blockchain();
+    }
+
+    fn on_peer_out_of_sync(&self, peer: Arc<Peer>) {
+        warn!("Peer {} out of sync, resyncing", peer.peer_address());
         self.sync_blockchain();
     }
 

@@ -32,7 +32,8 @@ pub mod requests;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConsensusAgentEvent {
-    Synced
+    Synced,
+    OutOfSync,
 }
 
 pub struct ConsensusAgentState {
@@ -76,6 +77,7 @@ pub struct ConsensusAgentState {
 #[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
 enum ConsensusAgentTimer {
     Mempool,
+    ResyncThrottle,
 }
 
 
@@ -99,6 +101,8 @@ impl ConsensusAgent {
     const SYNC_ATTEMPTS_MAX: u32 = 25;
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
+    const RESYNC_THROTTLE: Duration = Duration::from_secs(3);
+
     const CHAIN_PROOF_RATE_LIMIT: usize = 3; // per minute
     const BLOCK_PROOF_RATE_LIMIT: usize = 60; // per minute
     const TRANSACTION_RECEIPTS_RATE_LIMIT: usize = 30; // per minute
@@ -379,8 +383,39 @@ impl ConsensusAgent {
     }
 
     fn on_orphan_block(&self, hash: &Blake2bHash) {
-        debug!("Orphan block {} from {}", hash, self.peer.peer_address());
-        // TODO
+        // Ignore orphan blocks if we're not synced yet. This shouldn't happen.
+        if !self.state.read().synced {
+            warn!("Received orphan block {} from {} before/while syncing", hash, self.peer.peer_address());
+            return;
+        }
+
+        // The peer has announced an orphaned block after the initial sync. We're probably out of sync.
+        debug!("Received orphan block {} from {}", hash, self.peer.peer_address());
+
+        // Disable announcements from the peer once.
+        if !self.timers.delay_exists(&ConsensusAgentTimer::ResyncThrottle) {
+            self.inv_agent.subscribe(Subscription::None);
+        }
+
+        // Set the orphaned block as the new sync target.
+        self.state.write().sync_target = hash.clone();
+
+        // Wait a short time for:
+        // - our (un-)subscribe message to be sent
+        // - potentially more orphaned blocks to arrive
+        let weak = self.self_weak.clone();
+        self.timers.reset_delay(ConsensusAgentTimer::ResyncThrottle, move || {
+            let this = upgrade_weak!(weak);
+            this.out_of_sync();
+        }, Self::RESYNC_THROTTLE);
+    }
+
+    fn out_of_sync(&self) {
+        self.timers.clear_delay(&ConsensusAgentTimer::ResyncThrottle);
+
+        self.state.write().synced = false;
+
+        self.notifier.read().notify(ConsensusAgentEvent::OutOfSync);
     }
 
     fn on_get_blocks_timeout(&self) {
