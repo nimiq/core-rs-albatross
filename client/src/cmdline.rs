@@ -1,41 +1,61 @@
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::fmt;
+use std::error::Error;
 
-use clap::{Arg, App, SubCommand, ArgMatches};
+use clap::{Arg, App};
 
 use crate::settings::{Network, NodeType};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParseError {
+pub(crate) enum ParseError {
     Port,
-    Miner,
     Passive,
     RpcPort,
     MetricsPort,
-    StatisticsInterval,
     ConsensusType,
     Network
 }
 
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.description(), match self {
+            ParseError::Port => "port",
+            ParseError::Passive => "passive",
+            ParseError::RpcPort => "rpc",
+            ParseError::MetricsPort => "metrics",
+            ParseError::ConsensusType => "type",
+            ParseError::Network => "network"
+        })
+    }
+}
+
+impl Error for ParseError {
+    fn description(&self) -> &str {
+        return "Can't parse command-line option";
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Options {
-    hostname: Option<String>,
-    port: Option<u16>,
-    ssl_cert_file: Option<String>,
-    ssl_key_file: Option<String>,
-    config_file: Option<String>,
-    log_level: Option<String>,
-    log_tag: HashMap<String, String>,
-    miner_threads: Option<u64>,
-    passive: Option<bool>,
-    rpc_port: Option<u16>,
-    metrics_port: Option<u16>,
-    stats_interval: Option<u64>,
-    consensus_type: Option<NodeType>,
-    wallet_seed: Option<String>,
-    wallet_address: Option<String>,
-    extra_data: Option<String>,
-    network: Option<Network>
+    pub hostname: Option<String>,
+    pub port: Option<u16>,
+    pub ssl_cert_file: Option<String>,
+    pub ssl_key_file: Option<String>,
+    pub config_file: Option<String>,
+    pub log_level: Option<String>,
+    pub log_tags: HashMap<String, String>,
+    pub passive: Option<bool>,
+    pub rpc_port: Option<u16>,
+    pub metrics_port: Option<u16>,
+    pub consensus_type: Option<NodeType>,
+    pub wallet_seed: Option<String>,
+    pub wallet_address: Option<String>,
+    pub network: Option<Network>
 }
 
 
@@ -44,6 +64,7 @@ impl Options {
         App::new("nimiq")
             .version("0.1.0")
             .about("Nimiq's Rust client")
+            .author("The Nimiq Core Development Team <info@nimiq.com>")
             // Configuration
             .arg(Arg::with_name("hostname")
                 .long("host")
@@ -61,33 +82,29 @@ impl Options {
                 .help("SSL certificate file for your domain. CN should match HOSTNAME.")
                 .takes_value(true))
             .arg(Arg::with_name("ssl_key")
-                .long("cert")
+                .long("key")
                 .value_name("SSL_KEY_FILE")
                 .help("SSL private key file for your domain.")
                 .takes_value(true))
             .arg(Arg::with_name("config")
-                .short("s")
+                .short("c")
                 .long("config")
                 .value_name("CONFIG")
                 .help("Use CONFIG as config file")
                 .takes_value(true))
             // Options
             .arg(Arg::with_name("log_level")
-                .long("cert")
+                .long("log")
                 .value_name("LEVEL")
                 .help("Configure global log level.")
-                .possible_values(&["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]))
-            .arg(Arg::with_name("log_tag")
-                .long("cert")
+                .possible_values(&["error", "warn", "info", "debug", "trace"])
+                .case_insensitive(true))
+            .arg(Arg::with_name("log_tags")
+                .long("log-tag")
                 .value_name("TAG:LEVEL")
                 .help("Configure log level for specific tag.")
                 .takes_value(true)
                      .use_delimiter(true))
-            .arg(Arg::with_name("miner_threads")
-                .long("miner")
-                .value_name("THREADS")
-                .help("Activate mining on this node with THREADS parallel threads")
-                .takes_value(true))
             .arg(Arg::with_name("passive")
                 .long("passive")
                 .help("Do not actively connect to the network.")
@@ -102,16 +119,12 @@ impl Options {
                 .value_name("PORT")
                 .help("Start Prometheus-compatible metrics server on PORT (default: 8649).")
                 .takes_value(true))
-            .arg(Arg::with_name("stats_interval")
-                .long("statistics")
-                .value_name("INTERVAL")
-                .help("Output mner statistics every INTERVAL seconds")
-                .takes_value(true))
             .arg(Arg::with_name("consensus_type")
                 .long("type")
                 .value_name("TYPE")
                 .help("Configure consensus type, one of full (default), light or nano")
-                .possible_values(&["full", "light", "nano"]))
+                .possible_values(&["full", "light", "nano"])
+                .case_insensitive(true))
             .arg(Arg::with_name("wallet_seed")
                 .long("wallet-seed")
                 .value_name("SEED")
@@ -121,11 +134,6 @@ impl Options {
                 .long("wallet-address")
                 .value_name("ADDRESS")
                 .help("Initialize wallet using ADDRESS as a wallet address.")
-                .takes_value(true))
-            .arg(Arg::with_name("extra_data")
-                .long("extra-data")
-                .value_name("EXTRA_DATA")
-                .help("Extra data to add to every mined block.")
                 .takes_value(true))
             .arg(Arg::with_name("network")
                 .long("network")
@@ -156,22 +164,19 @@ impl Options {
 
         Ok(Options {
             hostname: Self::parse_option_string(matches.value_of("hostname")),
-           port: Self::parse_option::<u16>(matches.value_of("port"), ParseError::Port)?,
+            port: Self::parse_option::<u16>(matches.value_of("port"), ParseError::Port)?,
             ssl_cert_file: matches.value_of("ssl_cert").map(|s| String::from(s)),
             ssl_key_file: matches.value_of("ssl_key").map(|s| String::from(s)),
             config_file: matches.value_of("config").map(|s| String::from(s)),
             log_level: matches.value_of("log_level").map(|s| String::from(s)),
-            log_tag: HashMap::new(), // TODO
-            miner_threads: Self::parse_option::<u64>(matches.value_of("miner_threads"), ParseError::Miner)?,
-            passive: Self::parse_option::<bool>(matches.value_of("passive"), ParseError::Port)?,
+            log_tags: HashMap::new(), // TODO
+            passive: Self::parse_option::<bool>(matches.value_of("passive"), ParseError::Passive)?,
             rpc_port: Self::parse_option::<u16>(matches.value_of("rpc_port"), ParseError::RpcPort)?,
             metrics_port: Self::parse_option::<u16>(matches.value_of("metrics_port"), ParseError::MetricsPort)?,
-            stats_interval: Self::parse_option::<u64>(matches.value_of("stats_interval"), ParseError::StatisticsInterval)?,
             consensus_type: Self::parse_option::<NodeType>(matches.value_of("consensus_type"), ParseError::ConsensusType)?,
             // TODO: parse as seed/address: Self::parse_option<Seed>([...])
             wallet_seed: Self::parse_option_string(matches.value_of("wallet_seed")),
             wallet_address: Self::parse_option_string(matches.value_of("wallet_address")),
-            extra_data: Self::parse_option_string(matches.value_of("extra_data")),
             network: Self::parse_option::<Network>(matches.value_of("network"), ParseError::Network)?,
         })
     }

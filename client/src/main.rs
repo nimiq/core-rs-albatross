@@ -22,6 +22,12 @@ extern crate toml;
 extern crate clap;
 
 
+mod deadlock;
+mod logging;
+mod settings;
+mod cmdline;
+
+
 use std::error::Error;
 use std::io;
 use std::net::IpAddr;
@@ -45,12 +51,7 @@ use rpc_server::rpc_server;
 use crate::logging::{DEFAULT_LEVEL, NimiqDispatch, to_level};
 use crate::settings as s;
 use crate::settings::Settings;
-
-#[cfg(feature = "deadlock-detection")]
-mod deadlock;
-mod logging;
-mod settings;
-mod cmdline;
+use crate::cmdline::Options;
 
 
 lazy_static! {
@@ -61,17 +62,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "deadlock-detection")]
     deadlock::deadlock_detection();
 
-    let argv: Vec<String> = std::env::args().collect();
-    let path = argv.get(1).map(|p| p.as_str()).unwrap_or("config.toml");
+    // parse command line arguments
+    let cmdline = Options::parse()?;
 
-//    info!("Reading configuration: {}", path);
-    let settings = Settings::from_file(path)?;
+    // load config file
+    let config_path = cmdline.config_file.clone().unwrap_or("./config.toml".into());
+    let settings = Settings::from_file(config_path)?;
 
     // Setup logging.
     let mut dispatch = fern::Dispatch::new()
         .pretty_logging(settings.log.timestamps)
         .level(DEFAULT_LEVEL)
-        .level_for_nimiq(settings.log.level.as_ref().map(|level| to_level(level)).unwrap_or(Ok(DEFAULT_LEVEL))?);
+        .level_for_nimiq(cmdline.log_level.as_ref().or(settings.log.level.as_ref()).map(|level| to_level(level)).unwrap_or(Ok(DEFAULT_LEVEL))?);
     for (module, level) in settings.log.tags.iter() {
         dispatch = dispatch.level_for(module.clone(), to_level(level)?);
     }
@@ -79,6 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     dispatch = dispatch.chain(io::stdout());
     dispatch.apply()?;
 
+    debug!("Command-line options: {:#?}", cmdline);
     debug!("Settings: {:#?}", settings);
 
     // TODO: If a wallet is specified, we should use it, shouldn't we?
@@ -100,8 +103,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         s::Protocol::Dumb => NetworkConfig::new_dumb_network_config(settings.network.user_agent),
 
         s::Protocol::Ws => NetworkConfig::new_ws_network_config(
-            settings.network.host,
-            settings.network.port.unwrap_or(s::DEFAULT_NETWORK_PORT),
+            cmdline.hostname.unwrap_or(settings.network.host),
+            cmdline.port.or(settings.network.port).unwrap_or(s::DEFAULT_NETWORK_PORT),
             settings.reverse_proxy.map(|r| ReverseProxyConfig {
                 port: r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
                 address: r.address,
@@ -117,7 +120,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         s::Protocol::Rtc => unimplemented!()
     };
     network_config.init_persistent();
-    let network_id = match settings.consensus.network {
+    let network_id = match cmdline.network.unwrap_or(settings.consensus.network) {
         s::Network::Main => NetworkId::Main,
         s::Network::Test => NetworkId::Test,
         s::Network::Dev => NetworkId::Dev,
@@ -134,6 +137,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
 
     // start RPC server if enabled
+    // TODO: If no RPC server was configure, but on command line a port was given, generate RpcServer::default() and override port
     #[cfg(feature = "rpc-server")] {
         settings.rpc_server.map(|rpc_settings| {
             // TODO: Replace with parsing from config file
@@ -150,6 +154,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     // start metrics server if enabled
+    // TODO: Same as for RPC server
     #[cfg(feature = "metrics-server")] {
         settings.metrics_server.map(|metrics_settings| {
             // TODO: Replace with parsing from config file
