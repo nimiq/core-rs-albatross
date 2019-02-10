@@ -1,5 +1,4 @@
-#[cfg(debug_assertions)]
-extern crate dotenv;
+extern crate fern;
 extern crate futures;
 #[macro_use]
 extern crate lazy_static;
@@ -14,7 +13,6 @@ extern crate nimiq_network as network;
 extern crate nimiq_primitives as primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
-extern crate pretty_env_logger;
 #[macro_use]
 extern crate serde_derive;
 extern crate tokio;
@@ -22,6 +20,7 @@ extern crate toml;
 
 
 use std::error::Error;
+use std::io;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -40,34 +39,36 @@ use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
 
+use crate::logging::{DEFAULT_LEVEL, NimiqDispatch, to_level};
 use crate::settings as s;
 use crate::settings::Settings;
 
 mod settings;
+mod logging;
 
 
 lazy_static! {
     static ref ENV: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, open::Flags::empty()).unwrap();
 }
 
-
-// There is no really good way for a condition on the compilation environment (dev, staging, prod)
-#[cfg(debug_assertions)]
-fn dev_init() {
-    dotenv::dotenv(); /*.expect("Couldn't load dotenv");*/
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
-    #[cfg(debug_assertions)]
-    dev_init();
-
-    pretty_env_logger::init();
-
     let argv: Vec<String> = std::env::args().collect();
     let path = argv.get(1).map(|p| p.as_str()).unwrap_or("config.toml");
 
-    info!("Reading configuration: {}", path);
+//    info!("Reading configuration: {}", path);
     let settings = Settings::from_file(path)?;
+
+    // Setup logging.
+    let mut dispatch = fern::Dispatch::new()
+        .pretty_logging()
+        .level(DEFAULT_LEVEL)
+        .level_for_nimiq(settings.log.level.as_ref().map(|level| to_level(level)).unwrap_or(Ok(DEFAULT_LEVEL))?);
+    for (module, level) in settings.log.tags.iter() {
+        dispatch = dispatch.level_for(module.clone(), to_level(level)?);
+    }
+    // For now, we only log to stdout.
+    dispatch = dispatch.chain(io::stdout());
+    dispatch.apply()?;
 
     debug!("Settings: {:#?}", settings);
 

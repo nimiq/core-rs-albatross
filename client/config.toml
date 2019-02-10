@@ -15,7 +15,7 @@ type = "full"
 network = "test"
 
 [log]
-level = "verbose"
+level = "trace"
 
 [rpcServer]
 port = 8648
