@@ -282,9 +282,14 @@ impl Network {
             for _ in 0..cmp::min(Self::ADDRESS_REQUEST_PEERS, connection_scores.len()) {
                 let index = randrng.gen_range(0, len);
                 let (id, _): &(ConnectionId, f32) = connection_scores.get(index).unwrap(); // Cannot fail, since len is at most the real length.
-                let peer_connection = state.get_connection(*id).expect("ConnectionInfo for scored connection is missing");
-                trace!("Requesting addresses from {} (score idx {})", peer_connection, index);
-                let agent = peer_connection.network_agent().expect("ConnectionInfo for scored connection is missing its NetworkAgent");
+                let peer_connection = state.get_connection(*id)
+                    .expect("ConnectionInfo for scored connection is missing");
+
+                trace!("Requesting addresses from {} (score idx {})", peer_connection.peer_address()
+                    .expect("ConnectionInfo for scored connection is missing its PeerAddress"), index);
+
+                let agent = peer_connection.network_agent()
+                    .expect("ConnectionInfo for scored connection is missing its NetworkAgent");
                 agent.write().request_addresses(None);
             }
         } else {
@@ -306,8 +311,11 @@ impl Network {
             }
 
             if let Some(peer_connection) = peer_connection {
-                trace!("Requesting addresses from {} (score idx {})", peer_connection, index);
-                let agent = peer_connection.network_agent().expect("ConnectionInfo for scored connection is missing its NetworkAgent");
+                trace!("Requesting addresses from {} (score idx {})", peer_connection.peer_address()
+                    .expect("ConnectionInfo for scored connection is missing its PeerAddress"), index);
+
+                let agent = peer_connection.network_agent()
+                    .expect("ConnectionInfo for scored connection is missing its NetworkAgent");
                 agent.write().request_addresses(None);
             }
         }

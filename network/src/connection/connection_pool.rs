@@ -910,12 +910,12 @@ impl ConnectionPool {
         // Forbid connection if we have too many connections to the peer's IP address.
         if peer_address.net_address.is_reliable() {
             if state.get_num_connections_by_net_address(&peer_address.net_address) >= network_primitives::PEER_COUNT_PER_IP_MAX {
-                error!("Connection limit per IP ({}) reached", network_primitives::PEER_COUNT_PER_IP_MAX);
+                warn!("Connection limit per IP ({}) reached ({})", network_primitives::PEER_COUNT_PER_IP_MAX, peer_address.net_address);
                 return false;
             }
 
             if state.get_num_outbound_connections_by_subnet(&peer_address.net_address) >= network_primitives::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX {
-                error!("Connection limit per IP ({}) reached", network_primitives::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX);
+                warn!("Connection limit per IP ({}) reached ({})", network_primitives::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX, peer_address.net_address);
                 return false;
             }
         }
