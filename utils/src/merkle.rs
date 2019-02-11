@@ -1,6 +1,3 @@
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializingError, SerializeWithLength, WriteBytesExt};
-use nimiq_hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
-use bit_vec::BitVec;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::error;
@@ -8,6 +5,9 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 use std::ops::Deref;
+
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
+use nimiq_hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
 
 pub fn compute_root_from_content<D: Hasher, T: SerializeContent>(values: &Vec<T>) -> D::Output {
     return compute_root_from_content_slice::<D, T>(values.as_slice());
@@ -118,15 +118,23 @@ impl<H> MerklePath<H> where H: HashOutput {
         return self.nodes.len();
     }
 
-    // Compress "left" field of every node in the MerklePath to a bit vector.
-    fn compress(&self) -> BitVec {
-        let mut left_bits = BitVec::from_elem(self.len(), false);
+    /// Compress "left" field of every node in the MerklePath to a bit vector.
+    fn compress(&self) -> Vec<u8> {
+        // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them.
+        let num_bytes = (self.nodes.len() + 7) / 8; // Fast integer division with ceiling: (x + y - 1) / y
+        let mut left_bits: Vec<u8> = vec![0; num_bytes];
         for (i, node) in self.nodes.iter().enumerate() {
             if node.left {
-                left_bits.set(i, true);
+                left_bits[i / 8] |= 0x80 >> (i % 8);
             }
         }
         return left_bits;
+    }
+
+    /// Decompress "left" field of every node in the MerklePath to a bit vector.
+    #[inline]
+    fn decompress(node_index: usize, left_bits: &Vec<u8>) -> bool {
+        left_bits[node_index / 8] & (0x80 >> (node_index % 8)) != 0
     }
 }
 
@@ -135,7 +143,7 @@ impl<H: HashOutput> Serialize for MerklePath<H> {
         let mut size: usize = 0;
         size += Serialize::serialize(&(self.nodes.len() as u8), writer)?;
         let compressed = self.compress();
-        size += writer.write(compressed.to_bytes().as_slice())?;
+        size += writer.write(compressed.as_slice())?;
 
         for node in self.nodes.iter() {
             size += Serialize::serialize(&node.hash, writer)?;
@@ -154,22 +162,18 @@ impl<H: HashOutput> Serialize for MerklePath<H> {
 impl<H: HashOutput> Deserialize for MerklePath<H> {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let count: u8 = Deserialize::deserialize(reader)?;
+        let count = count as usize;
 
         let left_bits_size = (count + 7) / 8; // For rounding up: (num + divisor - 1) / divisor
-        let mut left_bits: Vec<u8> = vec![0; left_bits_size as usize];
+        let mut left_bits: Vec<u8> = vec![0; left_bits_size];
         reader.read_exact(left_bits.as_mut_slice())?;
-        let left_bits = BitVec::from_bytes(&left_bits);
 
-        let mut nodes: Vec<MerklePathNode<H>> = Vec::with_capacity(count as usize);
+        let mut nodes: Vec<MerklePathNode<H>> = Vec::with_capacity(count);
         for i in 0..count {
-            if let Some(left) = left_bits.get(i as usize) {
-                nodes.push(MerklePathNode {
-                    left,
-                    hash: Deserialize::deserialize(reader)?,
-                });
-            } else {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "failed to read left bits").into());
-            }
+            nodes.push(MerklePathNode {
+                left: MerklePath::<H>::decompress(i, &left_bits),
+                hash: Deserialize::deserialize(reader)?,
+            });
         }
         return Ok(MerklePath { nodes });
     }
@@ -352,28 +356,28 @@ impl<H> MerkleProof<H> where H: HashOutput {
         return self.nodes.len();
     }
 
-    // Compress Vector of MerkleProofOperation's in the MerkleProof to a bit vector.
-    fn compress(&self) -> BitVec {
-        // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them,
-        // hence the .len() * 2 in the capacity of the BitVec.
-        let mut operations_bits = BitVec::from_elem(self.operations.len() * 2, false);
+    /// Compress vector of MerkleProofOperations in the MerkleProof to a bit vector.
+    fn compress(&self) -> Vec<u8> {
+        // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them.
+        let num_bytes = (self.operations.len() + 3) / 4; // Fast integer division with ceiling: (x + y - 1) / y
+        let mut operation_bits: Vec<u8> = vec![0; num_bytes];
         for (i, operation) in self.operations.iter().enumerate() {
-            match *operation {
-                MerkleProofOperation::ConsumeProof => {
-                    operations_bits.set(i * 2, false);
-                    operations_bits.set(i * 2 + 1, false);
-                }
-                MerkleProofOperation::ConsumeInput => {
-                    operations_bits.set(i * 2, false);
-                    operations_bits.set(i * 2 + 1, true);
-                }
-                MerkleProofOperation::Hash => {
-                    operations_bits.set(i * 2, true);
-                    operations_bits.set(i * 2 + 1, false);
-                }
-            }
+            let op = *operation as u8; // By definition, this can only take up to two bits.
+            operation_bits[i / 4] |= op << (i % 4) * 2;
         }
-        return operations_bits;
+        return operation_bits;
+    }
+
+    /// Decompress a bit vector into a vector of MerkleProofOperations.
+    fn decompress(num_operations: usize, operation_bits: Vec<u8>) -> Option<Vec<MerkleProofOperation>> {
+        let mut operations: Vec<MerkleProofOperation> = Vec::with_capacity(num_operations);
+
+        for i in 0..num_operations {
+            let op = (operation_bits[i / 4] >> (i % 4) * 2) & 0x3;
+            operations.push(MerkleProofOperation::from_u8(op)?);
+        }
+
+        Some(operations)
     }
 }
 
@@ -382,7 +386,7 @@ impl<H: HashOutput> Serialize for MerkleProof<H> {
         let mut size: usize = 0;
         size += Serialize::serialize(&(self.operations.len() as u16), writer)?;
         let compressed = self.compress();
-        size += writer.write(compressed.to_bytes().as_slice())?;
+        size += writer.write(compressed.as_slice())?;
 
         size += SerializeWithLength::serialize::<u16, W>(&self.nodes, writer)?;
         return Ok(size);
@@ -399,22 +403,15 @@ impl<H: HashOutput> Serialize for MerkleProof<H> {
 impl<H: HashOutput> Deserialize for MerkleProof<H> {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let count: u16 = Deserialize::deserialize(reader)?;
+        let count = count as usize;
 
         let operations_size = (count + 3) / 4; // For rounding up: (num + divisor - 1) / divisor
-        let mut operation_bits: Vec<u8> = vec![0; operations_size as usize];
+        let mut operation_bits: Vec<u8> = vec![0; operations_size];
         reader.read_exact(operation_bits.as_mut_slice())?;
-        let operation_bits = BitVec::from_bytes(&operation_bits);
-
-        let mut operations: Vec<MerkleProofOperation> = Vec::with_capacity(count as usize);
-        for i in 0..(count as usize) {
-            let op = match (operation_bits.get(i * 2), operation_bits.get(i * 2 + 1)) {
-                (Some(false), Some(false)) => MerkleProofOperation::ConsumeProof,
-                (Some(false), Some(true)) => MerkleProofOperation::ConsumeInput,
-                (Some(true), Some(false)) => MerkleProofOperation::Hash,
-                _ => { return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "invalid operation in bitvector").into()); }
-            };
-            operations.push(op);
-        }
+        let operations = match MerkleProof::<H>::decompress(count, operation_bits) {
+            Some(operations) => operations,
+            None => return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "invalid operation in bitvector").into()),
+        };
 
         return Ok(MerkleProof {
             operations,
@@ -423,11 +420,24 @@ impl<H: HashOutput> Deserialize for MerkleProof<H> {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u8)]
+// The implementation assumes the operations to take at most 2 bits.
 enum MerkleProofOperation {
-    ConsumeProof,
-    ConsumeInput,
-    Hash,
+    ConsumeProof = 0,
+    ConsumeInput = 1,
+    Hash = 2,
+}
+
+impl MerkleProofOperation {
+    fn from_u8(val: u8) -> Option<Self> {
+        match val {
+            0 => Some(MerkleProofOperation::ConsumeProof),
+            1 => Some(MerkleProofOperation::ConsumeInput),
+            2 => Some(MerkleProofOperation::Hash),
+            _ => None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -450,3 +460,86 @@ impl error::Error for InvalidMerkleProofError {
 }
 
 pub type Blake2bMerkleProof = MerkleProof<Blake2bHash>;
+
+// Simple test that checks the order of operations.
+#[cfg(test)]
+mod tests {
+    use nimiq_hash::Blake2bHasher;
+
+    use super::*;
+
+    #[test]
+    fn it_correctly_computes_a_simple_proof() {
+        let values = vec!["1", "2", "3"];
+        /*
+         * (X) should be the nodes included in the proof.
+         * *X* marks the values to be proven.
+         *            h4
+         *         /      \
+         *     (h3)        h2
+         *     / \          |
+         *   h0  h1       *v2*
+         *   |    |
+         *  v0   v1
+         */
+        let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+        let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[values[2]]);
+        assert_eq!(proof.len(), 1);
+
+        // Check proof internals.
+        assert_eq!(&proof.operations, &vec![
+            MerkleProofOperation::ConsumeProof,
+            MerkleProofOperation::ConsumeInput,
+            MerkleProofOperation::Hash,
+        ]);
+        // Check serialization.
+        assert_eq!(proof.compress(), vec![36]);
+
+        let proof_root = proof.compute_root_from_values(&[values[2]]);
+        assert!(proof_root.is_ok());
+        assert_eq!(proof_root.unwrap(), root);
+
+        let values = vec!["1", "2", "3", "4"];
+        /*
+         * (X) should be the nodes included in the proof.
+         * *X* marks the values to be proven.
+         *            h6
+         *         /      \
+         *      h4        (h5)
+         *     / \         / \
+         *  (h0) h1      h2  h3
+         *   |    |      |    |
+         *  v0  *v1*    v2   v3
+         */
+        let root = compute_root_from_content::<Blake2bHasher, &str>(&values);
+        let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[values[1]]);
+        assert_eq!(proof.len(), 2);
+
+        // Check proof internals.
+        assert_eq!(&proof.operations, &vec![
+            MerkleProofOperation::ConsumeProof,
+            MerkleProofOperation::ConsumeInput,
+            MerkleProofOperation::Hash,
+            MerkleProofOperation::ConsumeProof,
+            MerkleProofOperation::Hash,
+        ]);
+        // Check serialization.
+        assert_eq!(proof.compress(), vec![36, 2]);
+
+        let proof_root = proof.compute_root_from_values(&[values[1]]);
+        assert!(proof_root.is_ok());
+        assert_eq!(proof_root.unwrap(), root);
+
+        let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values, &[]);
+        assert_eq!(proof.len(), 1);
+
+        // Check proof internals.
+        assert_eq!(&proof.operations, &vec![
+            MerkleProofOperation::ConsumeProof,
+        ]);
+
+        let proof_root = proof.compute_root_from_values::<&str>(&[]);
+        assert!(proof_root.is_ok());
+        assert_eq!(proof_root.unwrap(), root);
+    }
+}

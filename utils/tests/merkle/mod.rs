@@ -260,6 +260,22 @@ fn it_correctly_computes_more_complex_proofs() {
     /*
      *            h4
      *         /      \
+     *      h3        (h2)
+     *     / \          |
+     *   h0  h1        v2
+     *   |    |
+     * *v0* *v1*
+     */
+    let root = compute_root_from_content_slice::<Blake2bHasher, &str>(&values[..3]);
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::from_values::<&str>(&values[..3], &[values[2]]);
+    assert_eq!(proof.len(), 1);
+    let proof_root = proof.compute_root_from_values(&[values[2]]);
+    assert!(proof_root.is_ok());
+    assert_eq!(proof_root.unwrap(), root);
+
+    /*
+     *            h4
+     *         /      \
      *      h3         h2
      *     / \          |
      *  (h0) h1       *v2*
@@ -449,6 +465,22 @@ fn it_correctly_serializes_and_deserializes_proof() {
     let mut serialization: Vec<u8> = Vec::with_capacity(proof.serialized_size());
     let size = proof.serialize(&mut serialization).unwrap();
     assert_eq!(size, proof.serialized_size());
-    let proof2: MerkleProof<Blake2bHash> = Deserialize::deserialize(&mut &serialization[..]).unwrap();
-    assert_eq!(proof, proof2);
+    let proof2 = MerkleProof::<Blake2bHash>::deserialize_from_vec(&serialization);
+    assert_eq!(proof2, Ok(proof));
+
+    /*
+     *            h4
+     *         /      \
+     *     (h3)        h2
+     *     / \          |
+     *   h0  h1       *v2*
+     *   |    |
+     *  v0   v1
+     */
+    let proof: MerkleProof<Blake2bHash> = MerkleProof::with_absence::<&str>(&values[..3], &[values[4]]);
+    let mut serialization: Vec<u8> = Vec::with_capacity(proof.serialized_size());
+    let size = proof.serialize(&mut serialization).unwrap();
+    assert_eq!(size, proof.serialized_size());
+    let proof2 = MerkleProof::<Blake2bHash>::deserialize_from_vec(&serialization);
+    assert_eq!(proof2, Ok(proof));
 }
