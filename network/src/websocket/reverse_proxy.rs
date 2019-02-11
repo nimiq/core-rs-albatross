@@ -8,20 +8,19 @@ use tungstenite::error::{Error, Result};
 use tungstenite::handshake::server::{Callback, Request};
 
 use network_primitives::address::NetAddress;
+use crate::network_config::ReverseProxyConfig;
 
 /// Struct that stores relevant data for setting up reverse proxy support.
 #[derive(Debug)]
 pub struct ReverseProxyCallback {
-    proxy_header: Option<String>,
-    proxy_net_address: Option<NetAddress>,
+    reverse_proxy_config: Option<ReverseProxyConfig>,
     remote_address: Mutex<Option<NetAddress>>,
 }
 
 impl ReverseProxyCallback {
-    pub fn new(proxy_header: Option<String>, proxy_net_address: Option<NetAddress>) -> Arc<Self> {
+    pub fn new(reverse_proxy_config: Option<ReverseProxyConfig>) -> Arc<Self> {
         Arc::new(ReverseProxyCallback {
-            proxy_header,
-            proxy_net_address,
+            reverse_proxy_config,
             remote_address: Mutex::new(None),
         })
     }
@@ -46,8 +45,8 @@ impl ReverseProxyCallback {
     /// 3) Check whether there was a header present with the real peer's net address.
     ///   - Return this if it was found, None otherwise.
     pub fn check_reverse_proxy(&self, stream_net_address: NetAddress) -> Option<NetAddress> {
-        if self.proxy_header.is_some() {
-            let proxy_net_address = self.proxy_net_address.as_ref().expect("Reverse proxy config is set, but proxy net address is missing");
+        if let Some(ref config) = self.reverse_proxy_config {
+            let proxy_net_address = &config.address;
             if proxy_net_address != &stream_net_address {
                 error!("Received connection from {} when all connections were expected from the reverse proxy at {}: closing the connection", stream_net_address, proxy_net_address);
                 return None;
@@ -62,8 +61,8 @@ impl ReverseProxyCallback {
 
 impl<'a> Callback for &'a ReverseProxyCallback {
     fn on_request(self, request: &Request) -> Result<Option<Vec<(String, String)>>> {
-        if let Some(ref proxy_header) = self.proxy_header {
-            if let Some(value) = request.headers.find_first(&proxy_header) {
+        if let Some(ref config) = self.reverse_proxy_config {
+            if let Some(value) = request.headers.find_first(&config.header) {
                 let str_value = from_utf8(value).map_err(|_| Error::Utf8)?;
                 let str_value = str_value.split(",").next().unwrap(); // Take first value from list.
                 let str_value = str_value.trim();

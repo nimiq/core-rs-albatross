@@ -31,7 +31,6 @@ use network_primitives::{
     address::PeerAddress,
     protocol::ProtocolFlags,
 };
-use nimiq_network_primitives::address::NetAddress;
 use utils::observer::PassThroughNotifier;
 
 use crate::{
@@ -124,8 +123,6 @@ impl WebSocketConnector {
             },
             _ => panic!("Protocol not supported"),
         };
-        let proxy_header: Option<String> = reverse_proxy_config.as_ref().map(|config| config.header.clone());
-        let proxy_net_address: Option<NetAddress> = reverse_proxy_config.as_ref().map(|config| config.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"));
 
         // TODO remove unwraps. If the port is already used, this will panic
         let addr = SocketAddr::new("::".parse().unwrap(), port);
@@ -133,13 +130,12 @@ impl WebSocketConnector {
         let notifier = Arc::clone(&self.notifier);
 
         let srv = socket.incoming().for_each(move |tcp| {
-            let proxy_header = proxy_header.clone();
-            let proxy_net_address = proxy_net_address.clone();
+            let reverse_proxy_config = reverse_proxy_config.clone();
 
             let notifier = Arc::clone(&notifier);
             let identity_file = identity_file.clone();
                 wrap_stream(tcp, identity_file, mode).and_then(move |ss| {
-                    let callback = ReverseProxyCallback::new(proxy_header.clone(), proxy_net_address.clone());
+                    let callback = ReverseProxyCallback::new(reverse_proxy_config.clone());
                     nimiq_accept_async(ss, callback.clone().to_callback()).map(move |msg_stream: NimiqMessageStream| {
                         let mut shared_stream: SharedNimiqMessageStream = msg_stream.into();
                         // Only accept connection, if net address could be determined.

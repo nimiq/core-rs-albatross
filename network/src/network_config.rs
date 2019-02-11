@@ -162,7 +162,7 @@ impl NetworkConfig {
 #[derive(Debug, Clone)]
 pub struct ReverseProxyConfig {
     pub port: u16,
-    pub address: String,
+    pub address: NetAddress,
     pub header: String,
 }
 
