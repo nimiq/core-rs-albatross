@@ -553,9 +553,12 @@ impl InventoryAgent {
         // Mark object as received.
         self.on_object_received(&vector);
 
-        let state = self.state.read();
         // Check whether we subscribed for this transaction.
+        let state = self.state.read();
         if state.local_subscription.matches_transaction(&msg.transaction) {
+            // Give up read lock before pushing transaction.
+            drop(state);
+
             let result = self.mempool.push_transaction(msg.transaction);
             self.notifier.read().notify(InventoryEvent::TransactionProcessed(vector.hash.clone(), result));
         } else if state.last_subscription_change.elapsed() > Self::SUBSCRIPTION_CHANGE_GRACE_PERIOD {
