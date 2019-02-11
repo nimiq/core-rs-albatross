@@ -4,10 +4,9 @@ use crate::{FixedUnsigned, FixedScale};
 
 /*macro_rules! create_typed_array {
     ($scale: expr) => {
-    /// A fixed point Uint with 16 decimal places
         pub struct FixedScale$scale {}
         impl ::fixed_unsigned::FixedScale for FixedScale$scale {
-            const SCALE: u64 = 16;
+            const SCALE: u64 = $scale;
         }
         pub type FixedUnsigned$scale = FixedUnsigned<FixedScale$scale>;
     };
@@ -50,3 +49,14 @@ impl FixedScale for FixedScale10 {
     const SCALE: u64 = 10;
 }
 pub type FixedUnsigned10 = FixedUnsigned<FixedScale10>;
+
+
+/// A fixed point Uint with 10 decimal places
+///
+/// NOTE: This should have the same behaviour as bignumber.js (default config with 10 decimal places)
+#[derive(Clone, Debug)]
+pub struct FixedScale26 {}
+impl FixedScale for FixedScale26 {
+    const SCALE: u64 = 26;
+}
+pub type FixedUnsigned26 = FixedUnsigned<FixedScale26>;

@@ -272,30 +272,3 @@ fn it_rebranches_to_the_harder_chain() {
     assert_eq!(blockchain.push(block2_4), PushResult::Rebranched);
     assert!(listener_called.load(Ordering::Relaxed));
 }
-
-
-#[test]
-fn test_block_mainnet_5229_difficulty() {
-    let block_5228 = BlockHeader {
-        version: 1,
-        prev_hash: Deserialize::deserialize_from_vec(&hex::decode("48691533c220a031b3cdb159f59763216f003fab5b7938339f71e85bfcb0e72f").unwrap()).unwrap(),
-        interlink_hash: Deserialize::deserialize_from_vec(&hex::decode("f6df8b08def8162707e05342b24d598744c883ada0af4107d3ae3e2eeb54d918").unwrap()).unwrap(),
-        body_hash: Deserialize::deserialize_from_vec(&hex::decode("19b888e8f03b0a4a6a0cac2a48685a3c5fb162d3559e0a997769d1072e8d3aed").unwrap()).unwrap(),
-        accounts_hash: Deserialize::deserialize_from_vec(&hex::decode("3951ecc0d70fecae331264e6c1bd9ca03d2e270a44044190df9f7abcd1eeaac5").unwrap()).unwrap(),
-        n_bits: TargetCompact::from(0x1c31c51d),
-        height: 5228,
-        timestamp: 1524003126,
-        nonce: 458936204
-    };
-    let block_5229 = BlockHeader {
-        version: 1,
-        prev_hash: Deserialize::deserialize_from_vec(&hex::decode("b0a00c73a1e9f6afb88e9df725a559c896a169364ce876a9cdd790088b10be5c").unwrap()).unwrap(),
-        interlink_hash: Deserialize::deserialize_from_vec(&hex::decode("c7ff0ae52e6ae0197021d27bc86622b39caa177ba0db36901dd2fe3bcf439a29").unwrap()).unwrap(),
-        body_hash: Deserialize::deserialize_from_vec(&hex::decode("e584a3c14b5a6cd51b783897ce02a2b02e071eb274dd0bd7ea891a5b277d8cae").unwrap()).unwrap(),
-        accounts_hash: Deserialize::deserialize_from_vec(&hex::decode("8a2631cb9ade79da8c677830a2f256873f83e92c4fd570aca719c7d1487bc071").unwrap()).unwrap(),
-        n_bits: TargetCompact::from(0x1c322ce5),
-        height: 5229,
-        timestamp: 1524003154,
-        nonce: 778968508
-    }
-}

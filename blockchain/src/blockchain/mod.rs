@@ -15,7 +15,8 @@ use primitives::networks::NetworkId;
 use primitives::policy;
 use utils::observer::Notifier;
 use utils::unique_ptr::UniquePtr;
-use fixed_unsigned::types::FixedUnsigned10;
+use fixed_unsigned::RoundHalfUp;
+use fixed_unsigned::types::{FixedUnsigned10, FixedScale10, FixedUnsigned26, FixedScale26};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::{ChainStore, Direction};
@@ -219,29 +220,15 @@ impl<'env> Blockchain<'env> {
             return PushResult::Invalid(PushError::InvalidSuccessor);
         }
 
-
-        // DEBUG XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-        if block.header.height == 5229 {
-            println!("Block #5228:\n{:#?}\n", &prev_info.head.header);
-            println!("Block #5229:\n{:#?}\n", &block.header);
-        }
-
         // Check that the difficulty is correct.
         let next_target = self.get_next_target(Some(&block.header.prev_hash));
-        println!("next_target = {:?} (compact: {:?})", &next_target, TargetCompact::from(next_target.clone()));
         if block.header.n_bits != TargetCompact::from(next_target) {
             warn!("Rejecting block - difficulty mismatch");
-
-            /// DEBUG PANIC
-            assert!(false);
 
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
             return PushResult::Invalid(PushError::DifficultyMismatch);
         }
-
-        // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
         // Block looks good, create ChainInfo.
         let chain_info = prev_info.next(block);
@@ -533,12 +520,6 @@ impl<'env> Blockchain<'env> {
             || (head.height <= policy::DIFFICULTY_BLOCK_WINDOW && tail.height == 1),
             "Failed to compute next target - invalid head/tail block");
 
-        // DEBUG XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-        if head.height == 5228 {
-            println!("Block #{}:\n{:#?}\n", tail.height, &tail);
-        }
-
         let mut delta_total_difficulty = &head_info.total_difficulty - &tail_info.total_difficulty;
         let mut actual_time = head.timestamp - tail.timestamp;
 
@@ -553,28 +534,19 @@ impl<'env> Blockchain<'env> {
         let expected_time = policy::DIFFICULTY_BLOCK_WINDOW * policy::BLOCK_TIME;
         let mut adjustment = actual_time as f64 / expected_time as f64;
 
-        println!("delta_total_difficulty = {:?}", &delta_total_difficulty);
-        println!("actual_time = {:?}", actual_time);
-        println!("adjustment (unclamped) = {:?}", adjustment);
-
         // Clamp the adjustment factor to [1 / MAX_ADJUSTMENT_FACTOR, MAX_ADJUSTMENT_FACTOR].
-        adjustment = adjustment.max(1f64 / policy::DIFFICULTY_MAX_ADJUSTMENT_FACTOR);
-        adjustment = adjustment.min(policy::DIFFICULTY_MAX_ADJUSTMENT_FACTOR);
-        println!("adjustment (clamped) = {:?}", adjustment);
+        adjustment = adjustment
+            .max(1f64 / policy::DIFFICULTY_MAX_ADJUSTMENT_FACTOR)
+            .min(policy::DIFFICULTY_MAX_ADJUSTMENT_FACTOR);
 
         // Compute the next target.
-        // DEBUG [This line might be the cause] XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-        // Only places before the decimal point are important here
         let average_difficulty: Difficulty = delta_total_difficulty / policy::DIFFICULTY_BLOCK_WINDOW;
-        println!("average_difficulty = {:?}", &average_difficulty);
-        // DEBUG [Or this one] XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
         let average_target: FixedUnsigned10 = &*policy::BLOCK_TARGET_MAX / &average_difficulty.into(); // Do not use Difficulty -> Target conversion here to preserve precision.
-        println!("average_target = {:?}", &average_target);
-        // DEBUG [Or this one] XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-        // bignumber.js takes this with 16 decimal places!
-        let mut next_target = average_target * FixedUnsigned10::from(adjustment);
-        println!("next_target = {:?}", &next_target);
 
+        // `bignumber.js` returns 26 decimal places when multiplying a `BigNumber` with 10 decimal
+        // places and a `BigNumber` from a `Number` (which then has 16 decimal places).
+        let mut next_target = (average_target.into_scale::<FixedScale26, RoundHalfUp>() * FixedUnsigned26::from(adjustment))
+            .into_scale::<FixedScale10, RoundHalfUp>();
 
         // Make sure the target is below or equal the maximum allowed target (difficulty 1).
         // Also enforce a minimum target of 1.

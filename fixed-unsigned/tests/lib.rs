@@ -158,7 +158,7 @@ fn test_bytes_length_matches() {
 fn test_from_f64() {
     let float = 1234.56789f64;
     let fixed = FixedUnsigned4::from(float);
-    assert_eq!(fixed, FixedUnsigned4::from_str("1234.5679").unwrap());
+    assert_eq!(fixed, FixedUnsigned4::from_str("1234.5678").unwrap());
 }
 
 #[test]

@@ -48,7 +48,7 @@ pub trait RoundingMode {
 }
 
 /// Round half up - i.e. 0.4 -> 0 and 0.5 -> 1
-struct RoundHalfUp {}
+pub struct RoundHalfUp {}
 impl RoundingMode for RoundHalfUp{
     #[inline]
     fn round(int_value: BigUint, carrier: u8) -> BigUint {
@@ -57,7 +57,7 @@ impl RoundingMode for RoundHalfUp{
 }
 
 /// Round down - i.e. truncate
-struct RoundDown {}
+pub struct RoundDown {}
 impl RoundingMode for RoundDown {
     #[inline]
     fn round(int_value: BigUint, _: u8) -> BigUint {
@@ -88,13 +88,6 @@ impl Error for ParseError {
     fn cause(&self) -> Option<&Error> {
         None
     }
-}
-
-/// A trait to convert between `FixedUnsigned`s of different scale
-trait ConvertScale<S, T>
-    where S: FixedScale, T: FixedScale
-{
-    fn convert_scale(from: &FixedUnsigned<S>) -> FixedUnsigned<T>;
 }
 
 /// A fixed point unsigned integer
@@ -216,6 +209,8 @@ impl<S> FixedUnsigned<S>
 
     /// Converts a string representation to a `FixedUnsigned` with base `radix`.
     ///
+    /// NOTE: This function always rounds down.
+    ///
     /// # Panics
     ///
     /// This function will panic if the radix is 0 or greater than 36.
@@ -307,6 +302,16 @@ impl<S> FixedUnsigned<S>
     fn div(a: &BigUint, b: &BigUint) -> BigUint {
         // scale up 1 digit more - to keep the carrier, then divide and scale down 1 digit. The scale down of 1 will round appropriately
         Self::scale_down::<RoundHalfUp>(Self::scale_up(a.clone(), S::SCALE + 1u64) / b, 1u64)
+    }
+
+    /// Convert from scale `S` to scale `T`.
+    pub fn into_scale<T: FixedScale, R: RoundingMode>(self) -> FixedUnsigned<T> {
+        FixedUnsigned::<T>::new(if S::SCALE < T::SCALE {
+            Self::scale_up(self.int_value,T::SCALE - S::SCALE)
+        }
+        else {
+            Self::scale_down::<R>(self.int_value, S::SCALE - T::SCALE)
+        })
     }
 }
 
@@ -534,14 +539,6 @@ impl<S: FixedScale> From<u8> for FixedUnsigned<S> {
     }
 }
 
-impl<S, T> ConvertScale<S, T> for FixedUnsigned<S>
-    where S: FixedScale, T: FixedScale
-{
-    fn convert_scale(from: &FixedUnsigned<S>) -> FixedUnsigned<T> {
-        unimplemented!();
-    }
-}
-
 impl<S> Zero for FixedUnsigned<S>
     where S: FixedScale
 {
@@ -575,12 +572,8 @@ impl<S> Default for FixedUnsigned<S>
 /// TODO: Do checked operations and panic if anything fails or return an Option
 impl<S: FixedScale> From<f64> for FixedUnsigned<S> {
     fn from(x: f64) -> Self {
-        // scale up the float and drop the decimals (i.e. cast to u64)
-        // let scaled = x * 10f64.powi(S::SCALE as i32);
-        //let scaled = x * pow(10f64, (S::SCALE + 1) as usize);
-        //Self::new(Self::scale_down::<RoundHalfUp>(BigUint::from(scaled as u64), 1u64))
-
         // `bignumber.js` takes the `toString` of a `Number` to convert to `BigNumber`
-        Self::from_str(&format!("{:.10}", x)).unwrap()
+        // NOTE: JS and Rust seem both to use 16 decimal places
+        Self::from_str(&format!("{:.16}", x)).unwrap()
     }
 }
