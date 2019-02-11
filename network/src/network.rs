@@ -159,10 +159,13 @@ impl Network {
     }
 
     fn on_connect_error(&self, this: Arc<Network>) {
-        self.timers.set_delay(NetworkTimer::ConnectError, move || {
-            this.timers.clear_delay(&NetworkTimer::ConnectError);
-            this.check_peer_count();
-        }, Self::CONNECT_THROTTLE);
+        // Only set new delay if it doesn't already exist.
+        if !self.timers.delay_exists(&NetworkTimer::ConnectError) {
+            self.timers.set_delay(NetworkTimer::ConnectError, move || {
+                this.timers.clear_delay(&NetworkTimer::ConnectError);
+                this.check_peer_count();
+            }, Self::CONNECT_THROTTLE);
+        }
     }
 
     fn check_peer_count(&self) {
