@@ -763,7 +763,8 @@ impl ConnectionPool {
         // - inbound connections post handshake (peerAddress is verified)
         {
             let state = self.state.read();
-            let info = state.get_connection(connection_id).expect("Missing connection");
+            // TODO: apparently on_close is called multiple times
+            let info = state.get_connection(connection_id).expect("Missing connection in on_close");
             if let Some(peer_address) = info.peer_address() {
                 self.addresses.close(info.peer_channel(), peer_address, ty);
             }

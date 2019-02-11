@@ -1,4 +1,5 @@
 use std::{collections::VecDeque, fmt, fmt::Debug, io, net, time::Instant};
+#[cfg(feature = "metrics")]
 use std::sync::Arc;
 
 use futures::prelude::*;
@@ -6,7 +7,7 @@ use tokio::{
     net::TcpStream,
 };
 use tokio_tungstenite::{
-    accept_async,
+    accept_hdr_async,
     connect_async,
     MaybeTlsStream,
     stream::PeerAddr,
@@ -16,6 +17,7 @@ use tungstenite::{
     error::Error as WsError,
     protocol::Message as WebSocketMessage
 };
+use tungstenite::handshake::server::Callback;
 use url::Url;
 
 use beserial::{Deserialize, Serialize, SerializingError};
@@ -27,6 +29,7 @@ use utils::locking::MultiLock;
 use crate::network_metrics::NetworkMetrics;
 
 pub mod websocket_connector;
+mod reverse_proxy;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -285,9 +288,10 @@ pub fn nimiq_connect_async(url: Url) -> Box<Future<Item = NimiqMessageStream, Er
 }
 
 /// Accept an incoming connection and return a Future that will resolve to a NimiqMessageStream
-pub fn nimiq_accept_async(stream: MaybeTlsStream<TcpStream>) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send> {
+pub fn nimiq_accept_async<C>(stream: MaybeTlsStream<TcpStream>, callback: C) -> Box<Future<Item = NimiqMessageStream, Error = io::Error> + Send>
+    where C: Callback + Send + 'static { // TODO: Why do we need 'static here?!
     Box::new(
-        accept_async(stream).map(|ws_stream| NimiqMessageStream::new(ws_stream, false))
+        accept_hdr_async(stream, callback).map(|ws_stream| NimiqMessageStream::new(ws_stream, false))
         .map_err(|e| {
             println!("Error while accepting a connection from another node: {}", e);
             io::Error::new(io::ErrorKind::Other, e)

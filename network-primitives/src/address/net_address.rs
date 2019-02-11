@@ -1,10 +1,8 @@
 use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
 use std::cmp::min;
 use std::fmt;
-use std::net::{Ipv4Addr, Ipv6Addr};
-
-create_typed_array!(IPv4Address, u8, 4);
-create_typed_array!(IPv6Address, u8, 16);
+use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
+use std::str::FromStr;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Clone)]
 pub enum NetAddress {
@@ -126,6 +124,21 @@ impl fmt::Display for NetAddress {
             NetAddress::IPv6(ip) => write!(f, "{}", ip),
             NetAddress::Unspecified => write!(f, "<unspecified>"),
             NetAddress::Unknown => write!(f, "<unknown>"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NetAddressParseError;
+
+impl FromStr for NetAddress {
+    type Err = NetAddressParseError;
+
+    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+        let addr: IpAddr = s.parse().map_err(|_| NetAddressParseError)?;
+        match addr {
+            IpAddr::V4(addr) => Ok(NetAddress::IPv4(addr)),
+            IpAddr::V6(addr) => Ok(NetAddress::IPv6(addr)),
         }
     }
 }

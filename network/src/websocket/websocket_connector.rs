@@ -10,6 +10,7 @@ use std::{
 
 use futures::{
     prelude::*,
+    future::poll_fn,
 };
 use native_tls::{Identity, TlsAcceptor};
 use parking_lot::RwLock;
@@ -30,6 +31,7 @@ use network_primitives::{
     address::PeerAddress,
     protocol::ProtocolFlags,
 };
+use nimiq_network_primitives::address::NetAddress;
 use utils::observer::PassThroughNotifier;
 
 use crate::{
@@ -45,6 +47,8 @@ use crate::{
         nimiq_accept_async,
         nimiq_connect_async,
         NimiqMessageStream,
+        reverse_proxy::ReverseProxyCallback,
+        reverse_proxy::ToCallback,
         SharedNimiqMessageStream,
     },
 };
@@ -75,23 +79,23 @@ pub fn wrap_stream<S>(socket: S, identity_file: Option<String>, mode: Mode)
         -> Box<Future<Item=MaybeTlsStream<S>, Error=io::Error> + Send>
     where
         S: 'static + AsyncRead + AsyncWrite + Send,
-    {
-        match mode {
-            Mode::Plain => Box::new(future::ok(StreamSwitcher::Plain(socket))),
-            Mode::Tls => {
-                let identity_file = identity_file.expect("Tls option should always be called with a certificate.");
-                let mut file = File::open(identity_file).unwrap();
-                let mut pkcs12 = vec![];
-                file.read_to_end(&mut pkcs12).unwrap();
-                let pkcs12 = Identity::from_pkcs12(&pkcs12, "hunter2").unwrap();
-                Box::new(future::result(TlsAcceptor::new(pkcs12))
-                            .map(TokioTlsAcceptor::from)
-                            .and_then(move |acceptor| acceptor.accept(socket))
-                            .map(|s| StreamSwitcher::Tls(s))
-                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e)))
-            }
+{
+    match mode {
+        Mode::Plain => Box::new(future::ok(StreamSwitcher::Plain(socket))),
+        Mode::Tls => {
+            let identity_file = identity_file.expect("Tls option should always be called with a certificate.");
+            let mut file = File::open(identity_file).unwrap();
+            let mut pkcs12 = vec![];
+            file.read_to_end(&mut pkcs12).unwrap();
+            let pkcs12 = Identity::from_pkcs12(&pkcs12, "hunter2").unwrap();
+            Box::new(future::result(TlsAcceptor::new(pkcs12))
+                        .map(TokioTlsAcceptor::from)
+                        .and_then(move |acceptor| acceptor.accept(socket))
+                        .map(|s| StreamSwitcher::Tls(s))
+                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e)))
         }
     }
+}
 
 pub struct WebSocketConnector {
     network_config: Arc<NetworkConfig>,
@@ -111,15 +115,17 @@ impl WebSocketConnector {
     pub fn start(&self) {
         let protocol_config = self.network_config.protocol_config();
 
-        let (host, port, identity_file, mode) = match protocol_config {
-            ProtocolConfig::Ws{host, port, reverse_proxy_config} => {
-                (host.to_string(), port.clone(), None, Mode::Plain)
+        let (port, identity_file, mode, reverse_proxy_config) = match protocol_config {
+            ProtocolConfig::Ws{port, reverse_proxy_config, ..} => {
+                (*port, None, Mode::Plain, reverse_proxy_config.clone())
             },
-            ProtocolConfig::Wss{host, port, identity_file} => {
-                (host.to_string(), port.clone(), Some(identity_file.to_string()), Mode::Tls)
+            ProtocolConfig::Wss{port, identity_file, ..} => {
+                (*port, Some(identity_file.to_string()), Mode::Tls, None)
             },
             _ => panic!("Protocol not supported"),
         };
+        let proxy_header: Option<String> = reverse_proxy_config.as_ref().map(|config| config.header.clone());
+        let proxy_net_address: Option<NetAddress> = reverse_proxy_config.as_ref().map(|config| config.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"));
 
         // TODO remove unwraps. If the port is already used, this will panic
         let addr = SocketAddr::new("::".parse().unwrap(), port);
@@ -127,21 +133,28 @@ impl WebSocketConnector {
         let notifier = Arc::clone(&self.notifier);
 
         let srv = socket.incoming().for_each(move |tcp| {
+            let proxy_header = proxy_header.clone();
+            let proxy_net_address = proxy_net_address.clone();
+
             let notifier = Arc::clone(&notifier);
             let identity_file = identity_file.clone();
                 wrap_stream(tcp, identity_file, mode).and_then(move |ss| {
-                    nimiq_accept_async(ss).map(move |msg_stream: NimiqMessageStream| {
-                        // FIXME: Find a way to provide reverse proxy support (i.e. getting the correct IP
-                        // address from the request headers instead of from the socket itself)
-                        let shared_stream: SharedNimiqMessageStream = msg_stream.into();
-                        let net_address = Some(Arc::new(shared_stream.net_address()));
-                        let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, None));
-                        notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
-                        tokio::spawn(ncfut);
+                    let callback = ReverseProxyCallback::new(proxy_header.clone(), proxy_net_address.clone());
+                    nimiq_accept_async(ss, callback.clone().to_callback()).map(move |msg_stream: NimiqMessageStream| {
+                        let mut shared_stream: SharedNimiqMessageStream = msg_stream.into();
+                        // Only accept connection, if net address could be determined.
+                        if let Some(net_address) = callback.check_reverse_proxy(shared_stream.net_address()) {
+                            let net_address = Some(Arc::new(net_address));
+                            let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, None));
+                            notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
+                            tokio::spawn(ncfut);
+                        } else {
+                            tokio::spawn(poll_fn(move || shared_stream.close()));
+                        }
                     })
                 })
             })
-            .map_err(|error| (
+            .map_err(|_error| (
                 // FIXME: what should we do with incoming connection errors?
                 ()
             ));

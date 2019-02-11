@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use futures::future::poll_fn;
 use futures::prelude::*;
 use futures::stream::Forward;
 use futures::sync::mpsc::*;
@@ -149,13 +150,17 @@ impl ProcessConnectionFuture {
                 Err(_) => CloseType::NetworkError,
             };
 
-            // Send WS close frame, ignore result.
-            let _ = shared_stream.close();
-
-            // Now send out notifications.
-            notifier.read().notify(PeerStreamEvent::Close(ty));
-
-            Ok(())
+            // Send WS close frame, ignore result (it is a future).
+            poll_fn(move || {
+                match shared_stream.close() {
+                    Ok(Async::NotReady) => Ok(Async::NotReady),
+                    _ => {
+                        // Now send out notifications.
+                        notifier.read().notify(PeerStreamEvent::Close(ty));
+                        Ok(Async::Ready(()))
+                    },
+                }
+            })
         });
 
         (Self {
