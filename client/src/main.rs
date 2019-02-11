@@ -54,10 +54,6 @@ use crate::settings::Settings;
 use crate::cmdline::Options;
 
 
-lazy_static! {
-    static ref ENV: Environment = LmdbEnvironment::new("./db/", 1024 * 1024 * 50, 10, open::Flags::empty()).unwrap();
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "deadlock-detection")]
     deadlock::deadlock_detection();
@@ -87,16 +83,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     // TODO: If a wallet is specified, we should use it, shouldn't we?
     assert!(settings.wallet.is_none(), "Wallet settings are not implemented yet");
 
-    // Start database
-    // TODO: env must have lifetime 'static
-    /*
-    let env: Environment = (if settings.volatile {
-        VolatileEnvironment::new(settings.database.max_dbs)?
-    }
-    else {
-        LmdbEnvironment::new(&settings.database.path, settings.database.size, settings.database.max_dbs, open::Flags::empty())?
-    });
-    */
+    // Start database and obtain a 'static reference to it.
+    //
+    // NOTE: This is extremely unsafe. This only works because the lifetime of `env_orig` is actually longer than tokio uses the borrow.
+    //       Furthermore, once tokio stops, we exit the program anyway.
+    let default_database_settings = s::DatabaseSettings::default();
+    let env_orig = LmdbEnvironment::new(&settings.database.path, settings.database.size.unwrap_or(default_database_settings.size.unwrap()), settings.database.max_dbs.unwrap_or(default_database_settings.max_dbs.unwrap()), open::Flags::empty())?;
+    let env: &'static Environment = unsafe {
+        std::mem::transmute_copy::<&Environment, &'static Environment>(&&env_orig)
+    };
 
     // Start network
     let mut network_config = match settings.network.protocol {
@@ -130,7 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     info!("Nimiq Core starting: network={:?}, peer_address={}", network_id, network_config.peer_address());
 
     // Start consensus
-    let consensus = Consensus::new(&ENV, network_id, network_config);
+    let consensus = Consensus::new(env, network_id, network_config);
     info!("Blockchain state: height={}, head={}", consensus.blockchain.height(), consensus.blockchain.head_hash());
 
     // Additional futures we want to run.

@@ -243,16 +243,16 @@ pub(crate) struct LogSettings {
 #[derive(Debug, Deserialize)]
 pub(crate) struct DatabaseSettings {
     pub path: String,
-    pub size: usize,
-    pub max_dbs: u32
+    pub size: Option<usize>,
+    pub max_dbs: Option<u32>
 }
 
 impl Default for DatabaseSettings {
     fn default() -> Self {
         DatabaseSettings {
-            path: String::from("./db/"),
-            size: 1024 * 1024 * 50,
-            max_dbs: 10
+            path: String::from("./main.db/"),
+            size: Some(1024 * 1024 * 50),
+            max_dbs: Some(10)
         }
     }
 }
