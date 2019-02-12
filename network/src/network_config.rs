@@ -35,7 +35,7 @@ impl NetworkConfig {
         }
     }
 
-    pub fn new_wss_network_config(host: String, port: u16, identity_file: String, user_agent: Option<String>) -> Self {
+    pub fn new_wss_network_config(host: String, port: u16, identity_file: String, identity_password: String, user_agent: Option<String>) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -45,6 +45,7 @@ impl NetworkConfig {
                 host,
                 port,
                 identity_file,
+                identity_password,
             },
             user_agent
         }
@@ -178,6 +179,7 @@ pub enum ProtocolConfig {
         host: String,
         port: u16,
         identity_file: String,
+        identity_password: String,
     },
     Rtc,
 }

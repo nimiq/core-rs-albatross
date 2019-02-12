@@ -134,13 +134,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                     header: r.header,
                 }), settings.network.user_agent),
 
-            s::Protocol::Wss => NetworkConfig::new_wss_network_config(
-                hostname,
-                port,
-                cmdline.ssl_identity_file.or(settings.tls
-                    .map(|tls| tls.identity_file))
-                    .ok_or(ConfigError::NoTlsIdentityFile)?,
-                settings.network.user_agent),
+            // TODO: Either remove SSL from cmdline or add --ssl-password to it.
+            //       Anyway, this should be made prettier
+            s::Protocol::Wss => {
+                let tls_settings = settings.tls.ok_or(ConfigError::NoTlsIdentityFile)?;
+
+                NetworkConfig::new_wss_network_config(
+                    hostname,
+                    port,
+                    cmdline.ssl_identity_file.unwrap_or(tls_settings.identity_file),
+                    tls_settings.identity_password,
+                    settings.network.user_agent)
+            },
 
             s::Protocol::Rtc => unimplemented!()
         }

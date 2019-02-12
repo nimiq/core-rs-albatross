@@ -82,6 +82,7 @@ pub(crate) struct SeedNode {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TlsSettings {
     pub identity_file: String,
+    pub identity_password: String,
 }
 
 

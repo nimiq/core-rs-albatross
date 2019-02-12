@@ -74,7 +74,7 @@ pub enum WebSocketConnectorEvent {
     Error(Arc<PeerAddress>, io::ErrorKind),
 }
 
-pub fn wrap_stream<S>(socket: S, identity_file: Option<String>, mode: Mode)
+pub fn wrap_stream<S>(socket: S, identity_file: Option<String>, identity_password: Option<String>, mode: Mode)
         -> Box<Future<Item=MaybeTlsStream<S>, Error=io::Error> + Send>
     where
         S: 'static + AsyncRead + AsyncWrite + Send,
@@ -82,11 +82,27 @@ pub fn wrap_stream<S>(socket: S, identity_file: Option<String>, mode: Mode)
     match mode {
         Mode::Plain => Box::new(future::ok(StreamSwitcher::Plain(socket))),
         Mode::Tls => {
-            let identity_file = identity_file.expect("Tls option should always be called with a certificate.");
+            // get identity file or return error
+            let identity_file = match identity_file {
+                Some(i) => i,
+                None => {
+                    return Box::new(future::result(Err(io::Error::new(io::ErrorKind::Other, "Tls option should always be called with a certificate."))));
+                }
+            };
+            // get identity password, defaults to 'nimiq'
+            let identity_password = identity_password.unwrap_or("nimiq".into());
+
+            // read file and return error if this fails
             let mut file = File::open(identity_file).unwrap();
             let mut pkcs12 = vec![];
             file.read_to_end(&mut pkcs12).unwrap();
-            let pkcs12 = Identity::from_pkcs12(&pkcs12, "hunter2").unwrap();
+            let pkcs12 = match Identity::from_pkcs12(&pkcs12, &identity_password) {
+                Ok(i) => {debug!("Loaded PKCS#12 identity file"); i},
+                Err(e) => {
+                    return Box::new(future::result(Err(io::Error::new(io::ErrorKind::Other, e))))
+                }
+            };
+
             Box::new(future::result(TlsAcceptor::new(pkcs12))
                         .map(TokioTlsAcceptor::from)
                         .and_then(move |acceptor| acceptor.accept(socket))
@@ -114,17 +130,18 @@ impl WebSocketConnector {
     pub fn start(&self) {
         let protocol_config = self.network_config.protocol_config();
 
-        let (port, identity_file, mode, reverse_proxy_config) = match protocol_config {
+        let (port, identity_file, identity_password, mode, reverse_proxy_config) = match protocol_config {
             ProtocolConfig::Ws{port, reverse_proxy_config, ..} => {
-                (*port, None, Mode::Plain, reverse_proxy_config.clone())
+                (*port, None, None, Mode::Plain, reverse_proxy_config.clone())
             },
-            ProtocolConfig::Wss{port, identity_file, ..} => {
-                (*port, Some(identity_file.to_string()), Mode::Tls, None)
+            ProtocolConfig::Wss{port, identity_file, identity_password, ..} => {
+                (*port, Some(identity_file.to_string()), Some(identity_password.to_string()), Mode::Tls, None)
             },
             _ => panic!("Protocol not supported"),
         };
 
         // TODO remove unwraps. If the port is already used, this will panic
+        // TODO
         let addr = SocketAddr::new("::".parse().unwrap(), port);
         let socket = TcpListener::bind(&addr).unwrap();
         let notifier = Arc::clone(&self.notifier);
@@ -133,29 +150,29 @@ impl WebSocketConnector {
             let reverse_proxy_config = reverse_proxy_config.clone();
 
             let notifier = Arc::clone(&notifier);
-            let identity_file = identity_file.clone();
-                wrap_stream(tcp, identity_file, mode).and_then(move |ss| {
-                    let callback = ReverseProxyCallback::new(reverse_proxy_config.clone());
-                    nimiq_accept_async(ss, callback.clone().to_callback()).map(move |msg_stream: NimiqMessageStream| {
-                        let mut shared_stream: SharedNimiqMessageStream = msg_stream.into();
-                        // Only accept connection, if net address could be determined.
-                        if let Some(net_address) = callback.check_reverse_proxy(shared_stream.net_address()) {
-                            let net_address = Some(Arc::new(net_address));
-                            let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, None));
-                            notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
-                            tokio::spawn(ncfut);
-                        } else {
-                            tokio::spawn(poll_fn(move || shared_stream.close()));
-                        }
-                    })
+
+            wrap_stream(tcp, identity_file.clone(), identity_password.clone(), mode).and_then(move |ss| {
+                let callback = ReverseProxyCallback::new(reverse_proxy_config.clone());
+                nimiq_accept_async(ss, callback.clone().to_callback()).map(move |msg_stream: NimiqMessageStream| {
+                    let mut shared_stream: SharedNimiqMessageStream = msg_stream.into();
+                    // Only accept connection, if net address could be determined.
+                    if let Some(net_address) = callback.check_reverse_proxy(shared_stream.net_address()) {
+                        let net_address = Some(Arc::new(net_address));
+                        let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, None));
+                        notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
+                        tokio::spawn(ncfut);
+                    } else {
+                        tokio::spawn(poll_fn(move || shared_stream.close()));
+                    }
                 })
             })
-            .map_err(|_error| (
-                // FIXME: what should we do with incoming connection errors?
-                ()
-            ));
+        })
+        .map_err(|_error| (
+            // FIXME: what should we do with incoming connection errors?
+            ()
+        ));
 
-            tokio::spawn(srv);
+        tokio::spawn(srv);
     }
 
     pub fn connect(&self, peer_address: Arc<PeerAddress>) -> Arc<ConnectionHandle> {
