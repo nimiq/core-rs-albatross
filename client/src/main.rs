@@ -28,6 +28,7 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::fmt;
+use std::env;
 
 use futures::{Future, future};
 
@@ -53,6 +54,13 @@ mod logging;
 mod settings;
 mod cmdline;
 mod static_env;
+
+
+
+lazy_static! {
+    pub static ref USER_AGENT: String = format!("core-rs/{} (native; {} {})", env!("CARGO_PKG_VERSION"), env::consts::OS, env::consts::ARCH);
+}
+
 
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -117,10 +125,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut network_config = {
         let hostname = cmdline.hostname.unwrap_or(settings.network.host);
         let port = cmdline.port.or(settings.network.port).unwrap_or(s::DEFAULT_NETWORK_PORT);
+        let user_agent = settings.network.user_agent.unwrap_or(USER_AGENT.to_string());
         debug!("Binding to {}:{}", hostname, port);
+        debug!("UserAgent: {}", user_agent);
 
         match settings.network.protocol {
-            s::Protocol::Dumb => NetworkConfig::new_dumb_network_config(settings.network.user_agent),
+            s::Protocol::Dumb => {
+                //NetworkConfig::new_dumb_network_config(Some(user_agent))
+                unimplemented!("Dumb network protocol is not yet implemented.");
+            },
 
             s::Protocol::Ws => NetworkConfig::new_ws_network_config(
                 hostname,
@@ -129,7 +142,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     port: r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
                     address: r.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"),
                     header: r.header,
-                }), settings.network.user_agent),
+                }), Some(user_agent)),
 
             // TODO: Either remove SSL from cmdline or add --ssl-password to it.
             //       Anyway, this should be made prettier
@@ -141,7 +154,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     port,
                     cmdline.ssl_identity_file.unwrap_or(tls_settings.identity_file),
                     tls_settings.identity_password,
-                    settings.network.user_agent)
+                    Some(user_agent))
             },
 
             s::Protocol::Rtc => unimplemented!()
