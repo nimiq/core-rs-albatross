@@ -81,8 +81,7 @@ pub(crate) struct SeedNode {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TlsSettings {
-    pub cert: String,
-    pub key: String,
+    pub identity_file: String,
 }
 
 

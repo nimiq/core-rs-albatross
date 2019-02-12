@@ -27,6 +27,7 @@ use std::io;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::fmt;
 
 use futures::{Future, future};
 
@@ -52,6 +53,32 @@ mod logging;
 mod settings;
 mod cmdline;
 mod static_env;
+
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ConfigError {
+    NoTlsIdentityFile
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Configuration error: {}", self.description())
+    }
+}
+
+impl Error for ConfigError {
+    fn description(&self) -> &str {
+        match self {
+            ConfigError::NoTlsIdentityFile => "No TLS identity file supplied.",
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
+
 
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -90,25 +117,33 @@ fn main() -> Result<(), Box<dyn Error>> {
     ENV.initialize(env);
 
     // Start network
-    let mut network_config = match settings.network.protocol {
-        s::Protocol::Dumb => NetworkConfig::new_dumb_network_config(settings.network.user_agent),
+    let mut network_config = {
+        let hostname = cmdline.hostname.unwrap_or(settings.network.host);
+        let port = cmdline.port.or(settings.network.port).unwrap_or(s::DEFAULT_NETWORK_PORT);
+        debug!("Binding to {}:{}", hostname, port);
 
-        s::Protocol::Ws => NetworkConfig::new_ws_network_config(
-            cmdline.hostname.unwrap_or(settings.network.host),
-            cmdline.port.or(settings.network.port).unwrap_or(s::DEFAULT_NETWORK_PORT),
-            settings.reverse_proxy.map(|r| ReverseProxyConfig {
-                port: r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
-                address: r.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"),
-                header: r.header,
-            }), settings.network.user_agent),
+        match settings.network.protocol {
+            s::Protocol::Dumb => NetworkConfig::new_dumb_network_config(settings.network.user_agent),
 
-        // TODO: What is a `identify_file`? Shouldn't this be a key and cert file?
-        s::Protocol::Wss => NetworkConfig::new_wss_network_config(
-            settings.network.host,
-            settings.network.port.unwrap_or(s::DEFAULT_NETWORK_PORT),
-            unimplemented!(), settings.network.user_agent),
+            s::Protocol::Ws => NetworkConfig::new_ws_network_config(
+                hostname,
+                port,
+                settings.reverse_proxy.map(|r| ReverseProxyConfig {
+                    port: r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
+                    address: r.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"),
+                    header: r.header,
+                }), settings.network.user_agent),
 
-        s::Protocol::Rtc => unimplemented!()
+            s::Protocol::Wss => NetworkConfig::new_wss_network_config(
+                hostname,
+                port,
+                cmdline.ssl_identity_file.or(settings.tls
+                    .map(|tls| tls.identity_file))
+                    .ok_or(ConfigError::NoTlsIdentityFile)?,
+                settings.network.user_agent),
+
+            s::Protocol::Rtc => unimplemented!()
+        }
     };
     network_config.init_persistent();
     let network_id = match cmdline.network.unwrap_or(settings.consensus.network) {
