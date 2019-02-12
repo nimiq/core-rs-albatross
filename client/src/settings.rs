@@ -250,7 +250,7 @@ pub(crate) struct DatabaseSettings {
 impl Default for DatabaseSettings {
     fn default() -> Self {
         DatabaseSettings {
-            path: String::from("./main.db/"),
+            path: String::from("./db/"),
             size: Some(1024 * 1024 * 50),
             max_dbs: Some(10)
         }

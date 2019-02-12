@@ -12,7 +12,7 @@ user_agent = "core-rs/dev (native; Linux x64)"
 
 [consensus]
 type = "full"
-network = "main"
+network = "test"
 
 [log]
 level = "trace"
