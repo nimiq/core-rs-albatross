@@ -5,7 +5,7 @@ use beserial::{Deserialize, Serialize};
 
 use crate::{PrivateKey, PublicKey, Signature};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeyPair {
     pub public: PublicKey,
     pub private: PrivateKey,

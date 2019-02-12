@@ -24,7 +24,7 @@ impl ServiceFlags {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Services {
     pub provided: ServiceFlags,
     pub accepted: ServiceFlags,

@@ -11,6 +11,7 @@ use network_primitives::services::Services;
 use utils::time::systemtime_to_timestamp;
 use crate::error::Error;
 
+#[derive(Clone, Debug)]
 pub struct NetworkConfig {
     protocol_mask: ProtocolFlags,
     key_pair: Option<KeyPair>,

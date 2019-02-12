@@ -14,6 +14,10 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 futures = "0.1"
-nimiq-network = { path = "../network" }
 failure = "0.1.5"
 failure_derive = "0.1.5"
+nimiq-network = { path = "../network" }
+nimiq-consensus = { path = "../consensus" }
+nimiq-database = { path = "../database" }
+nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
+nimiq-primitives = { path = "../primitives" }
