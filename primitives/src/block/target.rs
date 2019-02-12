@@ -1,8 +1,7 @@
 use std::fmt;
-use std::ops::{Add, AddAssign, Sub, SubAssign, Mul, Div};
+use std::ops::{Add, AddAssign, Sub, SubAssign, Div};
 
-use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
-use fixed_unsigned::{FixedUnsigned, FixedScale};
+use num_bigint::BigUint;
 use fixed_unsigned::types::FixedUnsigned10;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};

@@ -2,7 +2,6 @@ use std::cell::UnsafeCell;
 use std::mem;
 
 use database::Environment;
-use database::lmdb::{LmdbEnvironment, open};
 
 
 /// A wrapper for static variables that can be initialized at run-time
@@ -42,5 +41,5 @@ unsafe impl<T> std::marker::Sync for InitializedStatic<T> {}
 
 pub type StaticEnvironment = InitializedStatic<Environment>;
 lazy_static! {
-    pub static ref ENV: InitializedStatic<Environment> = InitializedStatic::new();
+    pub static ref ENV: StaticEnvironment = InitializedStatic::new();
 }

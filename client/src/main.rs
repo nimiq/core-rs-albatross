@@ -1,3 +1,4 @@
+extern crate clap;
 extern crate fern;
 extern crate futures;
 #[macro_use]
@@ -19,14 +20,6 @@ extern crate parking_lot;
 extern crate serde_derive;
 extern crate tokio;
 extern crate toml;
-extern crate clap;
-
-
-mod deadlock;
-mod logging;
-mod settings;
-mod cmdline;
-mod static_env;
 
 
 use std::error::Error;
@@ -38,7 +31,6 @@ use std::sync::Arc;
 use futures::{Future, future};
 
 use consensus::consensus::Consensus;
-use database::Environment;
 use database::lmdb::{LmdbEnvironment, open};
 use lib::client::initialize;
 #[cfg(feature = "metrics-server")]
@@ -49,11 +41,17 @@ use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
 
+use crate::cmdline::Options;
 use crate::logging::{DEFAULT_LEVEL, NimiqDispatch, to_level};
 use crate::settings as s;
 use crate::settings::Settings;
-use crate::cmdline::Options;
-use crate::static_env::{StaticEnvironment, ENV};
+use crate::static_env::ENV;
+
+mod deadlock;
+mod logging;
+mod settings;
+mod cmdline;
+mod static_env;
 
 
 fn main() -> Result<(), Box<dyn Error>> {
