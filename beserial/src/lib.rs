@@ -1,12 +1,14 @@
 extern crate byteorder;
-extern crate num;
 #[macro_use]
 extern crate log;
+extern crate num;
 
 use std::collections::HashSet;
+use std::error::Error;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 pub use num::ToPrimitive;
+
 pub use crate::types::uvar;
 
 mod types;
@@ -41,6 +43,8 @@ pub enum SerializingError {
     InvalidValue,
     Overflow,
 }
+
+impl Error for SerializingError {}
 
 impl std::fmt::Display for SerializingError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

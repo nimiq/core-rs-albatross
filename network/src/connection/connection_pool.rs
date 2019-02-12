@@ -23,6 +23,7 @@ use crate::connection::NetworkConnection;
 use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_channel::PeerChannel;
+use crate::websocket::error::ConnectError;
 use crate::websocket::websocket_connector::{WebSocketConnector, WebSocketConnectorEvent};
 
 use super::close_type::CloseType;
@@ -386,8 +387,8 @@ impl ConnectionPool {
                     WebSocketConnectorEvent::Connection(conn) => {
                         pool.on_connection(conn);
                     },
-                    WebSocketConnectorEvent::Error(peer_address, _) => {
-                        pool.on_connect_error(peer_address);
+                    WebSocketConnectorEvent::Error(peer_address, error) => {
+                        pool.on_connect_error(peer_address, error);
                     },
                 }
             });
@@ -398,6 +399,7 @@ impl ConnectionPool {
     /// Initialises necessary threads.
     pub fn initialize(&self) {
         // Start accepting incoming connections.
+        // TODO: Handle result
         self.websocket_connector.start();
 
         let weak = self.self_weak.clone();
@@ -859,9 +861,9 @@ impl ConnectionPool {
     }
 
     /// Callback on connect error.
-    fn on_connect_error(&self, peer_address: Arc<PeerAddress>) {
+    fn on_connect_error(&self, peer_address: Arc<PeerAddress>, error: ConnectError) {
         let _guard = self.change_lock.lock();
-        debug!("Connection to {} failed", peer_address);
+        debug!("Connection to {} failed with error {}", peer_address, error);
 
         // Aquire write lock and release it again before notifying listeners.
         {

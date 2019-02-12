@@ -9,24 +9,22 @@ use rand::{Rng, rngs::OsRng};
 
 use beserial::Serialize;
 use blockchain::Blockchain;
+use network_messages::*;
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::PeerId;
-use network_messages::*;
 use network_primitives::networks::get_network_info;
 use network_primitives::version;
 use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
+use utils::rate_limit::RateLimit;
 use utils::time::systemtime_to_timestamp;
 use utils::timers::Timers;
 use utils::unique_ptr::UniquePtr;
-use utils::rate_limit::RateLimit;
 
 use crate::address::peer_address_book::PeerAddressBook;
 use crate::connection::close_type::CloseType;
 use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_channel::PeerChannel;
-
-
 
 pub struct NetworkAgent {
     blockchain: Arc<Blockchain<'static>>,

@@ -17,7 +17,7 @@ use crate::network_metrics::NetworkMetrics;
 use crate::peer_channel::PeerSink;
 use crate::peer_channel::PeerStream;
 use crate::peer_channel::PeerStreamEvent;
-use crate::websocket::{NimiqWebSocketMessage, SharedNimiqMessageStream};
+use crate::websocket::{Message, SharedNimiqMessageStream};
 
 #[derive(Debug, Clone)]
 pub struct ClosedFlag(Arc<AtomicBool>);
@@ -117,7 +117,7 @@ pub struct ProcessConnectionFuture {
 }
 
 impl ProcessConnectionFuture {
-    pub fn new(peer_stream: PeerStream, forward_future: Forward<UnboundedReceiver<NimiqWebSocketMessage>, SharedNimiqMessageStream>, _id: UniqueId) -> Self {
+    pub fn new(peer_stream: PeerStream, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>, _id: UniqueId) -> Self {
         // `select` required Item/Error to be the same, that's why we need to map them both to ().
         // TODO We're discarding any errors here, especially those coming from the forward future.
         // Results by the peer_stream have been processes already.
