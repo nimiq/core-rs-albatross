@@ -107,9 +107,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     debug!("Command-line options: {:#?}", cmdline);
     debug!("Settings: {:#?}", settings);
 
-    // TODO: If a wallet is specified, we should use it, shouldn't we?
-    assert!(settings.wallet.is_none(), "Wallet settings are not implemented yet");
-
     // Start database and obtain a 'static reference to it.
     let default_database_settings = s::DatabaseSettings::default();
     let env = LmdbEnvironment::new(&settings.database.path, settings.database.size.unwrap_or(default_database_settings.size.unwrap()), settings.database.max_dbs.unwrap_or(default_database_settings.max_dbs.unwrap()), open::Flags::empty())?;

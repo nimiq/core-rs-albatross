@@ -16,12 +16,9 @@ pub(crate) struct Settings {
     pub tls: Option<TlsSettings>,
     #[serde(default)]
     pub consensus: ConsensusSettings,
-    pub miner: Option<MinerSettings>,
-    pub pool_mining: Option<PoolMiningSettings>,
     pub rpc_server: Option<RpcServerSettings>,
-    pub ui_server: Option<UiServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
-    pub wallet: Option<WalletSettings>,
+    //pub wallet: Option<WalletSettings>,
     pub reverse_proxy: Option<ReverseProxySettings>,
     #[serde(default)]
     pub log: LogSettings,
@@ -35,7 +32,6 @@ impl Settings {
     }
 }
 
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NetworkSettings {
@@ -43,14 +39,13 @@ pub(crate) struct NetworkSettings {
     pub port: Option<u16>,
     #[serde(default)]
     pub protocol: Protocol,
-    #[serde(default)]
-    pub passive: bool,
+    //#[serde(default)]
+    //pub passive: bool,
     #[serde(default)]
     pub seed_nodes: Vec<SeedNode>,
     #[serde(default)]
     pub user_agent: Option<String>
 }
-
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -67,7 +62,6 @@ impl Default for Protocol {
     }
 }
 
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SeedNode {
@@ -75,8 +69,6 @@ pub(crate) struct SeedNode {
     pub port: u16,
     pub public_key: Option<String>,
 }
-
-
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -154,43 +146,6 @@ impl FromStr for Network {
     }
 }
 
-
-
-#[derive(Debug, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct MinerSettings {
-    pub threads: Option<u64>,
-    pub throttle_after: Option<u64>, // TODO: Fix that this can take "infinity"
-    pub throttle_wait: Option<u64>,
-    pub extra_data: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub(crate) struct PoolMiningSettings {
-    pub host: String,
-    pub port: u16,
-    #[serde(default)]
-    pub mode: MiningPoolMode,
-    // TODO: This only accepts String -> String.
-    #[serde(default)]
-    pub device_data: HashMap<String, String>
-}
-
-
-#[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum MiningPoolMode {
-    Smart,
-    Nano,
-}
-
-impl Default for MiningPoolMode {
-    fn default() -> Self {
-        MiningPoolMode::Smart
-    }
-}
-
-
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RpcServerSettings {
@@ -216,11 +171,11 @@ pub(crate) struct MetricsServerSettings {
     pub password: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+/*#[derive(Debug, Deserialize, Default)]
 pub(crate) struct WalletSettings {
     pub seed: Option<String>,
     pub address: Option<String>,
-}
+}*/
 
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct ReverseProxySettings {
