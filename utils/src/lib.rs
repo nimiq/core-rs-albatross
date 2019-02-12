@@ -26,3 +26,5 @@ pub mod time;
 pub mod throttled_queue;
 #[cfg(feature = "rate-limit")]
 pub mod rate_limit;
+#[cfg(feature = "unique-id")]
+pub mod unique_id;

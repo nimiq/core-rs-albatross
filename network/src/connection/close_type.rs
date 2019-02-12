@@ -1,5 +1,11 @@
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+use tungstenite::protocol::frame::coding::CloseCode;
+
+use beserial::Deserialize;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[repr(u16)]
 pub enum CloseType {
+    Unknown = 0,
     GetBlocksTimeout = 1,
     GetChainProofTimeout = 2,
     GetAccountsTreeChunkTimeout = 3,
@@ -83,10 +89,34 @@ pub enum CloseType {
 
 impl CloseType {
     pub fn is_banning_type(&self) -> bool {
-        (*self as i32) >= 100 && (*self as i32) < 200
+        (*self as u16) >= 100 && (*self as u16) < 200
     }
 
     pub fn is_failing_type(&self) -> bool {
-        (*self as i32) >= 200
+        (*self as u16) >= 200
+    }
+}
+
+impl Into<CloseCode> for CloseType {
+    fn into(self) -> CloseCode {
+        CloseCode::Library(4000 + (self as u16)) // Library specific is 4000-4999.
+    }
+}
+
+impl From<CloseCode> for CloseType {
+    fn from(code: CloseCode) -> Self {
+        match code {
+            CloseCode::Library(code) => Deserialize::deserialize_from_vec(&(code - 4000).to_be_bytes().to_vec()).unwrap_or(CloseType::Unknown),
+            _ => CloseType::Unknown,
+        }
+    }
+}
+
+impl From<Option<CloseCode>> for CloseType {
+    fn from(code: Option<CloseCode>) -> Self {
+        match code {
+            Some(code) => code.into(),
+            _ => CloseType::Unknown,
+        }
     }
 }

@@ -14,13 +14,14 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 beserial = { path = "../beserial" }
+beserial_derive = { path = "../beserial/beserial_derive"}
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-keys = { path = "../keys" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
 nimiq-messages = { path = "../messages" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
-nimiq-utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit"] }
+nimiq-utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
 atomic = "0.4"
 parking_lot = "0.6"
 rand = "0.6.4"
@@ -31,10 +32,14 @@ tokio = "0.1"
 tokio-tls = "0.2"
 native-tls = "0.2"
 futures = "0.1"
-tokio-tungstenite = { git = "https://github.com/nimiq/tokio-tungstenite", branch = "nimiq-features-0.6.0" }
+tokio-tungstenite = { git = "https://github.com/nimiq/tokio-tungstenite", branch = "nimiq-features" }
 
 [dependencies.tungstenite]
-version = "0.6.0"
+# Uncomment when `tungstenite-rs` is released.
+# version = "0.7.0"
+git = "https://github.com/snapview/tungstenite-rs"
+branch = "close-as-message"
+default-features = false
 
 [features]
 metrics = []

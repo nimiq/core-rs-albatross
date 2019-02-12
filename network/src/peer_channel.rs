@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -8,19 +9,21 @@ use futures::prelude::*;
 use futures::sync::mpsc::*;
 use parking_lot::RwLock;
 use tokio::prelude::Stream;
+use tungstenite::error::Error as WsError;
+use tungstenite::protocol::CloseFrame;
 
 use network_messages::{Message, MessageNotifier};
 use utils::observer::{Notifier, PassThroughNotifier};
+use utils::unique_id::UniqueId;
 use utils::unique_ptr::UniquePtr;
 
 use crate::connection::close_type::CloseType;
 use crate::connection::network_connection::AddressInfo;
-use crate::connection::network_connection::ClosingHelper;
+use crate::connection::network_connection::ClosedFlag;
 use crate::connection::network_connection::NetworkConnection;
-use crate::websocket::NimiqMessageStreamError;
-use crate::websocket::SharedNimiqMessageStream;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::MessageMetrics;
+use crate::websocket::{NimiqMessageStreamError, NimiqWebSocketMessage, SharedNimiqMessageStream};
 
 #[derive(Clone)]
 pub struct PeerChannel {
@@ -29,6 +32,8 @@ pub struct PeerChannel {
     pub close_notifier: Arc<RwLock<Notifier<'static, CloseType>>>,
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
+    closed_flag: ClosedFlag,
+
     #[cfg(feature = "metrics")]
     pub message_metrics: Arc<MessageMetrics>,
 }
@@ -65,27 +70,29 @@ impl PeerChannel {
             close_notifier,
             peer_sink: network_connection.peer_sink(),
             address_info: network_connection.address_info(),
+            closed_flag: network_connection.closed_flag(),
+
             #[cfg(feature = "metrics")]
             message_metrics,
         }
     }
 
-    pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> {
+    pub fn send(&self, msg: Message) -> Result<(), SendError<NimiqWebSocketMessage>> {
         self.peer_sink.send(msg)
     }
 
     pub fn send_or_close(&self, msg: Message) {
         if self.peer_sink.send(msg).is_err() {
-            self.peer_sink.close(CloseType::SendFailed);
+            let _ = self.peer_sink.close(CloseType::SendFailed, Some("SendFailed".to_string())); // TODO: We ignore the error here.
         }
     }
 
     pub fn closed(&self) -> bool {
-        self.peer_sink.closed()
+        self.closed_flag.is_closed()
     }
 
     pub fn close(&self, ty: CloseType) -> bool {
-        self.peer_sink.close(ty)
+        self.peer_sink.close(ty, None).is_ok()
     }
 }
 
@@ -131,33 +138,28 @@ impl From<PeerStreamEvent> for PeerChannelEvent {
 
 #[derive(Clone)]
 pub struct PeerSink {
-    sink: UnboundedSender<Message>,
-    closing_helper: Arc<ClosingHelper>,
+    sink: UnboundedSender<NimiqWebSocketMessage>,
+    unique_id: UniqueId,
 }
 
 impl PeerSink {
-    pub fn new(channel: UnboundedSender<Message>, closing_helper: ClosingHelper) -> Self {
+    pub fn new(channel: UnboundedSender<NimiqWebSocketMessage>, unique_id: UniqueId) -> Self {
         PeerSink {
             sink: channel,
-            closing_helper: Arc::new(closing_helper),
+            unique_id,
         }
     }
 
-    pub fn send(&self, msg: Message) -> Result<(), SendError<Message>> {
-        //debug!("[MESSAGE] >> {:#?}", msg);
-        self.sink.unbounded_send(msg)
+    pub fn send(&self, msg: Message) -> Result<(), SendError<NimiqWebSocketMessage>> {
+        self.sink.unbounded_send(NimiqWebSocketMessage::Message(msg))
     }
 
-    /// Closes the connection and returns a boolean value describing whether we closed the channel.
-    /// This may be false if we already closed the channel or the other side closed it.
-    pub fn close(&self, ty: CloseType) -> bool {
-        self.closing_helper.close(ty)
-    }
-
-    /// Checks whether a connection has been closed from our end.
-    pub fn closed(&self) -> bool {
-        // TODO currently this only reflects our end of the connection
-        self.closing_helper.closed()
+    /// Closes the connection.
+    pub fn close(&self, ty: CloseType, reason: Option<String>) -> Result<(), SendError<NimiqWebSocketMessage>> {
+        self.sink.unbounded_send(NimiqWebSocketMessage::Close(Some(CloseFrame {
+            code: ty.into(),
+            reason: Cow::Owned(reason.unwrap_or_else(|| "Unknown reason".to_string())),
+        })))
     }
 }
 
@@ -169,18 +171,15 @@ impl Debug for PeerSink {
 
 impl PartialEq for PeerSink {
     fn eq(&self, other: &PeerSink) -> bool {
-        Arc::ptr_eq(&self.closing_helper, &other.closing_helper)
+        self.unique_id == other.unique_id
     }
 }
 
 impl Eq for PeerSink {}
 
-// There is a single closing helper per connection.
-// Thus, we use the hash value of its pointer here.
 impl Hash for PeerSink {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let ptr = self.closing_helper.as_ref() as *const ClosingHelper;
-        ptr.hash(state);
+        self.unique_id.hash(state);
     }
 }
 
@@ -192,33 +191,48 @@ pub enum PeerStreamEvent {
 
 pub struct PeerStream {
     stream: SharedNimiqMessageStream,
+    closed_flag: ClosedFlag,
     pub notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>,
 }
 
 impl PeerStream {
-    pub fn new(stream: SharedNimiqMessageStream, notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>) -> Self {
+    pub fn new(stream: SharedNimiqMessageStream, notifier: Arc<RwLock<PassThroughNotifier<'static, PeerStreamEvent>>>, closed_flag: ClosedFlag) -> Self {
         PeerStream {
             stream,
             notifier,
+            closed_flag,
         }
     }
 
     pub fn process_stream(self) -> impl Future<Item=(), Error=NimiqMessageStreamError> + 'static {
         let stream = self.stream;
         let msg_notifier = self.notifier.clone();
-        let error_notifier = self.notifier.clone();
-        let close_notifier = self.notifier;
+        let error_notifier = self.notifier;
+        let msg_closed_flag = self.closed_flag.clone();
+        let error_closed_flag = self.closed_flag;
 
         let process_message = stream.for_each(move |msg| {
-            //debug!("[MESSAGE] << {:#?}", msg);
-            msg_notifier.read().notify(PeerStreamEvent::Message(msg));
+            match msg {
+                NimiqWebSocketMessage::Message(msg) => {
+                    msg_notifier.read().notify(PeerStreamEvent::Message(msg));
+                },
+                NimiqWebSocketMessage::Close(frame) => {
+                    msg_closed_flag.update(true);
+                    msg_notifier.read().notify(PeerStreamEvent::Close(frame.map(|f| f.code).into()));
+                },
+            }
             Ok(())
         }).or_else(move |error| {
-            error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(&error)));
+            match &error {
+                NimiqMessageStreamError::WebSocketError(WsError::ConnectionClosed(ref frame)) => {
+                    error_closed_flag.update(true);
+                    error_notifier.read().notify(PeerStreamEvent::Close(frame.as_ref().map(|f| f.code).into()));
+                },
+                error => {
+                    error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(error)));
+                },
+            }
             Err(error)
-        }).and_then(move |result| {
-            close_notifier.read().notify(PeerStreamEvent::Close(CloseType::ClosedByRemote));
-            Ok(result)
         });
 
         process_message

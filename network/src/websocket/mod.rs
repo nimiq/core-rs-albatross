@@ -18,6 +18,7 @@ use tungstenite::{
     protocol::Message as WebSocketMessage
 };
 use tungstenite::handshake::server::Callback;
+use tungstenite::protocol::CloseFrame;
 use url::Url;
 
 use beserial::{Deserialize, Serialize, SerializingError};
@@ -53,20 +54,92 @@ pub enum NimiqMessageStreamError {
     FinalChunkSizeExceeded,
 }
 
+pub enum NimiqWebSocketMessage {
+    Message(NimiqMessage),
+    Close(Option<CloseFrame<'static>>),
+}
+
+#[derive(Clone, Debug)]
+pub enum NimiqWebSocketState {
+    /// The connection is active.
+    Active,
+    /// We initiated a close handshake.
+    ClosedByUs,
+    /// The peer initiated a close handshake.
+    ClosedByPeer(Option<CloseFrame<'static>>),
+}
+
+impl NimiqWebSocketState {
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        match self {
+            NimiqWebSocketState::Active => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_closed(&self) -> bool {
+        !self.is_active()
+    }
+}
+
+/// This struct stores public information about the stream.
+#[derive(Clone, Debug)]
+pub struct PublicStreamState {
+    // Constant info.
+    net_address: NetAddress,
+    outbound: bool,
+
+    // Mutable info.
+    last_chunk_received_at: Option<Instant>,
+
+    #[cfg(feature = "metrics")]
+    network_metrics: Arc<NetworkMetrics>,
+}
+
+impl<'a> From<&'a PublicStreamState> for PublicStreamState {
+    fn from(state: &'a PublicStreamState) -> Self {
+        state.clone()
+    }
+}
+
+impl<'a> From<&'a NimiqMessageStream> for PublicStreamState {
+    fn from(stream: &'a NimiqMessageStream) -> Self {
+        stream.public_state.clone()
+    }
+}
+
+impl PublicStreamState {
+    pub fn new(net_address: NetAddress, outbound: bool) -> Self {
+        PublicStreamState {
+            net_address,
+            outbound,
+            last_chunk_received_at: None,
+
+            #[cfg(feature = "metrics")]
+            network_metrics: Arc::new(NetworkMetrics::default()),
+        }
+    }
+    pub fn update(&mut self, state: &PublicStreamState) {
+        self.last_chunk_received_at = state.last_chunk_received_at.clone();
+    }
+}
+
 const MAX_CHUNK_SIZE: usize = 1024 * 16; // 16 kb
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 10; // 10 mb
 
 pub struct NimiqMessageStream {
+    // Internal state.
     inner: WebSocketLayer,
     receiving_tag: u8,
     sending_tag: u8,
     ws_queue: VecDeque<WebSocketMessage>,
     msg_buf: Option<Vec<u8>>,
-    net_address: NetAddress,
-    outbound: bool,
-    last_chunk_received_at: Option<Instant>,
-    #[cfg(feature = "metrics")]
-    network_metrics: Arc<NetworkMetrics>,
+    state: NimiqWebSocketState,
+
+    // Public state.
+    public_state: PublicStreamState,
 }
 
 impl NimiqMessageStream {
@@ -78,64 +151,78 @@ impl NimiqMessageStream {
             sending_tag: 0,
             ws_queue: VecDeque::new(),
             msg_buf: None,
-            net_address: match peer_addr.ip() {
+            state: NimiqWebSocketState::Active,
+
+            public_state: PublicStreamState::new(match peer_addr.ip() {
                 net::IpAddr::V4(ip4) => NetAddress::IPv4(ip4),
                 net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
-            },
-            outbound,
-            last_chunk_received_at: None,
-            #[cfg(feature = "metrics")]
-            network_metrics: Arc::new(NetworkMetrics::default()),
+            }, outbound),
         };
     }
 
-    pub fn net_address(&self) -> &NetAddress {
-        &self.net_address
+    pub fn state(&self) -> &PublicStreamState {
+        &self.public_state
     }
 
-    pub fn outbound(&self) -> bool {
-        self.outbound
-    }
-
-    pub fn last_chunk_received_at(&self) -> &Option<Instant> {
-        &self.last_chunk_received_at
+    pub fn is_closed(&self) -> bool {
+        self.state.is_closed()
     }
 
     #[cfg(feature = "metrics")]
     pub fn network_metrics(&self) -> &Arc<NetworkMetrics> {
-        &self.network_metrics
+        &self.public_state.network_metrics
     }
 }
 
 impl Sink for NimiqMessageStream {
-    type SinkItem = NimiqMessage;
+    type SinkItem = NimiqWebSocketMessage;
     type SinkError = ();
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+        // Handle close messages differently:
+        let msg = match item {
+            NimiqWebSocketMessage::Message(msg) => msg,
+            NimiqWebSocketMessage::Close(frame) => {
+                self.state = NimiqWebSocketState::ClosedByUs;
+
+                return match self.inner.start_send(WebSocketMessage::Close(frame)) {
+                    Ok(state) => match state {
+                        AsyncSink::Ready => Ok(AsyncSink::Ready),
+                        AsyncSink::NotReady(WebSocketMessage::Close(frame)) => Ok(AsyncSink::NotReady(NimiqWebSocketMessage::Close(frame))),
+                        AsyncSink::NotReady(_) => {
+                            error!("Expected to get NotReady of a Close message, but got something else.");
+                            Err(())
+                        },
+                    },
+                    Err(_) => Err(()),
+                }
+            },
+        };
+
         // Save and increment tag.
         let tag = self.sending_tag;
         // XXX JS implementation quirk: Already wrap at 255 instead of 256
         self.sending_tag = (self.sending_tag + 1) % 255;
 
-        let msg = item.serialize_to_vec();
+        let serialized_msg = msg.serialize_to_vec();
 
         #[cfg(feature = "metrics")]
-        self.network_metrics.note_bytes_sent(msg.len());
+        self.public_state.network_metrics.note_bytes_sent(serialized_msg.len());
 
         // Send chunks to underlying layer.
-        let mut remaining = msg.len();
+        let mut remaining = serialized_msg.len();
         let mut chunk;
         while remaining > 0 {
             let mut buffer;
-            let start = msg.len() - remaining;
+            let start = serialized_msg.len() - remaining;
             if remaining + /*tag*/ 1 >= MAX_CHUNK_SIZE {
                 buffer = Vec::with_capacity(MAX_CHUNK_SIZE + /*tag*/ 1);
                 buffer.push(tag);
-                chunk = &msg[start..start + MAX_CHUNK_SIZE - 1];
+                chunk = &serialized_msg[start..start + MAX_CHUNK_SIZE - 1];
             } else {
                 buffer = Vec::with_capacity(remaining + /*tag*/ 1);
                 buffer.push(tag);
-                chunk = &msg[start..];
+                chunk = &serialized_msg[start..];
             }
 
             buffer.extend(chunk);
@@ -146,7 +233,7 @@ impl Sink for NimiqMessageStream {
                     // We started to send some chunks, but now the queue is full:
                     // FIXME If this happens, we will try sending the whole message again with a new tag.
                     // This should be improved, e.g. using https://docs.rs/futures/0.2.1/futures/sink/struct.Buffer.html.
-                    AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(item)),
+                    AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(NimiqWebSocketMessage::Message(msg))),
                 },
                 Err(_) => return Err(()),
             };
@@ -173,16 +260,26 @@ impl Sink for NimiqMessageStream {
 }
 
 impl Stream for NimiqMessageStream {
-    type Item = NimiqMessage;
+    type Item = NimiqWebSocketMessage;
     type Error = NimiqMessageStreamError;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        if self.state.is_closed() {
+            return Ok(Async::Ready(None));
+        }
+
         // First, lets get as many WebSocket messages as available and store them in the buffer.
         loop {
             match self.inner.poll() {
+                // Handle close frames first.
+                Ok(Async::Ready(Some(WebSocketMessage::Close(frame)))) => {
+                    self.state = NimiqWebSocketState::ClosedByPeer(frame.clone());
+
+                    return Ok(Async::Ready(Some(NimiqWebSocketMessage::Close(frame))))
+                },
                 Ok(Async::Ready(Some(m))) => {
                     #[cfg(feature = "metrics")]
-                    self.network_metrics.note_bytes_received(m.len());
+                    self.public_state.network_metrics.note_bytes_received(m.len());
 
                     // Check max chunk size.
                     if m.len() > MAX_CHUNK_SIZE {
@@ -199,6 +296,9 @@ impl Stream for NimiqMessageStream {
                     break
                 },
                 Err(e) => {
+                    if let WsError::ConnectionClosed(ref frame) = e {
+                        self.state = NimiqWebSocketState::ClosedByPeer(frame.clone());
+                    }
                     // FIXME: first flush our buffer and _then_ signal that there was an error
                     return Err(NimiqMessageStreamError::WebSocketError(e))
                 }
@@ -235,7 +335,7 @@ impl Stream for NimiqMessageStream {
             }
 
             // Update last chunk timestamp
-            self.last_chunk_received_at = Some(Instant::now());
+            self.public_state.last_chunk_received_at = Some(Instant::now());
 
             let msg_buf = self.msg_buf.as_mut().unwrap();
             let mut remaining = msg_buf.capacity() - msg_buf.len();
@@ -262,7 +362,7 @@ impl Stream for NimiqMessageStream {
                     return Ok(Async::NotReady);
                 }
 
-                return Ok(Async::Ready(Some(msg.unwrap())));
+                return Ok(Async::Ready(Some(NimiqWebSocketMessage::Message(msg.unwrap()))));
             }
         }
 
@@ -299,76 +399,51 @@ pub fn nimiq_accept_async<C>(stream: MaybeTlsStream<TcpStream>, callback: C) -> 
     )
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SharedNimiqMessageStream {
     inner: MultiLock<NimiqMessageStream>,
-    net_address: NetAddress,
-    outbound: bool,
-    last_chunk_received_at: Option<Instant>,
-    #[cfg(feature = "metrics")]
-    network_metrics: Arc<NetworkMetrics>,
+    state: PublicStreamState,
 }
 
 impl SharedNimiqMessageStream {
     pub fn net_address(&self) -> NetAddress {
-        self.net_address.clone()
+        self.state.net_address.clone()
     }
 
     pub fn outbound(&self) -> bool {
-        self.outbound
+        self.state.outbound
     }
 
     pub fn last_chunk_received_at(&self) -> Option<&Instant> {
-        self.last_chunk_received_at.as_ref()
+        self.state.last_chunk_received_at.as_ref()
     }
 
     #[cfg(feature = "metrics")]
     pub fn network_metrics(&self) -> &Arc<NetworkMetrics> {
-        &self.network_metrics
+        &self.state.network_metrics
     }
 }
 
 impl From<NimiqMessageStream> for SharedNimiqMessageStream {
     fn from(stream: NimiqMessageStream) -> Self {
-        let net_address = stream.net_address().clone();
-        let outbound = stream.outbound();
-        let last_chunk_received_at = stream.last_chunk_received_at().clone();
-        #[cfg(feature = "metrics")]
-        let network_metrics = stream.network_metrics().clone();
+        let state = PublicStreamState::from(&stream);
         SharedNimiqMessageStream {
-            net_address,
-            outbound,
-            last_chunk_received_at,
             inner: MultiLock::new(stream),
-            #[cfg(feature = "metrics")]
-            network_metrics,
-        }
-    }
-}
-
-impl Clone for SharedNimiqMessageStream {
-    #[inline]
-    fn clone(&self) -> Self {
-        SharedNimiqMessageStream {
-            net_address: self.net_address.clone(),
-            outbound: self.outbound,
-            last_chunk_received_at: self.last_chunk_received_at.clone(),
-            inner: self.inner.clone(),
-            #[cfg(feature = "metrics")]
-            network_metrics: self.network_metrics.clone(),
+            state,
         }
     }
 }
 
 impl Stream for SharedNimiqMessageStream {
-    type Item = NimiqMessage;
+    type Item = NimiqWebSocketMessage;
     type Error = NimiqMessageStreamError;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.inner.poll_lock() {
             Async::Ready(mut inner) => {
-                self.last_chunk_received_at = inner.last_chunk_received_at().clone();
-                inner.poll()
+                let result = inner.poll();
+                self.state.update(&inner.public_state);
+                result
             },
             Async::NotReady => Ok(Async::NotReady),
         }
@@ -376,28 +451,40 @@ impl Stream for SharedNimiqMessageStream {
 }
 
 impl Sink for SharedNimiqMessageStream {
-    type SinkItem = NimiqMessage;
+    type SinkItem = NimiqWebSocketMessage;
     type SinkError = ();
 
     fn start_send(&mut self, item: Self::SinkItem)
                   -> StartSend<Self::SinkItem, Self::SinkError>
     {
         match self.inner.poll_lock() {
-            Async::Ready(mut inner) => inner.start_send(item),
+            Async::Ready(mut inner) => {
+                let result = inner.start_send(item);
+                self.state.update(&inner.public_state);
+                result
+            },
             Async::NotReady => Ok(AsyncSink::NotReady(item)),
         }
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
         match self.inner.poll_lock() {
-            Async::Ready(mut inner) => inner.poll_complete(),
+            Async::Ready(mut inner) => {
+                let result = inner.poll_complete();
+                self.state.update(&inner.public_state);
+                result
+            },
             Async::NotReady => Ok(Async::NotReady),
         }
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
         match self.inner.poll_lock() {
-            Async::Ready(mut inner) => inner.close(),
+            Async::Ready(mut inner) => {
+                let result = inner.close();
+                self.state.update(&inner.public_state);
+                result
+            },
             Async::NotReady => Ok(Async::NotReady),
         }
     }

@@ -33,7 +33,8 @@ timers = ["futures", "parking_lot", "tokio", "log"]
 unique-ptr = []
 throttled-queue = ["nimiq-collections"]
 rate-limit = []
+unique-id = []
 # Compiles this package with all features.
-all = ["bit-vec", "crc", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr", "throttled-queue", "rate-limit"]
+all = ["bit-vec", "crc", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr", "throttled-queue", "rate-limit", "unique-id"]
 # Compiles this package with the features needed for the nimiq client.
 full-nimiq = ["crc", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr"]
