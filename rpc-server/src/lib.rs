@@ -94,11 +94,15 @@ impl JsonRpcHandler {
     }
 
     fn get_block_transaction_count_by_hash(&self, params: Array) -> Result<JsonValue, JsonValue> {
-        Ok("TODO".into())
+        Ok(self.block_by_hash(params.get(0).unwrap_or(&Null))?
+            .body.ok_or_else(|| object!{"message" => "No body for block found"})?
+            .transactions.len().into())
     }
 
     fn get_block_transaction_count_by_number(&self, params: Array) -> Result<JsonValue, JsonValue> {
-        Ok("TODO".into())
+        Ok(self.block_by_number(params.get(0).unwrap_or(&Null))?
+            .body.ok_or_else(|| object!{"message" => "No body for block found"})?
+            .transactions.len().into())
     }
 
     fn get_block_by_hash(&self, params: Array) -> Result<JsonValue, JsonValue> {
@@ -204,8 +208,6 @@ impl jsonrpc::Handler for JsonRpcHandler {
             "getBlockTransactionCountByNumber" => Some(JsonRpcHandler::get_block_transaction_count_by_number),
             "getBlockByHash" => Some(JsonRpcHandler::get_block_by_hash),
             "getBlockByNumber" => Some(JsonRpcHandler::get_block_by_number),
-
-
 
             _ => None
         }
