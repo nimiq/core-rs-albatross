@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::sync::mpsc::*;
 use parking_lot::RwLock;
@@ -48,6 +49,7 @@ impl PeerChannel {
         let message_metrics1 = message_metrics.clone();
 
         let info = network_connection.address_info();
+        let close_event_sent = AtomicBool::new(false);
         network_connection.notifier.write().register(move |e: PeerStreamEvent| {
             match e {
                 PeerStreamEvent::Message(msg) => {
@@ -55,10 +57,18 @@ impl PeerChannel {
                     message_metrics1.note_message(msg.ty());
                     msg_notifier1.notify(msg)
                 },
-                PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
+                PeerStreamEvent::Close(ty) => {
+                    // Only send close event once, i.e., if close_event_sent was false.
+                    if !close_event_sent.swap(true, Ordering::AcqRel) {
+                        close_notifier1.read().notify(ty)
+                    }
+                },
                 PeerStreamEvent::Error(error) => {
-                    debug!("Stream with peer closed with error: {} ({})", error.as_ref(), info);
-                    close_notifier1.read().notify(CloseType::NetworkError);
+                    // Only send close event once, i.e., if close_event_sent was false.
+                    if !close_event_sent.swap(true, Ordering::AcqRel) {
+                        debug!("Stream with peer closed with error: {} ({})", error.as_ref(), info);
+                        close_notifier1.read().notify(CloseType::NetworkError);
+                    }
                 }
             }
         });
