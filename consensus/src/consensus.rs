@@ -21,6 +21,7 @@ use crate::consensus_agent::ConsensusAgent;
 use crate::consensus_agent::ConsensusAgentEvent;
 use crate::inventory::InventoryManager;
 use crate::error::Error;
+use crate::accounts_chunk_cache::AccountsChunkCache;
 
 
 pub struct Consensus {
@@ -30,6 +31,7 @@ pub struct Consensus {
 
     inv_mgr: Arc<RwLock<InventoryManager>>,
     timers: Timers<ConsensusTimer>,
+    accounts_chunk_cache: Arc<AccountsChunkCache>,
 
     state: RwLock<ConsensusState>,
 
@@ -67,6 +69,7 @@ impl Consensus {
         let blockchain = Arc::new(Blockchain::new(env, network_id, network_time.clone()));
         let mempool = Mempool::new(blockchain.clone());
         let network = Network::new(blockchain.clone(), network_config, network_time, network_id)?;
+        let accounts_chunk_cache = AccountsChunkCache::new(env, Arc::clone(&blockchain));
 
         let this = Arc::new(Consensus {
             blockchain,
@@ -75,6 +78,7 @@ impl Consensus {
 
             inv_mgr: InventoryManager::new(),
             timers: Timers::new(),
+            accounts_chunk_cache,
 
             state: RwLock::new(ConsensusState {
                 established: false,
@@ -130,6 +134,7 @@ impl Consensus {
             self.blockchain.clone(),
             self.mempool.clone(),
             self.inv_mgr.clone(),
+            self.accounts_chunk_cache.clone(),
             peer_arc.clone());
 
         let weak = self.self_weak.clone();

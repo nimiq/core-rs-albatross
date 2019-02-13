@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
+use tokio::prelude::*;
+use futures::Future;
+
 use hash::Blake2bHash;
 use network_messages::{
     Message,
@@ -12,6 +15,8 @@ use network_messages::{
     TransactionsProofMessage,
     GetAccountsProofMessage,
     AccountsProofMessage,
+    GetAccountsTreeChunkMessage,
+    AccountsTreeChunkMessage
 };
 use network::connection::close_type::CloseType;
 
@@ -84,5 +89,16 @@ impl ConsensusAgent {
 
         let proof = self.blockchain.get_accounts_proof(&hash, &msg.addresses);
         self.peer.channel.send_or_close(AccountsProofMessage::new(hash, proof));
+    }
+
+    pub(super) fn on_get_accounts_tree_chunk(&self, msg: GetAccountsTreeChunkMessage) {
+        let get_chunk_future = self.accounts_chunk_cache.get_chunk(&msg.block_hash, &msg.start_prefix);
+        let peer = self.peer.clone();
+        let future = get_chunk_future.then(move |chunk_res| {
+            let chunk_opt = match chunk_res { Ok(v) => v, Err(_) => None };
+            peer.channel.send_or_close(Message::AccountsTreeChunk( AccountsTreeChunkMessage { block_hash: msg.block_hash, accounts_tree_chunk: chunk_opt }));
+            return future::ok::<(), ()>(());
+        });
+        tokio::run(future);
     }
 }

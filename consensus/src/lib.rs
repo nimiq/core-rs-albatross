@@ -3,6 +3,7 @@ extern crate log;
 #[macro_use]
 extern crate nimiq_macros as macros;
 
+extern crate nimiq_accounts as accounts;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_messages as network_messages;
@@ -18,3 +19,4 @@ pub mod consensus;
 pub mod consensus_agent;
 pub mod inventory;
 pub mod error;
+mod accounts_chunk_cache;

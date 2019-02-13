@@ -27,6 +27,7 @@ use utils::timers::Timers;
 use beserial::Serialize;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
+use crate::accounts_chunk_cache::AccountsChunkCache;
 
 pub mod requests;
 
@@ -83,6 +84,7 @@ enum ConsensusAgentTimer {
 
 pub struct ConsensusAgent {
     pub(crate) blockchain: Arc<Blockchain<'static>>,
+    accounts_chunk_cache: Arc<AccountsChunkCache>,
     pub peer: Arc<Peer>,
 
     inv_agent: Arc<InventoryAgent>,
@@ -114,12 +116,13 @@ impl ConsensusAgent {
     /// Maximum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, accounts_chunk_cache: Arc<AccountsChunkCache>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());
         let this = Arc::new(ConsensusAgent {
             blockchain,
+            accounts_chunk_cache,
             peer: peer_arc.clone(),
             inv_agent,
 
@@ -173,6 +176,9 @@ impl ConsensusAgent {
         msg_notifier.get_block_proof.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, msg| this.on_get_block_proof(msg)));
+        msg_notifier.get_accounts_tree_chunk.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg| this.on_get_accounts_tree_chunk(msg)));
     }
 
     pub fn relay_block(&self, block: &Block) -> bool {

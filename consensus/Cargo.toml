@@ -17,6 +17,7 @@ parking_lot = "0.6"
 rand = "0.6.4"
 log = "0.4.3"
 beserial = { path = "../beserial" }
+nimiq-accounts = { path = "../accounts" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
@@ -33,3 +34,5 @@ weak-table = "0.2.3"
 hex = "0.3.2"
 failure = "0.1.5"
 failure_derive = "0.1.5"
+futures = "0.1"
+tokio = "0.1"

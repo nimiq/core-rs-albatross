@@ -51,4 +51,8 @@ impl AccountsTreeChunk {
     pub(crate) fn tail(&self) -> &AccountsTreeNode { self.proof.nodes().get(0).unwrap() }
 
     pub fn root(&self) -> Blake2bHash { self.proof.root_hash() }
+
+    pub fn last_terminal_string(&self) -> Option<String> {
+        Some(self.tail().prefix().to_string())
+    }
 }

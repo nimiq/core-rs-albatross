@@ -259,8 +259,10 @@ impl<'env> AccountsTree<'env> {
                         }
                     }
                 }
-                AccountsTreeNode::TerminalNode { .. } => {
-                    vec.push(item);
+                AccountsTreeNode::TerminalNode { ref prefix, .. } => {
+                    if start.len() < prefix.len() || start < prefix {
+                        vec.push(item);
+                    }
                     if vec.len() >= size {
                         return Some(vec);
                     }
