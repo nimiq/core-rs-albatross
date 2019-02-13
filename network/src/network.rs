@@ -71,7 +71,7 @@ impl Network {
 
     pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Result<Arc<Self>, Error> {
         if !network_config.is_initialized() {
-            return Err(Error::PeerKeyUninitialized);
+            return Err(Error::UninitializedPeerKey);
         }
 
         let net_config = Arc::new(network_config);

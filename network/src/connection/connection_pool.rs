@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, SystemTime};
 
+use failure::{Backtrace, Fail};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 
 use blockchain::Blockchain;
@@ -171,10 +172,9 @@ impl ConnectionPoolState {
         self.connections_by_peer_address.insert(peer_address, connection_id);
     }
 
-    /// Remove a connection from the connection pool.
-    fn remove(&mut self, connection_id: ConnectionId) -> ConnectionInfo {
-        // TODO: Can we make sure that we never remove a connection twice?
-        let info = self.connections.remove(connection_id).unwrap();
+    /// Remove a connection from the connection pool if it is present.
+    fn remove(&mut self, connection_id: ConnectionId) -> Option<ConnectionInfo> {
+        let info = self.connections.remove(connection_id)?;
 
         if let Some(peer_address) = info.peer_address() {
             self.connections_by_peer_address.remove(&peer_address);
@@ -184,7 +184,7 @@ impl ConnectionPoolState {
             self.remove_net_address(connection_id, &network_connection.net_address());
         }
 
-        info
+        Some(info)
     }
 
     /// Adds the net address to a connection.
@@ -249,7 +249,7 @@ impl ConnectionPoolState {
     /// Bans an IP address.
     fn ban_ip(&mut self, net_address: &NetAddress) {
         if net_address.is_reliable() {
-            warn!("Banning ip {:?}", net_address);
+            warn!("Banning ip {}", net_address);
             let banned_address = if net_address.get_type() == NetAddressType::IPv4 {
                 net_address.clone()
             } else {
@@ -339,7 +339,7 @@ impl ConnectionPool {
     /// Constructor.
     pub fn new(peer_address_book: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Result<Arc<Self>, Error> {
         if !network_config.is_initialized() {
-            return Err(Error::PeerKeyUninitialized);
+            return Err(Error::UninitializedPeerKey);
         }
 
         let pool = Arc::new(Self {
@@ -523,14 +523,14 @@ impl ConnectionPool {
 
                 if connection_id_opt.is_none() {
                     ConnectionPool::close(Some(&connection), CloseType::InvalidConnectionState);
-                    error!("No ConnectionInfo present for outgoing connection ({:?}", peer_address);
+                    error!("No ConnectionInfo present for outgoing connection ({})", peer_address);
                     return;
                 }
 
                 connection_id = *connection_id_opt.unwrap();
                 if state.connections.get(connection_id).unwrap().state() != ConnectionState::Connecting {
                     ConnectionPool::close(Some(&connection), CloseType::InvalidConnectionState);
-                    error!("Expected state to be connecting ({:?}", peer_address);
+                    error!("Expected state to be connecting ({})", peer_address);
                     return;
                 }
 
@@ -756,7 +756,7 @@ impl ConnectionPool {
         // Let listeners know that the peers changed.
         self.notifier.read().notify(ConnectionPoolEvent::PeersChanged);
 
-        debug!("[PEER-JOINED] {} {} (version={:?}, services={:?}, headHash={:?})", &peer_address, peer.net_address()
+        debug!("[PEER-JOINED] {} {} (version={:?}, services={:?}, headHash={})", &peer_address, peer.net_address()
             .map_or("<unknown>".to_string(), |n| n.to_string()), peer.version, peer_address.services, peer.head_hash);
 
     }
@@ -783,7 +783,7 @@ impl ConnectionPool {
         // Aquire write lock and release it again before notifying listeners.
         {
             let mut state = self.state.write();
-            info = state.remove(connection_id);
+            info = state.remove(connection_id).expect("Missing connection in on_close");
 
             // Check if the handshake with this peer has completed.
             if info.state() == ConnectionState::Established {
@@ -803,10 +803,10 @@ impl ConnectionPool {
                 match info.network_connection().map(|n| n.inbound()) {
                     Some(true) => {
                         state.inbound_count.checked_sub(1).expect("inbound_count < 0");
-                        debug!("Inbound connection #{:?} closed pre-handshake: {:?}", connection_id, ty);
+                        debug!("Inbound connection #{} closed pre-handshake: {:?}", connection_id, ty);
                     },
                     Some(false) => {
-                        debug!("Connection #{:?} to {} closed pre-handshake: {:?}", connection_id, info.peer_address().unwrap(), ty);
+                        debug!("Connection #{} to {} closed pre-handshake: {:?}", connection_id, info.peer_address().unwrap(), ty);
                         self.notifier.read().notify(ConnectionPoolEvent::ConnectError(info.peer_address().expect("PeerAddress not set").clone(), ty));
                     },
                     _ => unreachable!("Invalid state, closing connection with network connection not set"),
@@ -877,7 +877,7 @@ impl ConnectionPool {
             let connection_id = *state.connections_by_peer_address.get(&peer_address).expect("PeerAddress not stored");
             let info = state.connections.get(connection_id).expect("Missing connection");
             assert_eq!(info.state(), ConnectionState::Connecting, "ConnectionInfo state not Connecting, but {:?} ({})", info.state(), peer_address);
-            state.remove(connection_id);
+            state.remove(connection_id).unwrap();
 
             update_checked!(state.connecting_count, PeerCountUpdate::Remove);
 

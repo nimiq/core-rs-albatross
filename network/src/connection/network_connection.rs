@@ -37,8 +37,8 @@ impl ClosedFlag {
     }
 
     #[inline]
-    pub fn set_closed(&self, closed: bool) {
-        self.closed.store(closed, Ordering::Release);
+    pub fn set_closed(&self, closed: bool) -> bool {
+        self.closed.swap(closed, Ordering::AcqRel)
     }
     #[inline]
     pub fn set_closed_type(&self, ty: CloseType) {

@@ -213,7 +213,7 @@ impl PeerKeyStore {
     pub fn load_peer_key() -> Result<KeyPair, Error> {
         match fs::read(PeerKeyStore::KEY_FILE) {
             Ok(data) => {
-                Deserialize::deserialize_from_vec(&data).map_err(|_| Error::PeerKeyInvalid)
+                Deserialize::deserialize_from_vec(&data).map_err(|_| Error::InvalidPeerKey)
             },
             Err(e) => Err(Error::IoError(e)),
         }

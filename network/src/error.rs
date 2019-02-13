@@ -8,9 +8,9 @@ use crate::websocket::error::ServerStartError;
 #[derive(Fail, Debug)]
 pub enum Error {
     #[fail(display = "PeerKey could not be deserialized")]
-    PeerKeyInvalid,
+    InvalidPeerKey,
     #[fail(display = "PeerKey has not been initialized")]
-    PeerKeyUninitialized,
+    UninitializedPeerKey,
     #[fail(display = "{}", _0)]
     IoError(#[cause] IoError),
     #[fail(display = "{}", _0)]
