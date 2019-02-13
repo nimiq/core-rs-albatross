@@ -350,7 +350,7 @@ impl PeerAddressBook {
 
                     // Only return addresses matching the service mask.
                     // TODO Is that the behaviour we'd like to see?
-                    if service_mask.intersects(peer_address.services) {
+                    if !service_mask.intersects(peer_address.services) {
                         return false;
                     }
 
