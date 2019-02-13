@@ -19,6 +19,7 @@ use crate::peer_channel::PeerSink;
 use crate::peer_channel::PeerStream;
 use crate::peer_channel::PeerStreamEvent;
 use crate::websocket::{Message, SharedNimiqMessageStream};
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct ClosedFlag {
@@ -195,5 +196,26 @@ impl AddressInfo {
     }
     pub fn set_net_address(&self, net_address: Arc<NetAddress>) {
         self.inner.net_address.write().replace(net_address);
+    }
+}
+
+impl fmt::Display for AddressInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "AddressInfo {{")?;
+        match self.inner.peer_address.try_read() {
+            Some(lock) => write!(f, "peer_address: {}, ", match lock.as_ref() {
+                Some(address) => address.to_string(),
+                None => "None".to_string(),
+            })?,
+            None => write!(f, "peer_address: [locked], ")?,
+        }
+        match self.inner.net_address.try_read() {
+            Some(lock) => write!(f, "net_address: {}, ", match lock.as_ref() {
+                Some(address) => address.to_string(),
+                None => "None".to_string(),
+            })?,
+            None => write!(f, "net_address: [locked], ")?,
+        }
+        write!(f, "}}")
     }
 }

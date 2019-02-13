@@ -47,6 +47,7 @@ impl PeerChannel {
         #[cfg(feature = "metrics")]
         let message_metrics1 = message_metrics.clone();
 
+        let info = network_connection.address_info();
         network_connection.notifier.write().register(move |e: PeerStreamEvent| {
             match e {
                 PeerStreamEvent::Message(msg) => {
@@ -56,8 +57,8 @@ impl PeerChannel {
                 },
                 PeerStreamEvent::Close(ty) => close_notifier1.read().notify(ty),
                 PeerStreamEvent::Error(error) => {
-                    // TODO: Pass this event somewhere.
-                    debug!("Stream with peer closed with error: {}", error.as_ref());
+                    debug!("Stream with peer closed with error: {} ({})", error.as_ref(), info);
+                    close_notifier1.read().notify(CloseType::NetworkError);
                 }
             }
         });

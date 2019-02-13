@@ -603,6 +603,7 @@ impl ConnectionPool {
     }
 
     /// Checks the validity of a handshake.
+    /// Is called after a version message.
     fn check_handshake(&self, connection_id: ConnectionId, peer: &UniquePtr<Peer>) -> bool {
         let _guard = self.change_lock.lock();
 
@@ -673,7 +674,7 @@ impl ConnectionPool {
                                 // Abort the stored connection attempt and accept this connection.
                                 let protocol = peer_address.protocol();
                                 assert!(protocol == Protocol::Wss || protocol == Protocol::Ws, "Duplicate connection to non-WS node");
-                                debug!("Aborting connection attempt to {:?}, simultaneous connection succeeded", peer_address);
+                                debug!("Aborting connection attempt to {}, simultaneous connection succeeded", peer_address);
 
                                 // Abort connection.
                                 stored_connection.connection_handle().map(|handle| {
