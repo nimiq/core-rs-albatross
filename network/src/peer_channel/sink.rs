@@ -29,11 +29,18 @@ impl PeerSink {
     }
 
     pub fn send(&self, msg: Message) -> Result<(), SendError<WebSocketMessage>> {
+        // Do not send messages over already closed connections.
+        // Stop sending silently until connection is really closed.
+        if self.closed_flag.is_closed() {
+            return Ok(());
+        }
         self.sink.unbounded_send(WebSocketMessage::Message(msg))
     }
 
     /// Closes the connection.
     pub fn close(&self, ty: CloseType, reason: Option<String>) -> Result<(), SendError<WebSocketMessage>> {
+        // Immediately mark channel as closed, so that no more messages are sent over it.
+        self.closed_flag.set_closed(true);
         self.closed_flag.set_closed_type(ty);
         debug!("Closing connection, reason: {:?} ({:?})", ty, reason);
         self.sink.unbounded_send(WebSocketMessage::Close(None))
