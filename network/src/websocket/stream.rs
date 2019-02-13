@@ -72,7 +72,7 @@ pub struct NimiqMessageStream {
 
 impl NimiqMessageStream {
     pub(super) fn new(ws_socket: WebSocketStream<MaybeTlsStream<TcpStream>>, outbound: bool) -> Self {
-        let peer_addr = ws_socket.get_ref().peer_addr().expect("WebSocketStream misses remote IP address");
+        let peer_addr = ws_socket.peer_addr().expect("WebSocketStream misses remote IP address");
         return NimiqMessageStream {
             inner: ws_socket,
             receiving_tag: 254,
