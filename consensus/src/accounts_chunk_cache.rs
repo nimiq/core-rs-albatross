@@ -8,7 +8,6 @@ use futures::prelude::*;
 use futures::task::Task;
 
 use accounts::tree::AccountsTreeChunk;
-use primitives::block::Block;
 use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
 use database::ReadTransaction;
@@ -20,10 +19,13 @@ use hash::Hash;
 use std::error::Error;
 use futures::task;
 use std::collections::LinkedList;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 pub struct AccountsChunkCache {
     blockchain: Arc<Blockchain<'static>>,
     env: &'static Environment,
+    computing_enabled: AtomicBool,
     chunks_by_prefix_by_block: RwLock<HashMap<Blake2bHash, HashMap<String, AccountsTreeChunk>>>,
     tasks_by_block: RwLock<HashMap<Blake2bHash, Vec<Task>>>,
     block_history_order: RwLock<LinkedList<Blake2bHash>>,
@@ -37,11 +39,12 @@ impl AccountsChunkCache {
 
     pub fn new(env: &'static Environment, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
         let cache = AccountsChunkCache {
-            chunks_by_prefix_by_block: RwLock::new(HashMap::new()),
-            block_history_order: RwLock::new(LinkedList::new()),
-            tasks_by_block: RwLock::new(HashMap::new()),
-            env,
             blockchain,
+            env,
+            computing_enabled: AtomicBool::new(false),
+            chunks_by_prefix_by_block: RwLock::new(HashMap::new()),
+            tasks_by_block: RwLock::new(HashMap::new()),
+            block_history_order: RwLock::new(LinkedList::new()),
             weak_self: MutableOnce::new(Weak::new()),
         };
         let cache_arc = Arc::new(cache);
@@ -54,24 +57,33 @@ impl AccountsChunkCache {
     }
 
     pub fn get_chunk(&self, hash: &Blake2bHash, prefix: &String) -> GetChunkFuture {
+        if !self.computing_enabled.load(Ordering::Relaxed) {
+            self.computing_enabled.store(true, Ordering::Relaxed);
+            if &self.blockchain.head_hash() == hash {
+                self.compute_chunks_for_block(hash.clone());
+            }
+        }
         return GetChunkFuture::new(hash.clone(), prefix.clone(), self.weak_self.upgrade().unwrap());
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent) {
+        if !self.computing_enabled.load(Ordering::Relaxed) {
+            // Only pre-compute chunks after a chunk was requested for the first time
+            return;
+        }
         match event {
             BlockchainEvent::Extended(_, ref block) => {
-                self.compute_chunks_for_block(block);
+                self.compute_chunks_for_block(block.header.hash());
             },
             BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
                 for (_hash, block) in adopted_blocks {
-                    self.compute_chunks_for_block(block);
+                    self.compute_chunks_for_block(block.header.hash());
                 }
             }
         }
     }
 
-    fn compute_chunks_for_block(&self, block: &Block) {
-        let hash: Blake2bHash = block.header.hash();
+    fn compute_chunks_for_block(&self, hash: Blake2bHash) {
         // Requests for accounts tree chunks of `block` are accepted now
         self.tasks_by_block.write().insert(hash.clone(), Vec::new());
 
