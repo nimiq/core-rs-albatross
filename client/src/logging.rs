@@ -119,12 +119,22 @@ impl NimiqDispatch for Dispatch {
     }
 }
 
+macro_rules! force_log {
+    ($lvl:expr, $($arg:tt)+) => ({
+        if log_enabled!($lvl) {
+            log!($lvl, $($arg)+);
+        } else {
+            eprintln!($($arg)+);
+        }
+    })
+}
+
 #[inline]
-pub fn log_error_cause_chain(mut fail: &Fail, level: Level) {
-    log!(level, "{}", fail);
-    log!(level, "  caused by");
+pub fn force_log_error_cause_chain(mut fail: &Fail, level: Level) {
+    force_log!(level, "{}", fail);
+    force_log!(level, "  caused by");
     while let Some(cause) = fail.cause() {
-        log!(level, "    {}", cause);
+        force_log!(level, "    {}", cause);
         fail = cause;
     }
 }

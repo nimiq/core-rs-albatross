@@ -45,7 +45,7 @@ use rpc_server::rpc_server;
 
 use crate::cmdline::Options;
 use crate::logging::{DEFAULT_LEVEL, NimiqDispatch, to_level};
-use crate::logging::log_error_cause_chain;
+use crate::logging::force_log_error_cause_chain;
 use crate::settings as s;
 use crate::settings::Settings;
 use crate::static_env::ENV;
@@ -68,7 +68,7 @@ pub enum ConfigError {
 
 fn main() {
     if let Err(e) = run() {
-        log_error_cause_chain(e.as_fail(), Level::Error);
+        force_log_error_cause_chain(e.as_fail(), Level::Error);
     }
 }
 
