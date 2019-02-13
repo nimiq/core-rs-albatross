@@ -26,6 +26,8 @@ pub enum Error {
     TlsWrappingError,
     #[fail(display = "{}", _0)]
     IoError(#[cause] IoError),
+    #[fail(display = "Message format is incorrect and could not be parsed correctly")]
+    InvalidMessageFormat,
 }
 
 impl From<IoError> for Error {

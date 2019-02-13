@@ -53,6 +53,8 @@ impl PeerStream {
                     msg_closed_flag.update(true);
                     msg_notifier.read().notify(PeerStreamEvent::Close(frame.map(|f| f.code).into()));
                 },
+                // We have a type WebSocketMessage::Resume that is only used in the Sink and will never be returned here.
+                _ => unreachable!(),
             }
             Ok(())
         }).or_else(move |error| {

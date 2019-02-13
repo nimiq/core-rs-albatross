@@ -23,5 +23,7 @@ pub mod shared_stream;
 pub enum Message {
     Message(NimiqMessage),
     Close(Option<CloseFrame<'static>>),
+    #[doc(hidden)]
+    Resume(Vec<u8>, Option<u8>),
 }
 
