@@ -25,14 +25,14 @@ fn it_correctly_serializes_and_deserializes_hashsets() {
     let reference_hashset = hashset.clone();
     let processed_hashset = reserialize(hashset);
 
-    assert!(reference_hashset == processed_hashset);
+    assert_eq!(reference_hashset, processed_hashset);
 
-    assert!(processed_hashset.contains(&18446744073709551615) == true);
-    assert!(processed_hashset.contains(&9223372036854775807) == true);
-    assert!(processed_hashset.contains(&381073568934759237) == true);
-    assert!(processed_hashset.contains(&2131907967678687) == true);
-    assert!(processed_hashset.contains(&255) == true);
-    assert!(processed_hashset.contains(&16) == true);
+    assert!(processed_hashset.contains(&18446744073709551615));
+    assert!(processed_hashset.contains(&9223372036854775807));
+    assert!(processed_hashset.contains(&381073568934759237));
+    assert!(processed_hashset.contains(&2131907967678687));
+    assert!(processed_hashset.contains(&255));
+    assert!(processed_hashset.contains(&16));
 
-    assert!(processed_hashset.contains(&0) == false);
+    assert!(!processed_hashset.contains(&0));
 }

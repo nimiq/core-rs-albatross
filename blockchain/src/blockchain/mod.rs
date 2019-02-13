@@ -52,7 +52,7 @@ pub(crate) struct BlockchainState<'env> {
     pub(crate) chain_proof: Option<ChainProof>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PushResult {
     Invalid(PushError),
     Orphan,
@@ -62,7 +62,7 @@ pub enum PushResult {
     Forked,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PushError {
     InvalidBlock(BlockError),
     InvalidSuccessor,

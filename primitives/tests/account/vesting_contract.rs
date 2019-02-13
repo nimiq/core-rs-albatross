@@ -193,7 +193,10 @@ fn it_can_verify_outgoing_transactions() {
     let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from(1), Coin::from(1000), 1, NetworkId::Dummy);
     tx.sender_type = AccountType::Vesting;
 
-    assert_eq!(VestingContract::verify_outgoing_transaction(&tx), Err(TransactionError::InvalidSerialization(SerializingError::IoError)));
+    assert!(match VestingContract::verify_outgoing_transaction(&tx) {
+        Err(TransactionError::InvalidSerialization(SerializingError::IoError(_, _))) => true,
+        _ => false,
+    });
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair.public, signature);

@@ -1,12 +1,10 @@
 extern crate byteorder;
-#[macro_use]
-extern crate log;
 extern crate num;
 
 use std::collections::HashSet;
-use std::error::Error;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
+use failure::Fail;
 pub use num::ToPrimitive;
 
 pub use crate::types::uvar;
@@ -36,31 +34,21 @@ pub trait Serialize {
 
 // Error and result
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Fail, Debug, PartialEq, Eq, Clone)]
 pub enum SerializingError {
-    IoError,
+    #[fail(display = "IoError(kind={:?}, description={})", _0, _1)]
+    IoError(std::io::ErrorKind, String),
+    #[fail(display = "Invalid encoding")]
     InvalidEncoding,
+    #[fail(display = "Invalid value")]
     InvalidValue,
+    #[fail(display = "Overflow")]
     Overflow,
-}
-
-impl Error for SerializingError {}
-
-impl std::fmt::Display for SerializingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            SerializingError::IoError => write!(f, "IoError"),
-            SerializingError::InvalidEncoding => write!(f, "InvalidEncoding"),
-            SerializingError::InvalidValue => write!(f, "InvalidValue"),
-            SerializingError::Overflow => write!(f, "Overflow"),
-        }
-    }
 }
 
 impl From<std::io::Error> for SerializingError {
     fn from(io_error: std::io::Error) -> Self {
-        warn!("I/O error: {}", io_error);
-        SerializingError::IoError
+        SerializingError::IoError(io_error.kind(), format!("{}", io_error))
     }
 }
 

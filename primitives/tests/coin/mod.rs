@@ -46,7 +46,7 @@ fn test_serialize_out_of_bounds() {
         Ok(coin) => assert!(false, "Instead of failing, got {}", coin),
         Err(err) => {
             match err {
-                SerializingError::IoError => (),
+                SerializingError::IoError(_, _) => (),
                 _ => assert!(false, "Expected to fail with IoError, but got {}", err)
             }
         }

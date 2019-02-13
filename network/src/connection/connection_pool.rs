@@ -6,7 +6,6 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, SystemTime};
 
-use failure::{Backtrace, Fail};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 
 use blockchain::Blockchain;

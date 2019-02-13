@@ -5,11 +5,11 @@ use atomic::{Atomic, Ordering};
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::{Hash, Blake2bHash};
+use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_primitives::time::NetworkTime;
 use nimiq_primitives::account::{AccountError, AccountType};
-use nimiq_primitives::block::{Block, BlockError, BlockHeader, Target, TargetCompact};
+use nimiq_primitives::block::{Block, BlockError};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::transaction::{SignatureProof, Transaction};
 

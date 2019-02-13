@@ -138,7 +138,7 @@ impl InventoryManager {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum InventoryEvent {
     NewBlockAnnounced,
     KnownBlockAnnounced(Blake2bHash),

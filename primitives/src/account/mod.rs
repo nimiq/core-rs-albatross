@@ -283,7 +283,7 @@ impl PartialEq for PrunedAccount {
 }
 
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum AccountError {
     InsufficientFunds,
     TypeMismatch,

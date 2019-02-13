@@ -383,7 +383,7 @@ impl Ord for Transaction {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TransactionError {
     ForeignNetwork,
     ZeroValue,
@@ -393,7 +393,7 @@ pub enum TransactionError {
     InvalidProof,
     InvalidForRecipient,
     InvalidData,
-    InvalidSerialization(SerializingError)
+    InvalidSerialization(SerializingError),
 }
 
 impl std::fmt::Display for TransactionError {

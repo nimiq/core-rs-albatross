@@ -13,7 +13,7 @@ pub use self::target::{Target, TargetCompact, Difficulty};
 
 use crate::transaction::TransactionError;
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum BlockError {
     UnsupportedVersion,
     FromTheFuture,

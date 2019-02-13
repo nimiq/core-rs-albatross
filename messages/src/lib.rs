@@ -498,7 +498,11 @@ impl Deserialize for VersionMessage {
             genesis_hash: Deserialize::deserialize(reader)?,
             head_hash: Deserialize::deserialize(reader)?,
             challenge_nonce: Deserialize::deserialize(reader)?,
-            user_agent: DeserializeWithLength::deserialize::<u8, R>(reader).ok()
+            user_agent: match DeserializeWithLength::deserialize::<u8, R>(reader) {
+                Ok(user_agent) => Some(user_agent),
+                Err(SerializingError::IoError(std::io::ErrorKind::UnexpectedEof, _)) => None,
+                Err(e) => return Err(e),
+            }
         })
     }
 }
