@@ -28,7 +28,7 @@ nimiq-macros = { path = "../macros", optional = true }
 nimiq-utils = { path = "../utils", optional = true, features = ["merkle"] }
 
 [dev-dependencies]
-lazy_static = "1.0"
+lazy_static = "1.2"
 
 [features]
 all = ["coin", "account", "block", "policy", "transaction", "networks"]

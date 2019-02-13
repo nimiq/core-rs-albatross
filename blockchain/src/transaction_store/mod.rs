@@ -11,7 +11,7 @@ use hash::Hash;
 
 pub mod blockchain;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TransactionInfo {
     pub transaction_hash: Blake2bHash,
     pub block_hash: Blake2bHash,

@@ -13,15 +13,15 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 maintenance = { status = "experimental" }
 
 [dependencies]
-nimiq-blockchain = { path = "../blockchain" }
+nimiq-blockchain = { path = "../blockchain", features = ["transaction-store"] }
 nimiq-accounts = { path = "../accounts" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-network = { path = "../network" }
 nimiq-hash = { path = "../hash" }
 nimiq-network-primitives = { path = "../network-primitives" }
 nimiq-primitives = { path = "../primitives", features = ["all"] }
+nimiq-keys = { path = "../keys" }
 beserial = { path = "../beserial" }
-
 hyper = "0.12.19"
 json = "0.11.13"
 futures = "0.1"

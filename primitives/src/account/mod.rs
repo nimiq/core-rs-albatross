@@ -14,6 +14,7 @@ pub use self::basic_account::BasicAccount;
 pub use self::htlc_contract::HashedTimeLockedContract;
 pub use self::vesting_contract::VestingContract;
 
+
 pub mod basic_account;
 pub mod htlc_contract;
 pub mod vesting_contract;
@@ -27,6 +28,17 @@ pub enum AccountType {
     Basic = 0,
     Vesting = 1,
     HTLC = 2,
+}
+
+impl AccountType {
+    pub fn from_int(x: u8) -> Option<AccountType> {
+        match x {
+            0 => Some(AccountType::Basic),
+            1 => Some(AccountType::Vesting),
+            2 => Some(AccountType::HTLC),
+            _ => None
+        }
+    }
 }
 
 macro_rules! invoke_account_type {

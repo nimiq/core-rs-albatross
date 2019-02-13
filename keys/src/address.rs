@@ -4,6 +4,7 @@ use std::convert::From;
 use std::char;
 use std::io;
 use std::iter::Iterator;
+use std::str::FromStr;
 use hex::FromHex;
 
 create_typed_array!(Address, u8, 20);
@@ -11,30 +12,35 @@ hash_typed_array!(Address);
 add_hex_io_fns_typed_arr!(Address, Address::SIZE);
 
 #[derive(Debug)]
-pub enum FriendlyAddressError {
+pub enum AddressParseError {
+    // User-friendly
     WrongCountryCode,
     WrongLength,
-    InvalidChecksum
+    InvalidChecksum,
+    // from Hash
+    InvalidHash,
+    // trying both
+    UnknownFormat
 }
 
 impl Address {
     const CCODE: &'static str = "NQ";
     const NIMIQ_ALPHABET: &'static str = "0123456789ABCDEFGHJKLMNPQRSTUVXY";
 
-    pub fn from_user_friendly_address(friendly_addr: &String) -> Result<Address, FriendlyAddressError> {
+    pub fn from_user_friendly_address(friendly_addr: &String) -> Result<Address, AddressParseError> {
         let friendly_addr_wospace = str::replace(friendly_addr, " ", "");
 
         if friendly_addr_wospace[0..2].to_uppercase() != Address::CCODE {
-            return Err(FriendlyAddressError::WrongCountryCode);
+            return Err(AddressParseError::WrongCountryCode);
         }
         if friendly_addr_wospace.len() != 36 {
-            return Err(FriendlyAddressError::WrongLength);
+            return Err(AddressParseError::WrongLength);
         }
         let mut twisted_str = String::with_capacity(friendly_addr_wospace.len());
         twisted_str.push_str(&friendly_addr_wospace[4..]);
         twisted_str.push_str(&friendly_addr_wospace[..4]);
         if Address::iban_check(&twisted_str) != 1 {
-            return Err(FriendlyAddressError::InvalidChecksum);
+            return Err(AddressParseError::InvalidChecksum);
         }
 
         let mut spec = data_encoding::Specification::new();
@@ -85,6 +91,12 @@ impl Address {
 
         return tmp.parse::<u32>().unwrap();
     }
+
+    pub fn from_any_str(s: &str) -> Result<Address, AddressParseError> {
+        Address::from_user_friendly_address(&String::from(s))
+            .or_else(|_| Address::from_str(s))
+            .map_err(|_|AddressParseError::UnknownFormat)
+    }
 }
 
 impl From<Blake2bHash> for Address {
@@ -99,23 +111,4 @@ impl<'a> From<&'a PublicKey> for Address {
         let hash = Blake2bHasher::default().digest(public_key.as_bytes());
         return Address::from(hash);
     }
-}
-
-#[test]
-fn it_computes_friendly_addresses() {
-    let mut addr = Address::from([0u8; Address::SIZE]);
-    assert_eq!(addr.to_user_friendly_address(), "NQ07 0000 0000 0000 0000 0000 0000 0000 0000");
-
-    let mut addr_bytes : [u8; Address::SIZE] = [0; Address::SIZE];
-    addr_bytes.clone_from_slice(&::hex::decode("e9910f2452419823dc2e5534633210074ae9527f").unwrap()[0..]);
-    addr = Address::from(addr_bytes);
-    assert_eq!(addr.to_user_friendly_address(), "NQ97 V68G X92J 86C2 7P1E ALS6 6CGG 0V5E JLKY");
-
-    addr_bytes.clone_from_slice(&::hex::decode("2987c28c1ff373ba1e18a9a2efe6dc101ee25ed9").unwrap()[0..]);
-    addr = Address::from(addr_bytes);
-    assert_eq!(addr.to_user_friendly_address(), "NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR");
-
-    let addr2 = Address::from_user_friendly_address(&"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string()).unwrap();
-    assert_eq!(addr.0, addr2.0);
-    assert_eq!(addr.to_user_friendly_address(), addr2.to_user_friendly_address());
 }

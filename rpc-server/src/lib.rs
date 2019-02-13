@@ -2,6 +2,7 @@
 extern crate json;
 #[macro_use]
 extern crate log;
+extern crate beserial;
 extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_consensus as consensus;
@@ -9,6 +10,7 @@ extern crate nimiq_network as network;
 extern crate nimiq_hash as hash;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_keys as keys;
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -16,17 +18,26 @@ use std::net::{SocketAddr, IpAddr};
 
 use futures::future::Future;
 use hyper::Server;
-use json::{Array, JsonValue, Null, };
+use json::{Array, JsonValue, Null};
 
-use beserial::Serialize;
+use beserial::{Serialize, Deserialize};
 use consensus::consensus::{Consensus, ConsensusEvent};
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use primitives::block::{Block, Difficulty};
-use primitives::transaction::Transaction;
 use crate::error::Error;
+use primitives::transaction::{Transaction, TransactionFlags, TransactionReceipt};
+use primitives::account::AccountType;
+use primitives::coin::Coin;
+use keys::Address;
+use blockchain::transaction_store::TransactionInfo;
 
 pub mod jsonrpc;
 pub mod error;
+
+fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
+    Err(object!{"message" => "Not implemented"})
+}
+
 
 pub struct JsonRpcHandler {
     consensus: Arc<Consensus>,
@@ -59,6 +70,8 @@ impl JsonRpcHandler {
     }
 
 
+    // Network
+
     fn peer_count(&self, _: Array) -> Result<JsonValue, JsonValue> {
         Ok(self.consensus.network.peer_count().into())
     }
@@ -82,12 +95,142 @@ impl JsonRpcHandler {
     }
 
     fn peer_list(&self, _params: Array) -> Result<JsonValue, JsonValue> {
-        Ok("TODO".into())
+        rpc_not_implemented()
     }
 
     fn peer_state(&self, _params: Array) -> Result<JsonValue, JsonValue> {
-        Ok("TODO".into())
+        rpc_not_implemented()
     }
+
+
+    // Transaction
+
+    fn send_raw_transaction(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let raw = hex::decode(params.get(0)
+                .unwrap_or(&Null)
+                .as_str()
+                .ok_or_else(|| object!{"message" => "Raw transaction must be a string"} )?)
+            .map_err(|_| object!{"message" => "Raw transaction must be a hex string"} )?;
+        let transaction: Transaction = Deserialize::deserialize_from_vec(&raw)
+            .map_err(|_| object!{"message" => "Transaction can't be deserialized"} )?;
+        self.push_transaction(&transaction)
+    }
+
+    fn create_raw_transaction(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let raw = Serialize::serialize_to_vec(&self.obj_to_transaction(params.get(0).unwrap_or(&Null))?);
+        Ok(hex::encode(raw).into())
+    }
+
+    fn send_transaction(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        self.push_transaction(&self.obj_to_transaction(params.get(0).unwrap_or(&Null))?)
+    }
+
+
+    fn get_raw_transaction_info(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let transaction: Transaction = params.get(0).unwrap_or(&Null).as_str()
+            .ok_or_else(|| object!{"message" => "Raw transaction data must be a string"}) // Result<&str, Err>
+            .and_then(|s| hex::decode(s)
+                .map_err(|_| object!{"message" => "Raw transaction data must be hex-encoded"})) // Result<Vec<u8>, Err>
+            .and_then(|b| Deserialize::deserialize_from_vec(&b)
+                .map_err(|_| object!{"message" => "Invalid transaction data"}))?;
+
+        let (mut transaction, valid, in_mempool) =
+            if let Ok(live_transaction) = self.get_transaction_by_hash_helper(&transaction.hash::<Blake2bHash>()) {
+                let confirmations = live_transaction["confirmations"].as_u32()
+                    .expect("Function didn't return transaction with confirmation number");
+                (live_transaction, true, confirmations == 0)
+            }
+            else {
+                (self.transaction_to_obj(&transaction, None, None)?,
+                 transaction.verify(self.consensus.blockchain.network_id).is_ok(), false)
+            };
+
+        // Insert `valid` and `in_mempool` into `transaction` object.
+        match transaction {
+            // This should always be an object
+            JsonValue::Object(mut o) => {
+                o.insert("valid", JsonValue::Boolean(valid));
+                o.insert("inMempool", JsonValue::Boolean(in_mempool));
+            }
+            _ => assert!(false)
+        };
+
+        rpc_not_implemented()
+    }
+
+    fn get_transaction_by_block_hash_and_index(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let block = self.block_by_hash(params.get(0).unwrap_or(&Null))?;
+        let index = params.get(1).and_then(JsonValue::as_u16)
+            .ok_or_else(|| object!("message" => "Invalid transaction index"))?;
+        self.get_transaction_by_block_and_index(&block, index)
+    }
+
+    fn get_transaction_by_block_number_and_index(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let block = self.block_by_number(params.get(0).unwrap_or(&Null))?;
+        let index = params.get(1).and_then(JsonValue::as_u16)
+            .ok_or_else(|| object!("message" => "Invalid transaction index"))?;
+        self.get_transaction_by_block_and_index(&block, index)
+    }
+
+    fn get_transaction_by_hash(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        params.get(0).and_then(JsonValue::as_str)
+            .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
+            .and_then(|s| Blake2bHash::from_str(s)
+                .map_err(|_| object!{"message" => "Invalid transaction hash"}))
+            .and_then(|h| self.get_transaction_by_hash_helper(&h))
+    }
+
+    fn get_transaction_receipt(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let hash = params.get(0).and_then(JsonValue::as_str)
+            .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
+            .and_then(|s| Blake2bHash::from_str(s)
+                .map_err(|_| object!{"message" => "Invalid transaction hash"}))?;
+
+        let transaction_info = self.consensus
+            .blockchain.get_transaction_info_by_hash(&hash)
+            .ok_or_else(|| object!{"message" => "Transaction not found"})?;
+
+        // Get block which contains the transaction. If we don't find the block (for what reason?),
+        // return an error
+        let block = self.consensus.blockchain.get_block(&transaction_info.block_hash, false, true);
+
+        let transaction_index = transaction_info.index;
+        Ok(self.transaction_receipt_to_obj(&transaction_info.into(),
+                                           Some(transaction_index),
+                                           block.as_ref()))
+    }
+
+    fn get_transactions_by_address(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let address = params.get(0).and_then(JsonValue::as_str)
+            .ok_or_else(|| object!{"message" => "Invalid address"})
+            .and_then(|s| Address::from_any_str(s)
+                .map_err(|_| object!{"message" => "Invalid address"}))?;
+
+        // TODO: Accept two limit parameters?
+        let limit = params.get(0).and_then(JsonValue::as_usize)
+            .unwrap_or(1000);
+        let sender_limit = limit / 2;
+        let recipient_limit = limit / 2;
+
+        Ok(JsonValue::Array(self.consensus.blockchain
+            .get_transaction_receipts_by_address(&address, sender_limit, recipient_limit)
+            .iter()
+            .map(|receipt| self.transaction_receipt_to_obj(&receipt, None, None))
+            .collect::<Array>()))
+    }
+
+    fn transaction_receipt_to_obj(&self, receipt: &TransactionReceipt, index: Option<u16>, block: Option<&Block>) -> JsonValue {
+        object!{
+            "transactionHash" => receipt.transaction_hash.to_hex(),
+            "blockNumber" => receipt.block_height,
+            "blockHash" => receipt.block_hash.to_hex(),
+            "confirmations" => self.consensus.blockchain.height() - receipt.block_height,
+            "timestamp" => block.map(|block| block.header.timestamp.into()).unwrap_or(Null),
+            "transactionIndex" => index.map(|i| i.into()).unwrap_or(Null)
+        }
+    }
+
+    // Blockchain
 
     fn block_number(&self, _params: Array) -> Result<JsonValue, JsonValue> {
         Ok(self.consensus.blockchain.height().into())
@@ -112,6 +255,9 @@ impl JsonRpcHandler {
     fn get_block_by_number(&self, params: Array) -> Result<JsonValue, JsonValue> {
         self.block_to_obj(&self.block_by_number(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false))
     }
+
+
+    // Helper functions
     
     fn block_by_number(&self, number: &JsonValue) -> Result<Block, JsonValue> {
         let mut block_number = if number.is_string() {
@@ -160,22 +306,22 @@ impl JsonRpcHandler {
             "size" => block.serialized_size(),
             "timestamp" => block.header.timestamp,
             "transactions" => JsonValue::Array(block.body.as_ref().map(|body| if include_transactions { 
-                body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(block), i).unwrap_or(Null)).collect()
+                body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(block), Some(i)).unwrap_or(Null)).collect()
             } else { 
                 body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
             }).unwrap_or(vec![])),
         })
     }
     
-    fn transaction_to_obj(&self, transaction: &Transaction, block: Option<&Block>, i: usize) -> Result<JsonValue, JsonValue> {
+    fn transaction_to_obj(&self, transaction: &Transaction, block: Option<&Block>, i: Option<usize>) -> Result<JsonValue, JsonValue> {
         let header = block.as_ref().map(|b| &b.header);
         Ok(object!{
             "hash" => transaction.hash::<Blake2bHash>().to_hex(),
             "blockHash" => header.map(|h| h.hash::<Blake2bHash>().to_hex().into()).unwrap_or(Null),
             "blockNumber" => header.map(|h| h.height.into()).unwrap_or(Null),
-            "blockHash" => header.map(|h| h.timestamp.into()).unwrap_or(Null),
+            "timestamp" => header.map(|h| h.timestamp.into()).unwrap_or(Null),
             "confirmations" => header.map(|b| (self.consensus.blockchain.height() - b.height).into()).unwrap_or(Null),
-            "transactionIndex" => i,
+            "transactionIndex" => i.map(|i| i.into()).unwrap_or(Null),
             "from" => transaction.sender.to_hex(),
             "fromAddress" => transaction.sender.to_user_friendly_address(),
             "to" => transaction.recipient.to_hex(),
@@ -183,8 +329,77 @@ impl JsonRpcHandler {
             "value" => u64::from(transaction.value),
             "fee" => u64::from(transaction.fee),
             "data" => hex::encode(&transaction.data),
-            "flags" => transaction.flags.bits()
+            "flags" => transaction.flags.bits(),
+            "validityStartHeight" => transaction.validity_start_height
         })
+    }
+
+    fn obj_to_transaction(&self, obj: &JsonValue) -> Result<Transaction, JsonValue> {
+        /*
+        let from = Address::from_any_str(obj["from"].as_str()
+            .ok_or_else(|| object!{"message" => "Sender address must be a string"})?)
+            .map_err(|_|  object!{"message" => "Sender address invalid"})?;
+
+        let from_type = match &obj["fromType"] {
+            &JsonValue::Null => Some(AccountType::Basic),
+            n @ JsonValue::Number(_) => n.as_u8().and_then(|n| AccountType::from_int(n)),
+            _ => None
+        }.ok_or_else(|| object!{"message" => "Invalid sender account type"})?;
+
+        let to = Address::from_any_str(obj["to"].as_str()
+            .ok_or_else(|| object!{"message" => "Recipient address must be a string"})?)
+            .map_err(|_|  object!{"message" => "Recipient address invalid"})?;
+
+        let to_type = match &obj["toType"] {
+            &JsonValue::Null => Some(AccountType::Basic),
+            n @ JsonValue::Number(_) => n.as_u8().and_then(|n| AccountType::from_int(n)),
+            _ => None
+        }.ok_or_else(|| object!{"message" => "Invalid recipient account type"})?;
+
+        let value = Coin::from(obj["value"].as_u64()
+            .ok_or_else(|| object!{"message" => "Invalid transaction value"})?);
+
+        let fee = Coin::from(obj["value"].as_u64()
+            .ok_or_else(|| object!{"message" => "Invalid transaction fee"})?);
+
+        let flags = obj["flags"].as_u8()
+            .map_or_else(|| Some(TransactionFlags::default()), TransactionFlags::from_bits)
+            .ok_or_else(|| object!{"message" => "Invalid transaction flags"})?;
+
+        let data = obj["data"].as_str()
+            .map(|d| hex::decode(d))
+            .transpose().map_err(|_| object!{"message" => "Invalid transaction data"})?
+            .unwrap_or(vec![]);
+        */
+
+        rpc_not_implemented()
+    }
+
+    fn push_transaction(&self, transaction: &Transaction) -> Result<JsonValue, JsonValue> {
+        rpc_not_implemented()
+    }
+
+    fn get_transaction_by_hash_helper(&self, hash: &Blake2bHash) -> Result<JsonValue, JsonValue> {
+        // Get transaction info, which includes Block hash, transaction hash, and transaction index.
+        // Return an error if the transaction doesn't exist.
+        let transaction_info = self.consensus.blockchain.get_transaction_info_by_hash(hash)
+            .ok_or_else(|| object!{"message" => "Transaction not found"})?;
+
+        // Get block which contains the transaction. If we don't find the block (for what reason?),
+        // return an error
+        let block = self.consensus.blockchain.get_block(&transaction_info.block_hash, false, true)
+            .ok_or_else(|| object!{"message" => "Block not found"})?;
+
+        self.get_transaction_by_block_and_index(&block, transaction_info.index)
+    }
+
+    fn get_transaction_by_block_and_index(&self, block: &Block, index: u16) -> Result<JsonValue, JsonValue> {
+        // Get the transaction. If the body doesn't store transaction, return an error
+        let transaction = block.body.as_ref()
+            .and_then(|b| b.transactions.get(index as usize))
+            .ok_or_else(|| object!{"message" => "Block doesn't contain transaction."})?;
+
+        self.transaction_to_obj(&transaction, Some(&block), Some(index as usize))
     }
 }
 
@@ -200,7 +415,16 @@ impl jsonrpc::Handler for JsonRpcHandler {
             "peerState" => Some(JsonRpcHandler::peer_count),
 
             // Transactions
-            // TODO
+            "sendRawTransaction" => Some(JsonRpcHandler::send_raw_transaction),
+            "createRawTransaction" => Some(JsonRpcHandler::create_raw_transaction),
+            "sendTransaction" => Some(JsonRpcHandler::send_transaction),
+            "getRawTransactionInfo" => Some(JsonRpcHandler::get_raw_transaction_info),
+
+            "getTransactionByBlockHashAndIndex" => Some(JsonRpcHandler::get_transaction_by_block_hash_and_index),
+            "getTransactionByBlockNumberAndIndex" => Some(JsonRpcHandler::get_transaction_by_block_number_and_index),
+            "getTransactionByHash" => Some(JsonRpcHandler::get_transaction_by_hash),
+            "getTransactionReceipt" => Some(JsonRpcHandler::get_transaction_receipt),
+            "getTransactionsByAddress" => Some(JsonRpcHandler::get_transactions_by_address),
 
             // Blockchain
             "blockNumber" => Some(JsonRpcHandler::block_number),
