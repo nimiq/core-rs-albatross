@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use futures::prelude::*;
 use futures::stream::Forward;
 use futures::sync::mpsc::*;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use network_primitives::address::net_address::NetAddress;
@@ -20,19 +21,36 @@ use crate::peer_channel::PeerStreamEvent;
 use crate::websocket::{Message, SharedNimiqMessageStream};
 
 #[derive(Debug, Clone)]
-pub struct ClosedFlag(Arc<AtomicBool>);
+pub struct ClosedFlag {
+    closed: Arc<AtomicBool>,
+    close_type: Arc<Mutex<Option<CloseType>>>,
+}
 
 impl ClosedFlag {
-    pub fn new(closed: bool) -> Self {
-        ClosedFlag(Arc::new(AtomicBool::new(closed)))
+    #[inline]
+    pub fn new() -> Self {
+        ClosedFlag {
+            closed: Arc::new(AtomicBool::new(false)),
+            close_type: Arc::new(Mutex::new(None)),
+        }
     }
 
-    pub fn update(&self, closed: bool) {
-        self.0.store(closed, Ordering::Release);
+    #[inline]
+    pub fn set_closed(&self, closed: bool) {
+        self.closed.store(closed, Ordering::Release);
+    }
+    #[inline]
+    pub fn set_closed_type(&self, ty: CloseType) {
+        self.close_type.lock().replace(ty);
     }
 
+    #[inline]
     pub fn is_closed(&self) -> bool {
-        self.0.load(Ordering::Acquire)
+        self.closed.load(Ordering::Acquire)
+    }
+    #[inline]
+    pub fn close_type(&self) -> Option<CloseType> {
+        self.close_type.lock().clone()
     }
 }
 
@@ -49,7 +67,7 @@ pub struct NetworkConnection {
 impl NetworkConnection {
     pub fn new_connection_setup(stream: SharedNimiqMessageStream, address_info: AddressInfo) -> (Self, ProcessConnectionFuture) {
         let id = UniqueId::new();
-        let closed_flag = ClosedFlag::new(false);
+        let closed_flag = ClosedFlag::new();
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
 
         let forward_future = rx.forward(stream.clone());
@@ -58,7 +76,7 @@ impl NetworkConnection {
         let peer_stream = PeerStream::new(stream.clone(), notifier.clone(), closed_flag.clone());
         let process_connection = ProcessConnectionFuture::new(peer_stream, forward_future, id);
 
-        let peer_sink = PeerSink::new(tx, id);
+        let peer_sink = PeerSink::new(tx, id, closed_flag.clone());
 
         let network_connection = NetworkConnection {
             peer_sink,

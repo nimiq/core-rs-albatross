@@ -49,9 +49,10 @@ impl PeerStream {
                 WebSocketMessage::Message(msg) => {
                     msg_notifier.read().notify(PeerStreamEvent::Message(msg));
                 },
-                WebSocketMessage::Close(frame) => {
-                    msg_closed_flag.update(true);
-                    msg_notifier.read().notify(PeerStreamEvent::Close(frame.map(|f| f.code).into()));
+                WebSocketMessage::Close(_frame) => {
+                    msg_closed_flag.set_closed(true);
+                    let ty = msg_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
+                    msg_notifier.read().notify(PeerStreamEvent::Close(ty));
                 },
                 // We have a type WebSocketMessage::Resume that is only used in the Sink and will never be returned here.
                 _ => unreachable!(),
@@ -59,9 +60,10 @@ impl PeerStream {
             Ok(())
         }).or_else(move |error| {
             match &error {
-                Error::WebSocketError(WsError::ConnectionClosed(ref frame)) => {
-                    error_closed_flag.update(true);
-                    error_notifier.read().notify(PeerStreamEvent::Close(frame.as_ref().map(|f| f.code).into()));
+                Error::WebSocketError(WsError::ConnectionClosed(ref _frame)) => {
+                    error_closed_flag.set_closed(true);
+                    let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
+                    error_notifier.read().notify(PeerStreamEvent::Close(ty));
                 },
                 error => {
                     error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(error)));

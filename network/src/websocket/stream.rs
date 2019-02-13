@@ -287,7 +287,10 @@ impl Stream for NimiqMessageStream {
             match self.inner.poll() {
                 // Handle close frames first.
                 Ok(Async::Ready(Some(WebSocketMessage::Close(frame)))) => {
-                    self.state = WebSocketState::ClosedByPeer(frame.clone());
+                    // If we haven't closed the connection, note as closed by peer.
+                    if !self.state.is_closed() {
+                        self.state = WebSocketState::ClosedByPeer(frame.clone());
+                    }
 
                     return Ok(Async::Ready(Some(Message::Close(frame))))
                 },
@@ -319,7 +322,10 @@ impl Stream for NimiqMessageStream {
                 },
                 Err(e) => {
                     if let WebSocketError::ConnectionClosed(ref frame) = e {
-                        self.state = WebSocketState::ClosedByPeer(frame.clone());
+                        // If we haven't closed the connection, note as closed by peer.
+                        if !self.state.is_closed() {
+                            self.state = WebSocketState::ClosedByPeer(frame.clone());
+                        }
                     }
                     return Err(e.into())
                 }

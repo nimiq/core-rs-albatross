@@ -10,18 +10,21 @@ use utils::unique_id::UniqueId;
 
 use crate::connection::close_type::CloseType;
 use crate::websocket::Message as WebSocketMessage;
+use crate::connection::network_connection::ClosedFlag;
 
 #[derive(Clone)]
 pub struct PeerSink {
     sink: UnboundedSender<WebSocketMessage>,
     unique_id: UniqueId,
+    closed_flag: ClosedFlag,
 }
 
 impl PeerSink {
-    pub fn new(channel: UnboundedSender<WebSocketMessage>, unique_id: UniqueId) -> Self {
+    pub fn new(channel: UnboundedSender<WebSocketMessage>, unique_id: UniqueId, closed_flag: ClosedFlag) -> Self {
         PeerSink {
             sink: channel,
             unique_id,
+            closed_flag,
         }
     }
 
@@ -31,6 +34,7 @@ impl PeerSink {
 
     /// Closes the connection.
     pub fn close(&self, ty: CloseType, reason: Option<String>) -> Result<(), SendError<WebSocketMessage>> {
+        self.closed_flag.set_closed_type(ty);
         debug!("Closing connection, reason: {:?} ({:?})", ty, reason);
         self.sink.unbounded_send(WebSocketMessage::Close(None))
         /*
