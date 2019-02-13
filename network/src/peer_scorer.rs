@@ -23,6 +23,8 @@ use crate::{
     },
     network_config::NetworkConfig,
 };
+use crate::address::peer_address_book::PeerAddressBookState;
+use parking_lot::RwLockReadGuard;
 
 type Score = f32;
 
@@ -99,7 +101,7 @@ impl PeerScorer {
             if !overflow && index >= end_index { break; }
             if overflow && (index >= end_index && index < start_index) { continue; }
 
-            let score = self.score_address(address, allow_bad_peers);
+            let score = self.score_address(address, allow_bad_peers, &addresses_state);
             if score >= 0 {
                 candidates.push( (Arc::clone(address), score));
                 if candidates.len() >= num_candidates {
@@ -110,8 +112,7 @@ impl PeerScorer {
         return candidates;
     }
 
-    fn score_address(&self, peer_address: &Arc<PeerAddress>, allow_bad_peers: bool) -> i32 {
-        let address_state = self.addresses.state();
+    fn score_address(&self, peer_address: &Arc<PeerAddress>, allow_bad_peers: bool, address_state: &RwLockReadGuard<PeerAddressBookState>) -> i32 {
         let peer_address_sopt = address_state.get_info(peer_address);
         match peer_address_sopt {
             None => 0,
