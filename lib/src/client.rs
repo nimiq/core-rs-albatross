@@ -1,9 +1,3 @@
-
-extern crate nimiq_consensus as consensus;
-extern crate nimiq_database as database;
-extern crate nimiq_network_primitives as network_primitives;
-extern crate nimiq_primitives as primitives;
-
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
@@ -11,12 +5,12 @@ use std::sync::Arc;
 use failure::Fail;
 use futures::{Async, Future, Poll};
 
+use consensus::consensus::Consensus;
+use consensus::error::Error as ConsensusError;
+use database::Environment;
 use network::error::Error as NetworkError;
 use network::network::Network;
 use network::network_config::{NetworkConfig, ProtocolConfig, ReverseProxyConfig};
-
-use consensus::consensus::Consensus;
-use database::Environment;
 use network_primitives::address::net_address::NetAddress;
 use primitives::networks::NetworkId;
 
@@ -58,15 +52,13 @@ impl<'a> ClientBuilder {
         self
     }
 
-    pub fn build_future(self) -> Result<ClientInitializeFuture, ClientError> {
-        match self.build_consensus() {
-            Ok(consensus) => Ok(initialize(consensus.network.clone())),
-            Err(e) => Err(e),
-        }
+    pub fn build_future(&mut self) -> Result<ClientInitializeFuture, ClientError> {
+        let consensus = self.build_consensus()?;
+        Ok(initialize(consensus.network.clone()))
     }
 
-    pub fn build_consensus(mut self) -> Result<Arc<Consensus>, ClientError> {
-        match self.reverse_proxy_config {
+    pub fn build_consensus(&mut self) -> Result<Arc<Consensus>, ClientError> {
+        match self.reverse_proxy_config.take() {
             Some(reverse_proxy_config) => {
                 match self.network_config.protocol_config() {
                     ProtocolConfig::Ws {host, port,..} => {
@@ -81,14 +73,8 @@ impl<'a> ClientBuilder {
             },
             None => (),
         };
-        match self.network_config.init_persistent() {
-            Ok(..) => (),
-            Err(e) => return Err(ClientError::NetworkError(e)),
-        };
-        match Consensus::new(self.environment, self.network_id, self.network_config.clone()) {
-            Ok(c) => return Ok(c),
-            Err(_) => return Err(ClientError::ConsensusError),
-        }
+        self.network_config.init_persistent()?;
+        Ok(Consensus::new(self.environment, self.network_id, self.network_config.clone())?)
     }
 }
 
@@ -101,8 +87,20 @@ pub enum ClientError {
     NetworkError(#[cause] NetworkError),
     #[fail(display = "Reverse Proxy can only be configured on Ws")]
     ConfigureReverseProxyError,
-    #[fail(display = "Error initializing Consensus")]
-    ConsensusError,
+    #[fail(display = "{}", _0)]
+    ConsensusError(#[cause] ConsensusError),
+}
+
+impl From<NetworkError> for ClientError {
+    fn from(e: NetworkError) -> Self {
+        ClientError::NetworkError(e)
+    }
+}
+
+impl From<ConsensusError> for ClientError {
+    fn from(e: ConsensusError) -> Self {
+        ClientError::ConsensusError(e)
+    }
 }
 
 
