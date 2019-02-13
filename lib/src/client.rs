@@ -1,32 +1,18 @@
-use std::error::Error;
-use std::fmt;
 use std::sync::Arc;
 
+use failure::Fail;
 use futures::{Async, Future, Poll};
 
+use network::error::Error as NetworkError;
 use network::network::Network;
 
 /// Prototype for a Error returned by these futures
 /// Errors can occur, when e.g. the bind port is already used
-/// TODO: Take a look at failure crate to chain errors (i.e. have the cause of the error)
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum ClientError {
+    #[fail(display = "{}", _0)]
+    NetworkError(#[cause] NetworkError),
 }
-
-impl fmt::Display for ClientError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!();
-    }
-}
-
-impl Error for ClientError {
-    fn description(&self) -> &str {
-        unimplemented!();
-    }
-}
-
-
-
 
 /// A trait representing a Client that may be uninitialized, initialized or connected
 trait Client {
@@ -56,7 +42,7 @@ impl Future for ClientInitializeFuture {
     fn poll(&mut self) -> Poll<InitializedClient, ClientError> {
         // NOTE: This is practically Future::fuse, but this way the types are cleaner
         if !self.initialized {
-            self.network.initialize();
+            self.network.initialize().map_err(|e| ClientError::NetworkError(e))?;
             Ok(Async::Ready(InitializedClient { network: Arc::clone(&self.network) }))
         }
         else {
@@ -104,7 +90,7 @@ impl Future for ClientConnectFuture {
 
     fn poll(&mut self) -> Poll<ConnectedClient, ClientError> {
         if !self.initialized {
-            self.network.connect();
+            self.network.connect().map_err(|e| ClientError::NetworkError(e))?;
             Ok(Async::Ready(ConnectedClient { network: Arc::clone(&self.network) }))
         }
         else {

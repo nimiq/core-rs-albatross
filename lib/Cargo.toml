@@ -15,3 +15,5 @@ maintenance = { status = "experimental" }
 [dependencies]
 futures = "0.1"
 nimiq-network = { path = "../network" }
+failure = "0.1.5"
+failure_derive = "0.1.5"

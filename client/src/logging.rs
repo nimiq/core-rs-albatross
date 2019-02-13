@@ -1,13 +1,12 @@
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use chrono::Local;
 use colored::Colorize;
+use failure::Fail;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
-use log::LevelFilter;
-use log::ParseLevelError;
-
-use chrono::Local;
+use log::{Level, LevelFilter, ParseLevelError};
 
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(0);
 
@@ -117,5 +116,15 @@ impl NimiqDispatch for Dispatch {
 
     fn only_nimiq(self) -> Self {
         self.filter(|metadata| metadata.target().starts_with("nimiq"))
+    }
+}
+
+#[inline]
+pub fn log_error_cause_chain(mut fail: &Fail, level: Level) {
+    log!(level, "{}", fail);
+    log!(level, "  caused by");
+    while let Some(cause) = fail.cause() {
+        log!(level, "    {}", cause);
+        fail = cause;
     }
 }

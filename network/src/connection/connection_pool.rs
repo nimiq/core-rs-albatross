@@ -28,6 +28,7 @@ use crate::websocket::websocket_connector::{WebSocketConnector, WebSocketConnect
 
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
+use crate::error::Error;
 
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
@@ -336,7 +337,11 @@ impl ConnectionPool {
     const UNBAN_IPS_INTERVAL: Duration = Duration::from_secs(60); // seconds
 
     /// Constructor.
-    pub fn new(peer_address_book: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
+    pub fn new(peer_address_book: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, blockchain: Arc<Blockchain<'static>>) -> Result<Arc<Self>, Error> {
+        if !network_config.is_initialized() {
+            return Err(Error::PeerKeyUninitialized);
+        }
+
         let pool = Arc::new(Self {
             blockchain,
             network_config: network_config.clone(),
@@ -393,20 +398,20 @@ impl ConnectionPool {
                 }
             });
         }
-        pool
+        Ok(pool)
     }
 
     /// Initialises necessary threads.
-    pub fn initialize(&self) {
+    pub fn initialize(&self) -> Result<(), Error> {
         // Start accepting incoming connections.
-        // TODO: Handle result
-        self.websocket_connector.start();
+        self.websocket_connector.start()?;
 
         let weak = self.self_weak.clone();
         self.timers.set_interval(ConnectionPoolTimer::UnbanIps, move || {
             let this = upgrade_weak!(weak);
             this.state.write().check_unban_ips();
         }, Self::UNBAN_IPS_INTERVAL);
+        Ok(())
     }
 
     /// Initiates a outbound connection.

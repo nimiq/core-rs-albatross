@@ -28,6 +28,24 @@ pub enum Error {
     IoError(#[cause] IoError),
 }
 
+impl From<IoError> for Error {
+    fn from(e: IoError) -> Self {
+        Error::IoError(e)
+    }
+}
+
+impl From<WsError> for Error {
+    fn from(e: WsError) -> Self {
+        Error::WebSocketError(e)
+    }
+}
+
+impl From<SerializingError> for Error {
+    fn from(e: SerializingError) -> Self {
+        Error::ParseError(e)
+    }
+}
+
 // This implementation is needed for forwarding into our Sink.
 impl From<Error> for () {
     fn from(_: Error) -> Self {
@@ -47,6 +65,20 @@ pub enum ConnectError {
     WebSocket(#[cause] Error),
 }
 
+
+impl From<TimerError> for ConnectError {
+    fn from(e: TimerError) -> Self {
+        ConnectError::Timer(e)
+    }
+}
+
+
+impl From<Error> for ConnectError {
+    fn from(e: Error) -> Self {
+        ConnectError::WebSocket(e)
+    }
+}
+
 #[derive(Fail, Debug)]
 pub enum ServerStartError {
     #[fail(display = "TLS certificate is missing or could not be read")]
@@ -59,4 +91,16 @@ pub enum ServerStartError {
     TlsError(#[cause] TlsError),
     #[fail(display = "Protocol config is not supported: {}", _0)]
     UnsupportedProtocol(String),
+}
+
+impl From<IoError> for ServerStartError {
+    fn from(e: IoError) -> Self {
+        ServerStartError::IoError(e)
+    }
+}
+
+impl From<TlsError> for ServerStartError {
+    fn from(e: TlsError) -> Self {
+        ServerStartError::TlsError(e)
+    }
 }

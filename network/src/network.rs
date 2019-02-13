@@ -25,6 +25,7 @@ use std::cmp;
 use rand::Rng;
 use rand::rngs::OsRng;
 use crate::connection::connection_pool::ConnectionId;
+use crate::error::Error;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {
@@ -68,10 +69,14 @@ impl Network {
     const ADDRESS_REQUEST_CUTOFF: usize = 250;
     const ADDRESS_REQUEST_PEERS: usize = 2;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Arc<Self> {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Result<Arc<Self>, Error> {
+        if !network_config.is_initialized() {
+            return Err(Error::PeerKeyUninitialized);
+        }
+
         let net_config = Arc::new(network_config);
-        let addresses = Arc::new(PeerAddressBook::new(net_config.clone(), network_id));
-        let connections = ConnectionPool::new(addresses.clone(), net_config.clone(), blockchain);
+        let addresses = Arc::new(PeerAddressBook::new(net_config.clone(), network_id)?);
+        let connections = ConnectionPool::new(addresses.clone(), net_config.clone(), blockchain)?;
         let this = Arc::new(Network {
             network_config: net_config.clone(),
             network_time,
@@ -100,15 +105,16 @@ impl Network {
             }
         });
 
-        this
+        Ok(this)
     }
 
-    pub fn initialize(&self) {
-        PeerAddressBook::initialize(&self.addresses);
-        self.connections.initialize();
+    pub fn initialize(&self) -> Result<(), Error> {
+        PeerAddressBook::initialize(&self.addresses)?;
+        self.connections.initialize()?;
+        Ok(())
     }
 
-    pub fn connect(&self) {
+    pub fn connect(&self) -> Result<(), Error> {
         self.auto_connect.store(true, Ordering::Relaxed);
 
         let connections = Arc::clone(&self.connections);
@@ -120,6 +126,7 @@ impl Network {
 
         // Start connecting to peers.
         self.check_peer_count();
+        Ok(())
     }
 
     pub fn disconnect(&self) {

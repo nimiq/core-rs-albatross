@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::fs::read_to_string;
-use std::error::Error;
+use failure::Error;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -27,7 +27,7 @@ pub(crate) struct Settings {
 }
 
 impl Settings {
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Settings, Box<dyn Error>> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Settings, Error> {
         Ok(toml::from_str(read_to_string(path)?.as_ref())?)
     }
 }

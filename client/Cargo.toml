@@ -33,6 +33,8 @@ nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-lib = { path = "../lib" }
 colored = "1.7.0"
 chrono = "0.4.6"
+failure = "0.1.5"
+failure_derive = "0.1.5"
 
 [features]
 default = ["all"]

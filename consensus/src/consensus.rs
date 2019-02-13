@@ -20,6 +20,7 @@ use utils::timers::Timers;
 use crate::consensus_agent::ConsensusAgent;
 use crate::consensus_agent::ConsensusAgentEvent;
 use crate::inventory::InventoryManager;
+use crate::error::Error;
 
 
 pub struct Consensus {
@@ -61,11 +62,11 @@ impl Consensus {
     const MIN_FULL_NODES: usize = 1;
     const SYNC_THROTTLE: Duration = Duration::from_millis(1500);
 
-    pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig) -> Arc<Self> {
+    pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig) -> Result<Arc<Self>, Error> {
         let network_time = Arc::new(NetworkTime::new());
         let blockchain = Arc::new(Blockchain::new(env, network_id, network_time.clone()));
         let mempool = Mempool::new(blockchain.clone());
-        let network = Network::new(blockchain.clone(), network_config, network_time, network_id);
+        let network = Network::new(blockchain.clone(), network_config, network_time, network_id)?;
 
         let this = Arc::new(Consensus {
             blockchain,
@@ -86,7 +87,7 @@ impl Consensus {
             notifier: RwLock::new(Notifier::new()),
         });
         Consensus::init_listeners(&this);
-        this
+        Ok(this)
     }
 
     fn init_listeners(this: &Arc<Consensus>) {

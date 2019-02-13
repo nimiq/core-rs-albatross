@@ -34,6 +34,7 @@ use crate::peer_channel::PeerChannel;
 
 use super::peer_address_state::PeerAddressInfo;
 use super::peer_address_state::PeerAddressState;
+use crate::error::Error;
 
 pub struct PeerAddressBookState {
     info_by_address: HashMap<Arc<PeerAddress>, PeerAddressInfo>,
@@ -270,7 +271,7 @@ pub enum PeerAddressBookEvent {
 }
 
 impl PeerAddressBook {
-    pub fn new(network_config: Arc<NetworkConfig>, network_id: NetworkId) -> Self {
+    pub fn new(network_config: Arc<NetworkConfig>, network_id: NetworkId) -> Result<Self, Error> {
         let this = Self {
             state: RwLock::new(PeerAddressBookState {
                 info_by_address: HashMap::new(),
@@ -291,23 +292,26 @@ impl PeerAddressBook {
         if let Some(network_info) = get_network_info(network_id) {
             // TODO: This may be optimized by using Vec<Arc<>> instead of cloning
             this.add(None, network_info.seed_peers.clone());
+        } else {
+            return Err(Error::InvalidNetworkInfo(network_id));
         }
 
         // TODO: Collect more seed peers from seed lists.
         // Wait at most PeerAddressBook.SEEDING_TIMEOUT for seeding.
         // this.seeded.store(true, Ordering::Release);
 
-        return this;
+        return Ok(this);
     }
 
     /// Initialises async stuff.
-    pub fn initialize(this: &Arc<Self>) {
+    pub fn initialize(this: &Arc<Self>) -> Result<(), Error> {
         // Setup housekeeping interval.
         let weak = Arc::downgrade(this);
         this.timers.set_interval(PeerAddressBookTimer::Housekeeping, move || {
             let this = upgrade_weak!(weak);
             this.housekeeping();
         }, HOUSEKEEPING_INTERVAL);
+        Ok(())
     }
 
     pub fn query(&self, protocol_mask: ProtocolFlags, service_mask: ServiceFlags, max_addresses: u16) -> Vec<Arc<PeerAddress>> {

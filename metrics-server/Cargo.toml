@@ -25,3 +25,6 @@ hyper = "0.12.19"
 futures = "0.1"
 log = "0.4.3"
 base64 = "0.10.1"
+
+failure = "0.1.5"
+failure_derive = "0.1.5"

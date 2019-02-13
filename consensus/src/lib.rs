@@ -17,3 +17,4 @@ extern crate nimiq_collections as collections;
 pub mod consensus;
 pub mod consensus_agent;
 pub mod inventory;
+pub mod error;

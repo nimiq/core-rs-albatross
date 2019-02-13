@@ -86,7 +86,7 @@ fn setup_tls_acceptor(identity_file: Option<String>, identity_passphrase: Option
             let mut pkcs12 = vec![];
             file.read_to_end(&mut pkcs12).map_err(|_| ServerStartError::CertificateMissing)?;
             let pkcs12 = Identity::from_pkcs12(&pkcs12,  &identity_passphrase).map_err(|_| ServerStartError::CertificatePassphraseError)?;
-            Ok(Some(TlsAcceptor::new(pkcs12).map_err(|e| ServerStartError::TlsError(e))?))
+            Ok(Some(TlsAcceptor::new(pkcs12)?))
         }
     }
 }
@@ -125,7 +125,7 @@ impl WebSocketConnector {
         let socket = TcpListener::bind(&addr).map_err(|e| ServerStartError::IoError(e))?;
         let notifier = Arc::clone(&self.notifier);
 
-        let srv = socket.incoming().map_err(|err| Error::IoError(err))
+        let srv = socket.incoming().map_err(|err| err.into())
             .for_each(move |tcp| {
                 let reverse_proxy_config = reverse_proxy_config.clone();
 
@@ -192,10 +192,10 @@ impl WebSocketConnector {
             .map_err(move |error| {
                 if error.is_inner() {
                     let error = error.into_inner().expect("There was no inner_error inside the timeout::Error struct: abort.");
-                    error_notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&error_peer_address), ConnectError::WebSocket(error)));
+                    error_notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&error_peer_address), error.into()));
                 } else if error.is_timer() {
                     let error = error.into_timer().expect("There was no timer error inside the timeout::Error struct: abort.");
-                    error_notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&error_peer_address), ConnectError::Timer(error)));
+                    error_notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&error_peer_address), error.into()));
                 } else if error.is_elapsed() {
                     error_notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&error_peer_address), ConnectError::Timeout));
                 }

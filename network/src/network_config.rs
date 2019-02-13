@@ -9,6 +9,7 @@ use network_primitives::address::PeerId;
 use network_primitives::protocol::{Protocol, ProtocolFlags};
 use network_primitives::services::Services;
 use utils::time::systemtime_to_timestamp;
+use crate::error::Error;
 
 pub struct NetworkConfig {
     protocol_mask: ProtocolFlags,
@@ -62,19 +63,23 @@ impl NetworkConfig {
         }
     }
 
-    pub fn init_persistent(&mut self) {
+    pub fn init_persistent(&mut self) -> Result<(), Error> {
         if self.key_pair.is_some() {
-            return;
+            return Ok(());
         }
 
-        let key_pair = PeerKeyStore::load_peer_key().unwrap_or_else(|| {
-            let key_pair = KeyPair::generate();
-            PeerKeyStore::save_peer_key(&key_pair);
-            key_pair
-        });
+        let key_pair = match PeerKeyStore::load_peer_key() {
+            Err(Error::IoError(_)) => {
+                let key_pair = KeyPair::generate();
+                PeerKeyStore::save_peer_key(&key_pair)?;
+                Ok(key_pair)
+            },
+            res => res,
+        }?;
 
         self.peer_id = Some(PeerId::from(&key_pair.public));
         self.key_pair = Some(key_pair);
+        Ok(())
     }
 
     pub fn init_volatile(&mut self) {
@@ -158,6 +163,10 @@ impl NetworkConfig {
         addr.signature = Some(self.key_pair.as_ref().expect("NetworkConfig is uninitialized").sign(&addr.get_signature_data()[..]));
         addr
     }
+
+    pub fn is_initialized(&self) -> bool {
+        self.key_pair.is_some() && self.peer_id.is_some()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -200,13 +209,16 @@ pub struct PeerKeyStore {}
 impl PeerKeyStore {
     const KEY_FILE: &'static str = "key.db";
 
-    pub fn load_peer_key() -> Option<KeyPair> {
-        fs::read(PeerKeyStore::KEY_FILE).map(|data| {
-            Deserialize::deserialize_from_vec(&data).expect("Invalid key file")
-        }).ok()
+    pub fn load_peer_key() -> Result<KeyPair, Error> {
+        match fs::read(PeerKeyStore::KEY_FILE) {
+            Ok(data) => {
+                Deserialize::deserialize_from_vec(&data).map_err(|_| Error::PeerKeyInvalid)
+            },
+            Err(e) => Err(Error::IoError(e)),
+        }
     }
 
-    pub fn save_peer_key(key_pair: &KeyPair) {
-        fs::write(PeerKeyStore::KEY_FILE, key_pair.serialize_to_vec()).unwrap();
+    pub fn save_peer_key(key_pair: &KeyPair) -> Result<(), Error> {
+        Ok(fs::write(PeerKeyStore::KEY_FILE, key_pair.serialize_to_vec())?)
     }
 }

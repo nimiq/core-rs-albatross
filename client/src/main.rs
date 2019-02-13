@@ -22,15 +22,15 @@ extern crate tokio;
 extern crate toml;
 
 
-use std::error::Error;
+use std::env;
 use std::io;
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::fmt;
-use std::env;
 
+use failure::{Error, Fail};
 use futures::{Future, future};
+use log::Level;
 
 use consensus::consensus::Consensus;
 use database::lmdb::{LmdbEnvironment, open};
@@ -45,6 +45,7 @@ use rpc_server::rpc_server;
 
 use crate::cmdline::Options;
 use crate::logging::{DEFAULT_LEVEL, NimiqDispatch, to_level};
+use crate::logging::log_error_cause_chain;
 use crate::settings as s;
 use crate::settings::Settings;
 use crate::static_env::ENV;
@@ -55,41 +56,23 @@ mod settings;
 mod cmdline;
 mod static_env;
 
-
-
 lazy_static! {
     pub static ref USER_AGENT: String = format!("core-rs/{} (native; {} {})", env!("CARGO_PKG_VERSION"), env::consts::OS, env::consts::ARCH);
 }
 
-
-
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Debug, Fail)]
 pub enum ConfigError {
-    NoTlsIdentityFile
+    #[fail(display = "No TLS identity file supplied")]
+    NoTlsIdentityFile,
 }
 
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Configuration error: {}", self.description())
+fn main() {
+    if let Err(e) = run() {
+        log_error_cause_chain(e.as_fail(), Level::Error);
     }
 }
 
-impl Error for ConfigError {
-    fn description(&self) -> &str {
-        match self {
-            ConfigError::NoTlsIdentityFile => "No TLS identity file supplied.",
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        None
-    }
-}
-
-
-
-
-fn main() -> Result<(), Box<dyn Error>> {
+fn run() -> Result<(), Error> {
     #[cfg(feature = "deadlock-detection")]
     deadlock::deadlock_detection();
 
@@ -160,7 +143,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             s::Protocol::Rtc => unimplemented!()
         }
     };
-    network_config.init_persistent();
+    network_config.init_persistent()?;
     let network_id = match cmdline.network.unwrap_or(settings.consensus.network) {
         s::Network::Main => NetworkId::Main,
         s::Network::Test => NetworkId::Test,
@@ -171,7 +154,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     info!("Nimiq Core starting: network={:?}, peer_address={}", network_id, network_config.peer_address());
 
     // Start consensus
-    let consensus = Consensus::new(ENV.get(), network_id, network_config);
+    let consensus = Consensus::new(ENV.get(), network_id, network_config)?;
     info!("Blockchain state: height={}, head={}", consensus.blockchain.height(), consensus.blockchain.head_hash());
 
     // Additional futures we want to run.
@@ -180,13 +163,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     // start RPC server if enabled
     // TODO: If no RPC server was configure, but on command line a port was given, generate RpcServer::default() and override port
     #[cfg(feature = "rpc-server")] {
-        settings.rpc_server.map(|rpc_settings| {
+        if let Some(rpc_settings) = settings.rpc_server {
             // TODO: Replace with parsing from config file
             let ip = IpAddr::from_str("127.0.0.1").unwrap();
             let port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
             info!("Starting RPC server listening on port {}", port);
-            other_futures.push(rpc_server(Arc::clone(&consensus), ip, port))
-        });
+            other_futures.push(rpc_server(Arc::clone(&consensus), ip, port)?);
+        }
     }
     // If the RPC server is enabled, but the client is not compiled with it, inform the user
     #[cfg(not(feature = "rpc-server"))] {
@@ -197,13 +180,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     // start metrics server if enabled
     // TODO: Same as for RPC server
     #[cfg(feature = "metrics-server")] {
-        settings.metrics_server.map(|metrics_settings| {
+        if let Some(metrics_settings) = settings.metrics_server {
             // TODO: Replace with parsing from config file
             let ip = IpAddr::from_str("127.0.0.1").unwrap();
             let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);
             info!("Starting metrics server listening on port {}", port);
-            other_futures.push(metrics_server(Arc::clone(&consensus), ip, port, metrics_settings.password))
-        });
+            other_futures.push(metrics_server(Arc::clone(&consensus), ip, port, metrics_settings.password)?);
+        }
     }
     // If the metrics server is enabled, but the client is not compiled with it, inform the user
     #[cfg(not(feature = "metrics-server"))] {

@@ -23,9 +23,10 @@ use consensus::consensus::Consensus;
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use primitives::block::{Block, Difficulty};
 use primitives::transaction::Transaction;
+use crate::error::Error;
 
 pub mod jsonrpc;
-
+pub mod error;
 
 pub struct JsonRpcHandler {
     consensus: Arc<Consensus>,
@@ -119,10 +120,10 @@ impl jsonrpc::Handler for JsonRpcHandler {
 }
 
 
-pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16) -> Box<dyn Future<Item=(), Error=()> + Send + Sync> {
-    Box::new(Server::bind(&SocketAddr::new(ip, port))
+pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
+    Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
         .serve(move || {
             jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&consensus)))
         })
-        .map_err(|e| error!("RPC server failed: {}", e))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
+        .map_err(|e| error!("RPC server failed: {}", e)))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
 }

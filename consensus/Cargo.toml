@@ -31,3 +31,5 @@ nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-on
 nimiq-blockchain = { path = "../blockchain", features = ["transaction-store"] }
 weak-table = "0.2.3"
 hex = "0.3.2"
+failure = "0.1.5"
+failure_derive = "0.1.5"

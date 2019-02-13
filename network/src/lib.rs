@@ -19,6 +19,7 @@ pub mod connection;
 pub mod peer;
 pub mod network_config;
 pub mod network;
+pub mod error;
 #[cfg(feature = "metrics")]
 mod network_metrics;
 

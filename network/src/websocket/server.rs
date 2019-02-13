@@ -12,7 +12,7 @@ pub fn nimiq_accept_async<C>(stream: MaybeTlsStream<TcpStream>, callback: C) -> 
     Box::new(
     accept_hdr_async(stream, callback).map(|ws_stream| NimiqMessageStream::new(ws_stream, false))
             .map_err(|e| {
-                Error::WebSocketError(e)
+                e.into()
             })
     )
 }
