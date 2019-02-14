@@ -99,6 +99,6 @@ impl ConsensusAgent {
             peer.channel.send_or_close(Message::AccountsTreeChunk( AccountsTreeChunkMessage { block_hash: msg.block_hash, accounts_tree_chunk: chunk_opt }));
             return future::ok::<(), ()>(());
         });
-        tokio::run(future);
+        tokio::spawn(future);
     }
 }
