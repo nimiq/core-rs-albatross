@@ -455,7 +455,7 @@ impl ConnectionPool {
     }
 
 
-    /// Get the connection info for a peer address.
+    /// Returns a mapped RwLockReadGuard for the internal state.
     pub fn state(&self) -> RwLockReadGuard<ConnectionPoolState> {
         self.state.read()
     }

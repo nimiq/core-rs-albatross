@@ -101,15 +101,8 @@ impl JsonRpcHandler {
     }
 
     fn peer_list(&self, _params: Array) -> Result<JsonValue, JsonValue> {
-        // TODO
-        let max_addresses = 100;
-
-        let peer_address_book_state = self.consensus.network.addresses.state();
-
-        Ok(self.consensus.network.addresses.query(ProtocolFlags::all(), ServiceFlags::all(), max_addresses)
-            .iter()
-            .filter_map(|address| peer_address_book_state.get_info(address)
-                .map(|info| self.peer_address_info_to_obj(info, None)))
+        Ok(self.consensus.network.addresses.state().address_info_iter()
+            .map(|info| self.peer_address_info_to_obj(info, None))
             .collect::<Array>().into())
     }
 

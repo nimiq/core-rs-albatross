@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::cmp;
-use std::collections::hash_map::Keys;
+use std::collections::hash_map::{Keys, Values};
 use std::collections::hash_set::Iter;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -45,6 +45,10 @@ pub struct PeerAddressBookState {
 }
 
 impl PeerAddressBookState {
+    pub fn address_info_iter(&self) -> Values<Arc<PeerAddress>, PeerAddressInfo> {
+        return self.info_by_address.values();
+    }
+
     pub fn address_iter(&self) -> Keys<Arc<PeerAddress>, PeerAddressInfo> {
         return self.info_by_address.keys();
     }
