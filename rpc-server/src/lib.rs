@@ -30,9 +30,14 @@ use primitives::account::AccountType;
 use primitives::coin::Coin;
 use keys::Address;
 use blockchain::transaction_store::TransactionInfo;
+use network::address::peer_address_state::PeerAddressInfo;
+use network::connection::connection_info::ConnectionInfo;
+use network_primitives::protocol::ProtocolFlags;
+use network_primitives::services::ServiceFlags;
 
 pub mod jsonrpc;
 pub mod error;
+
 
 fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
     Err(object!{"message" => "Not implemented"})
@@ -72,15 +77,15 @@ impl JsonRpcHandler {
 
     // Network
 
-    fn peer_count(&self, _: Array) -> Result<JsonValue, JsonValue> {
+    fn peer_count(&self, _params: Array) -> Result<JsonValue, JsonValue> {
         Ok(self.consensus.network.peer_count().into())
     }
 
-    fn consensus(&self, _: Array) -> Result<JsonValue, JsonValue> {
+    fn consensus(&self, _params: Array) -> Result<JsonValue, JsonValue> {
         Ok(self.consensus_state.into())
     }
 
-    fn syncing(&self, _: Array) -> Result<JsonValue, JsonValue> {
+    fn syncing(&self, _params: Array) -> Result<JsonValue, JsonValue> {
         Ok(if self.consensus_state == "established" {
             false.into()
         }
@@ -95,7 +100,16 @@ impl JsonRpcHandler {
     }
 
     fn peer_list(&self, _params: Array) -> Result<JsonValue, JsonValue> {
-        rpc_not_implemented()
+        // TODO
+        let max_addresses = 100;
+
+        let peer_address_book_state = self.consensus.network.addresses.state();
+
+        Ok(self.consensus.network.addresses.query(ProtocolFlags::all(), ServiceFlags::all(), max_addresses)
+            .iter()
+            .filter_map(|address| peer_address_book_state.get_info(address)
+                .map(|info| self.peer_address_info_to_obj(info, None)))
+            .collect::<Array>().into())
     }
 
     fn peer_state(&self, _params: Array) -> Result<JsonValue, JsonValue> {
@@ -363,7 +377,7 @@ impl JsonRpcHandler {
             .ok_or_else(|| object!{"message" => "Invalid transaction fee"})?);
 
         let flags = obj["flags"].as_u8()
-            .map_or_else(|| Some(TransactionFlags::default()), TransactionFlags::from_bits)
+            .map_or_else(|| Some(TransactionFlags::empty()), TransactionFlags::from_bits)
             .ok_or_else(|| object!{"message" => "Invalid transaction flags"})?;
 
         let data = obj["data"].as_str()
@@ -401,6 +415,29 @@ impl JsonRpcHandler {
 
         self.transaction_to_obj(&transaction, Some(&block), Some(index as usize))
     }
+
+    fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<ConnectionInfo>) -> JsonValue {
+        let state = self.consensus.network.connections.state();
+        let connection_info = connection_info.as_ref().or_else(|| {
+            state.get_connection_by_peer_address(&peer_address_info.peer_address)
+        });
+        let peer = connection_info.and_then(|conn| conn.peer());
+
+        object!{
+            "id" => peer_address_info.peer_address.peer_id().to_hex(),
+            "address" => peer_address_info.peer_address.as_uri(),
+            "failedAttempts" => peer_address_info.failed_attempts,
+            "addressState" => peer_address_info.state as u8,
+            "connectionState" => connection_info.map(|conn| (conn.state() as u8).into()).unwrap_or(Null),
+            "version" => peer.map(|peer| peer.version.into()).unwrap_or(Null),
+            "timeOffset" => peer.map(|peer| peer.time_offset.into()).unwrap_or(Null),
+            "headHash" => peer.map(|peer| peer.head_hash.to_hex().into()).unwrap_or(Null),
+            "score" => Null, // TODO: Not in ConnectionInfo
+            "latency" => connection_info.map(|conn| conn.statistics().latency_median().into()).unwrap_or(Null),
+            "rx" => Null, // TODO: Not in NetworkConnection
+            "tx" => Null,
+        }
+    }
 }
 
 impl jsonrpc::Handler for JsonRpcHandler {
@@ -411,7 +448,7 @@ impl jsonrpc::Handler for JsonRpcHandler {
             "peerCount" => Some(JsonRpcHandler::peer_count),
             "syncing" => Some(JsonRpcHandler::syncing),
             "consensus" => Some(JsonRpcHandler::consensus),
-            "peerCount" => Some(JsonRpcHandler::peer_list),
+            "peerList" => Some(JsonRpcHandler::peer_list),
             "peerState" => Some(JsonRpcHandler::peer_count),
 
             // Transactions
