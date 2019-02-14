@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::collections::LinkedList;
-use std::error::Error;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -17,7 +16,6 @@ use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
 use database::ReadTransaction;
 use hash::Blake2bHash;
-use hash::Hash;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::mutable_once::MutableOnce;
 
@@ -55,44 +53,56 @@ impl AccountsChunkCache {
         cache_arc
     }
 
+    /// Request a chunk from the cache.
     pub fn get_chunk(&self, hash: &Blake2bHash, prefix: &String) -> GetChunkFuture {
-        if !self.computing_enabled.load(Ordering::Relaxed) {
-            self.computing_enabled.store(true, Ordering::Relaxed);
-            if &self.blockchain.head_hash() == hash {
-                self.compute_chunks_for_block(hash.clone());
-            }
+        // Start computing of chunks on the first get_chunk request.
+        // Swap should ensure that this is only triggered *once* and that no race condition can occur.
+        if !self.computing_enabled.swap(true, Ordering::AcqRel) {
+            self.compute_chunks_for_block();
         }
         return GetChunkFuture::new(hash.clone(), prefix.clone(), self.weak_self.upgrade().unwrap());
     }
 
+    /// Trigger computation of chunks asynchronously after blockchain events.
     fn on_blockchain_event(&self, event: &BlockchainEvent) {
-        if !self.computing_enabled.load(Ordering::Relaxed) {
+        if !self.computing_enabled.load(Ordering::Acquire) {
             // Only pre-compute chunks after a chunk was requested for the first time
             return;
         }
         match event {
-            BlockchainEvent::Extended(_, ref block) => {
-                self.compute_chunks_for_block(block.header.hash());
+            BlockchainEvent::Extended(_, _) | BlockchainEvent::Rebranched(_, _) => {
+                self.compute_chunks_for_block();
             },
-            BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
-                for (_hash, block) in adopted_blocks {
-                    self.compute_chunks_for_block(block.header.hash());
-                }
-            }
         }
     }
 
-    fn compute_chunks_for_block(&self, hash: Blake2bHash) {
-        // Requests for accounts tree chunks of `block` are accepted now
-        self.tasks_by_block.write().insert(hash.clone(), Vec::new());
-
-        let this = upgrade_weak!(self.weak_self);
+    /// Internal function to asynchronously triggering the computation and caching of chunks.
+    /// This function assumes to be called at most *once* per block hash.
+    fn compute_chunks_for_block(&self) {
+        let weak = self.weak_self.clone();
         thread::spawn(move || {
-            let tx = ReadTransaction::new(&this.env);
+            let this: Arc<Self> = upgrade_weak!(weak);
+            let txn = ReadTransaction::new(&this.env);
+            let hash = match this.blockchain.head_hash_from_store(&txn) {
+                Some(hash) => hash,
+                None => return,
+            };
+
+            // Check that this hash is not yet worked on.
+            {
+                let mut guard = this.tasks_by_block.write();
+                if guard.contains_key(&hash) {
+                    return;
+                }
+                // Requests for accounts tree chunks of `block` are accepted now.
+                guard.insert(hash.clone(), Vec::new());
+            }
+
+            // Compute and store chunks.
             this.chunks_by_prefix_by_block.write().insert(hash.clone(), HashMap::new());
             let mut prefix = "".to_string();
             loop {
-                if let Some(chunk) = this.blockchain.accounts().get_chunk(&prefix[..], AccountsChunkCache::CHUNK_SIZE_MAX, Some(&tx)) {
+                if let Some(chunk) = this.blockchain.accounts().get_chunk(&prefix[..], AccountsChunkCache::CHUNK_SIZE_MAX, Some(&txn)) {
                     if let Some(chunks_by_prefix) = this.chunks_by_prefix_by_block.write().get_mut(&hash) {
                         let last_terminal_string_opt = chunk.last_terminal_string();
                         let chunk_len = chunk.len();
@@ -112,25 +122,31 @@ impl AccountsChunkCache {
                 this.notify_tasks_for_block(&hash);
             }
             this.notify_tasks_for_block(&hash);
+            // The chunks are cached, so newly created requests will not need to enter them into the list of tasks.
+            this.tasks_by_block.write().remove(&hash.clone());
+
+            // Put those blocks that are cached into a history, so that we can remove them later on.
             this.block_history_order.write().push_back(hash.clone());
 
-            // Remove old chunks
+            // Remove old chunks after some time.
             if this.block_history_order.read().len() > AccountsChunkCache::MAX_BLOCKS_BACKLOG {
+                // Take the oldest block to remove.
                 if let Some(block_hash) = this.block_history_order.write().pop_front() {
+                    // First clean up the chunks.
                     this.chunks_by_prefix_by_block.write().remove(&block_hash);
-                    if let Some(tasks) = this.tasks_by_block.read().get(&block_hash) {
+
+                    // Then remove the tasks (if present) and notify those that there won't be an update.
+                    if let Some(tasks) = this.tasks_by_block.write().remove(&block_hash) {
                         for task in tasks {
                             task.notify();
                         }
                     }
-                    this.tasks_by_block.write().remove(&block_hash);
                 }
             }
-
-            this.tasks_by_block.write().remove(&hash.clone());
         });
     }
 
+    /// Notifies tasks that something changed.
     fn notify_tasks_for_block(&self, hash: &Blake2bHash) {
         if let Some(tasks) = self.tasks_by_block.read().get(&hash) {
             for task in tasks {
@@ -140,6 +156,7 @@ impl AccountsChunkCache {
     }
 }
 
+/// Future given to the requester in order to retrieve accounts tree chunk.
 pub struct GetChunkFuture {
     hash: Blake2bHash,
     prefix: String,
@@ -155,21 +172,26 @@ impl GetChunkFuture {
 
 impl Future for GetChunkFuture {
     type Item = Option<AccountsTreeChunk>;
-    type Error = Box<Error>;
+    type Error = ();
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        // If chunk is available, deliver it to the client.
         if let Some(chunks_by_prefix) = self.chunk_cache.chunks_by_prefix_by_block.read().get(&self.hash) {
             if let Some(chunk) = chunks_by_prefix.get(&self.prefix) {
                 return Ok(Async::Ready(Some(chunk.clone())));
             }
         }
+        // Otherwise check if the task is (still) filed.
         if let Some(tasks) = self.chunk_cache.tasks_by_block.write().get_mut(&self.hash) {
+            // If yes, "subscribe" to updates.
             if !self.running {
                 tasks.push(task::current());
                 self.running = true;
             }
             return Ok(Async::NotReady);
         } else {
+            // Else, the block is unknown, too far in the past or something else.
+            // Return None in these cases.
             return Ok(Async::Ready(None));
         }
     }

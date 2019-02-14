@@ -643,6 +643,10 @@ impl<'env> Blockchain<'env> {
         self.state.read().head_hash.clone()
     }
 
+    pub fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash> {
+        self.chain_store.get_head(Some(txn))
+    }
+
     pub fn height(&self) -> u32 {
         self.state.read().main_chain.head.header.height
     }

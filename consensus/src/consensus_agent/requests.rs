@@ -95,7 +95,7 @@ impl ConsensusAgent {
         let get_chunk_future = self.accounts_chunk_cache.get_chunk(&msg.block_hash, &msg.start_prefix);
         let peer = self.peer.clone();
         let future = get_chunk_future.then(move |chunk_res| {
-            let chunk_opt = match chunk_res { Ok(v) => v, Err(_) => None };
+            let chunk_opt = chunk_res.unwrap_or(None);
             peer.channel.send_or_close(Message::AccountsTreeChunk( AccountsTreeChunkMessage { block_hash: msg.block_hash, accounts_tree_chunk: chunk_opt }));
             return future::ok::<(), ()>(());
         });
