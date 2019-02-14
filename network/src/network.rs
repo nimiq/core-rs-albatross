@@ -58,13 +58,13 @@ pub struct Network {
 impl Network {
     const PEER_COUNT_MAX: usize = 4000;
     const PEER_COUNT_RECYCLING_ACTIVE: usize = 1000;
-    const RECYCLING_PERCENTAGE_MIN: f32 = 0.01;
-    const RECYCLING_PERCENTAGE_MAX: f32 = 0.20;
+    const RECYCLING_PERCENTAGE_MIN: f64 = 0.01;
+    const RECYCLING_PERCENTAGE_MAX: f64 = 0.20;
     const CONNECTING_COUNT_MAX: usize = 2;
     const CONNECT_BACKOFF_INITIAL: Duration = Duration::from_secs(2);
     const CONNECT_BACKOFF_MAX: Duration = Duration::from_secs(10 * 60);
     const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(5 * 60);
-    const SCORE_INBOUND_EXCHANGE: f32 = 0.5;
+    const SCORE_INBOUND_EXCHANGE: f64 = 0.5;
     const CONNECT_THROTTLE: Duration = Duration::from_secs(1);
     const ADDRESS_REQUEST_CUTOFF: usize = 250;
     const ADDRESS_REQUEST_PEERS: usize = 2;
@@ -260,8 +260,8 @@ impl Network {
         let peer_count = connections.peer_count();
         if peer_count < Self::PEER_COUNT_RECYCLING_ACTIVE {
             // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
-            let percentage_to_recycle = (peer_count as f32 - Self::PEER_COUNT_RECYCLING_ACTIVE as f32) * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN) / (Self::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f32 + Self::RECYCLING_PERCENTAGE_MIN as f32;
-            let connections_to_recycle = f32::ceil(peer_count as f32 * percentage_to_recycle) as u32;
+            let percentage_to_recycle = (peer_count as f64 - Self::PEER_COUNT_RECYCLING_ACTIVE as f64) * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN) / (Self::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64 + Self::RECYCLING_PERCENTAGE_MIN as f64;
+            let connections_to_recycle = f64::ceil(peer_count as f64 * percentage_to_recycle) as u32;
             scorer.write().recycle_connections(connections_to_recycle, CloseType::PeerConnectionRecycled, "Peer connection recycled");
         }
 
@@ -291,7 +291,7 @@ impl Network {
 
             for _ in 0..cmp::min(Self::ADDRESS_REQUEST_PEERS, connection_scores.len()) {
                 let index = randrng.gen_range(0, len);
-                let (id, _): &(ConnectionId, f32) = connection_scores.get(index).unwrap(); // Cannot fail, since len is at most the real length.
+                let (id, _): &(ConnectionId, f64) = connection_scores.get(index).unwrap(); // Cannot fail, since len is at most the real length.
                 let peer_connection = state.get_connection(*id)
                     .expect("ConnectionInfo for scored connection is missing");
 

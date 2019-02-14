@@ -1,4 +1,4 @@
-use std::{cmp, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use rand::Rng;
 use rand::rngs::OsRng;
@@ -26,7 +26,7 @@ use crate::{
 use crate::address::peer_address_book::PeerAddressBookState;
 use parking_lot::RwLockReadGuard;
 
-type Score = f32;
+type Score = f64;
 
 pub struct PeerScorer {
     network_config: Arc<NetworkConfig>,
@@ -52,7 +52,7 @@ impl PeerScorer {
     const BEST_AGE_NANO: Duration = Duration::from_secs(5 * 60); // 5 minutes
     const MAX_AGE_NANO: Duration = Duration::from_secs(30 * 60); // 30 minutes
 
-    const BEST_PROTOCOL_WS_DISTRIBUTION: f32 = 0.15; // 15%
+    const BEST_PROTOCOL_WS_DISTRIBUTION: f64 = 0.15; // 15%
 
 
     pub fn new(network_config: Arc<NetworkConfig>, addresses: Arc<PeerAddressBook>, connections: Arc<ConnectionPool>) -> Self {
@@ -177,7 +177,7 @@ impl PeerScorer {
         let mut connection_scores: Vec<(ConnectionId, Score)> = Vec::new();
 
         let state = self.connections.state();
-        let distribution: f32 = (state.peer_count_ws as f32 + state.peer_count_wss as f32) / state.peer_count() as f32;
+        let distribution: f64 = (state.peer_count_ws as f64 + state.peer_count_wss as f64) / state.peer_count() as f64;
         let peer_count_full_ws_outbound = state.get_peer_count_full_ws_outbound();
         let connections: Vec<(ConnectionId, &ConnectionInfo)> = state.id_and_connection_iter();
 
@@ -208,7 +208,7 @@ impl PeerScorer {
         }
     }
 
-    fn score_connection(connection_info: &ConnectionInfo, distribution: f32, peer_count_full_ws_outbound: usize) -> Score {
+    fn score_connection(connection_info: &ConnectionInfo, distribution: f64, peer_count_full_ws_outbound: usize) -> Score {
         // Connection age
         let score_age = Self::score_connection_age(connection_info);
 
@@ -248,27 +248,29 @@ impl PeerScorer {
 
         // Connection speed, based on ping-pong latency median
         let median_latency = connection_info.statistics().latency_median();
-        let mut score_speed: f32 = 0.0;
+        let mut score_speed: f64 = 0.0;
 
-        if median_latency > 0.0 && median_latency < NetworkAgent::PING_TIMEOUT.as_secs() as f32 {
-            score_speed = 1.0 - median_latency / NetworkAgent::PING_TIMEOUT.as_secs() as f32;
+        if median_latency > 0.0 && median_latency < NetworkAgent::PING_TIMEOUT.as_secs() as f64 {
+            score_speed = 1.0 - median_latency / NetworkAgent::PING_TIMEOUT.as_secs() as f64;
         }
 
         return 0.15 * score_age + 0.25 * score_outbound + 0.2 * score_type + 0.2 * score_protocol + 0.2 * score_speed;
     }
 
-    fn score_connection_age(connection_info: &ConnectionInfo) -> Score {
-        let score = |age, best_age, max_age| { cmp::max(cmp::min(1 - (age - best_age) / max_age, 1), 0) };
+    fn score_by_age(age: u64, best_age: u64, max_age: u64) -> Score {
+        f64::max(f64::min(1. - (age as f64 - best_age as f64) / max_age as f64, 1.), 0.)
+    }
 
+    fn score_connection_age(connection_info: &ConnectionInfo) -> Score {
         let age = time::duration_as_millis(&connection_info.age_established());
         let services = connection_info.peer_address().expect("No peer address").services;
 
         if services.is_full_node() {
-            return (age as f32/ (2.0 * time::duration_as_millis(&Self::BEST_AGE_FULL) as f32) + 0.5) as Score;
+            (age as f64 / (2.0 * time::duration_as_millis(&Self::BEST_AGE_FULL) as f64) + 0.5) as Score
         } else if services.is_light_node() {
-            return score(age, time::duration_as_millis(&Self::BEST_AGE_LIGHT), time::duration_as_millis(&Self::MAX_AGE_LIGHT)) as Score;
+            PeerScorer::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_LIGHT), time::duration_as_millis(&Self::MAX_AGE_LIGHT)) as Score
         } else if services.is_nano_node() {
-            return score(age, time::duration_as_millis(&Self::BEST_AGE_NANO), time::duration_as_millis(&Self::MAX_AGE_NANO)) as Score;
+            PeerScorer::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_NANO), time::duration_as_millis(&Self::MAX_AGE_NANO)) as Score
         } else {
             unreachable!()
         }
@@ -303,7 +305,7 @@ impl PeerScorer {
         }
     }
 
-    pub fn connection_scores(&self) -> &Vec<(ConnectionId, f32)> {
+    pub fn connection_scores(&self) -> &Vec<(ConnectionId, f64)> {
         &self.connection_scores
     }
 }

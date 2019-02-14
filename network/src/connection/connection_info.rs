@@ -112,7 +112,7 @@ impl PartialEq for ConnectionInfo {
 impl Eq for ConnectionInfo {}
 
 pub struct ConnectionStatistics {
-    latencies: Vec<f32>,
+    latencies: Vec<f64>,
 }
 
 impl fmt::Display for ConnectionInfo {
@@ -135,11 +135,11 @@ impl ConnectionStatistics {
         self.latencies.clear();
     }
 
-    pub fn add_latency(&mut self, latency: f32) {
+    pub fn add_latency(&mut self, latency: f64) {
         self.latencies.push(latency);
     }
 
-    pub fn latency_median(&self) -> f32 {
+    pub fn latency_median(&self) -> f64 {
         // FIXME: Cloning is slow but needed to sort this vector without requiring &mut self (which we don't have in PeerScorer use)
         let mut latencies = self.latencies.clone();
         let length = self.latencies.len();
