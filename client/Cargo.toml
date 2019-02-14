@@ -35,6 +35,7 @@ colored = "1.7.0"
 chrono = "0.4.6"
 failure = "0.1.5"
 failure_derive = "0.1.5"
+log-panics = { version = "2.0.0", features = ["with-backtrace"] }
 
 [features]
 default = ["all"]

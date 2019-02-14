@@ -68,15 +68,17 @@ pub enum ConfigError {
 }
 
 fn main() {
+    #[cfg(feature = "deadlock-detection")]
+    deadlock::deadlock_detection();
+
+    log_panics::init();
+
     if let Err(e) = run() {
         force_log_error_cause_chain(e.as_fail(), Level::Error);
     }
 }
 
 fn run() -> Result<(), Error> {
-    #[cfg(feature = "deadlock-detection")]
-    deadlock::deadlock_detection();
-
     // parse command line arguments
     let cmdline = Options::parse()?;
 
