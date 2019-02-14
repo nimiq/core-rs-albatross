@@ -69,10 +69,10 @@ impl PeerAddressInfo {
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub enum PeerAddressState {
     New = 1,
-    Established,
-    Tried,
-    Failed,
-    Banned
+    Established = 2,
+    Tried = 3,
+    Failed = 4,
+    Banned = 5
 }
 
 pub struct SignalRouter {

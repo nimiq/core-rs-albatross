@@ -12,12 +12,12 @@ use crate::websocket::websocket_connector::ConnectionHandle;
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 pub enum ConnectionState {
-    New,
-    Connecting,
-    Connected,
-    Negotiating,
-    Established,
-    Closed
+    New = 1,
+    Connecting = 2,
+    Connected = 3,
+    Negotiating = 4,
+    Established = 5,
+    Closed = 6
 }
 
 pub struct ConnectionInfo {
