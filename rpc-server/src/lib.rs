@@ -19,6 +19,7 @@ use std::net::{SocketAddr, IpAddr};
 use futures::future::Future;
 use hyper::Server;
 use json::{Array, JsonValue, Null};
+use json::object::Object;
 
 use beserial::{Serialize, Deserialize};
 use consensus::consensus::{Consensus, ConsensusEvent};
@@ -155,7 +156,7 @@ impl JsonRpcHandler {
                 (live_transaction, true, confirmations == 0)
             }
             else {
-                (self.transaction_to_obj(&transaction, None, None)?,
+                (self.transaction_to_obj(&transaction, None, None),
                  transaction.verify(self.consensus.blockchain.network_id).is_ok(), false)
             };
 
@@ -233,15 +234,44 @@ impl JsonRpcHandler {
             .collect::<Array>()))
     }
 
-    fn transaction_receipt_to_obj(&self, receipt: &TransactionReceipt, index: Option<u16>, block: Option<&Block>) -> JsonValue {
-        object!{
-            "transactionHash" => receipt.transaction_hash.to_hex(),
-            "blockNumber" => receipt.block_height,
-            "blockHash" => receipt.block_hash.to_hex(),
-            "confirmations" => self.consensus.blockchain.height() - receipt.block_height,
-            "timestamp" => block.map(|block| block.header.timestamp.into()).unwrap_or(Null),
-            "transactionIndex" => index.map(|i| i.into()).unwrap_or(Null)
+    fn mempool_content(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let include_transactions = params.get(0).and_then(JsonValue::as_bool)
+            .unwrap_or(false);
+
+        Ok(JsonValue::Array(self.consensus.mempool.get_all_transactions()
+            .iter()
+            .map(|tx| if include_transactions {
+                self.transaction_to_obj(tx, None, None)
+            } else {
+                tx.hash::<Blake2bHash>().to_hex().into()
+            })
+            .collect::<Array>()))
+    }
+
+    fn mempool(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+        // Transactions sorted by fee/byte, ascending
+        let transactions = self.consensus.mempool.get_all_transactions();
+        let bucket_values: [u64; 14] = [0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+        let mut bucket_counts: [u32; 14] = [0; 14];
+        let mut i = 0;
+
+        for transaction in &transactions {
+            while (transaction.fee_per_byte() as u64) < bucket_values[i] { i += 1; }
+            bucket_counts[i] += 1;
         }
+
+        let mut transactions_per_bucket = Object::new();
+        let mut buckets = Array::new();
+        transactions_per_bucket.insert("total", transactions.len().into());
+        for (&value, &count) in bucket_values.iter().zip(&bucket_counts) {
+            if count > 0 {
+                transactions_per_bucket.insert(value.to_string().as_str(), JsonValue::from(count));
+                buckets.push(value.into());
+            }
+        }
+        transactions_per_bucket.insert("buckets", JsonValue::Array(buckets));
+
+        Ok(JsonValue::Object(transactions_per_bucket))
     }
 
     // Blockchain
@@ -263,11 +293,11 @@ impl JsonRpcHandler {
     }
 
     fn get_block_by_hash(&self, params: Array) -> Result<JsonValue, JsonValue> {
-        self.block_to_obj(&self.block_by_hash(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false))
+        Ok(self.block_to_obj(&self.block_by_hash(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
 
     fn get_block_by_number(&self, params: Array) -> Result<JsonValue, JsonValue> {
-        self.block_to_obj(&self.block_by_number(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false))
+        Ok(self.block_to_obj(&self.block_by_number(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
 
 
@@ -304,8 +334,8 @@ impl JsonRpcHandler {
             .ok_or_else(|| object!{"message" => "Block not found"})
     }
     
-    fn block_to_obj(&self, block: &Block, include_transactions: bool) -> Result<JsonValue, JsonValue> {
-        Ok(object!{
+    fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
+        object!{
             "number" => block.header.height,
             "hash" => block.header.hash::<Blake2bHash>().to_hex(),
             "pow" => block.header.hash::<Argon2dHash>().to_hex(),
@@ -320,16 +350,16 @@ impl JsonRpcHandler {
             "size" => block.serialized_size(),
             "timestamp" => block.header.timestamp,
             "transactions" => JsonValue::Array(block.body.as_ref().map(|body| if include_transactions { 
-                body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(block), Some(i)).unwrap_or(Null)).collect()
+                body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(block), Some(i))).collect()
             } else { 
                 body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
             }).unwrap_or(vec![])),
-        })
+        }
     }
     
-    fn transaction_to_obj(&self, transaction: &Transaction, block: Option<&Block>, i: Option<usize>) -> Result<JsonValue, JsonValue> {
+    fn transaction_to_obj(&self, transaction: &Transaction, block: Option<&Block>, i: Option<usize>) -> JsonValue {
         let header = block.as_ref().map(|b| &b.header);
-        Ok(object!{
+        object!{
             "hash" => transaction.hash::<Blake2bHash>().to_hex(),
             "blockHash" => header.map(|h| h.hash::<Blake2bHash>().to_hex().into()).unwrap_or(Null),
             "blockNumber" => header.map(|h| h.height.into()).unwrap_or(Null),
@@ -345,7 +375,7 @@ impl JsonRpcHandler {
             "data" => hex::encode(&transaction.data),
             "flags" => transaction.flags.bits(),
             "validityStartHeight" => transaction.validity_start_height
-        })
+        }
     }
 
     fn obj_to_transaction(&self, obj: &JsonValue) -> Result<Transaction, JsonValue> {
@@ -413,7 +443,7 @@ impl JsonRpcHandler {
             .and_then(|b| b.transactions.get(index as usize))
             .ok_or_else(|| object!{"message" => "Block doesn't contain transaction."})?;
 
-        self.transaction_to_obj(&transaction, Some(&block), Some(index as usize))
+        Ok(self.transaction_to_obj(&transaction, Some(&block), Some(index as usize)))
     }
 
     fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<ConnectionInfo>) -> JsonValue {
@@ -438,6 +468,17 @@ impl JsonRpcHandler {
             "tx" => Null,
         }
     }
+
+    fn transaction_receipt_to_obj(&self, receipt: &TransactionReceipt, index: Option<u16>, block: Option<&Block>) -> JsonValue {
+        object!{
+            "transactionHash" => receipt.transaction_hash.to_hex(),
+            "blockNumber" => receipt.block_height,
+            "blockHash" => receipt.block_hash.to_hex(),
+            "confirmations" => self.consensus.blockchain.height() - receipt.block_height,
+            "timestamp" => block.map(|block| block.header.timestamp.into()).unwrap_or(Null),
+            "transactionIndex" => index.map(|i| i.into()).unwrap_or(Null)
+        }
+    }
 }
 
 impl jsonrpc::Handler for JsonRpcHandler {
@@ -456,12 +497,13 @@ impl jsonrpc::Handler for JsonRpcHandler {
             "createRawTransaction" => Some(JsonRpcHandler::create_raw_transaction),
             "sendTransaction" => Some(JsonRpcHandler::send_transaction),
             "getRawTransactionInfo" => Some(JsonRpcHandler::get_raw_transaction_info),
-
             "getTransactionByBlockHashAndIndex" => Some(JsonRpcHandler::get_transaction_by_block_hash_and_index),
             "getTransactionByBlockNumberAndIndex" => Some(JsonRpcHandler::get_transaction_by_block_number_and_index),
             "getTransactionByHash" => Some(JsonRpcHandler::get_transaction_by_hash),
             "getTransactionReceipt" => Some(JsonRpcHandler::get_transaction_receipt),
             "getTransactionsByAddress" => Some(JsonRpcHandler::get_transactions_by_address),
+            "mempoolContent" => Some(JsonRpcHandler::mempool_content),
+            "mempool" => Some(JsonRpcHandler::mempool),
 
             // Blockchain
             "blockNumber" => Some(JsonRpcHandler::block_number),

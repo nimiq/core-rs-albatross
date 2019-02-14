@@ -33,7 +33,7 @@ struct MempoolState {
     transactions_by_hash: HashMap<Blake2bHash, Arc<Transaction>>,
     transactions_by_sender: HashMap<Address, BTreeSet<Arc<Transaction>>>,
     transactions_by_recipient: HashMap<Address, BTreeSet<Arc<Transaction>>>,
-    transactions_sorted_fee: BTreeSet<Arc<Transaction>>,
+    transactions_sorted_fee: BTreeSet<Arc<Transaction>>, // sorted by fee, ascending
 }
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
@@ -254,6 +254,11 @@ impl<'env> Mempool<'env> {
         };
 
         return txs;
+    }
+
+    pub fn get_all_transactions(&self) -> Vec<Arc<Transaction>> {
+        let state = self.state.read();
+        state.transactions_sorted_fee.iter().map(Arc::clone).collect()
     }
 
     pub fn get_transactions_for_block(&self, max_size: usize) -> Vec<Arc<Transaction>> {
