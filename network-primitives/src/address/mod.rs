@@ -4,10 +4,13 @@ pub mod peer_address;
 pub use self::net_address::*;
 pub use self::peer_address::*;
 
+use hex::FromHex;
+
 use nimiq_keys::{PublicKey};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
 
 create_typed_array!(PeerId, u8, 16);
+add_hex_io_fns_typed_arr!(PeerId, PeerId::SIZE);
 
 impl From<Blake2bHash> for PeerId {
     fn from(hash: Blake2bHash) -> Self {
