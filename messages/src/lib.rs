@@ -874,7 +874,7 @@ impl Deserialize for AccountsTreeChunkData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsTreeChunkMessage {
     pub block_hash: Blake2bHash,
-    pub accounts_tree_chunk: Option<AccountsTreeChunkData>,
+    pub chunk: Option<AccountsTreeChunkData>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

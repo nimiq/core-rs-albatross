@@ -19,7 +19,6 @@ log = "0.4.3"
 beserial = { path = "../beserial" }
 nimiq-accounts = { path = "../accounts" }
 nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-primitives = { path = "../primitives", features = ["coin"] }
 nimiq-block = { path = "../primitives/block" }
