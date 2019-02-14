@@ -553,6 +553,15 @@ impl ConnectionPool {
 
             // Register close listener early to clean up correctly in case _checkConnection() closes the connection.
             let info = state.connections.get(connection_id).expect("Missing connection");
+
+            // There is a chance that there was a race condition in the websocket connector
+            // and that the connection should actually have been aborted.
+            if info.connection_handle().map(|handle| handle.is_aborted()).unwrap_or(false) {
+                ConnectionPool::close(info.network_connection(), CloseType::SimultaneousConnection);
+                debug!("Connection should have been aborted in connecting state, closing it now");
+                return;
+            }
+
             let peer_channel = Arc::new(PeerChannel::new(info.network_connection().unwrap()));
             let weak = self.self_weak.clone();
             peer_channel.close_notifier.write().register(move |ty: &CloseType| {
@@ -687,7 +696,8 @@ impl ConnectionPool {
                                 stored_connection.connection_handle().map(|handle| {
                                     handle.abort();
                                 });
-                                assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
+                                // The assert does not make much sense since the closing happens asynchronously.
+                                // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                             },
                             ConnectionState::Established => {
                                 // If we have another established connection to this peer, close this connection.
@@ -698,16 +708,19 @@ impl ConnectionPool {
                                 // The peer with the lower peerId accepts this connection and closes his stored connection.
                                 if self.network_config.peer_id() < peer_address.peer_id() {
                                     ConnectionPool::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
-                                    assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
+                                    // The assert does not make much sense since the closing happens asynchronously.
+                                    // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                                 } else {
                                     // The peer with the higher peerId closes this connection and keeps his stored connection.
                                     ConnectionPool::close(info.network_connection(), CloseType::SimultaneousConnection);
+                                    return;
                                 }
                             },
                             _ => {
                                 // Accept this connection and close the stored connection.
                                 ConnectionPool::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
-                                assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
+                                // The assert does not make much sense since the closing happens asynchronously.
+                                // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                             },
                         }
                     }
@@ -786,7 +799,6 @@ impl ConnectionPool {
         // - inbound connections post handshake (peerAddress is verified)
         {
             let state = self.state.read();
-            // TODO: apparently on_close is called multiple times
             let info = state.get_connection(connection_id).expect("Missing connection in on_close");
             if let Some(peer_address) = info.peer_address() {
                 self.addresses.close(info.peer_channel(), peer_address, ty);
@@ -899,7 +911,11 @@ impl ConnectionPool {
             self.addresses.close(None, peer_address.clone(), CloseType::ConnectionFailed);
         }
 
-        self.notifier.read().notify(ConnectionPoolEvent::ConnectError(peer_address, CloseType::ConnectionFailed));
+        // Notify about error if it was not aborted by us due to a simultaneous connection
+        match error {
+            ConnectError::AbortedByUs => (),
+            _ => self.notifier.read().notify(ConnectionPoolEvent::ConnectError(peer_address, CloseType::ConnectionFailed)),
+        }
     }
 
     /// Convert a net address into a subnet according to the configured bitmask.

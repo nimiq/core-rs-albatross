@@ -61,6 +61,8 @@ pub enum ConnectError {
     Timeout,
     #[fail(display = "Protocol flags do not match")]
     ProtocolMismatch,
+    #[fail(display = "Connection was aborted by us")]
+    AbortedByUs,
     #[fail(display = "{}", _0)]
     Timer(#[cause] TimerError),
     #[fail(display = "{}", _0)]

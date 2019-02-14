@@ -15,6 +15,7 @@ use crate::connection::close_type::CloseType;
 use crate::connection::network_connection::ClosedFlag;
 use crate::websocket::{Error, SharedNimiqMessageStream};
 use crate::websocket::Message as WebSocketMessage;
+use futures::future;
 
 pub enum PeerStreamEvent {
     Message(Message),
@@ -47,7 +48,10 @@ impl PeerStream {
         let process_message = stream.for_each(move |msg| {
             match msg {
                 WebSocketMessage::Message(msg) => {
-                    msg_notifier.read().notify(PeerStreamEvent::Message(msg));
+                    // Ignore messages from peer if connection has been closed by us, but await close frame.
+                    if !msg_closed_flag.is_closed() {
+                        msg_notifier.read().notify(PeerStreamEvent::Message(msg));
+                    }
                 },
                 WebSocketMessage::Close(_frame) => {
                     msg_closed_flag.set_closed(true);
@@ -58,18 +62,29 @@ impl PeerStream {
                 _ => unreachable!(),
             }
             Ok(())
-        }).or_else(move |error| {
-            match &error {
-                Error::WebSocketError(WsError::ConnectionClosed(ref _frame)) => {
+        }).then(move |result| {
+            match result {
+                Err(error) => {
+                    match &error {
+                        Error::WebSocketError(WsError::ConnectionClosed(ref _frame)) => {
+                            error_closed_flag.set_closed(true);
+                            let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
+                            error_notifier.read().notify(PeerStreamEvent::Close(ty));
+                        },
+                        error => {
+                            error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(error)));
+                        },
+                    }
+                    future::err(error)
+                },
+                Ok(_) => {
+                    // If the stream was closed without any error or close frame (just in case), call close notifier as well.
                     error_closed_flag.set_closed(true);
                     let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
                     error_notifier.read().notify(PeerStreamEvent::Close(ty));
-                },
-                error => {
-                    error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(error)));
-                },
+                    future::ok(())
+                }
             }
-            Err(error)
         });
 
         process_message

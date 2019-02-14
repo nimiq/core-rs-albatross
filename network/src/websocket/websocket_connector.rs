@@ -187,17 +187,19 @@ impl WebSocketConnector {
                     let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, Some(peer_address)));
                     notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
                     tokio::spawn(ncfut);
+                } else {
+                    notifier.read().notify(WebSocketConnectorEvent::Error(peer_address.clone(), ConnectError::AbortedByUs));
                 }
             })
             .map_err(move |error| {
                 if error.is_inner() {
                     let error = error.into_inner().expect("There was no inner_error inside the timeout::Error struct: abort.");
-                    error_notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&error_peer_address), error.into()));
+                    error_notifier.read().notify(WebSocketConnectorEvent::Error(error_peer_address.clone(), error.into()));
                 } else if error.is_timer() {
                     let error = error.into_timer().expect("There was no timer error inside the timeout::Error struct: abort.");
-                    error_notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&error_peer_address), error.into()));
+                    error_notifier.read().notify(WebSocketConnectorEvent::Error(error_peer_address.clone(), error.into()));
                 } else if error.is_elapsed() {
-                    error_notifier.read().notify(WebSocketConnectorEvent::Error(Arc::clone(&error_peer_address), ConnectError::Timeout));
+                    error_notifier.read().notify(WebSocketConnectorEvent::Error(error_peer_address.clone(), ConnectError::Timeout));
                 }
                 ()
             });
