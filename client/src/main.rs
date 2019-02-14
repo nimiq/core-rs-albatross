@@ -29,6 +29,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use failure::{Error, Fail};
+use fern::log_file;
 use futures::{Future, future};
 use log::Level;
 
@@ -93,6 +94,9 @@ fn run() -> Result<(), Error> {
     }
     // For now, we only log to stdout.
     dispatch = dispatch.chain(io::stdout());
+    if let Some(ref filename) = settings.log.file {
+        dispatch = dispatch.chain(log_file(filename)?);
+    }
     dispatch.apply()?;
 
     debug!("Command-line options: {:#?}", cmdline);

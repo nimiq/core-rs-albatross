@@ -193,6 +193,8 @@ pub(crate) struct LogSettings {
     pub tags: HashMap<String, String>,
     #[serde(default)]
     pub statistics: u64,
+    #[serde(default)]
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
