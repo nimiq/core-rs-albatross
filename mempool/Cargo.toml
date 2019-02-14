@@ -13,6 +13,8 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 maintenance = { status = "experimental" }
 
 [dependencies]
+serde = "1.0.85"
+serde_derive = "1.0.85"
 parking_lot = "0.6"
 log = "0.4.3"
 beserial = { path = "../beserial" }
@@ -24,9 +26,10 @@ nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once"] }
 nimiq-accounts = { path = "../accounts" }
 nimiq-blockchain = { path = "../blockchain" }
+nimiq-collections = { path = "../collections" }
+nimiq-primitives = { path = "../primitives", features = ["coin"] }
 
 [dev-dependencies]
 nimiq-database = { path = "../database" }
-nimiq-primitives = { path = "../primitives", features = ["coin"] }
 nimiq-network-primitives = { path = "../network-primitives" }
 hex = "0.3.2"

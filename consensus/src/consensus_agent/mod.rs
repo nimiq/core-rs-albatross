@@ -385,6 +385,9 @@ impl ConsensusAgent {
                     Some(hash.serialize_to_vec())
                 ));
             },
+            ReturnCode::Filtered => {
+                debug!("Filtered tx {} from {}", hash, self.peer.peer_address());
+            },
         }
     }
 
