@@ -1,5 +1,3 @@
-use std::error::Error;
-use std::fmt;
 use std::sync::Arc;
 
 use failure::Fail;

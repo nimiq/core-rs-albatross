@@ -71,9 +71,9 @@ pub struct NimiqMessageStream {
 }
 
 impl NimiqMessageStream {
-    pub(super) fn new(ws_socket: WebSocketStream<MaybeTlsStream<TcpStream>>, outbound: bool) -> Self {
-        let peer_addr = ws_socket.peer_addr().expect("WebSocketStream misses remote IP address");
-        return NimiqMessageStream {
+    pub(super) fn new(ws_socket: WebSocketStream<MaybeTlsStream<TcpStream>>, outbound: bool) -> Result<Self, Error> {
+        let peer_addr = ws_socket.peer_addr().map_err(|e| Error::NetAddressMissing(e))?;
+        return Ok(NimiqMessageStream {
             inner: ws_socket,
             receiving_tag: 254,
             sending_tag: 0,
@@ -85,7 +85,7 @@ impl NimiqMessageStream {
                 net::IpAddr::V4(ip4) => NetAddress::IPv4(ip4),
                 net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
             }, outbound),
-        };
+        });
     }
 
     pub fn state(&self) -> &PublicStreamInfo {

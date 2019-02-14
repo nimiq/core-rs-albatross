@@ -26,6 +26,8 @@ pub enum Error {
     TlsWrappingError,
     #[fail(display = "{}", _0)]
     IoError(#[cause] IoError),
+    #[fail(display = "Could not read net address from stream: {}", _0)]
+    NetAddressMissing(#[cause] IoError),
     #[fail(display = "Message format is incorrect and could not be parsed correctly")]
     InvalidMessageFormat,
 }
