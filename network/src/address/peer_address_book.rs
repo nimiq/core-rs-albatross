@@ -330,7 +330,7 @@ impl PeerAddressBook {
         }
 
         // XXX inefficient linear scan
-        iterator.cycle().skip(start_index).take(max_addresses)
+        iterator.cycle().skip(start_index).take(cmp::min(max_addresses, num_addresses))
             .filter(|&peer_address| {
                 if let Some(info) = state.info_by_address.get(peer_address) {
                     // Never return banned or failed addresses.
