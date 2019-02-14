@@ -2,7 +2,9 @@ extern crate log;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_hash as hash;
-extern crate nimiq_primitives as primitives;
+extern crate nimiq_account as account;
+extern crate nimiq_block as block;
+extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 extern crate nimiq_keys as keys;
 
@@ -17,9 +19,9 @@ use accounts::Accounts;
 use blockchain::{Blockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use primitives::account::AccountTransactionInteraction;
-use primitives::block::Block;
-use primitives::transaction::Transaction;
+use account::AccountTransactionInteraction;
+use block::Block;
+use transaction::Transaction;
 use utils::observer::Notifier;
 
 pub struct Mempool<'env> {

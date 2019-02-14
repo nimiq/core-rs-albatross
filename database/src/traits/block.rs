@@ -1,7 +1,7 @@
 use std::io;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_primitives::block::Block;
+use nimiq_block::Block;
 
 use crate::{FromDatabaseValue, IntoDatabaseValue};
 

@@ -2,13 +2,16 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate bitflags;
+extern crate nimiq_account as account;
 extern crate nimiq_accounts as accounts;
+extern crate nimiq_block as block;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 #[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_network_primitives as network_primitives;
-extern crate nimiq_primitives as primitives;
+extern crate nimiq_transaction as transaction;
+extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
 
 use std::io;
@@ -19,8 +22,9 @@ use parking_lot::RwLock;
 use rand::Rng;
 use rand::rngs::OsRng;
 
-use accounts::AccountsTreeChunk;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
+use block::{Block, BlockHeader};
+use block::proof::ChainProof;
 use hash::{Blake2bHash, Hash};
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
@@ -28,10 +32,9 @@ use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
 use network_primitives::subscription::Subscription;
 use network_primitives::version;
-use primitives::account::accounts_proof::AccountsProof;
-use primitives::block::{Block, BlockHeader};
-use primitives::block::proof::ChainProof;
-use primitives::transaction::{Transaction, TransactionsProof, TransactionReceipt};
+use transaction::{Transaction, TransactionReceipt, TransactionsProof};
+use tree_primitives::accounts_proof::AccountsProof;
+use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
 

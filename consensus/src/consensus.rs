@@ -12,7 +12,7 @@ use mempool::{Mempool, MempoolEvent};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
-use primitives::transaction::Transaction;
+use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::timers::Timers;

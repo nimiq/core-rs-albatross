@@ -7,9 +7,10 @@ use lmdb_zero::traits::AsLmdbBytes;
 #[cfg(feature = "hash")]
 mod hash;
 
-#[cfg(feature = "primitives")]
+#[cfg(feature = "block")]
 mod block;
-#[cfg(feature = "primitives")]
+
+#[cfg(feature = "account")]
 mod accounts;
 
 #[cfg(feature = "keys")]

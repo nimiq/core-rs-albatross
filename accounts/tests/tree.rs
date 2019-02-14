@@ -4,7 +4,7 @@ use nimiq_accounts::tree::AccountsTree;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_keys::Address;
-use nimiq_primitives::account::{Account, BasicAccount};
+use nimiq_account::{Account, BasicAccount};
 use nimiq_primitives::coin::Coin;
 
 #[test]

@@ -4,9 +4,9 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_primitives::networks::get_network_info;
-use nimiq_primitives::block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
+use nimiq_block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::transaction::Transaction;
+use nimiq_transaction::Transaction;
 
 fn create_transactions() -> (Transaction, Transaction, Transaction) {
     // Prepare three transactions.

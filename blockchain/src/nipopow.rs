@@ -3,8 +3,8 @@ use std::time::Instant;
 use database::{Transaction, ReadTransaction};
 use hash::Blake2bHash;
 use network_primitives::networks::get_network_info;
-use primitives::block::{Block, BlockHeader, Target};
-use primitives::block::proof::ChainProof;
+use block::{Block, BlockHeader, Target};
+use block::proof::ChainProof;
 use utils::iterators::Merge;
 
 use crate::{Blockchain, chain_info::ChainInfo};

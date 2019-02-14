@@ -2,7 +2,7 @@ use std::io;
 use std::sync::Arc;
 
 use blockchain::Blockchain;
-use primitives::block::Difficulty;
+use block::Difficulty;
 
 use crate::server;
 use crate::server::SerializationType;

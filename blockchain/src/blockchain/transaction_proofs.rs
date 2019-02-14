@@ -4,8 +4,8 @@ use database::ReadTransaction;
 use hash::Blake2bHash;
 use hash::Hash;
 use keys::Address;
-use primitives::account::accounts_proof::AccountsProof;
-use primitives::transaction::TransactionsProof;
+use tree_primitives::accounts_proof::AccountsProof;
+use transaction::TransactionsProof;
 use utils::merkle::Blake2bMerkleProof;
 
 use crate::Blockchain;

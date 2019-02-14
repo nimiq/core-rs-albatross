@@ -4,10 +4,10 @@ use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_primitives::networks::get_network_info;
-use nimiq_primitives::account::PrunedAccount;
-use nimiq_primitives::block::*;
+use nimiq_account::PrunedAccount;
+use nimiq_block::*;
 use nimiq_primitives::policy;
-use nimiq_primitives::transaction::Transaction;
+use nimiq_transaction::Transaction;
 
 mod blockchain;
 mod chain_info;

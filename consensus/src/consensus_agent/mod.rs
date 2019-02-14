@@ -18,8 +18,8 @@ use network_messages::{
     RejectMessageCode,
 };
 use network_primitives::subscription::Subscription;
-use primitives::block::Block;
-use primitives::transaction::Transaction;
+use block::Block;
+use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use utils::rate_limit::RateLimit;

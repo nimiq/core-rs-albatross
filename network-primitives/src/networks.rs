@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hash::Blake2bHash;
 use keys::Address;
 use keys::PublicKey;
-use primitives::block::{Block, BlockBody, BlockHeader, BlockInterlink};
+use block::{Block, BlockBody, BlockHeader, BlockInterlink};
 pub use primitives::networks::NetworkId;
 
 use crate::address::net_address::NetAddress;

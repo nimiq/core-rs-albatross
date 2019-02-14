@@ -1,26 +1,25 @@
 use std::collections::HashMap;
+use std::collections::LinkedList;
+use std::error::Error;
 use std::sync::{Arc, Weak};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::thread;
 
-use parking_lot::RwLock;
 use futures::future::Future;
 use futures::Poll;
 use futures::prelude::*;
+use futures::task;
 use futures::task::Task;
+use parking_lot::RwLock;
 
-use accounts::tree::AccountsTreeChunk;
 use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
 use database::ReadTransaction;
 use hash::Blake2bHash;
-use utils::mutable_once::MutableOnce;
-
-use std::thread;
 use hash::Hash;
-use std::error::Error;
-use futures::task;
-use std::collections::LinkedList;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
+use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
+use utils::mutable_once::MutableOnce;
 
 pub struct AccountsChunkCache {
     blockchain: Arc<Blockchain<'static>>,

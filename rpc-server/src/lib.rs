@@ -1,40 +1,43 @@
+extern crate beserial;
 #[macro_use]
 extern crate json;
 #[macro_use]
 extern crate log;
-extern crate beserial;
-extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_accounts as accounts;
+extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_consensus as consensus;
-extern crate nimiq_network as network;
 extern crate nimiq_hash as hash;
+extern crate nimiq_keys as keys;
+extern crate nimiq_network as network;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
-extern crate nimiq_keys as keys;
+extern crate nimiq_block as block;
+extern crate nimiq_transaction as transaction;
 
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::net::{SocketAddr, IpAddr};
 
 use futures::future::Future;
 use hyper::Server;
 use json::{Array, JsonValue, Null};
 use json::object::Object;
 
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
+use block::{Block, Difficulty};
+use blockchain::transaction_store::TransactionInfo;
 use consensus::consensus::{Consensus, ConsensusEvent};
 use hash::{Argon2dHash, Blake2bHash, Hash};
-use primitives::block::{Block, Difficulty};
-use crate::error::Error;
-use primitives::transaction::{Transaction, TransactionFlags, TransactionReceipt};
-use primitives::account::AccountType;
-use primitives::coin::Coin;
 use keys::Address;
-use blockchain::transaction_store::TransactionInfo;
 use network::address::peer_address_state::PeerAddressInfo;
 use network::connection::connection_info::ConnectionInfo;
 use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
+use primitives::account::AccountType;
+use primitives::coin::Coin;
+use transaction::{Transaction, TransactionFlags, TransactionReceipt};
+
+use crate::error::Error;
 
 pub mod jsonrpc;
 pub mod error;

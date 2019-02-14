@@ -1,0 +1,30 @@
+[package]
+name = "nimiq-block"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+edition = "2018"
+description = "Block primitives to be used in Nimiq's Rust implementation"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs"
+license = "Apache-2.0"
+
+[badges]
+travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+
+[dependencies]
+beserial = { path = "../../beserial" }
+beserial_derive = { path = "../../beserial/beserial_derive"}
+num-bigint = "0.2.0"
+fixed-unsigned = { path = "../../fixed-unsigned" }
+nimiq-hash = { path = "../../hash" }
+nimiq-keys = { path = "../../keys" }
+nimiq-utils = { path = "../../utils", features = ["merkle"] }
+nimiq-primitives = { path = "..", features = ["policy", "networks"] }
+nimiq-transaction = { path = "../transaction" }
+nimiq-account = { path = "../account" }
+nimiq-macros = { path = "../../macros" }
+log = "0.4.3"
+hex = "0.3.2"
+
+[dev-dependencies]
+num-traits = "0.2.6"

@@ -2,21 +2,21 @@ use std::collections::HashMap;
 
 use hex;
 
+use account::{Account, AccountError, AccountTransactionInteraction, AccountType};
 use beserial::Deserialize;
+use block::{Block, BlockBody};
 use database::{Environment, ReadTransaction, WriteTransaction};
 use database as db;
 use hash::Blake2bHash;
 use keys::Address;
 use network_primitives::networks::get_network_info;
-use primitives::account::{Account, AccountError, AccountTransactionInteraction, AccountType};
-use primitives::account::accounts_proof::AccountsProof;
-use primitives::block::{Block, BlockBody};
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use primitives::transaction::{Transaction, TransactionFlags};
+use transaction::{Transaction, TransactionFlags};
+use tree_primitives::accounts_proof::AccountsProof;
+use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 
-use crate::AccountsTreeChunk;
 use crate::tree::AccountsTree;
 
 #[derive(Debug)]

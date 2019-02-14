@@ -16,7 +16,10 @@ beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
 nimiq-keys = { path = "../keys" }
 nimiq-hash = { path = "../hash" }
-nimiq-primitives = { path = "../primitives", features = ["account", "block", "transaction"] }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 nimiq-macros = { path = "../macros" }
 bitflags = "1.0"

@@ -1,7 +1,7 @@
 use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction, FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
-use primitives::block::Block;
-use primitives::transaction::Transaction as NimiqTransaction;
+use block::Block;
+use transaction::Transaction as NimiqTransaction;
 
 use beserial::{Serialize, Deserialize};
 use std::os::raw::c_uint;

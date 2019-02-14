@@ -7,8 +7,7 @@ use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_primitives::time::NetworkTime;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::transaction::SignatureProof;
-use nimiq_primitives::transaction::Transaction;
+use nimiq_transaction::{SignatureProof, Transaction};
 use std::collections::HashSet;
 
 #[test]

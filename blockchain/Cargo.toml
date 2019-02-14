@@ -17,9 +17,13 @@ beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
+nimiq-account = { path = "../primitives/account" }
+nimiq-block = { path = "../primitives/block" }
+nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-hash = { path = "../hash" }
 nimiq-accounts = { path = "../accounts" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
+nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 hex = "0.3.2"
 fixed-unsigned = { path = "../fixed-unsigned" }
 parking_lot = "0.6"

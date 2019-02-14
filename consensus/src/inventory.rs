@@ -22,9 +22,9 @@ use network_messages::{
 };
 use network_primitives::networks::get_network_info;
 use network_primitives::subscription::Subscription;
-use primitives::block::{Block, BlockHeader};
+use block::{Block, BlockHeader};
 use primitives::coin::Coin;
-use primitives::transaction::Transaction;
+use transaction::Transaction;
 use utils::{
     self,
     mutable_once::MutableOnce,

@@ -1,7 +1,7 @@
 use beserial::{Deserialize, Serialize, ReadBytesExt, WriteBytesExt, SerializingError};
 use keys::Address;
-use primitives::block::Block;
-use primitives::transaction::Transaction;
+use block::Block;
+use transaction::Transaction;
 use primitives::coin::Coin;
 use std::collections::HashSet;
 

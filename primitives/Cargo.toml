@@ -20,21 +20,15 @@ fixed-unsigned = { path = "../fixed-unsigned", optional = true }
 parking_lot = { version = "0.6", optional = true }
 hex = { version = "0.3.2", optional = true }
 lazy_static = { version = "1.0", optional = true }
-bitflags = { version = "1.0", optional = true }
-log = { version = "0.4.3", optional = true }
-nimiq-hash = { path = "../hash", optional = true }
-nimiq-keys = { path = "../keys", optional = true }
 nimiq-macros = { path = "../macros", optional = true }
-nimiq-utils = { path = "../utils", optional = true, features = ["merkle"] }
+log = { version = "0.4.3", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.2"
 
 [features]
-all = ["coin", "account", "block", "policy", "transaction", "networks"]
-coin = ["hex"]
-account = ["nimiq-keys", "coin", "nimiq-hash", "hex", "nimiq-macros", "log"]
-block = ["fixed-unsigned", "num-bigint", "nimiq-hash", "policy", "nimiq-utils", "account", "nimiq-keys", "transaction", "networks"]
-policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static"]
-transaction = ["fixed-unsigned", "nimiq-hash", "nimiq-utils", "policy", "networks", "bitflags", "log", "nimiq-keys", "account"]
+all = ["coin", "account", "policy", "networks"]
+coin = ["hex", "log"]
+account = ["hex", "nimiq-macros"]
+policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static", "fixed-unsigned"]
 networks = []

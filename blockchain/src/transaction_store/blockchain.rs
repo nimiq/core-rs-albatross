@@ -1,6 +1,6 @@
 use hash::Blake2bHash;
 use keys::Address;
-use primitives::transaction::TransactionReceipt;
+use transaction::TransactionReceipt;
 use database::ReadTransaction;
 
 use crate::blockchain::Blockchain;

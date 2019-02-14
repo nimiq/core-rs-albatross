@@ -1,7 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 
 use hash::{Blake2bHash, Hash};
-use primitives::block::Block;
+use block::Block;
 use primitives::policy;
 
 #[derive(Debug, Clone)]

@@ -5,7 +5,7 @@ use nimiq_network_primitives::networks::get_network_info;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
-use nimiq_primitives::transaction::Transaction;
+use nimiq_transaction::Transaction;
 
 #[test]
 fn it_can_push_blocks() {

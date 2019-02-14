@@ -21,7 +21,10 @@ nimiq-accounts = { path = "../accounts" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
-nimiq-primitives = { path = "../primitives" }
+nimiq-primitives = { path = "../primitives", features = ["coin"] }
+nimiq-block = { path = "../primitives/block" }
+nimiq-transaction = { path = "../primitives/transaction" }
+nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-collections = { path = "../collections" }
 nimiq-messages = { path = "../messages" }
