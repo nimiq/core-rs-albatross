@@ -29,6 +29,8 @@ byteorder = "1.2"
 hex = "0.3.2"
 lazy_static = "1.0"
 atomic = "0.4"
+url = "1.7.2"
+failure = "0.1.5"
 
 [features]
 all = ["networks", "time", "address", "services", "version", "protocol", "subscription"]
