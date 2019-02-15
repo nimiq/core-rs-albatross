@@ -823,10 +823,58 @@ pub struct GetAccountsTreeChunkMessage {
     pub start_prefix: String,
 }
 
+/// We use the following enum to store cached chunks more efficiently.
+/// Upon deserialization, we will always get the structured variant though.
+#[derive(Clone, Debug)]
+pub enum AccountsTreeChunkData {
+    Serialized(Vec<u8>),
+    Structured(AccountsTreeChunk),
+}
+
+impl AccountsTreeChunkData {
+    pub fn to_serialized(self) -> Self {
+        match self {
+            data @ AccountsTreeChunkData::Serialized(_) => data,
+            AccountsTreeChunkData::Structured(chunk) => AccountsTreeChunkData::Serialized(chunk.serialize_to_vec()),
+        }
+    }
+}
+
+impl Serialize for AccountsTreeChunkData {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        match self {
+            AccountsTreeChunkData::Serialized(ref buf) => {
+                writer.write_all(buf.as_slice())?;
+                Ok(buf.len())
+            },
+            AccountsTreeChunkData::Structured(ref chunk) => {
+                chunk.serialize(writer)
+            },
+        }
+    }
+
+    fn serialized_size(&self) -> usize {
+        match self {
+            AccountsTreeChunkData::Serialized(ref buf) => {
+                buf.len()
+            },
+            AccountsTreeChunkData::Structured(ref chunk) => {
+                chunk.serialized_size()
+            },
+        }
+    }
+}
+
+impl Deserialize for AccountsTreeChunkData {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        Ok(AccountsTreeChunkData::Structured(Deserialize::deserialize(reader)?))
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsTreeChunkMessage {
     pub block_hash: Blake2bHash,
-    pub accounts_tree_chunk: Option<AccountsTreeChunk>,
+    pub accounts_tree_chunk: Option<AccountsTreeChunkData>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

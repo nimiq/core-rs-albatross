@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use std::collections::LinkedList;
+use std::collections::VecDeque;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
+use std::time::Instant;
 
 use futures::future::Future;
 use futures::Poll;
@@ -12,20 +13,22 @@ use futures::task;
 use futures::task::Task;
 use parking_lot::RwLock;
 
+use beserial::Serialize;
 use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
 use database::ReadTransaction;
 use hash::Blake2bHash;
-use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::mutable_once::MutableOnce;
+
+pub type SerializedChunk = Vec<u8>;
 
 pub struct AccountsChunkCache {
     blockchain: Arc<Blockchain<'static>>,
     env: &'static Environment,
     computing_enabled: AtomicBool,
-    chunks_by_prefix_by_block: RwLock<HashMap<Blake2bHash, HashMap<String, AccountsTreeChunk>>>,
+    chunks_by_prefix_by_block: RwLock<HashMap<Blake2bHash, HashMap<String, SerializedChunk>>>,
     tasks_by_block: RwLock<HashMap<Blake2bHash, Vec<Task>>>,
-    block_history_order: RwLock<LinkedList<Blake2bHash>>,
+    block_history_order: RwLock<VecDeque<Blake2bHash>>,
     weak_self: MutableOnce<Weak<Self>>
 }
 
@@ -39,9 +42,9 @@ impl AccountsChunkCache {
             blockchain,
             env,
             computing_enabled: AtomicBool::new(false),
-            chunks_by_prefix_by_block: RwLock::new(HashMap::new()),
-            tasks_by_block: RwLock::new(HashMap::new()),
-            block_history_order: RwLock::new(LinkedList::new()),
+            chunks_by_prefix_by_block: RwLock::new(HashMap::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
+            tasks_by_block: RwLock::new(HashMap::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
+            block_history_order: RwLock::new(VecDeque::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
             weak_self: MutableOnce::new(Weak::new()),
         };
         let cache_arc = Arc::new(cache);
@@ -98,7 +101,10 @@ impl AccountsChunkCache {
                 guard.insert(hash.clone(), Vec::new());
             }
 
+            trace!("Computing chunks for block {}", hash);
+
             // Compute and store chunks.
+            let chunk_start = Instant::now();
             this.chunks_by_prefix_by_block.write().insert(hash.clone(), HashMap::new());
             let mut prefix = "".to_string();
             loop {
@@ -106,7 +112,7 @@ impl AccountsChunkCache {
                     if let Some(chunks_by_prefix) = this.chunks_by_prefix_by_block.write().get_mut(&hash) {
                         let last_terminal_string_opt = chunk.last_terminal_string();
                         let chunk_len = chunk.len();
-                        chunks_by_prefix.insert(prefix.clone(), chunk);
+                        chunks_by_prefix.insert(prefix.clone(), chunk.serialize_to_vec());
                         if chunk_len == 1 {
                             break;
                         }
@@ -124,6 +130,9 @@ impl AccountsChunkCache {
             this.notify_tasks_for_block(&hash);
             // The chunks are cached, so newly created requests will not need to enter them into the list of tasks.
             this.tasks_by_block.write().remove(&hash.clone());
+
+            let num_chunks = this.chunks_by_prefix_by_block.read().get(&hash).map(|cache| cache.len()).unwrap_or(0);
+            trace!("Computing {} chunks for block {} tree took {:?}", num_chunks, hash, chunk_start.elapsed());
 
             // Put those blocks that are cached into a history, so that we can remove them later on.
             this.block_history_order.write().push_back(hash.clone());
@@ -171,7 +180,7 @@ impl GetChunkFuture {
 }
 
 impl Future for GetChunkFuture {
-    type Item = Option<AccountsTreeChunk>;
+    type Item = Option<SerializedChunk>;
     type Error = ();
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
