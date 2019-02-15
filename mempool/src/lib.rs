@@ -1,14 +1,14 @@
 extern crate log;
-extern crate nimiq_accounts as accounts;
-extern crate nimiq_blockchain as blockchain;
-extern crate nimiq_hash as hash;
 extern crate nimiq_account as account;
+extern crate nimiq_accounts as accounts;
 extern crate nimiq_block as block;
-extern crate nimiq_transaction as transaction;
-extern crate nimiq_utils as utils;
+extern crate nimiq_blockchain as blockchain;
+extern crate nimiq_collections as collections;
+extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
-extern crate nimiq_collections as collections;
+extern crate nimiq_transaction as transaction;
+extern crate nimiq_utils as utils;
 
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -16,15 +16,17 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 
-use beserial::Serialize;
+use account::AccountTransactionInteraction;
 use accounts::Accounts;
+use beserial::Serialize;
+use block::Block;
 use blockchain::{Blockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use account::AccountTransactionInteraction;
-use block::Block;
 use transaction::Transaction;
 use utils::observer::Notifier;
+
+use crate::filter::MempoolFilter;
 
 pub mod filter;
 
@@ -40,7 +42,7 @@ struct MempoolState {
     transactions_by_sender: HashMap<Address, BTreeSet<Arc<Transaction>>>,
     transactions_by_recipient: HashMap<Address, BTreeSet<Arc<Transaction>>>,
     transactions_sorted_fee: BTreeSet<Arc<Transaction>>, // sorted by fee, ascending
-    filter: filter::MempoolFilter,
+    filter: MempoolFilter,
 }
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
@@ -61,8 +63,7 @@ impl<'env> Mempool<'env> {
                 transactions_by_sender: HashMap::new(),
                 transactions_by_recipient: HashMap::new(),
                 transactions_sorted_fee: BTreeSet::new(),
-                filter: filter::MempoolFilter::new(filter::MempoolFilter::DEFAULT_RULES,
-                                                   filter::MempoolFilter::DEFAULT_BLACKLIST_SIZE),
+                filter: MempoolFilter::default(),
             }),
             mut_lock: Mutex::new(()),
         });
@@ -85,8 +86,8 @@ impl<'env> Mempool<'env> {
             let state = self.state.read();
 
             // Check transaction against rules and blacklist
-            if !state.filter.accepts_transaction(&transaction) || state.filter.blacklisted(&transaction){
-                self.state.write().filter.blacklist( &transaction);
+            if !state.filter.accepts_transaction(&transaction) || state.filter.blacklisted(&transaction) {
+                self.state.write().filter.blacklist(&transaction);
                 return ReturnCode::Filtered;
             }
 
@@ -143,7 +144,7 @@ impl<'env> Mempool<'env> {
             match recipient_account.with_incoming_transaction(&transaction, block_height) {
                 Err(_) => return ReturnCode::Invalid,
                 Ok(r) => {
-                    // Check recipient account against filter rules
+                    // Check recipient account against filter rules.
                     if !state.filter.accepts_recipient_account(&transaction, &recipient_account, &r) {
                         self.state.write().filter.blacklist(&transaction);
                         return ReturnCode::Filtered;
@@ -178,14 +179,9 @@ impl<'env> Mempool<'env> {
                     break;
                 }
 
-                let old_sender_account = sender_account.clone();
                 sender_account = sender_account
                     .with_outgoing_transaction(tx, block_height)
                     .expect("Failed to apply existing transaction");
-                if !state.filter.accepts_sender_account(&transaction, &old_sender_account, &sender_account) {
-                    self.state.write().filter.blacklist(&transaction);
-                    return ReturnCode::Filtered;
-                }
                 tx_count += 1;
 
                 tx_opt = tx_iter.next_back();
@@ -197,10 +193,18 @@ impl<'env> Mempool<'env> {
             }
 
             // Now, check the new transaction.
+            let old_sender_account = sender_account.clone();
             sender_account = match sender_account.with_outgoing_transaction(&transaction, block_height) {
                 Ok(account) => account,
                 Err(_) => return ReturnCode::Invalid // XXX More specific return code here?
             };
+
+            // Check sender account against filter rules.
+            if !state.filter.accepts_sender_account(&transaction, &old_sender_account, &sender_account) {
+                self.state.write().filter.blacklist(&transaction);
+                return ReturnCode::Filtered;
+            }
+
             tx_count += 1;
 
             // Finally, check the remaining transactions with lower fee/byte and evict them if necessary.
@@ -583,7 +587,7 @@ pub enum ReturnCode {
     Invalid,
     Accepted,
     Known,
-    Filtered
+    Filtered,
 }
 
 /// Fee threshold in sat/byte below which transactions are considered "free".

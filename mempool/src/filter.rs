@@ -6,8 +6,6 @@ use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use transaction::{Transaction, TransactionFlags};
 
-
-
 #[derive(Debug)]
 pub struct MempoolFilter {
     blacklist: LimitHashSet<Blake2bHash>,
@@ -34,8 +32,10 @@ impl MempoolFilter {
     pub const DEFAULT_BLACKLIST_SIZE: usize = 25000;
 
     pub fn new(rules: Rules, blacklist_limit: usize) -> Self {
-        let b: LimitHashSet<Blake2bHash> = LimitHashSet::new(blacklist_limit);
-        MempoolFilter {blacklist: b, rules}
+        MempoolFilter {
+            blacklist: LimitHashSet::new(blacklist_limit),
+            rules,
+        }
     }
 
     pub fn blacklist(&mut self, tx: &Transaction) -> &mut Self {
@@ -54,26 +54,17 @@ impl MempoolFilter {
         self.blacklist.contains(&hash)
     }
 
-    pub fn accepts_transaction(& self, tx: &Transaction) -> bool {
-         if tx.fee < self.rules.tx_fee ||
-             tx.value < self.rules.tx_value ||
-             tx.value + tx.fee < self.rules.tx_value_total ||
-             tx.fee_per_byte() < self.rules.tx_fee_per_byte {
-             return false;
-         } else {
-             match tx.flags {
-                 TransactionFlags::CONTRACT_CREATION => {
-                     if (tx.fee < self.rules.contract_fee) ||
-                         (tx.fee_per_byte() < self.rules.contract_fee_per_byte) ||
-                         (tx.value < self.rules.contract_value) {
-                         return false
-                     } else {
-                         return  true
-                     }
-                 },
-                 _ => return true,
-             }
-         }
+    pub fn accepts_transaction(&self, tx: &Transaction) -> bool {
+         tx.fee >= self.rules.tx_fee &&
+             tx.value >= self.rules.tx_value &&
+             tx.value + tx.fee >= self.rules.tx_value_total &&
+             tx.fee_per_byte() >= self.rules.tx_fee_per_byte && (
+                !tx.flags.contains(TransactionFlags::CONTRACT_CREATION) || (
+                    tx.fee >= self.rules.contract_fee ||
+                        tx.fee_per_byte() >= self.rules.contract_fee_per_byte ||
+                        tx.value >= self.rules.contract_value
+                )
+         )
     }
 
     pub fn accepts_recipient_account(&self, tx: &Transaction, old_account: &Account, new_account: &Account) -> bool {
@@ -81,7 +72,9 @@ impl MempoolFilter {
             !old_account.is_initial() ||
                 (tx.fee >= self.rules.creation_fee &&
                     tx.fee_per_byte() >= self.rules.creation_fee_per_byte &&
-                    tx.value >= self.rules.creation_value ))
+                    tx.value >= self.rules.creation_value
+                )
+        )
     }
 
     pub fn accepts_sender_account(&self, tx: &Transaction, old_account: &Account, new_account: &Account) -> bool {
@@ -90,6 +83,13 @@ impl MempoolFilter {
             new_account.is_to_be_pruned()
     }
 }
+
+impl Default for MempoolFilter{
+    fn default() -> Self {
+        MempoolFilter::new(Self::DEFAULT_RULES, Self::DEFAULT_BLACKLIST_SIZE)
+    }
+}
+
 
 #[derive(Debug)]
 pub struct Rules {
@@ -113,9 +113,7 @@ mod tests {
 
     #[test]
     fn it_can_blacklist_transactions() {
-        let s: Rules = MempoolFilter::DEFAULT_RULES;
-
-        let mut f = MempoolFilter::new(s, 25000);
+        let mut f: MempoolFilter = Default::default();
 
         let tx = Transaction::new_basic(
             Address::from([32u8; Address::SIZE]),
@@ -137,7 +135,7 @@ mod tests {
         let mut s: Rules = MempoolFilter::DEFAULT_RULES;
         s.tx_fee = Coin::from(1);
 
-        let f = MempoolFilter::new(s, 25000);
+        let f = MempoolFilter::new(s, MempoolFilter::DEFAULT_BLACKLIST_SIZE);
 
         let mut tx = Transaction::new_basic(
             Address::from([32u8; Address::SIZE]),
