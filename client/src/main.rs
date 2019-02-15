@@ -131,6 +131,7 @@ fn run() -> Result<(), Error> {
                     port: r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
                     address: r.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"),
                     header: r.header,
+                    with_tls_termination: r.with_tls_termination,
                 }), Some(user_agent)),
 
             // TODO: Either remove SSL from cmdline or add --ssl-password to it.

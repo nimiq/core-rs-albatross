@@ -142,7 +142,10 @@ impl NetworkConfig {
                     ..
                 } => {
                     if let Some(reverse_proxy_config) = reverse_proxy_config.as_ref() {
-                        PeerAddressType::Ws(host.clone(), reverse_proxy_config.port)
+                        match reverse_proxy_config.with_tls_termination {
+                            true => PeerAddressType::Wss(host.clone(), reverse_proxy_config.port),
+                            false => PeerAddressType::Ws(host.clone(), reverse_proxy_config.port),
+                        }
                     } else {
                         PeerAddressType::Ws(host.clone(), port)
                     }
@@ -175,6 +178,7 @@ pub struct ReverseProxyConfig {
     pub port: u16,
     pub address: NetAddress,
     pub header: String,
+    pub with_tls_termination: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -199,7 +203,13 @@ impl From<&ProtocolConfig> for Protocol {
         match config {
             ProtocolConfig::Dumb => Protocol::Dumb,
             ProtocolConfig::Rtc => Protocol::Rtc,
-            ProtocolConfig::Ws { .. } => Protocol::Ws,
+            ProtocolConfig::Ws { reverse_proxy_config, .. } => {
+                match reverse_proxy_config {
+                    Some(ReverseProxyConfig { with_tls_termination: true, .. }) => Protocol::Wss,
+                    Some(ReverseProxyConfig { with_tls_termination: false, .. }) => Protocol::Ws,
+                    _ => Protocol::Ws,
+                }
+            },
             ProtocolConfig::Wss { .. } => Protocol::Wss,
         }
     }

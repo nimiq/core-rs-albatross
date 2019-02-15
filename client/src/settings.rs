@@ -182,6 +182,7 @@ pub(crate) struct ReverseProxySettings {
     pub port: Option<u16>,
     pub address: String,
     pub header: String,
+    pub with_tls_termination: bool,
 }
 
 #[derive(Debug, Deserialize, Default)]

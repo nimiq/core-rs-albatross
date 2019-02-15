@@ -35,8 +35,8 @@ impl<'a> ClientBuilder {
         self
     }
 
-    pub fn with_reverse_proxy(&mut self, port: u16, address: NetAddress, header: String) -> &mut Self {
-        self.reverse_proxy_config = Some(ReverseProxyConfig{port, address, header});
+    pub fn with_reverse_proxy(&mut self, port: u16, address: NetAddress, header: String, with_tls_termination: bool) -> &mut Self {
+        self.reverse_proxy_config = Some(ReverseProxyConfig{port, address, header, with_tls_termination});
         self
     }
 
