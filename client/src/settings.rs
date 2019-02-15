@@ -11,6 +11,7 @@ pub const DEFAULT_METRICS_PORT: u16 = 8649;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Settings {
     #[serde(default)]
     pub network: NetworkSettings,
@@ -34,6 +35,7 @@ impl Settings {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct NetworkSettings {
     pub host: Option<String>,
     pub port: Option<u16>,
@@ -58,17 +60,19 @@ pub(crate) enum Protocol {
 
 impl Default for Protocol {
     fn default() -> Self {
-        Protocol::Dumb
+        Protocol::Wss
     }
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct TlsSettings {
     pub identity_file: String,
     pub identity_password: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ConsensusSettings {
     #[serde(rename = "type")]
     #[serde(default)]
@@ -132,6 +136,7 @@ impl FromStr for Network {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RpcServerSettings {
     pub port: Option<u16>,
     #[serde(default)]
@@ -144,12 +149,14 @@ pub(crate) struct RpcServerSettings {
     pub password: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+/*#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct UiServerSettings {
     pub port: u16,
-}
+}*/
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct MetricsServerSettings {
     pub port: Option<u16>,
     pub password: Option<String>,
@@ -162,6 +169,7 @@ pub(crate) struct WalletSettings {
 }*/
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ReverseProxySettings {
     pub port: Option<u16>,
     pub address: String,
@@ -171,6 +179,7 @@ pub(crate) struct ReverseProxySettings {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct LogSettings {
     pub level: Option<String>,
     #[serde(default)]
@@ -184,6 +193,7 @@ pub(crate) struct LogSettings {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct DatabaseSettings {
     pub path: String,
     pub size: Option<usize>,
@@ -198,4 +208,33 @@ impl Default for DatabaseSettings {
             max_dbs: Some(10)
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MempoolFilter {
+    #[serde(default)]
+    pub tx_fee: u64,
+    #[serde(default)]
+    pub tx_fee_per_byte: f64,
+    #[serde(default)]
+    pub tx_value: u64,
+    #[serde(default)]
+    pub tx_value_total: u64,
+    #[serde(default)]
+    pub contract_fee: u64,
+    #[serde(default)]
+    pub contract_fee_per_byte: f64,
+    #[serde(default)]
+    pub contract_value: u64,
+    #[serde(default)]
+    pub creation_fee: u64,
+    #[serde(default)]
+    pub creation_fee_per_byte: f64,
+    #[serde(default)]
+    pub creation_value: u64,
+    #[serde(default)]
+    pub recipient_balance: u64,
+    #[serde(default)]
+    pub sender_balance: u64,
 }

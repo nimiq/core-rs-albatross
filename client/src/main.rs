@@ -14,6 +14,7 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_network_primitives as network_primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
+extern crate nimiq_mempool as mempool;
 #[cfg(feature = "deadlock-detection")]
 extern crate parking_lot;
 #[macro_use]
@@ -39,6 +40,8 @@ use metrics_server::metrics_server;
 use network::network_config::Seed;
 use network_primitives::protocol::Protocol;
 use primitives::networks::NetworkId;
+use primitives::coin::Coin;
+use mempool::filter::Rules;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
 
@@ -79,11 +82,33 @@ impl From<s::Network> for NetworkId {
     }
 }
 
+/// Convert rules from settings into Mempool filter rules
+impl From<s::MempoolFilter> for Rules {
+    fn from(f: s::MempoolFilter) -> Rules {
+        Rules {
+            tx_fee: Coin::from(f.tx_fee),
+            tx_fee_per_byte: f.tx_fee_per_byte,
+            tx_value: Coin::from(f.tx_value),
+            tx_value_total: Coin::from(f.tx_value_total),
+            contract_fee: Coin::from(f.contract_fee),
+            contract_fee_per_byte: f.contract_fee_per_byte,
+            contract_value: Coin::from(f.contract_value),
+            creation_fee: Coin::from(f.creation_fee),
+            creation_fee_per_byte: f.creation_fee_per_byte,
+            creation_value: Coin::from(f.creation_value),
+            sender_balance: Coin::from(f.sender_balance),
+            recipient_balance: Coin::from(f.recipient_balance),
+        }
+    }
+}
+
 
 #[derive(Debug, Fail)]
 pub enum ConfigError {
-    #[fail(display = "No TLS identity file supplied")]
+    #[fail(display = "Please configure a TLS identity file and the password in the `[tls]` section.")]
     NoTlsIdentityFile,
+    #[fail(display = "Please configure a hostname in the `[network]` section.")]
+    NoHostname,
 }
 
 fn main() {
@@ -139,6 +164,9 @@ fn run() -> Result<(), Error> {
     if let Some(hostname) = cmdline.hostname.or(settings.network.host) {
         client_builder.with_hostname(&hostname);
     }
+    else if settings.network.protocol == s::Protocol::Ws || settings.network.protocol == s::Protocol::Wss {
+        Err(ConfigError::NoHostname)?
+    }
     if let Some(port) = cmdline.port.or(settings.network.port) {
         client_builder.with_port(port);
     }
@@ -158,6 +186,9 @@ fn run() -> Result<(), Error> {
     if settings.network.protocol == s::Protocol::Wss {
         if let Some(tls_settings) = settings.tls {
             client_builder.with_tls_identity(&tls_settings.identity_file, &tls_settings.identity_password);
+        }
+        else {
+            Err(ConfigError::NoTlsIdentityFile)?
         }
     }
 

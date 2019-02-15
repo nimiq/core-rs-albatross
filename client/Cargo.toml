@@ -27,10 +27,11 @@ clap = "2.32"
 nimiq-database = { path = "../database" }
 nimiq-network = { path = "../network" }
 nimiq-consensus = { path = "../consensus" }
-nimiq-primitives = { path = "../primitives", features = ["networks"] }
+nimiq-primitives = { path = "../primitives", features = ["networks", "coin"] }
 nimiq-network-primitives = { path = "../network-primitives"}
 nimiq-rpc-server = { path = "../rpc-server", optional = true }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
+nimiq-mempool = { path = "../mempool" }
 nimiq-lib = { path = "../lib" }
 colored = "1.7.0"
 chrono = "0.4.6"

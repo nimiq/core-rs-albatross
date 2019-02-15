@@ -11,22 +11,6 @@ pub struct MempoolFilter {
 }
 
 impl MempoolFilter {
-
-    pub const DEFAULT_RULES: Rules = Rules {
-        tx_fee: Coin::ZERO,
-        tx_fee_per_byte: 0.0,
-        tx_value: Coin::ZERO,
-        tx_value_total: Coin::ZERO,
-        contract_fee: Coin::ZERO,
-        contract_fee_per_byte: 0.0,
-        contract_value: Coin::ZERO,
-        creation_fee: Coin::ZERO,
-        creation_fee_per_byte: 0.0,
-        creation_value: Coin::ZERO,
-        sender_balance: Coin::ZERO,
-        recipient_balance: Coin::ZERO,
-    };
-
     pub const DEFAULT_BLACKLIST_SIZE: usize = 25000;
 
     pub fn new(rules: Rules, blacklist_limit: usize) -> Self {
@@ -84,25 +68,44 @@ impl MempoolFilter {
 
 impl Default for MempoolFilter{
     fn default() -> Self {
-        MempoolFilter::new(Self::DEFAULT_RULES, Self::DEFAULT_BLACKLIST_SIZE)
+        MempoolFilter::new(Rules::default(), Self::DEFAULT_BLACKLIST_SIZE)
     }
 }
 
 
 #[derive(Debug)]
 pub struct Rules {
-    tx_fee: Coin,
-    tx_fee_per_byte: f64,
-    tx_value: Coin,
-    tx_value_total: Coin,
-    contract_fee: Coin,
-    contract_fee_per_byte: f64,
-    contract_value: Coin,
-    creation_fee: Coin,
-    creation_fee_per_byte: f64,
-    creation_value: Coin,
-    recipient_balance: Coin,
-    sender_balance: Coin,
+    pub tx_fee: Coin,
+    pub tx_fee_per_byte: f64,
+    pub tx_value: Coin,
+    pub tx_value_total: Coin,
+    pub contract_fee: Coin,
+    pub contract_fee_per_byte: f64,
+    pub contract_value: Coin,
+    pub creation_fee: Coin,
+    pub creation_fee_per_byte: f64,
+    pub creation_value: Coin,
+    pub recipient_balance: Coin,
+    pub sender_balance: Coin,
+}
+
+impl Default for Rules {
+    fn default() -> Rules {
+        Rules {
+            tx_fee: Coin::ZERO,
+            tx_fee_per_byte: 0.0,
+            tx_value: Coin::ZERO,
+            tx_value_total: Coin::ZERO,
+            contract_fee: Coin::ZERO,
+            contract_fee_per_byte: 0.0,
+            contract_value: Coin::ZERO,
+            creation_fee: Coin::ZERO,
+            creation_fee_per_byte: 0.0,
+            creation_value: Coin::ZERO,
+            sender_balance: Coin::ZERO,
+            recipient_balance: Coin::ZERO,
+        }
+    }
 }
 
 #[cfg(test)]

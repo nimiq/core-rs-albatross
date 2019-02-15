@@ -132,9 +132,11 @@ macro_rules! force_log {
 #[inline]
 pub fn force_log_error_cause_chain(mut fail: &Fail, level: Level) {
     force_log!(level, "{}", fail);
-    force_log!(level, "  caused by");
-    while let Some(cause) = fail.cause() {
-        force_log!(level, "    {}", cause);
-        fail = cause;
+    if fail.cause().is_some() {
+        force_log!(level, "  caused by");
+        while let Some(cause) = fail.cause() {
+            force_log!(level, "    {}", cause);
+            fail = cause;
+        }
     }
 }
