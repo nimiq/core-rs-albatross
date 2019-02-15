@@ -10,7 +10,7 @@ use nimiq_database::WriteTransaction;
 use nimiq_hash::Hash;
 use nimiq_keys::Address;
 use nimiq_keys::KeyPair;
-use nimiq_mempool::{Mempool, ReturnCode};
+use nimiq_mempool::{Mempool, ReturnCode, MempoolConfig};
 use nimiq_network_primitives::time::NetworkTime;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -22,7 +22,7 @@ const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c3
 fn push_same_tx_twice() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
-    let mempool = Mempool::new(blockchain.clone());
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -46,7 +46,7 @@ fn push_same_tx_twice() {
 fn push_tx_with_wrong_signature() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
-    let mempool = Mempool::new(blockchain);
+    let mempool = Mempool::new(blockchain, MempoolConfig::default());
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
     let mut t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
@@ -58,7 +58,7 @@ fn push_tx_with_wrong_signature() {
 fn push_tx_with_insufficient_balance() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
-    let mempool = Mempool::new(blockchain);
+    let mempool = Mempool::new(blockchain, MempoolConfig::default());
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
@@ -70,7 +70,7 @@ fn push_tx_with_insufficient_balance() {
 fn push_and_get_valid_tx() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
-    let mempool = Mempool::new(blockchain.clone());
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -100,7 +100,7 @@ fn push_and_get_valid_tx() {
 fn push_and_get_two_tx_same_user() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
-    let mempool = Mempool::new(blockchain.clone());
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);
@@ -136,7 +136,7 @@ fn push_and_get_two_tx_same_user() {
 fn reject_free_tx_beyond_limit() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
-    let mempool = Mempool::new(blockchain.clone());
+    let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair_a = KeyPair::generate();
     let address_a = Address::from(&keypair_a.public);

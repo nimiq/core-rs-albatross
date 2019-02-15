@@ -23,3 +23,4 @@ nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
 nimiq-primitives = { path = "../primitives", features = ["networks"] }
+nimiq-mempool = { path = "../mempool" }

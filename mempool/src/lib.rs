@@ -26,7 +26,7 @@ use keys::Address;
 use transaction::Transaction;
 use utils::observer::Notifier;
 
-use crate::filter::MempoolFilter;
+use crate::filter::{MempoolFilter, Rules};
 
 pub mod filter;
 
@@ -53,8 +53,23 @@ pub enum MempoolEvent {
     TransactionEvicted(Arc<Transaction>),
 }
 
+#[derive(Debug, Clone)]
+pub struct MempoolConfig {
+    pub filter_rules: Rules,
+    pub filter_limit: usize,
+}
+
+impl Default for MempoolConfig {
+    fn default() -> MempoolConfig {
+        MempoolConfig {
+            filter_rules: Rules::default(),
+            filter_limit: MempoolFilter::DEFAULT_BLACKLIST_SIZE
+        }
+    }
+}
+
 impl<'env> Mempool<'env> {
-    pub fn new(blockchain: Arc<Blockchain<'env>>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<Blockchain<'env>>, config: MempoolConfig) -> Arc<Self> {
         let arc = Arc::new(Self {
             blockchain: blockchain.clone(),
             notifier: RwLock::new(Notifier::new()),
@@ -63,7 +78,7 @@ impl<'env> Mempool<'env> {
                 transactions_by_sender: HashMap::new(),
                 transactions_by_recipient: HashMap::new(),
                 transactions_sorted_fee: BTreeSet::new(),
-                filter: MempoolFilter::default(),
+                filter: MempoolFilter::new(config.filter_rules, config.filter_limit),
             }),
             mut_lock: Mutex::new(()),
         });

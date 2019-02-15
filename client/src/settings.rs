@@ -25,7 +25,8 @@ pub(crate) struct Settings {
     #[serde(default)]
     pub log: LogSettings,
     #[serde(default)]
-    pub database: DatabaseSettings
+    pub database: DatabaseSettings,
+    pub mempool: Option<MempoolSettings>,
 }
 
 impl Settings {
@@ -212,7 +213,14 @@ impl Default for DatabaseSettings {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct MempoolFilter {
+pub(crate) struct MempoolSettings {
+    pub filter: Option<MempoolFilterSettings>,
+    pub blacklist_limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MempoolFilterSettings {
     #[serde(default)]
     pub tx_fee: u64,
     #[serde(default)]

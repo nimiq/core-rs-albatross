@@ -73,7 +73,7 @@ impl Default for MempoolFilter{
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Rules {
     pub tx_fee: Coin,
     pub tx_fee_per_byte: f64,
@@ -105,53 +105,5 @@ impl Default for Rules {
             sender_balance: Coin::ZERO,
             recipient_balance: Coin::ZERO,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use keys::Address;
-    use primitives::networks::NetworkId;
-
-    use super::*;
-
-    #[test]
-    fn it_can_blacklist_transactions() {
-        let mut f: MempoolFilter = Default::default();
-
-        let tx = Transaction::new_basic(
-            Address::from([32u8; Address::SIZE]),
-            Address::from([213u8; Address::SIZE]),
-            Coin::from(100),
-            Coin::from(1),
-            123,
-            NetworkId::Main,
-        );
-
-        f.blacklist(&tx);
-        assert!(f.blacklisted(&tx));
-        f.remove(&tx);
-        assert!(!f.blacklisted(&tx));
-    }
-
-    #[test]
-    fn it_accepts_and_rejects_transactions() {
-        let mut s: Rules = MempoolFilter::DEFAULT_RULES;
-        s.tx_fee = Coin::from(1);
-
-        let f = MempoolFilter::new(s, MempoolFilter::DEFAULT_BLACKLIST_SIZE);
-
-        let mut tx = Transaction::new_basic(
-            Address::from([32u8; Address::SIZE]),
-            Address::from([213u8; Address::SIZE]),
-            Coin::from(0),
-            Coin::from(0),
-            0,
-            NetworkId::Main,
-        );
-
-        assert!(!f.accepts_transaction(&tx));
-        tx.fee = Coin::from(1);
-        assert!(f.accepts_transaction(&tx));
     }
 }

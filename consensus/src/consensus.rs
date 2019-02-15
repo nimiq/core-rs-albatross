@@ -8,7 +8,7 @@ use rand::seq::SliceRandom;
 
 use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
-use mempool::{Mempool, MempoolEvent};
+use mempool::{Mempool, MempoolEvent, MempoolConfig};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
@@ -64,10 +64,10 @@ impl Consensus {
     const MIN_FULL_NODES: usize = 1;
     const SYNC_THROTTLE: Duration = Duration::from_millis(1500);
 
-    pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig) -> Result<Arc<Self>, Error> {
+    pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {
         let network_time = Arc::new(NetworkTime::new());
         let blockchain = Arc::new(Blockchain::new(env, network_id, network_time.clone()));
-        let mempool = Mempool::new(blockchain.clone());
+        let mempool = Mempool::new(blockchain.clone(), mempool_config);
         let network = Network::new(blockchain.clone(), network_config, network_time, network_id)?;
         let accounts_chunk_cache = AccountsChunkCache::new(env, Arc::clone(&blockchain));
 

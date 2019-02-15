@@ -41,7 +41,8 @@ use network::network_config::Seed;
 use network_primitives::protocol::Protocol;
 use primitives::networks::NetworkId;
 use primitives::coin::Coin;
-use mempool::filter::Rules;
+use mempool::filter::{Rules, MempoolFilter};
+use mempool::MempoolConfig;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
 
@@ -82,22 +83,28 @@ impl From<s::Network> for NetworkId {
     }
 }
 
-/// Convert rules from settings into Mempool filter rules
-impl From<s::MempoolFilter> for Rules {
-    fn from(f: s::MempoolFilter) -> Rules {
-        Rules {
-            tx_fee: Coin::from(f.tx_fee),
-            tx_fee_per_byte: f.tx_fee_per_byte,
-            tx_value: Coin::from(f.tx_value),
-            tx_value_total: Coin::from(f.tx_value_total),
-            contract_fee: Coin::from(f.contract_fee),
-            contract_fee_per_byte: f.contract_fee_per_byte,
-            contract_value: Coin::from(f.contract_value),
-            creation_fee: Coin::from(f.creation_fee),
-            creation_fee_per_byte: f.creation_fee_per_byte,
-            creation_value: Coin::from(f.creation_value),
-            sender_balance: Coin::from(f.sender_balance),
-            recipient_balance: Coin::from(f.recipient_balance),
+/// Convert mempool settings
+impl From<s::MempoolSettings> for MempoolConfig {
+    fn from(mempool_settings: s::MempoolSettings) -> MempoolConfig {
+        let rules = if let Some(f) = mempool_settings.filter {
+            Rules {
+                tx_fee: Coin::from(f.tx_fee),
+                tx_fee_per_byte: f.tx_fee_per_byte,
+                tx_value: Coin::from(f.tx_value),
+                tx_value_total: Coin::from(f.tx_value_total),
+                contract_fee: Coin::from(f.contract_fee),
+                contract_fee_per_byte: f.contract_fee_per_byte,
+                contract_value: Coin::from(f.contract_value),
+                creation_fee: Coin::from(f.creation_fee),
+                creation_fee_per_byte: f.creation_fee_per_byte,
+                creation_value: Coin::from(f.creation_value),
+                sender_balance: Coin::from(f.sender_balance),
+                recipient_balance: Coin::from(f.recipient_balance),
+            }
+        } else { Rules::default() };
+        MempoolConfig {
+            filter_rules: rules,
+            filter_limit: mempool_settings.blacklist_limit.unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE)
         }
     }
 }
@@ -171,6 +178,7 @@ fn run() -> Result<(), Error> {
         client_builder.with_port(port);
     }
 
+    // add reverse proxy settings to builder
     if let Some(r) = settings.reverse_proxy {
         client_builder.with_reverse_proxy(
             r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
@@ -178,6 +186,11 @@ fn run() -> Result<(), Error> {
             r.header,
             r.with_tls_termination
         );
+    }
+
+    // add mempool settings to filter
+    if let Some(mempool_settings) = settings.mempool {
+        client_builder.with_mempool_config(MempoolConfig::from(mempool_settings));
     }
 
     // Add TLS configuration, if present

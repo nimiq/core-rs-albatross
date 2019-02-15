@@ -13,6 +13,7 @@ use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
 use network_primitives::address::NetAddress;
 use primitives::networks::NetworkId;
 use network_primitives::protocol::Protocol;
+use mempool::MempoolConfig;
 
 
 
@@ -33,6 +34,7 @@ pub struct ClientBuilder {
     additional_seeds: Vec<Seed>,
     identity_file: Option<String>,
     identity_password: Option<String>,
+    mempool_config: Option<MempoolConfig>
 }
 
 impl ClientBuilder {
@@ -48,6 +50,7 @@ impl ClientBuilder {
             additional_seeds: Vec::new(),
             identity_file: None,
             identity_password: None,
+            mempool_config: None
         }
     }
 
@@ -83,6 +86,11 @@ impl ClientBuilder {
     pub fn with_tls_identity(&mut self, identity_file: &str, identity_password: &str) -> &mut Self {
         self.identity_file = Some(String::from(identity_file));
         self.identity_password = Some(String::from(identity_password));
+        self
+    }
+
+    pub fn with_mempool_config(&mut self, mempool_config: MempoolConfig) -> &mut Self {
+        self.mempool_config = Some(mempool_config);
         self
     }
 
@@ -128,9 +136,10 @@ impl ClientBuilder {
     pub fn build_consensus(self) -> Result<Arc<Consensus>, ClientError> {
         let env = self.environment;
         let network_id = self.network_id;
+        let mempool_config = self.mempool_config.clone().unwrap_or_else(|| MempoolConfig::default());
         let mut network_config = self.build_network_config()?;
         network_config.init_persistent()?;
-        Ok(Consensus::new(env, network_id, network_config)?)
+        Ok(Consensus::new(env, network_id, network_config, mempool_config)?)
     }
 }
 
