@@ -5,7 +5,7 @@ use failure::{Error, Fail};
 use std::str::FromStr;
 
 use crate::protocol::Protocol;
-
+use crate::address::{PeerAddress, PeerAddressType, PeerId};
 
 
 #[derive(Debug, Fail)]
@@ -58,7 +58,6 @@ impl fmt::Display for Protocol {
         })
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct PeerUri {
@@ -146,4 +145,20 @@ impl PeerUri {
     pub fn hostname(&self) -> Option<&String> { self.hostname.as_ref() }
     pub fn port(&self) -> Option<u16> { self.port }
     pub fn peer_id(&self) -> Option<&String> { self.peer_id.as_ref() }
+}
+
+impl From<PeerAddress> for PeerUri {
+    fn from(peer_address: PeerAddress) -> PeerUri {
+        let protocol = peer_address.ty.protocol();
+        let peer_id = Some(peer_address.peer_id.to_hex());
+
+        match peer_address.ty {
+            PeerAddressType::Dumb | PeerAddressType::Rtc => {
+                PeerUri { protocol, peer_id, hostname: None, port: None }
+            },
+            PeerAddressType::Ws(host, port) | PeerAddressType::Wss(host, port) => {
+                PeerUri { protocol, peer_id, hostname: Some(host), port: Some(port) }
+            }
+        }
+    }
 }

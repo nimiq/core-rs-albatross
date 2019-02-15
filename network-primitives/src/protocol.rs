@@ -58,3 +58,12 @@ impl From<Vec<Protocol>> for ProtocolFlags {
         flags
     }
 }
+
+impl Protocol {
+    pub fn default_port(protocol: Protocol) -> Option<u16> {
+        match protocol {
+            Protocol::Ws | Protocol::Wss => Some(8443),
+            _ => None
+        }
+    }
+}

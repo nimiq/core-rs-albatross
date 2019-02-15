@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use std::vec::Vec;
 
-use crate::address::{NetAddress, PeerId};
+use crate::address::{NetAddress, PeerId, PeerUri};
 use crate::protocol::Protocol;
 use crate::services::ServiceFlags;
 
@@ -114,13 +114,9 @@ impl PeerAddress {
     }
 
     pub fn as_uri(&self) -> String {
-        let peer_id: String = String::from(::hex::encode(&self.peer_id.0));
-        match self.ty {
-            PeerAddressType::Dumb => format!("dumb://{}", peer_id),
-            PeerAddressType::Ws(ref host, ref port) => format!("ws://{}:{}/{}", host, port, peer_id),
-            PeerAddressType::Wss(ref host, ref port) => format!("wss://{}:{}/{}", host, port, peer_id),
-            PeerAddressType::Rtc => format!("rtc://{}", peer_id)
-        }
+        // TODO: This should probably return the URI object and the user can then call to_string on it.
+        // TODO: Do this without cloning. Not urgent, since we don't use this too much.
+        PeerUri::from(self.clone()).to_string()
     }
 
     pub fn get_signature_data(&self) -> Vec<u8> {
