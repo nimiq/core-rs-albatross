@@ -31,11 +31,13 @@ use hash::{Argon2dHash, Blake2bHash, Hash};
 use keys::Address;
 use network::address::peer_address_state::PeerAddressInfo;
 use network::connection::connection_info::ConnectionInfo;
+use network::connection::close_type::CloseType;
 use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
 use primitives::account::AccountType;
 use primitives::coin::Coin;
 use transaction::{Transaction, TransactionFlags, TransactionReceipt};
+use network_primitives::address::{PeerUri, PeerId};
 
 use crate::error::Error;
 
@@ -109,8 +111,55 @@ impl JsonRpcHandler {
             .collect::<Array>().into())
     }
 
-    fn peer_state(&self, _params: Array) -> Result<JsonValue, JsonValue> {
-        rpc_not_implemented()
+    fn peer_state(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let peer_uri = params.get(0).unwrap_or(&Null).as_str()
+            .ok_or_else(|| object!{"message" => "Invalid peer URI"})
+            .and_then(|uri| PeerUri::from_str(uri)
+                .map_err(|e| object!{"message" => e.to_string()}))?;
+
+        let peer_id = peer_uri.peer_id()
+            .ok_or_else(|| object!{"message" => "URI must contain peer ID"})
+            .and_then(|s| PeerId::from_str(s)
+                .map_err(|e| object!{"message" => e.to_string()}))?;
+
+        let state = self.consensus.network.addresses.state();
+        let peer_address_info = state.get_by_peer_id(&peer_id)
+            .and_then(|peer_address| state.get_info(&peer_address))
+            .ok_or_else(|| object!{"message" => "Unknown peer"})?;
+
+        let state = self.consensus.network.connections.state();
+        let connection_info = state.get_connection_by_peer_address(&peer_address_info.peer_address);
+        let peer_channel = connection_info.and_then(|c| c.peer_channel());
+
+        let set = params.get(1).unwrap_or(&Null);
+        if !set.is_null() {
+            let set = set.as_str().ok_or_else(|| object!{"message" => "Invalid value for 'set'"})?;
+            match set {
+                "disconnect" => {
+                    peer_channel.map(|p| p.close(CloseType::ManualPeerDisconnect));
+                },
+
+                "fail" => {
+                    peer_channel.map(|p| p.close(CloseType::ManualPeerFail));
+                },
+
+                "ban" => {
+                    peer_channel.map(|p| p.close(CloseType::ManualPeerBan));
+                },
+
+                "unban" => {
+                    // TODO
+                },
+
+                "connect" => {
+                    // TODO
+                }
+
+                _ => return Err(object!{"message" => "Unknown 'set' command."})
+            }
+        }
+
+        Ok(self.peer_address_info_to_obj(peer_address_info, connection_info))
     }
 
 
@@ -442,9 +491,9 @@ impl JsonRpcHandler {
         Ok(self.transaction_to_obj(&transaction, Some(&block), Some(index as usize)))
     }
 
-    fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<ConnectionInfo>) -> JsonValue {
+    fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<&ConnectionInfo>) -> JsonValue {
         let state = self.consensus.network.connections.state();
-        let connection_info = connection_info.as_ref().or_else(|| {
+        let connection_info = connection_info.or_else(|| {
             state.get_connection_by_peer_address(&peer_address_info.peer_address)
         });
         let peer = connection_info.and_then(|conn| conn.peer());
@@ -486,7 +535,7 @@ impl jsonrpc::Handler for JsonRpcHandler {
             "syncing" => Some(JsonRpcHandler::syncing),
             "consensus" => Some(JsonRpcHandler::consensus),
             "peerList" => Some(JsonRpcHandler::peer_list),
-            "peerState" => Some(JsonRpcHandler::peer_count),
+            "peerState" => Some(JsonRpcHandler::peer_state),
 
             // Transactions
             "sendRawTransaction" => Some(JsonRpcHandler::send_raw_transaction),
