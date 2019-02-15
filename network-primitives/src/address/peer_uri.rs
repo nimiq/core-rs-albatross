@@ -3,7 +3,7 @@ use std::fmt;
 use url::Url;
 use failure::Fail;
 use std::str::FromStr;
-use hex::{FromHex, FromHexError};
+use hex::FromHexError;
 
 use keys::PublicKey;
 
@@ -35,10 +35,8 @@ pub enum PeerUriError {
     UnexpectedPath,
     #[fail(display = "Too many path segments")]
     TooManyPathSegments,
-    #[fail(display = "No peer ID in URI")]
-    NoPeerId,
-    #[fail(display = "Invalid peer ID: {}", _0)]
-    InvalidPeerId(FromHexError),
+    #[fail(display = "Invalid peer ID")]
+    InvalidPeerId,
 }
 
 impl From<url::ParseError> for PeerUriError {
@@ -48,8 +46,8 @@ impl From<url::ParseError> for PeerUriError {
 }
 
 impl From<FromHexError> for PeerUriError {
-    fn from(e: FromHexError) -> Self {
-        PeerUriError::InvalidPeerId(e)
+    fn from(_: FromHexError) -> Self {
+        PeerUriError::InvalidPeerId
     }
 }
 
@@ -83,8 +81,8 @@ pub struct PeerUri {
     protocol: Protocol,
     hostname: Option<String>,
     port: Option<u16>,
-    // Note: In community seed lists, this is a public key. Normally it is a peer Id
-    peer_id_or_public_key: Option<String>
+    peer_id: Option<String>,
+    public_key: Option<String>,
 }
 
 impl<'a> FromStr for PeerUri {
@@ -100,12 +98,13 @@ impl<'a> fmt::Display for PeerUri {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.protocol {
             Protocol::Dumb | Protocol::Rtc => {
-                write!(f, "{}://{}", self.protocol, self.peer_id_or_public_key.as_ref().expect("No peer Id for dumb/rtc URI"))?;
+                write!(f, "{}://{}", self.protocol, self.peer_id()
+                    .expect("No peer ID for dumb/rtc URI"))?;
             },
             Protocol::Ws | Protocol::Wss => {
                 write!(f, "{}://{}", self.protocol, self.hostname.as_ref().unwrap())?;
                 self.port.map(|p| write!(f, ":{}", p)).transpose()?;
-                self.peer_id_or_public_key.as_ref().map(|p| write!(f, "/{}", p)).transpose()?;
+                self.peer_id().or(self.public_key()).map(|p| write!(f, "/{}", p)).transpose()?;
             }
         }
         Ok(())
@@ -145,32 +144,38 @@ impl PeerUri {
                 let peer_id = String::from(url.host_str().ok_or_else(|| PeerUriError::MissingPeerId)?);
                 if url.port().is_some() { return Err(PeerUriError::UnexpectedPort) }
                 if path_segment.is_some() { return Err(PeerUriError::UnexpectedPath) }
-                Ok(PeerUri{protocol, hostname: None, port: None, peer_id_or_public_key: Some(peer_id)})
+                Ok(PeerUri {
+                    protocol,
+                    hostname: None,
+                    port: None,
+                    peer_id: Some(peer_id), // For dumb or Rtc this is always the peer ID
+                    public_key: None
+                })
             },
             Protocol::Ws | Protocol::Wss => {
                 let host = String::from(url.host_str().ok_or_else(|| PeerUriError::MissingHostname)?);
-                Ok(PeerUri{protocol, hostname: Some(host), port: url.port(), peer_id_or_public_key: path_segment})
+                let (peer_id, public_key) = match path_segment {
+                    Some(ref peer_id) if peer_id.len() == 2 * PeerId::SIZE => (path_segment, None),
+                    Some(ref public_key) if public_key.len() == 2 * PublicKey::SIZE => (None, path_segment),
+                    None => (None, None),
+                    _ => return Err(PeerUriError::InvalidPeerId)
+                };
+                Ok(PeerUri {
+                    protocol,
+                    hostname: Some(host),
+                    port: url.port(),
+                    peer_id,
+                    public_key
+                })
             }
         }
-    }
-
-    pub fn parse_peer_key_or_id(&self) -> Result<(Option<PublicKey>, PeerId), PeerUriError> {
-        match &self.peer_id_or_public_key {
-            Some(peer_id_or_public_key) => Ok({
-                match PublicKey::from_hex(peer_id_or_public_key) {
-                    Ok(pubkey) => (Some(pubkey), PeerId::from(&pubkey)),
-                    Err(_) => (None, PeerId::from_str(peer_id_or_public_key.as_str())?)
-                }
-            }),
-            None => Err(PeerUriError::NoPeerId)
-        }
-
     }
 
     pub fn protocol(&self) -> Protocol { self.protocol }
     pub fn hostname(&self) -> Option<&String> { self.hostname.as_ref() }
     pub fn port(&self) -> Option<u16> { self.port }
-    pub fn peer_id(&self) -> Option<&String> { self.peer_id_or_public_key.as_ref() }
+    pub fn peer_id(&self) -> Option<&String> { self.peer_id.as_ref() }
+    pub fn public_key(&self) -> Option<&String> { self.public_key.as_ref() }
 }
 
 impl From<PeerAddress> for PeerUri {
@@ -180,10 +185,10 @@ impl From<PeerAddress> for PeerUri {
 
         match peer_address.ty {
             PeerAddressType::Dumb | PeerAddressType::Rtc => {
-                PeerUri { protocol, peer_id_or_public_key: peer_id, hostname: None, port: None }
+                PeerUri { protocol, peer_id, hostname: None, port: None, public_key: None }
             },
             PeerAddressType::Ws(host, port) | PeerAddressType::Wss(host, port) => {
-                PeerUri { protocol, peer_id_or_public_key: peer_id, hostname: Some(host), port: Some(port) }
+                PeerUri { protocol, peer_id, hostname: Some(host), port: Some(port), public_key: None }
             }
         }
     }
