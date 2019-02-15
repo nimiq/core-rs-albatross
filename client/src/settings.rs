@@ -12,8 +12,9 @@ pub const DEFAULT_METRICS_PORT: u16 = 8649;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) struct Settings {
+    #[serde(default)]
     pub network: NetworkSettings,
-    pub tls: Option<TlsSettings>,
+    pub tls: Option<TlsSettings>, // TODO: Move this into `NetworkSettings`?
     #[serde(default)]
     pub consensus: ConsensusSettings,
     pub rpc_server: Option<RpcServerSettings>,
@@ -32,16 +33,16 @@ impl Settings {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub(crate) struct NetworkSettings {
-    pub host: String,
+    pub host: Option<String>,
     pub port: Option<u16>,
     #[serde(default)]
     pub protocol: Protocol,
     //#[serde(default)]
     //pub passive: bool,
     #[serde(default)]
-    pub seed_nodes: Vec<SeedNode>,
+    pub seed_nodes: Vec<String>,
     #[serde(default)]
     pub user_agent: Option<String>
 }
@@ -117,8 +118,6 @@ pub(crate) enum Network {
     Main,
     Test,
     Dev,
-    Dummy,
-    Bounty
 }
 
 impl Default for Network {
@@ -135,8 +134,6 @@ impl FromStr for Network {
             "main" => Network::Main,
             "test" => Network::Test,
             "dev" => Network::Dev,
-            "dummy" => Network::Dummy,
-            "bounty" => Network::Bounty,
             _ => Err(())?
         })
     }

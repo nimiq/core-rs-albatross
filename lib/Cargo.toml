@@ -16,8 +16,10 @@ maintenance = { status = "experimental" }
 futures = "0.1"
 failure = "0.1.5"
 failure_derive = "0.1.5"
+url = "1.7.2"
+lazy_static = "1.2.0"
 nimiq-network = { path = "../network" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
-nimiq-primitives = { path = "../primitives" }
+nimiq-primitives = { path = "../primitives", features = ["networks"] }

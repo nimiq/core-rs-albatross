@@ -44,7 +44,6 @@ impl Error for ParseError {
 pub(crate) struct Options {
     pub hostname: Option<String>,
     pub port: Option<u16>,
-    pub ssl_identity_file: Option<String>,
     pub config_file: Option<String>,
     pub log_level: Option<String>,
     pub log_tags: HashMap<String, String>,
@@ -74,11 +73,6 @@ impl Options {
                 .long("port")
                 .value_name("PORT")
                 .help("Port to listen on for connections.")
-                .takes_value(true))
-            .arg(Arg::with_name("ssl")
-                .long("cert")
-                .value_name("SSL_IDENTITY_FILE")
-                .help("SSL certificate and prvate key as PKCS#12 identity file. CN should match HOSTNAME.")
                 .takes_value(true))
             .arg(Arg::with_name("config")
                 .short("c")
@@ -159,7 +153,6 @@ impl Options {
         Ok(Options {
             hostname: Self::parse_option_string(matches.value_of("hostname")),
             port: Self::parse_option::<u16>(matches.value_of("port"), ParseError::Port)?,
-            ssl_identity_file: matches.value_of("ssl").map(|s| String::from(s)),
             config_file: matches.value_of("config").map(|s| String::from(s)),
             log_level: matches.value_of("log_level").map(|s| String::from(s)),
             log_tags: HashMap::new(), // TODO

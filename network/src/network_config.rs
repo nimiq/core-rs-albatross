@@ -10,6 +10,16 @@ use network_primitives::protocol::{Protocol, ProtocolFlags};
 use network_primitives::services::Services;
 use utils::time::systemtime_to_timestamp;
 use crate::error::Error;
+use url::Url;
+use network_primitives::address::PeerUri;
+
+
+#[derive(Clone, Debug)]
+pub enum Seed {
+    Peer(PeerUri),
+    List(Url)
+}
+
 
 #[derive(Clone, Debug)]
 pub struct NetworkConfig {
@@ -18,11 +28,12 @@ pub struct NetworkConfig {
     peer_id: Option<PeerId>,
     services: Services,
     protocol_config: ProtocolConfig,
-    user_agent: Option<String>
+    user_agent: Option<String>,
+    additional_seeds: Vec<Seed>,
 }
 
 impl NetworkConfig {
-    pub fn new_ws_network_config(host: String, port: u16, reverse_proxy_config: Option<ReverseProxyConfig>, user_agent: Option<String>) -> Self {
+    pub fn new_ws_network_config(host: String, port: u16, reverse_proxy_config: Option<ReverseProxyConfig>) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -33,11 +44,12 @@ impl NetworkConfig {
                 port,
                 reverse_proxy_config,
             },
-            user_agent
+            user_agent: None,
+            additional_seeds: Vec::new()
         }
     }
 
-    pub fn new_wss_network_config(host: String, port: u16, identity_file: String, identity_password: String, user_agent: Option<String>) -> Self {
+    pub fn new_wss_network_config(host: String, port: u16, identity_file: String, identity_password: String) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -49,18 +61,20 @@ impl NetworkConfig {
                 identity_file,
                 identity_password,
             },
-            user_agent
+            user_agent: None,
+            additional_seeds: Vec::new()
         }
     }
 
-    pub fn new_dumb_network_config(user_agent: Option<String>) -> Self {
+    pub fn new_dumb_network_config() -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS, // TODO Browsers might not always support WS.
             key_pair: None,
             peer_id: None,
             services: Services::full(),
             protocol_config: ProtocolConfig::Dumb,
-            user_agent
+            user_agent: None,
+            additional_seeds: Vec::new()
         }
     }
 
@@ -123,6 +137,18 @@ impl NetworkConfig {
 
     pub fn user_agent(&self) -> &Option<String> {
         &self.user_agent
+    }
+
+    pub fn set_user_agent(&mut self, user_agent: String) {
+        self.user_agent = Some(user_agent)
+    }
+
+    pub fn additional_seeds(&self) -> &Vec<Seed> {
+        &self.additional_seeds
+    }
+
+    pub fn set_additional_seeds(&mut self, seeds: Vec<Seed>) {
+        self.additional_seeds = seeds
     }
 
     pub fn protocol_config(&self) -> &ProtocolConfig {

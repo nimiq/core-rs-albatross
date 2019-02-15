@@ -12,6 +12,7 @@ extern crate nimiq_lib as lib;
 extern crate nimiq_metrics_server as metrics_server;
 extern crate nimiq_network as network;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_network_primitives as network_primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
 #[cfg(feature = "deadlock-detection")]
@@ -35,11 +36,13 @@ use log::Level;
 
 use consensus::consensus::Consensus;
 use database::lmdb::{LmdbEnvironment, open};
-use lib::client::initialize;
+use lib::client::{ClientBuilder, Client};
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
 use network::network_config::NetworkConfig;
 use network::network_config::ReverseProxyConfig;
+use network_primitives::protocol::Protocol;
+use network_primitives::address::PeerUri;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
@@ -57,9 +60,30 @@ mod settings;
 mod cmdline;
 mod static_env;
 
-lazy_static! {
-    pub static ref USER_AGENT: String = format!("core-rs/{} (native; {} {})", env!("CARGO_PKG_VERSION"), env::consts::OS, env::consts::ARCH);
+
+/// Converts protocol from settings into 'normal' protocol
+impl From<s::Protocol> for Protocol {
+    fn from(protocol: s::Protocol) -> Protocol {
+        match protocol {
+            s::Protocol::Dumb => Protocol::Dumb,
+            s::Protocol::Ws => Protocol::Ws,
+            s::Protocol::Wss => Protocol::Wss,
+            s::Protocol::Rtc => Protocol::Rtc,
+        }
+    }
 }
+
+/// Converts the network ID from settings into 'normal' network ID
+impl From<s::Network> for NetworkId {
+    fn from(network: s::Network) -> NetworkId {
+        match network {
+            s::Network::Main => NetworkId::Main,
+            s::Network::Test => NetworkId::Test,
+            s::Network::Dev=> NetworkId::Dev,
+        }
+    }
+}
+
 
 #[derive(Debug, Fail)]
 pub enum ConfigError {
@@ -110,59 +134,49 @@ fn run() -> Result<(), Error> {
     // Initialize the static environment variable
     ENV.initialize(env);
 
-    // Start network
-    let mut network_config = {
-        let hostname = cmdline.hostname.unwrap_or(settings.network.host);
-        let port = cmdline.port.or(settings.network.port).unwrap_or(s::DEFAULT_NETWORK_PORT);
-        let user_agent = settings.network.user_agent.unwrap_or(USER_AGENT.to_string());
-        debug!("Binding to {}:{}", hostname, port);
-        debug!("UserAgent: {}", user_agent);
+    // Start building the client with network ID and environment
+    let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), ENV.get());
 
-        match settings.network.protocol {
-            s::Protocol::Dumb => {
-                //NetworkConfig::new_dumb_network_config(Some(user_agent))
-                unimplemented!("Dumb network protocol is not yet implemented.");
-            },
+    // Map network ID from command-line or config to actual network ID
+    client_builder.with_network_id(NetworkId::from(cmdline.network.unwrap_or(settings.consensus.network)));
 
-            s::Protocol::Ws => NetworkConfig::new_ws_network_config(
-                hostname,
-                port,
-                settings.reverse_proxy.map(|r| ReverseProxyConfig {
-                    port: r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
-                    address: r.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"),
-                    header: r.header,
-                    with_tls_termination: r.with_tls_termination,
-                }), Some(user_agent)),
+    // add hostname and port to builder
+    if let Some(hostname) = cmdline.hostname.or(settings.network.host) {
+        client_builder.with_hostname(&hostname);
+    }
+    if let Some(port) = cmdline.port.or(settings.network.port) {
+        client_builder.with_port(port);
+    }
 
-            // TODO: Either remove SSL from cmdline or add --ssl-password to it.
-            //       Anyway, this should be made prettier
-            s::Protocol::Wss => {
-                let tls_settings = settings.tls.ok_or(ConfigError::NoTlsIdentityFile)?;
+    if let Some(r) = settings.reverse_proxy {
+        client_builder.with_reverse_proxy(
+            r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
+            r.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"),
+            r.header,
+            r.with_tls_termination
+        );
+    }
 
-                NetworkConfig::new_wss_network_config(
-                    hostname,
-                    port,
-                    cmdline.ssl_identity_file.unwrap_or(tls_settings.identity_file),
-                    tls_settings.identity_password,
-                    Some(user_agent))
-            },
 
-            s::Protocol::Rtc => unimplemented!()
+    // Add TLS configuration, if present
+    // NOTE: Currently we only need to set TLS settings for Wss
+    // TODO: Take ReverseProxyConfig and check if we're actually doing TLS
+    if settings.network.protocol == s::Protocol::Wss {
+        if let Some(tls_settings) = settings.tls {
+            client_builder.with_tls_identity(&tls_settings.identity_file, &tls_settings.identity_password);
         }
-    };
-    network_config.init_persistent()?;
-    let network_id = match cmdline.network.unwrap_or(settings.consensus.network) {
-        s::Network::Main => NetworkId::Main,
-        s::Network::Test => NetworkId::Test,
-        s::Network::Dev => NetworkId::Dev,
-        s::Network::Dummy => NetworkId::Dummy,
-        s::Network::Bounty => NetworkId::Bounty
-    };
-    info!("Nimiq Core starting: network={:?}, peer_address={}", network_id, network_config.peer_address());
+    }
 
-    // Start consensus
-    let consensus = Consensus::new(ENV.get(), network_id, network_config)?;
-    info!("Blockchain state: height={}, head={}", consensus.blockchain.height(), consensus.blockchain.head_hash());
+    // Parse additional seed nodes and add them
+    /*client_builder.with_seed_nodes(settings.network.seed_nodes.iter()
+        .filter_map(|s| PeerUri::from_str(s).map_err(|e| {
+            warn!("Invalid seed node: {}", e);
+            e
+        }).ok()).collect::<Vec<PeerUri>>());*/
+
+    // Setup client future to initialize and connect
+    let client = client_builder.build_client()?;
+    let consensus = client.consensus();
 
     // Additional futures we want to run.
     let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
@@ -202,14 +216,9 @@ fn run() -> Result<(), Error> {
         }
     }
 
-    // Setup client future to initialize and connect
-    // TODO: We might ass well pass an Arc of the whole consensus
-    let client_future = initialize(Arc::clone(&consensus.network))
-        .and_then(|client| client.connect());
-
-
+    // Run client and other futures
     tokio::run(
-        client_future // Run Nimiq client
+        client.and_then(|c| c.connect()) // Run Nimiq client
             .map(|_| info!("Client finished")) // Map Result to None
             .map_err(|e| error!("Client failed: {}", e))
             .and_then( move |_| future::join_all(other_futures)) // Run other futures (e.g. RPC server)
