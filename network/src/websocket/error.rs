@@ -22,8 +22,10 @@ pub enum Error {
     FinalChunkSizeExceeded,
     #[fail(display = "Tried closing a connection and got invalid response from the WebSocket layer")]
     InvalidClosingState,
-    #[fail(display = "Stream could not be wrapped")]
-    TlsWrappingError,
+    #[fail(display = "Stream could not be wrapped: TLS acceptor is None")]
+    TlsAcceptorMissing,
+    #[fail(display = "Stream could not be wrapped: {}", _0)]
+    TlsWrappingError(#[cause] TlsError),
     #[fail(display = "{}", _0)]
     IoError(#[cause] IoError),
     #[fail(display = "Could not read net address from stream: {}", _0)]

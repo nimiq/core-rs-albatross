@@ -64,11 +64,11 @@ pub fn wrap_stream<S>(socket: S, tls_acceptor: Option<TlsAcceptor>, mode: Mode)
     match mode {
         Mode::Plain => Box::new(future::ok(StreamSwitcher::Plain(socket))),
         Mode::Tls => {
-            Box::new(future::result(tls_acceptor.ok_or(Error::TlsWrappingError))
+            Box::new(future::result(tls_acceptor.ok_or(Error::TlsAcceptorMissing))
                 .map(TokioTlsAcceptor::from)
                 .and_then(move |acceptor| {
                     acceptor.accept(socket)
-                        .map_err(|_| Error::TlsWrappingError)
+                        .map_err(|e| Error::TlsWrappingError(e))
                 })
                 .map(|s| StreamSwitcher::Tls(s)))
         }

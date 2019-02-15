@@ -92,6 +92,7 @@ impl ConsensusAgent {
     }
 
     pub(super) fn on_get_accounts_tree_chunk(&self, msg: GetAccountsTreeChunkMessage) {
+        debug!("[GET-ACCOUNTS-TREE-CHUNK]");
         let get_chunk_future = self.accounts_chunk_cache.get_chunk(&msg.block_hash, &msg.start_prefix);
         let peer = self.peer.clone();
         let future = get_chunk_future.then(move |chunk_res| {
