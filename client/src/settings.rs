@@ -10,7 +10,7 @@ pub const DEFAULT_RPC_PORT: u16 = 8648;
 pub const DEFAULT_METRICS_PORT: u16 = 8649;
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub(crate) struct Settings {
     pub network: NetworkSettings,
     pub tls: Option<TlsSettings>,
@@ -33,7 +33,6 @@ impl Settings {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct NetworkSettings {
     pub host: String,
     pub port: Option<u16>,
@@ -63,7 +62,6 @@ impl Default for Protocol {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct SeedNode {
     pub host: String,
     pub port: u16,
@@ -71,7 +69,6 @@ pub(crate) struct SeedNode {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct TlsSettings {
     pub identity_file: String,
     pub identity_password: String,
@@ -79,7 +76,6 @@ pub(crate) struct TlsSettings {
 
 
 #[derive(Debug, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct ConsensusSettings {
     #[serde(rename = "type")]
     #[serde(default)]
@@ -147,7 +143,6 @@ impl FromStr for Network {
 }
 
 #[derive(Debug, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct RpcServerSettings {
     pub port: Option<u16>,
     #[serde(default)]

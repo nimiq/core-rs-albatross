@@ -40,7 +40,7 @@ host = "my.domain"
 # - port: the port that the nimiq node runs on.
 # - publicKey (optional): the public part of the peer key of this seed node. Should always be set if the node
 #                         is accessed via the internet.
-#seedNodes = [
+#seed_nodes = [
 #    { host = 'new-seed.nimiq.com', port = 8080, publicKey = 'e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837' },
 #    { host = 'nimiq-seed.company-network.int', port = 8080 },
 #]
@@ -53,8 +53,8 @@ host = "my.domain"
 #
 ##############################################################################
 #[tls]
-#identityFile = "./my.domain.p12"
-#identityPassword = "secret"
+#identity_file = "./my.domain.p12"
+#identity_password = "secret"
 
 
 
@@ -86,8 +86,8 @@ host = "my.domain"
 #
 ##############################################################################
 
-# Uncomment the following line to enable the rpc server
-#[rpcServer]
+# Uncomment the following line to enable the rpc server.
+#[rpc-server]
 
 # TCP-Port to use to create a listening socket for the JSON-RPC server.
 # Possible values: any valid port number
@@ -121,8 +121,8 @@ host = "my.domain"
 #
 ##############################################################################
 
-# Uncomment the following line to enable the metrics server
-#[metricsServer]
+# Uncomment the following line to enable the metrics server.
+#[metrics-server]
 
 # TCP-Port to use to create a listening socket for the metrics server.
 # Possible values: any valid port number
@@ -141,22 +141,27 @@ host = "my.domain"
 #
 ##############################################################################
 
-# Uncomment the following line to enable reverse proxy support
-#[reverseProxy]
+# Uncomment the following line to enable reverse proxy support.
+#[reverse-proxy]
 # TCP-Port where the reverse proxy is listening.
 # Possible values: any valid port number
 # Default: 8444
 #port = 8443
 
-# IP address of the reverse proxy that this node will "see" (i.e. the value of ws._socket.remoteAddress)
+# IP address of the reverse proxy that this node will "see" (i.e. the value of ws._socket.remoteAddress).
 # Possible values: any valid IP address
 # Default: "::ffff:127.0.0.1"
 #address = "::ffff:192.168.10.40"
 
-# HTTP header where the reverse proxy will send the original IP address of the connecting client
+# HTTP header where the reverse proxy will send the original IP address of the connecting client.
 # Possible values: any valid HTTP header name
 # Default: "x-forwarded-for"
 #header = "x-forwarded-for"
+
+# Determines whether the reverse proxy does TLS termination for this node.
+# In that case, we want to advertise our peer address as web socket secure.
+# Default: false
+#with_tls_termination = true
 
 
 
@@ -168,16 +173,18 @@ host = "my.domain"
 
 [log]
 # Configure global log level.
-# Possible values: "trace", "debug", "info", "warning", "error", "assert"
+# Possible values: "trace", "debug", "info", "warning", "error"
 # Default: "info"
 level = "info"
 
-# Define specific log levels for tags
+# Define specific log levels for tags.
 # Default: none
 tags = { BaseConsensus = "debug" }
 
-# Print statistics like mining hashrate, current account balance and mempool size
-# Possible values: the time interval (in seconds) between statistics, or 0 to disable
-# Default: 0
-statistics = 60
+# Specify whether timestamps should be included for log statements.
+# Default: false
+#timestamps = true
 
+# Save log output to a file.
+# Default: none
+#file = "log.txt"

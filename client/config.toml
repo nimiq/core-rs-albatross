@@ -18,7 +18,7 @@ network = "test"
 level = "trace"
 timestamps = true
 
-[rpcServer]
+[rpc-server]
 port = 8648
 
-[metricsServer]
+[metrics-server]

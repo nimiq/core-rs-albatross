@@ -25,7 +25,7 @@ nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-on
 nimiq-accounts = { path = "../accounts" }
 nimiq-blockchain = { path = "../blockchain" }
 nimiq-collections = { path = "../collections" }
-nimiq-primitives = { path = "../primitives", features = ["coin"] }
+nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 
 [dev-dependencies]
 nimiq-database = { path = "../database" }

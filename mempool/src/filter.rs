@@ -1,9 +1,7 @@
 use account::Account;
 use collections::LimitHashSet;
-use keys::Address;
 use nimiq_hash::{Blake2bHash, Hash};
 use primitives::coin::Coin;
-use primitives::networks::NetworkId;
 use transaction::{Transaction, TransactionFlags};
 
 #[derive(Debug)]
@@ -77,7 +75,7 @@ impl MempoolFilter {
         )
     }
 
-    pub fn accepts_sender_account(&self, tx: &Transaction, old_account: &Account, new_account: &Account) -> bool {
+    pub fn accepts_sender_account(&self, _tx: &Transaction, _old_account: &Account, new_account: &Account) -> bool {
         new_account.balance() >= self.rules.sender_balance ||
             new_account.is_initial() ||
             new_account.is_to_be_pruned()
@@ -109,6 +107,9 @@ pub struct Rules {
 
 #[cfg(test)]
 mod tests {
+    use keys::Address;
+    use primitives::networks::NetworkId;
+
     use super::*;
 
     #[test]

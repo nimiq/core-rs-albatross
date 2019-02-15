@@ -13,4 +13,4 @@ type = "full"
 network = "test"
 
 [log]
-level = "verbose"
+level = "trace"
