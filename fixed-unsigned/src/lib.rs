@@ -15,7 +15,7 @@ extern crate num_traits;
 
 use num_bigint::BigUint;
 use num_traits::identities::{One, Zero};
-use num_traits::{ToPrimitive, pow};
+use num_traits::ToPrimitive;
 
 use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign, MulAssign, DivAssign};
 use std::marker::PhantomData;

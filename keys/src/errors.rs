@@ -1,4 +1,3 @@
-use std::fmt::{self, Display};
 use ed25519_dalek::SignatureError;
 use failure::Fail;
 use hex::FromHexError;

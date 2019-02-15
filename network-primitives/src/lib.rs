@@ -14,7 +14,6 @@ extern crate nimiq_hash as hash;
 #[macro_use]
 extern crate lazy_static;
 extern crate url;
-#[macro_use]
 extern crate failure;
 
 #[cfg(feature = "address")]

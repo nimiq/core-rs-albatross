@@ -5,7 +5,6 @@ extern crate futures;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-extern crate nimiq_consensus as consensus;
 extern crate nimiq_database as database;
 extern crate nimiq_lib as lib;
 #[cfg(feature = "metrics-server")]
@@ -23,7 +22,6 @@ extern crate tokio;
 extern crate toml;
 
 
-use std::env;
 use std::io;
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -34,14 +32,12 @@ use fern::log_file;
 use futures::{Future, future};
 use log::Level;
 
-use consensus::consensus::Consensus;
 use database::lmdb::{LmdbEnvironment, open};
 use lib::client::{ClientBuilder, Client};
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
-use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
+use network::network_config::Seed;
 use network_primitives::protocol::Protocol;
-use network_primitives::address::PeerUri;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;

@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::io;
-use hex::{FromHex, ToHex};
+use hex::FromHex;
 use ed25519_dalek;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
@@ -28,6 +28,10 @@ impl PublicKey {
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
         Ok(PublicKey(ed25519_dalek::PublicKey::from_bytes(bytes).map_err(|e| KeysError(e))?))
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
     }
 }
 

@@ -4,7 +4,7 @@ use failure::Error;
 use std::collections::HashMap;
 use std::str::FromStr;
 
-pub const DEFAULT_NETWORK_PORT: u16 = 8443;
+
 pub const DEFAULT_REVERSE_PROXY_PORT: u16 = 8444;
 pub const DEFAULT_RPC_PORT: u16 = 8648;
 pub const DEFAULT_METRICS_PORT: u16 = 8649;

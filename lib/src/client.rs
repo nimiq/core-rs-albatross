@@ -9,8 +9,8 @@ use consensus::error::Error as ConsensusError;
 use database::Environment;
 use network::error::Error as NetworkError;
 use network::network::Network;
-use network::network_config::{NetworkConfig, ProtocolConfig, ReverseProxyConfig, Seed};
-use network_primitives::address::{NetAddress, PeerUri};
+use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
+use network_primitives::address::NetAddress;
 use primitives::networks::NetworkId;
 use network_primitives::protocol::Protocol;
 

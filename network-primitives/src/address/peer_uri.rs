@@ -1,7 +1,7 @@
 use std::fmt;
 
 use url::Url;
-use failure::{Error, Fail};
+use failure::Fail;
 use std::str::FromStr;
 use hex::{FromHex, FromHexError};
 
@@ -154,7 +154,7 @@ impl PeerUri {
         }
     }
 
-    fn parse_peer_key_or_id(&self) -> Result<(Option<PublicKey>, PeerId), PeerUriError> {
+    pub fn parse_peer_key_or_id(&self) -> Result<(Option<PublicKey>, PeerId), PeerUriError> {
         match &self.peer_id_or_public_key {
             Some(peer_id_or_public_key) => Ok({
                 match PublicKey::from_hex(peer_id_or_public_key) {

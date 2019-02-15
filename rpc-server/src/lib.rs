@@ -25,18 +25,13 @@ use json::object::Object;
 
 use beserial::{Deserialize, Serialize};
 use block::{Block, Difficulty};
-use blockchain::transaction_store::TransactionInfo;
-use consensus::consensus::{Consensus, ConsensusEvent};
+use consensus::consensus::Consensus;
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use keys::Address;
 use network::address::peer_address_state::PeerAddressInfo;
 use network::connection::connection_info::ConnectionInfo;
 use network::connection::close_type::CloseType;
-use network_primitives::protocol::ProtocolFlags;
-use network_primitives::services::ServiceFlags;
-use primitives::account::AccountType;
-use primitives::coin::Coin;
-use transaction::{Transaction, TransactionFlags, TransactionReceipt};
+use transaction::{Transaction, TransactionReceipt};
 use network_primitives::address::{PeerUri, PeerId};
 
 use crate::error::Error;
@@ -58,7 +53,7 @@ pub struct JsonRpcHandler {
 
 impl JsonRpcHandler {
     pub fn new(consensus: Arc<Consensus>) -> Self {
-        let mut res = JsonRpcHandler {
+        let res = JsonRpcHandler {
             consensus: consensus.clone(),
             consensus_state: "syncing",
             starting_block: consensus.blockchain.height(),
@@ -194,7 +189,7 @@ impl JsonRpcHandler {
             .and_then(|b| Deserialize::deserialize_from_vec(&b)
                 .map_err(|_| object!{"message" => "Invalid transaction data"}))?;
 
-        let (mut transaction, valid, in_mempool) =
+        let (transaction, valid, in_mempool) =
             if let Ok(live_transaction) = self.get_transaction_by_hash_helper(&transaction.hash::<Blake2bHash>()) {
                 let confirmations = live_transaction["confirmations"].as_u32()
                     .expect("Function didn't return transaction with confirmation number");
@@ -423,7 +418,7 @@ impl JsonRpcHandler {
         }
     }
 
-    fn obj_to_transaction(&self, obj: &JsonValue) -> Result<Transaction, JsonValue> {
+    fn obj_to_transaction(&self, _obj: &JsonValue) -> Result<Transaction, JsonValue> {
         /*
         let from = Address::from_any_str(obj["from"].as_str()
             .ok_or_else(|| object!{"message" => "Sender address must be a string"})?)
@@ -464,7 +459,7 @@ impl JsonRpcHandler {
         rpc_not_implemented()
     }
 
-    fn push_transaction(&self, transaction: &Transaction) -> Result<JsonValue, JsonValue> {
+    fn push_transaction(&self, _transaction: &Transaction) -> Result<JsonValue, JsonValue> {
         rpc_not_implemented()
     }
 
