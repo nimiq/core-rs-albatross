@@ -4,6 +4,8 @@ extern crate beserial_derive;
 extern crate nimiq_hash as hash;
 #[macro_use]
 extern crate nimiq_macros as macros;
+#[macro_use]
+extern crate failure;
 
 pub use self::address::*;
 pub use self::key_pair::*;

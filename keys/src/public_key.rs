@@ -1,13 +1,13 @@
 use std::cmp::Ordering;
 use std::io;
-
+use hex::{FromHex, ToHex};
 use ed25519_dalek;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 use crate::{PrivateKey, Signature};
 use hash::{Hash, SerializeContent};
-use crate::errors::KeysError;
+use crate::errors::{KeysError, ParseError};
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub struct PublicKey(pub(in super) ed25519_dalek::PublicKey);
@@ -26,8 +26,16 @@ impl PublicKey {
     pub(crate) fn as_dalek(&self) -> &ed25519_dalek::PublicKey { &self.0 }
 
     #[inline]
-    pub fn from_bytes(bytes: &[u8; PublicKey::SIZE]) -> Result<Self, KeysError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
         Ok(PublicKey(ed25519_dalek::PublicKey::from_bytes(bytes).map_err(|e| KeysError(e))?))
+    }
+}
+
+impl FromHex for PublicKey {
+    type Error = ParseError;
+
+    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<PublicKey, ParseError> {
+        Ok(PublicKey::from_bytes(hex::decode(hex)?.as_slice())?)
     }
 }
 
