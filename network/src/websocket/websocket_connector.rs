@@ -125,7 +125,7 @@ impl WebSocketConnector {
         let socket = TcpListener::bind(&addr).map_err(|e| ServerStartError::IoError(e))?;
         let notifier = Arc::clone(&self.notifier);
 
-        let srv = socket.incoming().map_err(|err| err.into())
+        let srv = socket.incoming()
             .for_each(move |tcp| {
                 let reverse_proxy_config = reverse_proxy_config.clone();
 
@@ -148,10 +148,14 @@ impl WebSocketConnector {
                             }));
                         }
                     })
+                }).or_else(|err| {
+                    error!("Could not accept connection: {}", err);
+                    // Do not stop the websocket server on inner connection errors!
+                    future::ok(())
                 })
-            })
-            .map_err(|err| {
-                error!("Could not accept connection: {}", err);
+
+            }).map_err(|err| {
+                error!("WebSocket server failed and was stopped: {}", Error::from(err));
                 ()
             });
 
