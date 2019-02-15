@@ -1,7 +1,9 @@
 #[macro_use]
-extern crate beserial_derive;
-#[macro_use]
 extern crate log;
+extern crate url;
+
+#[macro_use]
+extern crate beserial_derive;
 #[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_messages as network_messages;

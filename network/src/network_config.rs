@@ -1,5 +1,8 @@
 use std::fs;
 use std::time::SystemTime;
+use std::str::FromStr;
+
+use url::Url;
 
 use beserial::{Deserialize, Serialize};
 use keys::{KeyPair, PublicKey};
@@ -9,15 +12,34 @@ use network_primitives::address::PeerId;
 use network_primitives::protocol::{Protocol, ProtocolFlags};
 use network_primitives::services::Services;
 use utils::time::systemtime_to_timestamp;
-use crate::error::Error;
-use url::Url;
-use network_primitives::address::PeerUri;
+use network_primitives::address::{PeerUri};
+
+use crate::error::{Error, SeedError};
 
 
+// One or multiple seed nodes. Either a peer URI or a http(s) URL to a seed list
 #[derive(Clone, Debug)]
 pub enum Seed {
     Peer(PeerUri),
     List(Url)
+}
+
+impl FromStr for Seed {
+    type Err = SeedError;
+
+    fn from_str(s: &str) -> Result<Seed, SeedError> {
+        let url = Url::parse(s)?;
+        Ok(match url.scheme() {
+            "http" | "https" => {
+                // Seed list
+                Seed::List(url)
+            },
+            _ => {
+                // Peer URI
+                Seed::Peer(PeerUri::from_url(url)?)
+            }
+        })
+    }
 }
 
 

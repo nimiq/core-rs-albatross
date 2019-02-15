@@ -63,18 +63,10 @@ impl Default for Protocol {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct SeedNode {
-    pub host: String,
-    pub port: u16,
-    pub public_key: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 pub(crate) struct TlsSettings {
     pub identity_file: String,
     pub identity_password: String,
 }
-
 
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct ConsensusSettings {

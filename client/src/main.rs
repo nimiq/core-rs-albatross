@@ -39,8 +39,7 @@ use database::lmdb::{LmdbEnvironment, open};
 use lib::client::{ClientBuilder, Client};
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
-use network::network_config::NetworkConfig;
-use network::network_config::ReverseProxyConfig;
+use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
 use network_primitives::protocol::Protocol;
 use network_primitives::address::PeerUri;
 use primitives::networks::NetworkId;
@@ -157,7 +156,6 @@ fn run() -> Result<(), Error> {
         );
     }
 
-
     // Add TLS configuration, if present
     // NOTE: Currently we only need to set TLS settings for Wss
     // TODO: Take ReverseProxyConfig and check if we're actually doing TLS
@@ -168,11 +166,11 @@ fn run() -> Result<(), Error> {
     }
 
     // Parse additional seed nodes and add them
-    /*client_builder.with_seed_nodes(settings.network.seed_nodes.iter()
-        .filter_map(|s| PeerUri::from_str(s).map_err(|e| {
-            warn!("Invalid seed node: {}", e);
+    client_builder.with_seeds(settings.network.seed_nodes.iter()
+        .filter_map(|s| Seed::from_str(s).map_err(|e| {
+            warn!("Invalid seed node: {}: {}", s, e);
             e
-        }).ok()).collect::<Vec<PeerUri>>());*/
+        }).ok()).collect::<Vec<Seed>>());
 
     // Setup client future to initialize and connect
     let client = client_builder.build_client()?;

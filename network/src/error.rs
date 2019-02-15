@@ -2,8 +2,10 @@ use failure::Fail;
 use tokio::io::Error as IoError;
 
 use network_primitives::networks::NetworkId;
+use network_primitives::address::peer_uri::PeerUriError;
 
 use crate::websocket::error::ServerStartError;
+
 
 #[derive(Fail, Debug)]
 pub enum Error {
@@ -28,5 +30,26 @@ impl From<IoError> for Error {
 impl From<ServerStartError> for Error {
     fn from(e: ServerStartError) -> Self {
         Error::ServerStartError(e)
+    }
+}
+
+
+#[derive(Debug, Fail)]
+pub enum SeedError {
+    #[fail(display = "Invalid peer URI: {}", _0)]
+    Peer(#[cause] PeerUriError),
+    #[fail(display = "Invalid seed list URL: {}", _0)]
+    Url(#[cause] url::ParseError)
+}
+
+impl From<PeerUriError> for SeedError {
+    fn from(e: PeerUriError) -> SeedError {
+        SeedError::Peer(e)
+    }
+}
+
+impl From<url::ParseError> for SeedError {
+    fn from(e: url::ParseError) -> SeedError {
+        SeedError::Url(e)
     }
 }
