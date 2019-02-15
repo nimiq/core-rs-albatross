@@ -849,9 +849,6 @@ impl ConnectionPool {
             }
         }
 
-        // Set the peer connection to closed state.
-        info.close();
-
         // Drop the guard before notifying.
         drop(guard);
 
@@ -865,6 +862,9 @@ impl ConnectionPool {
 
         // Let listeners know about this closing.
         self.notifier.read().notify(ConnectionPoolEvent::Close(connection_id, UniquePtr::new(&info), ty));
+
+        // Set the peer connection to closed state.
+        info.close();
     }
 
     /// Total peer count.
