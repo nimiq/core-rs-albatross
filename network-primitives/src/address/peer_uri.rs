@@ -107,13 +107,6 @@ impl<'a> fmt::Display for PeerUri {
 }
 
 impl PeerUri {
-    pub fn default_port(protocol: Protocol) -> Option<u16> {
-        match protocol {
-            Protocol::Ws | Protocol::Wss => Some(8443),
-            _ => None
-        }
-    }
-
     pub fn from_url(url: Url) -> Result<Self, UriError> {
         if !url.username().is_empty() { return Err(UriError::UnexpectedUsername) }
         if url.password().is_some() { return Err(UriError::UnexpectedPassword) }
