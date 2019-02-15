@@ -3,7 +3,7 @@ extern crate fixed_unsigned;
 use std::str::FromStr;
 use std::string::ToString;
 
-use fixed_unsigned::types::{FixedUnsigned4, FixedUnsigned10};
+use fixed_unsigned::types::FixedUnsigned4;
 
 
 

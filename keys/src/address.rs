@@ -74,8 +74,8 @@ impl Address {
 
     fn iban_check(s: &String) -> u32 {
         let mut num = String::with_capacity(s.len() * 2);
-        for c in s.chars() {
-            let code = c.to_uppercase().collect::<String>().chars().next().unwrap() as u32; // TODO meh
+        for c in s.to_uppercase().chars() {
+            let code = c as u32;
             if code >= 48 && code <=57 {
                 num.push(char::from_u32(code).unwrap());
             } else {
