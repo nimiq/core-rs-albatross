@@ -120,6 +120,20 @@ impl PeerAddress {
         PeerUri::from(self.clone())
     }
 
+    pub fn to_seed_string(&self) -> Option<String> {
+        // This function should only be called on seed nodes
+        if !self.is_seed() {
+            return None;
+        }
+
+        let public_key: String = String::from(::hex::encode(&self.public_key.as_bytes()));
+        match self.ty {
+            PeerAddressType::Ws(ref host, ref port) => Some(format!("ws://{}:{}/{}", host, port, public_key)),
+            PeerAddressType::Wss(ref host, ref port) => Some(format!("wss://{}:{}/{}", host, port, public_key)),
+            _ => None, // Seed nodes should never be PeerAddressType::RTC or PeerAddressType::Dumb
+        }
+    }
+
     pub fn get_signature_data(&self) -> Vec<u8> {
         let mut res: Vec<u8> = (self.ty.protocol() as u8).serialize_to_vec();
         res.append(&mut self.services.serialize_to_vec());

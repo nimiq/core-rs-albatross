@@ -1,6 +1,8 @@
 use ed25519_dalek;
 use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
-use crate::errors::KeysError;
+use hex::FromHex;
+
+use crate::errors::{KeysError, ParseError};
 
 #[derive(Debug, Clone)]
 pub struct Signature(pub(in super) ed25519_dalek::Signature);
@@ -15,7 +17,7 @@ impl Signature {
     pub(crate) fn as_dalek(&self) -> &ed25519_dalek::Signature { &self.0 }
 
     #[inline]
-    pub fn from_bytes(bytes: &[u8; Self::SIZE]) -> Result<Self, KeysError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
         Ok(Signature(ed25519_dalek::Signature::from_bytes(bytes).map_err(|e| KeysError(e))?))
     }
 }
@@ -25,6 +27,14 @@ impl Eq for Signature {}
 impl PartialEq for Signature {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
+    }
+}
+
+impl FromHex for Signature {
+    type Error = ParseError;
+
+    fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Signature, ParseError> {
+        Ok(Signature::from_bytes(hex::decode(hex)?.as_slice())?)
     }
 }
 

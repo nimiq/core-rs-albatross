@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use hex::FromHex;
+
 use hash::Blake2bHash;
 use keys::Address;
 use keys::PublicKey;
@@ -10,31 +12,33 @@ use crate::address::net_address::NetAddress;
 use crate::address::peer_address::PeerAddress;
 use crate::address::peer_address::PeerAddressType;
 use crate::address::PeerId;
+use crate::address::seed_list_url::SeedListUrl;
 use crate::services::ServiceFlags;
+
 
 pub struct NetworkInfo {
     pub network_id: NetworkId,
     pub name: String,
     pub seed_peers: Vec<PeerAddress>,
+    pub seed_lists: Vec<SeedListUrl>,
     pub genesis_block: Block,
     pub genesis_hash: Blake2bHash,
     pub genesis_accounts: String, // FIXME
 }
 
-#[allow(dead_code)]
-fn create_seed_peer_addr(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
-    let mut public_key_bytes : [u8; PublicKey::SIZE] = [0; PublicKey::SIZE];
-    public_key_bytes.clone_from_slice(&::hex::decode(pubkey_hex.to_string()).unwrap()[0..]);
-    let public_key = PublicKey::from(&public_key_bytes);
+pub fn create_seed_peer_addr(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
+    let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
     PeerAddress { ty: PeerAddressType::Wss(url.to_string(), port), services: ServiceFlags::FULL, timestamp: 0, net_address: NetAddress::Unspecified, public_key, distance: 0, signature: None, peer_id: PeerId::from(&public_key)}
 }
 
-#[allow(dead_code)]
-fn create_seed_peer_addr_ws(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
-    let mut public_key_bytes : [u8; PublicKey::SIZE] = [0; PublicKey::SIZE];
-    public_key_bytes.clone_from_slice(&::hex::decode(pubkey_hex.to_string()).unwrap()[0..]);
-    let public_key = PublicKey::from(&public_key_bytes);
+pub fn create_seed_peer_addr_ws(url: &str, port: u16, pubkey_hex: &str) -> PeerAddress {
+    let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
     PeerAddress { ty: PeerAddressType::Ws(url.to_string(), port), services: ServiceFlags::FULL, timestamp: 0, net_address: NetAddress::Unspecified, public_key, distance: 0, signature: None, peer_id: PeerId::from(&public_key)}
+}
+
+pub fn create_seed_list(url: &str, pubkey_hex: &str) -> SeedListUrl {
+    let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
+    SeedListUrl::new(url.to_string(), Some(public_key))
 }
 
 lazy_static! {
@@ -68,6 +72,9 @@ lazy_static! {
                     create_seed_peer_addr("seed-18.nimiq.com", 8443, "c15a2d824a52837fa7165dc232592be35116661e7f28605187ab273dd7233711"),
                     create_seed_peer_addr("seed-19.nimiq.com", 8443, "98a24d4b05158314b36e0bd6ce3b42ac5ac061f4bb9664d783eb930caa9315b6"),
                     create_seed_peer_addr("seed-20.nimiq.com", 8443, "1fc33f93273d94dd2cf7470274c27ecb1261ec983e43bdbb281803c0a09e68d5")
+                ],
+                seed_lists: vec![
+                    create_seed_list("https://nimiq.community/seeds.txt", "8b4ae04557f490102036ce3e570b39058c92fc5669083fb9bbb6effc91dc3c71")
                 ],
                 genesis_block: Block {
                     header: BlockHeader {
@@ -1210,6 +1217,8 @@ lazy_static! {
                     create_seed_peer_addr("seed3.nimiqtest.net", 8080, "03feec9d5316a7b5ebb69c4e709547a28afe8e9ef91ee568df489d29e9845bb8"),
                     create_seed_peer_addr("seed4.nimiqtest.net", 8080, "943d5669226d3716a830371d99143af98bbaf84c630db24bdd67e55ccb7a9011")
                 ],
+                seed_lists: vec![
+                ],
                 genesis_block: Block {
                     header: BlockHeader {
                         version: 1,
@@ -1387,6 +1396,8 @@ lazy_static! {
                 name: "dev".into(),
                 seed_peers: vec![
                     create_seed_peer_addr_ws("dev.nimiq-network.com", 8080, "e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837")
+                ],
+                seed_lists: vec![
                 ],
                 genesis_block: Block {
                     header: BlockHeader {

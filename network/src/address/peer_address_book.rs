@@ -29,6 +29,7 @@ use crate::connection::close_type::CloseType;
 use crate::network_config::NetworkConfig;
 use crate::peer_channel::PeerChannel;
 
+use super::peer_address_seeder::{PeerAddressSeeder, PeerAddressSeederEvent};
 use super::peer_address_state::PeerAddressInfo;
 use super::peer_address_state::PeerAddressState;
 use crate::error::Error;
@@ -262,6 +263,7 @@ pub struct PeerAddressBook {
     state: RwLock<PeerAddressBookState>,
     seeded: AtomicBool,
     network_config: Arc<NetworkConfig>,
+    network_id: NetworkId,
     timers: Timers<PeerAddressBookTimer>,
     change_lock: Mutex<()>,
     pub notifier: Notifier<'static, PeerAddressBookEvent>,
@@ -269,11 +271,13 @@ pub struct PeerAddressBook {
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 enum PeerAddressBookTimer {
+    ExternalSeeding,
     Housekeeping,
 }
 
 pub enum PeerAddressBookEvent {
     Added(Vec<PeerAddress>),
+    Seeded,
 }
 
 impl PeerAddressBook {
@@ -287,7 +291,8 @@ impl PeerAddressBook {
                 address_by_peer_id: HashMap::new(),
                 addresses_by_net_address: HashMap::new(),
             }),
-            seeded: AtomicBool::new(true),
+            seeded: AtomicBool::new(false),
+            network_id,
             network_config,
             timers: Timers::new(),
             change_lock: Mutex::new(()),
@@ -317,6 +322,31 @@ impl PeerAddressBook {
             let this = upgrade_weak!(weak);
             this.housekeeping();
         }, HOUSEKEEPING_INTERVAL);
+
+        // Collect more seed peers from seed lists.
+        let weak = Arc::downgrade(this);
+        this.timers.set_delay(PeerAddressBookTimer::ExternalSeeding, move || {
+            let this = upgrade_weak!(weak);
+            this.seeded.store(true, Ordering::Release);
+            this.notifier.notify(PeerAddressBookEvent::Seeded);
+        }, SEEDING_TIMEOUT);
+
+        let seeder = PeerAddressSeeder::new();
+        let weak = Arc::downgrade(this);
+        seeder.notifier.lock().register(move |e: &PeerAddressSeederEvent| {
+            let this = upgrade_weak!(weak);
+            match e {
+                PeerAddressSeederEvent::Seeds(seeds) => {
+                    this.add(None, seeds.to_vec());
+                },
+                PeerAddressSeederEvent::End => {
+                    this.seeded.store(true, Ordering::Release);
+                    this.notifier.notify(PeerAddressBookEvent::Seeded);
+                },
+            }
+        });
+        seeder.collect(this.network_id);
+
         Ok(())
     }
 
