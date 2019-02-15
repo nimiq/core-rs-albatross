@@ -376,7 +376,7 @@ impl PeerAddressBook {
     }
 
     pub fn add(&self, channel: Option<Arc<PeerChannel>>, peer_addresses: Vec<PeerAddress>) {
-        let _guard = self.change_lock.lock();
+        let guard = self.change_lock.lock();
 
         let mut new_addresses: Vec<PeerAddress> = Vec::new();
         for peer_address in peer_addresses {
@@ -384,6 +384,9 @@ impl PeerAddressBook {
                 new_addresses.push(peer_address);
             }
         }
+
+        // Drop the guard before notifying.
+        drop(guard);
 
         self.notifier.notify(PeerAddressBookEvent::Added(new_addresses));
     }
@@ -621,7 +624,7 @@ impl PeerAddressBook {
     }
 
     fn housekeeping(&self) {
-        let _guard = self.change_lock.lock();
+        let guard = self.change_lock.lock();
 
         let mut state = self.state.write();
         let now = Instant::now();
@@ -684,6 +687,9 @@ impl PeerAddressBook {
         for peer_address in to_remove_from_store.drain(..) {
             state.remove_from_store(peer_address);
         }
+
+        // Drop the guard before notifying.
+        drop(guard);
 
         if unbanned_addresses.len() > 0 {
             self.notifier.notify(PeerAddressBookEvent::Added(unbanned_addresses));

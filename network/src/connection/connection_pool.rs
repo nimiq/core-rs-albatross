@@ -5,7 +5,7 @@ use std::collections::LinkedList;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
-use parking_lot::{Mutex, RwLock, RwLockReadGuard};
+use parking_lot::{ReentrantMutex, RwLock, RwLockReadGuard};
 
 use blockchain::Blockchain;
 use network_primitives::address::net_address::{NetAddress, NetAddressType};
@@ -330,7 +330,7 @@ pub struct ConnectionPool {
     signal_processor: SignalProcessor,
 
     state: RwLock<ConnectionPoolState>,
-    change_lock: Mutex<()>,
+    change_lock: ReentrantMutex<()>,
 
     pub notifier: RwLock<PassThroughNotifier<'static, ConnectionPoolEvent>>,
     timers: Timers<ConnectionPoolTimer>,
@@ -383,7 +383,7 @@ impl ConnectionPool {
 
                 banned_ips: HashMap::new(),
             }),
-            change_lock: Mutex::new(()),
+            change_lock: ReentrantMutex::new(()),
 
             notifier: RwLock::new(PassThroughNotifier::new()),
             timers: Timers::new(),
@@ -517,7 +517,7 @@ impl ConnectionPool {
 
     /// Callback upon connection establishment.
     fn on_connection(&self, connection: NetworkConnection) {
-        let _guard = self.change_lock.lock();
+        let guard = self.change_lock.lock();
 
         let agent;
         let connection_id;
@@ -611,6 +611,9 @@ impl ConnectionPool {
             info.set_network_agent(agent.clone());
         }
 
+        // Drop the guard before notifying.
+        drop(guard);
+
         // Let listeners know about this connection.
         self.notifier.read().notify(ConnectionPoolEvent::Connection(connection_id));
 
@@ -663,7 +666,7 @@ impl ConnectionPool {
 
     /// Callback during handshake.
     fn on_handshake(&self, connection_id: ConnectionId, peer: &UniquePtr<Peer>) {
-        let _guard = self.change_lock.lock();
+        let guard = self.change_lock.lock();
 
         let peer_address = peer.peer_address();
         let mut is_inbound = false;
@@ -744,6 +747,7 @@ impl ConnectionPool {
 
         // Check if we need to recycle a connection.
         if self.peer_count() >= network_primitives::PEER_COUNT_MAX {
+            // This will most likely lead to reentering the guard.
             self.notifier.read().notify(ConnectionPoolEvent::RecyclingRequest);
         }
 
@@ -778,6 +782,9 @@ impl ConnectionPool {
         // Mark address as established.
         self.addresses.established(info.peer_channel().unwrap(), peer_address.clone());
 
+        // Drop the guard before notifying.
+        drop(guard);
+
         // Let listeners know about this peer.
         self.notifier.read().notify(ConnectionPoolEvent::PeerJoined(peer.as_ref().clone()));
 
@@ -791,7 +798,7 @@ impl ConnectionPool {
 
     /// Callback upon closing of connection.
     fn on_close(&self, connection_id: ConnectionId, ty: CloseType) {
-        let _guard = self.change_lock.lock();
+        let guard = self.change_lock.lock();
 
         // Only propagate the close type (i.e. track fails/bans) if the peerAddress is set.
         // This is true for
@@ -834,12 +841,19 @@ impl ConnectionPool {
                     },
                     Some(false) => {
                         debug!("Connection #{} to {} closed pre-handshake: {:?}", connection_id, info.peer_address().unwrap(), ty);
+                        // Only sets a timer and won't reenter connection pool.
                         self.notifier.read().notify(ConnectionPoolEvent::ConnectError(info.peer_address().expect("PeerAddress not set").clone(), ty));
                     },
                     _ => unreachable!("Invalid state, closing connection with network connection not set"),
                 }
             }
         }
+
+        // Set the peer connection to closed state.
+        info.close();
+
+        // Drop the guard before notifying.
+        drop(guard);
 
         if established_peer_left {
             // Tell listeners that this peer has gone away.
@@ -851,9 +865,6 @@ impl ConnectionPool {
 
         // Let listeners know about this closing.
         self.notifier.read().notify(ConnectionPoolEvent::Close(connection_id, UniquePtr::new(&info), ty));
-
-        // Set the peer connection to closed state.
-        info.close();
     }
 
     /// Total peer count.
@@ -895,7 +906,7 @@ impl ConnectionPool {
 
     /// Callback on connect error.
     fn on_connect_error(&self, peer_address: Arc<PeerAddress>, error: ConnectError) {
-        let _guard = self.change_lock.lock();
+        let guard = self.change_lock.lock();
         debug!("Connection to {} failed with error {}", peer_address, error);
 
         // Aquire write lock and release it again before notifying listeners.
@@ -910,6 +921,9 @@ impl ConnectionPool {
 
             self.addresses.close(None, peer_address.clone(), CloseType::ConnectionFailed);
         }
+
+        // Drop the guard before notifying.
+        drop(guard);
 
         // Notify about error if it was not aborted by us due to a simultaneous connection
         match error {
