@@ -1,16 +1,19 @@
-extern crate beserial;
 #[macro_use]
 extern crate json;
 #[macro_use]
 extern crate log;
-extern crate nimiq_accounts as accounts;
-extern crate nimiq_blockchain as blockchain;
+extern crate parking_lot;
+extern crate hyper;
+extern crate failure;
+extern crate futures;
+extern crate hex;
+
+extern crate beserial;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_network as network;
 extern crate nimiq_network_primitives as network_primitives;
-extern crate nimiq_primitives as primitives;
 extern crate nimiq_block as block;
 extern crate nimiq_transaction as transaction;
 
@@ -22,10 +25,11 @@ use futures::future::Future;
 use hyper::Server;
 use json::{Array, JsonValue, Null};
 use json::object::Object;
+use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
 use block::{Block, Difficulty};
-use consensus::consensus::Consensus;
+use consensus::consensus::{Consensus, ConsensusEvent};
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use keys::Address;
 use network::address::peer_address_state::PeerAddressInfo;
@@ -45,34 +49,23 @@ fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
 }
 
 
-pub struct JsonRpcHandler {
-    consensus: Arc<Consensus>,
+pub(crate) struct JsonRpcServerState {
     consensus_state: &'static str,
+}
+
+pub(crate) struct JsonRpcHandler {
+    state: Arc<RwLock<JsonRpcServerState>>,
+    consensus: Arc<Consensus>,
     starting_block: u32,
 }
 
 impl JsonRpcHandler {
-    pub fn new(consensus: Arc<Consensus>) -> Self {
-        let res = JsonRpcHandler {
+    pub(crate) fn new(consensus: Arc<Consensus>, state: Arc<RwLock<JsonRpcServerState>>) -> Self {
+        JsonRpcHandler {
+            state,
             consensus: consensus.clone(),
-            consensus_state: "syncing",
             starting_block: consensus.blockchain.height(),
-        };
-
-        // Listen for consensus events
-        /*
-        TODO: We might need an Arc to the JsonRpcHandler here
-        consensus.notifier.write().register(|e: ConsensusEvent| {
-            match e {
-                Established => { res.consensus_state = "established" },
-                Lost => { res.consensus_state = "lost" },
-                Syncing => { res.consensus_state = "syncing" },
-                _ => ()
-            }
-        });
-        */
-
-        res
+        }
     }
 
 
@@ -83,11 +76,11 @@ impl JsonRpcHandler {
     }
 
     fn consensus(&self, _params: Array) -> Result<JsonValue, JsonValue> {
-        Ok(self.consensus_state.into())
+        Ok(self.state.read().consensus_state.into())
     }
 
     fn syncing(&self, _params: Array) -> Result<JsonValue, JsonValue> {
-        Ok(if self.consensus_state == "established" {
+        Ok(if self.state.read().consensus_state == "established" {
             false.into()
         }
         else {
@@ -524,6 +517,7 @@ impl JsonRpcHandler {
 impl jsonrpc::Handler for JsonRpcHandler {
     fn get_method(&self, name: &str) -> Option<fn(&Self, Array) -> Result<JsonValue, JsonValue>> {
         // TODO: Apply method white-listing
+        trace!("RPC method called: {}", name);
         match name {
             // Network
             "peerCount" => Some(JsonRpcHandler::peer_count),
@@ -559,9 +553,30 @@ impl jsonrpc::Handler for JsonRpcHandler {
 
 
 pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
+    let state = Arc::new(RwLock::new(JsonRpcServerState {
+        consensus_state: "syncing",
+    }));
+
+    // Register for consensus events.
+    {
+        trace!("Register listener for consensus");
+        let state = Arc::downgrade(&state);
+        consensus.notifier.write().register(move |e: &ConsensusEvent| {
+            trace!("Consensus Event: {:?}", e);
+            if let Some(state) = state.upgrade() {
+                match e {
+                    ConsensusEvent::Established => { state.write().consensus_state = "established" },
+                    ConsensusEvent::Lost => { state.write().consensus_state = "lost" },
+                    ConsensusEvent::Syncing => { state.write().consensus_state = "syncing" },
+                    _ => ()
+                }
+            }
+        });
+    }
+
     Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
         .serve(move || {
-            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&consensus)))
+            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&consensus), Arc::clone(&state)))
         })
         .map_err(|e| error!("RPC server failed: {}", e)))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
 }

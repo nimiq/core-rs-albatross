@@ -13,13 +13,10 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 maintenance = { status = "experimental" }
 
 [dependencies]
-nimiq-blockchain = { path = "../blockchain", features = ["transaction-store"] }
-nimiq-accounts = { path = "../accounts" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-network = { path = "../network" }
 nimiq-hash = { path = "../hash" }
 nimiq-network-primitives = { path = "../network-primitives" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "account"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-keys = { path = "../keys" }
@@ -30,4 +27,4 @@ futures = "0.1"
 log = "0.4.3"
 hex = "0.3.2"
 failure = "0.1.5"
-failure_derive = "0.1.5"
+parking_lot = "0.7.1"
