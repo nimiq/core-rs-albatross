@@ -11,9 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant, SystemTime};
 
-use parking_lot::Mutex;
-use parking_lot::RwLock;
-use parking_lot::RwLockReadGuard;
+use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rand::{Rng, rngs::OsRng};
 
 use network_primitives::address::net_address::NetAddress;
@@ -104,6 +102,11 @@ impl PeerAddressBookState {
     pub fn get_info<P>(&self, peer_address: &P) -> Option<&PeerAddressInfo>
         where Arc<PeerAddress>: Borrow<P>, P: Hash + Eq {
         return self.info_by_address.get(peer_address);
+    }
+
+    pub fn get_info_mut<P>(&mut self, peer_address: &P) -> Option<&mut PeerAddressInfo>
+        where Arc<PeerAddress>: Borrow<P>, P: Hash + Eq {
+        return self.info_by_address.get_mut(peer_address);
     }
 
     pub fn get_by_peer_id(&self, peer_id: &PeerId) -> Option<Arc<PeerAddress>> {
@@ -712,6 +715,10 @@ impl PeerAddressBook {
 
     pub fn state(&self) -> RwLockReadGuard<PeerAddressBookState> {
         self.state.read()
+    }
+
+    pub fn state_mut(&self) -> RwLockWriteGuard<PeerAddressBookState> {
+        self.state.write()
     }
 }
 

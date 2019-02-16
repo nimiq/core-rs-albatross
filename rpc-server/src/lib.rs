@@ -32,7 +32,7 @@ use block::{Block, Difficulty};
 use consensus::consensus::{Consensus, ConsensusEvent};
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use keys::Address;
-use network::address::peer_address_state::PeerAddressInfo;
+use network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
 use network::connection::connection_info::ConnectionInfo;
 use network::connection::close_type::CloseType;
 use transaction::{Transaction, TransactionReceipt};
@@ -110,13 +110,15 @@ impl JsonRpcHandler {
             .and_then(|s| PeerId::from_str(s)
                 .map_err(|e| object!{"message" => e.to_string()}))?;
 
-        let state = self.consensus.network.addresses.state();
-        let peer_address_info = state.get_by_peer_id(&peer_id)
-            .and_then(|peer_address| state.get_info(&peer_address))
+        let mut address_book = self.consensus.network.addresses.state_mut();
+        let peer_address = address_book.get_by_peer_id(&peer_id)
+            .ok_or_else(|| object!{"message" => "Unknown peer"})?;
+        let mut peer_address_info = address_book.get_info_mut(&peer_address)
             .ok_or_else(|| object!{"message" => "Unknown peer"})?;
 
-        let state = self.consensus.network.connections.state();
-        let connection_info = state.get_connection_by_peer_address(&peer_address_info.peer_address);
+
+        let connection_pool = self.consensus.network.connections.state();
+        let connection_info = connection_pool.get_connection_by_peer_address(&peer_address_info.peer_address);
         let peer_channel = connection_info.and_then(|c| c.peer_channel());
 
         let set = params.get(1).unwrap_or(&Null);
@@ -126,28 +128,29 @@ impl JsonRpcHandler {
                 "disconnect" => {
                     peer_channel.map(|p| p.close(CloseType::ManualPeerDisconnect));
                 },
-
                 "fail" => {
                     peer_channel.map(|p| p.close(CloseType::ManualPeerFail));
                 },
-
                 "ban" => {
                     peer_channel.map(|p| p.close(CloseType::ManualPeerBan));
                 },
-
                 "unban" => {
-                    // TODO
+                    if peer_address_info.state == PeerAddressState::Banned {
+                        peer_address_info.state = PeerAddressState::Tried;
+                    }
                 },
-
                 "connect" => {
-                    // TODO
+                    drop(address_book);
+                    drop(connection_pool);
+                    self.consensus.network.connections.connect_outbound(peer_address);
                 }
-
                 _ => return Err(object!{"message" => "Unknown 'set' command."})
             }
+            Ok(Null)
         }
-
-        Ok(self.peer_address_info_to_obj(peer_address_info, connection_info))
+        else {
+            Ok(self.peer_address_info_to_obj(peer_address_info, connection_info))
+        }
     }
 
 
