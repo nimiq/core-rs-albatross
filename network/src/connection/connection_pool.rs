@@ -799,59 +799,63 @@ impl ConnectionPool {
 
     /// Callback upon closing of connection.
     fn on_close(&self, connection_id: ConnectionId, ty: CloseType) {
-        let guard = self.change_lock.lock();
-
-        // Only propagate the close type (i.e. track fails/bans) if the peerAddress is set.
-        // This is true for
-        // - all outbound connections
-        // - inbound connections post handshake (peerAddress is verified)
-        {
-            let state = self.state.read();
-            let info = state.get_connection(connection_id).expect("Missing connection in on_close");
-            if let Some(peer_address) = info.peer_address() {
-                self.addresses.close(info.peer_channel(), peer_address, ty);
-            }
-        }
-
         let mut established_peer_left = false;
         let mut info;
-        // Aquire write lock and release it again before notifying listeners.
         {
-            let mut state = self.state.write();
-            info = state.remove(connection_id).expect("Missing connection in on_close");
+            let guard = self.change_lock.lock();
 
-            // Check if the handshake with this peer has completed.
-            if info.state() == ConnectionState::Established {
-                let net_address = info.network_connection().map(|p| p.net_address());
-                // If closing is due to a ban, also ban the IP
-                if ty.is_banning_type() {
-                    if let Some(ref net_address) = net_address {
-                        state.ban_ip(net_address);
-                    }
-                }
-
-                state.update_connected_peer_count(Connection::Info(&info), PeerCountUpdate::Remove);
-
-                established_peer_left = true;
-                debug!("[PEER-LEFT] {} {} (version={:?}, closeType={:?})", info.peer_address().unwrap(), net_address.unwrap(), info.peer().map(|p| p.version), ty);
-            } else {
-                match info.network_connection().map(|n| n.inbound()) {
-                    Some(true) => {
-                        state.inbound_count.checked_sub(1).expect("inbound_count < 0");
-                        debug!("Inbound connection #{} closed pre-handshake: {:?}", connection_id, ty);
-                    },
-                    Some(false) => {
-                        debug!("Connection #{} to {} closed pre-handshake: {:?}", connection_id, info.peer_address().unwrap(), ty);
-                        // Only sets a timer and won't reenter connection pool.
-                        self.notifier.read().notify(ConnectionPoolEvent::ConnectError(info.peer_address().expect("PeerAddress not set").clone(), ty));
-                    },
-                    _ => unreachable!("Invalid state, closing connection with network connection not set"),
+            // Only propagate the close type (i.e. track fails/bans) if the peerAddress is set.
+            // This is true for
+            // - all outbound connections
+            // - inbound connections post handshake (peerAddress is verified)
+            {
+                let state = self.state.read();
+                let info = state.get_connection(connection_id).expect("Missing connection in on_close");
+                if let Some(peer_address) = info.peer_address() {
+                    self.addresses.close(info.peer_channel(), peer_address, ty);
                 }
             }
-        }
 
-        // Drop the guard before notifying.
-        drop(guard);
+            // Aquire write lock and release it again before notifying listeners.
+            {
+                let mut state = self.state.write();
+                info = state.remove(connection_id).expect("Missing connection in on_close");
+
+                // Check if the handshake with this peer has completed.
+                if info.state() == ConnectionState::Established {
+                    let net_address = info.network_connection().map(|p| p.net_address());
+                    // If closing is due to a ban, also ban the IP
+                    if ty.is_banning_type() {
+                        if let Some(ref net_address) = net_address {
+                            state.ban_ip(net_address);
+                        }
+                    }
+
+                    state.update_connected_peer_count(Connection::Info(&info), PeerCountUpdate::Remove);
+
+                    established_peer_left = true;
+
+                    debug!("[PEER-LEFT] {} {} (version={:?}, closeType={:?})", info.peer_address().unwrap(), net_address.unwrap(), info.peer().map(|p| p.version), ty);
+                } else {
+                    match info.network_connection().map(|n| n.inbound()) {
+                        Some(true) => {
+                            state.inbound_count.checked_sub(1).expect("inbound_count < 0");
+                            debug!("Inbound connection #{} closed pre-handshake: {:?}", connection_id, ty);
+                        },
+                        Some(false) => {
+                            // Drop guard/lock before notifying (all changes done).
+                            drop(state);
+                            drop(guard);
+
+                            debug!("Connection #{} to {} closed pre-handshake: {:?}", connection_id, info.peer_address().unwrap(), ty);
+                            // Only sets a timer and won't reenter connection pool.
+                            self.notifier.read().notify(ConnectionPoolEvent::ConnectError(info.peer_address().expect("PeerAddress not set").clone(), ty));
+                        },
+                        _ => unreachable!("Invalid state, closing connection with network connection not set"),
+                    }
+                }
+            }
+        } // Implicitly drop guard through scoping.
 
         if established_peer_left {
             // Tell listeners that this peer has gone away.

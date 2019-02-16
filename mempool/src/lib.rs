@@ -135,42 +135,48 @@ impl<'env> Mempool<'env> {
                 }
             }
 
-            // Acquire blockchain read lock.
-            let accounts = self.blockchain.accounts();
-            let transaction_cache = self.blockchain.transaction_cache();
-            let block_height = self.blockchain.height() + 1;
+            let recipient_account;
+            let mut sender_account;
+            let block_height;
+            {
+                // Acquire blockchain read lock.
+                let blockchain_state = self.blockchain.state();
+                let accounts = blockchain_state.accounts();
+                let transaction_cache = blockchain_state.transaction_cache();
+                block_height = blockchain_state.main_chain().head.header.height + 1;
 
-            // Check if transaction is valid at the next block height.
-            if !transaction.is_valid_at(block_height) {
-                return ReturnCode::Invalid;
-            }
+                // Check if transaction is valid at the next block height.
+                if !transaction.is_valid_at(block_height) {
+                    return ReturnCode::Invalid;
+                }
 
-            // Check if transaction has already been mined.
-            if transaction_cache.contains(&hash) {
-                return ReturnCode::Invalid;
-            }
+                // Check if transaction has already been mined.
+                if transaction_cache.contains(&hash) {
+                    return ReturnCode::Invalid;
+                }
 
-            // Retrieve recipient account and test incoming transaction.
-            let recipient_account = accounts.get(&transaction.recipient, None);
-            if recipient_account.account_type() != transaction.recipient_type {
-                return ReturnCode::Invalid;
-            }
+                // Retrieve recipient account and test incoming transaction.
+                recipient_account = accounts.get(&transaction.recipient, None);
+                if recipient_account.account_type() != transaction.recipient_type {
+                    return ReturnCode::Invalid;
+                }
 
-            match recipient_account.with_incoming_transaction(&transaction, block_height) {
-                Err(_) => return ReturnCode::Invalid,
-                Ok(r) => {
-                    // Check recipient account against filter rules.
-                    if !state.filter.accepts_recipient_account(&transaction, &recipient_account, &r) {
-                        self.state.write().filter.blacklist(&transaction);
-                        return ReturnCode::Filtered;
+                match recipient_account.with_incoming_transaction(&transaction, block_height) {
+                    Err(_) => return ReturnCode::Invalid,
+                    Ok(r) => {
+                        // Check recipient account against filter rules.
+                        if !state.filter.accepts_recipient_account(&transaction, &recipient_account, &r) {
+                            self.state.write().filter.blacklist(&transaction);
+                            return ReturnCode::Filtered;
+                        }
                     }
                 }
-            }
 
-            // Retrieve sender account and test account type.
-            let mut sender_account = accounts.get(&transaction.sender, None);
-            if sender_account.account_type() != transaction.sender_type {
-                return ReturnCode::Invalid;
+                // Retrieve sender account and test account type.
+                sender_account = accounts.get(&transaction.sender, None);
+                if sender_account.account_type() != transaction.sender_type {
+                    return ReturnCode::Invalid;
+                }
             }
 
             // Re-check all transactions for this sender in fee/byte order against the sender account state.

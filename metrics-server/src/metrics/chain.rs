@@ -29,7 +29,7 @@ impl server::Metrics for ChainMetrics {
             serializer.metric("chain_head_difficulty", Difficulty::from(head.header.n_bits))?;
             serializer.metric("chain_head_transactions", head.body.as_ref().map(|body| body.transactions.len()).unwrap_or(0))?;
         }
-        serializer.metric("chain_total_work", self.blockchain.total_work().clone())?;
+        serializer.metric("chain_total_work", self.blockchain.total_work())?;
 
         serializer.metric_with_attributes("chain_block", self.blockchain.metrics.block_forked_count(), attributes!{"action" => "forked"})?;
         serializer.metric_with_attributes("chain_block", self.blockchain.metrics.block_rebranched_count(), attributes!{"action" => "rebranched"})?;

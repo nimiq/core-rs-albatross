@@ -672,19 +672,8 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| &s.main_chain.head)
     }
 
-    pub fn total_work(&self) -> MappedRwLockReadGuard<Difficulty> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.main_chain.total_work)
-    }
-
-    pub fn accounts(&self) -> MappedRwLockReadGuard<Accounts<'env>> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.accounts)
-    }
-
-    pub fn transaction_cache(&self) -> MappedRwLockReadGuard<TransactionCache> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.transaction_cache)
+    pub fn total_work(&self) -> Difficulty {
+        self.state.read().main_chain.total_work.clone()
     }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {

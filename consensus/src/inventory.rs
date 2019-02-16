@@ -443,6 +443,7 @@ impl InventoryAgent {
             //    continue;
             //}
 
+            // FIXME We still hold the state write lock when notifying here.
             match vector.ty {
                 InvVectorType::Block => {
                     if !self.blockchain.contains(&vector.hash, true) {

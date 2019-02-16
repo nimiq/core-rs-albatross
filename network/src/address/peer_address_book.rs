@@ -689,6 +689,7 @@ impl PeerAddressBook {
         }
 
         // Drop the guard before notifying.
+        drop(state);
         drop(guard);
 
         if unbanned_addresses.len() > 0 {

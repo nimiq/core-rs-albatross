@@ -207,6 +207,7 @@ impl Consensus {
         let block;
         match event {
             BlockchainEvent::Extended(_) => {
+                // This implicitly takes the lock on the blockchain state.
                 block = self.blockchain.head();
                 blocks = vec![block.deref()];
             },

@@ -124,7 +124,8 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         self.header.interlink_hash = interlink.hash(info.genesis_block.header.hash());
 
         // XXX Use default accounts hash if body fails to apply.
-        let accounts = self.blockchain.accounts();
+        let state = self.blockchain.state();
+        let accounts = state.accounts();
         self.header.accounts_hash = accounts
             .hash_with_block_body(&self.body, self.header.height)
             .unwrap_or([0u8; Blake2bHash::SIZE].into());

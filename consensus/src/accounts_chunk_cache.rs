@@ -108,7 +108,7 @@ impl AccountsChunkCache {
             this.chunks_by_prefix_by_block.write().insert(hash.clone(), HashMap::new());
             let mut prefix = "".to_string();
             loop {
-                if let Some(chunk) = this.blockchain.accounts().get_chunk(&prefix[..], AccountsChunkCache::CHUNK_SIZE_MAX, Some(&txn)) {
+                if let Some(chunk) = this.blockchain.state().accounts().get_chunk(&prefix[..], AccountsChunkCache::CHUNK_SIZE_MAX, Some(&txn)) {
                     if let Some(chunks_by_prefix) = this.chunks_by_prefix_by_block.write().get_mut(&hash) {
                         let last_terminal_string_opt = chunk.last_terminal_string();
                         let chunk_len = chunk.len();
