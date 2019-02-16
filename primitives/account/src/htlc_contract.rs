@@ -63,7 +63,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     }
 
     fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_sub(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
         let proof_buf = &mut &transaction.proof[..];
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
         match proof_type {
@@ -95,7 +95,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 // Check min cap.
                 let cap_ratio = 1f64 - (hash_depth as f64 / self.hash_count as f64);
                 let min_cap = (cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64;
-                if balance < Coin::from(min_cap) {
+                if balance < Coin::from_u64(min_cap)? {
                     return Err(AccountError::InsufficientFunds);
                 }
             },
@@ -126,7 +126,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     }
 
     fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
         return Ok(self.with_balance(balance));
     }
 }

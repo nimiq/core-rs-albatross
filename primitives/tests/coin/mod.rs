@@ -12,7 +12,7 @@ struct NonFailingTest {
 
 impl NonFailingTest {
     pub fn new(data: &'static str, value: u64) -> NonFailingTest {
-        NonFailingTest { data, coin: Coin::from(value) }
+        NonFailingTest { data, coin: Coin::from_u64(value).unwrap() }
     }
 }
 
@@ -56,7 +56,7 @@ fn test_serialize_out_of_bounds() {
 #[test]
 fn test_deserialize_out_of_bounds() {
     let mut vec = Vec::with_capacity(8);
-    let res = Serialize::serialize(&Coin::from(9007199254740992), &mut vec);
+    let res = Serialize::serialize(&Coin::from_u64_unchecked(9007199254740992), &mut vec);
     match res {
         Ok(_) => assert!(false, "Didn't fail"),
         Err(err) => {
@@ -70,25 +70,25 @@ fn test_deserialize_out_of_bounds() {
 
 #[test]
 fn test_format() {
-    let s = format!("{}", Coin::from(123456789u64));
+    let s = format!("{}", Coin::from_u64(123456789u64).unwrap());
     assert_eq!("1234.56789", s);
 }
 
 #[test]
 fn test_format_int_zero() {
-    let s = format!("{}", Coin::from(56789u64));
+    let s = format!("{}", Coin::from_u64(56789u64).unwrap());
     assert_eq!("0.56789", s);
 }
 
 #[test]
 fn test_format_frac_zero() {
-    let s = format!("{}", Coin::from(123400000u64));
+    let s = format!("{}", Coin::from_u64(123400000u64).unwrap());
     assert_eq!("1234", s);
 }
 
 #[test]
 fn test_format_zero() {
-    let s = format!("{}", Coin::from(0u64));
+    let s = format!("{}", Coin::from_u64(0u64).unwrap());
     assert_eq!("0", s);
 }
 
@@ -98,31 +98,31 @@ fn test_format_zero() {
 #[test]
 fn test_parse_valid_one_part() {
     let coin = Coin::from_str("1234").unwrap();
-    assert_eq!(Coin::from(123400000), coin);
+    assert_eq!(Coin::from_u64(123400000).unwrap(), coin);
 }
 
 #[test]
 fn test_parse_valid_two_parts() {
     let coin = Coin::from_str("1234.56789").unwrap();
-    assert_eq!(Coin::from(123456789), coin);
+    assert_eq!(Coin::from_u64(123456789).unwrap(), coin);
 }
 
 #[test]
 fn test_parse_zero1() {
     let coin = Coin::from_str("0").unwrap();
-    assert_eq!(Coin::from(0), coin);
+    assert_eq!(Coin::from_u64(0).unwrap(), coin);
 }
 
 #[test]
 fn test_parse_zero2() {
     let coin = Coin::from_str("0.0").unwrap();
-    assert_eq!(Coin::from(0), coin);
+    assert_eq!(Coin::from_u64(0).unwrap(), coin);
 }
 
 #[test]
 fn test_parse_zero3() {
     let coin = Coin::from_str("0000.0000").unwrap();
-    assert_eq!(Coin::from(0), coin);
+    assert_eq!(Coin::from_u64(0).unwrap(), coin);
 }
 
 #[test]
@@ -175,6 +175,21 @@ fn test_parse_frac_more_zeros() {
 }
 
 #[test]
+fn test_u64_overflow() {
+    let coin = Coin::from_u64(Coin::MAX_SAFE_VALUE);
+    match coin {
+        Ok(_) => (),
+        Err(_) => assert!(false, "Did not expect an error here"),
+    }
+
+    let coin = Coin::from_u64(Coin::MAX_SAFE_VALUE + 1);
+    match coin {
+        Err(CoinParseError::Overflow) => (),
+        _ => assert!(false, "Did not expect an error here"),
+    }
+}
+
+#[test]
 fn test_int_part_overflow() {
     let coin = Coin::from_str("900719925474");
     match coin {
@@ -205,7 +220,7 @@ fn test_frac_part_overflow() {
 #[test]
 fn test_max_value() {
     let coin = Coin::from_str("90071992547.40991").unwrap();
-    assert_eq!(Coin::from(9007199254740991u64), coin)
+    assert_eq!(Coin::from_u64(9007199254740991u64).unwrap(), coin)
 }
 
 #[test]

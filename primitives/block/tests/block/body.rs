@@ -53,7 +53,7 @@ fn it_can_deserialize_b169500_body() {
     assert_eq!(body.transactions[0].sender_type, AccountType::HTLC);
     assert_eq!(body.transactions[0].recipient, Address::from("24786862babbdb05e7c4430612135eb2a8368123"));
     assert_eq!(body.transactions[0].recipient_type, AccountType::Basic);
-    assert_eq!(body.transactions[0].value, Coin::from(1));
+    assert_eq!(body.transactions[0].value, Coin::from_u64(1).unwrap());
     assert_eq!(body.transactions[0].fee, Coin::ZERO);
     assert_eq!(body.transactions[0].validity_start_height, 169499);
     assert_eq!(body.transactions[0].flags, TransactionFlags::empty());
@@ -62,14 +62,14 @@ fn it_can_deserialize_b169500_body() {
     assert_eq!(body.transactions[1].format(), TransactionFormat::Basic);
     assert_eq!(body.transactions[1].sender, Address::from("86bd79da00997fd8be41bfd58f95a1f6f01d51f7"));
     assert_eq!(body.transactions[1].recipient, Address::from("44d5c0727a1a08efd376cd005293e33236232fad"));
-    assert_eq!(body.transactions[1].value, Coin::from(20000));
-    assert_eq!(body.transactions[1].fee, Coin::from(280));
+    assert_eq!(body.transactions[1].value, Coin::from_u64(20000).unwrap());
+    assert_eq!(body.transactions[1].fee, Coin::from_u64(280).unwrap());
     assert_eq!(body.transactions[1].validity_start_height, 169498);
 
     assert_eq!(body.transactions[2].format(), TransactionFormat::Basic);
     assert_eq!(body.transactions[2].sender, Address::from("d0fc18c65972d86d207a818dc4974019c3cc65c8"));
     assert_eq!(body.transactions[2].recipient, Address::from("6573413bec835fa4fb54f4dfc3b273a9e8ecc95b"));
-    assert_eq!(body.transactions[2].value, Coin::from(1165058));
+    assert_eq!(body.transactions[2].value, Coin::from_u64(1165058).unwrap());
     assert_eq!(body.transactions[2].fee, Coin::ZERO);
     assert_eq!(body.transactions[2].validity_start_height, 169497);
 
@@ -181,12 +181,12 @@ fn verify_rejects_invalid_pruned_accounts() {
     let pruned_account = PrunedAccount {
         address: Address::from([255u8; Address::SIZE]),
         account: Account::Vesting(VestingContract {
-            balance: Coin::from(1000),
+            balance: Coin::from_u64(1000).unwrap(),
             owner: Address::from([1u8; Address::SIZE]),
             vesting_start: 1,
             vesting_step_blocks: 1,
             vesting_step_amount: Coin::ZERO,
-            vesting_total_amount: Coin::from(1000)
+            vesting_total_amount: Coin::from_u64(1000).unwrap()
         })
     };
     body.pruned_accounts.push(pruned_account);

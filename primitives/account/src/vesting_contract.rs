@@ -38,7 +38,7 @@ impl VestingContract {
         return if self.vesting_step_blocks > 0 && self.vesting_step_amount > Coin::ZERO {
             let steps = ((block_height - self.vesting_start) as f64 / self.vesting_step_blocks as f64).floor();
             let min_cap = u64::from(self.vesting_total_amount) as f64 - steps * u64::from(self.vesting_step_amount) as f64;
-            Coin::from(min_cap.max(0f64) as u64)
+            Coin::from_u64(min_cap.max(0f64) as u64).unwrap() // Since all parameters have been validated, this will be safe as well.
         } else {
             Coin::ZERO
         };
@@ -68,7 +68,7 @@ impl AccountTransactionInteraction for VestingContract {
     }
 
     fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_sub(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_sub(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
 
         // Check vesting min cap.
         if balance < self.min_cap(block_height) {
@@ -85,7 +85,7 @@ impl AccountTransactionInteraction for VestingContract {
     }
 
     fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
-        let balance: Coin = Account::balance_add(self.balance, transaction.value + transaction.fee)?;
+        let balance: Coin = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
         return Ok(self.with_balance(balance));
     }
 }

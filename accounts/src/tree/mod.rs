@@ -285,16 +285,18 @@ impl<'env> AccountsTree<'env> {
 
 #[cfg(test)]
 mod tests {
+    use nimiq_primitives::coin::Coin;
+
     use super::*;
 
     #[test]
     fn it_can_create_valid_chunk() {
         let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-        let account1 = Account::Basic(account::BasicAccount { balance: 5.into() });
+        let account1 = Account::Basic(account::BasicAccount { balance: Coin::from_u64(5).unwrap() });
         let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
-        let account2 = Account::Basic(account::BasicAccount { balance: 55.into() });
+        let account2 = Account::Basic(account::BasicAccount { balance: Coin::from_u64(55).unwrap() });
         let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
-        let account3 = Account::Basic(account::BasicAccount { balance: 55555555.into() });
+        let account3 = Account::Basic(account::BasicAccount { balance: Coin::from_u64(55555555).unwrap() });
 
         let env = database::volatile::VolatileEnvironment::new(10).unwrap();
         let tree = AccountsTree::new(&env);

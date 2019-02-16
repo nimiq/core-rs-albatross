@@ -23,7 +23,6 @@ use network_messages::{
 use network_primitives::networks::get_network_info;
 use network_primitives::subscription::Subscription;
 use block::{Block, BlockHeader};
-use primitives::coin::Coin;
 use transaction::Transaction;
 use utils::{
     self,
@@ -577,8 +576,8 @@ impl InventoryAgent {
            Subscription::Addresses(addresses) => self.mempool.get_transactions_by_addresses(addresses.clone(), Self::MEMPOOL_ENTRIES_MAX),
            Subscription::MinFee(min_fee_per_byte) => {
                 // NOTE: every integer up to (2^53 - 1) should have an exact representation as f64 (IEEE 754 64-bit double)
-                // TODO: Should we incorporate this guarantee as part of the Coin type?
-                let min_fee_per_byte: f64 = if *min_fee_per_byte < Coin::from(Coin::MAX_SAFE_VALUE) { u64::from(*min_fee_per_byte) as f64 } else { Coin::MAX_SAFE_VALUE as f64 };
+                // This is guaranteed by the coin type.
+                let min_fee_per_byte: f64 = u64::from(*min_fee_per_byte) as f64;
                 let mut txs = self.mempool.get_transactions(usize::max_value(), min_fee_per_byte);
                 txs.truncate(Self::MEMPOOL_ENTRIES_MAX);
                 txs

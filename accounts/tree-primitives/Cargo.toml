@@ -19,3 +19,6 @@ nimiq-keys = { path = "../../keys" }
 nimiq-hash = { path = "../../hash" }
 hex = "0.3.2"
 nimiq-account = { path = "../../primitives/account" }
+
+[dev-dependencies]
+nimiq-primitives = { path = "../../primitives", features = ["coin"] }

@@ -7,14 +7,14 @@ extern crate lazy_static;
 extern crate log;
 extern crate nimiq_database as database;
 extern crate nimiq_lib as lib;
+extern crate nimiq_mempool as mempool;
 #[cfg(feature = "metrics-server")]
 extern crate nimiq_metrics_server as metrics_server;
 extern crate nimiq_network as network;
-extern crate nimiq_primitives as primitives;
 extern crate nimiq_network_primitives as network_primitives;
+extern crate nimiq_primitives as primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
-extern crate nimiq_mempool as mempool;
 #[cfg(feature = "deadlock-detection")]
 extern crate parking_lot;
 #[macro_use]
@@ -34,15 +34,16 @@ use futures::{Future, future};
 use log::Level;
 
 use database::lmdb::{LmdbEnvironment, open};
-use lib::client::{ClientBuilder, Client};
+use lib::client::{Client, ClientBuilder};
+use mempool::filter::{MempoolFilter, Rules};
+use mempool::MempoolConfig;
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
 use network::network_config::Seed;
 use network_primitives::protocol::Protocol;
-use primitives::networks::NetworkId;
 use primitives::coin::Coin;
-use mempool::filter::{Rules, MempoolFilter};
-use mempool::MempoolConfig;
+use primitives::coin::CoinParseError;
+use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
 
@@ -84,28 +85,32 @@ impl From<s::Network> for NetworkId {
 }
 
 /// Convert mempool settings
-impl From<s::MempoolSettings> for MempoolConfig {
-    fn from(mempool_settings: s::MempoolSettings) -> MempoolConfig {
+// TODO: Replace with TryFrom when available.
+trait FromMempoolSettings {
+    fn from_mempool_settings(mempool_settings: s::MempoolSettings) -> Result<MempoolConfig, CoinParseError>;
+}
+impl FromMempoolSettings for MempoolConfig {
+    fn from_mempool_settings(mempool_settings: s::MempoolSettings) -> Result<MempoolConfig, CoinParseError> {
         let rules = if let Some(f) = mempool_settings.filter {
             Rules {
-                tx_fee: Coin::from(f.tx_fee),
+                tx_fee: Coin::from_u64(f.tx_fee)?,
                 tx_fee_per_byte: f.tx_fee_per_byte,
-                tx_value: Coin::from(f.tx_value),
-                tx_value_total: Coin::from(f.tx_value_total),
-                contract_fee: Coin::from(f.contract_fee),
+                tx_value: Coin::from_u64(f.tx_value)?,
+                tx_value_total: Coin::from_u64(f.tx_value_total)?,
+                contract_fee: Coin::from_u64(f.contract_fee)?,
                 contract_fee_per_byte: f.contract_fee_per_byte,
-                contract_value: Coin::from(f.contract_value),
-                creation_fee: Coin::from(f.creation_fee),
+                contract_value: Coin::from_u64(f.contract_value)?,
+                creation_fee: Coin::from_u64(f.creation_fee)?,
                 creation_fee_per_byte: f.creation_fee_per_byte,
-                creation_value: Coin::from(f.creation_value),
-                sender_balance: Coin::from(f.sender_balance),
-                recipient_balance: Coin::from(f.recipient_balance),
+                creation_value: Coin::from_u64(f.creation_value)?,
+                sender_balance: Coin::from_u64(f.sender_balance)?,
+                recipient_balance: Coin::from_u64(f.recipient_balance)?,
             }
         } else { Rules::default() };
-        MempoolConfig {
+        Ok(MempoolConfig {
             filter_rules: rules,
             filter_limit: mempool_settings.blacklist_limit.unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE)
-        }
+        })
     }
 }
 
@@ -190,7 +195,7 @@ fn run() -> Result<(), Error> {
 
     // add mempool settings to filter
     if let Some(mempool_settings) = settings.mempool {
-        client_builder.with_mempool_config(MempoolConfig::from(mempool_settings));
+        client_builder.with_mempool_config(MempoolConfig::from_mempool_settings(mempool_settings)?);
     }
 
     // Add TLS configuration, if present

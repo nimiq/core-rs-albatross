@@ -3,9 +3,6 @@ extern crate beserial_derive;
 #[cfg(feature = "lazy_static")]
 #[macro_use]
 extern crate lazy_static;
-#[cfg(feature = "log")]
-#[macro_use]
-extern crate log;
 #[cfg(feature = "nimiq-macros")]
 #[macro_use]
 extern crate nimiq_macros;

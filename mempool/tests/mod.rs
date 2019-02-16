@@ -35,7 +35,7 @@ fn push_same_tx_twice() {
     txn.commit();
 
     // Generate and sign transaction from address_a
-    let mut tx = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from(10), Coin::from(0), 1, NetworkId::Main );
+    let mut tx = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from_u64(10).unwrap(), Coin::from_u64(0).unwrap(), 1, NetworkId::Main );
     let signature_proof = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx.serialize_content()));
     tx.proof = signature_proof.serialize_to_vec();
 
@@ -83,7 +83,7 @@ fn push_and_get_valid_tx() {
     txn.commit();
 
     // Generate and sign transaction from address_a
-    let mut tx = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from(10), Coin::from(0), 1, NetworkId::Main );
+    let mut tx = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from_u64(10).unwrap(), Coin::from_u64(0).unwrap(), 1, NetworkId::Main );
     let signature_proof = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx.serialize_content()));
     tx.proof = signature_proof.serialize_to_vec();
     let tx_copy = tx.clone();
@@ -113,7 +113,7 @@ fn push_and_get_two_tx_same_user() {
     txn.commit();
 
     // Generate, sign and push 1st transaction from address_a
-    let mut tx1 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from(10), Coin::from(0), 1, NetworkId::Main );
+    let mut tx1 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from_u64(10).unwrap(), Coin::from_u64(0).unwrap(), 1, NetworkId::Main );
     let signature_proof1 = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx1.serialize_content()));
     tx1.proof = signature_proof1.serialize_to_vec();
     let tx1_copy = tx1.clone();
@@ -121,7 +121,7 @@ fn push_and_get_two_tx_same_user() {
     assert_eq!(mempool.push_transaction(tx1), ReturnCode::Accepted);
 
     // Generate, sign and push 2nd transaction from address_a
-    let mut tx2 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from(9), Coin::from(0), 1, NetworkId::Main );
+    let mut tx2 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from_u64(9).unwrap(), Coin::from_u64(0).unwrap(), 1, NetworkId::Main );
     let signature_proof2 = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx2.serialize_content()));
     tx2.proof = signature_proof2.serialize_to_vec();
     let tx2_copy = tx2.clone();
@@ -149,7 +149,7 @@ fn reject_free_tx_beyond_limit() {
     txn.commit();
 
     for i in 0..10 + 1 {
-        let mut tx1 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from(1 + i), Coin::from(0), 1, NetworkId::Main );
+        let mut tx1 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::from_u64(1 + i).unwrap(), Coin::from_u64(0).unwrap(), 1, NetworkId::Main );
         let signature_proof1 = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx1.serialize_content()));
         tx1.proof = signature_proof1.serialize_to_vec();
         if i < 10 {

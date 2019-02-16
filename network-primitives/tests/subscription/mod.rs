@@ -43,7 +43,7 @@ fn test_subscription_minfee() {
     let vec = hex::decode(SUBSCRIPTION_MINFEE).unwrap();
     let subscription: Subscription = Deserialize::deserialize(&mut &vec[..]).unwrap();
     match subscription {
-        Subscription::MinFee(fee) => assert_eq!(Coin::from(42u64), fee),
+        Subscription::MinFee(fee) => assert_eq!(Coin::from_u64(42u64).unwrap(), fee),
         _ => assert!(false)
     };
 }

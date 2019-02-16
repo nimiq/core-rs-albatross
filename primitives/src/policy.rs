@@ -25,7 +25,7 @@ pub const DIFFICULTY_MAX_ADJUSTMENT_FACTOR: f64 = 2f64;
 pub const TRANSACTION_VALIDITY_WINDOW: u32 = 120;
 
 /// Total supply in satoshis.
-const TOTAL_SUPPLY: u64 = 2100000000000000;
+pub const TOTAL_SUPPLY: u64 = 2100000000000000;
 
 /// Initial supply in satoshis.
 const INITIAL_SUPPLY: u64 = 252000000000000;
@@ -96,7 +96,7 @@ fn compute_block_reward(current_supply: u64, block_height: u32) -> u64 {
 pub fn block_reward_at(block_height: u32) -> Coin {
     assert!(block_height >= 1, "block_height must be >= 1");
     let current_supply = supply_after(block_height - 1);
-    Coin::from(compute_block_reward(current_supply, block_height))
+    Coin::from_u64(compute_block_reward(current_supply, block_height)).unwrap()
 }
 
 #[cfg(test)]
@@ -105,20 +105,20 @@ mod tests {
 
     #[test]
     fn it_correctly_computes_block_reward() {
-        assert_eq!(block_reward_at(1), 440597534.into());
-        assert_eq!(block_reward_at(2), 440597429.into());
-        assert_eq!(block_reward_at(3), 440597324.into());
-        assert_eq!(block_reward_at(1000), 440492605.into());
-        assert_eq!(block_reward_at(4999), 440072823.into());
-        assert_eq!(block_reward_at(5000), 440072718.into());
-        assert_eq!(block_reward_at(5001), 440072613.into());
-        assert_eq!(block_reward_at(5002), 440072508.into());
-        assert_eq!(block_reward_at(100000), 430217207.into());
-        assert_eq!(block_reward_at(10000000), 40607225.into());
-        assert_eq!(block_reward_at(48692959), 4001.into());
-        assert_eq!(block_reward_at(48692960), 4000.into());
-        assert_eq!(block_reward_at(52888984), 4000.into());
-        assert_eq!(block_reward_at(52888985), 0.into());
+        assert_eq!(block_reward_at(1), Coin::from_u64(440597534).unwrap());
+        assert_eq!(block_reward_at(2), Coin::from_u64(440597429).unwrap());
+        assert_eq!(block_reward_at(3), Coin::from_u64(440597324).unwrap());
+        assert_eq!(block_reward_at(1000), Coin::from_u64(440492605).unwrap());
+        assert_eq!(block_reward_at(4999), Coin::from_u64(440072823).unwrap());
+        assert_eq!(block_reward_at(5000), Coin::from_u64(440072718).unwrap());
+        assert_eq!(block_reward_at(5001), Coin::from_u64(440072613).unwrap());
+        assert_eq!(block_reward_at(5002), Coin::from_u64(440072508).unwrap());
+        assert_eq!(block_reward_at(100000), Coin::from_u64(430217207).unwrap());
+        assert_eq!(block_reward_at(10000000), Coin::from_u64(40607225).unwrap());
+        assert_eq!(block_reward_at(48692959), Coin::from_u64(4001).unwrap());
+        assert_eq!(block_reward_at(48692960), Coin::from_u64(4000).unwrap());
+        assert_eq!(block_reward_at(52888984), Coin::from_u64(4000).unwrap());
+        assert_eq!(block_reward_at(52888985), Coin::from_u64(0).unwrap());
     }
 
     #[test]

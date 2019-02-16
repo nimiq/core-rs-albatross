@@ -21,6 +21,7 @@ use transaction::{Transaction, TransactionError};
 pub use self::basic_account::BasicAccount;
 pub use self::htlc_contract::HashedTimeLockedContract;
 pub use self::vesting_contract::VestingContract;
+use primitives::coin::CoinParseError;
 
 pub mod basic_account;
 pub mod htlc_contract;
@@ -194,7 +195,7 @@ impl AccountTransactionInteraction for Account {
         // Check account balance.
         // This assumes that transaction.value + transaction.fee does not overflow.
         let balance = self.balance();
-        if balance < transaction.value + transaction.fee {
+        if balance < transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)? {
             return Err(AccountError::InsufficientFunds);
         }
 
@@ -253,6 +254,7 @@ pub enum AccountError {
     InvalidPruning,
     InvalidSerialization(SerializingError),
     InvalidTransaction(TransactionError),
+    InvalidCoinValue,
     AccountsHashMismatch, // XXX This doesn't really belong here
 }
 
@@ -272,5 +274,11 @@ impl From<SerializingError> for AccountError {
 impl From<TransactionError> for AccountError {
     fn from(e: TransactionError) -> Self {
         AccountError::InvalidTransaction(e)
+    }
+}
+
+impl From<CoinParseError> for AccountError {
+    fn from(_: CoinParseError) -> Self {
+        AccountError::InvalidCoinValue
     }
 }

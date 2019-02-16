@@ -1,11 +1,11 @@
-use std::ops::{Add, Sub};
-use std::io;
 use std::fmt;
-use std::error::Error;
+use std::io;
+use std::ops::{Add, Sub};
 use std::str::FromStr;
 
-use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
+use failure::Fail;
 
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Coin(u64);
@@ -19,21 +19,32 @@ impl Coin {
 
     // JavaScript's Number.MAX_SAFE_INTEGER: 2^53 - 1
     pub const MAX_SAFE_VALUE: u64 = 9007199254740991u64;
-}
 
-impl From<u64> for Coin {
-    fn from(value: u64) -> Self { Coin(value) }
+    // TODO: Replace by TryFrom as it becomes stable
+    #[inline]
+    pub fn from_u64(val: u64) -> Result<Coin, CoinParseError> {
+        if val <= Coin::MAX_SAFE_VALUE {
+            Ok(Coin(val))
+        } else {
+            Err(CoinParseError::Overflow)
+        }
+    }
+
+    #[inline]
+    pub fn from_u64_unchecked(val: u64) -> Coin {
+        Coin(val)
+    }
 }
 
 impl From<Coin> for u64 {
-    // TODO: Should this panic with an unsafe value? or should it return an Option?
-    // NOTE: nightly rust has TryFrom
+    #[inline]
     fn from(coin: Coin) -> Self { coin.0 }
 }
 
 impl Add<Coin> for Coin {
     type Output = Coin;
 
+    #[inline]
     fn add(self, rhs: Coin) -> Coin {
         return Coin(self.0 + rhs.0);
     }
@@ -42,6 +53,7 @@ impl Add<Coin> for Coin {
 impl Sub<Coin> for Coin {
     type Output = Coin;
 
+    #[inline]
     fn sub(self, rhs: Coin) -> Coin {
         return Coin(self.0 - rhs.0);
     }
@@ -77,7 +89,6 @@ impl Serialize for Coin {
         if self.0 <= Coin::MAX_SAFE_VALUE {
             Ok(Serialize::serialize(&self.0, writer)?)
         } else {
-            error!("Coin value out of bounds");
             Err(SerializingError::Overflow)
         }
     }
@@ -88,47 +99,41 @@ impl Serialize for Coin {
 }
 
 
-// TODO: This should also check for MAX_SAFE_VALUE
 impl Coin {
+    #[inline]
     pub fn checked_add(self, rhs: Coin) -> Option<Coin> {
-        self.0.checked_add(rhs.0).map(|v| Coin(v))
-    }
-
-    pub fn checked_sub(self, rhs: Coin) -> Option<Coin> {
-        self.0.checked_sub(rhs.0).map(|v| Coin(v))
-    }
-
-    pub fn checked_factor(self, times: u64) -> Option<Coin> {
-        self.0.checked_mul(times).map(|v| Coin(v))
-    }
-}
-
-
-#[derive(Debug)]
-pub enum CoinParseError {
-    InvalidString,
-    TooManyFractionalDigits,
-    Overflow
-}
-
-impl fmt::Display for CoinParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
-    }
-}
-
-impl Error for CoinParseError {
-    fn description(&self) -> &str {
-        match self {
-            CoinParseError::InvalidString => "Invalid String",
-            CoinParseError::TooManyFractionalDigits => "Too many fractional digits",
-            CoinParseError::Overflow => "Overflow"
+        match self.0.checked_add(rhs.0) {
+            Some(val) => Coin::from_u64(val).ok(),
+            None => None,
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
-        None
+    #[inline]
+    pub fn checked_sub(self, rhs: Coin) -> Option<Coin> {
+        match self.0.checked_sub(rhs.0) {
+            Some(val) => Coin::from_u64(val).ok(),
+            None => None,
+        }
     }
+
+    #[inline]
+    pub fn checked_factor(self, times: u64) -> Option<Coin> {
+        match self.0.checked_mul(times) {
+            Some(val) => Coin::from_u64(val).ok(),
+            None => None,
+        }
+    }
+}
+
+
+#[derive(Debug, Fail)]
+pub enum CoinParseError {
+    #[fail(display = "Invalid string")]
+    InvalidString,
+    #[fail(display = "Too many fractional digits")]
+    TooManyFractionalDigits,
+    #[fail(display = "Overflow or unsafe value")]
+    Overflow,
 }
 
 
@@ -174,12 +179,6 @@ impl FromStr for Coin {
             .checked_mul(Coin::LUNAS_PER_COIN).ok_or(CoinParseError::Overflow)?
             .checked_add(frac_part).ok_or(CoinParseError::Overflow)?;
 
-        // Check if value is Javascript-safe
-        if value > Coin::MAX_SAFE_VALUE {
-            Err(CoinParseError::Overflow)
-        }
-        else {
-            Ok(Coin::from(value))
-        }
+        Ok(Coin::from_u64(value)?)
     }
 }

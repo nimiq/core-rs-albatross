@@ -3,13 +3,14 @@ use std::sync::Arc;
 use atomic::{Atomic, Ordering};
 
 use beserial::{Deserialize, Serialize};
+use nimiq_account::{AccountError, AccountType};
+use nimiq_block::{Block, BlockError};
 use nimiq_blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_network_primitives::time::NetworkTime;
-use nimiq_account::{AccountError, AccountType};
-use nimiq_block::{Block, BlockError};
+use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::{SignatureProof, Transaction};
 
@@ -140,8 +141,8 @@ fn it_rejects_blocks_with_duplicate_transactions() {
     let mut tx = Transaction::new_basic(
         miner.clone(),
         [2u8; Address::SIZE].into(),
-        10.into(),
-        0.into(),
+        Coin::from_u64(10).unwrap(),
+        Coin::from_u64(0).unwrap(),
         1,
         NetworkId::Main
     );
@@ -183,8 +184,8 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
     let mut tx = Transaction::new_basic(
         miner.clone(),
         [2u8; Address::SIZE].into(),
-        1000000000.into(),
-        0.into(),
+        Coin::from_u64(1000000000).unwrap(),
+        Coin::from_u64(0).unwrap(),
         1,
         NetworkId::Main
     );
@@ -201,8 +202,8 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
     tx = Transaction::new_basic(
         miner.clone(),
         [2u8; Address::SIZE].into(),
-        1000.into(),
-        0.into(),
+        Coin::from_u64(1000).unwrap(),
+        Coin::from_u64(0).unwrap(),
         1,
         NetworkId::Main
     );

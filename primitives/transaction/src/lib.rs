@@ -199,12 +199,13 @@ impl Transaction {
         }
 
         // Check that value + fee doesn't overflow.
-        // TODO also check max supply?
-        if self.value.checked_add(self.fee).is_none() {
-            return Err(TransactionError::Overflow);
+        match self.value.checked_add(self.fee) {
+            Some(coin) => match coin <= Coin::from_u64_unchecked(policy::TOTAL_SUPPLY) {
+                true => (),
+                false => return Err(TransactionError::Overflow),
+            }
+            None => return Err(TransactionError::Overflow),
         }
-
-        // TODO Check account types valid?
 
         // Check transaction validity for sender account.
         AccountType::verify_outgoing_transaction(&self)?;

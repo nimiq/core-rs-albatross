@@ -71,6 +71,7 @@ impl AccountsProof {
 mod tests {
     use crate::accounts_tree_node::AccountsTreeNodeChild;
     use account::BasicAccount;
+    use nimiq_primitives::coin::Coin;
 
     use super::*;
 
@@ -89,22 +90,22 @@ mod tests {
      */
 
         let an1: AddressNibbles = "0011111111111111111111111111111111111111".parse().unwrap();
-        let account1 = Account::Basic(BasicAccount { balance: 25.into() });
+        let account1 = Account::Basic(BasicAccount { balance: Coin::from_u64(25).unwrap() });
         let address1 = Address::from(hex::decode(an1.to_string()).unwrap().as_slice());
         let t1 = AccountsTreeNode::new_terminal(an1, account1.clone());
 
         let an2: AddressNibbles = "0033333333333333333333333333333333333333".parse().unwrap();
-        let account2 = Account::Basic(BasicAccount { balance: 1.into() });
+        let account2 = Account::Basic(BasicAccount { balance: Coin::from_u64(1).unwrap() });
         let address2 = Address::from(hex::decode(an2.to_string()).unwrap().as_slice());
         let t2 = AccountsTreeNode::new_terminal(an2, account2.clone());
 
         let an3: AddressNibbles = "0020000000000000000000000000000000000000".parse().unwrap();
-        let account3 = Account::Basic(BasicAccount { balance: 1322.into() });
+        let account3 = Account::Basic(BasicAccount { balance: Coin::from_u64(1322).unwrap() });
         let address3 = Address::from(hex::decode(an3.to_string()).unwrap().as_slice());
         let t3 = AccountsTreeNode::new_terminal(an3, account3.clone());
 
         let an4: AddressNibbles = "0022222222222222222222222222222222222222".parse().unwrap();
-        let account4 = Account::Basic(BasicAccount { balance: 93.into() });
+        let account4 = Account::Basic(BasicAccount { balance: Coin::from_u64(93).unwrap() });
         let address4 = Address::from(hex::decode(an4.to_string()).unwrap().as_slice());
         let t4 = AccountsTreeNode::new_terminal(an4, account4.clone());
 
