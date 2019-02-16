@@ -6,9 +6,6 @@ use std::string::ToString;
 use fixed_unsigned::types::FixedUnsigned4;
 
 
-
-// TODO: Test serialization
-
 #[test]
 fn test_parse_zero() {
     assert_eq!(FixedUnsigned4::from_str("0").unwrap(), FixedUnsigned4::from(0u32));
@@ -171,4 +168,19 @@ fn test_mul_borrow() {
 fn test_div_borrow() {
     let res = &FixedUnsigned4::from_str("12.34").unwrap() / &FixedUnsigned4::from_str("56.78").unwrap();
     assert_eq!(res, FixedUnsigned4::from_str("0.2173").unwrap());
+}
+
+#[test]
+fn test_serialize() {
+    let bytes = FixedUnsigned4::from_str("12.34").unwrap().to_bytes_be();
+    let expected: Vec<u8> = vec![0x01, 0xe2, 0x08];
+    assert_eq!(expected, bytes);
+}
+
+#[test]
+fn test_deserialize() {
+    let bytes: Vec<u8> = vec![0x01, 0xe2, 0x08];
+    let expected = FixedUnsigned4::from_str("12.34").unwrap();
+
+    assert_eq!(expected, FixedUnsigned4::from_bytes_be(bytes.as_slice()));
 }
