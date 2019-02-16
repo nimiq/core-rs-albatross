@@ -13,6 +13,7 @@ use network_messages::*;
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::PeerId;
 use network_primitives::networks::get_network_info;
+use network_primitives::protocol::Protocol;
 use network_primitives::version;
 use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use utils::rate_limit::RateLimit;
@@ -458,11 +459,10 @@ impl NetworkAgent {
                 return;
             }
 
-            // TODO Check globally reachable.
-//            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss) && address.globally_reachable() {
-//                self.channel.close(CloseType::AddrNotGloballyReachable);
-//                return;
-//            }
+            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss) && !address.is_globally_reachable() {
+                self.channel.close(CloseType::AddrNotGloballyReachable);
+                return;
+            }
         }
 
         // Update peer with new address.
