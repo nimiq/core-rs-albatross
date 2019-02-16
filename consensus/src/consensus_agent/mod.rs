@@ -248,7 +248,6 @@ impl ConsensusAgent {
         self.inv_agent.subscribe(Subscription::Any);
 
         // Request the peer's mempool.
-        // XXX Use a random delay here to prevent requests to multiple peers at once.
         let weak = self.self_weak.clone();
         self.timers.set_delay(ConsensusAgentTimer::Mempool, move || {
             let agent = upgrade_weak!(weak);

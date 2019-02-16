@@ -3,6 +3,7 @@ use native_tls::Error as TlsError;
 use tokio::io::Error as IoError;
 use tokio::timer::Error as TimerError;
 use tungstenite::error::Error as WsError;
+use url::ParseError;
 
 use beserial::SerializingError;
 
@@ -71,6 +72,8 @@ pub enum ConnectError {
     Timer(#[cause] TimerError),
     #[fail(display = "{}", _0)]
     WebSocket(#[cause] Error),
+    #[fail(display = "Could not parse URI to connect to: {}", _0)]
+    InvalidUri(#[cause] ParseError),
 }
 
 

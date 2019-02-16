@@ -163,7 +163,7 @@ impl WebSocketConnector {
         Ok(())
     }
 
-    pub fn connect(&self, peer_address: Arc<PeerAddress>) -> Arc<ConnectionHandle> {
+    pub fn connect(&self, peer_address: Arc<PeerAddress>) -> Result<Arc<ConnectionHandle>, ConnectError> {
         let notifier = Arc::clone(&self.notifier);
 
         if !self.network_config.protocol_mask().contains(ProtocolFlags::from(peer_address.protocol())) {
@@ -176,7 +176,7 @@ impl WebSocketConnector {
         // implementation where the data structures are there for something else and then you
         // get this check "for free")
 
-        let url = Url::parse(&peer_address.as_uri()).unwrap();
+        let url = Url::parse(&peer_address.as_uri().to_string()).map_err(ConnectError::InvalidUri)?;
         let error_notifier = Arc::clone(&self.notifier);
         let error_peer_address = Arc::clone(&peer_address);
         let connection_handle = Arc::new(ConnectionHandle(AtomicBool::new(false)));
@@ -210,6 +210,6 @@ impl WebSocketConnector {
 
             tokio::spawn(connect);
 
-            connection_handle
+            Ok(connection_handle)
     }
 }

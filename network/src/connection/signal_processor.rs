@@ -21,11 +21,13 @@ pub struct SignalProcessor {
 }
 
 impl SignalProcessor {
+    const SIGNAL_STORE_MAX_SIZE: usize = 1000;
+
     pub fn new(addresses: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>) -> Self {
         Self {
             addresses,
             network_config,
-            forwards: Mutex::new(SignalStore::new(1000)), // TODO: move magic number to const somewhere
+            forwards: Mutex::new(SignalStore::new(Self::SIGNAL_STORE_MAX_SIZE)),
         }
     }
 

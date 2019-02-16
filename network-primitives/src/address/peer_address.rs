@@ -113,10 +113,9 @@ impl PeerAddress {
         return false;
     }
 
-    pub fn as_uri(&self) -> String {
-        // TODO: This should probably return the URI object and the user can then call to_string on it.
+    pub fn as_uri(&self) -> PeerUri {
         // TODO: Do this without cloning. Not urgent, since we don't use this too much.
-        PeerUri::from(self.clone()).to_string()
+        PeerUri::from(self.clone())
     }
 
     pub fn get_signature_data(&self) -> Vec<u8> {

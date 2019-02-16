@@ -436,7 +436,14 @@ impl ConnectionPool {
         let connection_id = state.add(ConnectionInfo::outbound(peer_address.clone()));
 
         // Choose connector type and call.
-        let handle = self.websocket_connector.connect(peer_address);
+        let handle = match self.websocket_connector.connect(peer_address.clone()) {
+            Ok(handle) => handle,
+            Err(e) => {
+                warn!("Could not connect outbound to {}, error: {}", peer_address, e);
+                state.remove(connection_id);
+                return false;
+            },
+        };
         state.connections.get_mut(connection_id).map(move |info| {
             info.set_connection_handle(handle);
         });

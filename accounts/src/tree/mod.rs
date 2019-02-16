@@ -130,11 +130,12 @@ impl<'env> AccountsTree<'env> {
     fn update_keys_batch(&self, txn: &mut WriteTransaction, prefix: AddressNibbles, mut root_path: Vec<AccountsTreeNode>) {
         // Walk along the rootPath towards the root node starting with the
         // immediate predecessor of the node specified by 'prefix'.
-        let mut tmp_prefix = prefix;
-        while let Some(node) = root_path.pop() {
-            let node = node.with_child(&tmp_prefix, Blake2bHash::default()).unwrap();
+        let mut tmp_prefix = &prefix;
+        let mut node;
+        while let Some(path_node) = root_path.pop() {
+            node = path_node.with_child(tmp_prefix, Blake2bHash::default()).unwrap();
             txn.put_reserve(&self.db, node.prefix(), &node);
-            tmp_prefix = node.prefix().clone(); // TODO: can we get rid of the clone here?
+            tmp_prefix = node.prefix();
         }
     }
 

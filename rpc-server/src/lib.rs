@@ -495,7 +495,7 @@ impl JsonRpcHandler {
 
         object!{
             "id" => peer_address_info.peer_address.peer_id().to_hex(),
-            "address" => peer_address_info.peer_address.as_uri(),
+            "address" => peer_address_info.peer_address.as_uri().to_string(),
             "failedAttempts" => peer_address_info.failed_attempts,
             "addressState" => peer_address_info.state as u8,
             "connectionState" => connection_info.map(|conn| (conn.state() as u8).into()).unwrap_or(Null),
