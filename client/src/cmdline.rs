@@ -1,43 +1,26 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::fmt;
-use std::error::Error;
 
-use clap::{Arg, App};
+use clap::{Arg, App, Values};
+use failure::Fail;
 
 use crate::settings::{Network, NodeType};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+
+#[derive(Debug, Fail)]
 pub(crate) enum ParseError {
+    #[fail(display = "Failed to parse port.")]
     Port,
-    Passive,
+    #[fail(display = "Failed to parse RPC port.")]
     RpcPort,
+    #[fail(display = "Failed to parse metrics port.")]
     MetricsPort,
+    #[fail(display = "Failed to parse consensus type.")]
     ConsensusType,
-    Network
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {}", self.description(), match self {
-            ParseError::Port => "port",
-            ParseError::Passive => "passive",
-            ParseError::RpcPort => "rpc",
-            ParseError::MetricsPort => "metrics",
-            ParseError::ConsensusType => "type",
-            ParseError::Network => "network"
-        })
-    }
-}
-
-impl Error for ParseError {
-    fn description(&self) -> &str {
-        return "Can't parse command-line option";
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        None
-    }
+    #[fail(display = "Failed to parse network ID.")]
+    Network,
+    #[fail(display = "Failed to parse log tag.")]
+    LogTag,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,9 +30,7 @@ pub(crate) struct Options {
     pub config_file: Option<String>,
     pub log_level: Option<String>,
     pub log_tags: HashMap<String, String>,
-    pub passive: Option<bool>,
-    pub rpc_port: Option<u16>,
-    pub metrics_port: Option<u16>,
+    pub passive: bool,
     pub consensus_type: Option<NodeType>,
     pub wallet_seed: Option<String>,
     pub wallet_address: Option<String>,
@@ -97,23 +78,13 @@ impl Options {
                 .long("passive")
                 .help("Do not actively connect to the network.")
                 .takes_value(false))
-            .arg(Arg::with_name("rpc_port")
-                .long("rpc")
-                .value_name("PORT")
-                .help("Start JSON-RPC server on PORT (default: 8648).")
-                .takes_value(true))
-            .arg(Arg::with_name("metrics_port")
-                .long("metrics")
-                .value_name("PORT")
-                .help("Start Prometheus-compatible metrics server on PORT (default: 8649).")
-                .takes_value(true))
             .arg(Arg::with_name("consensus_type")
                 .long("type")
                 .value_name("TYPE")
                 .help("Configure consensus type, one of full (default), light or nano")
                 .possible_values(&["full", "light", "nano"])
                 .case_insensitive(true))
-            .arg(Arg::with_name("wallet_seed")
+            /*.arg(Arg::with_name("wallet_seed")
                 .long("wallet-seed")
                 .value_name("SEED")
                 .help("Initialize wallet using SEED as a wallet seed.")
@@ -122,7 +93,7 @@ impl Options {
                 .long("wallet-address")
                 .value_name("ADDRESS")
                 .help("Initialize wallet using ADDRESS as a wallet address.")
-                .takes_value(true))
+                .takes_value(true))*/
             .arg(Arg::with_name("network")
                 .long("network")
                 .value_name("NAME")
@@ -131,7 +102,6 @@ impl Options {
     }
 
     /// Parses a command line option from a string into `T` and returns `error`, when parsing fails.
-    /// TODO: Use failure here, to display the cause to the user.
     fn parse_option<T: FromStr>(value: Option<&str>, error: ParseError) -> Result<Option<T>, ParseError> {
         match value {
             None => Ok(None),
@@ -146,6 +116,20 @@ impl Options {
         value.map(|s| String::from(s))
     }
 
+    fn parse_log_tags(values_opt: Option<Values>) -> Result<HashMap<String, String>, ParseError> {
+        let mut tags: HashMap<String, String> = HashMap::new();
+        if let Some(values) = values_opt {
+            for value in values {
+                let split = value.split(":").collect::<Vec<&str>>();
+                if split.len() != 2 {
+                    return Err(ParseError::LogTag);
+                }
+                tags.insert(String::from(split[0]), String::from(split[1]));
+            }
+        }
+        Ok(tags)
+    }
+
     pub fn parse() -> Result<Options, ParseError> {
         let app = Self::create_app();
         let matches = app.get_matches();
@@ -155,14 +139,13 @@ impl Options {
             port: Self::parse_option::<u16>(matches.value_of("port"), ParseError::Port)?,
             config_file: matches.value_of("config").map(|s| String::from(s)),
             log_level: matches.value_of("log_level").map(|s| String::from(s)),
-            log_tags: HashMap::new(), // TODO
-            passive: Self::parse_option::<bool>(matches.value_of("passive"), ParseError::Passive)?,
-            rpc_port: Self::parse_option::<u16>(matches.value_of("rpc_port"), ParseError::RpcPort)?,
-            metrics_port: Self::parse_option::<u16>(matches.value_of("metrics_port"), ParseError::MetricsPort)?,
+            log_tags: Self::parse_log_tags(matches.values_of("log_tags"))?,
+            passive: matches.is_present("passive"),
             consensus_type: Self::parse_option::<NodeType>(matches.value_of("consensus_type"), ParseError::ConsensusType)?,
-            // TODO: parse as seed/address: Self::parse_option<Seed>([...])
-            wallet_seed: Self::parse_option_string(matches.value_of("wallet_seed")),
-            wallet_address: Self::parse_option_string(matches.value_of("wallet_address")),
+            // TODO: Wallets are not supported yet
+            //wallet_seed: Self::parse_option_string(matches.value_of("wallet_seed")),
+            //wallet_address: Self::parse_option_string(matches.value_of("wallet_address")),
+            wallet_seed: None, wallet_address: None,
             network: Self::parse_option::<Network>(matches.value_of("network"), ParseError::Network)?,
         })
     }

@@ -26,6 +26,7 @@ use failure::{Error, Fail};
 use fern::log_file;
 use futures::{Future, future};
 use log::Level;
+use log::LevelFilter;
 
 use database::lmdb::{LmdbEnvironment, open};
 use lib::client::{Client, ClientBuilder};
@@ -83,8 +84,12 @@ fn run() -> Result<(), Error> {
     let mut dispatch = fern::Dispatch::new()
         .pretty_logging(settings.log.timestamps)
         .level(DEFAULT_LEVEL)
+
         .level_for_nimiq(cmdline.log_level.as_ref().map(|level| level.parse()).or(settings.log.level.map(Ok)).unwrap_or(Ok(DEFAULT_LEVEL))?);
     for (module, level) in settings.log.tags.iter() {
+        //.chain(cmdline.log_tags.iter()
+        //    .map(|(module, filter)| Ok((module, LevelFilter::from_str(filter)?)))
+        //    .collect::<Result<Iterator<Item=(&String, &LevelFilter)>, _>>()?) {
         dispatch = dispatch.level_for(module.clone(), level.clone());
     }
     // For now, we only log to stdout.
@@ -157,7 +162,6 @@ fn run() -> Result<(), Error> {
     let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
 
     // start RPC server if enabled
-    // TODO: If no RPC server was configure, but on command line a port was given, generate RpcServer::default() and override port
     #[cfg(feature = "rpc-server")] {
         if let Some(rpc_settings) = settings.rpc_server {
             // TODO: Replace with parsing from config file
@@ -174,7 +178,6 @@ fn run() -> Result<(), Error> {
         }
     }
     // start metrics server if enabled
-    // TODO: Same as for RPC server
     #[cfg(feature = "metrics-server")] {
         if let Some(metrics_settings) = settings.metrics_server {
             // TODO: Replace with parsing from config file
