@@ -308,28 +308,33 @@ impl Network {
         } else {
             // Drop lock on connection_scores since it is empty.
             drop(connection_scores);
-            let index = randrng.gen_range(0, cmp::min(connections.count(), 10));
+            if connections.count() > 0 {
+                let index = randrng.gen_range(0, cmp::min(connections.count(), 10));
 
-            let state = connections.state();
-            let mut peer_connection = None;
-            let mut i: usize = 0;
-            for conn in state.connection_iter() {
-                if conn.state() == ConnectionState::Established {
-                    peer_connection = Some(conn);
+                let state = connections.state();
+                let mut peer_connection = None;
+                let mut i: usize = 0;
+                for conn in state.connection_iter() {
+                    if conn.state() == ConnectionState::Established {
+                        peer_connection = Some(conn);
+                    }
+                    if i >= index && peer_connection.is_some() {
+                        break;
+                    }
+                    i += 1;
                 }
-                if i >= index && peer_connection.is_some() {
-                    break;
+
+                if let Some(peer_connection) = peer_connection {
+                    trace!("Requesting addresses from {} (score idx {})", peer_connection.peer_address()
+                        .expect("ConnectionInfo for scored connection is missing its PeerAddress"), index);
+
+                    let agent = peer_connection.network_agent()
+                        .expect("ConnectionInfo for scored connection is missing its NetworkAgent");
+                    agent.write().request_addresses(None);
                 }
-                i += 1;
             }
-
-            if let Some(peer_connection) = peer_connection {
-                trace!("Requesting addresses from {} (score idx {})", peer_connection.peer_address()
-                    .expect("ConnectionInfo for scored connection is missing its PeerAddress"), index);
-
-                let agent = peer_connection.network_agent()
-                    .expect("ConnectionInfo for scored connection is missing its NetworkAgent");
-                agent.write().request_addresses(None);
+            else {
+                error!("No peers to connect to!")
             }
         }
     }
