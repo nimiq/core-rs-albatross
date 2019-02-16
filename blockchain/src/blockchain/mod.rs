@@ -14,7 +14,6 @@ use block::proof::ChainProof;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use utils::observer::Notifier;
-use utils::unique_ptr::UniquePtr;
 use fixed_unsigned::RoundHalfUp;
 use fixed_unsigned::types::{FixedUnsigned10, FixedScale10, FixedUnsigned26, FixedScale26};
 
@@ -44,12 +43,26 @@ pub struct Blockchain<'env> {
     pub(crate) transaction_store: TransactionStore<'env>,
 }
 
-pub(crate) struct BlockchainState<'env> {
+pub struct BlockchainState<'env> {
     accounts: Accounts<'env>,
     transaction_cache: TransactionCache,
     pub(crate) main_chain: ChainInfo,
     head_hash: Blake2bHash,
     pub(crate) chain_proof: Option<ChainProof>,
+}
+
+impl<'env> BlockchainState<'env> {
+    pub fn accounts(&self) -> &Accounts<'env> {
+        &self.accounts
+    }
+
+    pub fn transaction_cache(&self) -> &TransactionCache {
+        &self.transaction_cache
+    }
+
+    pub fn main_chain(&self) -> &ChainInfo {
+        &self.main_chain
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,7 +87,7 @@ pub enum PushError {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BlockchainEvent {
-    Extended(Blake2bHash, UniquePtr<Block>),
+    Extended(Blake2bHash),
     Rebranched(Vec<(Blake2bHash, Block)>, Vec<(Blake2bHash, Block)>),
 }
 
@@ -304,8 +317,11 @@ impl<'env> Blockchain<'env> {
         }
 
         // Give up write lock before notifying.
-        let state = self.state.read();
-        let event = BlockchainEvent::Extended(state.head_hash.clone(), UniquePtr::new(&state.main_chain.head));
+        let event;
+        {
+            let state = self.state.read();
+            event = BlockchainEvent::Extended(state.head_hash.clone());
+        }
         self.notifier.read().notify(event);
 
         #[cfg(feature = "metrics")]
@@ -669,5 +685,9 @@ impl<'env> Blockchain<'env> {
     pub fn transaction_cache(&self) -> MappedRwLockReadGuard<TransactionCache> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| &s.transaction_cache)
+    }
+
+    pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
+        self.state.read()
     }
 }

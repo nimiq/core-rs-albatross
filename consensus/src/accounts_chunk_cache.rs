@@ -73,7 +73,7 @@ impl AccountsChunkCache {
             return;
         }
         match event {
-            BlockchainEvent::Extended(_, _) | BlockchainEvent::Rebranched(_, _) => {
+            BlockchainEvent::Extended(_) | BlockchainEvent::Rebranched(_, _) => {
                 self.compute_chunks_for_block();
             },
         }

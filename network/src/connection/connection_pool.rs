@@ -782,7 +782,8 @@ impl ConnectionPool {
         // Mark address as established.
         self.addresses.established(info.peer_channel().unwrap(), peer_address.clone());
 
-        // Drop the guard before notifying.
+        // Drop the locks before notifying.
+        drop(state);
         drop(guard);
 
         // Let listeners know about this peer.

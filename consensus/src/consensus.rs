@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use parking_lot::RwLock;
-use rand::thread_rng;
 use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
@@ -17,12 +18,11 @@ use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
 use utils::timers::Timers;
 
+use crate::accounts_chunk_cache::AccountsChunkCache;
 use crate::consensus_agent::ConsensusAgent;
 use crate::consensus_agent::ConsensusAgentEvent;
-use crate::inventory::InventoryManager;
 use crate::error::Error;
-use crate::accounts_chunk_cache::AccountsChunkCache;
-
+use crate::inventory::InventoryManager;
 
 pub struct Consensus {
     pub blockchain: Arc<Blockchain<'static>>,
@@ -204,9 +204,11 @@ impl Consensus {
         }
 
         let blocks;
+        let block;
         match event {
-            BlockchainEvent::Extended(_, ref block) => {
-                blocks = vec![block.as_ref()];
+            BlockchainEvent::Extended(_) => {
+                block = self.blockchain.head();
+                blocks = vec![block.deref()];
             },
             BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
                 blocks = adopted_blocks.iter().map(|(_, block)| block).collect();

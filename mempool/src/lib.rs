@@ -339,7 +339,7 @@ impl<'env> Mempool<'env> {
 
     fn on_blockchain_event(&self, event: &BlockchainEvent) {
         match event {
-            BlockchainEvent::Extended(_, _) => self.evict_transactions(),
+            BlockchainEvent::Extended(_) => self.evict_transactions(),
             BlockchainEvent::Rebranched(reverted_blocks, _) => self.restore_transactions(reverted_blocks),
         }
     }
@@ -356,8 +356,9 @@ impl<'env> Mempool<'env> {
             let state = self.state.read();
 
             // Acquire blockchain read lock.
-            let accounts = self.blockchain.accounts();
-            let transaction_cache = self.blockchain.transaction_cache();
+            let blockchain_state = self.blockchain.state();
+            let accounts = blockchain_state.accounts();
+            let transaction_cache = blockchain_state.transaction_cache();
             let block_height = self.blockchain.height() + 1;
 
             for (address, transactions) in state.transactions_by_sender.iter() {
@@ -421,81 +422,86 @@ impl<'env> Mempool<'env> {
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
 
-        // Acquire blockchain read lock.
-        let accounts = self.blockchain.accounts();
-        let transaction_cache = self.blockchain.transaction_cache();
-        let block_height = self.blockchain.height() + 1;
-
-        // Collect all transactions from reverted blocks that are still valid.
-        // Track them by sender and sort them by fee/byte.
-        let mut txs_by_sender = HashMap::new();
-        for (_, block) in reverted_blocks {
-            for tx in block.body.as_ref().unwrap().transactions.iter() {
-                if !tx.is_valid_at(block_height) {
-                    // This transaction has expired (or is not valid yet) on the new chain.
-                    // XXX The transaction is lost!
-                    continue;
-                }
-
-                if transaction_cache.contains(&tx.hash()) {
-                    // This transaction is also included in the new chain, ignore.
-                    continue;
-                }
-
-                let recipient_account = accounts.get(&tx.recipient, None);
-                if recipient_account.with_incoming_transaction(&tx, block_height).is_err() {
-                    // This transaction cannot be accepted by the recipient anymore.
-                    // XXX The transaction is lost!
-                    continue;
-                }
-
-                let txs = txs_by_sender
-                    .entry(&tx.sender)
-                    .or_insert_with(|| BTreeSet::new());
-                txs.insert(tx);
-            }
-        }
-
-        // Merge the new transaction sets per sender with the existing ones.
-        let mut state = self.state.write();
-
         let mut removed_transactions = Vec::new();
         let mut restored_transactions = Vec::new();
 
-        for (sender, restored_txs) in txs_by_sender {
-            let empty_btree;
-            let existing_txs = match state.transactions_by_sender.get(&sender) {
-                Some(txs) => txs,
-                None => {
-                    empty_btree = BTreeSet::new();
-                    &empty_btree
+        {
+            // Acquire blockchain read lock.
+            let blockchain_state = self.blockchain.state();
+            let accounts = blockchain_state.accounts();
+            let transaction_cache = blockchain_state.transaction_cache();
+            let block_height = blockchain_state.main_chain().head.header.height + 1;
+
+            // Collect all transactions from reverted blocks that are still valid.
+            // Track them by sender and sort them by fee/byte.
+            let mut txs_by_sender = HashMap::new();
+            for (_, block) in reverted_blocks {
+                for tx in block.body.as_ref().unwrap().transactions.iter() {
+                    if !tx.is_valid_at(block_height) {
+                        // This transaction has expired (or is not valid yet) on the new chain.
+                        // XXX The transaction is lost!
+                        continue;
+                    }
+
+                    if transaction_cache.contains(&tx.hash()) {
+                        // This transaction is also included in the new chain, ignore.
+                        continue;
+                    }
+
+                    let recipient_account = accounts.get(&tx.recipient, None);
+                    if recipient_account.with_incoming_transaction(&tx, block_height).is_err() {
+                        // This transaction cannot be accepted by the recipient anymore.
+                        // XXX The transaction is lost!
+                        continue;
+                    }
+
+                    let txs = txs_by_sender
+                        .entry(&tx.sender)
+                        .or_insert_with(|| BTreeSet::new());
+                    txs.insert(tx);
                 }
-            };
+            }
 
-            let (txs_to_add, txs_to_remove) = Mempool::merge_transactions(&accounts, sender, block_height, existing_txs, &restored_txs);
-            for tx in txs_to_add {
-                let transaction = Arc::new(tx.clone());
-                Mempool::add_transaction(&mut state, tx.hash(), transaction.clone());
-                restored_transactions.push(transaction);
-            }
-            for tx in txs_to_remove {
-                Mempool::remove_transaction(&mut state, &tx);
-                removed_transactions.push(tx);
-            }
-        }
+            // Merge the new transaction sets per sender with the existing ones.
+            {
+                let mut state = self.state.write();
 
-        // Evict lowest fee transactions if the mempool has grown too large.
-        let size = state.transactions_sorted_fee.len();
-        if size > SIZE_MAX {
-            let mut txs_to_remove = Vec::with_capacity(size - SIZE_MAX);
-            let mut iter = state.transactions_sorted_fee.iter();
-            for _ in 0..size - SIZE_MAX {
-                txs_to_remove.push(iter.next().unwrap().clone());
+                for (sender, restored_txs) in txs_by_sender {
+                    let empty_btree;
+                    let existing_txs = match state.transactions_by_sender.get(&sender) {
+                        Some(txs) => txs,
+                        None => {
+                            empty_btree = BTreeSet::new();
+                            &empty_btree
+                        }
+                    };
+
+                    let (txs_to_add, txs_to_remove) = Mempool::merge_transactions(&accounts, sender, block_height, existing_txs, &restored_txs);
+                    for tx in txs_to_add {
+                        let transaction = Arc::new(tx.clone());
+                        Mempool::add_transaction(&mut state, tx.hash(), transaction.clone());
+                        restored_transactions.push(transaction);
+                    }
+                    for tx in txs_to_remove {
+                        Mempool::remove_transaction(&mut state, &tx);
+                        removed_transactions.push(tx);
+                    }
+                }
+
+                // Evict lowest fee transactions if the mempool has grown too large.
+                let size = state.transactions_sorted_fee.len();
+                if size > SIZE_MAX {
+                    let mut txs_to_remove = Vec::with_capacity(size - SIZE_MAX);
+                    let mut iter = state.transactions_sorted_fee.iter();
+                    for _ in 0..size - SIZE_MAX {
+                        txs_to_remove.push(iter.next().unwrap().clone());
+                    }
+                    for tx in txs_to_remove.iter() {
+                        Mempool::remove_transaction(&mut state, tx);
+                    }
+                    removed_transactions.extend(txs_to_remove);
+                }
             }
-            for tx in txs_to_remove.iter() {
-                Mempool::remove_transaction(&mut state, tx);
-            }
-            removed_transactions.extend(txs_to_remove);
         }
 
         // Notify listeners.
