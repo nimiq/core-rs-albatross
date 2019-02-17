@@ -24,8 +24,10 @@ use crate::transaction_cache::TransactionCache;
 use crate::chain_metrics::BlockchainMetrics;
 #[cfg(feature = "transaction-store")]
 use crate::transaction_store::TransactionStore;
+use crate::blockchain::error::BlockchainError;
 
 pub mod transaction_proofs;
+pub mod error;
 
 pub struct Blockchain<'env> {
     pub(crate) env: &'env Environment,
@@ -92,30 +94,34 @@ pub enum BlockchainEvent {
 }
 
 impl<'env> Blockchain<'env> {
-    pub fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Self {
+    pub fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
         let chain_store = ChainStore::new(env);
-        match chain_store.get_head(None) {
-            Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash),
-            None => Blockchain::init(env, network_time, network_id, chain_store)
-        }
+        Ok(match chain_store.get_head(None) {
+            Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash)?,
+            None => Blockchain::init(env, network_time, network_id, chain_store)?
+        })
     }
 
-    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Self {
+    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let network_info = get_network_info(network_id).unwrap();
         let genesis_info = chain_store.get_chain_info(&network_info.genesis_hash, false, None);
-        assert!(genesis_info.is_some() && genesis_info.unwrap().on_main_chain,
-            "Invalid genesis block stored. Reset your consensus database.");
+
+        if !genesis_info.map(|i| i.on_main_chain).unwrap_or(false) {
+            return Err(BlockchainError::InvalidGenesisBlock)
+        }
 
         // Load main chain from store.
         let main_chain = chain_store
             .get_chain_info(&head_hash, true, None)
-            .expect("Failed to load main chain. Reset your consensus database.");
+            .ok_or(BlockchainError::FailedLoadingMainChain)?;
 
         // Check that chain/accounts state is consistent.
         let accounts = Accounts::new(env);
-        assert_eq!(main_chain.head.header.accounts_hash, accounts.hash(None),
-            "Inconsistent chain/accounts state. Reset your consensus database.");
+
+        if main_chain.head.header.accounts_hash != accounts.hash(None) {
+            return Err(BlockchainError::InconsistentState);
+        }
 
         // Initialize TransactionCache.
         let mut transaction_cache = TransactionCache::new();
@@ -126,7 +132,7 @@ impl<'env> Blockchain<'env> {
         transaction_cache.push_block(&main_chain.head);
         assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.header.height));
 
-        Blockchain {
+        Ok(Blockchain {
             env,
             network_id,
             network_time,
@@ -146,12 +152,12 @@ impl<'env> Blockchain<'env> {
 
             #[cfg(feature = "transaction-store")]
             transaction_store: TransactionStore::new(env),
-        }
+        })
     }
 
-    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Self {
+    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
-        let network_info = get_network_info(network_id).expect(&format!("No NetworkInfo for network {:?}", network_id));
+        let network_info = get_network_info(network_id).ok_or_else(|| BlockchainError::NoNetwork(network_id))?;
         let main_chain = ChainInfo::initial(network_info.genesis_block.clone());
         let head_hash = network_info.genesis_hash.clone();
 
@@ -168,7 +174,7 @@ impl<'env> Blockchain<'env> {
         // Initialize empty TransactionCache.
         let transaction_cache = TransactionCache::new();
 
-        Blockchain {
+        Ok(Blockchain {
             env,
             network_id,
             network_time,
@@ -188,7 +194,7 @@ impl<'env> Blockchain<'env> {
 
             #[cfg(feature = "transaction-store")]
             transaction_store: TransactionStore::new(env),
-        }
+        })
     }
 
     pub fn push(&self, block: Block) -> PushResult {

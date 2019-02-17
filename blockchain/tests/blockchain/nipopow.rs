@@ -9,7 +9,7 @@ use nimiq_primitives::networks::NetworkId;
 #[test]
 fn it_can_compute_trivial_chain_proofs() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let proof = blockchain.get_chain_proof();
     assert_eq!(proof.prefix.len(), 1);
@@ -43,7 +43,7 @@ fn it_can_compute_trivial_chain_proofs() {
 #[test]
 fn it_can_compute_trivial_block_proofs() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let block = crate::next_block(&blockchain)
         .with_nonce(83054)
@@ -90,7 +90,7 @@ fn it_can_compute_trivial_block_proofs() {
 #[test]
 fn it_can_compute_empty_block_proofs() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let head_hash1 = blockchain.head_hash();
     let proof = blockchain.get_block_proof(&head_hash1, &head_hash1);

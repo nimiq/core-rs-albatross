@@ -10,3 +10,4 @@ extern crate nimiq_mempool as mempool;
 
 pub mod prelude;
 pub mod client;
+pub mod error;

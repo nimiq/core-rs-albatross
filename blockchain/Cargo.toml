@@ -24,12 +24,13 @@ nimiq-hash = { path = "../hash" }
 nimiq-accounts = { path = "../accounts" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
-hex = "0.3"
 fixed-unsigned = { path = "../fixed-unsigned" }
-parking_lot = "0.7"
 nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr", "iterators"] }
-log = "0.4"
 nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
+parking_lot = "0.7"
+log = "0.4"
+hex = "0.3"
+failure = "0.1"
 
 [dev-dependencies]
 atomic = "0.4"

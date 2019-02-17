@@ -29,12 +29,12 @@ fn it_can_load_a_stored_chain() {
     let hash = block.header.hash();
 
     {
-        let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+        let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
         let status = blockchain.push(block);
         assert_eq!(status, PushResult::Extended);
     }
 
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
     assert_eq!(blockchain.height(), 2);
     assert_eq!(blockchain.head_hash(), hash);
 }
@@ -42,7 +42,7 @@ fn it_can_load_a_stored_chain() {
 #[test]
 fn it_can_extend_the_main_chain() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     let mut status = blockchain.push(block);
@@ -64,7 +64,7 @@ fn it_can_extend_the_main_chain() {
 #[test]
 fn it_detects_known_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
 
     let block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     let mut status = blockchain.push(block.clone());
@@ -77,7 +77,7 @@ fn it_detects_known_blocks() {
 #[test]
 fn it_rejects_orphan_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
 
     let block = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
     let status = blockchain.push(block);
@@ -87,7 +87,7 @@ fn it_rejects_orphan_blocks() {
 #[test]
 fn it_rejects_intrisically_invalid_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     block.header.nonce = 1;
@@ -98,7 +98,7 @@ fn it_rejects_intrisically_invalid_blocks() {
 #[test]
 fn it_rejects_invalid_successors() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     block.header.timestamp = 5000;
@@ -111,7 +111,7 @@ fn it_rejects_invalid_successors() {
 #[test]
 fn it_rejects_blocks_with_invalid_difficulty() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())));
+    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     block.header.n_bits = 0x1f051234.into();
@@ -126,7 +126,7 @@ fn it_rejects_blocks_with_duplicate_transactions() {
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let miner = Address::from(&keypair.public);
     let block2 = crate::next_block(&blockchain)
@@ -169,7 +169,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let miner = Address::from(&keypair.public);
     let block2 = crate::next_block(&blockchain)
@@ -221,7 +221,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
 #[test]
 fn it_detects_fork_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let mut block = crate::next_block(&blockchain)
         .with_nonce(83054)
@@ -235,7 +235,7 @@ fn it_detects_fork_blocks() {
 #[test]
 fn it_rebranches_to_the_harder_chain() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new()));
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let block1_2 = crate::next_block(&blockchain)
         .with_nonce(83054)

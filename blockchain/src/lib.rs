@@ -27,4 +27,5 @@ pub mod chain_metrics;
 pub mod transaction_store;
 
 pub use self::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
+pub use self::blockchain::error::BlockchainError;
 pub use self::chain_store::Direction;
