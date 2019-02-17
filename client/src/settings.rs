@@ -105,7 +105,7 @@ impl Default for NodeType {
 }
 
 impl FromStr for NodeType {
-    type Err = (); // TODO: proper Error type
+    type Err = ();
 
     fn from_str(s: &str) -> Result<NodeType, ()> {
         Ok(match s.to_lowercase().as_str() {
@@ -132,7 +132,7 @@ impl Default for Network {
 }
 
 impl FromStr for Network {
-    type Err = (); // TODO: proper Error type
+    type Err = ();
 
     fn from_str(s: &str) -> Result<Network, ()> {
         Ok(match s.to_lowercase().as_str() {

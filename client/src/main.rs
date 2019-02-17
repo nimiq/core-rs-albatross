@@ -81,6 +81,10 @@ fn run() -> Result<(), Error> {
     // load config file
     let config_path = cmdline.config_file.clone().unwrap_or("./config.toml".into());
     let settings = Settings::from_file(config_path)?;
+    if settings.consensus.node_type != s::NodeType::Full {
+        error!("Only full consensus is implemented right now.");
+        unimplemented!();
+    }
 
     // Setup logging.
     let mut dispatch = fern::Dispatch::new()
