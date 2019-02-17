@@ -1,7 +1,7 @@
 pub mod net_address;
 pub mod peer_address;
 pub mod peer_uri;
-pub mod seed_list_url;
+pub mod seed_list;
 
 pub use self::net_address::*;
 pub use self::peer_address::*;

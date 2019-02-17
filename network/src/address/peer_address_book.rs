@@ -26,7 +26,7 @@ use utils::time::systemtime_to_timestamp;
 use utils::timers::Timers;
 
 use crate::connection::close_type::CloseType;
-use crate::network_config::NetworkConfig;
+use crate::network_config::{NetworkConfig, Seed};
 use crate::peer_channel::PeerChannel;
 
 use super::peer_address_seeder::{PeerAddressSeeder, PeerAddressSeederEvent};
@@ -307,9 +307,15 @@ impl PeerAddressBook {
             return Err(Error::InvalidNetworkInfo(network_id));
         }
 
-        // TODO: Collect more seed peers from seed lists.
-        // Wait at most PeerAddressBook.SEEDING_TIMEOUT for seeding.
-        // this.seeded.store(true, Ordering::Release);
+        // Init seed peers from config file.
+        let additional_seeds: Vec<PeerAddress> = this.network_config.additional_seeds().iter()
+        .filter_map(|seed| {
+            match seed {
+                Seed::Peer(peer_uri) => Some(peer_uri.as_seed_peer_address().expect("This should be checked before adding the seed peer to network_config")),
+                Seed::List(_) => None,
+            }
+        }).collect();
+        this.add(None, additional_seeds);
 
         Ok(this)
     }
@@ -337,6 +343,7 @@ impl PeerAddressBook {
             let this = upgrade_weak!(weak);
             match e {
                 PeerAddressSeederEvent::Seeds(seeds) => {
+                    trace!("Adding new seeds from remote seed list");
                     this.add(None, seeds.to_vec());
                 },
                 PeerAddressSeederEvent::End => {
@@ -345,7 +352,7 @@ impl PeerAddressBook {
                 },
             }
         });
-        seeder.collect(this.network_id);
+        seeder.collect(this.network_id, this.network_config.clone());
 
         Ok(())
     }
@@ -413,6 +420,7 @@ impl PeerAddressBook {
         let mut new_addresses: Vec<PeerAddress> = Vec::new();
         for peer_address in peer_addresses {
             if self.add_single(channel.clone(), peer_address.clone()) {
+                trace!("Added new peer: {}", peer_address.as_uri());
                 new_addresses.push(peer_address);
             }
         }

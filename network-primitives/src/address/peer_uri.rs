@@ -3,13 +3,13 @@ use std::fmt;
 use url::Url;
 use failure::Fail;
 use std::str::FromStr;
-use hex::FromHexError;
+use hex::{FromHex, FromHexError};
 
 use keys::PublicKey;
 
+use crate::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
 use crate::protocol::Protocol;
-use crate::address::{PeerAddress, PeerAddressType, PeerId};
-
+use crate::services::ServiceFlags;
 
 #[derive(Debug, Fail)]
 pub enum PeerUriError {
@@ -37,6 +37,12 @@ pub enum PeerUriError {
     TooManyPathSegments,
     #[fail(display = "Invalid peer ID")]
     InvalidPeerId,
+    #[fail(display = "Invalid public key {}", _0)]
+    InvalidPublicKey(#[cause] keys::ParseError),
+    #[fail(display = "Seed node is missing the public key")]
+    SeedNodeMissingPublicKey,
+    #[fail(display = "The only allowed protocols for seed nodes are Wss and Ws")]
+    SeedNodeWithInvalidProtocol,
 }
 
 impl From<url::ParseError> for PeerUriError {
@@ -48,6 +54,12 @@ impl From<url::ParseError> for PeerUriError {
 impl From<FromHexError> for PeerUriError {
     fn from(_: FromHexError) -> Self {
         PeerUriError::InvalidPeerId
+    }
+}
+
+impl From<keys::ParseError> for PeerUriError {
+    fn from(e: keys::ParseError) -> Self {
+        PeerUriError::InvalidPublicKey(e)
     }
 }
 
@@ -176,6 +188,42 @@ impl PeerUri {
     pub fn port(&self) -> Option<u16> { self.port }
     pub fn peer_id(&self) -> Option<&String> { self.peer_id.as_ref() }
     pub fn public_key(&self) -> Option<&String> { self.public_key.as_ref() }
+
+    pub fn as_seed_peer_address(&self) -> Result<PeerAddress, PeerUriError> {
+        // TODO: May be we want to allow seed nodes without public key?
+        if self.public_key().is_none() {
+            return Err(PeerUriError::SeedNodeMissingPublicKey);
+        }
+
+        let public_key = match PublicKey::from_hex(self.public_key().expect("Checked in previous step")) {
+            Ok(public_key) => public_key,
+            Err(e) => return Err(PeerUriError::from(e)),
+        };
+
+        match self.protocol() {
+            Protocol::Wss => Ok(PeerAddress {
+                ty: PeerAddressType::Wss(self.hostname().expect("Mandatory for Wss").to_string(), self.port().unwrap_or(443)),
+                services: ServiceFlags::FULL,
+                timestamp: 0,
+                net_address: NetAddress::Unspecified,
+                public_key: public_key,
+                distance: 0,
+                signature: None,
+                peer_id: PeerId::from(&public_key),
+            }),
+            Protocol::Ws => Ok(PeerAddress {
+                ty: PeerAddressType::Ws(self.hostname().expect("Mandatory for Ws").to_string(), self.port().unwrap_or(80)),
+                services: ServiceFlags::FULL,
+                timestamp: 0,
+                net_address: NetAddress::Unspecified,
+                public_key: public_key,
+                distance: 0,
+                signature: None,
+                peer_id: PeerId::from(&public_key),
+            }),
+            _ => Err(PeerUriError::SeedNodeWithInvalidProtocol),
+        }
+    }
 }
 
 impl From<PeerAddress> for PeerUri {

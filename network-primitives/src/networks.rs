@@ -14,7 +14,7 @@ use crate::address::net_address::NetAddress;
 use crate::address::peer_address::PeerAddress;
 use crate::address::peer_address::PeerAddressType;
 use crate::address::PeerId;
-use crate::address::seed_list_url::SeedListUrl;
+use crate::address::seed_list::SeedList;
 use crate::services::ServiceFlags;
 
 
@@ -22,7 +22,7 @@ pub struct NetworkInfo {
     pub network_id: NetworkId,
     pub name: String,
     pub seed_peers: Vec<PeerAddress>,
-    pub seed_lists: Vec<SeedListUrl>,
+    pub seed_lists: Vec<SeedList>,
     pub genesis_block: Block,
     pub genesis_hash: Blake2bHash,
     pub genesis_accounts: String, // FIXME
@@ -38,9 +38,10 @@ pub fn create_seed_peer_addr_ws(url: &str, port: u16, pubkey_hex: &str) -> PeerA
     PeerAddress { ty: PeerAddressType::Ws(url.to_string(), port), services: ServiceFlags::FULL, timestamp: 0, net_address: NetAddress::Unspecified, public_key, distance: 0, signature: None, peer_id: PeerId::from(&public_key)}
 }
 
-pub fn create_seed_list(url: &str, pubkey_hex: &str) -> SeedListUrl {
+pub fn create_seed_list(url_str: &str, pubkey_hex: &str) -> SeedList {
+    let url = url::Url::parse(url_str).unwrap();
     let public_key = PublicKey::from_hex(pubkey_hex).unwrap();
-    SeedListUrl::new(url.to_string(), Some(public_key))
+    SeedList::new(url, Some(public_key))
 }
 
 lazy_static! {

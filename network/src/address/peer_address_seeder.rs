@@ -7,17 +7,14 @@ use failure::Fail;
 use futures::{future::*, Future, Stream};
 use parking_lot::Mutex;
 use reqwest::r#async::{Chunk, Client, Response};
+use url::Url;
 
 use keys::Signature;
+use crate::network_config::{NetworkConfig, Seed};
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::peer_uri::{PeerUri, PeerUriError};
-use network_primitives::networks::{
-    create_seed_peer_addr,
-    create_seed_peer_addr_ws,
-    get_network_info,
-    NetworkId
-};
-use network_primitives::protocol::Protocol;
+use network_primitives::networks::{ get_network_info, NetworkId };
+
 use utils::observer::Notifier;
 
 pub enum PeerAddressSeederEvent {
@@ -33,10 +30,8 @@ pub enum PeerAddressSeederError {
     FetchError(#[cause] reqwest::Error),
     #[fail(display = "Failed while reading a line from the seed list with io::error '{}'", _0)]
     IoError(IoError),
-    #[fail(display = "Seed node address could not be parsed into a PeerUri")]
+    #[fail(display = "Seed node address parsing failed with error '{}'", _0)]
     PeerUriParsingError(#[cause] PeerUriError),
-    #[fail(display = "The seed node didn't provide any parseable public key")]
-    SeedNodeMissingPublicKey,
     #[fail(display = "The seed list file didn't contain any parseable signature")]
     SignatureMissing,
     #[fail(display = "The signature in the file was in a line other than the last one")]
@@ -70,15 +65,29 @@ impl PeerAddressSeeder {
         }
     }
 
-    pub fn collect(&self, network_id: NetworkId) {
+    pub fn collect(&self, network_id: NetworkId, network_config: Arc<NetworkConfig>) {
         let network_info = get_network_info(network_id).expect("This was validated by PeerAddressBook::new()");
 
+        // Get additional seed lists from the config file (in Iterator form)
+        let additional_seedlists = network_config.additional_seeds().iter()
+        .filter_map(|seed| {
+            match seed {
+                Seed::List(seed_list) => Some(seed_list.clone()),
+                Seed::Peer(_) => None,
+            }
+        });
+
+        // Create a new Iterator chaining the hardcoded seed lists with the seed lists from the config file
+        // TODO: Optimize this to use references instead of cloning
+        let seed_lists = network_info.seed_lists.iter().cloned().chain(additional_seedlists);
+
         // Process all seed lists asynchronously
-        for seed_list in &network_info.seed_lists {
+        for seed_list in seed_lists {
             let notifier = Arc::clone(&self.notifier);
             let seed_list_url = seed_list.url().clone();
 
-            let task = Self::fetch(seed_list.url())
+            trace!("Start processing remote seed list: {}", &seed_list.url());
+            let task = Self::fetch(seed_list.url().clone())
             .and_then(move |response_body| {
                 let mut signature = None;
                 let mut seed_addresses = Vec::new();
@@ -105,9 +114,13 @@ impl PeerAddressSeeder {
                     // Try to parse the line as a seed address, if that fails, fallback to try to parse it as a signature
                     // TODO: Should we fail if this step fails (i.e. if there is a non-comment/non-empty line that is not
                     // a seed address neither a signature)?
-                    let seed_address = Self::str_to_seed_peer_addr(&line);
-                    match seed_address {
-                        Ok(seed_address) => seed_addresses.push(seed_address),
+                    match PeerUri::from_str(line) {
+                        Ok(seed_address) => {
+                            match seed_address.as_seed_peer_address() {
+                                Ok(peer_address) => seed_addresses.push(peer_address),
+                                Err(e) => return err(PeerAddressSeederError::PeerUriParsingError(e)),
+                            }
+                        },
                         _ => signature = Signature::from_hex(line).ok(),
                     }
                 }
@@ -145,32 +158,17 @@ impl PeerAddressSeeder {
     }
 
     // Asynchronously fetches a seed list from a remote location
-    fn fetch(url: &str) -> impl Future<Item=Chunk, Error=PeerAddressSeederError> {
+    fn fetch(url: Url) -> impl Future<Item=Chunk, Error=PeerAddressSeederError> {
         Client::new().get(url).send()
         .map_err(PeerAddressSeederError::from)
         .and_then(Self::fetch_callback)
-    }
-
-    fn str_to_seed_peer_addr(line: &str) -> Result<PeerAddress, PeerAddressSeederError> {
-        let uri = PeerUri::from_str(line)?;
-
-        // TODO: May be we want to allow seed nodes without public key?
-        // Note: only Wss and Ws nodes have a public key, so this also catches other node types
-        if uri.public_key().is_none() {
-            return Err(PeerAddressSeederError::SeedNodeMissingPublicKey);
-        }
-
-        match uri.protocol() {
-            Protocol::Wss => Ok(create_seed_peer_addr(uri.hostname().unwrap(), uri.port().unwrap_or(443), uri.public_key().unwrap())),
-            Protocol::Ws => Ok(create_seed_peer_addr_ws(uri.hostname().unwrap(), uri.port().unwrap_or(80), uri.public_key().unwrap())),
-            _ => unreachable!(), // Check the previous comment
-        }
     }
 
     // Note: this is a standalone function to help the compiler because as a closure in the fetch() function
     // it would fail to infer the types correctly
     fn fetch_callback(res: Response) -> Box<Future<Item=Chunk, Error=PeerAddressSeederError> + Send> {
         let status = res.status();
+
         if status == 200 {
             Box::new(res.into_body().concat2().map_err(PeerAddressSeederError::from))
         } else {

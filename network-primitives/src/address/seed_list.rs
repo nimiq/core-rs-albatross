@@ -1,19 +1,21 @@
 use keys::PublicKey;
+use url::Url;
 
-pub struct SeedListUrl {
-    url: String,
+#[derive(Clone, Debug)]
+pub struct SeedList {
+    url: Url,
     public_key: Option<PublicKey>,
 }
 
-impl SeedListUrl {
-    pub fn new(url: String, public_key: Option<PublicKey>) -> Self {
+impl SeedList {
+    pub fn new(url: Url, public_key: Option<PublicKey>) -> Self {
         Self {
             url,
             public_key,
         }
     }
 
-    pub fn url(&self) -> &String {
+    pub fn url(&self) -> &Url {
         &self.url
     }
 

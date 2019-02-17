@@ -19,6 +19,8 @@ pub enum Error {
     ServerStartError(#[cause] ServerStartError),
     #[fail(display = "Could not load network info for id {:?}", _0)]
     InvalidNetworkInfo(NetworkId),
+    #[fail(display = "Could not add seed node {}", _0)]
+    InvalidSeed(#[cause] SeedError)
 }
 
 impl From<IoError> for Error {
@@ -33,6 +35,11 @@ impl From<ServerStartError> for Error {
     }
 }
 
+impl From<SeedError> for Error {
+    fn from(e: SeedError) -> Self {
+        Error::InvalidSeed(e)
+    }
+}
 
 #[derive(Debug, Fail)]
 pub enum SeedError {

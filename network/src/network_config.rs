@@ -9,6 +9,7 @@ use keys::{KeyPair, PublicKey};
 use network_primitives::address::net_address::NetAddress;
 use network_primitives::address::peer_address::{PeerAddress, PeerAddressType};
 use network_primitives::address::PeerId;
+use network_primitives::address::seed_list::SeedList;
 use network_primitives::protocol::{Protocol, ProtocolFlags};
 use network_primitives::services::Services;
 use utils::time::systemtime_to_timestamp;
@@ -21,7 +22,7 @@ use crate::error::{Error, SeedError};
 #[derive(Clone, Debug)]
 pub enum Seed {
     Peer(PeerUri),
-    List(Url)
+    List(SeedList)
 }
 
 impl FromStr for Seed {
@@ -32,7 +33,8 @@ impl FromStr for Seed {
         Ok(match url.scheme() {
             "http" | "https" => {
                 // Seed list
-                Seed::List(url)
+                // FIXME: add the public key once we know how it's going to be included into the str.
+                Seed::List(SeedList::new(url, None))
             },
             _ => {
                 // Peer URI
