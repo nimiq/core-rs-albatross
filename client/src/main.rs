@@ -1,6 +1,3 @@
-extern crate clap;
-extern crate fern;
-extern crate futures;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -19,9 +16,6 @@ extern crate nimiq_rpc_server as rpc_server;
 extern crate parking_lot;
 #[macro_use]
 extern crate serde_derive;
-extern crate tokio;
-extern crate toml;
-
 
 use std::io;
 use std::net::IpAddr;

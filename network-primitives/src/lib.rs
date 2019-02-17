@@ -14,8 +14,6 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_hash as hash;
 #[macro_use]
 extern crate lazy_static;
-extern crate url;
-extern crate failure;
 
 #[cfg(feature = "address")]
 pub mod address;

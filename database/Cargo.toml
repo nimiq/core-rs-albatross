@@ -13,11 +13,11 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 
 [dependencies]
 log = "0.4"
-lmdb-zero = "0.4.4"
-fs2 = "0.4.3"
+lmdb-zero = "0.4"
+fs2 = "0.4"
 parking_lot = "0.7"
 tempdir = "0.3"
-rand = "0.6.4"
+rand = "0.6"
 bitflags = "1.0"
 beserial = { path = "../beserial" }
 nimiq-hash = { path = "../hash", optional = true }

@@ -9,10 +9,6 @@
 /// TODO: Parameterize all functions that use scale_down with the rounding mode.
 ///
 
-
-extern crate num_bigint;
-extern crate num_traits;
-
 use num_bigint::BigUint;
 use num_traits::identities::{One, Zero};
 use num_traits::ToPrimitive;

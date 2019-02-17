@@ -19,4 +19,4 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 
 [dev-dependencies]
-hex = "0.3.2"
+hex = "0.3"

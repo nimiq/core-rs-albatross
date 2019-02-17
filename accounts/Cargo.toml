@@ -21,6 +21,6 @@ nimiq-account = { path = "../primitives/account" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
-hex = "0.3.2"
+hex = "0.3"
 nimiq-tree-primitives = { path = "./tree-primitives" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["networks"] }

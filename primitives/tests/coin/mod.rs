@@ -1,5 +1,3 @@
-extern crate hex;
-
 use beserial::{Serialize, Deserialize, SerializingError};
 use primitives::coin::{Coin, CoinParseError};
 use std::str::FromStr;

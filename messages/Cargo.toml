@@ -22,9 +22,9 @@ nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 
 bitflags = "1.0"
 byteorder = "1.2"
-hex = "0.3.2"
+hex = "0.3"
 parking_lot = "0.7"
-rand = "0.6.4"
+rand = "0.6"
 
 [dev-dependencies.nimiq-utils]
 path = "../utils"

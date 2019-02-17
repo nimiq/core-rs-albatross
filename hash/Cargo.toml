@@ -12,10 +12,10 @@ license = "Apache-2.0"
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 
 [dependencies]
-blake2-rfc = "0.2.18"
+blake2-rfc = "0.2"
 libargon2-sys = { path = "../libargon2-sys" }
-hex = "0.3.2"
-sha2 = "0.8.0"
+hex = "0.3"
+sha2 = "0.8"
 beserial = { path = "../beserial" }
 nimiq-macros = { path = "../macros" }
 byteorder = "1.2"

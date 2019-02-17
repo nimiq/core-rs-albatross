@@ -1159,8 +1159,6 @@ unsafe impl<'a, T: Sync> Sync for IterMut<'a, T> {}
 
 #[cfg(test)]
 mod tests {
-    extern crate rand;
-
     use std::thread;
     use std::vec::Vec;
 

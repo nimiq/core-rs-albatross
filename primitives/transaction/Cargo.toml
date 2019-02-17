@@ -22,4 +22,4 @@ nimiq-utils = { path = "../../utils", features = ["merkle"] }
 nimiq-primitives = { path = "..", features = ["policy", "networks", "account", "coin"] }
 
 [dev-dependencies]
-hex = "0.3.2"
+hex = "0.3"

@@ -1,5 +1,3 @@
-extern crate fixed_unsigned;
-
 use std::str::FromStr;
 use std::string::ToString;
 

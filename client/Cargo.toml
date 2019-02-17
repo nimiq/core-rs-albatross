@@ -13,9 +13,9 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 maintenance = { status = "experimental" }
 
 [dependencies]
-serde = "1.0.85"
-serde_derive = "1.0.85"
-toml = "0.4.10"
+serde = "1.0"
+serde_derive = "1.0"
+toml = "0.4"
 log = "0.4"
 fern = { version = "0.5", features = ["colored"] }
 futures = "0.1"
@@ -31,10 +31,10 @@ nimiq-rpc-server = { path = "../rpc-server", optional = true }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-mempool = { path = "../mempool" }
 nimiq-lib = { path = "../lib" }
-colored = "1.7.0"
-chrono = "0.4.6"
-failure = "0.1.5"
-log-panics = { version = "2.0.0", features = ["with-backtrace"] }
+colored = "1.7"
+chrono = "0.4"
+failure = "0.1"
+log-panics = { version = "2.0", features = ["with-backtrace"] }
 
 [features]
 default = ["all"]

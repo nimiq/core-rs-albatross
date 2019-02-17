@@ -1,4 +1,3 @@
-extern crate beserial;
 extern crate nimiq_primitives as primitives;
 #[cfg(feature = "lazy_static")]
 #[macro_use]

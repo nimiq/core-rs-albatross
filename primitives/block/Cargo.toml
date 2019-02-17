@@ -24,7 +24,7 @@ nimiq-transaction = { path = "../transaction" }
 nimiq-account = { path = "../account" }
 nimiq-macros = { path = "../../macros" }
 log = "0.4"
-hex = "0.3.2"
+hex = "0.3"
 
 [dev-dependencies]
-num-traits = "0.2.6"
+num-traits = "0.2"

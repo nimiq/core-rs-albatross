@@ -1,5 +1,3 @@
-extern crate hex;
-extern crate beserial;
 extern crate nimiq_keys as keys;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;

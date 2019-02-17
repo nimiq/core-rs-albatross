@@ -22,4 +22,4 @@ log = "0.4"
 
 [dev-dependencies]
 nimiq-transaction = { path = "../transaction" }
-hex = "0.3.2"
+hex = "0.3"

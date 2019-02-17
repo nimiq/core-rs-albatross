@@ -22,11 +22,11 @@ nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 nimiq-macros = { path = "../macros" }
 bitflags = "1.0"
-hex = "0.3.2"
+hex = "0.3"
 lazy_static = "1.2"
 atomic = "0.4"
 url = "1.7"
-failure = "0.1.5"
+failure = "0.1"
 
 [features]
 default = ["all"]

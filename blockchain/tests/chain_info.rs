@@ -1,5 +1,3 @@
-extern crate fixed_unsigned;
-
 use std::str::FromStr;
 use fixed_unsigned::types::FixedUnsigned10;
 

@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-extern crate libc;
 use libc::{c_int, uint32_t, size_t};
 
 extern {

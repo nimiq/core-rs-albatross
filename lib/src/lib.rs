@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate lazy_static;
-extern crate futures;
 
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_database as database;

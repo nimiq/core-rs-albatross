@@ -14,7 +14,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 parking_lot = "0.7"
-rand = "0.6.4"
+rand = "0.6"
 log = "0.4"
 beserial = { path = "../beserial" }
 nimiq-hash = { path = "../hash" }
@@ -29,7 +29,7 @@ nimiq-network = { path = "../network" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
 nimiq-blockchain = { path = "../blockchain", features = ["transaction-store"] }
-weak-table = "0.2.3"
-failure = "0.1.5"
+weak-table = "0.2"
+failure = "0.1"
 futures = "0.1"
 tokio = "0.1"

@@ -1,5 +1,3 @@
-extern crate cc;
-
 fn main() {
     let mut config = cc::Build::new();
     config.file("native/argon2.c")

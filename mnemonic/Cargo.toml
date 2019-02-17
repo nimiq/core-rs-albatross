@@ -16,10 +16,10 @@ nimiq-hash = { path = "../hash" }
 beserial = { path = "../beserial" }
 nimiq-macros = { path = "../macros" }
 nimiq-utils = { path = "../utils", features = ["bit-vec", "crc"] }
-bit-vec = "0.5.0"
-hex = "0.3.2"
+bit-vec = "0.5"
+hex = "0.3"
 nimiq-key-derivation = { path = "../key-derivation", optional = true }
-unicode-normalization = "0.1.7"
+unicode-normalization = "0.1"
 
 [features]
 default = ["key-derivation"]
