@@ -9,8 +9,8 @@ use std::ops::Deref;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use nimiq_hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
 
-pub fn compute_root_from_content<D: Hasher, T: SerializeContent>(values: &Vec<T>) -> D::Output {
-    return compute_root_from_content_slice::<D, T>(values.as_slice());
+pub fn compute_root_from_content<D: Hasher, T: SerializeContent>(values: &[T]) -> D::Output {
+    compute_root_from_content_slice::<D, T>(values)
 }
 
 pub fn compute_root_from_content_slice<D: Hasher, T: SerializeContent>(values: &[T]) -> D::Output {
@@ -20,18 +20,18 @@ pub fn compute_root_from_content_slice<D: Hasher, T: SerializeContent>(values: &
         h.serialize_content(&mut hasher).unwrap();
         v.push(hasher.finish());
     }
-    return compute_root_from_hashes::<D::Output>(&v);
+    compute_root_from_hashes::<D::Output>(&v)
 }
 
-pub fn compute_root_from_hashes<T: HashOutput>(values: &Vec<T>) -> T {
-    return compute_root_from_slice::<T>(values.as_slice()).into_owned();
+pub fn compute_root_from_hashes<T: HashOutput>(values: &[T]) -> T {
+    compute_root_from_slice::<T>(values).into_owned()
 }
 
 pub fn compute_root_from_slice<T: HashOutput>(values: &[T]) -> Cow<T> {
     let mut hasher = T::Builder::default();
     match values.len() {
         0 => {
-            hasher.write(&[]).unwrap();
+            hasher.write_all(&[]).unwrap();
         }
         1 => {
             return Cow::Borrowed(&values[0]);
@@ -44,7 +44,7 @@ pub fn compute_root_from_slice<T: HashOutput>(values: &[T]) -> Cow<T> {
             hasher.hash(right_hash.deref());
         }
     };
-    return Cow::Owned(hasher.finish());
+    Cow::Owned(hasher.finish())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -54,16 +54,16 @@ pub struct MerklePath<H: HashOutput> {
 
 impl<H> MerklePath<H> where H: HashOutput {
     pub fn empty() -> Self {
-        return MerklePath {
+        MerklePath {
             nodes: Vec::new()
-        };
+        }
     }
 
-    pub fn new<D: Hasher<Output=H>, T: SerializeContent>(values: &Vec<T>, leaf_value: &T) -> MerklePath<H> {
+    pub fn new<D: Hasher<Output=H>, T: SerializeContent>(values: &[T], leaf_value: &T) -> MerklePath<H> {
         let leaf_hash = D::default().chain(leaf_value).finish();
         let mut path: Vec<MerklePathNode<D::Output>> = Vec::new();
-        MerklePath::<H>::compute::<D, T>(values.as_slice(), &leaf_hash, &mut path);
-        return MerklePath { nodes: path };
+        MerklePath::<H>::compute::<D, T>(values, &leaf_hash, &mut path);
+        MerklePath { nodes: path }
     }
 
     fn compute<D: Hasher<Output=H>, T: SerializeContent>(values: &[T], leaf_hash: &D::Output, path: &mut Vec<MerklePathNode<H>>) -> (bool, H) {
@@ -71,7 +71,7 @@ impl<H> MerklePath<H> where H: HashOutput {
         let mut contains_leaf = false;
         match values.len() {
             0 => {
-                hasher.write(&[]).unwrap();
+                hasher.write_all(&[]).unwrap();
             }
             1 => {
                 hasher.hash(&values[0]);
@@ -94,7 +94,7 @@ impl<H> MerklePath<H> where H: HashOutput {
                 }
             }
         };
-        return (contains_leaf, hasher.finish());
+        (contains_leaf, hasher.finish())
     }
 
     pub fn compute_root<T: SerializeContent>(&self, leaf_value: &T) -> H {
@@ -110,12 +110,17 @@ impl<H> MerklePath<H> where H: HashOutput {
             }
             root = h.finish();
         }
-        return root;
+        root
     }
 
     #[inline]
     pub fn len(&self) -> usize {
-        return self.nodes.len();
+        self.nodes.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
     }
 
     /// Compress "left" field of every node in the MerklePath to a bit vector.
@@ -128,12 +133,12 @@ impl<H> MerklePath<H> where H: HashOutput {
                 left_bits[i / 8] |= 0x80 >> (i % 8);
             }
         }
-        return left_bits;
+        left_bits
     }
 
     /// Decompress "left" field of every node in the MerklePath to a bit vector.
     #[inline]
-    fn decompress(node_index: usize, left_bits: &Vec<u8>) -> bool {
+    fn decompress(node_index: usize, left_bits: &[u8]) -> bool {
         left_bits[node_index / 8] & (0x80 >> (node_index % 8)) != 0
     }
 }
@@ -148,14 +153,14 @@ impl<H: HashOutput> Serialize for MerklePath<H> {
         for node in self.nodes.iter() {
             size += Serialize::serialize(&node.hash, writer)?;
         }
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
         let mut size = /*count*/ 1;
         size += (self.nodes.len() + 7) / 8; // For rounding up: (num + divisor - 1) / divisor
         size += self.nodes.iter().fold(0, |acc, node| acc + Serialize::serialized_size(&node.hash));
-        return size;
+        size
     }
 }
 
@@ -175,7 +180,7 @@ impl<H: HashOutput> Deserialize for MerklePath<H> {
                 hash: Deserialize::deserialize(reader)?,
             });
         }
-        return Ok(MerklePath { nodes });
+        Ok(MerklePath { nodes })
     }
 }
 
@@ -198,10 +203,10 @@ impl<H> MerkleProof<H> where H: HashOutput {
         let mut nodes: Vec<H> = Vec::new();
         let mut operations: Vec<MerkleProofOperation> = Vec::new();
         MerkleProof::compute(hashes.as_slice(), hashes_to_proof.as_slice(), &mut nodes, &mut operations);
-        return MerkleProof {
+        MerkleProof {
             nodes,
             operations,
-        };
+        }
     }
 
     pub fn from_values<T: SerializeContent>(values: &[T], values_to_proof: &[T]) -> Self {
@@ -241,35 +246,35 @@ impl<H> MerkleProof<H> where H: HashOutput {
             }
         }
         // If we processed all values but not all leaves, these are missing. Add last value as proof.
-        if leaf_index < values_to_proof.len() && values.len() > 0 {
+        if leaf_index < values_to_proof.len() && !values.is_empty() {
             final_values_to_proof.push(values[values.len() - 1].clone());
         }
 
         let hashes: Vec<H> = values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
         let hashes_to_proof: Vec<H> = final_values_to_proof.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
-        return MerkleProof::new(hashes, hashes_to_proof);
+        MerkleProof::new(hashes, hashes_to_proof)
     }
 
     fn compute(hashes: &[H], hashes_to_proof: &[H], path: &mut Vec<H>, operations: &mut Vec<MerkleProofOperation>) -> (bool, H) {
         let mut hasher = H::Builder::default();
         match hashes.len() {
             0 => {
-                hasher.write(&[]).unwrap();
+                hasher.write_all(&[]).unwrap();
                 let hash = hasher.finish();
                 path.push(hash.clone());
                 operations.push(MerkleProofOperation::ConsumeProof);
-                return (false, hash);
+                (false, hash)
             }
             1 => {
                 let hash = hashes[0].clone(); // We assume all values to be hashed once already.
                 let is_leaf = hashes_to_proof.contains(&hash);
                 if is_leaf {
                     operations.push(MerkleProofOperation::ConsumeInput);
-                    return (is_leaf, hash);
+                    (is_leaf, hash)
                 } else {
                     path.push(hash.clone());
                     operations.push(MerkleProofOperation::ConsumeProof);
-                    return (is_leaf,  hash);
+                    (is_leaf,  hash)
                 }
             }
             len => {
@@ -292,9 +297,9 @@ impl<H> MerkleProof<H> where H: HashOutput {
                 path.extend(sub_path);
                 operations.extend(sub_operations);
                 operations.push(MerkleProofOperation::Hash);
-                return (true, hash);
+                (true, hash)
             }
-        };
+        }
     }
 
     pub fn compute_root_from_values<T: SerializeContent>(&self, leaf_values: &[T]) -> Result<H, InvalidMerkleProofError> {
@@ -348,12 +353,17 @@ impl<H> MerkleProof<H> where H: HashOutput {
         }
 
         let hash = stack.remove(0);
-        return Ok(hash.into_owned());
+        Ok(hash.into_owned())
     }
 
     #[inline]
     pub fn len(&self) -> usize {
-        return self.nodes.len();
+        self.nodes.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
     }
 
     /// Compress vector of MerkleProofOperations in the MerkleProof to a bit vector.
@@ -363,9 +373,9 @@ impl<H> MerkleProof<H> where H: HashOutput {
         let mut operation_bits: Vec<u8> = vec![0; num_bytes];
         for (i, operation) in self.operations.iter().enumerate() {
             let op = *operation as u8; // By definition, this can only take up to two bits.
-            operation_bits[i / 4] |= op << (i % 4) * 2;
+            operation_bits[i / 4] |= op << ((i % 4) * 2);
         }
-        return operation_bits;
+        operation_bits
     }
 
     /// Decompress a bit vector into a vector of MerkleProofOperations.
@@ -373,7 +383,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
         let mut operations: Vec<MerkleProofOperation> = Vec::with_capacity(num_operations);
 
         for i in 0..num_operations {
-            let op = (operation_bits[i / 4] >> (i % 4) * 2) & 0x3;
+            let op = (operation_bits[i / 4] >> ((i % 4) * 2)) & 0x3;
             operations.push(MerkleProofOperation::from_u8(op)?);
         }
 
@@ -389,14 +399,14 @@ impl<H: HashOutput> Serialize for MerkleProof<H> {
         size += writer.write(compressed.as_slice())?;
 
         size += SerializeWithLength::serialize::<u16, W>(&self.nodes, writer)?;
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
         let mut size = /*operations*/ 2;
         size += (self.operations.len() + 3) / 4; // For rounding up: (num + divisor - 1) / divisor
         size += SerializeWithLength::serialized_size::<u16>(&self.nodes);
-        return size;
+        size
     }
 }
 
@@ -413,10 +423,10 @@ impl<H: HashOutput> Deserialize for MerkleProof<H> {
             None => return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "invalid operation in bitvector").into()),
         };
 
-        return Ok(MerkleProof {
+        Ok(MerkleProof {
             operations,
             nodes: DeserializeWithLength::deserialize::<u16, R>(reader)?,
-        });
+        })
     }
 }
 

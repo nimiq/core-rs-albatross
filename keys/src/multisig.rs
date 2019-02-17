@@ -21,13 +21,13 @@ impl RandomSecret {
 
 impl From<[u8; RandomSecret::SIZE]> for RandomSecret {
     fn from(bytes: [u8; RandomSecret::SIZE]) -> Self {
-        return RandomSecret(Scalar::from_bytes_mod_order(bytes));
+        RandomSecret(Scalar::from_bytes_mod_order(bytes))
     }
 }
 
 impl<'a> From<&'a [u8; RandomSecret::SIZE]> for RandomSecret {
     fn from(bytes: &'a [u8; RandomSecret::SIZE]) -> Self {
-        return RandomSecret::from(bytes.clone());
+        RandomSecret::from(*bytes)
     }
 }
 
@@ -45,22 +45,22 @@ impl Commitment {
 
     pub fn from_bytes(bytes: [u8; Commitment::SIZE]) -> Option<Self> {
         let compressed = CompressedEdwardsY(bytes);
-        return match compressed.decompress() {
+        match compressed.decompress() {
             None => None,
             Some(e) => Some(Commitment(e)),
-        };
+        }
     }
 }
 
 impl From<[u8; Commitment::SIZE]> for Commitment {
     fn from(bytes: [u8; Commitment::SIZE]) -> Self {
-        return Commitment::from_bytes(bytes).unwrap();
+        Commitment::from_bytes(bytes).unwrap()
     }
 }
 
 impl<'a> From<&'a [u8; Commitment::SIZE]> for Commitment {
     fn from(bytes: &'a [u8; Commitment::SIZE]) -> Self {
-        return Commitment::from(bytes.clone());
+        Commitment::from(*bytes)
     }
 }
 
@@ -69,7 +69,7 @@ pub struct InvalidScalarError;
 
 impl fmt::Display for InvalidScalarError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        return write!(f, "Generated scalar was invalid (0 or 1).");
+        write!(f, "Generated scalar was invalid (0 or 1).")
     }
 }
 
@@ -91,9 +91,9 @@ pub struct CommitmentPair {
 
 impl CommitmentPair {
     pub fn new(random_secret: &RandomSecret, commitment: &Commitment) -> Self {
-        let cloned_secret = random_secret.clone();
-        let cloned_commitment = commitment.clone();
-        return CommitmentPair { random_secret: cloned_secret, commitment: cloned_commitment };
+        let cloned_secret = *random_secret;
+        let cloned_commitment = *commitment;
+        CommitmentPair { random_secret: cloned_secret, commitment: cloned_commitment }
     }
 
     pub fn generate() -> Result<CommitmentPair, InvalidScalarError> {
@@ -116,7 +116,7 @@ impl CommitmentPair {
 
         let rs = RandomSecret(scalar);
         let ct = Commitment(commitment);
-        return Ok(CommitmentPair { random_secret: rs, commitment: ct });
+        Ok(CommitmentPair { random_secret: rs, commitment: ct })
     }
 
     #[inline]
@@ -136,7 +136,7 @@ impl PartialSignature {
         let mut signature: [u8; Signature::SIZE] = [0u8; Signature::SIZE];
         signature[..Commitment::SIZE].copy_from_slice(&aggregated_commitment.to_bytes());
         signature[Commitment::SIZE..].copy_from_slice(self.as_bytes());
-        return Signature::from(&signature);
+        Signature::from(&signature)
     }
 
     #[inline]
@@ -145,22 +145,22 @@ impl PartialSignature {
 
 impl From<[u8; PartialSignature::SIZE]> for PartialSignature {
     fn from(bytes: [u8; PartialSignature::SIZE]) -> Self {
-        return PartialSignature(Scalar::from_bytes_mod_order(bytes));
+        PartialSignature(Scalar::from_bytes_mod_order(bytes))
     }
 }
 
 impl<'a> From<&'a [u8; PartialSignature::SIZE]> for PartialSignature {
     fn from(bytes: &'a [u8; PartialSignature::SIZE]) -> Self {
-        return PartialSignature::from(bytes.clone());
+        PartialSignature::from(*bytes)
     }
 }
 
 impl KeyPair {
-    pub fn partial_sign(&self, public_keys: &Vec<PublicKey>, secret: &RandomSecret, commitments: &Vec<Commitment>, data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
+    pub fn partial_sign(&self, public_keys: &[PublicKey], secret: &RandomSecret, commitments: &[Commitment], data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
         if public_keys.len() != commitments.len() {
             panic!("Number of public keys and commitments must be the same.");
         }
-        if public_keys.len() == 0 {
+        if public_keys.is_empty() {
             panic!("Number of public keys and commitments must be greater than 0.");
         }
         if !public_keys.contains(&self.public) {
@@ -189,7 +189,7 @@ impl KeyPair {
         let partial_signature: Scalar = s * delinearized_private_key + secret.0;
         let mut public_key_bytes: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
         public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
-        return (PartialSignature(partial_signature), PublicKey::from(public_key_bytes), aggregated_commitment);
+        (PartialSignature(partial_signature), PublicKey::from(public_key_bytes), aggregated_commitment)
     }
 
     fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {
@@ -205,7 +205,7 @@ impl KeyPair {
         let sk = expanded_private_key.to_scalar();
 
         // Compute H(C||P)*sk
-        return s * sk;
+        s * sk
     }
 }
 
@@ -215,7 +215,7 @@ impl PublicKey {
         bits.copy_from_slice(&self.as_bytes()[..PublicKey::SIZE]);
 
         let compressed = CompressedEdwardsY(bits);
-        return compressed.decompress();
+        compressed.decompress()
     }
 
     fn delinearize(&self, public_keys_hash: &[u8; 64]) -> EdwardsPoint {
@@ -229,11 +229,11 @@ impl PublicKey {
         // Should always work, since we come from a valid public key.
         let p = self.to_edwards_point().unwrap();
         // Compute H(C||P)*P.
-        return s * p;
+        s * p
     }
 }
 
-fn hash_public_keys(public_keys: &Vec<PublicKey>) -> [u8; 64] {
+fn hash_public_keys(public_keys: &[PublicKey]) -> [u8; 64] {
     // 1. Compute hash over public keys public_keys_hash = C = H(P_1 || ... || P_n).
     let mut h: sha2::Sha512 = sha2::Sha512::default();
     let mut public_keys_hash: [u8; 64] = [0u8; 64];
@@ -241,7 +241,7 @@ fn hash_public_keys(public_keys: &Vec<PublicKey>) -> [u8; 64] {
         h.input(public_key.as_bytes());
     }
     public_keys_hash.copy_from_slice(h.result().as_slice());
-    return public_keys_hash;
+    public_keys_hash
 }
 
 trait ToScalar {
@@ -252,6 +252,6 @@ impl ToScalar for ::ed25519_dalek::ExpandedSecretKey {
     fn to_scalar(&self) -> Scalar {
         let mut bytes: [u8; 32] = [0u8; 32];
         bytes.copy_from_slice(&self.to_bytes()[..32]);
-        return Scalar::from_bytes_mod_order(bytes);
+        Scalar::from_bytes_mod_order(bytes)
     }
 }

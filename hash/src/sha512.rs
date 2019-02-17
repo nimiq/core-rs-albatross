@@ -11,7 +11,7 @@ impl<'a> From<&'a [u8]> for Sha512Hash {
         assert_eq!(slice.len(), SHA512_LENGTH, "Tried to create instance with slice of wrong length");
         let mut a = [0 as u8; SHA512_LENGTH];
         a.clone_from_slice(&slice[0..SHA512_LENGTH]);
-        return Sha512Hash(a);
+        Sha512Hash(a)
     }
 }
 
@@ -19,30 +19,30 @@ impl ::beserial::Deserialize for Sha512Hash {
     fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> Result<Self, ::beserial::SerializingError> {
         let mut a = [0 as u8; SHA512_LENGTH];
         reader.read_exact(&mut a[..])?;
-        return Ok(Sha512Hash(a))
+        Ok(Sha512Hash(a))
     }
 }
 
 impl ::beserial::Serialize for Sha512Hash {
     fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> Result<usize, ::beserial::SerializingError> {
-        writer.write(&self.0)?;
-        return Ok(SHA512_LENGTH);
+        writer.write_all(&self.0)?;
+        Ok(SHA512_LENGTH)
     }
 
     fn serialized_size(&self) -> usize {
-        return SHA512_LENGTH;
+        SHA512_LENGTH
     }
 }
 
 impl From<[u8; SHA512_LENGTH]> for Sha512Hash {
     fn from(arr: [u8; SHA512_LENGTH]) -> Self {
-        return Sha512Hash(arr);
+        Sha512Hash(arr)
     }
 }
 
 impl From<Sha512Hash> for [u8; SHA512_LENGTH] {
     fn from(i: Sha512Hash) -> [u8; SHA512_LENGTH] {
-        return i.0;
+        i.0
     }
 }
 
@@ -97,7 +97,7 @@ impl Ord for Sha512Hash {
 
 impl Debug for Sha512Hash {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        return f.write_str(&::hex::encode(&self.0[..]));
+        f.write_str(&::hex::encode(&self.0[..]))
     }
 }
 
@@ -116,7 +116,7 @@ impl Sha512Hash {
 
 impl ::std::fmt::Display for Sha512Hash {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        return f.write_str(&::hex::encode(&self.0[..]));
+        f.write_str(&::hex::encode(&self.0[..]))
     }
 }
 
@@ -126,16 +126,16 @@ impl ::std::str::FromStr for Sha512Hash {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let vec = Vec::from_hex(s)?;
         if vec.len() == SHA512_LENGTH {
-            return Ok(Sha512Hash::from(&vec[..]));
+            Ok(Sha512Hash::from(&vec[..]))
         } else {
-            return Err(::hex::FromHexError::InvalidStringLength);
+            Err(::hex::FromHexError::InvalidStringLength)
         }
     }
 }
 
 impl From<&'static str> for Sha512Hash {
     fn from(s: &'static str) -> Self {
-        return s.parse().unwrap();
+        s.parse().unwrap()
     }
 }
 
@@ -148,32 +148,32 @@ pub struct Sha512Hasher(Sha512);
 impl HashOutput for Sha512Hash {
     type Builder = Sha512Hasher;
 
-    fn as_bytes<'a>(&'a self) -> &[u8] {
-        return &self.0;
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
     fn len() -> usize { SHA512_LENGTH }
 }
 
 impl Sha512Hasher {
     pub fn new() -> Self {
-        return Sha512Hasher(Sha512::default());
+        Sha512Hasher(Sha512::default())
     }
 }
 
 impl Default for Sha512Hasher {
     fn default() -> Self {
-        return Sha512Hasher::new();
+        Sha512Hasher::new()
     }
 }
 
 impl io::Write for Sha512Hasher {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0.input(buf);
-        return Ok(buf.len());
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -182,6 +182,6 @@ impl Hasher for Sha512Hasher {
 
     fn finish(self) -> Sha512Hash {
         let result = self.0.result();
-        return Sha512Hash::from(result.as_slice());
+        Sha512Hash::from(result.as_slice())
     }
 }

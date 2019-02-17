@@ -22,12 +22,14 @@ impl SerializeContent for BlockHeader {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
+// Different hash implementation than std
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for BlockHeader {}
 
 impl BlockHeader {
     pub fn verify_proof_of_work(&self) -> bool {
         let target: Target = self.n_bits.into();
-        return target.is_met_by(&self.pow());
+        target.is_met_by(&self.pow())
     }
 
     pub fn pow(&self) -> Argon2dHash {
@@ -52,10 +54,10 @@ impl BlockHeader {
         }
 
         // Everything checks out.
-        return true;
+        true
     }
 
     pub fn timestamp_in_millis(&self) -> u64 {
-        return self.timestamp as u64 * 1000;
+        self.timestamp as u64 * 1000
     }
 }

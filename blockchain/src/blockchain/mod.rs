@@ -271,7 +271,7 @@ impl<'env> Blockchain<'env> {
 
         #[cfg(feature = "metrics")]
         self.metrics.note_forked_block();
-        return PushResult::Forked;
+        PushResult::Forked
     }
 
     fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> PushResult {
@@ -332,7 +332,7 @@ impl<'env> Blockchain<'env> {
 
         #[cfg(feature = "metrics")]
         self.metrics.note_extended_block();
-        return PushResult::Extended;
+        PushResult::Extended
     }
 
     fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo) -> PushResult {
@@ -448,9 +448,10 @@ impl<'env> Blockchain<'env> {
 
             // Set onMainChain flag / mainChainSuccessor on the fork.
             for i in (0..fork_chain.len()).rev() {
-                let main_chain_successor = match i > 0 {
-                    true => Some(fork_chain[i - 1].0.clone()),
-                    false => None
+                let main_chain_successor = if i > 0 {
+                    Some(fork_chain[i - 1].0.clone())
+                } else {
+                    None
                 };
 
                 let fork_block = &mut fork_chain[i];
@@ -488,7 +489,7 @@ impl<'env> Blockchain<'env> {
 
         #[cfg(feature = "metrics")]
         self.metrics.note_rebranched_block();
-        return PushResult::Rebranched;
+        PushResult::Rebranched
     }
 
     pub fn get_next_target(&self, head_hash: Option<&Blake2bHash>) -> Target {
@@ -582,7 +583,7 @@ impl<'env> Blockchain<'env> {
 
         // XXX Reduce target precision to nBits precision.
         let n_bits: TargetCompact = Target::from(next_target).into();
-        return Target::from(n_bits);
+        Target::from(n_bits)
     }
 
     pub fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {

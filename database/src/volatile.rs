@@ -46,29 +46,29 @@ impl Error for VolatileDatabaseError {
 
 impl VolatileEnvironment {
     pub fn new(max_dbs: u32) -> Result<Environment, VolatileDatabaseError> {
-        let temp_dir = TempDir::new("volatile-core").map_err(|e| VolatileDatabaseError::IoError(e))?;
-        let path = temp_dir.path().to_str().ok_or(VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
-        return Ok(Environment::Volatile(VolatileEnvironment {
+        let temp_dir = TempDir::new("volatile-core").map_err(VolatileDatabaseError::IoError)?;
+        let path = temp_dir.path().to_str().ok_or_else(|| VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
+        Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir,
-            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, open::NOSYNC | open::WRITEMAP).map_err(|e| VolatileDatabaseError::LmdbError(e))?,
-        }));
+            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, open::NOSYNC | open::WRITEMAP).map_err(VolatileDatabaseError::LmdbError)?,
+        }))
     }
 
     pub fn new_with_lmdb_flags(max_dbs: u32, flags: open::Flags) -> Result<Environment, VolatileDatabaseError> {
-        let temp_dir = TempDir::new("volatile-core").map_err(|e| VolatileDatabaseError::IoError(e))?;
-        let path = temp_dir.path().to_str().ok_or(VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
-        return Ok(Environment::Volatile(VolatileEnvironment {
+        let temp_dir = TempDir::new("volatile-core").map_err(VolatileDatabaseError::IoError)?;
+        let path = temp_dir.path().to_str().ok_or_else(|| VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
+        Ok(Environment::Volatile(VolatileEnvironment {
             temp_dir,
-            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, flags | open::NOSYNC | open::WRITEMAP).map_err(|e| VolatileDatabaseError::LmdbError(e))?,
-        }));
+            env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, flags | open::NOSYNC | open::WRITEMAP).map_err(VolatileDatabaseError::LmdbError)?,
+        }))
     }
 
-    pub(in super) fn open_database<'env>(&'env self, name: String, flags: DatabaseFlags) -> VolatileDatabase<'env> {
-        return VolatileDatabase(self.env.open_database(name, flags));
+    pub(in super) fn open_database(&self, name: String, flags: DatabaseFlags) -> VolatileDatabase {
+        VolatileDatabase(self.env.open_database(name, flags))
     }
 
     pub(in super) fn drop_database(self) -> io::Result<()> {
-        return Ok(());
+        Ok(())
     }
 }
 
@@ -85,7 +85,7 @@ pub struct VolatileReadTransaction<'env>(LmdbReadTransaction<'env>);
 
 impl<'env> VolatileReadTransaction<'env> {
     pub(in super) fn new(env: &'env VolatileEnvironment) -> Self {
-        return VolatileReadTransaction(LmdbReadTransaction::new(&env.env));
+        VolatileReadTransaction(LmdbReadTransaction::new(&env.env))
     }
 
     pub(in super) fn get<K, V>(&self, db: &VolatileDatabase, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
@@ -102,7 +102,7 @@ pub struct VolatileWriteTransaction<'env>(LmdbWriteTransaction<'env>);
 
 impl<'env> VolatileWriteTransaction<'env> {
     pub(in super) fn new(env: &'env VolatileEnvironment) -> Self {
-        return VolatileWriteTransaction(LmdbWriteTransaction::new(&env.env));
+        VolatileWriteTransaction(LmdbWriteTransaction::new(&env.env))
     }
 
     pub(in super) fn get<K, V>(&self, db: &VolatileDatabase, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {

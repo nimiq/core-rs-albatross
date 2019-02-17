@@ -148,12 +148,10 @@ impl ConnectionStatistics {
 
         latencies.sort_unstable_by(|a, b| a.partial_cmp(&b).unwrap());
 
-        let median = match length % 2 {
+        match length % 2 {
             0 => ((latencies[(length / 2) - 1] + latencies[length / 2]) / 2.0).round(),
             1 => latencies[(length - 1) / 2],
             _ => unreachable!()
-        };
-
-        return median;
+        }
     }
 }

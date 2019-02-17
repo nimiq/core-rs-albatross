@@ -8,7 +8,7 @@ use failure::Fail;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum NetAddress {
     IPv4(Ipv4Addr),
     IPv6(Ipv6Addr),
@@ -113,7 +113,7 @@ impl Serialize for NetAddress {
             NetAddress::Unspecified => 0,
             NetAddress::Unknown => 0
         };
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
@@ -125,7 +125,7 @@ impl Serialize for NetAddress {
             NetAddress::Unspecified => 0,
             NetAddress::Unknown => 0
         };
-        return size;
+        size
     }
 }
 

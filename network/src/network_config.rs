@@ -190,9 +190,10 @@ impl NetworkConfig {
                     ..
                 } => {
                     if let Some(reverse_proxy_config) = reverse_proxy_config.as_ref() {
-                        match reverse_proxy_config.with_tls_termination {
-                            true => PeerAddressType::Wss(host.clone(), reverse_proxy_config.port),
-                            false => PeerAddressType::Ws(host.clone(), reverse_proxy_config.port),
+                        if reverse_proxy_config.with_tls_termination {
+                            PeerAddressType::Wss(host.clone(), reverse_proxy_config.port)
+                        } else {
+                            PeerAddressType::Ws(host.clone(), reverse_proxy_config.port)
                         }
                     } else {
                         PeerAddressType::Ws(host.clone(), port)
@@ -207,7 +208,7 @@ impl NetworkConfig {
             services: self.services.provided,
             timestamp: systemtime_to_timestamp(SystemTime::now()),
             net_address: NetAddress::Unspecified,
-            public_key: self.key_pair.as_ref().expect("NetworkConfig is uninitialized").public.clone(),
+            public_key: self.key_pair.as_ref().expect("NetworkConfig is uninitialized").public,
             distance: 0,
             signature: None,
             peer_id: self.peer_id.as_ref().expect("NetworkConfig is uninitialized").clone(),

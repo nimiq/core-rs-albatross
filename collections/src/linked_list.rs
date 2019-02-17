@@ -125,8 +125,8 @@ impl<T> Node<T> {
         }
     }
 
-    pub(super) fn into_element(self: Box<Self>) -> T {
-        self.element
+    pub(super) fn box_to_element(node: Box<Self>) -> T {
+        node.element
     }
 }
 
@@ -622,7 +622,7 @@ impl<T> LinkedList<T> {
     /// assert_eq!(d.pop_front(), None);
     /// ```
     pub fn pop_front(&mut self) -> Option<T> {
-        self.pop_front_node().map(Node::into_element)
+        self.pop_front_node().map(Node::box_to_element)
     }
 
     /// Appends an element to the back of a list
@@ -656,7 +656,7 @@ impl<T> LinkedList<T> {
     /// assert_eq!(d.pop_back(), Some(3));
     /// ```
     pub fn pop_back(&mut self) -> Option<T> {
-        self.pop_back_node().map(Node::into_element)
+        self.pop_back_node().map(Node::box_to_element)
     }
 
     /// Splits the list into two at the given index. Returns everything after the given index,
@@ -773,10 +773,10 @@ impl<T> LinkedList<T> {
 
         DrainFilter {
             list: self,
-            it: it,
+            it,
             pred: filter,
             idx: 0,
-            old_len: old_len,
+            old_len,
         }
     }
 }
@@ -1162,7 +1162,7 @@ mod tests {
     use std::thread;
     use std::vec::Vec;
 
-    use rand::{thread_rng, Rng};
+    use rand::{RngCore, thread_rng};
 
     use super::{LinkedList, Node};
 

@@ -66,7 +66,7 @@ impl SignalProcessor {
         }
 
         // Discard signals that have reached their TTL.
-        if msg.ttl <= 0 {
+        if msg.ttl == 0 {
             debug!("Discarding signal from {:?} to {:?} - TTL reached", &msg.sender_id, &msg.recipient_id);
             // Send signal containing TTL_EXCEEDED flag back in reverse direction.
             if msg.flags.is_empty() {

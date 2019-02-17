@@ -45,7 +45,7 @@ impl PeerStream {
         let msg_closed_flag = self.closed_flag.clone();
         let error_closed_flag = self.closed_flag;
 
-        let process_message = stream.for_each(move |msg| {
+        stream.for_each(move |msg| {
             match msg {
                 WebSocketMessage::Message(msg) => {
                     // Ignore messages from peer if connection has been closed by us, but await close frame.
@@ -85,9 +85,7 @@ impl PeerStream {
                     future::ok(())
                 }
             }
-        });
-
-        process_message
+        })
     }
 }
 

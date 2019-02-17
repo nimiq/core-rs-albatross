@@ -12,10 +12,14 @@ pub struct BlockInterlink {
 }
 
 impl BlockInterlink {
-    pub fn len(&self) -> usize { return self.hashes.len(); }
+    #[inline]
+    pub fn len(&self) -> usize { self.hashes.len() }
 
-    fn compress(hashes: &Vec<Blake2bHash>, prev_hash: &Blake2bHash) -> (Vec<u8>, Vec<Blake2bHash>) {
-        let repeat_bits_size = if hashes.len() > 0 { (hashes.len() - 1) / 8 + 1 } else { 0 };
+    #[inline]
+    pub fn is_empty(&self) -> bool { self.hashes.is_empty() }
+
+    fn compress(hashes: &[Blake2bHash], prev_hash: &Blake2bHash) -> (Vec<u8>, Vec<Blake2bHash>) {
+        let repeat_bits_size = if hashes.is_empty() { 0 } else { (hashes.len() - 1) / 8 + 1 };
         let mut repeat_bits = vec![0u8; repeat_bits_size];
 
         let mut hash = prev_hash;
@@ -30,12 +34,12 @@ impl BlockInterlink {
             }
         }
 
-        return (repeat_bits, compressed);
+        (repeat_bits, compressed)
     }
 
     pub fn new(hashes: Vec<Blake2bHash>, prev_hash: &Blake2bHash) -> Self {
         let (repeat_bits, compressed) = Self::compress(&hashes, prev_hash);
-        return BlockInterlink { hashes, repeat_bits, compressed };
+        BlockInterlink { hashes, repeat_bits, compressed }
     }
 
     pub fn deserialize<R: ReadBytesExt>(reader: &mut R, prev_hash: &Blake2bHash) -> io::Result<Self> {
@@ -52,10 +56,10 @@ impl BlockInterlink {
             if !repeated {
                 compressed.push(Deserialize::deserialize(reader)?);
             }
-            hashes.push(if compressed.len() > 0 { compressed[compressed.len() - 1].clone() } else { prev_hash.clone() });
+            hashes.push(if !compressed.is_empty() { compressed[compressed.len() - 1].clone() } else { prev_hash.clone() });
         }
 
-        return Ok(BlockInterlink { hashes, repeat_bits, compressed });
+        Ok(BlockInterlink { hashes, repeat_bits, compressed })
     }
 }
 
@@ -68,7 +72,7 @@ impl Serialize for BlockInterlink {
         for h in &self.compressed {
             size += Serialize::serialize(&h, writer)?;
         }
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
@@ -77,7 +81,7 @@ impl Serialize for BlockInterlink {
             hash_sizes += Serialize::serialized_size(&h);
         }
 
-        return 1 + self.repeat_bits.len() + hash_sizes;
+        1 + self.repeat_bits.len() + hash_sizes
     }
 }
 
@@ -89,6 +93,6 @@ impl BlockInterlink {
         for h in &self.compressed {
             vec.push(h.clone());
         }
-        return merkle::compute_root_from_hashes::<Blake2bHash>(&vec);
+        merkle::compute_root_from_hashes::<Blake2bHash>(&vec)
     }
 }

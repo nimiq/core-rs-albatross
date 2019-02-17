@@ -14,11 +14,11 @@ impl Coin {
     pub const ZERO: Coin = Coin(0u64);
 
     // How many Lunas fit in once Coin
-    pub const LUNAS_PER_COIN: u64 = 100000u64;
+    pub const LUNAS_PER_COIN: u64 = 100_000u64;
     pub const FRAC_DIGITS: u32 = 5u32;
 
     // JavaScript's Number.MAX_SAFE_INTEGER: 2^53 - 1
-    pub const MAX_SAFE_VALUE: u64 = 9007199254740991u64;
+    pub const MAX_SAFE_VALUE: u64 = 9_007_199_254_740_991u64;
 
     // TODO: Replace by TryFrom as it becomes stable
     #[inline]
@@ -46,7 +46,7 @@ impl Add<Coin> for Coin {
 
     #[inline]
     fn add(self, rhs: Coin) -> Coin {
-        return Coin(self.0 + rhs.0);
+        Coin(self.0 + rhs.0)
     }
 }
 
@@ -55,7 +55,7 @@ impl Sub<Coin> for Coin {
 
     #[inline]
     fn sub(self, rhs: Coin) -> Coin {
-        return Coin(self.0 - rhs.0);
+        Coin(self.0 - rhs.0)
     }
 }
 
@@ -77,10 +77,11 @@ impl Deserialize for Coin {
         let value: u64 = Deserialize::deserialize(reader)?;
 
         // Check that the value does not exceed Javascript's Number.MAX_SAFE_INTEGER.
-        return match value <= Coin::MAX_SAFE_VALUE {
-            true => Ok(Coin(value)),
-            false => Err(io::Error::new(io::ErrorKind::InvalidData, "Coin value out of bounds").into())
-        };
+        if value <= Coin::MAX_SAFE_VALUE {
+            Ok(Coin(value))
+        } else {
+            Err(io::Error::new(io::ErrorKind::InvalidData, "Coin value out of bounds").into())
+        }
     }
 }
 
@@ -142,10 +143,10 @@ impl FromStr for Coin {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // NOTE: I would like to use a RegEx here, but this needs a crate - Janosch
-        let split: Vec<&str> = s.split('.').into_iter().collect();
+        let split: Vec<&str> = s.split('.').collect();
 
         // check that string is either 1 part or 2 parts seperated by a `.`
-        if split.len() < 1 || split.len() > 2 {
+        if split.len() != 1 && split.len() != 2 {
             return Err(CoinParseError::InvalidString);
         }
         // try to parse integer part

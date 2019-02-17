@@ -18,7 +18,7 @@ impl Signature {
 
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
-        Ok(Signature(ed25519_dalek::Signature::from_bytes(bytes).map_err(|e| KeysError(e))?))
+        Ok(Signature(ed25519_dalek::Signature::from_bytes(bytes).map_err(KeysError)?))
     }
 }
 
@@ -60,7 +60,7 @@ impl Deserialize for Signature {
 
 impl Serialize for Signature {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        writer.write(&self.to_bytes())?;
+        writer.write_all(&self.to_bytes())?;
         Ok(self.serialized_size())
     }
 

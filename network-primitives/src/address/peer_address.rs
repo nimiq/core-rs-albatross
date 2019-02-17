@@ -65,7 +65,7 @@ impl Serialize for PeerAddress {
             PeerAddressType::Wss(host, port) => host.serialize::<u8, W>(writer)? + port.serialize(writer)?,
             PeerAddressType::Rtc => 0
         };
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
@@ -83,7 +83,7 @@ impl Serialize for PeerAddress {
             PeerAddressType::Wss(host, port) => host.serialized_size::<u8>() + port.serialized_size(),
             PeerAddressType::Rtc => 0
         };
-        return size;
+        size
     }
 }
 
@@ -103,7 +103,7 @@ impl Deserialize for PeerAddress {
             Protocol::Rtc => PeerAddressType::Rtc
         };
         let peer_id = PeerId::from(&public_key);
-        return Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key, distance, signature: Some(signature), peer_id});
+        Ok(PeerAddress{ ty: type_special, services, timestamp, net_address, public_key, distance, signature: Some(signature), peer_id})
     }
 }
 
@@ -112,7 +112,7 @@ impl PeerAddress {
         if let Some(signature) = &self.signature {
             return self.public_key.verify(signature, self.get_signature_data().as_slice());
         }
-        return false;
+        false
     }
 
     pub fn as_uri(&self) -> PeerUri {
@@ -126,7 +126,7 @@ impl PeerAddress {
             return None;
         }
 
-        let public_key: String = String::from(::hex::encode(&self.public_key.as_bytes()));
+        let public_key: String = ::hex::encode(&self.public_key.as_bytes());
         match self.ty {
             PeerAddressType::Ws(ref host, ref port) => Some(format!("ws://{}:{}/{}", host, port, public_key)),
             PeerAddressType::Wss(ref host, ref port) => Some(format!("wss://{}:{}/{}", host, port, public_key)),
@@ -147,11 +147,11 @@ impl PeerAddress {
             _ => {}
         };
 
-        return res;
+        res
     }
 
     pub fn is_seed(&self) -> bool {
-        return self.timestamp == 0;
+        self.timestamp == 0
     }
 
     pub fn exceeds_age(&self) -> bool {
@@ -169,7 +169,7 @@ impl PeerAddress {
                 (None, _) => return false,
             }
         }
-        return false;
+        false
     }
 
     pub fn is_globally_reachable(&self) -> bool {
@@ -190,7 +190,7 @@ impl PeerAddress {
             },
             PeerAddressType::Wss(host, _) => {
                 // IP addresses can't have a proper certificate
-                if let Ok(_) = IpAddr::from_str(&host[..]) {
+                if IpAddr::from_str(&host[..]).is_ok() {
                     return false;
                 }
             },
@@ -199,13 +199,13 @@ impl PeerAddress {
         match &self.ty {
             PeerAddressType::Wss(host, _) | PeerAddressType::Ws(host, _) => {
                 // "the use of dotless domains is prohibited [in new gTLDs]" [ https://www.icann.org/resources/board-material/resolutions-new-gtld-2013-08-13-en#1 ]. Old gTLDs rarely use them.
-                if host.len() < 4 || !host.contains(".") || host.chars().next().unwrap() == '.' || host.chars().last().unwrap() == '.' {
+                if host.len() < 4 || !host.contains('.') || host.starts_with('.') || host.ends_with('.') {
                     return false;
                 }
             },
             _ => { return false; }
         };
-        return true;
+        true
     }
 
     pub fn protocol(&self) -> Protocol { self.ty.protocol() }
@@ -218,13 +218,13 @@ impl PartialEq for PeerAddress {
         // We consider peer addresses to be equal if the public key or peer id is not known on one of them:
         // Peers from the network always contain a peer id and public key, peers without peer id or public key
         // are always set by the user.
-        return self.protocol() == other.protocol()
+        self.protocol() == other.protocol()
             && self.public_key == other.public_key
             && self.peer_id == other.peer_id
             /* services is ignored */
             /* timestamp is ignored */
             /* netAddress is ignored */
-            /* distance is ignored */;
+            /* distance is ignored */
     }
 }
 
@@ -232,7 +232,7 @@ impl Eq for PeerAddress {}
 
 impl Hash for PeerAddress {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let peer_id: String = String::from(::hex::encode(&self.peer_id.0));
+        let peer_id: String = ::hex::encode(&self.peer_id.0);
         let peer_id_uri = match self.ty {
             PeerAddressType::Dumb => format!("dumb:///{}", peer_id),
             PeerAddressType::Ws(_, _) => format!("ws:///{}", peer_id),

@@ -15,18 +15,18 @@ impl Deserialize for Block {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let header: BlockHeader = Deserialize::deserialize(reader)?;
         let interlink = BlockInterlink::deserialize(reader, &header.prev_hash)?;
-        return Ok(Block {
+        Ok(Block {
             header,
             interlink,
             body: Deserialize::deserialize(reader)?,
-        });
+        })
     }
 }
 
 impl Block {
     pub const VERSION: u16 = 1;
     const TIMESTAMP_DRIFT_MAX: u64 = 600 * 1000;
-    const MAX_SIZE: usize = 100000; // 100 kb
+    const MAX_SIZE: usize = 100_000; // 100 kb
 
     pub fn verify(&self, timestamp_now: u64, network_id: NetworkId, genesis_hash: Blake2bHash) -> Result<(), BlockError> {
         // XXX Check that the block version is supported.
@@ -58,8 +58,8 @@ impl Block {
             self.verify_body(body, network_id)?;
         }
 
-        // Everything checks out.
-        return Ok(());
+        // Everything fine.
+        Ok(())
     }
 
     fn verify_interlink(&self, genesis_hash: Blake2bHash) -> Result<(), BlockError> {
@@ -73,8 +73,8 @@ impl Block {
             return Err(BlockError::InterlinkHashMismatch);
         }
 
-        // Everything checks out.
-        return Ok(());
+        // Everything fine.
+        Ok(())
     }
 
     fn verify_body(&self, body: &BlockBody, network_id: NetworkId) -> Result<(), BlockError> {
@@ -86,8 +86,8 @@ impl Block {
             return Err(BlockError::BodyHashMismatch);
         }
 
-        // Everything checks out.
-        return Ok(());
+        // Everything fine.
+        Ok(())
     }
 
     pub fn is_immediate_successor_of(&self, predecessor: &Block) -> bool {
@@ -102,8 +102,8 @@ impl Block {
             return false;
         }
 
-        // Everything checks out.
-        return true;
+        // Everything fine.
+        true
     }
 
     pub fn get_next_interlink(&self, next_target: &Target) -> BlockInterlink {
@@ -131,7 +131,7 @@ impl Block {
             hashes.push(self.interlink.hashes[i].clone());
         }
 
-        return BlockInterlink::new(hashes, &hash);
+        BlockInterlink::new(hashes, &hash)
     }
 
     pub fn into_light(mut self) -> Block {

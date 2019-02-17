@@ -17,7 +17,7 @@ pub struct AccountsProof {
 
 impl AccountsProof {
     pub fn new(nodes : Vec<AccountsTreeNode>) -> AccountsProof {
-        return AccountsProof { nodes, verified: false };
+        AccountsProof { nodes, verified: false }
     }
 
     pub fn verify(&mut self) -> bool {
@@ -43,7 +43,7 @@ impl AccountsProof {
         let root_nibbles : AddressNibbles = "".parse().unwrap();
         let valid = children.len() == 1 && children[0].prefix() == &root_nibbles && children[0].is_branch();
         self.verified = valid;
-        return valid;
+        valid
     }
 
     pub fn get_account(&self, address: &Address) -> Option<Account> {
@@ -57,11 +57,11 @@ impl AccountsProof {
                 }
             }
         }
-        return None;
+        None
     }
 
     pub fn root_hash(&self) -> Blake2bHash {
-        return (&self.nodes[self.nodes.len() - 1]).hash();
+        (&self.nodes[self.nodes.len() - 1]).hash()
     }
 
     pub fn nodes(&self) -> &Vec<AccountsTreeNode> { &self.nodes }

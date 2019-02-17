@@ -46,6 +46,6 @@ impl PublicStreamInfo {
         }
     }
     pub fn update(&mut self, state: &PublicStreamInfo) {
-        self.last_chunk_received_at = state.last_chunk_received_at.clone();
+        self.last_chunk_received_at = state.last_chunk_received_at;
     }
 }

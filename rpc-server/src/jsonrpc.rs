@@ -129,7 +129,7 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
     }
 
     if single {
-        Response::new(Body::from(results.pop().map(json::stringify).unwrap_or("".to_string())))
+        Response::new(Body::from(results.pop().map(json::stringify).unwrap_or_else(String::new)))
     } else {
         Response::new(Body::from(json::stringify(JsonValue::Array(results))))
     }
@@ -153,9 +153,9 @@ impl<H> hyper::service::Service for Service<H> where H: Handler + 'static {
 
     fn call(&mut self, req: Request<<Self as hyper::service::Service>::ReqBody>) -> <Self as hyper::service::Service>::Future {
         let handler = Arc::clone(&self.handler);
-        match req.method() {
-            &Method::GET => Box::new(future::ok(Response::new(Body::from("Nimiq JSON-RPC Server")))),
-            &Method::POST => {
+        match *req.method() {
+            Method::GET => Box::new(future::ok(Response::new(Body::from("Nimiq JSON-RPC Server")))),
+            Method::POST => {
                 Box::new(req.into_body().concat2()
                     .map(|b| handle_request(handler, std::str::from_utf8(&b))))
             },

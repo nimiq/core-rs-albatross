@@ -4,7 +4,6 @@ use std::ops::Add;
 use std::sync::Arc;
 
 pub trait Attributes: Display {
-    #[inline]
     fn is_empty(&self) -> bool;
 }
 
@@ -50,7 +49,7 @@ impl<'a> From<&'a CachedAttributes> for CombinedAttributes<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct VecAttributes {
     attributes: Vec<(String, String)>,
 }
@@ -107,7 +106,7 @@ impl Add for VecAttributes {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CachedAttributes {
     attributes: Arc<String>,
 }

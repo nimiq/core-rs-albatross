@@ -51,7 +51,7 @@ impl ClosedFlag {
     }
     #[inline]
     pub fn close_type(&self) -> Option<CloseType> {
-        self.close_type.lock().clone()
+        *self.close_type.lock()
     }
 }
 

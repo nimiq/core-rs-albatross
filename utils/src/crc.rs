@@ -7,11 +7,12 @@ pub struct Crc32Computer {
 impl Default for Crc32Computer {
     fn default() -> Crc32Computer {
         Crc32Computer {
-            value: 0xffffffff
+            value: 0xffff_ffff
         }
     }
 }
 
+#[allow(clippy::unreadable_literal)]
 impl Crc32Computer {
     //let mut table = [0u32; 256];
     //for j in 0..256 {
@@ -57,21 +58,21 @@ impl Crc32Computer {
         for &i in buf {
             self.value = Crc32Computer::TABLE[((self.value ^ (i as u32)) & 0xFF) as usize] ^ (self.value >> 8);
         }
-        return self;
+        self
     }
 
     pub fn result(&self) -> u32 {
-        return self.value ^ 0xffffffffu32;
+        self.value ^ 0xffff_ffffu32
     }
 }
 
 impl io::Write for Crc32Computer {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
         self.update(buf);
-        return Ok(buf.len());
+        Ok(buf.len())
     }
 
-    fn flush(&mut self) -> Result<(), io::Error> { Ok({}) }
+    fn flush(&mut self) -> Result<(), io::Error> { Ok(()) }
 }
 
 pub struct Crc8Computer {
@@ -86,6 +87,7 @@ impl Default for Crc8Computer {
     }
 }
 
+#[allow(clippy::unreadable_literal)]
 impl Crc8Computer {
     const TABLE: [u8; 256] =
         [0, 151, 185, 46, 229, 114, 92, 203, 93, 202, 228, 115, 184, 47, 1, 150, 186, 45, 3, 148,
@@ -107,19 +109,19 @@ impl Crc8Computer {
         for &i in buf {
             self.value = Crc8Computer::TABLE[(self.value ^ (i as u8) /* & 0xff*/) as usize];
         }
-        return self;
+        self
     }
 
     pub fn result(&self) -> u8 {
-        return self.value;
+        self.value
     }
 }
 
 impl io::Write for Crc8Computer {
     fn write(&mut self, buf: &[u8]) -> Result<usize, io::Error> {
         self.update(buf);
-        return Ok(buf.len());
+        Ok(buf.len())
     }
 
-    fn flush(&mut self) -> Result<(), io::Error> { Ok({}) }
+    fn flush(&mut self) -> Result<(), io::Error> { Ok(()) }
 }

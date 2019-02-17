@@ -19,15 +19,15 @@ bitflags! {
     #[derive(Default)]
     pub struct DatabaseFlags: u32 {
         /// Duplicate keys may be used in the database.
-        const DUPLICATE_KEYS        = 0b00000001;
+        const DUPLICATE_KEYS        = 0b0000_0001;
         /// This flag may only be used in combination with `DUPLICATE_KEYS`.
         /// This option tells the database that the values for this database are all the same size.
-        const DUP_FIXED_SIZE_VALUES = 0b00000010;
+        const DUP_FIXED_SIZE_VALUES = 0b0000_0010;
         /// Keys are binary integers in native byte order and will be sorted as such
         /// (`std::os::raw::c_uint`, i.e. most likely `u32`).
-        const UINT_KEYS             = 0b00000100;
+        const UINT_KEYS             = 0b0000_0100;
         /// This option specifies that duplicate data items are binary integers, similar to `UINT_KEYS` keys.
-        const DUP_UINT_VALUES       = 0b00001000;
+        const DUP_UINT_VALUES       = 0b0000_1000;
     }
 }
 
@@ -40,15 +40,15 @@ pub enum Environment {
 impl Environment {
     pub fn open_database(&self, name: String) -> Database {
         match *self {
-            Environment::Volatile(ref env) => { return Database::Volatile(env.open_database(name, Default::default())); }
-            Environment::Persistent(ref env) => { return Database::Persistent(env.open_database(name, Default::default())); }
+            Environment::Volatile(ref env) => { Database::Volatile(env.open_database(name, Default::default())) }
+            Environment::Persistent(ref env) => { Database::Persistent(env.open_database(name, Default::default())) }
         }
     }
 
     pub fn open_database_with_flags(&self, name: String, flags: DatabaseFlags) -> Database {
         match *self {
-            Environment::Volatile(ref env) => { return Database::Volatile(env.open_database(name, flags)); }
-            Environment::Persistent(ref env) => { return Database::Persistent(env.open_database(name, flags)); }
+            Environment::Volatile(ref env) => { Database::Volatile(env.open_database(name, flags)) }
+            Environment::Persistent(ref env) => { Database::Persistent(env.open_database(name, flags)) }
         }
     }
 
@@ -56,8 +56,8 @@ impl Environment {
 
     pub fn drop_database(self) -> io::Result<()> {
         match self {
-            Environment::Volatile(env) => { return env.drop_database(); }
-            Environment::Persistent(env) => { return env.drop_database(); }
+            Environment::Volatile(env) => { env.drop_database() }
+            Environment::Persistent(env) => { env.drop_database() }
         }
     }
 }
@@ -73,7 +73,7 @@ impl<'env> Database<'env> {
         if let Database::Volatile(ref db) = self {
             return Some(db);
         }
-        return None;
+        None
     }
 
     fn persistent(&self) -> Option<&lmdb::LmdbDatabase> {
@@ -95,19 +95,19 @@ pub enum Transaction<'env> {
 impl<'env> Transaction<'env> {
     pub fn get<K, V>(&self, db: &Database, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         match *self {
-            Transaction::VolatileRead(ref txn) => { return txn.get(db.volatile().unwrap(), key); }
-            Transaction::VolatileWrite(ref txn) => { return txn.get(db.volatile().unwrap(), key); }
-            Transaction::PersistentRead(ref txn) => { return txn.get(db.persistent().unwrap(), key); }
-            Transaction::PersistentWrite(ref txn) => { return txn.get(db.persistent().unwrap(), key); }
+            Transaction::VolatileRead(ref txn) => { txn.get(db.volatile().unwrap(), key) }
+            Transaction::VolatileWrite(ref txn) => { txn.get(db.volatile().unwrap(), key) }
+            Transaction::PersistentRead(ref txn) => { txn.get(db.persistent().unwrap(), key) }
+            Transaction::PersistentWrite(ref txn) => { txn.get(db.persistent().unwrap(), key) }
         }
     }
 
     pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> Cursor<'txn, 'db> {
         match *self {
-            Transaction::VolatileRead(ref txn) => { return Cursor::VolatileCursor(txn.cursor(db)); }
-            Transaction::VolatileWrite(ref txn) => { return Cursor::VolatileCursor(txn.cursor(db)); }
-            Transaction::PersistentRead(ref txn) => { return Cursor::PersistentCursor(txn.cursor(db)); }
-            Transaction::PersistentWrite(ref txn) => { return Cursor::PersistentCursor(txn.cursor(db)); }
+            Transaction::VolatileRead(ref txn) => { Cursor::VolatileCursor(txn.cursor(db)) }
+            Transaction::VolatileWrite(ref txn) => { Cursor::VolatileCursor(txn.cursor(db)) }
+            Transaction::PersistentRead(ref txn) => { Cursor::PersistentCursor(txn.cursor(db)) }
+            Transaction::PersistentWrite(ref txn) => { Cursor::PersistentCursor(txn.cursor(db)) }
         }
     }
 }
@@ -118,8 +118,8 @@ pub struct ReadTransaction<'env>(Transaction<'env>);
 impl<'env> ReadTransaction<'env> {
     pub fn new(env: &'env Environment) -> Self {
         match *env {
-            Environment::Volatile(ref env) => { return ReadTransaction(Transaction::VolatileRead(volatile::VolatileReadTransaction::new(env))); }
-            Environment::Persistent(ref env) => { return ReadTransaction(Transaction::PersistentRead(lmdb::LmdbReadTransaction::new(env))); }
+            Environment::Volatile(ref env) => { ReadTransaction(Transaction::VolatileRead(volatile::VolatileReadTransaction::new(env))) }
+            Environment::Persistent(ref env) => { ReadTransaction(Transaction::PersistentRead(lmdb::LmdbReadTransaction::new(env))) }
         }
     }
 
@@ -138,7 +138,7 @@ impl<'env> Deref for ReadTransaction<'env> {
     type Target = Transaction<'env>;
 
     fn deref(&self) -> &Transaction<'env> {
-        return &self.0;
+        &self.0
     }
 }
 
@@ -148,8 +148,8 @@ pub struct WriteTransaction<'env>(Transaction<'env>);
 impl<'env> WriteTransaction<'env> {
     pub fn new(env: &'env Environment) -> Self {
         match *env {
-            Environment::Volatile(ref env) => { return WriteTransaction(Transaction::VolatileWrite(volatile::VolatileWriteTransaction::new(env))); }
-            Environment::Persistent(ref env) => { return WriteTransaction(Transaction::PersistentWrite(lmdb::LmdbWriteTransaction::new(env))); }
+            Environment::Volatile(ref env) => { WriteTransaction(Transaction::VolatileWrite(volatile::VolatileWriteTransaction::new(env))) }
+            Environment::Persistent(ref env) => { WriteTransaction(Transaction::PersistentWrite(lmdb::LmdbWriteTransaction::new(env))) }
         }
     }
 
@@ -162,8 +162,8 @@ impl<'env> WriteTransaction<'env> {
     /// This method will panic when called on a database with duplicate keys!
     pub fn put_reserve<K, V>(&mut self, db: &Database, key: &K, value: &V) where K: AsDatabaseBytes + ?Sized, V: IntoDatabaseValue + ?Sized {
         match self.0 {
-            Transaction::VolatileWrite(ref mut txn) => { return txn.put_reserve(db.volatile().unwrap(), key, value); }
-            Transaction::PersistentWrite(ref mut txn) => { return txn.put_reserve(db.persistent().unwrap(), key, value); }
+            Transaction::VolatileWrite(ref mut txn) => { txn.put_reserve(db.volatile().unwrap(), key, value) }
+            Transaction::PersistentWrite(ref mut txn) => { txn.put_reserve(db.persistent().unwrap(), key, value) }
             _ => { unreachable!(); }
         }
     }
@@ -174,32 +174,32 @@ impl<'env> WriteTransaction<'env> {
     /// This also works with duplicate key databases.
     pub fn put<K, V>(&mut self, db: &Database, key: &K, value: &V) where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
         match self.0 {
-            Transaction::VolatileWrite(ref mut txn) => { return txn.put(db.volatile().unwrap(), key, value); }
-            Transaction::PersistentWrite(ref mut txn) => { return txn.put(db.persistent().unwrap(), key, value); }
+            Transaction::VolatileWrite(ref mut txn) => { txn.put(db.volatile().unwrap(), key, value) }
+            Transaction::PersistentWrite(ref mut txn) => { txn.put(db.persistent().unwrap(), key, value) }
             _ => { unreachable!(); }
         }
     }
 
     pub fn remove<K>(&mut self, db: &Database, key: &K) where K: AsDatabaseBytes + ?Sized {
         match self.0 {
-            Transaction::VolatileWrite(ref mut txn) => { return txn.remove(db.volatile().unwrap(), key); }
-            Transaction::PersistentWrite(ref mut txn) => { return txn.remove(db.persistent().unwrap(), key); }
+            Transaction::VolatileWrite(ref mut txn) => { txn.remove(db.volatile().unwrap(), key) }
+            Transaction::PersistentWrite(ref mut txn) => { txn.remove(db.persistent().unwrap(), key) }
             _ => { unreachable!(); }
         }
     }
 
     pub fn remove_item<K, V>(&mut self, db: &Database, key: &K, value: &V) where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
         match self.0 {
-            Transaction::VolatileWrite(ref mut txn) => { return txn.remove_item(db.volatile().unwrap(), key, value); }
-            Transaction::PersistentWrite(ref mut txn) => { return txn.remove_item(db.persistent().unwrap(), key, value); }
+            Transaction::VolatileWrite(ref mut txn) => { txn.remove_item(db.volatile().unwrap(), key, value) }
+            Transaction::PersistentWrite(ref mut txn) => { txn.remove_item(db.persistent().unwrap(), key, value) }
             _ => { unreachable!(); }
         }
     }
 
     pub fn commit(self) {
         match self.0 {
-            Transaction::VolatileWrite(txn) => { return txn.commit(); }
-            Transaction::PersistentWrite(txn) => { return txn.commit(); }
+            Transaction::VolatileWrite(txn) => { txn.commit() }
+            Transaction::PersistentWrite(txn) => { txn.commit() }
             _ => { unreachable!(); }
         }
     }
@@ -215,7 +215,7 @@ impl<'env> Deref for WriteTransaction<'env> {
     type Target = Transaction<'env>;
 
     fn deref(&self) -> &Transaction<'env> {
-        return &self.0;
+        &self.0
     }
 }
 

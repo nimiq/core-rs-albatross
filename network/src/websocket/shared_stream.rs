@@ -22,7 +22,7 @@ pub struct SharedNimiqMessageStream {
 
 impl SharedNimiqMessageStream {
     pub fn net_address(&self) -> NetAddress {
-        self.state.net_address.clone()
+        self.state.net_address
     }
 
     pub fn outbound(&self) -> bool {

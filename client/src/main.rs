@@ -80,7 +80,7 @@ fn run() -> Result<(), Error> {
     let cmdline = Options::parse()?;
 
     // load config file
-    let config_path = cmdline.config_file.clone().unwrap_or("./config.toml".into());
+    let config_path = cmdline.config_file.clone().unwrap_or_else(|| "./config.toml".into());
     let settings = Settings::from_file(config_path)?;
     if settings.consensus.node_type != s::NodeType::Full {
         error!("Only full consensus is implemented right now.");
@@ -109,7 +109,10 @@ fn run() -> Result<(), Error> {
 
     // Start database and obtain a 'static reference to it.
     let default_database_settings = s::DatabaseSettings::default();
-    let env = LmdbEnvironment::new(&settings.database.path, settings.database.size.unwrap_or(default_database_settings.size.unwrap()), settings.database.max_dbs.unwrap_or(default_database_settings.max_dbs.unwrap()), open::Flags::empty())?;
+    let env = LmdbEnvironment::new(&settings.database.path,
+                                   settings.database.size.unwrap_or_else(|| default_database_settings.size.unwrap()),
+                                   settings.database.max_dbs.unwrap_or_else(|| default_database_settings.max_dbs.unwrap()),
+                                   open::Flags::empty())?;
     // Initialize the static environment variable
     ENV.initialize(env);
 

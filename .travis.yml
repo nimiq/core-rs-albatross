@@ -32,12 +32,14 @@ matrix:
 
 before_script:
   - export PATH=$HOME/.cargo/bin:$PATH
+  - rustup component add clippy || export NO_CLIPPY=1
   - cargo install cargo-update || echo "cargo-update already installed"
   - cargo install cargo-travis || echo "cargo-travis already installed"
   - cargo install-update -a # update outdated cached binaries
   - pip install --user python-coveralls
 
 script:
+  - if [ -z ${NO_CLIPPY+x} ]; then cargo clippy --all-features; fi
   - cargo test --verbose --all
 
 # temporarily disabled, plan is to move to codecov

@@ -10,15 +10,16 @@ impl<'a> Key<'a> {
         match self {
             Key::Borrowed(key) => key.get(index),
             Key::Owned(key) => key.get(index),
-        }.map(|i| *i)
+        }.cloned()
     }
 }
 
 pub fn compute_hmac_sha512(key: &[u8], data: &[u8]) -> Sha512Hash {
-    let mut hashed_key = Key::Borrowed(key);
-    if key.len() > Sha512Hash::block_size() {
-        hashed_key = Key::Owned(Sha512Hasher::default().digest(key).into());
-    }
+    let hashed_key = if key.len() > Sha512Hash::block_size() {
+        Key::Owned(Sha512Hasher::default().digest(key).into())
+    } else {
+        Key::Borrowed(key)
+    };
 
     let mut inner_key: Vec<u8> = Vec::with_capacity(Sha512Hash::block_size());
     let mut outer_key: Vec<u8> = Vec::with_capacity(Sha512Hash::block_size());

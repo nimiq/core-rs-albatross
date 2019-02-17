@@ -114,10 +114,6 @@ impl PartialEq for PeerChannel {
     fn eq(&self, other: &PeerChannel) -> bool {
         self.peer_sink == other.peer_sink
     }
-
-    fn ne(&self, other: &PeerChannel) -> bool {
-        self.peer_sink != other.peer_sink
-    }
 }
 
 impl Eq for PeerChannel {}

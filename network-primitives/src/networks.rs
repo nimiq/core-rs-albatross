@@ -1,3 +1,5 @@
+#![allow(clippy::unreadable_literal)]
+
 use std::collections::HashMap;
 
 use hex::FromHex;
@@ -91,7 +93,7 @@ lazy_static! {
                     interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                     body: Some(BlockBody {
                         miner: [0u8; Address::SIZE].into(),
-                        extra_data: "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".as_bytes().to_vec(),
+                        extra_data: b"love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".to_vec(),
                         transactions: vec![],
                         pruned_accounts: vec![],
                     }),
@@ -1234,7 +1236,7 @@ lazy_static! {
                     interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                     body: Some(BlockBody {
                         miner: [0u8; Address::SIZE].into(),
-                        extra_data: "TestNet".as_bytes().to_vec(),
+                        extra_data: b"TestNet".to_vec(),
                         transactions: vec![],
                         pruned_accounts: vec![]
                     })
@@ -1414,7 +1416,7 @@ lazy_static! {
                     interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                     body: Some(BlockBody {
                         miner: [0u8; Address::SIZE].into(),
-                        extra_data: "DevNet".as_bytes().to_vec(),
+                        extra_data: b"DevNet".to_vec(),
                         transactions: vec![],
                         pruned_accounts: vec![]
                     })
@@ -1576,4 +1578,4 @@ lazy_static! {
     };
 }
 
-pub fn get_network_info<'a>(network_id: NetworkId) -> Option<&'a NetworkInfo> { return NETWORK_MAP.get(&network_id); }
+pub fn get_network_info<'a>(network_id: NetworkId) -> Option<&'a NetworkInfo> { NETWORK_MAP.get(&network_id) }

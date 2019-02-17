@@ -178,10 +178,6 @@ impl PartialEq for FreeTransactionVector {
     fn eq(&self, other: &FreeTransactionVector) -> bool {
         self.vector == other.vector
     }
-
-    fn ne(&self, other: &FreeTransactionVector) -> bool {
-        self.vector != other.vector
-    }
 }
 
 impl Eq for FreeTransactionVector {}
@@ -592,7 +588,7 @@ impl InventoryAgent {
 
         // Send an InvVector for each transaction in the mempool.
         // Split into multiple Inv messages if the mempool is large.
-        while transactions.len() > 0 {
+        while !transactions.is_empty() {
             let max_vectors = std::cmp::min(transactions.len(), InvVector::VECTORS_MAX_COUNT);
             let vectors: Vec<InvVector> = transactions.drain(..max_vectors).
                 map(|tx| InvVector::from_transaction(tx.as_ref())).
@@ -671,7 +667,7 @@ impl InventoryAgent {
         }
 
         // Don't do anything if there are no objects queued to request.
-        if state.blocks_to_request.is_empty() && !state.txs_to_request.is_available() {
+        if state.blocks_to_request.is_empty() && !state.txs_to_request.check_available() {
             return;
         }
 
@@ -744,7 +740,7 @@ impl InventoryAgent {
         }
 
         // If there are more objects to request, request them.
-        if !state.blocks_to_request.is_empty() || state.txs_to_request.is_available() {
+        if !state.blocks_to_request.is_empty() || state.txs_to_request.check_available() {
             self.request_vectors(&mut *state);
         } else {
             // Give up write lock before notifying.

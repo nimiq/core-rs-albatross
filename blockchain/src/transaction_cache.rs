@@ -32,10 +32,10 @@ pub struct TransactionCache {
 
 impl TransactionCache {
     pub fn new() -> Self {
-        return TransactionCache {
+        TransactionCache {
             transaction_hashes: HashSet::new(),
             block_order: VecDeque::with_capacity(policy::TRANSACTION_VALIDITY_WINDOW as usize)
-        };
+        }
     }
 
     pub fn contains(&self, transaction_hash: &Blake2bHash) -> bool {
@@ -48,7 +48,7 @@ impl TransactionCache {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     pub fn push_block(&mut self, block: &Block) {

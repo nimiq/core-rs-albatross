@@ -29,14 +29,14 @@ impl<'env> ChainStore<'env> {
         let block_db = env.open_database(Self::BLOCK_DB_NAME.to_string());
         let height_idx = env.open_database_with_flags(Self::HEIGHT_IDX_NAME.to_string(),
             DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES);
-        return ChainStore { env, chain_db, block_db, height_idx };
+        ChainStore { env, chain_db, block_db, height_idx }
     }
 
     pub fn get_head(&self, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
-        return match txn_option {
+        match txn_option {
             Some(txn) => txn.get(&self.chain_db, ChainStore::HEAD_KEY),
             None => ReadTransaction::new(self.env).get(&self.chain_db, ChainStore::HEAD_KEY)
-        };
+        }
     }
 
     pub fn set_head(&self, txn: &mut WriteTransaction, hash: &Blake2bHash) {
@@ -66,7 +66,7 @@ impl<'env> ChainStore<'env> {
             }
         }
 
-        return Some(chain_info);
+        Some(chain_info)
     }
 
     pub fn put_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, chain_info: &ChainInfo, include_body: bool) {
@@ -124,7 +124,7 @@ impl<'env> ChainStore<'env> {
             }
         }
 
-        return Some(chain_info);
+        Some(chain_info)
     }
 
     pub fn get_block(&self, hash: &Blake2bHash, include_body: bool, txn_option: Option<&Transaction>) -> Option<Block> {
@@ -137,11 +137,11 @@ impl<'env> ChainStore<'env> {
             }
         };
 
-        return if include_body {
+        if include_body {
             txn.get(&self.block_db, hash)
         } else {
             txn.get(&self.chain_db, hash).map(|chain_info: ChainInfo| chain_info.head)
-        };
+        }
     }
 
     pub fn get_block_at(&self, block_height: u32) -> Option<Block> {
@@ -177,7 +177,7 @@ impl<'env> ChainStore<'env> {
             blocks.push(block);
         }
 
-        return blocks;
+        blocks
     }
 
     pub fn get_blocks_forward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {
@@ -210,7 +210,7 @@ impl<'env> ChainStore<'env> {
             }
         }
 
-        return blocks;
+        blocks
     }
 
     pub fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction, txn_option: Option<&Transaction>) -> Vec<Block> {

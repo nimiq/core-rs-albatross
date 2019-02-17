@@ -18,7 +18,7 @@ fn it_can_enqueue_dequeue() {
     assert_eq!(queue.len(), 4);
     assert_eq!(queue.dequeue(), Some(1));
     assert_eq!(queue.dequeue_multi(2), vec![2, 3]);
-    assert!(queue.is_available());
+    assert!(queue.check_available());
     assert_eq!(queue.num_available(), 1);
 }
 

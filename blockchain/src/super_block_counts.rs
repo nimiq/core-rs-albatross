@@ -39,7 +39,7 @@ impl SuperBlockCounts {
         // NOTE: The `counts` vector must already be longer, otherwise the non-existing entry counts as 0, which we can't substract
         assert!((depth as usize) < self.counts.len());
         for i in 0..=(depth as usize) {
-            self.counts[i] = self.counts[i].checked_sub(1).expect(&format!("Superblock count for level {} is already 0 and can't be decreased", i));
+            self.counts[i] = self.counts[i].checked_sub(1).unwrap_or_else(|| panic!("Superblock count for level {} is already 0 and can't be decreased", i));
         }
     }
 
@@ -155,7 +155,7 @@ impl Deserialize for SuperBlockCounts {
 
 impl IntoDatabaseValue for SuperBlockCounts {
     fn database_byte_size(&self) -> usize {
-        return self.serialized_size();
+        self.serialized_size()
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
@@ -166,6 +166,6 @@ impl IntoDatabaseValue for SuperBlockCounts {
 impl FromDatabaseValue for SuperBlockCounts {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
-        return Ok(Deserialize::deserialize(&mut cursor)?);
+        Ok(Deserialize::deserialize(&mut cursor)?)
     }
 }

@@ -1,3 +1,6 @@
+// TODO: Perhaps move constructors into Message
+#![allow(clippy::new_ret_no_self)]
+
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
@@ -165,7 +168,7 @@ impl Message {
     }
 }
 
-const MAGIC: u32 = 0x42042042;
+const MAGIC: u32 = 0x4204_2042;
 
 impl Deserialize for Message {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
@@ -198,7 +201,7 @@ impl Deserialize for Message {
                         self.crc32.update(&[0, 0, 0, 0]);
                     }
                 }
-                return Ok(size);
+                Ok(size)
             }
         }
 
@@ -258,7 +261,7 @@ impl Deserialize for Message {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Bad checksum").into());
         }
 
-        return Ok(message);
+        Ok(message)
     }
 }
 
@@ -311,12 +314,11 @@ impl Serialize for Message {
         // write checksum to placeholder
         let mut v_crc = Vec::with_capacity(4);
         Crc32Computer::default().update(v.as_slice()).result().serialize(&mut v_crc)?;
-        for i in 0..4 {
-            v[checksum_start + i] = v_crc[i];
-        }
 
-        writer.write(v.as_slice())?;
-        return Ok(size);
+        v[checksum_start..(4 + checksum_start)].clone_from_slice(&v_crc[..4]);
+
+        writer.write_all(v.as_slice())?;
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
@@ -356,7 +358,7 @@ impl Serialize for Message {
             Message::Head(header) => header.serialized_size(),
             Message::VerAck(verack_message) => verack_message.serialized_size(),
         };
-        return size;
+        size
     }
 }
 
@@ -518,10 +520,9 @@ impl Serialize for VersionMessage {
         size += Serialize::serialize(&self.genesis_hash, writer)?;
         size += Serialize::serialize(&self.head_hash, writer)?;
         size += Serialize::serialize(&self.challenge_nonce, writer)?;
-        match &self.user_agent {
-            Some(u) => size += SerializeWithLength::serialize::<u8, W>(u, writer)?,
-            _ => ()
-        };
+        if let Some(u) = &self.user_agent {
+            size += SerializeWithLength::serialize::<u8, W>(u, writer)?;
+        }
         Ok(size)
     }
 
@@ -532,10 +533,9 @@ impl Serialize for VersionMessage {
         size += Serialize::serialized_size(&self.genesis_hash);
         size += Serialize::serialized_size(&self.head_hash);
         size += Serialize::serialized_size(&self.challenge_nonce);
-        match &self.user_agent {
-            Some(u) => size += SerializeWithLength::serialized_size::<u8>(u),
-            _ => ()
-        };
+        if let Some(u) = &self.user_agent {
+            size += SerializeWithLength::serialized_size::<u8>(u);
+        }
         size
     }
 }
@@ -649,7 +649,7 @@ impl RejectMessage {
             message_type,
             code,
             reason,
-            extra_data: extra_data.unwrap_or_else(|| Vec::new()),
+            extra_data: extra_data.unwrap_or_else(Vec::new),
         })
     }
 }
@@ -731,8 +731,8 @@ pub struct SignalMessage {
 bitflags! {
     #[derive(Default, Serialize, Deserialize)]
     pub struct SignalMessageFlags: u8 {
-        const UNROUTABLE  = 0b00000001;
-        const TTL_EXCEEDED = 0b00000010;
+        const UNROUTABLE  = 0b0000_0001;
+        const TTL_EXCEEDED = 0b0000_0010;
     }
 }
 
@@ -744,8 +744,8 @@ impl Deserialize for SignalMessage {
         let ttl = Deserialize::deserialize(reader)?;
         let flags = SignalMessageFlags::from_bits_truncate(Deserialize::deserialize(reader)?);
         let payload: Vec<u8> = DeserializeWithLength::deserialize::<u16, R>(reader)?;
-        let sender_public_key = if payload.len() > 0 { Some(Deserialize::deserialize(reader)?) } else { None };
-        let signature = if payload.len() > 0 { Some(Deserialize::deserialize(reader)?) } else { None };
+        let sender_public_key = if !payload.is_empty() { Some(Deserialize::deserialize(reader)?) } else { None };
+        let signature = if !payload.is_empty() { Some(Deserialize::deserialize(reader)?) } else { None };
 
         Ok(SignalMessage {
             sender_id,
@@ -769,8 +769,8 @@ impl Serialize for SignalMessage {
         size += Serialize::serialize(&self.ttl, writer)?;
         size += self.flags.bits().serialize(writer)?;
         size += SerializeWithLength::serialize::<u16, W>(&self.payload, writer)?;
-        if self.payload.len() > 0 {
-            size += Serialize::serialize(&self.sender_public_key.clone().unwrap(), writer)?;
+        if !self.payload.is_empty() {
+            size += Serialize::serialize(&self.sender_public_key.unwrap(), writer)?;
             size += Serialize::serialize(&self.signature.clone().unwrap(), writer)?;
         }
         Ok(size)
@@ -784,9 +784,9 @@ impl Serialize for SignalMessage {
         size += Serialize::serialized_size(&self.ttl);
         size += self.flags.bits().serialized_size();
         size += SerializeWithLength::serialized_size::<u16>(&self.payload);
-        if self.payload.len() > 0 {
-            size += Serialize::serialized_size(&self.sender_public_key.clone().unwrap());
-            size += Serialize::serialized_size(&self.signature.clone().unwrap());
+        if !self.payload.is_empty() {
+            size += Serialize::serialized_size(&self.sender_public_key.unwrap());
+            size += self.signature.as_ref().map(Serialize::serialized_size).unwrap();
         }
         size
     }
@@ -830,7 +830,7 @@ pub enum AccountsTreeChunkData {
 }
 
 impl AccountsTreeChunkData {
-    pub fn to_serialized(self) -> Self {
+    pub fn into_serialized(self) -> Self {
         match self {
             data @ AccountsTreeChunkData::Serialized(_) => data,
             AccountsTreeChunkData::Structured(chunk) => AccountsTreeChunkData::Serialized(chunk.serialize_to_vec()),
@@ -963,7 +963,7 @@ impl VerAckMessage {
         peer_challenge_nonce.serialize(&mut data).unwrap();
         let signature = key_pair.sign(&data[..]);
         Message::VerAck(Self {
-            public_key: key_pair.public.clone(),
+            public_key: key_pair.public,
             signature,
         })
     }

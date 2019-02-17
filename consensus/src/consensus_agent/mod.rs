@@ -281,9 +281,10 @@ impl ConsensusAgent {
             // Check if the peer is sending us a fork.
             let on_fork = state.fork_head.is_some() && state.num_blocks_extending == 0 && state.num_blocks_forking > 0;
 
-            locators = match on_fork {
-                true => vec![state.fork_head.as_ref().unwrap().clone()],
-                false => self.blockchain.get_block_locators(GetBlocksMessage::LOCATORS_MAX_COUNT),
+            locators = if on_fork {
+                vec![state.fork_head.as_ref().unwrap().clone()]
+            } else {
+                self.blockchain.get_block_locators(GetBlocksMessage::LOCATORS_MAX_COUNT)
             };
         }
 

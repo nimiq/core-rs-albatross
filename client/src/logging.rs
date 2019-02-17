@@ -9,7 +9,7 @@ use log::{Level, LevelFilter};
 
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(0);
 
-const NIMIQ_MODULES: [&'static str; 22] = [
+const NIMIQ_MODULES: [&str; 22] = [
     "nimiq_accounts",
     "beserial",
     "nimiq_blockchain",
@@ -94,9 +94,10 @@ impl NimiqDispatch for Dispatch {
             .debug(Color::Blue)
             .trace(Color::Magenta);
 
-        match show_timestamps {
-            true => pretty_logging_with_timestamps(self, colors_level),
-            false => pretty_logging(self, colors_level),
+        if show_timestamps {
+            pretty_logging_with_timestamps(self, colors_level)
+        } else {
+            pretty_logging(self, colors_level)
         }
     }
 

@@ -23,11 +23,11 @@ pub struct HashedTimeLockedContract {
 
 impl HashedTimeLockedContract {
     pub fn new(balance: Coin, sender: Address, recipient: Address, hash_algorithm: HashAlgorithm, hash_root: AnyHash, hash_count: u8, timeout: u32, total_amount: Coin) -> Self {
-        return HashedTimeLockedContract { balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, total_amount };
+        HashedTimeLockedContract { balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, total_amount }
     }
 
     pub fn with_balance(&self, balance: Coin) -> Self {
-        return HashedTimeLockedContract {
+        HashedTimeLockedContract {
             balance,
             sender: self.sender.clone(),
             recipient: self.recipient.clone(),
@@ -36,7 +36,7 @@ impl HashedTimeLockedContract {
             hash_count: self.hash_count,
             timeout: self.timeout,
             total_amount: self.total_amount,
-        };
+        }
     }
 }
 
@@ -51,15 +51,15 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
     fn create(balance: Coin, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let (sender, recipient, hash_algorithm, hash_root, hash_count, timeout) = parse_and_verify_htlc_creation_transaction(transaction)?;
-        return Ok(HashedTimeLockedContract::new(balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value));
+        Ok(HashedTimeLockedContract::new(balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value))
     }
 
     fn with_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
-        return Err(AccountError::InvalidForRecipient);
+        Err(AccountError::InvalidForRecipient)
     }
 
     fn without_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
-        return Err(AccountError::InvalidForRecipient);
+        Err(AccountError::InvalidForRecipient)
     }
 
     fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
@@ -127,6 +127,6 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
     fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
-        return Ok(self.with_balance(balance));
+        Ok(self.with_balance(balance))
     }
 }

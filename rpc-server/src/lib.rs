@@ -197,7 +197,7 @@ impl JsonRpcHandler {
                 o.insert("valid", JsonValue::Boolean(valid));
                 o.insert("inMempool", JsonValue::Boolean(in_mempool));
             }
-            _ => assert!(false)
+            _ => unreachable!()
         };
 
         rpc_not_implemented()
@@ -383,7 +383,7 @@ impl JsonRpcHandler {
                 body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(block), Some(i))).collect()
             } else { 
                 body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
-            }).unwrap_or(vec![])),
+            }).unwrap_or_else(Vec::new)),
         }
     }
     

@@ -31,7 +31,7 @@ impl<'env> Blockchain<'env> {
         })
     }
 
-    pub fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &Vec<Address>) -> Option<AccountsProof> {
+    pub fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof> {
         let state = self.state.read();
         // We only support accounts proofs for the head hash.
         if block_hash != &state.head_hash {

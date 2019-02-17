@@ -14,7 +14,7 @@ pub struct TargetCompact(u32);
 
 impl fmt::Debug for TargetCompact {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TargetCompact{{{:04x}: shift={}, value={:06x}}}", self.0, self.0 >> 24, self.0 & 0xFFFFFF)
+        write!(f, "TargetCompact{{{:04x}: shift={}, value={:06x}}}", self.0, self.0 >> 24, self.0 & 0x00FF_FFFF)
     }
 }
 
@@ -40,7 +40,7 @@ impl From<TargetCompact> for Target {
     fn from(target_compact: TargetCompact) -> Self {
         let mut val = [0u8; 32];
         let shift_bytes = (target_compact.0 >> 24).saturating_sub(3) as usize;
-        let value = target_compact.0 & 0xffffff; // TODO: This step is unnecessary, since we mask the bytes later anyway.
+        let value = target_compact.0 & 0x00ff_ffff; // TODO: This step is unnecessary, since we mask the bytes later anyway.
         val[32 - shift_bytes - 1] = (value & 0xff) as u8;
         val[32 - shift_bytes - 2] = ((value >> 8) & 0xff) as u8;
         val[32 - shift_bytes - 3] = ((value >> 16) & 0xff) as u8;
@@ -268,18 +268,18 @@ impl SubAssign<Difficulty> for Difficulty {
 
 impl Serialize for Difficulty {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        return SerializeWithLength::serialize::<u8, W>(&self.0.to_bytes_be(), writer)
+        SerializeWithLength::serialize::<u8, W>(&self.0.to_bytes_be(), writer)
     }
 
     fn serialized_size(&self) -> usize {
-        return self.0.bytes() + 1 // 1 byte for length
+        self.0.bytes() + 1 // 1 byte for length
     }
 }
 
 impl Deserialize for Difficulty {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let bytes: Vec<u8> = DeserializeWithLength::deserialize::<u8, R>(reader)?;
-        return Ok(Difficulty(FixedUnsigned10::from_bytes_be(bytes.as_slice())));
+        Ok(Difficulty(FixedUnsigned10::from_bytes_be(bytes.as_slice())))
     }
 }
 
@@ -292,7 +292,7 @@ impl fmt::Display for Difficulty {
 impl Target {
     pub fn is_met_by(&self, hash: &Argon2dHash) -> bool {
         let reached = Target::from(hash);
-        return &reached < self;
+        &reached < self
     }
 
     pub fn get_depth(&self) -> u8 {
@@ -325,6 +325,6 @@ impl Target {
             exp -= 1;
         }
 
-        return 240u8.saturating_sub(exp as u8);
+        240u8.saturating_sub(exp as u8)
     }
 }

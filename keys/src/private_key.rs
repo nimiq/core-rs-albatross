@@ -18,7 +18,7 @@ impl PrivateKey {
 
     pub fn generate() -> Self {
         let mut cspring: OsRng = OsRng::new().unwrap();
-        return PrivateKey(ed25519_dalek::SecretKey::generate(&mut cspring));
+        PrivateKey(ed25519_dalek::SecretKey::generate(&mut cspring))
     }
 
     #[inline]
@@ -30,20 +30,20 @@ impl PrivateKey {
 
 impl<'a> From<&'a [u8; PrivateKey::SIZE]> for PrivateKey {
     fn from(bytes: &'a [u8; PublicKey::SIZE]) -> Self {
-        return PrivateKey(ed25519_dalek::SecretKey::from_bytes(bytes).unwrap());
+        PrivateKey(ed25519_dalek::SecretKey::from_bytes(bytes).unwrap())
     }
 }
 
 impl From<[u8; PrivateKey::SIZE]> for PrivateKey {
     fn from(bytes: [u8; PrivateKey::SIZE]) -> Self {
-        return PrivateKey::from(&bytes);
+        PrivateKey::from(&bytes)
     }
 }
 
 impl Clone for PrivateKey {
     fn clone(&self) -> Self {
         let cloned_dalek = ed25519_dalek::SecretKey::from_bytes(self.0.as_bytes()).unwrap();
-        return PrivateKey(cloned_dalek);
+        PrivateKey(cloned_dalek)
     }
 }
 
@@ -51,18 +51,18 @@ impl Deserialize for PrivateKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let mut buf = [0u8; PrivateKey::SIZE];
         reader.read_exact(&mut buf)?;
-        return Ok(PrivateKey::from(&buf));
+        Ok(PrivateKey::from(&buf))
     }
 }
 
 impl Serialize for PrivateKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        writer.write(self.as_bytes())?;
-        return Ok(self.serialized_size());
+        writer.write_all(self.as_bytes())?;
+        Ok(self.serialized_size())
     }
 
     fn serialized_size(&self) -> usize {
-        return PrivateKey::SIZE;
+        PrivateKey::SIZE
     }
 }
 

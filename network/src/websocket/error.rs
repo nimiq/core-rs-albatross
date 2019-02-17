@@ -56,7 +56,7 @@ impl From<SerializingError> for Error {
 // This implementation is needed for forwarding into our Sink.
 impl From<Error> for () {
     fn from(_: Error) -> Self {
-        ()
+
     }
 }
 

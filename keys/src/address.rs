@@ -27,7 +27,7 @@ impl Address {
     const CCODE: &'static str = "NQ";
     const NIMIQ_ALPHABET: &'static str = "0123456789ABCDEFGHJKLMNPQRSTUVXY";
 
-    pub fn from_user_friendly_address(friendly_addr: &String) -> Result<Address, AddressParseError> {
+    pub fn from_user_friendly_address(friendly_addr: &str) -> Result<Address, AddressParseError> {
         let friendly_addr_wospace = str::replace(friendly_addr, " ", "");
 
         if friendly_addr_wospace[0..2].to_uppercase() != Address::CCODE {
@@ -50,7 +50,7 @@ impl Address {
         let b_vec = encoding.decode(friendly_addr_wospace[4..].as_bytes()).unwrap();
         let mut b = [0; 20];
         b.copy_from_slice(&b_vec[..b_vec.len()]);
-        return Ok(Address(b));
+        Ok(Address(b))
     }
 
     pub fn to_user_friendly_address(&self) -> String {
@@ -69,10 +69,10 @@ impl Address {
                 friendly_spaces.push_str(" ");
             }
         }
-        return friendly_spaces;
+        friendly_spaces
     }
 
-    fn iban_check(s: &String) -> u32 {
+    fn iban_check(s: &str) -> u32 {
         let mut num = String::with_capacity(s.len() * 2);
         for c in s.to_uppercase().chars() {
             let code = c as u32;
@@ -89,7 +89,7 @@ impl Address {
             tmp = (num_tmp_sub.parse::<u32>().unwrap() % 97).to_string();
         }
 
-        return tmp.parse::<u32>().unwrap();
+        tmp.parse::<u32>().unwrap()
     }
 
     pub fn from_any_str(s: &str) -> Result<Address, AddressParseError> {
@@ -102,13 +102,13 @@ impl Address {
 impl From<Blake2bHash> for Address {
     fn from(hash: Blake2bHash) -> Self {
         let hash_arr: [u8; 32] = hash.into();
-        return Address::from(&hash_arr[0..Address::len()]);
+        Address::from(&hash_arr[0..Address::len()])
     }
 }
 
 impl<'a> From<&'a PublicKey> for Address {
     fn from(public_key: &'a PublicKey) -> Self {
         let hash = Blake2bHasher::default().digest(public_key.as_bytes());
-        return Address::from(hash);
+        Address::from(hash)
     }
 }

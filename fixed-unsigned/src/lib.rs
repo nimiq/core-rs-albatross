@@ -1,3 +1,12 @@
+use std::char::from_digit;
+use std::cmp::Ordering;
+use std::error::Error;
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use std::str::FromStr;
+
 ///
 /// fixed-unsigned - A crate for fixed-point unsigned big integers
 ///
@@ -13,14 +22,6 @@ use num_bigint::BigUint;
 use num_traits::identities::{One, Zero};
 use num_traits::ToPrimitive;
 
-use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign, MulAssign, DivAssign};
-use std::marker::PhantomData;
-use std::str::FromStr;
-use std::fmt;
-use std::error::Error;
-use std::char::from_digit;
-use std::cmp::Ordering;
-
 pub mod types;
 
 
@@ -29,7 +30,7 @@ const U64_MAX_DIGITS: u64 = 19u64;
 /// Maximum decimal number that can be represented with an `u64`
 /// `U64_MAX_DECIMAL` = 10<sup>`U64_MAX_DIGITS`</sup>
 /// NOTE: If we go with 15 decimal places, this can safely fit a Javascript Integer
-const U64_MAX_DECIMAL: u64 = 10000000000000000000u64;
+const U64_MAX_DECIMAL: u64 = 10_000_000_000_000_000_000u64;
 
 /// Trait for a fixed scale. It only has one associated constant that must be implemented:
 /// `SCALE`, which defines the place of the decimal point.
@@ -92,7 +93,7 @@ impl Error for ParseError {
 ///
 /// The fixed scale is determined by the generic `S` which implements `FixedScale` and
 /// provides the constant `FixedScale::SCALE`.
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub struct FixedUnsigned<S>
     where S: FixedScale
 {
@@ -272,7 +273,7 @@ impl<S> FixedUnsigned<S>
 
     pub fn bytes(&self) -> usize {
         let bits = self.bits();
-        return bits / 8 + if bits % 8 == 0 {0} else {1};
+        bits / 8 + if bits % 8 == 0 {0} else {1}
     }
 
     /// Adds two `BigUint`s interpreted as `FixedUnsigned<S>` and returns the result.
@@ -428,6 +429,14 @@ impl<S> PartialEq for FixedUnsigned<S>
 {
     fn eq(&self, other: &Self) -> bool {
         self.int_value.eq(&other.int_value)
+    }
+}
+
+impl<S> Hash for FixedUnsigned<S>
+    where S: FixedScale
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.int_value.hash(state)
     }
 }
 

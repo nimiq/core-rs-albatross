@@ -57,13 +57,13 @@ impl AccountsChunkCache {
     }
 
     /// Request a chunk from the cache.
-    pub fn get_chunk(&self, hash: &Blake2bHash, prefix: &String) -> GetChunkFuture {
+    pub fn get_chunk(&self, hash: &Blake2bHash, prefix: &str) -> GetChunkFuture {
         // Start computing of chunks on the first get_chunk request.
         // Swap should ensure that this is only triggered *once* and that no race condition can occur.
         if !self.computing_enabled.swap(true, Ordering::AcqRel) {
             self.compute_chunks_for_block();
         }
-        return GetChunkFuture::new(hash.clone(), prefix.clone(), self.weak_self.upgrade().unwrap());
+        GetChunkFuture::new(hash.clone(), prefix.to_string(), self.weak_self.upgrade().unwrap())
     }
 
     /// Trigger computation of chunks asynchronously after blockchain events.
@@ -107,20 +107,16 @@ impl AccountsChunkCache {
             let chunk_start = Instant::now();
             this.chunks_by_prefix_by_block.write().insert(hash.clone(), HashMap::new());
             let mut prefix = "".to_string();
-            loop {
-                if let Some(chunk) = this.blockchain.state().accounts().get_chunk(&prefix[..], AccountsChunkCache::CHUNK_SIZE_MAX, Some(&txn)) {
-                    if let Some(chunks_by_prefix) = this.chunks_by_prefix_by_block.write().get_mut(&hash) {
-                        let last_terminal_string_opt = chunk.last_terminal_string();
-                        let chunk_len = chunk.len();
-                        chunks_by_prefix.insert(prefix.clone(), chunk.serialize_to_vec());
-                        if chunk_len == 1 {
-                            break;
-                        }
-                        if let Some(last_terminal_string) = last_terminal_string_opt {
-                            prefix = last_terminal_string;
-                        }
-                    } else {
+            while let Some(chunk) = this.blockchain.state().accounts().get_chunk(&prefix[..], AccountsChunkCache::CHUNK_SIZE_MAX, Some(&txn)) {
+                if let Some(chunks_by_prefix) = this.chunks_by_prefix_by_block.write().get_mut(&hash) {
+                    let last_terminal_string_opt = chunk.last_terminal_string();
+                    let chunk_len = chunk.len();
+                    chunks_by_prefix.insert(prefix.clone(), chunk.serialize_to_vec());
+                    if chunk_len == 1 {
                         break;
+                    }
+                    if let Some(last_terminal_string) = last_terminal_string_opt {
+                        prefix = last_terminal_string;
                     }
                 } else {
                     break;
@@ -175,7 +171,7 @@ pub struct GetChunkFuture {
 
 impl GetChunkFuture {
     pub fn new(hash: Blake2bHash, prefix: String, chunk_cache: Arc<AccountsChunkCache>) -> Self {
-        return GetChunkFuture { hash, prefix, chunk_cache, running: false };
+        GetChunkFuture { hash, prefix, chunk_cache, running: false }
     }
 }
 

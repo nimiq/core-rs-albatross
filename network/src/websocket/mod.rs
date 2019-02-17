@@ -22,7 +22,7 @@ pub mod shared_stream;
 /// - Close frames
 #[derive(Debug)]
 pub enum Message {
-    Message(NimiqMessage),
+    Message(NimiqMessage), // TODO: Box?
     Close(Option<CloseFrame<'static>>),
     #[doc(hidden)]
     Resume(Vec<u8>, Option<u8>),

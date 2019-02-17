@@ -287,7 +287,7 @@ impl NetworkAgent {
             let stored_address = addresses.get_info(&peer_address);
             if let Some(peer_address_info) = stored_address {
                 if !peer_address_info.peer_address.net_address.is_pseudo() {
-                    peer_address.net_address = peer_address_info.peer_address.net_address.clone();
+                    peer_address.net_address = peer_address_info.peer_address.net_address;
                 }
             }
         }
@@ -430,7 +430,7 @@ impl NetworkAgent {
 
         // Reject unsolicited address messages unless it is the peer's own address.
         let peer_address = self.peer.as_ref().unwrap().peer_address();
-        let is_own_address = msg.addresses.len() == 1 && peer_address.as_ref() == msg.addresses.get(0).unwrap();
+        let is_own_address = msg.addresses.len() == 1 && peer_address.as_ref() == &msg.addresses[0];
         if self.address_request.is_none() && !is_own_address {
             return;
         }
@@ -451,7 +451,7 @@ impl NetworkAgent {
         // XXX Discard any addresses beyond the ones we requested
         // and check the addresses the peer sent to us.
         // TODO reject addr messages not matching our request.
-        let addresses: Vec<PeerAddress> = msg.addresses.iter().take(address_request.max_results as usize).map(|p| p.clone()).collect();
+        let addresses: Vec<PeerAddress> = msg.addresses.iter().take(address_request.max_results as usize).cloned().collect();
 
         for address in addresses.iter() {
             if !address.verify_signature() {
@@ -514,7 +514,7 @@ impl NetworkAgent {
 
         // Save ping timestamp to detect the speed of the connection.
         let start_time = Instant::now();
-        self.ping_times.insert(nonce, start_time.clone());
+        self.ping_times.insert(nonce, start_time);
 
         // Expect the peer to answer with a pong message if we haven't heard anything from it
         // within the last CONNECTIVITY_CHECK_INTERVAL. Drop the peer otherwise.
@@ -568,7 +568,7 @@ impl NetworkAgent {
             return false;
         }
 
-        return true;
+        true
     }
 }
 

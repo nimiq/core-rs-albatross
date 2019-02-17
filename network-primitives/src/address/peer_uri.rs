@@ -104,7 +104,7 @@ impl<'a> fmt::Display for PeerUri {
             Protocol::Ws | Protocol::Wss => {
                 write!(f, "{}://{}", self.protocol, self.hostname.as_ref().unwrap())?;
                 self.port.map(|p| write!(f, ":{}", p)).transpose()?;
-                self.peer_id().or(self.public_key()).map(|p| write!(f, "/{}", p)).transpose()?;
+                self.peer_id().or_else(|| self.public_key()).map(|p| write!(f, "/{}", p)).transpose()?;
             }
         }
         Ok(())

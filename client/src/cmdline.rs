@@ -110,7 +110,7 @@ impl Options {
     }
 
     fn parse_option_string(value: Option<&str>) -> Option<String> {
-        value.map(|s| String::from(s))
+        value.map(String::from)
     }
 
     fn parse_log_tags(values_opt: Option<Values>) -> Result<HashMap<String, LevelFilter>, ParseError> {
@@ -135,8 +135,8 @@ impl Options {
         Ok(Options {
             hostname: Self::parse_option_string(matches.value_of("hostname")),
             port: Self::parse_option::<u16>(matches.value_of("port"), ParseError::Port)?,
-            config_file: matches.value_of("config").map(|s| String::from(s)),
-            log_level: matches.value_of("log_level").map(|s| String::from(s)),
+            config_file: matches.value_of("config").map(String::from),
+            log_level: matches.value_of("log_level").map(String::from),
             log_tags: Self::parse_log_tags(matches.values_of("log_tags"))?,
             passive: matches.is_present("passive"),
             consensus_type: Self::parse_option::<NodeType>(matches.value_of("consensus_type"), ParseError::ConsensusType)?,

@@ -18,13 +18,13 @@ add_hex_io_fns_typed_arr!(PeerId, PeerId::SIZE);
 impl From<Blake2bHash> for PeerId {
     fn from(hash: Blake2bHash) -> Self {
         let hash_arr: [u8; 32] = hash.into();
-        return PeerId::from(&hash_arr[0..PeerId::len()]);
+        PeerId::from(&hash_arr[0..PeerId::len()])
     }
 }
 
 impl<'a> From<&'a PublicKey> for PeerId {
     fn from(public_key: &'a PublicKey) -> Self {
         let hash = Blake2bHasher::default().digest(public_key.as_bytes());
-        return PeerId::from(hash);
+        PeerId::from(hash)
     }
 }

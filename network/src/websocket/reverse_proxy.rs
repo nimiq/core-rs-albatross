@@ -27,7 +27,7 @@ impl ReverseProxyCallback {
 
     /// Returns the net address found in the header.
     pub fn header_net_address(&self) -> Option<NetAddress> {
-        self.remote_address.lock().clone()
+        *self.remote_address.lock()
     }
 
     /// This function takes the net address given by the stream
@@ -64,7 +64,7 @@ impl<'a> Callback for &'a ReverseProxyCallback {
         if let Some(ref config) = self.reverse_proxy_config {
             if let Some(value) = request.headers.find_first(&config.header) {
                 let str_value = from_utf8(value).map_err(|_| Error::Utf8)?;
-                let str_value = str_value.split(",").next().ok_or(Error::Utf8)?; // Take first value from list.
+                let str_value = str_value.split(',').next().ok_or(Error::Utf8)?; // Take first value from list.
                 let str_value = str_value.trim();
                 let net_address = NetAddress::from_str(str_value)
                     .map_err(|_|

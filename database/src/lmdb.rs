@@ -18,7 +18,7 @@ pub struct LmdbEnvironment {
 
 impl LmdbEnvironment {
     pub fn new(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Environment, lmdb_zero::Error> {
-        return Ok(Environment::Persistent(LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?));
+        Ok(Environment::Persistent(LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?))
     }
 
     pub(in super) fn new_lmdb_environment(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Self, lmdb_zero::Error> {
@@ -45,7 +45,7 @@ impl LmdbEnvironment {
             lmdb.do_resize(0);
         }
 
-        return Ok(lmdb);
+        Ok(lmdb)
     }
 
     pub(in super) fn open_database(&self, name: String, flags: DatabaseFlags) -> LmdbDatabase {
@@ -69,15 +69,15 @@ impl LmdbEnvironment {
             db_flags.insert(lmdb_zero::db::INTEGERKEY);
         }
 
-        return LmdbDatabase { db: lmdb_zero::Database::open(&self.env, Some(&name), &lmdb_zero::DatabaseOptions::new(db_flags)).unwrap() };
+        LmdbDatabase { db: lmdb_zero::Database::open(&self.env, Some(&name), &lmdb_zero::DatabaseOptions::new(db_flags)).unwrap() }
     }
 
     pub(in super) fn drop_database(self) -> io::Result<()> {
-        return fs::remove_dir_all(self.path().as_ref());
+        fs::remove_dir_all(self.path().as_ref())
     }
 
     fn path(&self) -> Cow<str> {
-        return self.env.path().unwrap().to_string_lossy();
+        self.env.path().unwrap().to_string_lossy()
     }
 
     pub fn do_resize(&self, increase_size: usize) {
@@ -141,7 +141,7 @@ impl LmdbEnvironment {
             return true;
         }
 
-        return false;
+        false
     }
 }
 
@@ -160,13 +160,13 @@ impl<'env> LmdbReadTransaction<'env> {
     pub(in super) fn new(env: &'env LmdbEnvironment) -> Self {
         // This is an implicit transaction, so take the lock first.
         let guard = env.creation_gate.read();
-        return LmdbReadTransaction { txn: lmdb_zero::ReadTransaction::new(&env.env).unwrap(), guard };
+        LmdbReadTransaction { txn: lmdb_zero::ReadTransaction::new(&env.env).unwrap(), guard }
     }
 
     pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         let access = self.txn.access();
         let result: Option<&[u8]> = access.get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
-        return Some(FromDatabaseValue::copy_from_database(result?).unwrap());
+        Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
     pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbCursor<'txn, 'db> {
@@ -197,13 +197,13 @@ impl<'env> LmdbWriteTransaction<'env> {
             env.do_resize(0);
         }
         let guard = env.creation_gate.read();
-        return LmdbWriteTransaction { txn: lmdb_zero::WriteTransaction::new(&env.env).unwrap(), guard };
+        LmdbWriteTransaction { txn: lmdb_zero::WriteTransaction::new(&env.env).unwrap(), guard }
     }
 
     pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         let access = self.txn.access();
         let result: Option<&[u8]> = access.get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
-        return Some(FromDatabaseValue::copy_from_database(result?).unwrap());
+        Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
     pub(in super) fn put_reserve<K, V>(&mut self, db: &LmdbDatabase, key: &K, value: &V) where K: AsDatabaseBytes + ?Sized, V: IntoDatabaseValue + ?Sized {

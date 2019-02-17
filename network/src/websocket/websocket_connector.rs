@@ -68,9 +68,9 @@ pub fn wrap_stream<S>(socket: S, tls_acceptor: Option<TlsAcceptor>, mode: Mode)
                 .map(TokioTlsAcceptor::from)
                 .and_then(move |acceptor| {
                     acceptor.accept(socket)
-                        .map_err(|e| Error::TlsWrappingError(e))
+                        .map_err(Error::TlsWrappingError)
                 })
-                .map(|s| StreamSwitcher::Tls(s)))
+                .map(StreamSwitcher::Tls))
         }
     }
 }
@@ -122,7 +122,7 @@ impl WebSocketConnector {
         let tls_acceptor = setup_tls_acceptor(identity_file, identity_passphrase, mode)?;
 
         let addr = SocketAddr::new("::".parse().unwrap(), port);
-        let socket = TcpListener::bind(&addr).map_err(|e| ServerStartError::IoError(e))?;
+        let socket = TcpListener::bind(&addr).map_err(ServerStartError::IoError)?;
         let notifier = Arc::clone(&self.notifier);
 
         let srv = socket.incoming()
@@ -144,7 +144,6 @@ impl WebSocketConnector {
                         } else {
                             tokio::spawn(poll_fn(move || shared_stream.close()).map_err(|e| {
                                 warn!("Could not close connection: {}", e);
-                                ()
                             }));
                         }
                     })
@@ -156,7 +155,6 @@ impl WebSocketConnector {
 
             }).map_err(|err| {
                 error!("WebSocket server failed and was stopped: {}", Error::from(err));
-                ()
             });
 
         tokio::spawn(srv);
@@ -205,7 +203,6 @@ impl WebSocketConnector {
                 } else if error.is_elapsed() {
                     error_notifier.read().notify(WebSocketConnectorEvent::Error(error_peer_address.clone(), ConnectError::Timeout));
                 }
-                ()
             });
 
             tokio::spawn(connect);

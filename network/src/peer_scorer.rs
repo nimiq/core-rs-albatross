@@ -48,7 +48,7 @@ impl PeerScorer {
     const BEST_AGE_LIGHT: Duration = Duration::from_secs(15 * 60); // 15 minutes
     const MAX_AGE_LIGHT: Duration = Duration::from_secs(6 * 60 * 60); // 6 hours
 
-    const MIN_AGE_NANO: Duration = Duration::from_secs(1 * 60); // 1 minute
+    const MIN_AGE_NANO: Duration = Duration::from_secs(60); // 1 minute
     const BEST_AGE_NANO: Duration = Duration::from_secs(5 * 60); // 5 minutes
     const MAX_AGE_NANO: Duration = Duration::from_secs(30 * 60); // 30 minutes
 
@@ -56,7 +56,7 @@ impl PeerScorer {
 
 
     pub fn new(network_config: Arc<NetworkConfig>, addresses: Arc<PeerAddressBook>, connections: Arc<ConnectionPool>) -> Self {
-        return PeerScorer {
+        PeerScorer {
             network_config,
             addresses,
             connections,
@@ -66,33 +66,33 @@ impl PeerScorer {
 
     pub fn pick_address(&self) -> Option<Arc<PeerAddress>> {
         let mut candidates = self.find_candidates(1000, false);
-        if candidates.len() == 0 {
+        if candidates.is_empty() {
             candidates = self.find_candidates(1000, true);
         }
-        if candidates.len() == 0 {
+        if candidates.is_empty() {
             return None;
         }
         candidates.sort_by(|a, b| { a.1.cmp(&b.1) });
         let mut randrng: OsRng = OsRng::new().unwrap();
         let rand_ind = randrng.gen_range(0, usize::min(PeerScorer::PICK_SELECTION_SIZE, candidates.len()));
         match candidates.get(rand_ind) {
-            Some((peer_address, _)) => return Some(Arc::clone(peer_address)),
-            None => return None
+            Some((peer_address, _)) => Some(Arc::clone(peer_address)),
+            None => None
         }
     }
 
     fn find_candidates(&self, num_candidates: usize, allow_bad_peers: bool) -> Vec<(Arc<PeerAddress>, i32)> {
         let addresses_state = self.addresses.state();
-        let address_iterator = addresses_state.address_iter_for_protocol_mask(self.network_config.protocol_mask().clone());
-        let num_addresses = addresses_state.known_addresses_nr_for_protocol_mask(self.network_config.protocol_mask().clone());
+        let address_iterator = addresses_state.address_iter_for_protocol_mask(self.network_config.protocol_mask());
+        let num_addresses = addresses_state.known_addresses_nr_for_protocol_mask(self.network_config.protocol_mask());
 
-        let mut start_index = 0;
-        let mut end_index = num_addresses;
-        if num_addresses > num_candidates {
+        let (start_index, end_index) = if num_addresses > num_candidates {
             let mut randrng: OsRng = OsRng::new().unwrap();
-            start_index = randrng.gen_range(0, num_addresses);
-            end_index = (start_index + num_candidates) % num_addresses;
-        }
+            let start = randrng.gen_range(0, num_addresses);
+            (start, (start + num_candidates) % num_addresses)
+        } else {
+            (0, num_addresses)
+        };
         let overflow = start_index > end_index;
 
         let mut candidates = Vec::new();
@@ -109,7 +109,7 @@ impl PeerScorer {
                 }
             }
         }
-        return candidates;
+        candidates
     }
 
     fn score_address(&self, peer_address: &Arc<PeerAddress>, allow_bad_peers: bool, address_state: &RwLockReadGuard<PeerAddressBookState>) -> i32 {
@@ -133,7 +133,7 @@ impl PeerScorer {
                 }
 
                 // A channel to that peer address is CONNECTING, CONNECTED, NEGOTIATING OR ESTABLISHED
-                if let Some(_) = self.connections.state().get_connection_by_peer_address(peer_address) {
+                if self.connections.state().get_connection_by_peer_address(peer_address).is_some() {
                     return -1;
                 }
 
@@ -182,11 +182,10 @@ impl PeerScorer {
         let connections: Vec<(ConnectionId, &ConnectionInfo)> = state.id_and_connection_iter();
 
         for connection in connections {
-            if connection.1.state() == ConnectionState::Established {
-                if connection.1.age_established() > self.get_min_age(connection.1.peer_address().expect("No peer address")) {
-                    let score = Self::score_connection(connection.1, distribution, peer_count_full_ws_outbound);
-                    connection_scores.push((connection.0, score));
-                }
+            if connection.1.state() == ConnectionState::Established
+                && connection.1.age_established() > self.get_min_age(connection.1.peer_address().expect("No peer address")) {
+                let score = Self::score_connection(connection.1, distribution, peer_count_full_ws_outbound);
+                connection_scores.push((connection.0, score));
             }
         }
 
@@ -195,7 +194,7 @@ impl PeerScorer {
     }
 
     pub fn recycle_connections(&mut self, mut count: u32, ty: CloseType, reason: &str) {
-        while count > 0 && self.connection_scores.len() > 0 {
+        while count > 0 && !self.connection_scores.is_empty() {
             let connection_id = self.connection_scores.pop().map(|(connection_id, _)| connection_id).unwrap();
             let state = self.connections.state();
             let connection_info = state.get_connection(connection_id).expect("Missing connection");
@@ -213,9 +212,10 @@ impl PeerScorer {
         let score_age = Self::score_connection_age(connection_info);
 
         // Connection type (inbound/outbound)
-        let score_outbound = match connection_info.network_connection().expect("Missing network connection").outbound() {
-            false => 0.0,
-            true => 1.0,
+        let score_outbound = if connection_info.network_connection().expect("Missing network connection").outbound() {
+            0.0
+        } else {
+            1.0
         };
 
         let peer_address = connection_info.peer_address().expect("Missing peer address");
@@ -248,13 +248,11 @@ impl PeerScorer {
 
         // Connection speed, based on ping-pong latency median
         let median_latency = connection_info.statistics().latency_median();
-        let mut score_speed: f64 = 0.0;
+        let score_speed: f64 = if median_latency > 0.0 && median_latency < NetworkAgent::PING_TIMEOUT.as_secs() as f64 {
+            1.0 - median_latency / NetworkAgent::PING_TIMEOUT.as_secs() as f64
+        } else { 0.0 };
 
-        if median_latency > 0.0 && median_latency < NetworkAgent::PING_TIMEOUT.as_secs() as f64 {
-            score_speed = 1.0 - median_latency / NetworkAgent::PING_TIMEOUT.as_secs() as f64;
-        }
-
-        return 0.15 * score_age + 0.25 * score_outbound + 0.2 * score_type + 0.2 * score_protocol + 0.2 * score_speed;
+        0.15 * score_age + 0.25 * score_outbound + 0.2 * score_type + 0.2 * score_protocol + 0.2 * score_speed
     }
 
     fn score_by_age(age: u64, best_age: u64, max_age: u64) -> Score {
@@ -289,7 +287,7 @@ impl PeerScorer {
     }
 
     pub fn lowest_connection_score(&mut self) -> Option<Score> {
-        while self.connection_scores.len() > 0 {
+        while !self.connection_scores.is_empty() {
             let connection_id = self.connection_scores.last().map(|(connection_id, _)| *connection_id).unwrap();
             let state = self.connections.state();
             let connection_info = state.get_connection(connection_id).expect("Missing connection");
@@ -300,7 +298,7 @@ impl PeerScorer {
         }
 
         match self.connection_scores.last() {
-            None => return None,
+            None => None,
             Some(tuple) => Some(tuple.1),
         }
     }

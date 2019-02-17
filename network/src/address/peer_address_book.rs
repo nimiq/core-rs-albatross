@@ -45,76 +45,76 @@ pub struct PeerAddressBookState {
 
 impl PeerAddressBookState {
     pub fn address_info_iter(&self) -> Values<Arc<PeerAddress>, PeerAddressInfo> {
-        return self.info_by_address.values();
+        self.info_by_address.values()
     }
 
     pub fn address_iter(&self) -> Keys<Arc<PeerAddress>, PeerAddressInfo> {
-        return self.info_by_address.keys();
+        self.info_by_address.keys()
     }
 
     pub fn ws_address_iter(&self) -> Iter<Arc<PeerAddress>> {
-        return self.ws_addresses.iter();
+        self.ws_addresses.iter()
     }
 
     pub fn wss_address_iter(&self) -> Iter<Arc<PeerAddress>> {
-        return self.wss_addresses.iter();
+        self.wss_addresses.iter()
     }
 
     pub fn rtc_address_iter(&self) -> Iter<Arc<PeerAddress>> {
-        return self.rtc_addresses.iter();
+        self.rtc_addresses.iter()
     }
 
     pub fn address_iter_for_protocol_mask(&self, protocol_mask: ProtocolFlags) -> QueryIterator {
         if protocol_mask == ProtocolFlags::WSS {
-            return QueryIterator::Iter(self.wss_address_iter());
+            QueryIterator::Iter(self.wss_address_iter())
         } else if protocol_mask == ProtocolFlags::WS {
-            return QueryIterator::Iter(self.ws_address_iter());
+            QueryIterator::Iter(self.ws_address_iter())
         } else if protocol_mask == ProtocolFlags::WS | ProtocolFlags::WSS {
-            return QueryIterator::Alternate(Alternate::new(self.ws_address_iter(), self.wss_address_iter()));
+            QueryIterator::Alternate(Alternate::new(self.ws_address_iter(), self.wss_address_iter()))
         } else if protocol_mask == ProtocolFlags::RTC {
-            return QueryIterator::Iter(self.rtc_address_iter());
+            QueryIterator::Iter(self.rtc_address_iter())
         } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WS {
-            return QueryIterator::Alternate(Alternate::new(self.rtc_address_iter(), self.ws_address_iter()));
+            QueryIterator::Alternate(Alternate::new(self.rtc_address_iter(), self.ws_address_iter()))
         } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WSS {
-            return QueryIterator::Alternate(Alternate::new(self.rtc_address_iter(), self.wss_address_iter()));
+            QueryIterator::Alternate(Alternate::new(self.rtc_address_iter(), self.wss_address_iter()))
         } else {
-            return QueryIterator::Keys(self.address_iter());
+            QueryIterator::Keys(self.address_iter())
         }
     }
 
     pub fn known_addresses_nr_for_protocol_mask(&self, protocol_mask: ProtocolFlags) -> usize {
         if protocol_mask == ProtocolFlags::WSS {
-            return self.known_wss_addresses_count();
+            self.known_wss_addresses_count()
         } else if protocol_mask == ProtocolFlags::WS {
-            return self.known_ws_addresses_count();
+            self.known_ws_addresses_count()
         } else if protocol_mask == ProtocolFlags::WS | ProtocolFlags::WSS {
-            return self.known_ws_addresses_count() + self.known_wss_addresses_count();
+            self.known_ws_addresses_count() + self.known_wss_addresses_count()
         } else if protocol_mask == ProtocolFlags::RTC {
-            return self.known_rtc_addresses_count();
+            self.known_rtc_addresses_count()
         } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WS {
-            return self.known_rtc_addresses_count() + self.known_ws_addresses_count();
+            self.known_rtc_addresses_count() + self.known_ws_addresses_count()
         } else if protocol_mask == ProtocolFlags::RTC | ProtocolFlags::WSS {
-            return self.known_rtc_addresses_count() + self.known_wss_addresses_count();
+            self.known_rtc_addresses_count() + self.known_wss_addresses_count()
         } else {
-            return self.known_addresses_count();
+            self.known_addresses_count()
         }
     }
 
     pub fn get_info<P>(&self, peer_address: &P) -> Option<&PeerAddressInfo>
         where Arc<PeerAddress>: Borrow<P>, P: Hash + Eq {
-        return self.info_by_address.get(peer_address);
+        self.info_by_address.get(peer_address)
     }
 
     pub fn get_info_mut<P>(&mut self, peer_address: &P) -> Option<&mut PeerAddressInfo>
         where Arc<PeerAddress>: Borrow<P>, P: Hash + Eq {
-        return self.info_by_address.get_mut(peer_address);
+        self.info_by_address.get_mut(peer_address)
     }
 
     pub fn get_by_peer_id(&self, peer_id: &PeerId) -> Option<Arc<PeerAddress>> {
         if let Some(peer_address) = self.address_by_peer_id.get(peer_id) {
             return Some(Arc::clone(&peer_address));
         }
-        return None;
+        None
     }
 
     pub fn get_channel_by_peer_id(&self, peer_id: &PeerId) -> Option<&PeerChannel> {
@@ -125,7 +125,7 @@ impl PeerAddressBookState {
                 }
             }
         }
-        return None;
+        None
     }
 
     fn add_to_store(&mut self, info: PeerAddressInfo) {
@@ -201,7 +201,7 @@ impl PeerAddressBookState {
         // XXX inefficient linear scan
         let addresses = self.address_iter()
             .filter(|&peer_address| peer_address.protocol() == Protocol::Rtc)
-            .map(|peer_address| peer_address.clone())
+            .cloned()
             .collect::<Vec<Arc<PeerAddress>>>();
 
         for peer_address in addresses {
@@ -250,7 +250,7 @@ impl PeerAddressBookState {
                 return !info.peer_address.is_seed();
             }
         }
-        return false;
+        false
     }
 
     pub fn known_addresses_count(&self) -> usize { self.info_by_address.len() }
@@ -311,7 +311,7 @@ impl PeerAddressBook {
         // Wait at most PeerAddressBook.SEEDING_TIMEOUT for seeding.
         // this.seeded.store(true, Ordering::Release);
 
-        return Ok(this);
+        Ok(this)
     }
 
     /// Initialises async stuff.
@@ -358,12 +358,11 @@ impl PeerAddressBook {
         let iterator = state.address_iter_for_protocol_mask(protocol_mask);
         let num_addresses = state.known_addresses_nr_for_protocol_mask(protocol_mask);
 
-        let mut start_index = 0;
         // Pick a random start index if we have a lot of addresses.
-        if num_addresses > max_addresses {
+        let start_index = if num_addresses > max_addresses {
             let mut cspring: OsRng = OsRng::new().unwrap();
-            start_index = cspring.gen_range(0, num_addresses);
-        }
+            cspring.gen_range(0, num_addresses)
+        } else { 0 };
 
         // XXX inefficient linear scan
         iterator.cycle().skip(start_index).take(cmp::min(max_addresses, num_addresses))
@@ -402,9 +401,9 @@ impl PeerAddressBook {
 
                     return true;
                 }
-                return false;
+                false
             })
-            .map(|peer_address| peer_address.clone())
+            .cloned()
             .collect()
     }
 
@@ -486,7 +485,7 @@ impl PeerAddressBook {
             if addr_arc.net_address.is_pseudo() && info.peer_address.net_address.is_reliable() {
                 let peer_address = Arc::get_mut(&mut addr_arc);
                 if let Some(peer_address) = peer_address {
-                    peer_address.net_address = info.peer_address.net_address.clone();
+                    peer_address.net_address = info.peer_address.net_address;
                 } else {
                     unreachable!();
                 }
@@ -546,7 +545,7 @@ impl PeerAddressBook {
         // Track which IP address send us this address.
         state.track_by_net_address(addr_arc, net_address);
 
-        return changed;
+        changed
     }
 
     /// Called when a connection to this peerAddress has been established.
@@ -725,7 +724,7 @@ impl PeerAddressBook {
         drop(state);
         drop(guard);
 
-        if unbanned_addresses.len() > 0 {
+        if !unbanned_addresses.is_empty() {
             self.notifier.notify(PeerAddressBookEvent::Added(unbanned_addresses));
         }
     }

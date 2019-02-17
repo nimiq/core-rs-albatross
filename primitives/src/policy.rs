@@ -25,19 +25,19 @@ pub const DIFFICULTY_MAX_ADJUSTMENT_FACTOR: f64 = 2f64;
 pub const TRANSACTION_VALIDITY_WINDOW: u32 = 120;
 
 /// Total supply in satoshis.
-pub const TOTAL_SUPPLY: u64 = 2100000000000000;
+pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
 
 /// Initial supply in satoshis.
-const INITIAL_SUPPLY: u64 = 252000000000000;
+const INITIAL_SUPPLY: u64 = 252_000_000_000_000;
 
 /// First block using constant tail emission until total supply is reached.
-const EMISSION_TAIL_START: u32 = 48692960;
+const EMISSION_TAIL_START: u32 = 48_692_960;
 
 /// Constant tail emission in satoshis until total supply is reached.
 const EMISSION_TAIL_REWARD: u64 = 4000;
 
 /// Emission speed.
-const EMISSION_SPEED: u64 = 4194304;
+const EMISSION_SPEED: u64 = 4_194_304;
 
 lazy_static! {
     static ref SUPPLY_CACHE: RwLock<Vec<u64>> = RwLock::new(vec![INITIAL_SUPPLY]);
@@ -67,7 +67,7 @@ fn supply_after(block_height: u32) -> u64 {
     }
 
     // Calculate remaining supply.
-    return supply_between(supply, end_i * SUPPLY_CACHE_INTERVAL, block_height + 1);
+    supply_between(supply, end_i * SUPPLY_CACHE_INTERVAL, block_height + 1)
 }
 
 fn supply_between(initial_supply: u64, start_height: u32, end_height: u32) -> u64 {

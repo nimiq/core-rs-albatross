@@ -10,7 +10,7 @@ macro_rules! create_typed_array {
                 assert_eq!(slice.len(), $len, "Tried to create instance with slice of wrong length");
                 let mut a = [0 as $t; $len];
                 a.clone_from_slice(&slice[0..$len]);
-                return $name(a);
+                $name(a)
             }
         }
 
@@ -18,36 +18,36 @@ macro_rules! create_typed_array {
             fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> Result<Self, ::beserial::SerializingError> {
                 let mut a = [0 as $t; $len];
                 reader.read_exact(&mut a[..])?;
-                return Ok($name(a))
+                Ok($name(a))
             }
         }
 
         impl ::beserial::Serialize for $name {
             fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> Result<usize, ::beserial::SerializingError> {
-                writer.write(&self.0)?;
-                return Ok($len);
+                writer.write_all(&self.0)?;
+                Ok($len)
             }
 
             fn serialized_size(&self) -> usize {
-                return $len;
+                $len
             }
         }
 
         impl From<[$t; $len]> for $name {
             fn from(arr: [$t; $len]) -> Self {
-                return $name(arr);
+                $name(arr)
             }
         }
 
         impl From<$name> for [$t; $len] {
             fn from(i: $name) -> [$t; $len] {
-                return i.0;
+                i.0
             }
         }
 
         impl ::std::fmt::Debug for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                return f.write_str(&::hex::encode(&self.0));
+                f.write_str(&::hex::encode(&self.0))
             }
         }
 
@@ -65,7 +65,7 @@ macro_rules! add_hex_io_fns_typed_arr {
     ($name: ident, $len: expr) => {
         impl ::std::fmt::Display for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                return f.write_str(&::hex::encode(&self.0));
+                f.write_str(&::hex::encode(&self.0))
             }
         }
 
@@ -79,16 +79,16 @@ macro_rules! add_hex_io_fns_typed_arr {
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let vec = Vec::from_hex(s)?;
                 if vec.len() == $len {
-                    return Ok($name::from(&vec[..]));
+                    Ok($name::from(&vec[..]))
                 } else {
-                    return Err(::hex::FromHexError::InvalidStringLength);
+                    Err(::hex::FromHexError::InvalidStringLength)
                 }
             }
         }
 
         impl From<&'static str> for $name {
             fn from(s: &'static str) -> Self {
-                return s.parse().unwrap();
+                s.parse().unwrap()
             }
         }
     };

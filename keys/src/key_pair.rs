@@ -17,17 +17,17 @@ impl KeyPair {
         let key_pair = ed25519_dalek::Keypair::generate(&mut cspring);
         let priv_key = PrivateKey(key_pair.secret);
         let pub_key = PublicKey(key_pair.public);
-        return KeyPair { private: priv_key, public: pub_key };
+        KeyPair { private: priv_key, public: pub_key }
     }
 
     pub fn sign(&self, data: &[u8]) -> Signature {
         let ext_signature = ed25519_dalek::ExpandedSecretKey::from(&self.private.0).sign(data, &self.public.0);
-        return Signature(ext_signature);
+        Signature(ext_signature)
     }
 }
 
 impl From<PrivateKey> for KeyPair {
     fn from(private_key: PrivateKey) -> Self {
-        return KeyPair { public: PublicKey::from(&private_key), private: private_key };
+        KeyPair { public: PublicKey::from(&private_key), private: private_key }
     }
 }

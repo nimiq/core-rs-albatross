@@ -72,8 +72,8 @@ pub struct NimiqMessageStream {
 
 impl NimiqMessageStream {
     pub(super) fn new(ws_socket: WebSocketStream<MaybeTlsStream<TcpStream>>, outbound: bool) -> Result<Self, Error> {
-        let peer_addr = ws_socket.peer_addr().map_err(|e| Error::NetAddressMissing(e))?;
-        return Ok(NimiqMessageStream {
+        let peer_addr = ws_socket.peer_addr().map_err(Error::NetAddressMissing)?;
+        Ok(NimiqMessageStream {
             inner: ws_socket,
             receiving_tag: 254,
             sending_tag: 0,
@@ -85,7 +85,7 @@ impl NimiqMessageStream {
                 net::IpAddr::V4(ip4) => NetAddress::IPv4(ip4),
                 net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
             }, outbound),
-        });
+        })
     }
 
     pub fn state(&self) -> &PublicStreamInfo {
@@ -166,6 +166,7 @@ impl Sink for NimiqMessageStream {
 
             buffer.extend(chunk);
 
+            #[cfg(feature = "metrics")]
             let buffer_len = buffer.len();
             match self.inner.start_send(WebSocketMessage::binary(buffer)) {
                 Ok(state) => match state {
@@ -205,14 +206,14 @@ impl NimiqMessageStream {
     fn try_read_message(&mut self) -> Result<Option<Message>, Error> {
         // If there are no web socket messages in the buffer, signal that we don't have anything yet
         // (i.e. we would need to block waiting, which is a no no in an async function)
-        if self.ws_queue.len() == 0 {
+        if self.ws_queue.is_empty() {
             return Ok(None);
         }
 
         while let Some(ws_msg) = self.ws_queue.pop_front() {
             let raw_msg = ws_msg.into_data();
             // We need at least the tag.
-            if raw_msg.len() < 1 {
+            if raw_msg.is_empty() {
                 return Err(Error::InvalidMessageFormat);
             }
 
@@ -305,9 +306,8 @@ impl Stream for NimiqMessageStream {
                     }
                     self.ws_queue.push_back(m);
 
-                    match self.try_read_message()? {
-                        Some(msg) => return Ok(Async::Ready(Some(msg))),
-                        None => {},
+                    if let Some(msg) = self.try_read_message()? {
+                        return Ok(Async::Ready(Some(msg)));
                     }
                 },
                 Ok(Async::Ready(None)) => {

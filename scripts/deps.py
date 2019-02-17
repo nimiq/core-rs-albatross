@@ -420,7 +420,7 @@ def analyze_versions(crate_data):
     versions = {}
     # Fill datastructure first.
     for data in crate_data:
-        for dependency in data['dependencies']:
+        for dependency in data['dependencies'] + data['dev-dependencies']:
             if dependency['name'] not in dependencies:
                 dependencies[dependency['name']] = {}
                 versions[dependency['name']] = set()

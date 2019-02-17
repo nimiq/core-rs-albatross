@@ -23,21 +23,21 @@ impl AccountTransactionInteraction for BasicAccount {
 
     fn with_incoming_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_add(self.balance, transaction.value)?;
-        return Ok(BasicAccount { balance });
+        Ok(BasicAccount { balance })
     }
 
     fn without_incoming_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.value)?;
-        return Ok(BasicAccount { balance });
+        Ok(BasicAccount { balance })
     }
 
     fn with_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
-        return Ok(BasicAccount { balance });
+        Ok(BasicAccount { balance })
     }
 
     fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
         let balance: Coin = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
-        return Ok(BasicAccount { balance });
+        Ok(BasicAccount { balance })
     }
 }

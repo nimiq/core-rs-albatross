@@ -135,7 +135,7 @@ impl ClientBuilder {
     pub fn build_consensus(self) -> Result<Arc<Consensus>, ClientError> {
         let env = self.environment;
         let network_id = self.network_id;
-        let mempool_config = self.mempool_config.clone().unwrap_or_else(|| MempoolConfig::default());
+        let mempool_config = self.mempool_config.clone().unwrap_or_else(MempoolConfig::default);
         let mut network_config = self.build_network_config()?;
         network_config.init_persistent()?;
         Ok(Consensus::new(env, network_id, network_config, mempool_config)?)
@@ -168,7 +168,7 @@ impl Future for ClientInitializeFuture {
     fn poll(&mut self) -> Poll<InitializedClient, ClientError> {
         // NOTE: This is practically Future::fuse, but this way the types are cleaner
         if !self.initialized {
-            self.network().initialize().map_err(|e| ClientError::NetworkError(e))?;
+            self.network().initialize().map_err(ClientError::NetworkError)?;
             self.initialized = true;
             Ok(Async::Ready(InitializedClient {
                 consensus: Arc::clone(&self.consensus),
@@ -233,7 +233,7 @@ impl Future for ClientConnectFuture {
 
     fn poll(&mut self) -> Poll<ConnectedClient, ClientError> {
         if !self.connected {
-            self.network().connect().map_err(|e| ClientError::NetworkError(e))?;
+            self.network().connect().map_err(ClientError::NetworkError)?;
             self.connected = true;
             Ok(Async::Ready(ConnectedClient { consensus: Arc::clone(&self.consensus) }))
         }

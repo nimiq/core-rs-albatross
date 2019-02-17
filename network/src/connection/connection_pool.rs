@@ -75,15 +75,15 @@ pub struct ConnectionPoolState {
 
 impl ConnectionPoolState {
     pub fn connection_iter(&self) -> Vec<&ConnectionInfo> {
-        return self.connections_by_peer_address.values().map(|connection_id| {
+        self.connections_by_peer_address.values().map(|connection_id| {
             self.connections.get(*connection_id).expect("Missing connection")
-        }).collect();
+        }).collect()
     }
 
     pub fn id_and_connection_iter(&self) -> Vec<(ConnectionId, &ConnectionInfo)> {
-        return self.connections_by_peer_address.values().map(|connection_id| {
+        self.connections_by_peer_address.values().map(|connection_id| {
             (*connection_id, self.connections.get(*connection_id).expect("Missing connection"))
-        }).collect();
+        }).collect()
     }
 
     /// Get the connection info for a peer address.
@@ -254,7 +254,7 @@ impl ConnectionPoolState {
         if net_address.is_reliable() {
             warn!("Banning ip {}", net_address);
             let banned_address = if net_address.get_type() == NetAddressType::IPv4 {
-                net_address.clone()
+                *net_address
             } else {
                 net_address.subnet(64)
             };
@@ -444,12 +444,12 @@ impl ConnectionPool {
                 return false;
             },
         };
-        state.connections.get_mut(connection_id).map(move |info| {
+        if let Some(info) = state.connections.get_mut(connection_id) {
             info.set_connection_handle(handle);
-        });
+        }
         state.connecting_count += 1;
 
-        return true;
+        true
     }
 
     pub fn disconnect(&self) {
@@ -519,7 +519,7 @@ impl ConnectionPool {
             ConnectionPool::close(info.network_connection(), CloseType::MaxPeerCountReached);
             return false;
         }
-        return true;
+        true
     }
 
     /// Callback upon connection establishment.
@@ -668,7 +668,7 @@ impl ConnectionPool {
         // Set peerConnection to NEGOTIATING state.
         self.state.write().connections.get_mut(connection_id).unwrap().negotiating();
 
-        return false;
+        false
     }
 
     /// Callback during handshake.
@@ -703,9 +703,9 @@ impl ConnectionPool {
                                 debug!("Aborting connection attempt to {}, simultaneous connection succeeded", peer_address);
 
                                 // Abort connection.
-                                stored_connection.connection_handle().map(|handle| {
+                                if let Some(handle) = stored_connection.connection_handle() {
                                     handle.abort();
-                                });
+                                }
                                 // The assert does not make much sense since the closing happens asynchronously.
                                 // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                             },
@@ -986,7 +986,7 @@ impl ConnectionPool {
             }
         }
 
-        return true;
+        true
     }
 }
 
@@ -1038,7 +1038,7 @@ impl<T> SparseVec<T> {
 
     pub fn insert(&mut self, value: T) -> usize {
         if let Some(index) = self.free_indices.pop_front() {
-            self.inner.get_mut(index).unwrap().get_or_insert(value);
+            self.inner[index].get_or_insert(value);
             index
         } else {
             let index = self.inner.len();

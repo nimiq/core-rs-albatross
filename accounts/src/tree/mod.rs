@@ -27,7 +27,7 @@ impl<'env> AccountsTree<'env> {
             txn.put_reserve(&tree.db, &root, &AccountsTreeNode::new_branch(root.clone(), NO_CHILDREN));
         }
         txn.commit();
-        return tree;
+        tree
     }
 
     pub fn put(&self, txn: &mut WriteTransaction, address: &Address, account: Account) {
@@ -96,7 +96,7 @@ impl<'env> AccountsTree<'env> {
         let node = node.with_child(child.prefix(), Blake2bHash::default()).unwrap();
         txn.put_reserve(&self.db, node.prefix(), &node);
 
-        return self.update_keys_batch(txn, node_prefix, root_path);
+        self.update_keys_batch(txn, node_prefix, root_path)
     }
 
     fn prune_batch(&self, txn: &mut WriteTransaction, prefix: AddressNibbles, mut root_path: Vec<AccountsTreeNode>) {
@@ -157,10 +157,10 @@ impl<'env> AccountsTree<'env> {
             }
         }
         txn.put_reserve(&self.db, node.prefix(), &node);
-        return node.hash();
+        node.hash()
     }
 
-    pub fn get_accounts_proof(&self, txn: &Transaction, addresses: &Vec<Address>) -> AccountsProof {
+    pub fn get_accounts_proof(&self, txn: &Transaction, addresses: &[Address]) -> AccountsProof {
         let mut prefixes = Vec::new();
         for address in addresses {
             prefixes.push(AddressNibbles::from(address));
@@ -170,10 +170,10 @@ impl<'env> AccountsTree<'env> {
 
         let mut nodes = Vec::new();
         self.get_accounts_proof_rec(&txn, &self.get_root(txn).unwrap(), &prefixes, &mut nodes);
-        return AccountsProof::new(nodes);
+        AccountsProof::new(nodes)
     }
 
-    fn get_accounts_proof_rec(&self, txn: &Transaction, node: &AccountsTreeNode, prefixes: &Vec<AddressNibbles>, nodes: &mut Vec<AccountsTreeNode>) -> bool {
+    fn get_accounts_proof_rec(&self, txn: &Transaction, node: &AccountsTreeNode, prefixes: &[AddressNibbles], nodes: &mut Vec<AccountsTreeNode>) -> bool {
         // For each prefix, descend the tree individually.
         let mut include_node = false;
         let mut i = 0;
@@ -198,13 +198,13 @@ impl<'env> AccountsTree<'env> {
                 // In the next main iteration we can skip those we already requested here.
                 let mut sub_prefixes = vec![ prefixes[0].clone() ];
                 // Find other prefixes to descend into this tree as well.
-                for j in i+1..prefixes.len() {
+                for (j, prefix) in prefixes.iter().enumerate().skip(i+1) {
                     // Since we ordered prefixes, there can't be any other prefixes with commonalities.
-                    if !child_prefix.is_prefix_of(&prefixes[j]) {
+                    if !child_prefix.is_prefix_of(prefix) {
                         break;
                     }
                     // But if there is a commonality, add it to the list.
-                    sub_prefixes.push(prefixes[j].clone());
+                    sub_prefixes.push(prefix.clone());
                     // Move j forward. As soon as j is the last index which doesn't have commonalities,
                     // we continue from there in the next iteration.
                     i = j;
@@ -223,25 +223,25 @@ impl<'env> AccountsTree<'env> {
             nodes.push(node.clone());
         }
 
-        return include_node;
+        include_node
     }
 
     pub fn get(&self, txn: &Transaction, address: &Address) -> Option<Account> {
         if let AccountsTreeNode::TerminalNode { account, .. } = txn.get(&self.db, &AddressNibbles::from(address))? {
             return Some(account);
         }
-        return None;
+        None
     }
 
     pub(crate) fn get_chunk(&self, txn: &Transaction, start: &str, size: usize) -> Option<AccountsTreeChunk> {
         let mut chunk = self.get_terminal_nodes(txn, &AddressNibbles::from_str(start).ok()?, size)?;
         let last_node = chunk.pop();
         let proof = if let Some(node) = last_node {
-            self.get_accounts_proof(txn, &vec![node.prefix().to_address()?])
+            self.get_accounts_proof(txn, &[node.prefix().to_address()?])
         } else {
-            self.get_accounts_proof(txn, &vec![Address::from_str("ffffffffffffffffffffffffffffffffffffffff").ok()?])
+            self.get_accounts_proof(txn, &[Address::from_str("ffffffffffffffffffffffffffffffffffffffff").ok()?])
         };
-        return Some(AccountsTreeChunk::new(chunk, proof));
+        Some(AccountsTreeChunk::new(chunk, proof))
     }
 
     pub(crate) fn get_terminal_nodes(&self, txn: &Transaction, start: &AddressNibbles, size: usize) -> Option<Vec<AccountsTreeNode>> {
@@ -269,17 +269,16 @@ impl<'env> AccountsTree<'env> {
                 }
             }
         }
-        return Some(vec);
+        Some(vec)
     }
 
     fn get_root(&self, txn: &Transaction) -> Option<AccountsTreeNode> {
-        let node = txn.get(&self.db, &AddressNibbles::empty());
-        return node;
+        txn.get(&self.db, &AddressNibbles::empty())
     }
 
     pub fn root_hash(&self, txn: &Transaction) -> Blake2bHash {
         let node = self.get_root(txn).unwrap();
-        return node.hash();
+        node.hash()
     }
 }
 

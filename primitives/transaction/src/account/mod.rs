@@ -54,7 +54,7 @@ impl AccountTransactionVerification for AccountType {
                         let mut pre_image: [u8; 32] = AnyHash::deserialize(proof_buf)?.into();
                         let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
-                        if proof_buf.len() != 0 {
+                        if !proof_buf.is_empty() {
                             warn!("Over-long proof");
                             return Err(TransactionError::InvalidProof);
                         }
@@ -84,7 +84,7 @@ impl AccountTransactionVerification for AccountType {
                         let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
                         let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
-                        if proof_buf.len() != 0 {
+                        if !proof_buf.is_empty() {
                             warn!("Over-long proof");
                             return Err(TransactionError::InvalidProof)
                         }
@@ -97,7 +97,7 @@ impl AccountTransactionVerification for AccountType {
                     ProofType::TimeoutResolve => {
                         let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
-                        if proof_buf.len() != 0 {
+                        if !proof_buf.is_empty() {
                             warn!("Over-long proof");
                             return Err(TransactionError::InvalidProof)
                         }
@@ -162,7 +162,7 @@ pub fn parse_htlc_creation_transaction(transaction: &Transaction) -> Result<(Add
     let hash_count = Deserialize::deserialize(reader)?;
     let timeout = Deserialize::deserialize(reader)?;
 
-    return Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout));
+    Ok((sender, recipient, hash_algorithm, hash_root, hash_count, timeout))
 }
 
 pub fn parse_and_verify_vesting_creation_transaction(transaction: &Transaction) -> Result<(Address, u32, u32, Coin, Coin), TransactionError> {
@@ -196,19 +196,19 @@ pub fn parse_vesting_creation_transaction(transaction: &Transaction) -> Result<(
     if transaction.data.len() == Address::SIZE + 4 {
         // Only block number: vest full amount at that block
         let vesting_step_blocks = Deserialize::deserialize(reader)?;
-        return Ok((owner, 0, vesting_step_blocks, transaction.value, transaction.value));
+        Ok((owner, 0, vesting_step_blocks, transaction.value, transaction.value))
     } else if transaction.data.len() == Address::SIZE + 16 {
         let vesting_start = Deserialize::deserialize(reader)?;
         let vesting_step_blocks = Deserialize::deserialize(reader)?;
         let vesting_step_amount = Deserialize::deserialize(reader)?;
-        return Ok((owner, vesting_start, vesting_step_blocks, vesting_step_amount, transaction.value));
+        Ok((owner, vesting_start, vesting_step_blocks, vesting_step_amount, transaction.value))
     } else if transaction.data.len() == Address::SIZE + 24 {
         // Create a vesting account with some instantly vested funds or additional funds considered.
         let vesting_start = Deserialize::deserialize(reader)?;
         let vesting_step_blocks = Deserialize::deserialize(reader)?;
         let vesting_step_amount = Deserialize::deserialize(reader)?;
         let vesting_total_amount = Deserialize::deserialize(reader)?;
-        return Ok((owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount));
+        Ok((owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount))
     } else {
         unreachable!();
     }

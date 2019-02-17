@@ -21,15 +21,20 @@ pub struct AddressNibbles {
 
 impl AddressNibbles {
     pub fn empty() -> AddressNibbles {
-        return AddressNibbles {
+        AddressNibbles {
             bytes: Vec::new(),
             length: 0,
-        };
+        }
     }
 
     #[inline]
     pub fn len(&self) -> usize {
-        return self.length as usize;
+        self.length as usize
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
     }
 
     pub fn get(&self, index: usize) -> Option<usize> {
@@ -38,7 +43,7 @@ impl AddressNibbles {
         }
         let byte = index / 2;
         let nibble = index % 2;
-        return Some(((self.bytes[byte] >> ((1 - nibble) * 4)) & 0xf) as usize);
+        Some(((self.bytes[byte] >> ((1 - nibble) * 4)) & 0xf) as usize)
     }
 
     pub fn is_prefix_of(&self, other: &AddressNibbles) -> bool {
@@ -56,7 +61,7 @@ impl AddressNibbles {
                 return false;
             }
         }
-        return self.bytes[..end] == other.bytes[..end];
+        self.bytes[..end] == other.bytes[..end]
     }
 
     pub fn common_prefix(&self, other: &AddressNibbles) -> AddressNibbles {
@@ -71,7 +76,7 @@ impl AddressNibbles {
             }
         }
 
-        return self.slice(0, first_difference_nibble);
+        self.slice(0, first_difference_nibble)
     }
 
     pub fn slice(&self, start: usize, end: usize) -> AddressNibbles {
@@ -106,14 +111,14 @@ impl AddressNibbles {
                 new_bytes.push(last_byte | (last_nibble >> 4));
             }
         }
-        return AddressNibbles {
+        AddressNibbles {
             bytes: new_bytes,
             length: (end - start) as u8,
-        };
+        }
     }
 
     pub fn suffix(&self, start: u8) -> AddressNibbles {
-        return self.slice(start as usize, self.len());
+        self.slice(start as usize, self.len())
     }
 
     pub fn to_address(&self) -> Option<Address> {
@@ -122,22 +127,22 @@ impl AddressNibbles {
         }
         let mut addr = [0u8; 20];
         addr.copy_from_slice(&self.bytes);
-        return Some(Address::from(addr));
+        Some(Address::from(addr))
     }
 }
 
 impl<'a> From<&'a Address> for AddressNibbles {
     fn from(address: &'a Address) -> Self {
-        return AddressNibbles::from(address.as_bytes());
+        AddressNibbles::from(address.as_bytes())
     }
 }
 
 impl<'a> From<&'a [u8]> for AddressNibbles {
     fn from(v: &'a [u8]) -> Self {
-        return AddressNibbles {
+        AddressNibbles {
             bytes: v.to_vec(),
             length: (v.len() * 2) as u8
-        };
+        }
     }
 }
 
@@ -148,7 +153,7 @@ impl fmt::Display for AddressNibbles {
         if self.length % 2 == 1 {
             hex_representation.pop();
         }
-        return f.write_str(&hex_representation);
+        f.write_str(&hex_representation)
     }
 }
 
@@ -158,17 +163,17 @@ impl str::FromStr for AddressNibbles {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() % 2 == 0 {
             let v: Vec<u8> = hex::decode(s)?;
-            return Ok(AddressNibbles::from(v.as_slice()));
+            Ok(AddressNibbles::from(v.as_slice()))
         } else {
             let mut v: Vec<u8> = hex::decode(&s[..s.len() - 1])?;
             let last_nibble = s.chars().last().unwrap();
             let last_nibble = last_nibble.to_digit(16)
                 .ok_or_else(|| hex::FromHexError::InvalidHexCharacter { c: last_nibble, index: s.len() - 1 })?;
             v.push((last_nibble as u8) << 4);
-            return Ok(AddressNibbles {
+            Ok(AddressNibbles {
                 bytes: v,
                 length: s.len() as u8
-            });
+            })
         }
     }
 }
@@ -176,14 +181,17 @@ impl str::FromStr for AddressNibbles {
 impl SerializeContent for AddressNibbles {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         let size = SerializeWithLength::serialize::<u8, W>(&self.to_string(), writer)?;
-        return Ok(size);
+        Ok(size)
     }
 }
 
+// Different hash implementation than std
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for AddressNibbles {}
 
 impl<'a, 'b> ops::Add<&'b AddressNibbles> for &'a AddressNibbles {
     type Output = AddressNibbles;
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn add(self, other: &'b AddressNibbles) -> AddressNibbles {
         let mut bytes = self.bytes.clone();
 
@@ -203,10 +211,10 @@ impl<'a, 'b> ops::Add<&'b AddressNibbles> for &'a AddressNibbles {
             }
         }
 
-        return AddressNibbles {
+        AddressNibbles {
             bytes,
             length: self.length + other.length
-        };
+        }
     }
 }
 
@@ -234,11 +242,11 @@ impl ops::Add<AddressNibbles> for AddressNibbles {
 impl Serialize for AddressNibbles {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let size = SerializeWithLength::serialize::<u8, W>(&self.to_string(), writer)?;
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
-        return /*length*/ 1 + self.len();
+        /*length*/ 1 + self.len()
     }
 }
 
@@ -247,10 +255,10 @@ impl Deserialize for AddressNibbles {
         let hex_repr: String = DeserializeWithLength::deserialize::<u8, R>(reader)?;
         let pot_address: Result<AddressNibbles, hex::FromHexError> = hex_repr.parse();
 
-        return match pot_address {
+        match pot_address {
             Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e).into()),
             Ok(address) => Ok(address),
-        };
+        }
     }
 }
 

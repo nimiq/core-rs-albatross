@@ -27,7 +27,7 @@ pub struct PeerAddressInfo {
 
 impl PeerAddressInfo {
     pub fn new(peer_address: Arc<PeerAddress>) -> Self {
-        return PeerAddressInfo {
+        PeerAddressInfo {
             peer_address: Arc::clone(&peer_address),
             state: PeerAddressState::New,
             signal_router: SignalRouter::new(peer_address),
@@ -37,7 +37,7 @@ impl PeerAddressInfo {
             ban_backoff: super::peer_address_book::INITIAL_FAILED_BACKOFF,
             close_types: HashMap::new(),
             added_by: HashSet::new(),
-        };
+        }
     }
 
     pub fn max_failed_attempts(&self) -> u32 {
@@ -83,11 +83,11 @@ pub struct SignalRouter {
 
 impl SignalRouter {
     pub fn new(peer_address: Arc<PeerAddress>) -> Self {
-        return SignalRouter {
+        SignalRouter {
             peer_address,
             best_route: None,
             routes: HashSet::new()
-        };
+        }
     }
 
     /// Adds a new route and returns whether we have a new best route
@@ -115,7 +115,7 @@ impl SignalRouter {
             return true;
         }
 
-        return false;
+        false
     }
 
     pub fn delete_best_route(&mut self) {
@@ -182,7 +182,7 @@ pub struct SignalRouteInfo {
 impl SignalRouteInfo {
     pub fn new(signal_channel: Arc<PeerChannel>, distance: u8, timestamp: u64) -> Self {
         let signal_channel = signal_channel.clone();
-        return SignalRouteInfo {
+        SignalRouteInfo {
             failed_attempts: 0,
             timestamp,
             signal_channel,
@@ -198,10 +198,10 @@ impl SignalRouteInfo {
 impl PartialEq for SignalRouteInfo {
     fn eq(&self, other: &SignalRouteInfo) -> bool {
         // We consider signal route infos to be equal if their signal_channel is equal
-        return self.signal_channel == other.signal_channel
+        self.signal_channel == other.signal_channel
             /* failed_attempts is ignored */
             /* timestamp is ignored */
-            /* distance is ignored */;
+            /* distance is ignored */
     }
 }
 

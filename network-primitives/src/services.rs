@@ -3,23 +3,23 @@ use beserial::{Deserialize, Serialize};
 bitflags! {
     #[derive(Serialize, Deserialize)]
     pub struct ServiceFlags: u32 {
-        const NONE  = 0b00000000;
-        const NANO  = 0b00000001;
-        const LIGHT = 0b00000010;
-        const FULL  = 0b00000100;
+        const NONE  = 0b0000_0000;
+        const NANO  = 0b0000_0001;
+        const LIGHT = 0b0000_0010;
+        const FULL  = 0b0000_0100;
     }
 }
 
 impl ServiceFlags {
-    pub fn is_full_node(&self) -> bool {
+    pub fn is_full_node(self) -> bool {
         self.contains(ServiceFlags::FULL)
     }
 
-    pub fn is_light_node(&self) -> bool {
+    pub fn is_light_node(self) -> bool {
         self.contains(ServiceFlags::LIGHT)
     }
 
-    pub fn is_nano_node(&self) -> bool {
+    pub fn is_nano_node(self) -> bool {
         self.contains(ServiceFlags::NANO)
     }
 }

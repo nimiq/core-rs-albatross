@@ -78,7 +78,7 @@ impl Serialize for ChainInfo {
         size += Serialize::serialize(&self.super_block_counts, writer)?;
         size += Serialize::serialize(&self.on_main_chain, writer)?;
         size += Serialize::serialize(&self.main_chain_successor, writer)?;
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
@@ -91,13 +91,13 @@ impl Serialize for ChainInfo {
         size += Serialize::serialized_size(&self.super_block_counts);
         size += Serialize::serialized_size(&self.on_main_chain);
         size += Serialize::serialized_size(&self.main_chain_successor);
-        return size;
+        size
     }
 }
 
 impl IntoDatabaseValue for ChainInfo {
     fn database_byte_size(&self) -> usize {
-        return self.serialized_size();
+        self.serialized_size()
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
@@ -108,6 +108,6 @@ impl IntoDatabaseValue for ChainInfo {
 impl FromDatabaseValue for ChainInfo {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
-        return Ok(Deserialize::deserialize(&mut cursor)?);
+        Ok(Deserialize::deserialize(&mut cursor)?)
     }
 }

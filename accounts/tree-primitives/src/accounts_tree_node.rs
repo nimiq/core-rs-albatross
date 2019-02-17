@@ -27,7 +27,7 @@ pub enum AccountsTreeNodeType {
 pub enum AccountsTreeNode {
     BranchNode {
         prefix: AddressNibbles,
-        children: [Option<AccountsTreeNodeChild>; 16],
+        children: Box<[Option<AccountsTreeNodeChild>; 16]>,
     },
     TerminalNode {
         prefix: AddressNibbles,
@@ -37,73 +37,73 @@ pub enum AccountsTreeNode {
 
 impl AccountsTreeNode {
     pub fn new_terminal(prefix: AddressNibbles, account: Account) -> Self {
-        return AccountsTreeNode::TerminalNode { prefix, account };
+        AccountsTreeNode::TerminalNode { prefix, account }
     }
 
     pub fn new_branch(prefix: AddressNibbles, children: [Option<AccountsTreeNodeChild>; 16]) -> Self {
-        return AccountsTreeNode::BranchNode { prefix, children };
+        AccountsTreeNode::BranchNode { prefix, children: Box::new(children) }
     }
 
     #[inline]
     pub fn is_terminal(&self) -> bool {
-        return match *self {
+        match *self {
             AccountsTreeNode::TerminalNode { .. } => true,
             AccountsTreeNode::BranchNode { .. } => false,
-        };
+        }
     }
 
     #[inline]
     pub fn is_branch(&self) -> bool {
-        return match *self {
+        match *self {
             AccountsTreeNode::TerminalNode { .. } => false,
             AccountsTreeNode::BranchNode { .. } => true,
-        };
+        }
     }
 
     pub fn get_child_hash(&self, prefix: &AddressNibbles) -> Option<&Blake2bHash> {
         match *self {
-            AccountsTreeNode::TerminalNode { .. } => return None,
+            AccountsTreeNode::TerminalNode { .. } => None,
             AccountsTreeNode::BranchNode { ref children, .. } => {
                 if let Some(ref child) = children[self.get_child_index(prefix)?] {
                     return Some(&child.hash);
                 }
-                return None;
+                None
             },
-        };
+        }
     }
 
     pub fn get_child_prefix(&self, prefix: &AddressNibbles) -> Option<AddressNibbles> {
         match *self {
-            AccountsTreeNode::TerminalNode { .. } => return None,
+            AccountsTreeNode::TerminalNode { .. } => None,
             AccountsTreeNode::BranchNode { ref children, .. } => {
                 if let Some(ref child) = children[self.get_child_index(prefix)?] {
                     return Some(self.prefix() + &child.suffix);
                 }
-                return None;
+                None
             },
-        };
+        }
     }
 
     #[inline]
     pub fn prefix(&self) -> &AddressNibbles {
-        return match *self {
+        match *self {
             AccountsTreeNode::TerminalNode { ref prefix, .. } => &prefix,
             AccountsTreeNode::BranchNode { ref prefix, .. } => &prefix,
-        };
+        }
     }
 
     #[inline]
     fn node_type(&self) -> AccountsTreeNodeType {
-        return match *self {
+        match *self {
             AccountsTreeNode::TerminalNode { .. } => AccountsTreeNodeType::TerminalNode,
             AccountsTreeNode::BranchNode { .. } => AccountsTreeNodeType::BranchNode,
-        };
+        }
     }
 
     #[inline]
     pub fn get_child_index(&self, prefix: &AddressNibbles) -> Option<usize> {
         assert!(self.prefix().is_prefix_of(prefix), "prefix {} is not a child of the current node {}", prefix, self.prefix());
-        return prefix.get(self.prefix().len());
+        prefix.get(self.prefix().len())
     }
 
     pub fn with_child(mut self, prefix: &AddressNibbles, hash: Blake2bHash) -> Option<Self> {
@@ -116,7 +116,7 @@ impl AccountsTreeNode {
                 children[child_index] = Some(child);
             },
         };
-        return Some(self);
+        Some(self)
     }
 
     pub fn without_child(mut self, suffix: AddressNibbles) -> Option<Self> {
@@ -127,7 +127,7 @@ impl AccountsTreeNode {
                 children[child_index] = None;
             },
         };
-        return Some(self);
+        Some(self)
     }
 
     pub fn with_account(mut self, new_account: Account) -> Option<Self> {
@@ -137,15 +137,15 @@ impl AccountsTreeNode {
             },
             AccountsTreeNode::BranchNode { .. } => { return None; },
         };
-        return Some(self);
+        Some(self)
     }
 
     pub fn iter_children(&self) -> Iter {
-        return self.into_iter();
+        self.into_iter()
     }
 
     pub fn iter_children_mut(&mut self) -> IterMut {
-        return self.into_iter();
+        self.into_iter()
     }
 }
 
@@ -170,7 +170,7 @@ impl Serialize for AccountsTreeNode {
             },
         }
 
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
@@ -191,7 +191,7 @@ impl Serialize for AccountsTreeNode {
             },
         }
 
-        return size;
+        size
     }
 }
 
@@ -203,7 +203,7 @@ impl Deserialize for AccountsTreeNode {
         match node_type {
             AccountsTreeNodeType::TerminalNode => {
                 let account: Account = Deserialize::deserialize(reader)?;
-                return Ok(AccountsTreeNode::new_terminal(prefix, account));
+                Ok(AccountsTreeNode::new_terminal(prefix, account))
             },
             AccountsTreeNodeType::BranchNode => {
                 let child_count: u8 = Deserialize::deserialize(reader)?;
@@ -216,7 +216,7 @@ impl Deserialize for AccountsTreeNode {
                         return Err(io::Error::from(io::ErrorKind::InvalidData).into());
                     }
                 }
-                return Ok(AccountsTreeNode::new_branch(prefix, children));
+                Ok(AccountsTreeNode::new_branch(prefix, children))
             },
         }
     }
@@ -226,10 +226,15 @@ impl SerializeContent for AccountsTreeNode {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
+// Different hash implementation than std
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for AccountsTreeNode {}
 
+#[allow(clippy::type_complexity)]
+type AccountsTreeNodeIter<'a> = Option<iter::FilterMap<slice::Iter<'a, Option<AccountsTreeNodeChild>>, fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>>>;
+
 pub struct Iter<'a> {
-    it: Option<iter::FilterMap<slice::Iter<'a, Option<AccountsTreeNodeChild>>, fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>>>,
+    it: AccountsTreeNodeIter<'a>,
 }
 
 impl<'a> iter::Iterator for Iter<'a> {
@@ -239,7 +244,7 @@ impl<'a> iter::Iterator for Iter<'a> {
         if let Some(ref mut it) = self.it {
             return it.next();
         }
-        return None;
+        None
     }
 }
 
@@ -248,10 +253,10 @@ impl<'a> iter::IntoIterator for &'a AccountsTreeNode {
     type IntoIter = Iter<'a>;
 
     fn into_iter(self) -> Iter<'a> {
-        return match self {
+        match self {
             AccountsTreeNode::TerminalNode { .. } => Iter { it: None },
             AccountsTreeNode::BranchNode { ref children, .. } => Iter { it: Some(children.iter().filter_map(|o| o.as_ref())) },
-        };
+        }
     }
 }
 
@@ -266,7 +271,7 @@ impl<'a> iter::Iterator for IterMut<'a> {
         if let Some(ref mut it) = self.it {
             return it.next();
         }
-        return None;
+        None
     }
 }
 
@@ -275,10 +280,10 @@ impl<'a> iter::IntoIterator for &'a mut AccountsTreeNode {
     type IntoIter = IterMut<'a>;
 
     fn into_iter(self) -> IterMut<'a> {
-        return match self {
+        match self {
             AccountsTreeNode::TerminalNode { .. } => IterMut { it: None },
             AccountsTreeNode::BranchNode { ref mut children, .. } => IterMut { it: Some(children.iter_mut().filter_map(|o| o.as_mut())) },
-        };
+        }
     }
 }
 

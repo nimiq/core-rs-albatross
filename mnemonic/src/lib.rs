@@ -207,14 +207,14 @@ impl FromStr for Mnemonic {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Mnemonic {
-            mnemonic: s.split(" ").map(|s| s.to_string()).collect()
+            mnemonic: s.split(' ').map(|s| s.to_string()).collect()
         })
     }
 }
 
 impl From<&'static str> for Mnemonic {
     fn from(s: &'static str) -> Self {
-        return s.parse().unwrap();
+        s.parse().unwrap()
     }
 }
 

@@ -24,7 +24,7 @@ impl<'env> Blockchain<'env> {
         receipts = self.transaction_store.get_by_sender(address, sender_limit, Some(&txn));
         receipts.extend(self.transaction_store.get_by_recipient(address, recipient_limit, Some(&txn)));
 
-        receipts.drain(..).map(|info| TransactionReceipt::from(info)).collect()
+        receipts.drain(..).map(TransactionReceipt::from).collect()
     }
 
     pub fn get_transaction_info_by_hash(&self, transaction_hash: &Blake2bHash) -> Option<TransactionInfo> {

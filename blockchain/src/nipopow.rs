@@ -200,7 +200,7 @@ impl SuperChain {
             }
         }
 
-        return true;
+        true
     }
 
     fn has_multi_level_quality(&self, depth: u8, k1: u32, delta: f64) -> bool {
@@ -216,7 +216,7 @@ impl SuperChain {
                 let upper_chain_length = head_info.super_block_counts.get(mu) - tail_info.super_block_counts.get(mu);
 
                 // Moderate badness check:
-                for j in (0..=mu - 1).rev() {
+                for j in (0..mu).rev() {
                     let lower_chain_length = head_info.super_block_counts.get(j) - tail_info.super_block_counts.get(j);
                     if !SuperChain::is_locally_good(upper_chain_length, lower_chain_length, mu - j, delta) {
                         trace!("Chain badness detected at depth {}[{}:{}], failing at {}/{}", depth, i, i + k1 as usize, mu, j);
@@ -226,7 +226,7 @@ impl SuperChain {
             }
         }
 
-        return true;
+        true
     }
 
     fn is_locally_good(super_length: u32, underlying_length: u32, depth: u8, delta: f64) -> bool {

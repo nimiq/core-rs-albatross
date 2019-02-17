@@ -63,24 +63,24 @@ pub struct SignatureProof {
 
 impl SignatureProof {
     pub fn from(public_key: PublicKey, signature: Signature) -> Self {
-        return SignatureProof {
+        SignatureProof {
             public_key,
             merkle_path: Blake2bMerklePath::empty(),
             signature,
-        };
+        }
     }
 
     pub fn compute_signer(&self) -> Address {
         let merkle_root = self.merkle_path.compute_root(&self.public_key);
-        return Address::from(merkle_root);
+        Address::from(merkle_root)
     }
 
     pub fn is_signed_by(&self, address: &Address) -> bool {
-        return self.compute_signer() == *address;
+        self.compute_signer() == *address
     }
 
     pub fn verify(&self, data: &[u8]) -> bool {
-        return self.public_key.verify(&self.signature, data);
+        self.public_key.verify(&self.signature, data)
     }
 }
 
@@ -105,7 +105,7 @@ impl Transaction {
     pub const MIN_SIZE: usize = 138;
 
     pub fn new_basic(sender: Address, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
-        return Self {
+        Self {
             data: Vec::new(),
             sender,
             sender_type: AccountType::Basic,
@@ -117,7 +117,7 @@ impl Transaction {
             network_id,
             flags: TransactionFlags::empty(),
             proof: Vec::new()
-        };
+        }
     }
 
     pub fn new_contract_creation(data: Vec<u8>, sender: Address, sender_type: AccountType, recipient_type: AccountType, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
@@ -135,27 +135,27 @@ impl Transaction {
             proof: Vec::new()
         };
         tx.recipient = tx.contract_creation_address();
-        return tx;
+        tx
     }
 
     pub fn format(&self) -> TransactionFormat {
         if self.sender_type == AccountType::Basic
             && self.recipient_type == AccountType::Basic
-            && self.data.len() == 0
+            && self.data.is_empty()
             && self.flags.is_empty() {
 
             if let Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
                 if self.sender == Address::from(&signature_proof.public_key)
-                    && signature_proof.merkle_path.len() == 0 {
+                    && signature_proof.merkle_path.is_empty() {
                     return TransactionFormat::Basic;
                 }
             }
         }
-        return TransactionFormat::Extended;
+        TransactionFormat::Extended
     }
 
     pub fn cmp_mempool_order(&self, other: &Transaction) -> Ordering {
-        return Ordering::Equal
+        Ordering::Equal
             .then_with(|| self.fee_per_byte().partial_cmp(&other.fee_per_byte()).unwrap_or(Ordering::Equal))
             .then_with(|| self.fee.cmp(&other.fee))
             .then_with(|| self.value.cmp(&other.value))
@@ -166,11 +166,11 @@ impl Transaction {
             .then_with(|| self.sender_type.cmp(&other.sender_type))
             .then_with(|| self.flags.cmp(&other.flags))
             .then_with(|| self.data.len().cmp(&other.data.len()))
-            .then_with(|| self.data.cmp(&other.data));
+            .then_with(|| self.data.cmp(&other.data))
     }
 
     pub fn cmp_block_order(&self, other: &Transaction) -> Ordering {
-        return Ordering::Equal
+        Ordering::Equal
             .then_with(|| self.recipient.cmp(&other.recipient))
             .then_with(|| self.validity_start_height.cmp(&other.validity_start_height))
             .then_with(|| other.fee.cmp(&self.fee))
@@ -180,7 +180,7 @@ impl Transaction {
             .then_with(|| self.sender_type.cmp(&other.sender_type))
             .then_with(|| self.flags.cmp(&other.flags))
             .then_with(|| self.data.len().cmp(&other.data.len()))
-            .then_with(|| self.data.cmp(&other.data));
+            .then_with(|| self.data.cmp(&other.data))
     }
 
     pub fn verify(&self, network_id: NetworkId) -> Result<(), TransactionError> {
@@ -200,10 +200,9 @@ impl Transaction {
 
         // Check that value + fee doesn't overflow.
         match self.value.checked_add(self.fee) {
-            Some(coin) => match coin <= Coin::from_u64_unchecked(policy::TOTAL_SUPPLY) {
-                true => (),
-                false => return Err(TransactionError::Overflow),
-            }
+            Some(coin) => if coin > Coin::from_u64_unchecked(policy::TOTAL_SUPPLY) {
+                return Err(TransactionError::Overflow);
+            },
             None => return Err(TransactionError::Overflow),
         }
 
@@ -213,19 +212,19 @@ impl Transaction {
         // Check transaction validity for recipient account.
         AccountType::verify_incoming_transaction(&self)?;
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
-        return block_height >= self.validity_start_height
-            && block_height < self.validity_start_height + policy::TRANSACTION_VALIDITY_WINDOW;
+        block_height >= self.validity_start_height
+            && block_height < self.validity_start_height + policy::TRANSACTION_VALIDITY_WINDOW
     }
 
     pub fn contract_creation_address(&self) -> Address {
         let mut tx = self.clone();
         tx.recipient = Address::from([0u8; Address::SIZE]);
         let hash: Blake2bHash = tx.hash();
-        return Address::from(hash);
+        Address::from(hash)
     }
 
     pub fn fee_per_byte(&self) -> f64 {
@@ -243,7 +242,7 @@ impl Transaction {
         res.append(&mut self.validity_start_height.serialize_to_vec());
         res.append(&mut self.network_id.serialize_to_vec());
         res.append(&mut self.flags.serialize_to_vec());
-        return res;
+        res
     }
 }
 
@@ -261,7 +260,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialize(&self.validity_start_height, writer)?;
                 size += Serialize::serialize(&self.network_id, writer)?;
                 size += Serialize::serialize(&signature_proof.signature, writer)?;
-                return Ok(size);
+                Ok(size)
             }
             TransactionFormat::Extended => {
                 let mut size = 0;
@@ -277,7 +276,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialize(&self.network_id, writer)?;
                 size += Serialize::serialize(&self.flags, writer)?;
                 size += SerializeWithLength::serialize::<u16, W>(&self.proof, writer)?;
-                return Ok(size);
+                Ok(size)
             }
         }
     }
@@ -294,7 +293,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialized_size(&self.validity_start_height);
                 size += Serialize::serialized_size(&self.network_id);
                 size += Serialize::serialized_size(&signature_proof.signature);
-                return size;
+                size
             }
             TransactionFormat::Extended => {
                 let mut size = 1;
@@ -309,7 +308,7 @@ impl Serialize for Transaction {
                 size += Serialize::serialized_size(&self.network_id);
                 size += Serialize::serialized_size(&self.flags);
                 size += SerializeWithLength::serialized_size::<u16>(&self.proof);
-                return size;
+                size
             }
         }
     }
@@ -321,7 +320,7 @@ impl Deserialize for Transaction {
         match transaction_type {
             TransactionFormat::Basic => {
                 let sender_public_key: PublicKey = Deserialize::deserialize(reader)?;
-                return Ok(Transaction {
+                Ok(Transaction {
                     data: vec![],
                     sender: Address::from(&sender_public_key),
                     sender_type: AccountType::Basic,
@@ -332,11 +331,11 @@ impl Deserialize for Transaction {
                     validity_start_height: Deserialize::deserialize(reader)?,
                     network_id: Deserialize::deserialize(reader)?,
                     flags: TransactionFlags::empty(),
-                    proof: SignatureProof::from(sender_public_key.clone(), Deserialize::deserialize(reader)?).serialize_to_vec(),
-                });
+                    proof: SignatureProof::from(sender_public_key, Deserialize::deserialize(reader)?).serialize_to_vec(),
+                })
             }
             TransactionFormat::Extended => {
-                return Ok(Transaction {
+                Ok(Transaction {
                     data: DeserializeWithLength::deserialize::<u16, R>(reader)?,
                     sender: Deserialize::deserialize(reader)?,
                     sender_type: Deserialize::deserialize(reader)?,
@@ -348,7 +347,7 @@ impl Deserialize for Transaction {
                     network_id: Deserialize::deserialize(reader)?,
                     flags: Deserialize::deserialize(reader)?,
                     proof: DeserializeWithLength::deserialize::<u16, R>(reader)?,
-                });
+                })
             }
         }
     }
@@ -367,7 +366,7 @@ impl SerializeContent for Transaction {
         size += Serialize::serialize(&self.validity_start_height, writer)?;
         size += Serialize::serialize(&self.network_id, writer)?;
         size += Serialize::serialize(&self.flags, writer)?;
-        return Ok(size);
+        Ok(size)
     }
 }
 

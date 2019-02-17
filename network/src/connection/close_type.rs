@@ -88,12 +88,12 @@ pub enum CloseType {
 }
 
 impl CloseType {
-    pub fn is_banning_type(&self) -> bool {
-        (*self as u16) >= 100 && (*self as u16) < 200
+    pub fn is_banning_type(self) -> bool {
+        (self as u16) >= 100 && (self as u16) < 200
     }
 
-    pub fn is_failing_type(&self) -> bool {
-        (*self as u16) >= 200
+    pub fn is_failing_type(self) -> bool {
+        (self as u16) >= 200
     }
 }
 

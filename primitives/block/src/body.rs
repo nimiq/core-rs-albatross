@@ -25,10 +25,12 @@ impl SerializeContent for BlockBody {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
+// Different hash implementation than std
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for BlockBody {
     fn hash<H: HashOutput>(&self) -> H {
         let vec = self.get_merkle_leaves();
-        return merkle::compute_root_from_hashes::<H>(&vec);
+        merkle::compute_root_from_hashes::<H>(&vec)
     }
 }
 
@@ -85,7 +87,7 @@ impl BlockBody {
         }
 
         // Everything checks out.
-        return Ok(());
+        Ok(())
     }
 
     pub fn get_merkle_leaves<H: HashOutput>(&self) -> Vec<H> {

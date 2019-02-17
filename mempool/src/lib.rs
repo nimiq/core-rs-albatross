@@ -281,7 +281,7 @@ impl<'env> Mempool<'env> {
             self.notifier.read().notify(MempoolEvent::TransactionEvicted(tx));
         }
 
-        return ReturnCode::Accepted;
+        ReturnCode::Accepted
     }
 
     pub fn contains(&self, hash: &Blake2bHash) -> bool {
@@ -289,7 +289,7 @@ impl<'env> Mempool<'env> {
     }
 
     pub fn get_transaction(&self, hash: &Blake2bHash) -> Option<Arc<Transaction>> {
-        self.state.read().transactions_by_hash.get(hash).map(|arc| arc.clone())
+        self.state.read().transactions_by_hash.get(hash).cloned()
     }
 
     pub fn get_transactions(&self, max_size: usize, min_fee_per_byte: f64) -> Vec<Arc<Transaction>> {
@@ -309,7 +309,7 @@ impl<'env> Mempool<'env> {
             }
         };
 
-        return txs;
+        txs
     }
 
     pub fn get_all_transactions(&self) -> Vec<Arc<Transaction>> {
@@ -343,7 +343,7 @@ impl<'env> Mempool<'env> {
         }
         // TODO: optimize this to not push txs that are going to be discarded anyways
         txs.truncate(max_transactions);
-        return txs;
+        txs
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent) {
@@ -427,7 +427,7 @@ impl<'env> Mempool<'env> {
         }
     }
 
-    fn restore_transactions(&self, reverted_blocks: &Vec<(Blake2bHash, Block)>) {
+    fn restore_transactions(&self, reverted_blocks: &[(Blake2bHash, Block)]) {
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
 
@@ -466,7 +466,7 @@ impl<'env> Mempool<'env> {
 
                     let txs = txs_by_sender
                         .entry(&tx.sender)
-                        .or_insert_with(|| BTreeSet::new());
+                        .or_insert_with(BTreeSet::new);
                     txs.insert(tx);
                 }
             }
@@ -529,12 +529,12 @@ impl<'env> Mempool<'env> {
 
         let txs_by_recipient = state.transactions_by_recipient
             .entry(tx.recipient.clone()) // XXX Get rid of the .clone() here
-            .or_insert_with(|| BTreeSet::new());
+            .or_insert_with(BTreeSet::new);
         txs_by_recipient.insert(tx.clone());
 
         let txs_by_sender = state.transactions_by_sender
             .entry(tx.sender.clone()) // XXX Get rid of the .clone() here
-            .or_insert_with(|| BTreeSet::new());
+            .or_insert_with(BTreeSet::new);
         txs_by_sender.insert(tx.clone());
     }
 
@@ -630,4 +630,4 @@ const TRANSACTIONS_PER_SENDER_MAX : u32 = 500;
 const FREE_TRANSACTIONS_PER_SENDER_MAX : u32 = 10;
 
 /// Maximum number of transactions in the mempool.
-pub const SIZE_MAX : usize = 100000;
+pub const SIZE_MAX : usize = 100_000;

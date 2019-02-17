@@ -62,51 +62,51 @@ impl Account {
     pub const INITIAL: Account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 
     pub fn new_basic(balance: Coin) -> Account {
-        return Account::Basic(BasicAccount { balance });
+        Account::Basic(BasicAccount { balance })
     }
 
     pub fn account_type(&self) -> AccountType {
-        return match *self {
+        match *self {
             Account::Basic(_) => AccountType::Basic,
             Account::Vesting(_) => AccountType::Vesting,
             Account::HTLC(_) => AccountType::HTLC
-        };
+        }
     }
 
     pub fn balance(&self) -> Coin {
-        return match *self {
+        match *self {
             Account::Basic(ref account) => account.balance,
             Account::Vesting(ref account) => account.balance,
             Account::HTLC(ref account) => account.balance
-        };
+        }
     }
 
     pub fn is_initial(&self) -> bool {
-        return match *self {
+        match *self {
             Account::Basic(ref account) => account.balance == Coin::ZERO,
             _ => false
-        };
+        }
     }
 
     pub fn is_to_be_pruned(&self) -> bool {
-        return match *self {
+        match *self {
             Account::Basic(_) => false,
             _ => self.balance() == Coin::ZERO,
-        };
+        }
     }
 
     pub fn balance_add(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
-        return match balance.checked_add(value) {
+        match balance.checked_add(value) {
             Some(result) => Ok(result),
             None => Err(AccountError::InsufficientFunds)
-        };
+        }
     }
 
     pub fn balance_sub(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
-        return match balance.checked_sub(value) {
+        match balance.checked_sub(value) {
             Some(result) => Ok(result),
             None => Err(AccountError::InsufficientFunds)
-        };
+        }
     }
 }
 
@@ -127,7 +127,7 @@ impl Serialize for Account {
             }
         }
 
-        return Ok(size);
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
@@ -145,7 +145,7 @@ impl Serialize for Account {
             }
         }
 
-        return size;
+        size
     }
 }
 
@@ -156,15 +156,15 @@ impl Deserialize for Account {
         match account_type {
             AccountType::Basic => {
                 let account: BasicAccount = Deserialize::deserialize(reader)?;
-                return Ok(Account::Basic(account));
+                Ok(Account::Basic(account))
             }
             AccountType::Vesting => {
                 let account: VestingContract = Deserialize::deserialize(reader)?;
-                return Ok(Account::Vesting(account));
+                Ok(Account::Vesting(account))
             }
             AccountType::HTLC => {
                 let account: HashedTimeLockedContract = Deserialize::deserialize(reader)?;
-                return Ok(Account::HTLC(account));
+                Ok(Account::HTLC(account))
             }
         }
     }
@@ -172,11 +172,11 @@ impl Deserialize for Account {
 
 impl AccountTransactionInteraction for Account {
     fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        return match account_type {
+        match account_type {
             AccountType::Basic => Err(AccountError::InvalidForRecipient),
             AccountType::Vesting => Ok(Account::Vesting(VestingContract::create(balance, transaction, block_height)?)),
             AccountType::HTLC => Ok(Account::HTLC(HashedTimeLockedContract::create(balance, transaction, block_height)?))
-        };
+        }
     }
 
     fn create(_balance: Coin, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
@@ -221,7 +221,7 @@ impl Hash for PrunedAccount {
     fn hash<H: HashOutput>(&self) -> H  {
         let h = H::Builder::default();
         self.serialize_content(&mut vec![]).unwrap();
-        return h.finish();
+        h.finish()
     }
 }
 
@@ -261,7 +261,7 @@ pub enum AccountError {
 impl fmt::Display for AccountError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO: Don't use debug formatter
-        return write!(f, "{:?}", self);
+        write!(f, "{:?}", self)
     }
 }
 

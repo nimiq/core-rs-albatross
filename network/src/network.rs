@@ -313,15 +313,13 @@ impl Network {
 
                 let state = connections.state();
                 let mut peer_connection = None;
-                let mut i: usize = 0;
-                for conn in state.connection_iter() {
+                for (i, conn) in state.connection_iter().into_iter().enumerate() {
                     if conn.state() == ConnectionState::Established {
                         peer_connection = Some(conn);
                     }
                     if i >= index && peer_connection.is_some() {
                         break;
                     }
-                    i += 1;
                 }
 
                 if let Some(peer_connection) = peer_connection {
@@ -340,7 +338,7 @@ impl Network {
     }
 
     pub fn peer_count(&self) -> usize {
-        return self.connections.peer_count();
+        self.connections.peer_count()
     }
 
     pub fn set_allow_inbound_connections(&self, allow_inbound_connections: bool) {

@@ -31,10 +31,10 @@ impl From<ProtocolFlags> for Vec<Protocol> {
 bitflags! {
     #[derive(Default, Serialize, Deserialize)]
     pub struct ProtocolFlags: u8 {
-        const DUMB  = 0b00000000;
-        const WSS  = 0b00000001;
-        const RTC = 0b00000010;
-        const WS  = 0b00000100;
+        const DUMB  = 0b0000_0000;
+        const WSS   = 0b0000_0001;
+        const RTC   = 0b0000_0010;
+        const WS    = 0b0000_0100;
     }
 }
 
@@ -60,7 +60,7 @@ impl From<Vec<Protocol>> for ProtocolFlags {
 }
 
 impl Protocol {
-    pub fn default_port(&self) -> Option<u16> {
+    pub fn default_port(self) -> Option<u16> {
         match self {
             Protocol::Ws | Protocol::Wss => Some(8443),
             _ => None

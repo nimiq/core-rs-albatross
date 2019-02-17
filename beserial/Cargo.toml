@@ -13,5 +13,5 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 
 [dependencies]
 byteorder = "1.2"
-num = "0.1"
+num = "0.2"
 failure = "0.1"

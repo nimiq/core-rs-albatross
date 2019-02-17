@@ -27,7 +27,7 @@ pub struct Accounts<'env> {
 
 impl<'env> Accounts<'env> {
     pub fn new(env: &'env Environment) -> Self {
-        return Accounts { env, tree: AccountsTree::new(env) };
+        Accounts { env, tree: AccountsTree::new(env) }
     }
 
     pub fn init(&self, txn: &mut WriteTransaction, network_id: NetworkId) {
@@ -53,10 +53,10 @@ impl<'env> Accounts<'env> {
     }
 
     pub fn get(&self, address: &Address, txn_option: Option<&db::Transaction>) -> Account {
-        return match txn_option {
+        match txn_option {
             Some(txn) => self.tree.get(txn, address),
             None => self.tree.get(&ReadTransaction::new(self.env), address)
-        }.unwrap_or(Account::INITIAL);
+        }.unwrap_or(Account::INITIAL)
     }
 
     pub fn get_chunk(&self, prefix: &str, size: usize, txn_option: Option<&db::Transaction>) -> Option<AccountsTreeChunk> {
@@ -67,10 +67,10 @@ impl<'env> Accounts<'env> {
     }
 
     pub fn hash(&self, txn_option: Option<&db::Transaction>) -> Blake2bHash {
-        return match txn_option {
+        match txn_option {
             Some(txn) => self.tree.root_hash(txn),
             None => self.tree.root_hash(&ReadTransaction::new(self.env))
-        };
+        }
     }
 
     pub fn hash_with_block_body(&self, body: &BlockBody, block_height: u32) -> Result<Blake2bHash, AccountError> {
@@ -92,7 +92,7 @@ impl<'env> Accounts<'env> {
             return Err(AccountError::AccountsHashMismatch);
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), AccountError> {
@@ -102,7 +102,7 @@ impl<'env> Accounts<'env> {
             return Err(AccountError::AccountsHashMismatch);
         }
 
-        return Ok(self.revert_block_body(txn, block.body.as_ref().unwrap(), block.header.height)?);
+        Ok(self.revert_block_body(txn, block.body.as_ref().unwrap(), block.header.height)?)
     }
 
     pub fn commit_block_body(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32) -> Result<(), AccountError> {
@@ -114,9 +114,10 @@ impl<'env> Accounts<'env> {
 
         // Process recipient accounts.
         for transaction in &body.transactions {
-            let recipient_type = match transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-                true => None,
-                false => Some(transaction.recipient_type)
+            let recipient_type = if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                None
+            } else {
+                Some(transaction.recipient_type)
             };
             self.process_transaction(txn, &transaction.recipient, recipient_type, transaction, block_height,
                                      |account, transaction, block_height| account.with_incoming_transaction(transaction, block_height))?;
@@ -135,7 +136,7 @@ impl<'env> Accounts<'env> {
                                   |account, transaction, block_height| account.with_incoming_transaction(transaction, block_height))?;
 
         self.tree.finalize_batch(txn);
-        return Ok(());
+        Ok(())
     }
 
     pub fn revert_block_body(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32) -> Result<(), AccountError> {
@@ -154,9 +155,10 @@ impl<'env> Accounts<'env> {
 
         // Process recipient accounts.
         for transaction in &body.transactions {
-            let recipient_type = match transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-                true => None,
-                false => Some(transaction.recipient_type)
+            let recipient_type = if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                None
+            } else {
+                Some(transaction.recipient_type)
             };
             self.process_transaction(txn, &transaction.recipient, recipient_type, transaction, block_height,
                                      |account, transaction, block_height| account.without_incoming_transaction(transaction, block_height))?;
@@ -169,7 +171,7 @@ impl<'env> Accounts<'env> {
         }
 
         self.tree.finalize_batch(txn);
-        return Ok(());
+        Ok(())
     }
 
     fn process_transaction<F>(&self, txn: &mut WriteTransaction, address: &Address, account_type: Option<AccountType>, transaction: &Transaction, block_height: u32, account_op: F) -> Result<(), AccountError>
@@ -184,7 +186,7 @@ impl<'env> Accounts<'env> {
 
         let new_account = account_op(account, transaction, block_height)?;
         self.tree.put_batch(txn, address, new_account);
-        return Ok(());
+        Ok(())
     }
 
     fn process_miner_reward<F>(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32, account_op: F) -> Result<(), AccountError>
@@ -206,7 +208,7 @@ impl<'env> Accounts<'env> {
             NetworkId::Main, // XXX ignored
         );
 
-        return self.process_transaction(txn, &body.miner, Some(AccountType::Basic), &coinbase_tx, block_height, account_op);
+        self.process_transaction(txn, &body.miner, Some(AccountType::Basic), &coinbase_tx, block_height, account_op)
     }
 
     fn create_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
@@ -215,7 +217,7 @@ impl<'env> Accounts<'env> {
         let recipient_account = self.get(&transaction.recipient, Some(txn));
         let new_recipient_account = Account::new_contract(transaction.recipient_type, recipient_account.balance(), transaction, block_height)?;
         self.tree.put_batch(txn, &transaction.recipient, new_recipient_account);
-        return Ok(());
+        Ok(())
     }
 
     fn revert_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
@@ -228,7 +230,7 @@ impl<'env> Accounts<'env> {
 
         let new_recipient_account = Account::new_basic(recipient_account.balance());
         self.tree.put_batch(txn, &transaction.recipient, new_recipient_account);
-        return Ok(());
+        Ok(())
     }
 
     fn prune_accounts(&self, txn: &mut WriteTransaction, body: &BlockBody) -> Result<(), AccountError> {
@@ -255,21 +257,21 @@ impl<'env> Accounts<'env> {
             pruned_accounts.remove(&transaction.sender);
         }
 
-        if pruned_accounts.len() > 0 {
+        if !pruned_accounts.is_empty() {
             return Err(AccountError::InvalidPruning);
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn restore_accounts(&self, txn: &mut WriteTransaction, body: &BlockBody) -> Result<(), AccountError> {
         for pruned_account in &body.pruned_accounts {
             self.tree.put_batch(txn, &pruned_account.address, pruned_account.account.clone());
         }
-        return Ok(());
+        Ok(())
     }
 
-    pub fn get_accounts_proof(&self, txn: &db::Transaction, addresses: &Vec<Address>) -> AccountsProof {
+    pub fn get_accounts_proof(&self, txn: &db::Transaction, addresses: &[Address]) -> AccountsProof {
         self.tree.get_accounts_proof(txn, addresses)
     }
 }

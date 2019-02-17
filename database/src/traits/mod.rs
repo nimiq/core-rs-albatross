@@ -32,7 +32,7 @@ pub trait AsDatabaseBytes {
 // Trait implementations
 impl IntoDatabaseValue for [u8] {
     fn database_byte_size(&self) -> usize {
-        return self.len();
+        self.len()
     }
 
     fn copy_into_database(&self, bytes: &mut [u8]) {
@@ -42,7 +42,7 @@ impl IntoDatabaseValue for [u8] {
 
 impl IntoDatabaseValue for str {
     fn database_byte_size(&self) -> usize {
-        return self.len();
+        self.len()
     }
 
     fn copy_into_database(&self, bytes: &mut [u8]) {
@@ -52,7 +52,7 @@ impl IntoDatabaseValue for str {
 
 impl FromDatabaseValue for String {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        return Ok(String::from_utf8(bytes.to_vec()).unwrap());
+        Ok(String::from_utf8(bytes.to_vec()).unwrap())
     }
 }
 

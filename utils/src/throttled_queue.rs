@@ -68,7 +68,7 @@ impl<T> ThrottledQueue<T>
     }
 
     /// Determines whether there are elements available in the `ThrottledQueue`.
-    pub fn is_available(&mut self) -> bool {
+    pub fn check_available(&mut self) -> bool {
         self.num_available() > 0
     }
 
@@ -103,8 +103,15 @@ impl<T> ThrottledQueue<T>
     }
 
     /// Returns the length of the queue.
+    #[inline]
     pub fn len(&self) -> usize {
         self.queue.len()
+    }
+
+    /// Checks whether the queue is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 }
 

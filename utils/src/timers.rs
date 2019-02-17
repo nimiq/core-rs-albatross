@@ -10,6 +10,7 @@ use futures::sync::oneshot;
 use parking_lot::{Mutex, MutexGuard};
 use tokio::timer::{Delay, Interval};
 
+#[derive(Default)]
 pub struct Timers<K: Eq + Hash + Debug> {
     delays: Mutex<HashMap<K, oneshot::Sender<()>>>,
     intervals: Mutex<HashMap<K, oneshot::Sender<()>>>,

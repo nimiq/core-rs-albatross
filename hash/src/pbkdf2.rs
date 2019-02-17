@@ -22,10 +22,10 @@ pub fn compute_pbkdf2_sha512(password: &[u8], salt: &[u8], iterations: usize, de
     let r = derived_key_length - (l - 1) * Sha512Hash::len();
 
     let mut derived_key = Vec::with_capacity(derived_key_length);
-    for i in 1..l+1 {
+    for i in 1..=l {
         let mut u: Vec<u8> = Vec::with_capacity(salt.len() + 4);
-        u.write(salt).map_err(|e| Pbkdf2Error::IOError(e))?;
-        u.write_u32::<BigEndian>(i as u32).map_err(|e| Pbkdf2Error::IOError(e))?;
+        u.write(salt).map_err(Pbkdf2Error::IOError)?;
+        u.write_u32::<BigEndian>(i as u32).map_err(Pbkdf2Error::IOError)?;
 
         let mut t: [u8; SHA512_LENGTH] = compute_hmac_sha512(password, u.as_slice()).into();
         let mut u = t;
@@ -37,9 +37,9 @@ pub fn compute_pbkdf2_sha512(password: &[u8], salt: &[u8], iterations: usize, de
         }
 
         if i < l {
-            derived_key.write(&t[..]).map_err(|e| Pbkdf2Error::IOError(e))?;
+            derived_key.write(&t[..]).map_err(Pbkdf2Error::IOError)?;
         } else {
-            derived_key.write(&t[..r]).map_err(|e| Pbkdf2Error::IOError(e))?;
+            derived_key.write(&t[..r]).map_err(Pbkdf2Error::IOError)?;
         }
     }
     Ok(derived_key)

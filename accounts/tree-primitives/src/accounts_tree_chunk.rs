@@ -30,13 +30,17 @@ impl AccountsTreeChunk {
         if last_prefix > Option::Some(self.tail().prefix()) {
             return false;
         }
-        return true;
+        true
     }
 
+    #[inline]
     pub fn len(&self) -> usize { self.nodes.len() + 1 }
 
     #[inline]
-    pub fn head(&self) -> &AccountsTreeNode { self.nodes.get(0).unwrap_or(self.tail()) }
+    pub fn is_empty(&self) -> bool { false }
+
+    #[inline]
+    pub fn head(&self) -> &AccountsTreeNode { self.nodes.get(0).unwrap_or_else(|| self.tail()) }
 
     #[inline]
     pub fn terminal_nodes(&self) -> Vec<&AccountsTreeNode> {
@@ -45,7 +49,7 @@ impl AccountsTreeChunk {
             vec.push(node)
         }
         vec.push(self.tail());
-        return vec;
+        vec
     }
 
     #[inline]

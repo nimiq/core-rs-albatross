@@ -22,13 +22,13 @@ pub struct TransactionInfo {
 impl FromDatabaseValue for TransactionInfo {
     fn copy_from_database(bytes: &[u8]) -> Result<Self, io::Error> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
-        return Ok(Deserialize::deserialize(&mut cursor)?);
+        Ok(Deserialize::deserialize(&mut cursor)?)
     }
 }
 
 impl IntoDatabaseValue for TransactionInfo {
     fn database_byte_size(&self) -> usize {
-        return self.serialized_size();
+        self.serialized_size()
     }
 
     fn copy_into_database(&self, mut bytes: &mut [u8]) {
@@ -94,7 +94,7 @@ impl<'env> TransactionStore<'env> {
         let transaction_hash_idx = env.open_database(
             Self::TRANSACTION_HASH_IDX_NAME.to_string()
         );
-        return TransactionStore { env, transaction_db, sender_idx, recipient_idx, transaction_hash_idx };
+        TransactionStore { env, transaction_db, sender_idx, recipient_idx, transaction_hash_idx }
     }
 
     fn get_head(&self, txn_option: Option<&Transaction>) -> c_uint {

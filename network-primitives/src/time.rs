@@ -4,7 +4,7 @@ use utils::time::systemtime_to_timestamp;
 use atomic::Atomic;
 use atomic::Ordering;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct NetworkTime {
     offset: Atomic<i64>
 }
@@ -33,6 +33,6 @@ impl NetworkTime {
             SystemTime::now() - Duration::from_secs(abs_offset)
         };
 
-        return systemtime_to_timestamp(system_time);
+        systemtime_to_timestamp(system_time)
     }
 }
