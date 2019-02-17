@@ -13,6 +13,7 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 maintenance = { status = "experimental" }
 
 [dependencies]
+log = "0.4"
 parking_lot = "0.7"
 beserial = { path = "../beserial" }
 nimiq-hash = { path = "../hash" }

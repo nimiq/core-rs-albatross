@@ -182,7 +182,7 @@ host = "my.domain"
 
 ##############################################################################
 #
-# Configure log output. All output will go to STDOUT.
+# Configure log output.
 #
 ##############################################################################
 
@@ -201,6 +201,35 @@ level = "info"
 #timestamps = true
 
 # Save log output to a file.
-# If not specified, log to stderr.
+# If not specified, log to stdout.
 # Default: none
 #file = "log.txt"
+
+
+
+##############################################################################
+##
+## Configure mempool
+##
+###############################################################################
+
+[mempool]
+
+# Configure max size of transaction black list
+# Default: 25000
+#blacklist_limit = 25000
+
+# Rules to filter certain transaction
+#[mempool.filter]
+#tx_fee = 0
+#tx_fee_per_byte = 0
+#tx_value = 0
+#tx_value_total = 0
+#contract_fee = 0
+#contract_fee_per_byte = 0
+#contract_value = 0
+#creation_fee = 0
+#creation_fee_per_byte = 0
+#creation_value = 0
+#sender_balance = 0
+#recipient_balance = 0

@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate log;
 extern crate nimiq_account as account;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_block as block;
@@ -101,7 +103,9 @@ impl<'env> Mempool<'env> {
 
             // Check transaction against rules and blacklist
             if !state.filter.accepts_transaction(&transaction) || state.filter.blacklisted(&transaction) {
+                drop(state);
                 self.state.write().filter.blacklist(&transaction);
+                trace!("Transaction was filtered: {}", transaction.hash::<Blake2bHash>());
                 return ReturnCode::Filtered;
             }
 
