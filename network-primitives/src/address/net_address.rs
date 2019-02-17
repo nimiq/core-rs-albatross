@@ -1,8 +1,12 @@
-use beserial::{Serialize, SerializingError, Deserialize, ReadBytesExt, WriteBytesExt};
 use std::cmp::min;
 use std::fmt;
-use std::net::{Ipv4Addr, Ipv6Addr, IpAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::AddrParseError;
 use std::str::FromStr;
+
+use failure::Fail;
+
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Clone)]
 pub enum NetAddress {
@@ -128,14 +132,15 @@ impl fmt::Display for NetAddress {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct NetAddressParseError;
+#[derive(Debug, Clone, Fail)]
+#[fail(display = "{}", _0)]
+pub struct NetAddressParseError(#[cause] AddrParseError);
 
 impl FromStr for NetAddress {
     type Err = NetAddressParseError;
 
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        let addr: IpAddr = s.parse().map_err(|_| NetAddressParseError)?;
+        let addr: IpAddr = s.parse().map_err(NetAddressParseError)?;
         match addr {
             IpAddr::V4(addr) => Ok(NetAddress::IPv4(addr)),
             IpAddr::V6(addr) => Ok(NetAddress::IPv6(addr)),

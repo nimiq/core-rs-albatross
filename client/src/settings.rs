@@ -1,9 +1,16 @@
-use std::path::Path;
-use std::fs::read_to_string;
-use failure::Error;
 use std::collections::HashMap;
+use std::fs::read_to_string;
+use std::path::Path;
 use std::str::FromStr;
 
+use failure::Error;
+use log::LevelFilter;
+
+use network::network_config::Seed;
+use network_primitives::address::NetAddress;
+use primitives::coin::Coin;
+
+use crate::serialization::*;
 
 pub const DEFAULT_REVERSE_PROXY_PORT: u16 = 8444;
 pub const DEFAULT_RPC_PORT: u16 = 8648;
@@ -44,8 +51,9 @@ pub(crate) struct NetworkSettings {
     pub protocol: Protocol,
     //#[serde(default)]
     //pub passive: bool,
+    #[serde(deserialize_with = "deserialize_string_vec")]
     #[serde(default)]
-    pub seed_nodes: Vec<String>,
+    pub seed_nodes: Vec<Seed>,
     #[serde(default)]
     pub user_agent: Option<String>
 }
@@ -169,11 +177,13 @@ pub(crate) struct WalletSettings {
     pub address: Option<String>,
 }*/
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ReverseProxySettings {
     pub port: Option<u16>,
-    pub address: String,
+    #[serde(deserialize_with = "deserialize_string")]
+    pub address: NetAddress,
+    #[serde(default)]
     pub header: String,
     #[serde(default)]
     pub with_tls_termination: bool,
@@ -182,11 +192,13 @@ pub(crate) struct ReverseProxySettings {
 #[derive(Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct LogSettings {
-    pub level: Option<String>,
+    #[serde(deserialize_with = "deserialize_string_option")]
+    pub level: Option<LevelFilter>,
     #[serde(default)]
     pub timestamps: bool,
     #[serde(default)]
-    pub tags: HashMap<String, String>,
+    #[serde(deserialize_with = "deserialize_tags")]
+    pub tags: HashMap<String, LevelFilter>,
     #[serde(default)]
     pub statistics: u64,
     #[serde(default)]
@@ -221,28 +233,37 @@ pub(crate) struct MempoolSettings {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MempoolFilterSettings {
+    #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
-    pub tx_fee: u64,
+    pub tx_fee: Coin,
     #[serde(default)]
     pub tx_fee_per_byte: f64,
+    #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
-    pub tx_value: u64,
+    pub tx_value: Coin,
+    #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
-    pub tx_value_total: u64,
+    pub tx_value_total: Coin,
+    #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
-    pub contract_fee: u64,
+    pub contract_fee: Coin,
     #[serde(default)]
     pub contract_fee_per_byte: f64,
+    #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
-    pub contract_value: u64,
+    pub contract_value: Coin,
     #[serde(default)]
-    pub creation_fee: u64,
+    #[serde(deserialize_with = "deserialize_coin")]
+    pub creation_fee: Coin,
     #[serde(default)]
     pub creation_fee_per_byte: f64,
+    #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
-    pub creation_value: u64,
+    pub creation_value: Coin,
+    #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
-    pub recipient_balance: u64,
+    pub recipient_balance: Coin,
+    #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
-    pub sender_balance: u64,
+    pub sender_balance: Coin,
 }

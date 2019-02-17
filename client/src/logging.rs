@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use chrono::Local;
@@ -6,7 +5,7 @@ use colored::Colorize;
 use failure::Fail;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
-use log::{Level, LevelFilter, ParseLevelError};
+use log::{Level, LevelFilter};
 
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(0);
 
@@ -44,11 +43,6 @@ fn max_module_width(target: &str) -> usize {
         max_width = target.len();
     }
     max_width
-}
-
-/// Convert a &str into a LevelFilter or use default.
-pub fn to_level(level: &str) -> Result<LevelFilter, ParseLevelError> {
-    LevelFilter::from_str(level)
 }
 
 /// Trait that implements Nimiq specific behavior for fern's Dispatch.

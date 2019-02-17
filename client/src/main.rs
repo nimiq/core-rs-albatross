@@ -35,20 +35,16 @@ use log::Level;
 
 use database::lmdb::{LmdbEnvironment, open};
 use lib::client::{Client, ClientBuilder};
-use mempool::filter::{MempoolFilter, Rules};
 use mempool::MempoolConfig;
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
-use network::network_config::Seed;
 use network_primitives::protocol::Protocol;
-use primitives::coin::Coin;
-use primitives::coin::CoinParseError;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
 
 use crate::cmdline::Options;
-use crate::logging::{DEFAULT_LEVEL, NimiqDispatch, to_level};
+use crate::logging::{DEFAULT_LEVEL, NimiqDispatch};
 use crate::logging::force_log_error_cause_chain;
 use crate::settings as s;
 use crate::settings::Settings;
@@ -59,60 +55,7 @@ mod logging;
 mod settings;
 mod cmdline;
 mod static_env;
-
-
-/// Converts protocol from settings into 'normal' protocol
-impl From<s::Protocol> for Protocol {
-    fn from(protocol: s::Protocol) -> Protocol {
-        match protocol {
-            s::Protocol::Dumb => Protocol::Dumb,
-            s::Protocol::Ws => Protocol::Ws,
-            s::Protocol::Wss => Protocol::Wss,
-            s::Protocol::Rtc => Protocol::Rtc,
-        }
-    }
-}
-
-/// Converts the network ID from settings into 'normal' network ID
-impl From<s::Network> for NetworkId {
-    fn from(network: s::Network) -> NetworkId {
-        match network {
-            s::Network::Main => NetworkId::Main,
-            s::Network::Test => NetworkId::Test,
-            s::Network::Dev=> NetworkId::Dev,
-        }
-    }
-}
-
-/// Convert mempool settings
-// TODO: Replace with TryFrom when available.
-trait FromMempoolSettings {
-    fn from_mempool_settings(mempool_settings: s::MempoolSettings) -> Result<MempoolConfig, CoinParseError>;
-}
-impl FromMempoolSettings for MempoolConfig {
-    fn from_mempool_settings(mempool_settings: s::MempoolSettings) -> Result<MempoolConfig, CoinParseError> {
-        let rules = if let Some(f) = mempool_settings.filter {
-            Rules {
-                tx_fee: Coin::from_u64(f.tx_fee)?,
-                tx_fee_per_byte: f.tx_fee_per_byte,
-                tx_value: Coin::from_u64(f.tx_value)?,
-                tx_value_total: Coin::from_u64(f.tx_value_total)?,
-                contract_fee: Coin::from_u64(f.contract_fee)?,
-                contract_fee_per_byte: f.contract_fee_per_byte,
-                contract_value: Coin::from_u64(f.contract_value)?,
-                creation_fee: Coin::from_u64(f.creation_fee)?,
-                creation_fee_per_byte: f.creation_fee_per_byte,
-                creation_value: Coin::from_u64(f.creation_value)?,
-                sender_balance: Coin::from_u64(f.sender_balance)?,
-                recipient_balance: Coin::from_u64(f.recipient_balance)?,
-            }
-        } else { Rules::default() };
-        Ok(MempoolConfig {
-            filter_rules: rules,
-            filter_limit: mempool_settings.blacklist_limit.unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE)
-        })
-    }
-}
+mod serialization;
 
 
 #[derive(Debug, Fail)]
@@ -146,9 +89,9 @@ fn run() -> Result<(), Error> {
     let mut dispatch = fern::Dispatch::new()
         .pretty_logging(settings.log.timestamps)
         .level(DEFAULT_LEVEL)
-        .level_for_nimiq(cmdline.log_level.as_ref().or(settings.log.level.as_ref()).map(|level| to_level(level)).unwrap_or(Ok(DEFAULT_LEVEL))?);
+        .level_for_nimiq(cmdline.log_level.as_ref().map(|level| level.parse()).or(settings.log.level.map(Ok)).unwrap_or(Ok(DEFAULT_LEVEL))?);
     for (module, level) in settings.log.tags.iter() {
-        dispatch = dispatch.level_for(module.clone(), to_level(level)?);
+        dispatch = dispatch.level_for(module.clone(), level.clone());
     }
     // For now, we only log to stdout.
     dispatch = dispatch.chain(io::stdout());
@@ -187,20 +130,19 @@ fn run() -> Result<(), Error> {
     if let Some(r) = settings.reverse_proxy {
         client_builder.with_reverse_proxy(
             r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
-            r.address.parse().expect("Could not parse reverse proxy address from config despite being enabled"),
+            r.address,
             r.header,
             r.with_tls_termination
         );
     }
 
-    // add mempool settings to filter
+    // Add mempool settings to filter
     if let Some(mempool_settings) = settings.mempool {
-        client_builder.with_mempool_config(MempoolConfig::from_mempool_settings(mempool_settings)?);
+        client_builder.with_mempool_config(MempoolConfig::from(mempool_settings));
     }
 
     // Add TLS configuration, if present
     // NOTE: Currently we only need to set TLS settings for Wss
-    // TODO: Take ReverseProxyConfig and check if we're actually doing TLS
     if settings.network.protocol == s::Protocol::Wss {
         if let Some(tls_settings) = settings.tls {
             client_builder.with_tls_identity(&tls_settings.identity_file, &tls_settings.identity_password);
@@ -211,11 +153,7 @@ fn run() -> Result<(), Error> {
     }
 
     // Parse additional seed nodes and add them
-    client_builder.with_seeds(settings.network.seed_nodes.iter()
-        .filter_map(|s| Seed::from_str(s).map_err(|e| {
-            warn!("Invalid seed node: {}: {}", s, e);
-            e
-        }).ok()).collect::<Vec<Seed>>());
+    client_builder.with_seeds(settings.network.seed_nodes);
 
     // Setup client future to initialize and connect
     let client = client_builder.build_client()?;

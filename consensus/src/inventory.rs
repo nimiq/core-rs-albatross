@@ -513,7 +513,7 @@ impl InventoryAgent {
 
         self.inv_mgr.write().note_vector_received(&vector);
 
-        // TODO do this async
+        // TODO do this async (then we need a form of synchronizer to process the blocks in the right order)
         // XXX Debug
         let start = Instant::now();
         let height = block.header.height;
