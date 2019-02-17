@@ -54,6 +54,14 @@ impl NetAddress {
         // TODO add reliability flag
         !self.is_pseudo()
     }
+
+    pub fn into_ip_address(self) -> Option<IpAddr> {
+        match self {
+            NetAddress::IPv4(addr) => Some(IpAddr::V4(addr)),
+            NetAddress::IPv6(addr) => Some(IpAddr::V6(addr)),
+            _ => None
+        }
+    }
 }
 
 fn ip_to_subnet(ip: &[u8], mut bit_count: u8) -> Vec<u8> {

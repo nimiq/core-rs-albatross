@@ -34,6 +34,7 @@ use mempool::MempoolConfig;
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
 use network_primitives::protocol::Protocol;
+use network_primitives::address::NetAddress;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::rpc_server;
@@ -168,12 +169,14 @@ fn run() -> Result<(), Error> {
     // start RPC server if enabled
     #[cfg(feature = "rpc-server")] {
         if let Some(rpc_settings) = settings.rpc_server {
-            let ip = IpAddr::from_str(rpc_settings.bind.as_ref()
-                .map(|s| s.as_str()).unwrap_or("127.0.0.1"))
-                .map_err(|_| ConfigError::InvalidIpAddress)?;
+            // Unwrap is safe, since `NetAddress::from_str` only returns variants that can be turned
+            // into a IpAddr
+            let bind = rpc_settings.bind
+                .unwrap_or(NetAddress::from_str("127.0.0.1").unwrap())
+                .into_ip_address().unwrap();
             let port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
             info!("Starting RPC server listening on port {}", port);
-            other_futures.push(rpc_server(Arc::clone(&consensus), ip, port)?);
+            other_futures.push(rpc_server(Arc::clone(&consensus), bind, port)?);
         }
     }
     // If the RPC server is enabled, but the client is not compiled with it, inform the user
@@ -185,12 +188,12 @@ fn run() -> Result<(), Error> {
     // start metrics server if enabled
     #[cfg(feature = "metrics-server")] {
         if let Some(metrics_settings) = settings.metrics_server {
-            let ip = IpAddr::from_str(metrics_settings.bind.as_ref()
-                .map(|s| s.as_str()).unwrap_or("127.0.0.1"))
-                .map_err(|_| ConfigError::InvalidIpAddress)?;
+            let bind = metrics_settings.bind
+                .unwrap_or(NetAddress::from_str("127.0.0.1").unwrap())
+                .into_ip_address().unwrap();
             let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);
             info!("Starting metrics server listening on port {}", port);
-            other_futures.push(metrics_server(Arc::clone(&consensus), ip, port, metrics_settings.password)?);
+            other_futures.push(metrics_server(Arc::clone(&consensus), bind, port, metrics_settings.password)?);
         }
     }
     // If the metrics server is enabled, but the client is not compiled with it, inform the user
