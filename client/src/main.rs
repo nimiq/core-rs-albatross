@@ -59,6 +59,8 @@ pub enum ConfigError {
     NoTlsIdentityFile,
     #[fail(display = "Please configure a hostname in the `[network]` section.")]
     NoHostname,
+    #[fail(display = "Invalid IP address.")]
+    InvalidIpAddress
 }
 
 fn main() {
@@ -165,7 +167,9 @@ fn run() -> Result<(), Error> {
     #[cfg(feature = "rpc-server")] {
         if let Some(rpc_settings) = settings.rpc_server {
             // TODO: Replace with parsing from config file
-            let ip = IpAddr::from_str("127.0.0.1").unwrap();
+            let ip = IpAddr::from_str(rpc_settings.bind.as_ref()
+                .map(|s| s.as_str()).unwrap_or("127.0.0.1"))
+                .map_err(|_| ConfigError::InvalidIpAddress)?;
             let port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
             info!("Starting RPC server listening on port {}", port);
             other_futures.push(rpc_server(Arc::clone(&consensus), ip, port)?);
@@ -181,7 +185,9 @@ fn run() -> Result<(), Error> {
     #[cfg(feature = "metrics-server")] {
         if let Some(metrics_settings) = settings.metrics_server {
             // TODO: Replace with parsing from config file
-            let ip = IpAddr::from_str("127.0.0.1").unwrap();
+            let ip = IpAddr::from_str(metrics_settings.bind.as_ref()
+                .map(|s| s.as_str()).unwrap_or("127.0.0.1"))
+                .map_err(|_| ConfigError::InvalidIpAddress)?;
             let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);
             info!("Starting metrics server listening on port {}", port);
             other_futures.push(metrics_server(Arc::clone(&consensus), ip, port, metrics_settings.password)?);

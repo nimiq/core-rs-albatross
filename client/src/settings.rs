@@ -147,6 +147,7 @@ impl FromStr for Network {
 #[derive(Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RpcServerSettings {
+    pub bind: Option<String>,
     pub port: Option<u16>,
     #[serde(default)]
     pub corsdomain: Vec<String>,
@@ -167,6 +168,7 @@ pub(crate) struct UiServerSettings {
 #[derive(Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MetricsServerSettings {
+    pub bind: Option<String>,
     pub port: Option<u16>,
     pub password: Option<String>,
 }
