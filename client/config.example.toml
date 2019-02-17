@@ -32,8 +32,8 @@ host = "my.domain"
 # - "dumb": Discouraged as other nodes might set limits on the number of dumb connections.
 #           Other nodes will not be able to connect to this node, but you may connect to others.
 # Possible values: "wss", "ws", "dumb"
-# Default: "wss"
-#protocol = "wss"
+# Default: "ws"
+#protocol = "ws"
 
 # Details of additional seed node.
 # - host: the hostname of the websocket server to connect to.
@@ -45,6 +45,13 @@ host = "my.domain"
 #    { host = 'nimiq-seed.company-network.int', port = 8080 },
 #]
 
+# User Agent
+#
+# String that describes what kind of node is running.
+#
+# Default: Generated from version, operating system and processor architecture
+#user_agent = "core-rs/0.1.0 (native; linux x86_64)"
+
 
 
 ##############################################################################
@@ -52,7 +59,7 @@ host = "my.domain"
 # Identity file (PCKS#12) and password for privat key
 #
 ##############################################################################
-#[tls]
+#[network.tls]
 #identity_file = "./my.domain.p12"
 #identity_password = "secret"
 
@@ -86,8 +93,12 @@ host = "my.domain"
 #
 ##############################################################################
 
-# Uncomment the following line to enable the rpc server.
+# Uncomment the following line to enable the RPC server.
 #[rpc-server]
+
+# Bind the RPC server to specified IP
+# Default: 127.0.0.1
+#bind="127.0.0.1"
 
 # TCP-Port to use to create a listening socket for the JSON-RPC server.
 # Possible values: any valid port number
@@ -123,6 +134,10 @@ host = "my.domain"
 
 # Uncomment the following line to enable the metrics server.
 #[metrics-server]
+
+# Bind the RPC server to specified IP
+# Default: 127.0.0.1
+#bind="127.0.0.1"
 
 # TCP-Port to use to create a listening socket for the metrics server.
 # Possible values: any valid port number
@@ -179,12 +194,13 @@ level = "info"
 
 # Define specific log levels for tags.
 # Default: none
-tags = { BaseConsensus = "debug" }
+#tags = { BaseConsensus = "debug" }
 
 # Specify whether timestamps should be included for log statements.
 # Default: false
 #timestamps = true
 
 # Save log output to a file.
+# If not specified, log to stderr.
 # Default: none
 #file = "log.txt"

@@ -145,7 +145,7 @@ fn run() -> Result<(), Error> {
     // Add TLS configuration, if present
     // NOTE: Currently we only need to set TLS settings for Wss
     if settings.network.protocol == s::Protocol::Wss {
-        if let Some(tls_settings) = settings.tls {
+        if let Some(tls_settings) = settings.network.tls {
             client_builder.with_tls_identity(&tls_settings.identity_file, &tls_settings.identity_password);
         }
         else {
@@ -166,7 +166,6 @@ fn run() -> Result<(), Error> {
     // start RPC server if enabled
     #[cfg(feature = "rpc-server")] {
         if let Some(rpc_settings) = settings.rpc_server {
-            // TODO: Replace with parsing from config file
             let ip = IpAddr::from_str(rpc_settings.bind.as_ref()
                 .map(|s| s.as_str()).unwrap_or("127.0.0.1"))
                 .map_err(|_| ConfigError::InvalidIpAddress)?;
@@ -184,7 +183,6 @@ fn run() -> Result<(), Error> {
     // start metrics server if enabled
     #[cfg(feature = "metrics-server")] {
         if let Some(metrics_settings) = settings.metrics_server {
-            // TODO: Replace with parsing from config file
             let ip = IpAddr::from_str(metrics_settings.bind.as_ref()
                 .map(|s| s.as_str()).unwrap_or("127.0.0.1"))
                 .map_err(|_| ConfigError::InvalidIpAddress)?;

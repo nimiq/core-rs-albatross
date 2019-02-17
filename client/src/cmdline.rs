@@ -11,10 +11,6 @@ use crate::settings::{Network, NodeType};
 pub(crate) enum ParseError {
     #[fail(display = "Failed to parse port.")]
     Port,
-    #[fail(display = "Failed to parse RPC port.")]
-    RpcPort,
-    #[fail(display = "Failed to parse metrics port.")]
-    MetricsPort,
     #[fail(display = "Failed to parse consensus type.")]
     ConsensusType,
     #[fail(display = "Failed to parse network ID.")]

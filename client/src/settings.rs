@@ -22,7 +22,6 @@ pub const DEFAULT_METRICS_PORT: u16 = 8649;
 pub(crate) struct Settings {
     #[serde(default)]
     pub network: NetworkSettings,
-    pub tls: Option<TlsSettings>, // TODO: Move this into `NetworkSettings`?
     #[serde(default)]
     pub consensus: ConsensusSettings,
     pub rpc_server: Option<RpcServerSettings>,
@@ -55,7 +54,8 @@ pub(crate) struct NetworkSettings {
     #[serde(default)]
     pub seed_nodes: Vec<Seed>,
     #[serde(default)]
-    pub user_agent: Option<String>
+    pub user_agent: Option<String>,
+    pub tls: Option<TlsSettings>,
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -69,7 +69,7 @@ pub(crate) enum Protocol {
 
 impl Default for Protocol {
     fn default() -> Self {
-        Protocol::Wss
+        Protocol::Ws
     }
 }
 
