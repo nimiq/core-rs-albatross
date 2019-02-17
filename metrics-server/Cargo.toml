@@ -17,14 +17,12 @@ nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
 nimiq-consensus = { path = "../consensus" }
 nimiq-network = { path = "../network", features = ["metrics"] }
 nimiq-mempool = { path = "../mempool" }
-nimiq-network-primitives = { path = "../network-primitives" }
 nimiq-block = { path = "../primitives/block" }
 beserial = { path = "../beserial" }
 
 hyper = "0.12.19"
 futures = "0.1"
-log = "0.4.3"
+log = "0.4"
 base64 = "0.10.1"
 
 failure = "0.1.5"
-failure_derive = "0.1.5"

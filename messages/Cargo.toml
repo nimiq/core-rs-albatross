@@ -11,13 +11,10 @@ license = "Apache-2.0"
 [dependencies]
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
-nimiq-accounts = { path = "../accounts" }
-nimiq-blockchain = { path = "../blockchain" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "subscription", "version"] }
-nimiq-account = { path = "../primitives/account" }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-transaction = { path = "../primitives/transaction" }
@@ -26,7 +23,7 @@ nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 bitflags = "1.0"
 byteorder = "1.2"
 hex = "0.3.2"
-parking_lot = "0.6"
+parking_lot = "0.7"
 rand = "0.6.4"
 
 [dev-dependencies.nimiq-utils]

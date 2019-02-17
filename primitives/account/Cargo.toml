@@ -14,12 +14,12 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 [dependencies]
 beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive"}
-hex = "0.3.2"
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
 nimiq-transaction = { path = "../transaction" }
 nimiq-primitives = { path = "..", features = ["coin"] }
-log = "0.4.3"
+log = "0.4"
 
 [dev-dependencies]
 nimiq-transaction = { path = "../transaction" }
+hex = "0.3.2"

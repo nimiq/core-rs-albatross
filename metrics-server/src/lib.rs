@@ -4,7 +4,6 @@ extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network as network;
-extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_block as block;
 
 use std::net::{IpAddr, SocketAddr};

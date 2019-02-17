@@ -1,5 +1,3 @@
-extern crate beserial;
-
 use std::collections::HashSet;
 use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 

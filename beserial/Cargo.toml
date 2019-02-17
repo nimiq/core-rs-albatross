@@ -12,7 +12,6 @@ license = "Apache-2.0"
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 
 [dependencies]
-byteorder = "1.2.3"
+byteorder = "1.2"
 num = "0.1.42"
 failure = "0.1.5"
-failure_derive = "0.1.5"

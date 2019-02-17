@@ -12,10 +12,10 @@ license = "Apache-2.0"
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 
 [dependencies]
-log = "0.4.3"
+log = "0.4"
 lmdb-zero = "0.4.4"
 fs2 = "0.4.3"
-parking_lot = "0.6"
+parking_lot = "0.7"
 tempdir = "0.3"
 rand = "0.6.4"
 bitflags = "1.0"

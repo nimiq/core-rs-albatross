@@ -1,6 +1,3 @@
-extern crate byteorder;
-extern crate num;
-
 use std::collections::HashSet;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};

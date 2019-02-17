@@ -26,15 +26,16 @@ nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 hex = "0.3.2"
 fixed-unsigned = { path = "../fixed-unsigned" }
-parking_lot = "0.6"
+parking_lot = "0.7"
 nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr", "iterators"] }
-log = "0.4.3"
+log = "0.4"
 nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
 
 [dev-dependencies]
 atomic = "0.4"
-pretty_env_logger = "0.2.3"
+#pretty_env_logger = "0.2.3"
 
 [features]
+default = ["transaction-store"]
 metrics = []
 transaction-store = []

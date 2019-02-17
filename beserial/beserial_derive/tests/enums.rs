@@ -1,4 +1,3 @@
-extern crate beserial;
 #[macro_use]
 extern crate beserial_derive;
 

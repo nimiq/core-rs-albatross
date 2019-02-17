@@ -1,5 +1,5 @@
 use hash::pbkdf2::Pbkdf2Error;
-use key_derivation::ExtendedPrivateKey;
+use nimiq_key_derivation::ExtendedPrivateKey;
 
 use crate::Mnemonic;
 

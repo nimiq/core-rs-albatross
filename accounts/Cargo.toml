@@ -22,11 +22,5 @@ nimiq-block = { path = "../primitives/block" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
 hex = "0.3.2"
-parking_lot = "0.6"
 nimiq-tree-primitives = { path = "./tree-primitives" }
-nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr"] }
 nimiq-network-primitives = { path = "../network-primitives", features = ["networks"] }
-
-[dev-dependencies]
-atomic = "0.4"
-pretty_env_logger = "0.2.3"

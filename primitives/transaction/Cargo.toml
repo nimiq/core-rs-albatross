@@ -14,9 +14,8 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 [dependencies]
 beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive"}
-fixed-unsigned = { path = "../../fixed-unsigned" }
 bitflags = "1.0"
-log = "0.4.3"
+log = "0.4"
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }

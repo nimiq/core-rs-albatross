@@ -1,5 +1,3 @@
-extern crate beserial;
-
 use beserial::{DeserializeWithLength, SerializeWithLength};
 
 #[test]

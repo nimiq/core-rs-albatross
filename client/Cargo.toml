@@ -16,17 +16,15 @@ maintenance = { status = "experimental" }
 serde = "1.0.85"
 serde_derive = "1.0.85"
 toml = "0.4.10"
-log = "0.4.6"
+log = "0.4"
 fern = { version = "0.5", features = ["colored"] }
 futures = "0.1"
 tokio = "0.1"
-lazy_static = "1.0"
-parking_lot = { version = "0.6", optional = true, features = ["deadlock_detection"] }
-hyper = { version = "0.12.19", optional = true }
+lazy_static = "1.2"
+parking_lot = { version = "0.7", optional = true, features = ["deadlock_detection"] }
 clap = "2.32"
 nimiq-database = { path = "../database" }
 nimiq-network = { path = "../network" }
-nimiq-consensus = { path = "../consensus" }
 nimiq-primitives = { path = "../primitives", features = ["networks", "coin"] }
 nimiq-network-primitives = { path = "../network-primitives"}
 nimiq-rpc-server = { path = "../rpc-server", optional = true }
@@ -36,12 +34,11 @@ nimiq-lib = { path = "../lib" }
 colored = "1.7.0"
 chrono = "0.4.6"
 failure = "0.1.5"
-failure_derive = "0.1.5"
 log-panics = { version = "2.0.0", features = ["with-backtrace"] }
 
 [features]
 default = ["all"]
 all = ["rpc-server", "metrics-server", "deadlock-detection"]
-rpc-server = ["nimiq-rpc-server", "hyper"]
-metrics-server = ["nimiq-metrics-server", "hyper"]
+rpc-server = ["nimiq-rpc-server"]
+metrics-server = ["nimiq-metrics-server"]
 deadlock-detection = ["parking_lot"]

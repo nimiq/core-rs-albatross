@@ -1,5 +1,3 @@
-extern crate beserial;
-
 use beserial::{Deserialize, Serialize, uvar};
 
 #[test]

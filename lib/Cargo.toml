@@ -15,9 +15,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 futures = "0.1"
 failure = "0.1.5"
-failure_derive = "0.1.5"
-url = "1.7.2"
-lazy_static = "1.2.0"
+lazy_static = "1.2"
 nimiq-network = { path = "../network" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database" }

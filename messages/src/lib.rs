@@ -2,8 +2,6 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate bitflags;
-extern crate nimiq_account as account;
-extern crate nimiq_accounts as accounts;
 extern crate nimiq_block as block;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;

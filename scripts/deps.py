@@ -37,7 +37,7 @@ def load_cargo_toml(path):
             'name': cfg['package'] if isinstance(cfg, dict) and 'package' in cfg else dep,
             'local_name': dep.replace('-', '_'),
             'version': cfg if isinstance(cfg, str) else cfg['version'] if 'version' in cfg else None,
-        } for (dep, cfg) in deps.items()];
+        } for (dep, cfg) in deps.items()]
 
     with open(path, 'r') as f:
         config = toml.load(f)
@@ -358,7 +358,7 @@ def find_unused_externs(path, dependencies):
 
 def analyze_crate_dependencies(path, data=None):
     """
-    Checks for unused externs and gives suggestions for both src and tests directories.
+    Checks for unused externs and gives suggestions for both src and tests/benches directories.
     :param path: The path to the crate to analyze
     :param data: Optional crate data loaded from `load_cargo_toml`
     :return: A dict in the form:
@@ -387,10 +387,13 @@ def analyze_crate_dependencies(path, data=None):
     if os.path.isdir(os.path.join(path, 'tests')):
         unused_dev_dependencies = find_unused_externs(os.path.join(path, 'tests'),
                                                       local_dependencies + local_dev_dependencies)
+    if os.path.isdir(os.path.join(path, 'benches')):
+        unused_dev_dependencies = unused_dev_dependencies.intersection(find_unused_externs(os.path.join(path, 'benches'),
+                                                      local_dependencies + local_dev_dependencies))
 
     # We should move those dependencies that are unused in src but used in the tests path
     to_move = unused_dependencies.intersection(set(local_dependencies) - unused_dev_dependencies)
-    to_remove = (unused_dependencies - to_move) | unused_dev_dependencies.intersection(local_dev_dependencies)
+    to_remove = (unused_dependencies - to_move) | unused_dev_dependencies.intersection(set(local_dev_dependencies) - set(local_dependencies))
 
     to_move = [renames[crate] if crate in renames else crate for crate in to_move]
     to_remove = [renames[crate] if crate in renames else crate for crate in to_remove]
@@ -439,16 +442,20 @@ def find_crates(path):
     """
     def find_crates_recursive(directory):
         crates = []
+
+        # Check current path
+        cargo_toml = os.path.join(directory, 'Cargo.toml')
+        if os.path.isfile(cargo_toml):
+            data = load_cargo_toml(cargo_toml)
+            if data is not None:
+                crates.append((directory, data))
+
+        # Then check sub directories
         for file in os.listdir(directory):
             filename = os.path.join(directory, file)
             # We are only interested in directories
             if not os.path.isdir(filename):
                 continue
-            cargo_toml = os.path.join(directory, 'Cargo.toml')
-            if os.path.isfile(cargo_toml):
-                data = load_cargo_toml(cargo_toml)
-                if data is not None:
-                    crates.append((directory, data))
             crates.extend(find_crates_recursive(filename))
 
         return crates
@@ -466,14 +473,17 @@ if __name__ == '__main__':
     path = sys.argv[2] if len(sys.argv) > 2 else '.'
 
     if cmd == 'versions':
+        print('The following dependencies have inconsistent versions throughout the crates.')
         crates = map(lambda x: x[1], find_crates(path))
         versions = analyze_versions(crates)
         for (dependency, versions) in versions.items():
             print('[{}]'.format(dependency))
             for (crate, version) in versions.items():
-                print('    {} = "{}"'.format(crate, version))
+                print('    {} uses "{}"'.format(crate, version))
             print()
     elif cmd == 'unused':
+        print('The estimation is that the following packages are unused.')
+        print('Be aware that this is entirely based on `use` statements and there are other ways to use those!')
         for (path, info) in find_crates(path):
             result = analyze_crate_dependencies(path, info)
             if len(result['remove']) > 0 or len(result['move-to-dev']) > 0:

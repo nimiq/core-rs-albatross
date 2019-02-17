@@ -13,17 +13,14 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 maintenance = { status = "experimental" }
 
 [dependencies]
-parking_lot = "0.6"
+parking_lot = "0.7"
 rand = "0.6.4"
-log = "0.4.3"
+log = "0.4"
 beserial = { path = "../beserial" }
-nimiq-accounts = { path = "../accounts" }
 nimiq-hash = { path = "../hash" }
 nimiq-macros = { path = "../macros" }
-nimiq-primitives = { path = "../primitives", features = ["coin"] }
 nimiq-block = { path = "../primitives/block" }
 nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-collections = { path = "../collections" }
 nimiq-messages = { path = "../messages" }
@@ -33,8 +30,6 @@ nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
 nimiq-blockchain = { path = "../blockchain", features = ["transaction-store"] }
 weak-table = "0.2.3"
-hex = "0.3.2"
 failure = "0.1.5"
-failure_derive = "0.1.5"
 futures = "0.1"
 tokio = "0.1"

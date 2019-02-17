@@ -8,7 +8,6 @@ extern crate bitflags;
 extern crate nimiq_macros as macros;
 extern crate nimiq_utils as utils;
 extern crate nimiq_keys as keys;
-extern crate nimiq_account as account;
 extern crate nimiq_block as block;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_primitives as primitives;

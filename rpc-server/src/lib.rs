@@ -2,19 +2,12 @@
 extern crate json;
 #[macro_use]
 extern crate log;
-extern crate parking_lot;
-extern crate hyper;
-extern crate failure;
-extern crate futures;
-extern crate hex;
-
-extern crate beserial;
+extern crate nimiq_block as block;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_network as network;
 extern crate nimiq_network_primitives as network_primitives;
-extern crate nimiq_block as block;
 extern crate nimiq_transaction as transaction;
 
 use std::net::{IpAddr, SocketAddr};
@@ -31,12 +24,13 @@ use beserial::{Deserialize, Serialize};
 use block::{Block, Difficulty};
 use consensus::consensus::{Consensus, ConsensusEvent};
 use hash::{Argon2dHash, Blake2bHash, Hash};
+use hex;
 use keys::Address;
 use network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
-use network::connection::connection_info::ConnectionInfo;
 use network::connection::close_type::CloseType;
+use network::connection::connection_info::ConnectionInfo;
+use network_primitives::address::{PeerId, PeerUri};
 use transaction::{Transaction, TransactionReceipt};
-use network_primitives::address::{PeerUri, PeerId};
 
 use crate::error::Error;
 

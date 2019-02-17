@@ -22,4 +22,5 @@ nimiq-key-derivation = { path = "../key-derivation", optional = true }
 unicode-normalization = "0.1.7"
 
 [features]
+default = ["key-derivation"]
 key-derivation = ["nimiq-key-derivation"]
