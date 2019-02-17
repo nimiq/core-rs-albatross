@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use log::LevelFilter;
 use clap::{Arg, App, Values};
 use failure::Fail;
 
@@ -25,7 +26,7 @@ pub(crate) struct Options {
     pub port: Option<u16>,
     pub config_file: Option<String>,
     pub log_level: Option<String>,
-    pub log_tags: HashMap<String, String>,
+    pub log_tags: HashMap<String, LevelFilter>,
     pub passive: bool,
     pub consensus_type: Option<NodeType>,
     pub wallet_seed: Option<String>,
@@ -112,15 +113,16 @@ impl Options {
         value.map(|s| String::from(s))
     }
 
-    fn parse_log_tags(values_opt: Option<Values>) -> Result<HashMap<String, String>, ParseError> {
-        let mut tags: HashMap<String, String> = HashMap::new();
+    fn parse_log_tags(values_opt: Option<Values>) -> Result<HashMap<String, LevelFilter>, ParseError> {
+        let mut tags: HashMap<String, LevelFilter> = HashMap::new();
         if let Some(values) = values_opt {
             for value in values {
                 let split = value.split(":").collect::<Vec<&str>>();
                 if split.len() != 2 {
                     return Err(ParseError::LogTag);
                 }
-                tags.insert(String::from(split[0]), String::from(split[1]));
+                tags.insert(String::from(split[0]), LevelFilter::from_str(split[1])
+                    .map_err(|_| ParseError::LogTag)?);
             }
         }
         Ok(tags)

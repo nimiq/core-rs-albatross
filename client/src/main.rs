@@ -90,12 +90,10 @@ fn run() -> Result<(), Error> {
     let mut dispatch = fern::Dispatch::new()
         .pretty_logging(settings.log.timestamps)
         .level(DEFAULT_LEVEL)
-
-        .level_for_nimiq(cmdline.log_level.as_ref().map(|level| level.parse()).or(settings.log.level.map(Ok)).unwrap_or(Ok(DEFAULT_LEVEL))?);
-    for (module, level) in settings.log.tags.iter() {
-        //.chain(cmdline.log_tags.iter()
-        //    .map(|(module, filter)| Ok((module, LevelFilter::from_str(filter)?)))
-        //    .collect::<Result<Iterator<Item=(&String, &LevelFilter)>, _>>()?) {
+        .level_for_nimiq(cmdline.log_level.as_ref()
+            .map(|level| level.parse()).transpose()?
+            .unwrap_or(DEFAULT_LEVEL));
+    for (module, level) in settings.log.tags.iter().chain(cmdline.log_tags.iter()) {
         dispatch = dispatch.level_for(module.clone(), level.clone());
     }
     // For now, we only log to stdout.
