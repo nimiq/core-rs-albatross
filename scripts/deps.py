@@ -8,7 +8,8 @@ dependency = re.compile(r'^\s*use\s*([^;\]]+)\s*;\s*$', re.MULTILINE)
 compressed_dependency = re.compile(r'([\w:]+)(\{(.*)\})?')
 
 modules_only = True
-limit_to_crate = True
+limit_to_crate = False
+limit_to_extern = True
 
 def format_path(path):
 	if modules_only:
@@ -72,6 +73,21 @@ def path_from_filename(filename, source_dir):
 
 	return '::'.join(['crate'] + path)
 
+def estimate_crate_name_from_path(path, source_dir):
+	path_elements = path.split('::')
+
+	d = []
+	name = ''
+	for element in path_elements:
+		if element == 'crate':
+			continue
+
+		d.append(element)
+		sys_dir = os.path.join(source_dir, *d)
+		if os.path.isdir(sys_dir) and os.path.isfile(os.path.join(sys_dir, 'Cargo.toml')):
+			name = os.path.sep.join(d)
+
+	return name
 
 def list_dependencies(filename, source):
 	current_path = path_from_filename(filename, source)
@@ -104,6 +120,9 @@ def format_dependencies(dependencies):
 		formatted_file = format_path(file)
 
 		if limit_to_crate and not formatted_file.startswith('crate::'):
+			continue
+
+		if limit_to_extern and formatted_file.startswith('crate::'):
 			continue
 
 		if formatted_file not in new_dependencies:
@@ -156,4 +175,21 @@ assert path_from_filename('src/consensus/consensus.rs', 'src/') == 'crate::conse
 assert path_from_filename('src/consensus/mod.rs', 'src') == 'crate::consensus'
 assert path_from_filename('src/consensus/test/mod.rs', 'src') == 'crate::consensus::test'
 
-print(to_dot_graph(format_dependencies(list_dependencies_recursive('src'))))
+# print(to_dot_graph(format_dependencies(list_dependencies_recursive('src'))))
+
+# List used crates per folder.
+def print_extern_crate_uses(path):
+	deps = list_dependencies_recursive(path)
+	deps_per_crate = {}
+	for k in deps:
+		local_crate_name = estimate_crate_name_from_path(k, path)
+		if local_crate_name not in deps_per_crate:
+			deps_per_crate[local_crate_name] = set()
+
+		extern_crate_names = set([use.split('::')[0] for use in deps[k]])
+		deps_per_crate[local_crate_name] |= extern_crate_names
+
+	for local_crate in deps_per_crate:
+		print(local_crate, list(deps_per_crate[local_crate]))
+
+print_extern_crate_uses('..')
