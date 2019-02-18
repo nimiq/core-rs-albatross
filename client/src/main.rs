@@ -91,6 +91,7 @@ fn run() -> Result<(), Error> {
         .level(DEFAULT_LEVEL)
         .level_for_nimiq(cmdline.log_level.as_ref()
             .map(|level| level.parse()).transpose()?
+            .or(settings.log.level)
             .unwrap_or(DEFAULT_LEVEL));
     for (module, level) in settings.log.tags.iter().chain(cmdline.log_tags.iter()) {
         dispatch = dispatch.level_for(module.clone(), level.clone());
