@@ -32,7 +32,7 @@ use network::connection::connection_info::ConnectionInfo;
 use network_primitives::address::{PeerId, PeerUri};
 use transaction::{Transaction, TransactionReceipt};
 
-use crate::error::Error;
+use crate::error::{Error, AuthenticationError};
 
 pub mod jsonrpc;
 pub mod error;
@@ -43,6 +43,22 @@ fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
 }
 
 
+#[derive(Debug, Clone)]
+pub struct Credentials {
+    username: String,
+    password: String,
+}
+
+impl Credentials {
+    pub fn new(username: &str, password: &str) -> Credentials {
+        Credentials { username: String::from(username), password: String::from(password) }
+    }
+
+    pub fn check(&self, username: &str, password: &str) -> bool {
+        self.username == username && self.password == password
+    }
+}
+
 pub(crate) struct JsonRpcServerState {
     consensus_state: &'static str,
 }
@@ -51,14 +67,16 @@ pub(crate) struct JsonRpcHandler {
     state: Arc<RwLock<JsonRpcServerState>>,
     consensus: Arc<Consensus>,
     starting_block: u32,
+    credentials: Option<Credentials>
 }
 
 impl JsonRpcHandler {
-    pub(crate) fn new(consensus: Arc<Consensus>, state: Arc<RwLock<JsonRpcServerState>>) -> Self {
+    pub(crate) fn new(consensus: Arc<Consensus>, state: Arc<RwLock<JsonRpcServerState>>, credentials: Option<Credentials>) -> Self {
         JsonRpcHandler {
             state,
             consensus: consensus.clone(),
             starting_block: consensus.blockchain.height(),
+            credentials
         }
     }
 
@@ -546,10 +564,17 @@ impl jsonrpc::Handler for JsonRpcHandler {
             _ => None
         }
     }
+
+    fn authorize(&self, username: &str, password: &str) -> Result<(), AuthenticationError> {
+        if !self.credentials.as_ref().map(|c| c.check(username, password)).unwrap_or(true) {
+            return Err(AuthenticationError::IncorrectCredentials);
+        }
+        Ok(())
+    }
 }
 
 
-pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
+pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16, credentials: Option<Credentials>) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
     let state = Arc::new(RwLock::new(JsonRpcServerState {
         consensus_state: "syncing",
     }));
@@ -573,7 +598,7 @@ pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16) -> Result<Bo
 
     Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
         .serve(move || {
-            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&consensus), Arc::clone(&state)))
+            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&consensus), Arc::clone(&state), credentials.clone()))
         })
         .map_err(|e| error!("RPC server failed: {}", e)))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
 }

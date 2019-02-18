@@ -12,3 +12,11 @@ impl From<HyperError> for Error {
         Error::HyperError(e)
     }
 }
+
+#[derive(Debug, Fail)]
+pub enum AuthenticationError {
+    #[fail(display = "Invalid authorization header.")]
+    InvalidHeader,
+    #[fail(display = "Incorrect credentials.")]
+    IncorrectCredentials,
+}

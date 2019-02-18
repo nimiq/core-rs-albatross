@@ -2,10 +2,16 @@ use std::sync::Arc;
 
 use futures::{future, Future, IntoFuture, stream::Stream};
 use hyper::{Body, Method, Request, Response, StatusCode};
+use hyper::header::HeaderValue;
 use json::{Array, JsonValue, Null};
+
+use crate::error::AuthenticationError;
 
 pub trait Handler: Send + Sync {
     fn get_method(&self, name: &str) -> Option<fn(&Self, params: Array) -> Result<JsonValue, JsonValue>>;
+    fn authorize(&self, _username: &str, _password: &str) -> Result<(), AuthenticationError> {
+        Ok(())
+    }
 }
 
 pub struct Service<H> where H: Handler {
@@ -19,6 +25,7 @@ impl<H> Service<H> where H: Handler {
         }
     }
 }
+
 
 #[derive(Debug)]
 pub enum Never {}
@@ -135,6 +142,29 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
     }
 }
 
+fn check_authentication<H: Handler>(handler: Arc<H>, authorization: Option<&HeaderValue>) -> Result<(), AuthenticationError> {
+    if let Some(authorization) = authorization {
+        let authorization = authorization.to_str()
+            .map_err(|_| AuthenticationError::InvalidHeader)?
+            .split_whitespace().collect::<Vec<&str>>();
+        if authorization.len() != 2 || authorization[0] != "Basic" {
+            return Err(AuthenticationError::InvalidHeader);
+        }
+        let authorization = base64::decode(authorization[1].into())
+            .map_err(|_| AuthenticationError::InvalidHeader)?;
+        let authorization = std::str::from_utf8(authorization
+            .as_slice()).map_err(|_| AuthenticationError::InvalidHeader)?
+            .split(":").collect::<Vec<&str>>();
+        if authorization.len() != 2 {
+            return Err(AuthenticationError::IncorrectCredentials);
+        }
+        handler.authorize(authorization[0], authorization[1])
+    }
+    else {
+        handler.authorize("", "")
+    }
+}
+
 impl<H> IntoFuture for Service<H> where H: Handler {
     type Future = future::FutureResult<Self::Item, Self::Error>;
     type Item = Self;
@@ -156,6 +186,14 @@ impl<H> hyper::service::Service for Service<H> where H: Handler + 'static {
         match *req.method() {
             Method::GET => Box::new(future::ok(Response::new(Body::from("Nimiq JSON-RPC Server")))),
             Method::POST => {
+                if let Err(e) = check_authentication(Arc::clone(&handler), req.headers().get("Authorization")) {
+                    info!("Authentication failed: {}", e);
+                    //return Box::new(future::ok(Response::new(Body::from(json::stringify(e)))));
+                    return Box::new(future::ok(Response::builder()
+                        .status(StatusCode::UNAUTHORIZED)
+                        .body(Body::from(""))
+                        .unwrap()))
+                }
                 Box::new(req.into_body().concat2()
                     .map(|b| handle_request(handler, std::str::from_utf8(&b))))
             },

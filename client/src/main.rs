@@ -35,7 +35,7 @@ use network_primitives::protocol::Protocol;
 use network_primitives::address::NetAddress;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
-use rpc_server::rpc_server;
+use rpc_server::{rpc_server, Credentials};
 
 use crate::cmdline::Options;
 use crate::logging::{DEFAULT_LEVEL, NimiqDispatch};
@@ -59,7 +59,9 @@ pub enum ConfigError {
     #[fail(display = "Please configure a hostname in the `[network]` section.")]
     NoHostname,
     #[fail(display = "Invalid IP address.")]
-    InvalidIpAddress
+    InvalidIpAddress,
+    #[fail(display = "Username or password missing for RPC server.")]
+    MissingRpcCredentials
 }
 
 fn main() {
@@ -177,8 +179,16 @@ fn run() -> Result<(), Error> {
                 .unwrap_or(NetAddress::from_str("127.0.0.1").unwrap())
                 .into_ip_address().unwrap();
             let port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
+            let credentials = match (rpc_settings.username, rpc_settings.password) {
+                (Some(username), Some(password)) => Some(Credentials::new(&username, &password)),
+                (None, None) => None,
+                _ => Err(ConfigError::MissingRpcCredentials)?
+            };
+            if credentials.is_none() {
+                warn!("Running RPC server without authentication! Consider setting a username and password.")
+            }
             info!("Starting RPC server listening on port {}", port);
-            other_futures.push(rpc_server(Arc::clone(&consensus), bind, port)?);
+            other_futures.push(rpc_server(Arc::clone(&consensus), bind, port, credentials)?);
         }
     }
     // If the RPC server is enabled, but the client is not compiled with it, inform the user
