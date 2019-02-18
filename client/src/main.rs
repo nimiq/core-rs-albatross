@@ -20,6 +20,8 @@ extern crate serde_derive;
 use std::io;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 
 use failure::{Error, Fail};
 use fern::log_file;
@@ -35,7 +37,7 @@ use network_primitives::protocol::Protocol;
 use network_primitives::address::NetAddress;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
-use rpc_server::{rpc_server, Credentials};
+use rpc_server::{rpc_server, Credentials, JsonRpcConfig};
 
 use crate::cmdline::Options;
 use crate::logging::{DEFAULT_LEVEL, NimiqDispatch};
@@ -188,7 +190,12 @@ fn run() -> Result<(), Error> {
                 warn!("Running RPC server without authentication! Consider setting a username and password.")
             }
             info!("Starting RPC server listening on port {}", port);
-            other_futures.push(rpc_server(Arc::clone(&consensus), bind, port, credentials)?);
+            other_futures.push(rpc_server(Arc::clone(&consensus), bind, port, JsonRpcConfig {
+                credentials,
+                methods: HashSet::from_iter(rpc_settings.methods),
+                allowip: (), // TODO
+                corsdomain: rpc_settings.corsdomain
+            })?);
         }
     }
     // If the RPC server is enabled, but the client is not compiled with it, inform the user

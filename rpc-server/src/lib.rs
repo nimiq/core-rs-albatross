@@ -13,6 +13,7 @@ extern crate nimiq_transaction as transaction;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::collections::HashSet;
 
 use futures::future::Future;
 use hyper::Server;
@@ -44,6 +45,14 @@ fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
 
 
 #[derive(Debug, Clone)]
+pub struct JsonRpcConfig {
+    pub credentials: Option<Credentials>,
+    pub methods: HashSet<String>,
+    pub allowip: (),
+    pub corsdomain: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Credentials {
     username: String,
     password: String,
@@ -67,16 +76,16 @@ pub(crate) struct JsonRpcHandler {
     state: Arc<RwLock<JsonRpcServerState>>,
     consensus: Arc<Consensus>,
     starting_block: u32,
-    credentials: Option<Credentials>
+    config: Arc<JsonRpcConfig>
 }
 
 impl JsonRpcHandler {
-    pub(crate) fn new(consensus: Arc<Consensus>, state: Arc<RwLock<JsonRpcServerState>>, credentials: Option<Credentials>) -> Self {
+    pub(crate) fn new(consensus: Arc<Consensus>, state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self {
         JsonRpcHandler {
             state,
             consensus: consensus.clone(),
             starting_block: consensus.blockchain.height(),
-            credentials
+            config
         }
     }
 
@@ -531,8 +540,14 @@ impl JsonRpcHandler {
 
 impl jsonrpc::Handler for JsonRpcHandler {
     fn get_method(&self, name: &str) -> Option<fn(&Self, Array) -> Result<JsonValue, JsonValue>> {
-        // TODO: Apply method white-listing
         trace!("RPC method called: {}", name);
+
+        if !self.config.methods.is_empty() && !self.config.methods.contains(name) {
+            info!("RPC call to black-listed method: {}", name);
+            //return Some(|_, _| Err(object!("message" => "Method is not allowed.")))
+            return None
+        }
+
         match name {
             // Network
             "peerCount" => Some(JsonRpcHandler::peer_count),
@@ -566,7 +581,7 @@ impl jsonrpc::Handler for JsonRpcHandler {
     }
 
     fn authorize(&self, username: &str, password: &str) -> Result<(), AuthenticationError> {
-        if !self.credentials.as_ref().map(|c| c.check(username, password)).unwrap_or(true) {
+        if !self.config.credentials.as_ref().map(|c| c.check(username, password)).unwrap_or(true) {
             return Err(AuthenticationError::IncorrectCredentials);
         }
         Ok(())
@@ -574,7 +589,7 @@ impl jsonrpc::Handler for JsonRpcHandler {
 }
 
 
-pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16, credentials: Option<Credentials>) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
+pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16, config: JsonRpcConfig) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
     let state = Arc::new(RwLock::new(JsonRpcServerState {
         consensus_state: "syncing",
     }));
@@ -596,9 +611,10 @@ pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16, credentials:
         });
     }
 
+    let config = Arc::new(config);
     Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
         .serve(move || {
-            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&consensus), Arc::clone(&state), credentials.clone()))
+            jsonrpc::Service::new(JsonRpcHandler::new(Arc::clone(&consensus), Arc::clone(&state), Arc::clone(&config)))
         })
         .map_err(|e| error!("RPC server failed: {}", e)))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
 }
