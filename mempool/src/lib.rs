@@ -368,7 +368,7 @@ impl<'env> Mempool<'env> {
             let blockchain_state = self.blockchain.state();
             let accounts = blockchain_state.accounts();
             let transaction_cache = blockchain_state.transaction_cache();
-            let block_height = self.blockchain.height() + 1;
+            let block_height = blockchain_state.main_chain().head.header.height + 1;
 
             for (address, transactions) in state.transactions_by_sender.iter() {
                 let mut sender_account = accounts.get(&address, None);
