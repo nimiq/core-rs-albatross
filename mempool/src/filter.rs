@@ -1,6 +1,6 @@
 use account::Account;
 use collections::LimitHashSet;
-use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_hash::Blake2bHash;
 use primitives::coin::Coin;
 use transaction::{Transaction, TransactionFlags};
 
@@ -20,20 +20,18 @@ impl MempoolFilter {
         }
     }
 
-    pub fn blacklist(&mut self, tx: &Transaction) -> &mut Self {
-        self.blacklist.insert(tx.hash());
+    pub fn blacklist(&mut self, hash: Blake2bHash) -> &mut Self {
+        self.blacklist.insert(hash);
         self
     }
 
-    pub fn remove(&mut self, tx: &Transaction) -> &mut Self {
-        let hash: Blake2bHash = tx.hash();
-        self.blacklist.remove(&hash);
+    pub fn remove(&mut self, hash: &Blake2bHash) -> &mut Self {
+        self.blacklist.remove(hash);
         self
     }
 
-    pub fn blacklisted(&self, tx: &Transaction) -> bool {
-        let hash: Blake2bHash = tx.hash();
-        self.blacklist.contains(&hash)
+    pub fn blacklisted(&self, hash: &Blake2bHash) -> bool {
+        self.blacklist.contains(hash)
     }
 
     pub fn accepts_transaction(&self, tx: &Transaction) -> bool {

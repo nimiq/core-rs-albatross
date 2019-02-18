@@ -1,8 +1,9 @@
+use nimiq_hash::{Hash, Blake2bHash};
 use nimiq_keys::Address;
-use nimiq_primitives::networks::NetworkId;
 use nimiq_mempool::filter::{MempoolFilter, Rules};
-use nimiq_transaction::Transaction;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_transaction::Transaction;
 
 #[test]
 fn it_can_blacklist_transactions() {
@@ -17,10 +18,11 @@ fn it_can_blacklist_transactions() {
         NetworkId::Main,
     );
 
-    f.blacklist(&tx);
-    assert!(f.blacklisted(&tx));
-    f.remove(&tx);
-    assert!(!f.blacklisted(&tx));
+    let hash: Blake2bHash = tx.hash();
+    f.blacklist(hash.clone());
+    assert!(f.blacklisted(&hash));
+    f.remove(&hash);
+    assert!(!f.blacklisted(&hash));
 }
 
 #[test]

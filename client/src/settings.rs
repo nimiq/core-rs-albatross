@@ -148,6 +148,7 @@ impl FromStr for Network {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RpcServerSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
+    #[serde(default)]
     pub bind: Option<NetAddress>,
     pub port: Option<u16>,
     #[serde(default)]
@@ -170,6 +171,7 @@ pub(crate) struct UiServerSettings {
 #[serde(deny_unknown_fields)]
 pub(crate) struct MetricsServerSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
+    #[serde(default)]
     pub bind: Option<NetAddress>,
     pub port: Option<u16>,
     pub password: Option<String>,

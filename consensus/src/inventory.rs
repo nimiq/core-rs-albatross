@@ -404,6 +404,16 @@ impl InventoryAgent {
         self.peer.channel.send_or_close(Message::Subscribe(subscription));
     }
 
+    fn should_request_data(&self, vector: &InvVector) -> bool {
+        // Ignore block announcements from nano clients as they will ignore our getData requests anyways (they only know headers).
+        // Also don't request transactions that the mempool has filtered.
+        match vector.ty {
+            InvVectorType::Block => !self.peer.peer_address().services.is_nano_node(),
+            InvVectorType::Transaction => !self.mempool.is_filtered(&vector.hash),
+            _ => false,
+        }
+    }
+
     fn on_subscribe(&self, subscription: Subscription) {
         self.state.write().remote_subscription = subscription;
     }
@@ -433,10 +443,10 @@ impl InventoryAgent {
                 continue;
             }
 
-            // TODO Filter out objects that we are not interested in.
-            //if (!this._shouldRequestData(vector)) {
-            //    continue;
-            //}
+            // Filter out objects that we are not interested in.
+            if !self.should_request_data(&vector) {
+                continue;
+            }
 
             // FIXME We still hold the state write lock when notifying here.
             match vector.ty {

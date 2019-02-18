@@ -18,7 +18,6 @@ extern crate parking_lot;
 extern crate serde_derive;
 
 use std::io;
-use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -26,7 +25,6 @@ use failure::{Error, Fail};
 use fern::log_file;
 use futures::{Future, future};
 use log::Level;
-use log::LevelFilter;
 
 use database::lmdb::{LmdbEnvironment, open};
 use lib::client::{Client, ClientBuilder};

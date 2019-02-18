@@ -28,6 +28,7 @@ use transaction::Transaction;
 use utils::observer::Notifier;
 
 use crate::filter::{MempoolFilter, Rules};
+use parking_lot::RwLockUpgradableReadGuard;
 
 pub mod filter;
 
@@ -89,6 +90,10 @@ impl<'env> Mempool<'env> {
         arc
     }
 
+    pub fn is_filtered(&self, hash: &Blake2bHash) -> bool {
+        self.state.read().filter.blacklisted(hash)
+    }
+
     pub fn push_transaction(&self, transaction: Transaction) -> ReturnCode {
         let hash: Blake2bHash = transaction.hash();
 
@@ -99,12 +104,12 @@ impl<'env> Mempool<'env> {
         let mut txs_to_remove = Vec::new();
 
         {
-            let state = self.state.read();
+            let state = self.state.upgradable_read();
 
             // Check transaction against rules and blacklist
-            if !state.filter.accepts_transaction(&transaction) || state.filter.blacklisted(&transaction) {
-                drop(state);
-                self.state.write().filter.blacklist(&transaction);
+            if !state.filter.accepts_transaction(&transaction) || state.filter.blacklisted(&hash) {
+                let mut state = RwLockUpgradableReadGuard::upgrade(state);
+                state.filter.blacklist(hash);
                 trace!("Transaction was filtered: {}", transaction.hash::<Blake2bHash>());
                 return ReturnCode::Filtered;
             }
@@ -169,7 +174,7 @@ impl<'env> Mempool<'env> {
                     Ok(r) => {
                         // Check recipient account against filter rules.
                         if !state.filter.accepts_recipient_account(&transaction, &recipient_account, &r) {
-                            self.state.write().filter.blacklist(&transaction);
+                            self.state.write().filter.blacklist(hash);
                             return ReturnCode::Filtered;
                         }
                     }
@@ -225,7 +230,7 @@ impl<'env> Mempool<'env> {
 
             // Check sender account against filter rules.
             if !state.filter.accepts_sender_account(&transaction, &old_sender_account, &sender_account) {
-                self.state.write().filter.blacklist(&transaction);
+                self.state.write().filter.blacklist(hash);
                 return ReturnCode::Filtered;
             }
 
