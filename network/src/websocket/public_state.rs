@@ -1,6 +1,5 @@
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
-use std::time::Instant;
 
 use network_primitives::address::net_address::NetAddress;
 
@@ -14,9 +13,6 @@ pub struct PublicStreamInfo {
     // Constant info.
     pub net_address: NetAddress,
     pub outbound: bool,
-
-    // Mutable info.
-    pub last_chunk_received_at: Option<Instant>,
 
     #[cfg(feature = "metrics")]
     pub network_metrics: Arc<NetworkMetrics>,
@@ -39,13 +35,9 @@ impl PublicStreamInfo {
         PublicStreamInfo {
             net_address,
             outbound,
-            last_chunk_received_at: None,
 
             #[cfg(feature = "metrics")]
             network_metrics: Arc::new(NetworkMetrics::default()),
         }
-    }
-    pub fn update(&mut self, state: &PublicStreamInfo) {
-        self.last_chunk_received_at = state.last_chunk_received_at;
     }
 }

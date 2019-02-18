@@ -29,10 +29,6 @@ impl SharedNimiqMessageStream {
         self.state.outbound
     }
 
-    pub fn last_chunk_received_at(&self) -> Option<&Instant> {
-        self.state.last_chunk_received_at.as_ref()
-    }
-
     #[cfg(feature = "metrics")]
     pub fn network_metrics(&self) -> &Arc<NetworkMetrics> {
         &self.state.network_metrics
@@ -57,7 +53,6 @@ impl Stream for SharedNimiqMessageStream {
         match self.inner.poll_lock() {
             Async::Ready(mut inner) => {
                 let result = inner.poll();
-                self.state.update(&inner.public_state);
                 result
             },
             Async::NotReady => Ok(Async::NotReady),
@@ -75,7 +70,6 @@ impl Sink for SharedNimiqMessageStream {
         match self.inner.poll_lock() {
             Async::Ready(mut inner) => {
                 let result = inner.start_send(item);
-                self.state.update(&inner.public_state);
                 result
             },
             Async::NotReady => Ok(AsyncSink::NotReady(item)),
@@ -86,7 +80,6 @@ impl Sink for SharedNimiqMessageStream {
         match self.inner.poll_lock() {
             Async::Ready(mut inner) => {
                 let result = inner.poll_complete();
-                self.state.update(&inner.public_state);
                 result
             },
             Async::NotReady => Ok(Async::NotReady),
@@ -97,7 +90,6 @@ impl Sink for SharedNimiqMessageStream {
         match self.inner.poll_lock() {
             Async::Ready(mut inner) => {
                 let result = inner.close();
-                self.state.update(&inner.public_state);
                 result
             },
             Async::NotReady => Ok(Async::NotReady),

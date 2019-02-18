@@ -21,6 +21,8 @@ use crate::websocket::Message as WebSocketMessage;
 
 use super::sink::PeerSink;
 use super::stream::PeerStreamEvent;
+use std::time::Instant;
+use atomic::Atomic;
 
 #[derive(Clone)]
 pub struct PeerChannel {
@@ -29,6 +31,7 @@ pub struct PeerChannel {
     peer_sink: PeerSink,
     pub address_info: AddressInfo,
     closed_flag: ClosedFlag,
+    pub last_message_received: Arc<Atomic<Instant>>,
 
     #[cfg(feature = "metrics")]
     pub message_metrics: Arc<MessageMetrics>,
@@ -41,9 +44,11 @@ impl PeerChannel {
 
         #[cfg(feature = "metrics")]
         let message_metrics = Arc::new(MessageMetrics::new());
+        let last_message_received = Arc::new(Atomic::new(Instant::now()));
 
         let msg_notifier1 = msg_notifier.clone();
         let close_notifier1 = close_notifier.clone();
+        let last_message_received1 = last_message_received.clone();
 
         #[cfg(feature = "metrics")]
         let message_metrics1 = message_metrics.clone();
@@ -55,6 +60,7 @@ impl PeerChannel {
                 PeerStreamEvent::Message(msg) => {
                     #[cfg(feature = "metrics")]
                     message_metrics1.note_message(msg.ty());
+                    last_message_received1.store(Instant::now(), Ordering::Relaxed);
                     msg_notifier1.notify(msg)
                 },
                 PeerStreamEvent::Close(ty) => {
@@ -79,6 +85,7 @@ impl PeerChannel {
             peer_sink: network_connection.peer_sink(),
             address_info: network_connection.address_info(),
             closed_flag: network_connection.closed_flag(),
+            last_message_received,
 
             #[cfg(feature = "metrics")]
             message_metrics,

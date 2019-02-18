@@ -26,6 +26,7 @@ use crate::connection::close_type::CloseType;
 use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_channel::PeerChannel;
+use atomic::Ordering;
 
 pub struct NetworkAgent {
     blockchain: Arc<Blockchain<'static>>,
@@ -518,8 +519,7 @@ impl NetworkAgent {
 
         // Expect the peer to answer with a pong message if we haven't heard anything from it
         // within the last CONNECTIVITY_CHECK_INTERVAL. Drop the peer otherwise.
-        // TODO last_message_received missing
-        if false {
+        if self.channel.last_message_received.load(Ordering::Relaxed).elapsed() > NetworkAgent::CONNECTIVITY_CHECK_INTERVAL  {
             let weak = self.self_weak.clone();
             self.timers.set_delay(NetworkAgentTimer::Ping(nonce), move || {
                 let arc = upgrade_weak!(weak);

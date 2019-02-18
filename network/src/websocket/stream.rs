@@ -238,9 +238,6 @@ impl NimiqMessageStream {
                 return Err(Error::TagMismatch);
             }
 
-            // Update last chunk timestamp
-            self.public_state.last_chunk_received_at = Some(Instant::now());
-
             let msg_buf = self.msg_buf.as_mut().unwrap();
             let mut remaining = msg_buf.capacity() - msg_buf.len();
 
