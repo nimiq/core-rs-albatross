@@ -25,25 +25,6 @@ pub enum Seed {
     List(SeedList)
 }
 
-impl FromStr for Seed {
-    type Err = SeedError;
-
-    fn from_str(s: &str) -> Result<Seed, SeedError> {
-        let url = Url::parse(s)?;
-        Ok(match url.scheme() {
-            "http" | "https" => {
-                // Seed list
-                // FIXME: add the public key once we know how it's going to be included into the str.
-                Seed::List(SeedList::new(url, None))
-            },
-            _ => {
-                // Peer URI
-                Seed::Peer(PeerUri::from_url(url)?)
-            }
-        })
-    }
-}
-
 
 #[derive(Clone, Debug)]
 pub struct NetworkConfig {
