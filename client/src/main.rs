@@ -2,6 +2,11 @@
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
+#[cfg(feature = "deadlock-detection")]
+extern crate parking_lot;
+#[macro_use]
+extern crate serde_derive;
+
 extern crate nimiq_database as database;
 extern crate nimiq_lib as lib;
 extern crate nimiq_mempool as mempool;
@@ -12,10 +17,8 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
-#[cfg(feature = "deadlock-detection")]
-extern crate parking_lot;
-#[macro_use]
-extern crate serde_derive;
+extern crate nimiq_keys as keys;
+
 
 use std::io;
 use std::str::FromStr;
@@ -35,6 +38,7 @@ use mempool::MempoolConfig;
 use metrics_server::metrics_server;
 use network_primitives::protocol::Protocol;
 use network_primitives::address::NetAddress;
+use network::network_config::Seed;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::{rpc_server, Credentials, JsonRpcConfig};
@@ -45,6 +49,7 @@ use crate::logging::force_log_error_cause_chain;
 use crate::settings as s;
 use crate::settings::Settings;
 use crate::static_env::ENV;
+use crate::serialization::SeedError;
 
 mod deadlock;
 mod logging;
@@ -63,7 +68,9 @@ pub enum ConfigError {
     #[fail(display = "Invalid IP address.")]
     InvalidIpAddress,
     #[fail(display = "Username or password missing for RPC server.")]
-    MissingRpcCredentials
+    MissingRpcCredentials,
+    #[fail(display = "The public key for a seed node is missing. Seed nodes without public_key are currently not implemented.")]
+    MissingPublicKey,
 }
 
 fn main() {
@@ -163,7 +170,16 @@ fn run() -> Result<(), Error> {
     }
 
     // Parse additional seed nodes and add them
-    client_builder.with_seeds(settings.network.seed_nodes);
+    let seeds = settings.network.seed_nodes.iter()
+        .map(|s| s::Seed::try_from(s.clone()))
+        .collect::<Result<Vec<Seed>, SeedError>>()?;
+    if seeds.iter().any(|s| match s {
+        Seed::Peer(uri) => uri.public_key().is_none(),
+        _ => false
+    }) {
+        Err(ConfigError::MissingPublicKey)?;
+    }
+    client_builder.with_seeds(seeds);
 
     // Setup client future to initialize and connect
     let client = client_builder.build_client()?;

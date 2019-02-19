@@ -23,6 +23,12 @@ tokio = "0.1"
 lazy_static = "1.2"
 parking_lot = { version = "0.7", optional = true, features = ["deadlock_detection"] }
 clap = "2.32"
+colored = "1.7"
+chrono = "0.4"
+failure = "0.1"
+log-panics = { version = "2.0", features = ["with-backtrace"] }
+url = "1.7"
+hex = "0.3"
 nimiq-database = { path = "../database" }
 nimiq-network = { path = "../network" }
 nimiq-primitives = { path = "../primitives", features = ["networks", "coin"] }
@@ -31,10 +37,7 @@ nimiq-rpc-server = { path = "../rpc-server", optional = true }
 nimiq-metrics-server = { path = "../metrics-server", optional = true }
 nimiq-mempool = { path = "../mempool" }
 nimiq-lib = { path = "../lib" }
-colored = "1.7"
-chrono = "0.4"
-failure = "0.1"
-log-panics = { version = "2.0", features = ["with-backtrace"] }
+nimiq-keys = { path = "../keys" }
 
 [features]
 default = ["all"]

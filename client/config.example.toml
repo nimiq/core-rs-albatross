@@ -36,13 +36,15 @@ host = "my.domain"
 #protocol = "ws"
 
 # Details of additional seed node.
-# - host: the hostname of the websocket server to connect to.
-# - port: the port that the nimiq node runs on.
-# - publicKey (optional): the public part of the peer key of this seed node. Should always be set if the node
-#                         is accessed via the internet.
+# NOTE: Seed nodes without public key are currently not supported.
+#
 #seed_nodes = [
-#    { host = 'new-seed.nimiq.com', port = 8080, publicKey = 'e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837' },
-#    { host = 'nimiq-seed.company-network.int', port = 8080 },
+#	# Add seed nodes from list (e.g. community seed nodes). The public key specified is used to verify the signature of the file.
+#	{ list = "https://nimiq.community/seeds.txt", pubkey = "e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837" },
+#	# Specify a Wss seed node with hostname, port (optional) and peer_id (optional), or public_key (optional).
+#	{ host = "seed-15.nimiq-network.com", port = 8443, peer_id = "c705843de04503656f4965a6672e70f0" },
+#	# Specify seed node using a peer's URI.
+#	{ uri = "wss://seed-17.nimiq.com:8443/f1240638c6dd670467f22a04b58f7740" }
 #]
 
 # User Agent

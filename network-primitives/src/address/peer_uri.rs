@@ -124,6 +124,16 @@ impl<'a> fmt::Display for PeerUri {
 }
 
 impl PeerUri {
+    pub fn new_wss(hostname: String, port: Option<u16>, peer_id: Option<String>, public_key: Option<String>) -> PeerUri {
+        PeerUri {
+            protocol: Protocol::Wss,
+            hostname: Some(hostname),
+            port,
+            peer_id,
+            public_key
+        }
+    }
+
     pub fn from_url(url: Url) -> Result<Self, PeerUriError> {
         if !url.username().is_empty() { return Err(PeerUriError::UnexpectedUsername) }
         if url.password().is_some() { return Err(PeerUriError::UnexpectedPassword) }

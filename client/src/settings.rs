@@ -6,7 +6,6 @@ use std::str::FromStr;
 use failure::Error;
 use log::LevelFilter;
 
-use network::network_config::Seed;
 use network_primitives::address::NetAddress;
 use primitives::coin::Coin;
 
@@ -16,7 +15,7 @@ pub const DEFAULT_REVERSE_PROXY_PORT: u16 = 8444;
 pub const DEFAULT_RPC_PORT: u16 = 8648;
 pub const DEFAULT_METRICS_PORT: u16 = 8649;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Settings {
@@ -41,7 +40,7 @@ impl Settings {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct NetworkSettings {
     pub host: Option<String>,
@@ -50,13 +49,42 @@ pub(crate) struct NetworkSettings {
     pub protocol: Protocol,
     //#[serde(default)]
     //pub passive: bool,
-    #[serde(deserialize_with = "deserialize_string_vec")]
+    //#[serde(deserialize_with = "deserialize_seed_list")]
     #[serde(default)]
     pub seed_nodes: Vec<Seed>,
     #[serde(default)]
     pub user_agent: Option<String>,
     pub tls: Option<TlsSettings>,
 }
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum Seed {
+    Uri(SeedUri),
+    Info(SeedInfo),
+    List(SeedList),
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct SeedUri {
+    pub uri: String
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct SeedInfo {
+    pub host: String,
+    pub port: Option<u16>,
+    pub public_key: Option<String>,
+    pub peer_id: Option<String>
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub(crate) struct SeedList {
+    pub list: String,
+    pub public_key: Option<String>
+}
+
+
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -73,14 +101,14 @@ impl Default for Protocol {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TlsSettings {
     pub identity_file: String,
     pub identity_password: String,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ConsensusSettings {
     #[serde(rename = "type")]
@@ -144,7 +172,7 @@ impl FromStr for Network {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RpcServerSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
@@ -167,7 +195,7 @@ pub(crate) struct UiServerSettings {
     pub port: u16,
 }*/
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MetricsServerSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
@@ -183,7 +211,7 @@ pub(crate) struct WalletSettings {
     pub address: Option<String>,
 }*/
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ReverseProxySettings {
     pub port: Option<u16>,
@@ -195,7 +223,7 @@ pub(crate) struct ReverseProxySettings {
     pub with_tls_termination: bool,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct LogSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
@@ -211,7 +239,7 @@ pub(crate) struct LogSettings {
     pub file: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DatabaseSettings {
     pub path: String,
@@ -229,14 +257,14 @@ impl Default for DatabaseSettings {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MempoolSettings {
     pub filter: Option<MempoolFilterSettings>,
     pub blacklist_limit: Option<usize>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MempoolFilterSettings {
     #[serde(deserialize_with = "deserialize_coin")]

@@ -6,6 +6,7 @@ pub mod seed_list;
 pub use self::net_address::*;
 pub use self::peer_address::*;
 pub use self::peer_uri::PeerUri;
+pub use self::seed_list::SeedList;
 
 use hex::FromHex;
 

@@ -3,12 +3,19 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer};
 use serde::de::Error;
+use url::Url;
+use hex::FromHex;
+use failure::Fail;
 
 use mempool::filter::{MempoolFilter, Rules};
 use mempool::MempoolConfig;
 use network_primitives::protocol::Protocol;
+use network_primitives::address::SeedList;
+use network_primitives::address::PeerUri;
+use network::network_config::Seed;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
+use keys::PublicKey;
 
 use crate::settings as s;
 use std::collections::HashMap;
@@ -59,6 +66,54 @@ impl From<s::MempoolSettings> for MempoolConfig {
             filter_rules: rules,
             filter_limit: mempool_settings.blacklist_limit.unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE)
         }
+    }
+}
+
+use network_primitives::address::peer_uri::PeerUriError;
+
+#[derive(Debug, Fail)]
+pub enum SeedError {
+    #[fail(display = "Failed to parse peer URI: {}", _0)]
+    PeerUri(#[cause] PeerUriError),
+    #[fail(display = "Failed to parse seed list URL: {}", _0)]
+    Url(#[cause] url::ParseError),
+    #[fail(display = "Failed to parse public key: {}", _0)]
+    PublicKey(#[cause] keys::ParseError),
+}
+
+impl From<PeerUriError> for SeedError {
+    fn from(e: PeerUriError) -> Self {
+        SeedError::PeerUri(e)
+    }
+}
+
+impl From<url::ParseError> for SeedError {
+    fn from(e: url::ParseError) -> Self {
+        SeedError::Url(e)
+    }
+}
+
+impl From<keys::ParseError> for SeedError {
+    fn from(e: keys::ParseError) -> Self {
+        SeedError::PublicKey(e)
+    }
+}
+
+impl s::Seed {
+    pub fn try_from(seed: s::Seed) -> Result<Seed, SeedError> {
+        Ok(match seed {
+            s::Seed::Uri(s::SeedUri{uri}) => {
+                Seed::Peer(PeerUri::from_str(&uri)?)
+            },
+            s::Seed::Info(s::SeedInfo{host, port, public_key, peer_id}) => {
+                // TODO: Implement this without having to instantiate a PeerUri
+                Seed::Peer(PeerUri::new_wss(host, port, peer_id, public_key))
+            },
+            s::Seed::List(s::SeedList{list, public_key}) => {
+                Seed::List(SeedList::new(Url::from_str(&list)?, public_key
+                    .map(|p| PublicKey::from_hex(p)).transpose()?))
+            }
+        })
     }
 }
 
