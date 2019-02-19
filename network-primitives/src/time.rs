@@ -28,9 +28,9 @@ impl NetworkTime {
         let offset = self.offset.load(Ordering::Relaxed);
         let abs_offset = offset.abs() as u64;
         let system_time = if offset > 0 {
-            SystemTime::now() + Duration::from_secs(abs_offset)
+            SystemTime::now() + Duration::from_millis(abs_offset)
         } else {
-            SystemTime::now() - Duration::from_secs(abs_offset)
+            SystemTime::now() - Duration::from_millis(abs_offset)
         };
 
         systemtime_to_timestamp(system_time)
