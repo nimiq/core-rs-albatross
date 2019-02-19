@@ -499,7 +499,7 @@ impl InventoryAgent {
         }
     }
 
-    fn on_block(&self, block: Block) {
+    fn on_block(&self, mut block: Block) {
         //let lock = self.mutex.lock();
 
         let hash = block.header.hash::<Blake2bHash>();
@@ -515,7 +515,14 @@ impl InventoryAgent {
         // Give up read lock before notifying.
         drop(state);
 
-        // TODO Reuse already known (verified) transactions from mempool.
+        // Use already known (verified) transactions from mempool to set validity.
+        if let Some(ref mut block_body) = block.body {
+            for i in 0..block_body.transactions.len() {
+                if let Some(mempool_tx) = self.mempool.get_transaction(&block_body.transactions[i].hash()) {
+                    block_body.transactions[i].check_set_valid(&mempool_tx);
+                }
+            }
+        }
 
         self.inv_mgr.write().note_vector_received(&vector);
 

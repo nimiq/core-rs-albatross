@@ -4,7 +4,6 @@ use std::fmt::Debug;
 use std::net;
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
-use std::time::Instant;
 
 use futures::prelude::*;
 use tokio::net::TcpStream;

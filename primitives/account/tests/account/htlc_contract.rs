@@ -170,19 +170,15 @@ fn prepare_outgoing_transaction() -> (HashedTimeLockedContract, Transaction, Any
         total_amount: Coin::from_u64(1000).unwrap(),
     };
 
-    let tx = Transaction {
-        data: vec![],
-        sender: Address::from([0u8; 20]),
-        sender_type: AccountType::HTLC,
-        recipient: recipient.clone(),
-        recipient_type: AccountType::Basic,
-        value: Coin::from_u64(1000).unwrap(),
-        fee: Coin::from_u64(0).unwrap(),
-        validity_start_height: 1,
-        network_id: NetworkId::Dummy,
-        flags: TransactionFlags::empty(),
-        proof: vec![],
-    };
+    let tx = Transaction::new_contract_creation(
+        vec![],
+        Address::from([0u8; 20]),
+        AccountType::HTLC,
+        AccountType::Basic,
+        Coin::from_u64(1000).unwrap(),
+        Coin::from_u64(0).unwrap(),
+        1,
+        NetworkId::Dummy);
 
     let sender_signature = sender_key_pair.sign(&tx.serialize_content()[..]);
     let recipient_signature = recipient_key_pair.sign(&tx.serialize_content()[..]);

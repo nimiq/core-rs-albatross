@@ -94,7 +94,7 @@ impl<'env> Mempool<'env> {
         self.state.read().filter.blacklisted(hash)
     }
 
-    pub fn push_transaction(&self, transaction: Transaction) -> ReturnCode {
+    pub fn push_transaction(&self, mut transaction: Transaction) -> ReturnCode {
         let hash: Blake2bHash = transaction.hash();
 
         // Only one mutating operation at a time.
@@ -120,7 +120,7 @@ impl<'env> Mempool<'env> {
             };
 
             // Intrinsic transaction verification.
-            if transaction.verify(self.blockchain.network_id).is_err() {
+            if transaction.verify_mut(self.blockchain.network_id).is_err() {
                 return ReturnCode::Invalid;
             }
 

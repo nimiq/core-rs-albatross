@@ -1,6 +1,5 @@
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
-use std::time::Instant;
 
 use futures::prelude::*;
 

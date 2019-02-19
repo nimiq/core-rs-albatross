@@ -11,6 +11,7 @@ extern crate nimiq_utils as utils;
 
 use std::cmp::{Ord, Ordering};
 use std::io;
+use std::sync::Arc;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
@@ -98,6 +99,7 @@ pub struct Transaction {
     pub network_id: NetworkId,
     pub flags: TransactionFlags,
     pub proof: Vec<u8>,
+    valid: bool
 }
 
 impl Transaction {
@@ -116,7 +118,8 @@ impl Transaction {
             validity_start_height,
             network_id,
             flags: TransactionFlags::empty(),
-            proof: Vec::new()
+            proof: Vec::new(),
+            valid: false
         }
     }
 
@@ -132,7 +135,8 @@ impl Transaction {
             validity_start_height,
             network_id,
             flags: TransactionFlags::CONTRACT_CREATION,
-            proof: Vec::new()
+            proof: Vec::new(),
+            valid: false
         };
         tx.recipient = tx.contract_creation_address();
         tx
@@ -183,7 +187,19 @@ impl Transaction {
             .then_with(|| self.data.cmp(&other.data))
     }
 
+    pub fn verify_mut(&mut self, network_id: NetworkId) -> Result<(), TransactionError> {
+        let ret = self.verify(network_id);
+        if ret.is_ok() {
+            self.valid = true;
+        }
+        return ret;
+    }
+
     pub fn verify(&self, network_id: NetworkId) -> Result<(), TransactionError> {
+        if self.valid {
+            return Ok(());
+        }
+
         if self.network_id != network_id {
             return Err(TransactionError::ForeignNetwork);
         }
@@ -213,6 +229,12 @@ impl Transaction {
         AccountType::verify_incoming_transaction(&self)?;
 
         Ok(())
+    }
+
+    pub fn check_set_valid(&mut self, tx: &Arc<Transaction>) {
+        if tx.valid && self.hash::<Blake2bHash>() == tx.hash() {
+            self.valid = true;
+        }
     }
 
     pub fn is_valid_at(&self, block_height: u32) -> bool {
@@ -332,6 +354,7 @@ impl Deserialize for Transaction {
                     network_id: Deserialize::deserialize(reader)?,
                     flags: TransactionFlags::empty(),
                     proof: SignatureProof::from(sender_public_key, Deserialize::deserialize(reader)?).serialize_to_vec(),
+                    valid: false
                 })
             }
             TransactionFormat::Extended => {
@@ -347,6 +370,7 @@ impl Deserialize for Transaction {
                     network_id: Deserialize::deserialize(reader)?,
                     flags: Deserialize::deserialize(reader)?,
                     proof: DeserializeWithLength::deserialize::<u16, R>(reader)?,
+                    valid: false
                 })
             }
         }
