@@ -92,6 +92,11 @@ impl ConnectionPoolState {
         Some(self.connections.get(*self.connections_by_peer_address.get(peer_address)?).expect("Missing connection"))
     }
 
+    #[inline]
+    pub fn get_connection_id_by_peer_address(&self, peer_address: &PeerAddress) -> Option<ConnectionId> {
+        self.connections_by_peer_address.get(peer_address).map(|id| *id)
+    }
+
     /// Get the connection info for a peer address as a mutable borrow.
     #[inline]
     pub fn get_connection_by_peer_address_mut(&mut self, peer_address: &PeerAddress) -> Option<&mut ConnectionInfo> {

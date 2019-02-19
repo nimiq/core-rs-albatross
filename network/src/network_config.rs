@@ -1,8 +1,6 @@
 use std::fs;
 use std::time::SystemTime;
 
-use url::Url;
-
 use beserial::{Deserialize, Serialize};
 use keys::{KeyPair, PublicKey};
 use network_primitives::address::net_address::NetAddress;
@@ -14,7 +12,7 @@ use network_primitives::services::Services;
 use utils::time::systemtime_to_timestamp;
 use network_primitives::address::{PeerUri};
 
-use crate::error::{Error, SeedError};
+use crate::error::Error;
 
 
 // One or multiple seed nodes. Either a peer URI or a http(s) URL to a seed list

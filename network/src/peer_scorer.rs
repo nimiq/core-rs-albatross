@@ -26,7 +26,7 @@ use crate::{
 use crate::address::peer_address_book::PeerAddressBookState;
 use parking_lot::RwLockReadGuard;
 
-type Score = f64;
+pub type Score = f64;
 
 pub struct PeerScorer {
     network_config: Arc<NetworkConfig>,
@@ -303,7 +303,7 @@ impl PeerScorer {
         }
     }
 
-    pub fn connection_scores(&self) -> &Vec<(ConnectionId, f64)> {
+    pub fn connection_scores(&self) -> &Vec<(ConnectionId, Score)> {
         &self.connection_scores
     }
 }

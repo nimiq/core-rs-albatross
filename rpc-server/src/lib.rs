@@ -13,7 +13,7 @@ extern crate nimiq_transaction as transaction;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use futures::future::Future;
 use hyper::Server;
@@ -32,6 +32,8 @@ use network::connection::close_type::CloseType;
 use network::connection::connection_info::ConnectionInfo;
 use network_primitives::address::{PeerId, PeerUri};
 use transaction::{Transaction, TransactionReceipt};
+use network::connection::connection_pool::ConnectionId;
+use network::peer_scorer::Score;
 
 use crate::error::{Error, AuthenticationError};
 
@@ -115,8 +117,20 @@ impl JsonRpcHandler {
     }
 
     fn peer_list(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+        let mut scores: HashMap<ConnectionId, Score> = HashMap::new();
+        trace!("[SCORE] Num scores: {}", self.consensus.network.scorer().connection_scores().len());
+        for (id, score) in self.consensus.network.scorer().connection_scores() {
+            trace!("[SCORE] id={}, score={}", id, score);
+            scores.insert(*id, *score);
+        }
+
         Ok(self.consensus.network.addresses.state().address_info_iter()
-            .map(|info| self.peer_address_info_to_obj(info, None))
+            .map(|info| {
+                let conn_id = self.consensus.network.connections.state()
+                    .get_connection_id_by_peer_address(&info.peer_address);
+                self.peer_address_info_to_obj(info, None,
+                                              conn_id.and_then(|id| scores.get(&id)).map(|s| *s))
+            })
             .collect::<Array>().into())
     }
 
@@ -170,7 +184,7 @@ impl JsonRpcHandler {
             Ok(Null)
         }
         else {
-            Ok(self.peer_address_info_to_obj(peer_address_info, connection_info))
+            Ok(self.peer_address_info_to_obj(peer_address_info, connection_info, None))
         }
     }
 
@@ -503,7 +517,7 @@ impl JsonRpcHandler {
         Ok(self.transaction_to_obj(&transaction, Some(&block), Some(index as usize)))
     }
 
-    fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<&ConnectionInfo>) -> JsonValue {
+    fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<&ConnectionInfo>, score: Option<Score>) -> JsonValue {
         let state = self.consensus.network.connections.state();
         let connection_info = connection_info.or_else(|| {
             state.get_connection_by_peer_address(&peer_address_info.peer_address)
@@ -519,7 +533,7 @@ impl JsonRpcHandler {
             "version" => peer.map(|peer| peer.version.into()).unwrap_or(Null),
             "timeOffset" => peer.map(|peer| peer.time_offset.into()).unwrap_or(Null),
             "headHash" => peer.map(|peer| peer.head_hash.to_hex().into()).unwrap_or(Null),
-            "score" => Null, // TODO: Not in ConnectionInfo
+            "score" => score.map(|s| s.into()).unwrap_or(Null),
             "latency" => connection_info.map(|conn| conn.statistics().latency_median().into()).unwrap_or(Null),
             "rx" => Null, // TODO: Not in NetworkConnection
             "tx" => Null,

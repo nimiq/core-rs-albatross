@@ -344,4 +344,8 @@ impl Network {
     pub fn set_allow_inbound_connections(&self, allow_inbound_connections: bool) {
         self.connections.set_allow_inbound_connections(allow_inbound_connections);
     }
+
+    pub fn scorer(&self) -> RwLockReadGuard<PeerScorer> {
+        self.scorer.read()
+    }
 }
