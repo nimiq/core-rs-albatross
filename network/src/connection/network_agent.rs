@@ -452,7 +452,7 @@ impl NetworkAgent {
         // XXX Discard any addresses beyond the ones we requested
         // and check the addresses the peer sent to us.
         // TODO reject addr messages not matching our request.
-        let addresses: Vec<PeerAddress> = msg.addresses.iter().take(address_request.max_results as usize).cloned().collect();
+        let mut addresses: Vec<PeerAddress> = msg.addresses.iter().take(address_request.max_results as usize).cloned().collect();
 
         for address in addresses.iter() {
             if !address.verify_signature() {
@@ -460,11 +460,14 @@ impl NetworkAgent {
                 return;
             }
 
-            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss) && !address.is_globally_reachable() {
+            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss) && !address.is_globally_reachable(true) {
                 self.channel.close(CloseType::AddrNotGloballyReachable);
                 return;
             }
         }
+
+        // Filter out addresses that are not globally reachable
+        addresses.retain(|x| x.is_globally_reachable(false));
 
         // Update peer with new address.
         if is_own_address {
