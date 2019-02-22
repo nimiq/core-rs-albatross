@@ -185,6 +185,8 @@ fn run() -> Result<(), Error> {
     let client = client_builder.build_client()?;
     let consensus = client.consensus();
 
+    info!("Peer address: {} - public key: {}", consensus.network.network_config.peer_address(), consensus.network.network_config.public_key().to_hex());
+
     // Additional futures we want to run.
     let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
 
