@@ -438,17 +438,12 @@ impl InventoryAgent {
         let num_vectors = vectors.len();
         let mut unknown_blocks = Vec::new();
         let mut unknown_txs = Vec::new();
+        let vectors: Vec<InvVector> = vectors.into_iter().filter(|vector| {
+            !state.objects_in_flight.contains(&vector) && self.should_request_data(&vector)
+        }).collect();
+        // Give up state write lock.
+        drop(state);
         for vector in vectors {
-            if state.objects_in_flight.contains(&vector) {
-                continue;
-            }
-
-            // Filter out objects that we are not interested in.
-            if !self.should_request_data(&vector) {
-                continue;
-            }
-
-            // FIXME We still hold the state write lock when notifying here.
             match vector.ty {
                 InvVectorType::Block => {
                     if !self.blockchain.contains(&vector.hash, true) {
@@ -473,6 +468,8 @@ impl InventoryAgent {
         debug!("[INV] {} vectors, {} new blocks, {} new txs",
                num_vectors, unknown_blocks.len(), unknown_txs.len());
 
+        // Re-take state write lock.
+        let mut state = self.state.write();
         if !unknown_blocks.is_empty() || !unknown_txs.is_empty() {
             if state.bypass_mgr {
                 self.queue_vectors(&mut *state, unknown_blocks, unknown_txs);
@@ -575,6 +572,9 @@ impl InventoryAgent {
             let result = self.mempool.push_transaction(msg.transaction);
             self.notifier.read().notify(InventoryEvent::TransactionProcessed(vector.hash.clone(), result));
         } else if state.last_subscription_change.elapsed() > Self::SUBSCRIPTION_CHANGE_GRACE_PERIOD {
+            // Give up read lock.
+            drop(state);
+
             warn!("We're not subscribed to this transaction from {} - discarding and closing the channel", self.peer.peer_address());
             self.peer.channel.close(CloseType::ReceivedTransactionNotMatchingOurSubscription);
         }
@@ -814,9 +814,11 @@ impl InventoryAgent {
 
     fn on_get_data(&self, vectors: Vec<InvVector>) {
         // Keep track of the objects the peer knows.
-        let mut state = self.state.write();
-        for vector in vectors.iter() {
-            state.known_objects.insert(vector.clone());
+        {
+            let mut state = self.state.write();
+            for vector in vectors.iter() {
+                state.known_objects.insert(vector.clone());
+            }
         }
 
         // Check which of the requested objects we know.
@@ -862,9 +864,11 @@ impl InventoryAgent {
 
     fn on_get_header(&self, vectors: Vec<InvVector>) {
         // Keep track of the objects the peer knows.
-        let mut state = self.state.write();
-        for vector in vectors.iter() {
-            state.known_objects.insert(vector.clone());
+        {
+            let mut state = self.state.write();
+            for vector in vectors.iter() {
+                state.known_objects.insert(vector.clone());
+            }
         }
 
         // Check which of the requested objects we know.
