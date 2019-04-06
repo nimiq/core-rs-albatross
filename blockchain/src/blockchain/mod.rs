@@ -466,6 +466,7 @@ impl<'env> Blockchain<'env> {
             }
 
             // Commit transaction & update head.
+            self.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
             write_txn.commit();
             state.transaction_cache = cache_txn;
 
