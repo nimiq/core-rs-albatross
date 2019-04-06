@@ -207,10 +207,12 @@ impl<'env> Mempool<'env> {
                 if transaction.cmp(tx) == Ordering::Greater {
                     break;
                 }
-
-                sender_account = sender_account
-                    .with_outgoing_transaction(tx, block_height)
-                    .expect("Failed to apply existing transaction");
+                // Reject the transaction, if after the intrinsic check, the balance went too low
+                sender_account = match sender_account
+                    .with_outgoing_transaction(tx, block_height) {
+                    Ok(s) => s,
+                    Err(_) => return ReturnCode::Invalid
+                };
                 tx_count += 1;
 
                 tx_opt = tx_iter.next_back();
