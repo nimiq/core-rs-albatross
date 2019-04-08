@@ -42,7 +42,6 @@ url = "1.7"
 # Uncomment when `tungstenite-rs` is released.
 # version = "0.7.0"
 git = "https://github.com/snapview/tungstenite-rs"
-branch = "close-as-message"
 default-features = false
 
 [features]
