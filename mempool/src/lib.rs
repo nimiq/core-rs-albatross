@@ -356,7 +356,10 @@ impl<'env> Mempool<'env> {
     fn on_blockchain_event(&self, event: &BlockchainEvent) {
         match event {
             BlockchainEvent::Extended(_) => self.evict_transactions(),
-            BlockchainEvent::Rebranched(reverted_blocks, _) => self.restore_transactions(reverted_blocks),
+            BlockchainEvent::Rebranched(reverted_blocks, _) => {
+                self.restore_transactions(reverted_blocks);
+                self.evict_transactions();
+            },
         }
     }
 
