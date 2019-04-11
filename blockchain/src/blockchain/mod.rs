@@ -36,7 +36,7 @@ pub struct Blockchain<'env> {
     pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
     pub(crate) chain_store: ChainStore<'env>,
     pub(crate) state: RwLock<BlockchainState<'env>>,
-    push_lock: Mutex<()>,
+    pub push_lock: Mutex<()>, // TODO: Not very nice to have this public
 
     #[cfg(feature = "metrics")]
     pub metrics: BlockchainMetrics,

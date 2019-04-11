@@ -97,6 +97,9 @@ impl<'env> Mempool<'env> {
     pub fn push_transaction(&self, mut transaction: Transaction) -> ReturnCode {
         let hash: Blake2bHash = transaction.hash();
 
+        // Synchronize with `Blockchain::push`
+        let _push_lock = self.blockchain.push_lock.lock();
+
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
 
@@ -279,6 +282,9 @@ impl<'env> Mempool<'env> {
                 removed_transactions.push(tx);
             }
         }
+
+        // Drop the lock on blockchain::push
+        drop(_push_lock);
 
         // Tell listeners about the new transaction we received.
         self.notifier.read().notify(MempoolEvent::TransactionAdded(hash, tx_arc));
