@@ -279,10 +279,8 @@ impl PeerScorer {
             Self::MIN_AGE_FULL
         } else if peer_address.services.is_light_node() {
             Self::MIN_AGE_LIGHT
-        } else if peer_address.services.is_nano_node() {
-            Self::MIN_AGE_NANO
         } else {
-            unreachable!()
+            Self::MIN_AGE_NANO
         }
     }
 
