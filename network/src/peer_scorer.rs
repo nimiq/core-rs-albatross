@@ -226,10 +226,8 @@ impl PeerScorer {
             score_type = 1.0;
         } else if peer_address.services.is_light_node() {
             score_type = 0.5;
-        } else if peer_address.services.is_nano_node() {
-            score_type = 0.0;
         } else {
-            unreachable!()
+            score_type = 0.0;
         }
 
         // Protocol: Prefer WebSocket over WebRTC over Dumb.
@@ -267,10 +265,8 @@ impl PeerScorer {
             (age as f64 / (2.0 * time::duration_as_millis(&Self::BEST_AGE_FULL) as f64) + 0.5) as Score
         } else if services.is_light_node() {
             PeerScorer::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_LIGHT), time::duration_as_millis(&Self::MAX_AGE_LIGHT)) as Score
-        } else if services.is_nano_node() {
-            PeerScorer::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_NANO), time::duration_as_millis(&Self::MAX_AGE_NANO)) as Score
         } else {
-            unreachable!()
+            PeerScorer::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_NANO), time::duration_as_millis(&Self::MAX_AGE_NANO)) as Score
         }
     }
 
