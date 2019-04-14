@@ -471,7 +471,7 @@ impl NetworkAgent {
 
         // Update peer with new address.
         if is_own_address {
-            self.channel.address_info.set_peer_address(Arc::new(addresses[0].clone()));
+            self.channel.address_info.set_peer_address(Arc::new(msg.addresses[0].clone()));
         }
 
         // Put the new addresses in the address pool.
