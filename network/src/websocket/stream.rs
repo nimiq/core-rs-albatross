@@ -211,8 +211,8 @@ impl NimiqMessageStream {
 
         while let Some(ws_msg) = self.ws_queue.pop_front() {
             let raw_msg = ws_msg.into_data();
-            // We need at least the tag.
-            if raw_msg.is_empty() {
+            // The minimum possible size is tag (1) + magic (4) + type (1) + length (4) + checksum (4) = 14 bytes;
+            if raw_msg.len() < 14 {
                 return Err(Error::InvalidMessageFormat);
             }
 
