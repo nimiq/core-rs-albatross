@@ -23,13 +23,11 @@ rust:
   - stable
   - beta
   - nightly
-  - nightly-2019-03-22
 
 matrix:
   allow_failures:
     - rust: stable
     - rust: beta
-    - rust: nightly
   fast_finish: true
 
 before_script:
