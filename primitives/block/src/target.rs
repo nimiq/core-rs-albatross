@@ -18,7 +18,7 @@ impl fmt::Debug for TargetCompact {
     }
 }
 
-/// Target as 32 byte array
+// Target as 32 byte array
 create_typed_array!(Target, u8, 32);
 
 /// Difficulty as FixedUnsigned with 10 decimal places
@@ -40,10 +40,9 @@ impl From<TargetCompact> for Target {
     fn from(target_compact: TargetCompact) -> Self {
         let mut val = [0u8; 32];
         let shift_bytes = (target_compact.0 >> 24).saturating_sub(3) as usize;
-        let value = target_compact.0 & 0x00ff_ffff; // TODO: This step is unnecessary, since we mask the bytes later anyway.
-        val[32 - shift_bytes - 1] = (value & 0xff) as u8;
-        val[32 - shift_bytes - 2] = ((value >> 8) & 0xff) as u8;
-        val[32 - shift_bytes - 3] = ((value >> 16) & 0xff) as u8;
+        val[32 - shift_bytes - 1] = (target_compact.0 & 0xff) as u8;
+        val[32 - shift_bytes - 2] = ((target_compact.0 >> 8) & 0xff) as u8;
+        val[32 - shift_bytes - 3] = ((target_compact.0 >> 16) & 0xff) as u8;
         Target(val)
     }
 }
@@ -77,9 +76,9 @@ impl<'a> From<&'a Target> for TargetCompact {
         let shift_bytes = 32 - first_byte;
         let start_byte = first_byte.min(29);
         TargetCompact(((shift_bytes as u32) << 24)
-            | ((target.0[start_byte] as u32) << 16)
-            | ((target.0[start_byte + 1] as u32) << 8)
-            | (target.0[start_byte + 2] as u32))
+            | (u32::from(target.0[start_byte]) << 16)
+            | (u32::from(target.0[start_byte + 1]) << 8)
+            | u32::from(target.0[start_byte + 2]))
     }
 }
 
@@ -292,7 +291,7 @@ impl fmt::Display for Difficulty {
 impl Target {
     pub fn is_met_by(&self, hash: &Argon2dHash) -> bool {
         let reached = Target::from(hash);
-        &reached < self
+        reached < *self
     }
 
     pub fn get_depth(&self) -> u8 {

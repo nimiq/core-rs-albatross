@@ -46,6 +46,7 @@ impl NetworkMetrics {
     }
 }
 
+#[derive(Default)]
 pub struct MessageMetrics {
     messages: HashMap<MessageType, AtomicUsize>,
 }

@@ -12,6 +12,7 @@ edition = "2018"
 
 [badges]
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 libc = "0.2"

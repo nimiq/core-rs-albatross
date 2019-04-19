@@ -5,6 +5,8 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate enum_display_derive;
 extern crate nimiq_block as block;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
@@ -17,6 +19,7 @@ extern crate nimiq_utils as utils;
 
 use std::io;
 use std::io::Read;
+use std::fmt::Display;
 
 use byteorder::{BigEndian, ByteOrder};
 use parking_lot::RwLock;
@@ -39,7 +42,7 @@ use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
 #[repr(u64)]
 #[beserial(uvar)]
 pub enum MessageType {
@@ -84,43 +87,43 @@ pub enum MessageType {
 
 #[derive(Clone, Debug)]
 pub enum Message {
-    Version(VersionMessage),
+    Version(Box<VersionMessage>),
     Inv(Vec<InvVector>),
     GetData(Vec<InvVector>),
     GetHeader(Vec<InvVector>),
     NotFound(Vec<InvVector>),
-    Block(Block),
-    Header(BlockHeader),
-    Tx(TxMessage),
-    GetBlocks(GetBlocksMessage),
+    Block(Box<Block>),
+    Header(Box<BlockHeader>),
+    Tx(Box<TxMessage>),
+    GetBlocks(Box<GetBlocksMessage>),
     Mempool,
-    Reject(RejectMessage),
-    Subscribe(Subscription),
+    Reject(Box<RejectMessage>),
+    Subscribe(Box<Subscription>),
 
-    Addr(AddrMessage),
-    GetAddr(GetAddrMessage),
+    Addr(Box<AddrMessage>),
+    GetAddr(Box<GetAddrMessage>),
     Ping(/*nonce*/ u32),
     Pong(/*nonce*/ u32),
 
-    Signal(SignalMessage),
+    Signal(Box<SignalMessage>),
 
     GetChainProof,
-    ChainProof(ChainProof),
-    GetAccountsProof(GetAccountsProofMessage),
-    AccountsProof(AccountsProofMessage),
-    GetAccountsTreeChunk(GetAccountsTreeChunkMessage),
-    AccountsTreeChunk(AccountsTreeChunkMessage),
-    GetTransactionsProof(GetTransactionsProofMessage),
-    TransactionsProof(TransactionsProofMessage),
-    GetTransactionReceipts(GetTransactionReceiptsMessage),
-    TransactionReceipts(TransactionReceiptsMessage),
-    GetBlockProof(GetBlockProofMessage),
-    BlockProof(BlockProofMessage),
+    ChainProof(Box<ChainProof>),
+    GetAccountsProof(Box<GetAccountsProofMessage>),
+    AccountsProof(Box<AccountsProofMessage>),
+    GetAccountsTreeChunk(Box<GetAccountsTreeChunkMessage>),
+    AccountsTreeChunk(Box<AccountsTreeChunkMessage>),
+    GetTransactionsProof(Box<GetTransactionsProofMessage>),
+    TransactionsProof(Box<TransactionsProofMessage>),
+    GetTransactionReceipts(Box<GetTransactionReceiptsMessage>),
+    TransactionReceipts(Box<TransactionReceiptsMessage>),
+    GetBlockProof(Box<GetBlockProofMessage>),
+    BlockProof(Box<BlockProofMessage>),
 
     GetHead,
-    Head(BlockHeader),
+    Head(Box<BlockHeader>),
 
-    VerAck(VerAckMessage),
+    VerAck(Box<VerAckMessage>),
 }
 
 impl Message {
@@ -437,38 +440,38 @@ impl MessageNotifier {
 
     pub fn notify(&self, msg: Message) {
         match msg {
-            Message::Version(msg) => self.version.read().notify(msg),
-            Message::VerAck(msg) => self.ver_ack.read().notify(msg),
+            Message::Version(msg) => self.version.read().notify(*msg),
+            Message::VerAck(msg) => self.ver_ack.read().notify(*msg),
             Message::Inv(vector) => self.inv.read().notify(vector),
             Message::GetData(vector) => self.get_data.read().notify(vector),
             Message::GetHeader(vector) => self.get_header.read().notify(vector),
             Message::NotFound(vector) => self.not_found.read().notify(vector),
-            Message::Block(block) => self.block.read().notify(block),
-            Message::Header(header) => self.header.read().notify(header),
-            Message::Tx(msg) => self.tx.read().notify(msg),
-            Message::GetBlocks(msg) => self.get_blocks.read().notify(msg),
+            Message::Block(block) => self.block.read().notify(*block),
+            Message::Header(header) => self.header.read().notify(*header),
+            Message::Tx(msg) => self.tx.read().notify(*msg),
+            Message::GetBlocks(msg) => self.get_blocks.read().notify(*msg),
             Message::Mempool => self.mempool.read().notify(()),
-            Message::Reject(msg) => self.reject.read().notify(msg),
-            Message::Subscribe(msg) => self.subscribe.read().notify(msg),
-            Message::Addr(msg) => self.addr.read().notify(msg),
-            Message::GetAddr(msg) => self.get_addr.read().notify(msg),
+            Message::Reject(msg) => self.reject.read().notify(*msg),
+            Message::Subscribe(msg) => self.subscribe.read().notify(*msg),
+            Message::Addr(msg) => self.addr.read().notify(*msg),
+            Message::GetAddr(msg) => self.get_addr.read().notify(*msg),
             Message::Ping(nonce) => self.ping.read().notify(nonce),
             Message::Pong(nonce) => self.pong.read().notify(nonce),
-            Message::Signal(msg) => self.signal.read().notify(msg),
+            Message::Signal(msg) => self.signal.read().notify(*msg),
             Message::GetChainProof => self.get_chain_proof.read().notify(()),
-            Message::ChainProof(proof) => self.chain_proof.read().notify(proof),
-            Message::GetAccountsProof(msg) => self.get_accounts_proof.read().notify(msg),
-            Message::AccountsProof(msg) => self.accounts_proof.read().notify(msg),
-            Message::GetAccountsTreeChunk(msg) => self.get_accounts_tree_chunk.read().notify(msg),
-            Message::AccountsTreeChunk(msg) => self.accounts_tree_chunk.read().notify(msg),
-            Message::GetTransactionsProof(msg) => self.get_transactions_proof.read().notify(msg),
-            Message::TransactionsProof(msg) => self.transactions_proof.read().notify(msg),
-            Message::GetTransactionReceipts(msg) => self.get_transaction_receipts.read().notify(msg),
-            Message::TransactionReceipts(msg) => self.transaction_receipts.read().notify(msg),
-            Message::GetBlockProof(msg) => self.get_block_proof.read().notify(msg),
-            Message::BlockProof(msg) => self.block_proof.read().notify(msg),
+            Message::ChainProof(proof) => self.chain_proof.read().notify(*proof),
+            Message::GetAccountsProof(msg) => self.get_accounts_proof.read().notify(*msg),
+            Message::AccountsProof(msg) => self.accounts_proof.read().notify(*msg),
+            Message::GetAccountsTreeChunk(msg) => self.get_accounts_tree_chunk.read().notify(*msg),
+            Message::AccountsTreeChunk(msg) => self.accounts_tree_chunk.read().notify(*msg),
+            Message::GetTransactionsProof(msg) => self.get_transactions_proof.read().notify(*msg),
+            Message::TransactionsProof(msg) => self.transactions_proof.read().notify(*msg),
+            Message::GetTransactionReceipts(msg) => self.get_transaction_receipts.read().notify(*msg),
+            Message::TransactionReceipts(msg) => self.transaction_receipts.read().notify(*msg),
+            Message::GetBlockProof(msg) => self.get_block_proof.read().notify(*msg),
+            Message::BlockProof(msg) => self.block_proof.read().notify(*msg),
             Message::GetHead => self.get_head.read().notify(()),
-            Message::Head(header) => self.head.read().notify(header),
+            Message::Head(header) => self.head.read().notify(*header),
         }
     }
 }
@@ -542,14 +545,14 @@ impl Serialize for VersionMessage {
 
 impl VersionMessage {
     pub fn new(peer_address: PeerAddress, head_hash: Blake2bHash, genesis_hash: Blake2bHash, challenge_nonce: ChallengeNonce, user_agent: Option<String>) -> Message {
-        Message::Version(Self {
+        Message::Version(Box::new(Self {
             version: version::CODE,
             peer_address,
             genesis_hash,
             head_hash,
             challenge_nonce,
             user_agent
-        })
+        }))
     }
 }
 
@@ -589,10 +592,10 @@ pub struct TxMessage {
 }
 impl TxMessage {
     pub fn new(transaction: Transaction) -> Message {
-        Message::Tx(Self {
+        Message::Tx(Box::new(Self {
             transaction,
             accounts_proof: None
-        })
+        }))
     }
 }
 
@@ -614,11 +617,11 @@ impl GetBlocksMessage {
     pub const LOCATORS_MAX_COUNT: usize = 128;
 
     pub fn new(locators: Vec<Blake2bHash>, max_inv_size: u16, direction: GetBlocksDirection) -> Message {
-        Message::GetBlocks(Self {
+        Message::GetBlocks(Box::new(Self {
             locators,
             max_inv_size,
             direction,
-        })
+        }))
     }
 }
 
@@ -645,12 +648,12 @@ pub struct RejectMessage {
 
 impl RejectMessage {
     pub fn new(message_type: MessageType, code: RejectMessageCode, reason: String, extra_data: Option<Vec<u8>>) -> Message {
-        Message::Reject(Self {
+        Message::Reject(Box::new(Self {
             message_type,
             code,
             reason,
             extra_data: extra_data.unwrap_or_else(Vec::new),
-        })
+        }))
     }
 }
 
@@ -662,9 +665,9 @@ pub struct AddrMessage {
 
 impl AddrMessage {
     pub fn new(addresses: Vec<PeerAddress>) -> Message {
-        Message::Addr(Self {
+        Message::Addr(Box::new(Self {
             addresses
-        })
+        }))
     }
 }
 
@@ -672,16 +675,16 @@ impl AddrMessage {
 pub struct GetAddrMessage {
     pub protocol_mask: ProtocolFlags,
     pub service_mask: ServiceFlags,
-    pub max_results: u16, // TODO this is optional right now but is always set
+    pub max_results: Option<u16>,
 }
 
 impl GetAddrMessage {
-    pub fn new(protocol_mask: ProtocolFlags, service_mask: ServiceFlags, max_results: u16) -> Message {
-        Message::GetAddr(Self {
+    pub fn new(protocol_mask: ProtocolFlags, service_mask: ServiceFlags, max_results: Option<u16>) -> Message {
+        Message::GetAddr(Box::new(Self {
             protocol_mask,
             service_mask,
             max_results
-        })
+        }))
     }
 }
 
@@ -690,7 +693,9 @@ impl Serialize for GetAddrMessage {
         let mut size = 0;
         size += self.protocol_mask.bits().serialize(writer)?;
         size += self.service_mask.bits().serialize(writer)?;
-        size += self.max_results.serialize(writer)?;
+        if let Some(max_results) = self.max_results {
+            size += max_results.serialize(writer)?;
+        }
         Ok(size)
     }
 
@@ -698,7 +703,9 @@ impl Serialize for GetAddrMessage {
         let mut size = 0;
         size += self.protocol_mask.bits().serialized_size();
         size += self.service_mask.bits().serialized_size();
-        size += self.max_results.serialized_size();
+        if let Some(max_results) = self.max_results {
+            size += max_results.serialized_size();
+        }
         size
     }
 }
@@ -707,7 +714,7 @@ impl Deserialize for GetAddrMessage {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let protocol_mask = ProtocolFlags::from_bits_truncate(Deserialize::deserialize(reader)?);
         let service_mask = ServiceFlags::from_bits_truncate(Deserialize::deserialize(reader)?);
-        let max_results: u16 = Deserialize::deserialize(reader)?;
+        let max_results = Deserialize::deserialize(reader).ok();
         Ok(GetAddrMessage {
             protocol_mask,
             service_mask,
@@ -807,10 +814,10 @@ pub struct AccountsProofMessage {
 
 impl AccountsProofMessage {
     pub fn new(block_hash: Blake2bHash, proof: Option<AccountsProof>) -> Message {
-        Message::AccountsProof(AccountsProofMessage {
+        Message::AccountsProof(Box::new(AccountsProofMessage {
             block_hash,
             proof,
-        })
+        }))
     }
 }
 
@@ -890,10 +897,10 @@ pub struct TransactionsProofMessage {
 
 impl TransactionsProofMessage {
     pub fn new(block_hash: Blake2bHash, transactions_proof: Option<TransactionsProof>) -> Message {
-        Message::TransactionsProof(TransactionsProofMessage {
+        Message::TransactionsProof(Box::new(TransactionsProofMessage {
             block_hash,
             transactions_proof,
-        })
+        }))
     }
 }
 
@@ -913,15 +920,15 @@ impl TransactionReceiptsMessage {
     pub const RECEIPTS_MAX_COUNT: usize = 500;
 
     pub fn new(receipts: Vec<TransactionReceipt>) -> Message {
-        Message::TransactionReceipts(TransactionReceiptsMessage {
+        Message::TransactionReceipts(Box::new(TransactionReceiptsMessage {
             receipts: Some(receipts),
-        })
+        }))
     }
 
     pub fn empty() -> Message {
-        Message::TransactionReceipts(TransactionReceiptsMessage {
+        Message::TransactionReceipts(Box::new(TransactionReceiptsMessage {
             receipts: None,
-        })
+        }))
     }
 }
 
@@ -939,15 +946,15 @@ pub struct BlockProofMessage {
 
 impl BlockProofMessage {
     pub fn new(proof: Option<Vec<Block>>) -> Message {
-        Message::BlockProof(BlockProofMessage {
+        Message::BlockProof(Box::new(BlockProofMessage {
             proof,
-        })
+        }))
     }
 
     pub fn empty() -> Message {
-        Message::BlockProof(BlockProofMessage {
+        Message::BlockProof(Box::new(BlockProofMessage {
             proof: None,
-        })
+        }))
     }
 }
 
@@ -962,9 +969,9 @@ impl VerAckMessage {
         let mut data = peer_id.serialize_to_vec();
         peer_challenge_nonce.serialize(&mut data).unwrap();
         let signature = key_pair.sign(&data[..]);
-        Message::VerAck(Self {
+        Message::VerAck(Box::new(Self {
             public_key: key_pair.public,
             signature,
-        })
+        }))
     }
 }

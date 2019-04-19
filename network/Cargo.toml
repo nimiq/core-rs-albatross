@@ -23,7 +23,6 @@ nimiq-macros = { path = "../macros" }
 nimiq-messages = { path = "../messages" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
 nimiq-utils = { path = "../utils", features = ["timers", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
-
 atomic = "0.4"
 failure = "0.1"
 futures = "0.1"

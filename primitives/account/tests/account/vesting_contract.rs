@@ -284,5 +284,5 @@ fn it_refuses_invalid_transaction() {
     let signature = key_pair.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 100), Err(AccountError::InsufficientFunds));
+    assert_eq!(start_contract.with_outgoing_transaction(&tx, 100), Err(AccountError::InsufficientFunds { needed: Coin::from_u64(900).unwrap(), balance: Coin::from_u64(800).unwrap() }));
 }

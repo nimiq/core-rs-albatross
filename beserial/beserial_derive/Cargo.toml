@@ -3,6 +3,14 @@ name = "beserial_derive"
 version = "0.1.0"
 authors = ["Marvin W <git@larma.de>"]
 edition = "2018"
+description = "Derive macros for beserial"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs"
+license = "Apache-2.0"
+
+[badges]
+travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
 
 [lib]
 proc-macro = true

@@ -19,9 +19,8 @@ use utils::crc::Crc8Computer;
 #[cfg(feature = "key-derivation")]
 pub mod key_derivation;
 
-/**
- * Our entropy implementation is fixed to 32 bytes.
- */
+
+// Our entropy implementation is fixed to 32 bytes.
 create_typed_array!(Entropy, u8, 32);
 add_hex_io_fns_typed_arr!(Entropy, 32);
 
@@ -207,7 +206,7 @@ impl FromStr for Mnemonic {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Mnemonic {
-            mnemonic: s.split(' ').map(|s| s.to_string()).collect()
+            mnemonic: s.split(' ').map(ToString::to_string).collect()
         })
     }
 }

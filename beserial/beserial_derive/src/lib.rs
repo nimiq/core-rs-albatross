@@ -59,7 +59,7 @@ fn parse_field_attribs(field: &syn::Field) -> (Option<syn::Ident>, Option<Option
             }
         }
     }
-    return (len_type, skip, uvar);
+    (len_type, skip, uvar)
 }
 
 fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
@@ -68,7 +68,7 @@ fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
     for attr in &ast.attrs {
         if let Meta::List(ref meta_list) = attr.parse_meta().unwrap() {
             if meta_list.ident == "repr" {
-                enum_type = meta_list.nested.first().map_or(Option::None, |n| {
+                enum_type = meta_list.nested.first().and_then( |n| {
                     if let syn::NestedMeta::Meta(Meta::Word(ref meta_type)) = n.value() { Option::Some(meta_type.clone()) } else { Option::None }
                 })
             } else if meta_list.ident == "beserial" {
@@ -86,7 +86,7 @@ fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
             }
         }
     }
-    return (enum_type, uvar);
+    (enum_type, uvar)
 }
 
 fn expr_from_value(value: u64) -> syn::Expr {
@@ -118,7 +118,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
                 serialize_body.push(quote! { size += Serialize::serialize(&::beserial::uvar::from(*self as #ty), writer)?; });
                 serialized_size_body.push(quote! { size += Serialize::serialized_size(&::beserial::uvar::from(*self as #ty)); });
             } else {
-                let ty = enum_type.expect(format!("Serialize can not be derived for enum {} without repr(u*) or repr(i*)", name).as_str());
+                let ty = enum_type.unwrap_or_else(|| panic!("Serialize can not be derived for enum {} without repr(u*) or repr(i*)", name));
                 serialize_body.push(quote! { size += Serialize::serialize(&(*self as #ty), writer)?; });
                 serialized_size_body.push(quote! { size += Serialize::serialized_size(&(*self as #ty)); });
             }
@@ -175,7 +175,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
     };
-    gen.into()
+    gen
 }
 
 #[proc_macro_derive(Deserialize, attributes(beserial))]
@@ -195,12 +195,11 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
         Data::Enum(ref data_enum) => {
             let (enum_type, uvar) = parse_enum_attribs(ast);
 
-            let ty;
-            if uvar {
-                ty = enum_type.unwrap_or(Ident::new("u64", syn::export::Span::call_site()));
+            let ty= if uvar {
+                enum_type.unwrap_or(Ident::new("u64", syn::export::Span::call_site()))
             } else {
-                ty = enum_type.expect(format!("Deserialize can not be derived for enum {} without repr(u*) or repr(i*)", name).as_str());
-            }
+                enum_type.expect(format!("Deserialize can not be derived for enum {} without repr(u*) or repr(i*)", name).as_str())
+            };
 
             let mut num = expr_from_value(0);
             let mut num_cases = Vec::<TokenStream>::new();

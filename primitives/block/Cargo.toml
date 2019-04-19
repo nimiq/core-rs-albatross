@@ -10,11 +10,11 @@ license = "Apache-2.0"
 
 [badges]
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive"}
-num-bigint = "0.2"
 fixed-unsigned = { path = "../../fixed-unsigned" }
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
@@ -23,6 +23,7 @@ nimiq-primitives = { path = "..", features = ["policy", "networks"] }
 nimiq-transaction = { path = "../transaction" }
 nimiq-account = { path = "../account" }
 nimiq-macros = { path = "../../macros" }
+num-bigint = "0.2"
 log = "0.4"
 hex = "0.3"
 

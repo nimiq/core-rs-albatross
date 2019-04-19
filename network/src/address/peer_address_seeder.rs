@@ -134,7 +134,7 @@ impl PeerAddressSeeder {
                 if let Some(public_key) = seed_list.public_key() {
                     if let Some(signature) = signature {
                         // Serialize the seed addresses for signature verification
-                        let data = seed_addresses.iter().filter_map(|seed| seed.to_seed_string()).collect::<Vec<String>>().join("\n");
+                        let data = seed_addresses.iter().filter_map(PeerAddress::to_seed_string).collect::<Vec<String>>().join("\n");
                         let data = data.as_bytes();
 
                         if !public_key.verify(&signature, data) {

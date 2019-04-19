@@ -50,10 +50,7 @@ impl Stream for SharedNimiqMessageStream {
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.inner.poll_lock() {
-            Async::Ready(mut inner) => {
-                let result = inner.poll();
-                result
-            },
+            Async::Ready(mut inner) => inner.poll(),
             Async::NotReady => Ok(Async::NotReady),
         }
     }
@@ -67,30 +64,21 @@ impl Sink for SharedNimiqMessageStream {
                   -> StartSend<Self::SinkItem, Self::SinkError>
     {
         match self.inner.poll_lock() {
-            Async::Ready(mut inner) => {
-                let result = inner.start_send(item);
-                result
-            },
+            Async::Ready(mut inner) => inner.start_send(item),
             Async::NotReady => Ok(AsyncSink::NotReady(item)),
         }
     }
 
     fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
         match self.inner.poll_lock() {
-            Async::Ready(mut inner) => {
-                let result = inner.poll_complete();
-                result
-            },
+            Async::Ready(mut inner) => inner.poll_complete(),
             Async::NotReady => Ok(Async::NotReady),
         }
     }
 
     fn close(&mut self) -> Poll<(), Self::SinkError> {
         match self.inner.poll_lock() {
-            Async::Ready(mut inner) => {
-                let result = inner.close();
-                result
-            },
+            Async::Ready(mut inner) => inner.close(),
             Async::NotReady => Ok(Async::NotReady),
         }
     }

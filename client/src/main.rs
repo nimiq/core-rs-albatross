@@ -196,7 +196,7 @@ fn run() -> Result<(), Error> {
             // Unwrap is safe, since `NetAddress::from_str` only returns variants that can be turned
             // into a IpAddr
             let bind = rpc_settings.bind
-                .unwrap_or(NetAddress::from_str("127.0.0.1").unwrap())
+                .unwrap_or_else(|| NetAddress::from_str("127.0.0.1").unwrap())
                 .into_ip_address().unwrap();
             let port = rpc_settings.port.unwrap_or(s::DEFAULT_RPC_PORT);
             let credentials = match (rpc_settings.username, rpc_settings.password) {
@@ -226,7 +226,7 @@ fn run() -> Result<(), Error> {
     #[cfg(feature = "metrics-server")] {
         if let Some(metrics_settings) = settings.metrics_server {
             let bind = metrics_settings.bind
-                .unwrap_or(NetAddress::from_str("127.0.0.1").unwrap())
+                .unwrap_or_else(|| NetAddress::from_str("127.0.0.1").unwrap())
                 .into_ip_address().unwrap();
             let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);
             info!("Starting metrics server listening on port {}", port);

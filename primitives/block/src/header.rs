@@ -58,6 +58,6 @@ impl BlockHeader {
     }
 
     pub fn timestamp_in_millis(&self) -> u64 {
-        self.timestamp as u64 * 1000
+        u64::from(self.timestamp) * 1000
     }
 }

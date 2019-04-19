@@ -120,7 +120,8 @@ impl SignalRouter {
 
     pub fn delete_best_route(&mut self) {
         if let Some(best_route) = &self.best_route {
-            self.delete_route(best_route.signal_channel.clone());
+            let signal_channel = best_route.signal_channel.clone();
+            self.delete_route(signal_channel);
         }
     }
 
@@ -191,7 +192,7 @@ impl SignalRouteInfo {
     }
 
     pub fn score(&self) -> u32 {
-        ((super::peer_address_book::MAX_DISTANCE - self.distance) / 2) as u32 * (1 - self.failed_attempts / super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC)
+        u32::from((super::peer_address_book::MAX_DISTANCE - self.distance) / 2) * (1 - self.failed_attempts / super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC)
     }
 }
 

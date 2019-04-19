@@ -8,6 +8,10 @@ homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs"
 license = "Apache-2.0"
 
+[badges]
+travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
+
 [dependencies]
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
@@ -19,12 +23,12 @@ nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 nimiq-block = { path = "../primitives/block" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
-
 bitflags = "1.0"
 byteorder = "1.2"
 hex = "0.3"
 parking_lot = "0.7"
 rand = "0.6"
+enum-display-derive = "0.1"
 
 [dev-dependencies.nimiq-utils]
 path = "../utils"

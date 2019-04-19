@@ -14,7 +14,7 @@ struct BlockDescriptor {
 impl<'a> From<&'a Block> for BlockDescriptor {
     fn from(block: &'a Block) -> Self {
         let transactions = &block.body.as_ref().unwrap().transactions;
-        let hashes = transactions.iter().map(|tx| tx.hash()).collect();
+        let hashes = transactions.iter().map(Hash::hash).collect();
 
         BlockDescriptor {
             hash: block.header.hash(),

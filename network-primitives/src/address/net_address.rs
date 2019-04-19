@@ -68,7 +68,7 @@ fn ip_to_subnet(ip: &[u8], mut bit_count: u8) -> Vec<u8> {
     let mut mask: Vec<u8> = Vec::new();
     for &byte in ip {
         let n = min(bit_count, 8);
-        mask.push(byte & ((256 - (1 << (8 - (n as u16)))) as u8));
+        mask.push(byte & ((256 - (1 << (8 - u16::from(n)))) as u8));
         bit_count -= n;
     }
     mask

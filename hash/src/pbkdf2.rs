@@ -11,7 +11,7 @@ pub enum Pbkdf2Error {
 
 pub fn compute_pbkdf2_sha512(password: &[u8], salt: &[u8], iterations: usize, derived_key_length: usize) -> Result<Vec<u8>, Pbkdf2Error> {
     // Following https://www.ietf.org/rfc/rfc2898.txt
-    if (derived_key_length as u64) > (u32::max_value() as u64) * (Sha512Hash::len() as u64) {
+    if (derived_key_length as u64) > u64::from(u32::max_value()) * (Sha512Hash::len() as u64) {
         return Err(Pbkdf2Error::KeyTooLong);
     }
 

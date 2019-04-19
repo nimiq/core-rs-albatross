@@ -17,7 +17,6 @@ pub struct ChainInfo {
 }
 
 impl ChainInfo {
-    // TODO: Does `initial` need a `super_block_counts` parameter?
     pub fn initial(block: Block) -> Self {
         let target = Target::from(&block.header.pow());
         let mut super_block_counts = SuperBlockCounts::default();

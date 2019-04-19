@@ -81,7 +81,7 @@ impl server::Metrics for NetworkMetrics {
             serializer.metric_with_attributes(
                 "message_rx_count",
                 message_metrics.message_occurences(ty).unwrap_or(0),
-                attributes!{"type" => format!("{:?}", ty)} // TODO: implement Display for it.
+                attributes!{"type" => format!("{}", ty)} // TODO: implement Display for it.
             )?;
         }
 

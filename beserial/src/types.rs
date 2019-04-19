@@ -118,32 +118,32 @@ impl Deserialize for uvar {
             // 6 bytes follow
             let byte_1_2 = read::<u16, R>(reader)?;
             let byte_3_6 = read::<u32, R>(reader)?;
-            Ok(uvar(((first_byte as u64 & 0x01) << 48) + (byte_1_2 << 32) + byte_3_6 + 0x0408_1020_4080))
+            Ok(uvar(((u64::from(first_byte) & 0x01) << 48) + (byte_1_2 << 32) + byte_3_6 + 0x0408_1020_4080))
         } else if first_byte & 0xF8 == 0xF8 {
             // 5 bytes to follow
             let byte_1 = read::<u8, R>(reader)?;
             let byte_2_5 = read::<u32, R>(reader)?;
-            Ok(uvar(((first_byte as u64 & 0x03) << 40) + (byte_1 << 32) + byte_2_5 + 0x0008_1020_4080))
+            Ok(uvar(((u64::from(first_byte) & 0x03) << 40) + (byte_1 << 32) + byte_2_5 + 0x0008_1020_4080))
         } else if first_byte & 0xF0 == 0xF0 {
             // 4 bytes to follow
             let byte_1_4 = read::<u32, R>(reader)?;
-            Ok(uvar(((first_byte as u64 & 0x07) << 32) + byte_1_4 + 0x1020_4080))
+            Ok(uvar(((u64::from(first_byte) & 0x07) << 32) + byte_1_4 + 0x1020_4080))
         } else if first_byte & 0xE0 == 0xE0 {
             // 3 bytes to follow
             let byte_1 = read::<u8, R>(reader)?;
             let byte_2_3 = read::<u16, R>(reader)?;
-            Ok(uvar(((first_byte as u64 & 0x0f) << 24) + (byte_1 << 16) + byte_2_3 + 0x0020_4080))
+            Ok(uvar(((u64::from(first_byte) & 0x0f) << 24) + (byte_1 << 16) + byte_2_3 + 0x0020_4080))
         } else if first_byte & 0xC0 == 0xC0 {
             // 2 bytes to follow
             let byte_1_2 = read::<u16, R>(reader)?;
-            Ok(uvar(((first_byte as u64 & 0x1f) << 16) + byte_1_2 + 0x4080))
+            Ok(uvar(((u64::from(first_byte) & 0x1f) << 16) + byte_1_2 + 0x4080))
         } else if first_byte & 0x80 == 0x80 {
             // 1 byte follows
             let byte_1 = read::<u8, R>(reader)?;
-            Ok(uvar(((first_byte as u64 & 0x3f) << 8) + byte_1 + 0x80))
+            Ok(uvar(((u64::from(first_byte) & 0x3f) << 8) + byte_1 + 0x80))
         } else {
             // Just that byte
-            Ok(uvar(first_byte as u64))
+            Ok(uvar(u64::from(first_byte)))
         }
     }
 } 

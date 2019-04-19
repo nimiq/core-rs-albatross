@@ -1,10 +1,12 @@
 use std::collections::HashSet;
+use std::ops::Deref;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 use failure::Fail;
 pub use num::ToPrimitive;
 
 pub use crate::types::uvar;
+use std::hash::BuildHasher;
 
 mod types;
 
@@ -49,6 +51,7 @@ impl From<std::io::Error> for SerializingError {
     }
 }
 
+// TODO: Remove
 #[deprecated]
 impl From<SerializingError> for std::io::Error {
     fn from(_: SerializingError) -> Self {
@@ -184,6 +187,9 @@ impl SerializeWithLength for String {
 
 pub trait DeserializeWithLength: Sized {
     fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError>;
+    fn deserialize_from_vec<D: Deserialize + num::ToPrimitive>(v: &Vec<u8>) -> Result<Self, SerializingError> {
+        Self::deserialize::<D, _>(&mut &v[..])
+    }
 }
 
 pub trait SerializeWithLength {
@@ -226,15 +232,34 @@ impl<T: Serialize> SerializeWithLength for Vec<T> {
     }
 }
 
+// Box
+
+impl<T: Deserialize> Deserialize for Box<T> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        Ok(Box::new(T::deserialize(reader)?))
+    }
+}
+
+impl<T: Serialize> Serialize for Box<T> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        Ok(T::serialize(self.deref(), writer)?)
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.deref().serialized_size()
+    }
+}
+
 // HashSets
 
-impl<T> DeserializeWithLength for HashSet<T>
-    where T: Deserialize + std::cmp::Eq + std::hash::Hash
+impl<T, H> DeserializeWithLength for HashSet<T, H>
+    where T: Deserialize + std::cmp::Eq + std::hash::Hash,
+          H: BuildHasher + Default
 {
     fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let len: D = Deserialize::deserialize(reader)?;
         let len_u = len.to_usize().unwrap();
-        let mut v = HashSet::with_capacity(len_u);
+        let mut v = HashSet::with_capacity_and_hasher(len_u, H::default());
         for _ in 0..len_u {
             v.insert(T::deserialize(reader)?);
         }
@@ -242,8 +267,9 @@ impl<T> DeserializeWithLength for HashSet<T>
     }
 }
 
-impl<T> SerializeWithLength for HashSet<T>
-    where T: Serialize + std::cmp::Eq + std::hash::Hash
+impl<T, H> SerializeWithLength for HashSet<T, H>
+    where T: Serialize + std::cmp::Eq + std::hash::Hash,
+          H: BuildHasher
 {
     fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;

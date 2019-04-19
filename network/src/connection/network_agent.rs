@@ -417,7 +417,7 @@ impl NetworkAgent {
         self.channel.send_or_close(GetAddrMessage::new(
             self.network_config.protocol_mask(),
             self.network_config.services().accepted,
-            max_results));
+            Some(max_results)));
 
         // We don't use a timeout here. The peer will not respond with an addr message if
         // it doesn't have any new addresses.
@@ -493,7 +493,7 @@ impl NetworkAgent {
         }
 
         // Find addresses that match the given protocolMask & serviceMask.
-        let num_results = cmp::min(msg.max_results, Self::MAX_ADDR_PER_REQUEST);
+        let num_results = cmp::min(msg.max_results.unwrap_or(Self::MAX_ADDR_PER_REQUEST), Self::MAX_ADDR_PER_REQUEST);
         let addresses = self.addresses.query(
             msg.protocol_mask,
             msg.service_mask,

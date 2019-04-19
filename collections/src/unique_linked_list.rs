@@ -31,6 +31,7 @@ use std::iter::FromIterator;
 use std::iter::FusedIterator;
 use std::ptr::NonNull;
 use std::rc::Rc;
+use std::convert::AsRef;
 
 use crate::linked_list::{IntoIter as LinkedListIntoIter, Iter as LinkedListIter, LinkedList, Node};
 
@@ -312,7 +313,7 @@ impl<T> UniqueLinkedList<T>
     /// ```
     #[inline]
     pub fn front(&self) -> Option<&T> {
-        self.list.front().map(|elt| elt.as_ref())
+        self.list.front().map(AsRef::as_ref)
     }
 
     /// Provides a reference to the back element, or `None` if the list is
@@ -331,7 +332,7 @@ impl<T> UniqueLinkedList<T>
     /// ```
     #[inline]
     pub fn back(&self) -> Option<&T> {
-        self.list.back().map(|elt| elt.as_ref())
+        self.list.back().map(AsRef::as_ref)
     }
 
     /// Adds an element first in the list if it is not yet present in the list
@@ -358,7 +359,7 @@ impl<T> UniqueLinkedList<T>
 
         let elt = Rc::new(elt);
         self.list.push_front(elt.clone());
-        let ptr = self.list.head.clone().unwrap();
+        let ptr = self.list.head.unwrap();
         self.map.insert(elt, ptr);
     }
 
@@ -409,7 +410,7 @@ impl<T> UniqueLinkedList<T>
 
         let elt = Rc::new(elt);
         self.list.push_back(elt.clone());
-        let ptr = self.list.tail.clone().unwrap();
+        let ptr = self.list.tail.unwrap();
         self.map.insert(elt, ptr);
     }
 
@@ -443,7 +444,7 @@ impl<'a, T> Iterator for Iter<'a, T>
 
     #[inline]
     fn next(&mut self) -> Option<&'a T> {
-        self.iter.next().map(|elt| elt.as_ref())
+        self.iter.next().map(AsRef::as_ref)
     }
 
     #[inline]
@@ -456,7 +457,7 @@ impl<'a, T> DoubleEndedIterator for Iter<'a, T>
     where T: Hash + Eq {
     #[inline]
     fn next_back(&mut self) -> Option<&'a T> {
-        self.iter.next_back().map(|elt| elt.as_ref())
+        self.iter.next_back().map(AsRef::as_ref)
     }
 }
 
@@ -553,10 +554,6 @@ impl<T: PartialEq> PartialEq for UniqueLinkedList<T>
     where T: Hash + Eq {
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other)
-    }
-
-    fn ne(&self, other: &Self) -> bool {
-        self.len() != other.len() || self.iter().ne(other)
     }
 }
 

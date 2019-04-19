@@ -112,8 +112,8 @@ impl Block {
         let pow: Argon2dHash = self.header.hash();
 
         // Compute how many times this blockHash should be included in the next interlink.
-        let this_pow_depth = Target::from(&pow).get_depth() as i16;
-        let next_target_depth = next_target.get_depth() as i16;
+        let this_pow_depth = i16::from(Target::from(&pow).get_depth());
+        let next_target_depth = i16::from(next_target.get_depth());
         let num_occurrences = (this_pow_depth - next_target_depth + 1).max(0);
 
         // Push this blockHash numOccurrences times onto the next interlink.
@@ -122,7 +122,7 @@ impl Block {
         }
 
         // Compute how many blocks to omit from the beginning of this interlink.
-        let this_target_depth = Target::from(self.header.n_bits).get_depth() as i16;
+        let this_target_depth = i16::from(Target::from(self.header.n_bits).get_depth());
         let target_offset = next_target_depth - this_target_depth;
         let interlink_offset = (num_occurrences + target_offset) as usize;
 

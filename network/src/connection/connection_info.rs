@@ -103,6 +103,12 @@ impl ConnectionInfo {
     }
 }
 
+impl Default for ConnectionInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PartialEq for ConnectionInfo {
     fn eq(&self, other: &ConnectionInfo) -> bool {
         self.peer_address == other.peer_address
@@ -153,5 +159,11 @@ impl ConnectionStatistics {
             1 => latencies[(length - 1) / 2],
             _ => unreachable!()
         }
+    }
+}
+
+impl Default for ConnectionStatistics {
+    fn default() -> Self {
+        Self::new()
     }
 }

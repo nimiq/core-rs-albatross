@@ -93,10 +93,10 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 }
 
                 // Check min cap.
-                let cap_ratio = 1f64 - (hash_depth as f64 / self.hash_count as f64);
-                let min_cap = (cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64;
-                if balance < Coin::from_u64(min_cap)? {
-                    return Err(AccountError::InsufficientFunds);
+                let cap_ratio = 1f64 - (f64::from(hash_depth) / f64::from(self.hash_count));
+                let min_cap = Coin::from_u64((cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64)?;
+                if balance < min_cap {
+                    return Err(AccountError::InsufficientFunds {balance, needed: min_cap});
                 }
             },
             ProofType::EarlyResolve => {

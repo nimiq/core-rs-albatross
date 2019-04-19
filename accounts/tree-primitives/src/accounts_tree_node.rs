@@ -255,7 +255,7 @@ impl<'a> iter::IntoIterator for &'a AccountsTreeNode {
     fn into_iter(self) -> Iter<'a> {
         match self {
             AccountsTreeNode::TerminalNode { .. } => Iter { it: None },
-            AccountsTreeNode::BranchNode { ref children, .. } => Iter { it: Some(children.iter().filter_map(|o| o.as_ref())) },
+            AccountsTreeNode::BranchNode { ref children, .. } => Iter { it: Some(children.iter().filter_map(Option::as_ref)) },
         }
     }
 }
@@ -282,7 +282,7 @@ impl<'a> iter::IntoIterator for &'a mut AccountsTreeNode {
     fn into_iter(self) -> IterMut<'a> {
         match self {
             AccountsTreeNode::TerminalNode { .. } => IterMut { it: None },
-            AccountsTreeNode::BranchNode { ref mut children, .. } => IterMut { it: Some(children.iter_mut().filter_map(|o| o.as_mut())) },
+            AccountsTreeNode::BranchNode { ref mut children, .. } => IterMut { it: Some(children.iter_mut().filter_map(Option::as_mut)) },
         }
     }
 }

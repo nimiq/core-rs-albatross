@@ -63,7 +63,7 @@ fn is_ip_globally_reachable_legacy(ip: &IpAddr) -> bool {
             }
         }
     };
-    return true;
+    true
 }
 
 #[test]

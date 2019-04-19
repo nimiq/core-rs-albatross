@@ -399,7 +399,7 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(&(<[u8; 32]>::from(pre_image))))), &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 1), Err(AccountError::InsufficientFunds));
+    assert_eq!(start_contract.with_outgoing_transaction(&tx, 1), Err(AccountError::InsufficientFunds { needed: Coin::from_u64(500).unwrap(), balance: Coin::from_u64(0).unwrap() }));
 
     // early resolve: invalid signature
     let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size());

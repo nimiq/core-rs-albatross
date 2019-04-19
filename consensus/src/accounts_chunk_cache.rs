@@ -127,7 +127,7 @@ impl AccountsChunkCache {
             // The chunks are cached, so newly created requests will not need to enter them into the list of tasks.
             this.tasks_by_block.write().remove(&hash.clone());
 
-            let num_chunks = this.chunks_by_prefix_by_block.read().get(&hash).map(|cache| cache.len()).unwrap_or(0);
+            let num_chunks = this.chunks_by_prefix_by_block.read().get(&hash).map_or(0, HashMap::len);
             trace!("Computing {} chunks for block {} tree took {:?}", num_chunks, hash, chunk_start.elapsed());
 
             // Put those blocks that are cached into a history, so that we can remove them later on.

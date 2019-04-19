@@ -12,14 +12,15 @@ license = "Apache-2.0"
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 
 [dependencies]
-beserial = { path = "../../beserial" }
-beserial_derive = { path = "../../beserial/beserial_derive"}
-bitflags = "1.0"
-log = "0.4"
 nimiq-hash = { path = "../../hash" }
 nimiq-keys = { path = "../../keys" }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }
 nimiq-primitives = { path = "..", features = ["policy", "networks", "account", "coin"] }
+beserial = { path = "../../beserial" }
+beserial_derive = { path = "../../beserial/beserial_derive"}
+bitflags = "1.0"
+log = "0.4"
+failure = "0.1"
 
 [dev-dependencies]
 hex = "0.3"

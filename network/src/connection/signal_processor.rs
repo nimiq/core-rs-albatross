@@ -70,7 +70,7 @@ impl SignalProcessor {
             debug!("Discarding signal from {:?} to {:?} - TTL reached", &msg.sender_id, &msg.recipient_id);
             // Send signal containing TTL_EXCEEDED flag back in reverse direction.
             if msg.flags.is_empty() {
-                channel.send_or_close(Message::Signal(SignalMessage {
+                channel.send_or_close(Message::Signal(Box::new(SignalMessage {
                     sender_id: msg.recipient_id,
                     recipient_id: msg.sender_id,
                     nonce: msg.nonce,
@@ -79,7 +79,7 @@ impl SignalProcessor {
                     payload: Vec::new(),
                     sender_public_key: None,
                     signature: None,
-                }));
+                })));
             }
             return;
         }
@@ -92,7 +92,7 @@ impl SignalProcessor {
             // If we don't know a route to the intended recipient, return signal to sender with unroutable flag set and payload removed.
             // Only do this if the signal is not already a unroutable response.
             if msg.flags.is_empty() {
-                channel.send_or_close(Message::Signal(SignalMessage {
+                channel.send_or_close(Message::Signal(Box::new(SignalMessage {
                     sender_id: msg.recipient_id,
                     recipient_id: msg.sender_id,
                     nonce: msg.nonce,
@@ -101,7 +101,7 @@ impl SignalProcessor {
                     payload: Vec::new(),
                     sender_public_key: None,
                     signature: None,
-                }));
+                })));
             }
             return;
         }
@@ -114,7 +114,7 @@ impl SignalProcessor {
             // If our best route is via the sending peer, return signal to sender with unroutable flag set and payload removed.
             // Only do this if the signal is not already a unroutable response.
             if msg.flags.is_empty() {
-                channel.send_or_close(Message::Signal(SignalMessage {
+                channel.send_or_close(Message::Signal(Box::new(SignalMessage {
                     sender_id: msg.recipient_id,
                     recipient_id: msg.sender_id,
                     nonce: msg.nonce,
@@ -123,13 +123,13 @@ impl SignalProcessor {
                     payload: Vec::new(),
                     sender_public_key: None,
                     signature: None,
-                }));
+                })));
             }
             return;
         }
 
         // Decrement ttl and forward signal.
-        signal_channel.send_or_close(Message::Signal(SignalMessage {
+        signal_channel.send_or_close(Message::Signal(Box::new(SignalMessage {
             sender_id: msg.sender_id.clone(),
             recipient_id: msg.recipient_id.clone(),
             nonce: msg.nonce,
@@ -138,7 +138,7 @@ impl SignalProcessor {
             payload: msg.payload,
             sender_public_key: msg.sender_public_key,
             signature: msg.signature,
-        }));
+        })));
 
         debug!("Forwarded signal to {:?} from {:?}", &msg.recipient_id, &msg.sender_id);
 

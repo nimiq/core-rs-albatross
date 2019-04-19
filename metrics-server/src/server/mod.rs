@@ -87,8 +87,14 @@ impl MetricsServer {
         let stream = stream::iter_ok::<_, io::Error>(metrics)
             .map(move |metrics| {
                 let mut serializer = MetricsSerializer::new(attributes.clone(), Vec::new());
-                metrics.metrics(&mut serializer).unwrap(); // TODO: Properly handle errors.
-                Chunk::from(serializer)
+                match metrics.metrics(&mut serializer) {
+                    Ok(()) => Chunk::from(serializer),
+                    Err(e) => {
+                        // TODO: Properly handle errors.
+                        warn!("Metrics error: {}", e);
+                        Chunk::default()
+                    }
+                }
             });
 
         Body::wrap_stream(stream)

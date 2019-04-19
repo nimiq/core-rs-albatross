@@ -210,15 +210,15 @@ impl<T> LinkedList<T> {
         let node = node.as_mut();
 
         match node.prev {
-            Some(mut prev) => prev.as_mut().next = node.next.clone(),
+            Some(mut prev) => prev.as_mut().next = node.next,
             // this node is the head node
-            None => self.head = node.next.clone(),
+            None => self.head = node.next,
         };
 
         match node.next {
-            Some(mut next) => next.as_mut().prev = node.prev.clone(),
+            Some(mut next) => next.as_mut().prev = node.prev,
             // this node is the tail node
-            None => self.tail = node.prev.clone(),
+            None => self.tail = node.prev,
         };
 
         self.len -= 1;
@@ -1088,10 +1088,6 @@ impl<'a, T: 'a + Copy> Extend<&'a T> for LinkedList<T> {
 impl<T: PartialEq> PartialEq for LinkedList<T> {
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other)
-    }
-
-    fn ne(&self, other: &Self) -> bool {
-        self.len() != other.len() || self.iter().ne(other)
     }
 }
 

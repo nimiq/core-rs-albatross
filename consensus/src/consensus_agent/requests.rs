@@ -33,7 +33,7 @@ impl ConsensusAgent {
         }
 
         let chain_proof = self.blockchain.get_chain_proof();
-        self.peer.channel.send_or_close(Message::ChainProof(chain_proof));
+        self.peer.channel.send_or_close(Message::ChainProof(Box::new(chain_proof)));
     }
 
     pub(super) fn on_get_block_proof(&self, msg: GetBlockProofMessage) {
@@ -98,7 +98,7 @@ impl ConsensusAgent {
         let peer = self.peer.clone();
         let future = get_chunk_future.then(move |chunk_res| {
             let chunk_opt = chunk_res.unwrap_or(None).map(AccountsTreeChunkData::Serialized);
-            peer.channel.send_or_close(Message::AccountsTreeChunk( AccountsTreeChunkMessage { block_hash: msg.block_hash, chunk: chunk_opt }));
+            peer.channel.send_or_close(Message::AccountsTreeChunk(Box::new(AccountsTreeChunkMessage { block_hash: msg.block_hash, chunk: chunk_opt })));
             future::ok::<(), ()>(())
         });
         tokio::spawn(future);

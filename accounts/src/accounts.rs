@@ -180,8 +180,10 @@ impl<'env> Accounts<'env> {
         let account = self.get(address, Some(txn));
 
         // Check account type.
-        if account_type.is_some() && account.account_type() != account_type.unwrap() {
-            return Err(AccountError::TypeMismatch);
+        if let Some(account_type) = account_type {
+            if account.account_type() != account_type {
+                return Err(AccountError::TypeMismatch {expected: account.account_type(), got: account_type});
+            }
         }
 
         let new_account = account_op(account, transaction, block_height)?;
@@ -225,7 +227,7 @@ impl<'env> Accounts<'env> {
 
         let recipient_account = self.get(&transaction.recipient, Some(txn));
         if recipient_account.account_type() != transaction.recipient_type {
-            return Err(AccountError::TypeMismatch);
+            return Err(AccountError::TypeMismatch { expected: recipient_account.account_type(), got: transaction.recipient_type });
         }
 
         let new_recipient_account = Account::new_basic(recipient_account.balance());

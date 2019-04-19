@@ -253,8 +253,7 @@ impl<'env> AccountsTree<'env> {
                 AccountsTreeNode::BranchNode { children, prefix } => {
                     for child in children.iter().flat_map(|opt| opt).rev() {
                         let combined = &prefix + &child.suffix;
-                        if combined.is_prefix_of(start) ||
-                            start <= &combined {
+                        if combined.is_prefix_of(start) || *start <= combined {
                             stack.push(txn.get(&self.db, &combined)?);
                         }
                     }

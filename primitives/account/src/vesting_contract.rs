@@ -36,7 +36,7 @@ impl VestingContract {
 
     pub fn min_cap(&self, block_height: u32) -> Coin {
         if self.vesting_step_blocks > 0 && self.vesting_step_amount > Coin::ZERO {
-            let steps = ((block_height - self.vesting_start) as f64 / self.vesting_step_blocks as f64).floor();
+            let steps = (f64::from(block_height - self.vesting_start) / f64::from(self.vesting_step_blocks)).floor();
             let min_cap = u64::from(self.vesting_total_amount) as f64 - steps * u64::from(self.vesting_step_amount) as f64;
             Coin::from_u64(min_cap.max(0f64) as u64).unwrap() // Since all parameters have been validated, this will be safe as well.
         } else {
@@ -71,8 +71,9 @@ impl AccountTransactionInteraction for VestingContract {
         let balance: Coin = Account::balance_sub(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
 
         // Check vesting min cap.
-        if balance < self.min_cap(block_height) {
-            return Err(AccountError::InsufficientFunds);
+        let min_cap = self.min_cap(block_height);
+        if balance < min_cap {
+            return Err(AccountError::InsufficientFunds { balance, needed: min_cap });
         }
 
         // Check transaction signer is contract owner.

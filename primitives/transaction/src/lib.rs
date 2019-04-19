@@ -13,6 +13,8 @@ use std::cmp::{Ord, Ordering};
 use std::io;
 use std::sync::Arc;
 
+use failure::Fail;
+
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_keys::{PublicKey, Signature};
@@ -192,7 +194,7 @@ impl Transaction {
         if ret.is_ok() {
             self.valid = true;
         }
-        return ret;
+        ret
     }
 
     pub fn verify(&self, network_id: NetworkId) -> Result<(), TransactionError> {
@@ -423,24 +425,26 @@ impl Ord for Transaction {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug, Fail, PartialEq, Eq)]
 pub enum TransactionError {
+    #[fail(display = "Transaction is for a foreign network")]
     ForeignNetwork,
+    #[fail(display = "Transaction has 0 value")]
     ZeroValue,
+    #[fail(display = "Overflow")]
     Overflow,
+    #[fail(display = "Sender same as recipient")]
     SenderEqualsRecipient,
+    #[fail(display = "Transaction is invalid for sender")]
     InvalidForSender,
+    #[fail(display = "Invalid transaction proof")]
     InvalidProof,
+    #[fail(display = "Transaction is invalid for recipient")]
     InvalidForRecipient,
+    #[fail(display = "Invalid transaction data")]
     InvalidData,
-    InvalidSerialization(SerializingError),
-}
-
-impl std::fmt::Display for TransactionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // TODO: Don't use debug formatter
-        write!(f, "{:?}", self)
-    }
+    #[fail(display = "Invalid serialization")]
+    InvalidSerialization(#[cause] SerializingError),
 }
 
 impl From<SerializingError> for TransactionError {

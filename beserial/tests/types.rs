@@ -1,4 +1,6 @@
-use beserial::{Deserialize, Serialize, uvar};
+use beserial::{Deserialize, Serialize, DeserializeWithLength, SerializeWithLength, uvar};
+
+
 
 #[test]
 fn it_correctly_serializes_and_deserializes_uvar() {
@@ -46,4 +48,33 @@ fn it_correctly_serializes_and_deserializes_uvar() {
     assert_eq!(reserialize(100000000000000000), 100000000000000000);
     assert_eq!(reserialize(9223372036854775807), 9223372036854775807);
     assert_eq!(reserialize(18446744073709551615), 18446744073709551615);
+}
+
+#[test]
+fn it_serializes_and_deserializes_box() {
+    let b = Box::new(1337);
+    let serialized = Serialize::serialize_to_vec(&b);
+    let deserialized: Box<i32> = Deserialize::deserialize_from_vec(&serialized).unwrap();
+    assert_eq!(deserialized, b);
+}
+
+#[test]
+fn it_serializes_and_deserializes_vec() {
+    let vec = vec![1,4,7,4,3,6,9,9,4];
+    let serialized = SerializeWithLength::serialize_to_vec::<u8>(&vec);
+    let deserialized: Vec<i32> = DeserializeWithLength::deserialize_from_vec::<u8>(&serialized).unwrap();
+    assert_eq!(deserialized, vec);
+}
+
+#[test]
+fn it_correctly_serializes_and_deserializes_string() {
+    fn reserialize(s: String) -> String {
+        let mut v = Vec::with_capacity(50);
+        SerializeWithLength::serialize::<u16, Vec<u8>>(&s, &mut v).unwrap();
+        let s2: String = DeserializeWithLength::deserialize::<u16, &[u8]>(&mut &v[..]).unwrap();
+        return s2;
+    }
+    assert!(reserialize("a".into()) == "a");
+    assert!(reserialize("kjsSDFsdf345SD@$%^&".into()) == "kjsSDFsdf345SD@$%^&");
+    assert!(reserialize("a".into()) != "b");
 }

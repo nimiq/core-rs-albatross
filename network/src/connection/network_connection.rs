@@ -21,7 +21,7 @@ use crate::peer_channel::PeerStreamEvent;
 use crate::websocket::{Message, SharedNimiqMessageStream};
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ClosedFlag {
     closed: Arc<AtomicBool>,
     close_type: Arc<Mutex<Option<CloseType>>>,

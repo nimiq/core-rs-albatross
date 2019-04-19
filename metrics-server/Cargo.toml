@@ -19,10 +19,8 @@ nimiq-network = { path = "../network", features = ["metrics"] }
 nimiq-mempool = { path = "../mempool" }
 nimiq-block = { path = "../primitives/block" }
 beserial = { path = "../beserial" }
-
 hyper = "0.12"
 futures = "0.1"
 log = "0.4"
 base64 = "0.10"
-
 failure = "0.1"

@@ -331,7 +331,7 @@ impl<'env> Mempool<'env> {
     }
 
     pub fn get_transactions_for_block(&self, max_size: usize) -> Vec<Arc<Transaction>> {
-        let transactions = self.get_transactions(max_size, 0f64);
+        let _transactions = self.get_transactions(max_size, 0f64);
         // TODO get to be pruned accounts and remove transactions to fit max_size
         unimplemented!();
     }

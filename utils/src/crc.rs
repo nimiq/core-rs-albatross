@@ -56,7 +56,7 @@ impl Crc32Computer {
 
     pub fn update(&mut self, buf: &[u8]) -> &mut Self {
         for &i in buf {
-            self.value = Crc32Computer::TABLE[((self.value ^ (i as u32)) & 0xFF) as usize] ^ (self.value >> 8);
+            self.value = Crc32Computer::TABLE[((self.value ^ u32::from(i)) & 0xFF) as usize] ^ (self.value >> 8);
         }
         self
     }

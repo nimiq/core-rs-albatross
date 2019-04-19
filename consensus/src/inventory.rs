@@ -401,7 +401,7 @@ impl InventoryAgent {
         let mut state = self.state.write();
         state.local_subscription = subscription.clone();
         state.last_subscription_change = Instant::now();
-        self.peer.channel.send_or_close(Message::Subscribe(subscription));
+        self.peer.channel.send_or_close(Message::Subscribe(Box::new(subscription)));
     }
 
     fn should_request_data(&self, vector: &InvVector) -> bool {
@@ -796,7 +796,7 @@ impl InventoryAgent {
         // after the identified block on the main chain.
         let blocks = self.blockchain.get_blocks(
             &start_block_hash,
-            cmp::min(msg.max_inv_size as u32, Self::GET_BLOCKS_VECTORS_MAX),
+            cmp::min(u32::from(msg.max_inv_size), Self::GET_BLOCKS_VECTORS_MAX),
             false,
             match msg.direction {
                 GetBlocksDirection::Forward => Direction::Forward,
@@ -831,13 +831,16 @@ impl InventoryAgent {
                 InvVectorType::Block => {
                     // TODO raw blocks. Needed?
                     let block_opt = self.blockchain.get_block(&vector.hash, false, true);
-                    if block_opt.is_some() {
-                        if self.peer.channel.send(Message::Block(block_opt.unwrap())).is_err() {
-                            self.peer.channel.close(CloseType::SendFailed);
-                            return;
+                    match block_opt {
+                        Some(block) => {
+                            if self.peer.channel.send(Message::Block(Box::new(block))).is_err() {
+                                self.peer.channel.close(CloseType::SendFailed);
+                                return;
+                            }
+                        },
+                        None => {
+                            unknown_objects.push(vector);
                         }
-                    } else {
-                        unknown_objects.push(vector);
                     }
                 }
                 InvVectorType::Transaction => {
@@ -881,13 +884,16 @@ impl InventoryAgent {
                 InvVectorType::Block => {
                     // TODO raw blocks. Needed?
                     let block_opt = self.blockchain.get_block(&vector.hash, false, true);
-                    if block_opt.is_some() {
-                        if self.peer.channel.send(Message::Header(block_opt.unwrap().header)).is_err() {
-                            self.peer.channel.close(CloseType::SendFailed);
-                            return;
+                    match block_opt {
+                        Some(block) => {
+                            if self.peer.channel.send(Message::Header(Box::new(block.header))).is_err() {
+                                self.peer.channel.close(CloseType::SendFailed);
+                                return;
+                            }
+                        },
+                        None => {
+                            unknown_objects.push(vector);
                         }
-                    } else {
-                        unknown_objects.push(vector);
                     }
                 }
                 InvVectorType::Transaction => {} // XXX JavaScript client errors here

@@ -5,8 +5,9 @@ use parking_lot::RwLock;
 use crate::coin::Coin;
 use fixed_unsigned::types::FixedUnsigned10;
 
-/// The highest (easiest) block PoW target.
+
 lazy_static! {
+    /// The highest (easiest) block PoW target.
     pub static ref BLOCK_TARGET_MAX: FixedUnsigned10  = {
         FixedUnsigned10::from(pow(BigUint::from(2u64), 240))
     };

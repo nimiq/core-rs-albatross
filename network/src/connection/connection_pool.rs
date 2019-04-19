@@ -94,7 +94,7 @@ impl ConnectionPoolState {
 
     #[inline]
     pub fn get_connection_id_by_peer_address(&self, peer_address: &PeerAddress) -> Option<ConnectionId> {
-        self.connections_by_peer_address.get(peer_address).map(|id| *id)
+        self.connections_by_peer_address.get(peer_address).cloned()
     }
 
     /// Get the connection info for a peer address as a mutable borrow.
@@ -119,7 +119,7 @@ impl ConnectionPoolState {
     /// Get the number of connections for a net address.
     #[inline]
     pub fn get_num_connections_by_net_address(&self, net_address: &NetAddress) -> usize {
-        self.connections_by_net_address.get(net_address).map_or(0, |s| s.len())
+        self.connections_by_net_address.get(net_address).map_or(0, HashSet::len)
     }
 
     /// Get a list of connection info for a subnet.
@@ -132,7 +132,7 @@ impl ConnectionPoolState {
     /// Get the number of connections for a subnet.
     #[inline]
     pub fn get_num_connections_by_subnet(&self, net_address: &NetAddress) -> usize {
-        self.connections_by_subnet.get(&ConnectionPool::get_subnet_address(net_address)).map_or(0, |s| s.len())
+        self.connections_by_subnet.get(&ConnectionPool::get_subnet_address(net_address)).map_or(0, HashSet::len)
     }
 
     /// Retrieve a list of connection info for all outbound connections into a subnet.
@@ -275,9 +275,9 @@ impl ConnectionPoolState {
 
     /// Called to regularly unban IPs.
     fn check_unban_ips(&mut self) {
-        let mut now = SystemTime::now();
+        let now = SystemTime::now();
         self.banned_ips.retain(|_net_address, unban_time| {
-            unban_time > &mut now
+            *unban_time > now
         });
     }
 
@@ -587,7 +587,7 @@ impl ConnectionPool {
 
             // Connection accepted.
 
-            let net_address = info.network_connection().map(|p| p.net_address()).clone();
+            let net_address = info.network_connection().map(NetworkConnection::net_address).clone();
 
             if let Some(ref net_address) = net_address {
                 state.add_net_address(connection_id, &net_address);
@@ -835,7 +835,7 @@ impl ConnectionPool {
 
                 // Check if the handshake with this peer has completed.
                 if info.state() == ConnectionState::Established {
-                    let net_address = info.network_connection().map(|p| p.net_address());
+                    let net_address = info.network_connection().map(NetworkConnection::net_address);
                     // If closing is due to a ban, also ban the IP
                     if ty.is_banning_type() {
                         if let Some(ref net_address) = net_address {
@@ -849,7 +849,7 @@ impl ConnectionPool {
 
                     debug!("[PEER-LEFT] {} {} (version={:?}, closeType={:?})", info.peer_address().unwrap(), net_address.unwrap(), info.peer().map(|p| p.version), ty);
                 } else {
-                    match info.network_connection().map(|n| n.inbound()) {
+                    match info.network_connection().map(NetworkConnection::inbound) {
                         Some(true) => {
                             state.inbound_count.checked_sub(1).expect("inbound_count < 0");
                             debug!("Inbound connection #{} closed pre-handshake: {:?}", connection_id, ty);

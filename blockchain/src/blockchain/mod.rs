@@ -507,7 +507,6 @@ impl<'env> Blockchain<'env> {
             None => &state.main_chain
         };
 
-        // TODO: Why not [...].checked_sub([...]).unwrap_or(1u32)
         let tail_height = 1u32.max(head_info.head.header.height.saturating_sub(policy::DIFFICULTY_BLOCK_WINDOW));
         let tail_info;
         if head_info.on_main_chain {
@@ -556,7 +555,7 @@ impl<'env> Blockchain<'env> {
 
         // Compute the target adjustment factor.
         let expected_time = policy::DIFFICULTY_BLOCK_WINDOW * policy::BLOCK_TIME;
-        let mut adjustment = actual_time as f64 / expected_time as f64;
+        let mut adjustment = f64::from(actual_time) / f64::from(expected_time);
 
         // Clamp the adjustment factor to [1 / MAX_ADJUSTMENT_FACTOR, MAX_ADJUSTMENT_FACTOR].
         adjustment = adjustment

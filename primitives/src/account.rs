@@ -1,8 +1,11 @@
+use std::fmt::Display;
+
 use hex::FromHex;
 
 use beserial::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
 #[repr(u8)]
 pub enum AccountType {
     Basic = 0,

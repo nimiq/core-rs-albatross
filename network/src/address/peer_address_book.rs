@@ -684,8 +684,8 @@ impl PeerAddressBook {
                     // Reset failed attempts after banned_until has expired.
                     if info.state == PeerAddressState::Failed
                         && info.failed_attempts >= info.max_failed_attempts() {
-                        if let Some(ref banned_until) = info.banned_until {
-                            if banned_until <= &now {
+                        if let Some(banned_until) = info.banned_until {
+                            if banned_until <= now {
                                 info.banned_until = None;
                                 info.failed_attempts = 0;
                                 unbanned_addresses.push(peer_address.as_ref().clone());
@@ -694,8 +694,8 @@ impl PeerAddressBook {
                     }
                 },
                 PeerAddressState::Banned => {
-                    if let Some(ref banned_until) = info.banned_until {
-                        if banned_until <= &now {
+                    if let Some(banned_until) = info.banned_until {
+                        if banned_until <= now {
                             // Don't remove seed addresses, unban them.
                             if peer_address.is_seed() {
                                 // Restore banned seed addresses to the NEW state.

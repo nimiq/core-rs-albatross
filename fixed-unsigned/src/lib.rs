@@ -15,8 +15,6 @@ use std::str::FromStr;
 /// Not all traits you would expect for a number are implemented. Some things are implemented
 /// just to work with Nimiq.
 ///
-/// TODO: Parameterize all functions that use scale_down with the rounding mode.
-///
 
 use num_bigint::BigUint;
 use num_traits::identities::{One, Zero};
@@ -67,19 +65,17 @@ impl RoundingMode for RoundDown {
 /// Error returned when a string representation can't be parse into a FixedUnsigned.
 /// TODO: Attach string to it for error message
 #[derive(Debug, PartialEq, Eq)]
-pub enum ParseError {
-    Invalid
-}
+pub struct ParseError(String);
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
+        write!(f, "{}: {}", self.description(), self.0)
     }
 }
 
 impl Error for ParseError {
     fn description(&self) -> &str {
-        "Parsing failed"
+        "Failed to parse fixed point decimal:"
     }
 
     fn cause(&self) -> Option<&Error> {
@@ -109,7 +105,6 @@ impl<S> FixedUnsigned<S>
     }
 
     /// Scales up a `BigUint` by `scale`
-    /// TODO: We could start with scaling down 10^16, then 2^8, etc. to have logarithmic runtime
     fn scale_up(mut int_value: BigUint, mut scale: u64) -> BigUint {
         while scale >= U64_MAX_DIGITS {
             int_value *= U64_MAX_DECIMAL;
@@ -186,7 +181,7 @@ impl<S> FixedUnsigned<S>
         if radix == 0 || radix > 36 {
             panic!("Radix too large: {}", radix);
         }
-        let digits = self.int_value.to_radix_be(radix as u32);
+        let digits = self.int_value.to_radix_be(u32::from(radix));
         let mut string: String = String::new();
         let decimal_place = digits.len().checked_sub(S::SCALE as usize);
         if let Some(0) = decimal_place {
@@ -198,7 +193,7 @@ impl<S> FixedUnsigned<S>
                 _ => ()
             }
             // This unwrap is safe, because we to_radix_be only gives us digits in the right radix
-            let c = from_digit(*d as u32, radix as u32).unwrap();
+            let c = from_digit(u32::from(*d), u32::from(radix)).unwrap();
             string.push(if uppercase { c.to_ascii_uppercase() } else { c }); // NOTE: `form_digit` returns lower-case characters
         }
         string
@@ -220,20 +215,20 @@ impl<S> FixedUnsigned<S>
         for (i, c) in string.chars().enumerate() {
             if c == '.' {
                 if decimal_place.is_some() {
-                    return Err(ParseError::Invalid)
+                    return Err(ParseError(String::from(string)))
                 }
                 decimal_place = Some(i)
             }
             else {
-                digits.push(c.to_digit(radix as u32).unwrap() as u8)
+                digits.push(c.to_digit(u32::from(radix)).unwrap() as u8)
             }
         }
         if digits.is_empty() {
-            return Err(ParseError::Invalid);
+            return Err(ParseError(String::from(string)));
         }
         // unscaled `int_value`
-        let int_value = BigUint::from_radix_be(digits.as_slice(), radix as u32)
-            .ok_or(ParseError::Invalid)?;
+        let int_value = BigUint::from_radix_be(digits.as_slice(), u32::from(radix))
+            .ok_or_else(|| ParseError(String::from(string)))?;
         // the scale of the string representation
         // NOTE: `string.len() - 1` is the number of digits. One is being subtracted for the decimal point
         let scale = decimal_place.map(|p| string.len() - p - 1).unwrap_or(0) as u64;
@@ -573,8 +568,6 @@ impl<S> Default for FixedUnsigned<S>
 }
 
 /// Converts a `f64` to a `FixedUnsigned`
-///
-/// TODO: Do checked operations and panic if anything fails or return an Option
 impl<S: FixedScale> From<f64> for FixedUnsigned<S> {
     fn from(x: f64) -> Self {
         // `bignumber.js` takes the `toString` of a `Number` to convert to `BigNumber`

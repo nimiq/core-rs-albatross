@@ -111,7 +111,7 @@ impl s::Seed {
             },
             s::Seed::List(s::SeedList{list, public_key}) => {
                 Seed::List(SeedList::new(Url::from_str(&list)?, public_key
-                    .map(|p| PublicKey::from_hex(p)).transpose()?))
+                    .map(PublicKey::from_hex).transpose()?))
             }
         })
     }
@@ -131,6 +131,8 @@ pub(crate) fn deserialize_string<'de, D, T>(deserializer: D) -> Result<T, D::Err
     T::from_str(&value).map_err(Error::custom)
 }
 
+// NOTE: This is currently unused, but might be used in future.
+#[allow(dead_code)]
 pub(crate) fn deserialize_string_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
     where D: Deserializer<'de>,
           T: FromStr,

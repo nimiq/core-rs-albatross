@@ -10,18 +10,20 @@ license = "Apache-2.0"
 
 [badges]
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 beserial = { path = "../beserial" }
 beserial_derive = { path = "../beserial/beserial_derive"}
+nimiq-macros = { path = "../macros", optional = true }
+fixed-unsigned = { path = "../fixed-unsigned", optional = true }
 num-bigint = { version = "0.2", optional = true }
 num-traits = { version = "0.2", optional = true }
-fixed-unsigned = { path = "../fixed-unsigned", optional = true }
 parking_lot = { version = "0.7", optional = true }
 hex = { version = "0.3", optional = true }
 lazy_static = { version = "1.2", optional = true }
-nimiq-macros = { path = "../macros", optional = true }
-failure = { version = "0.1", optional = true }
+failure = { version = "0.1", optional = true}
+enum-display-derive = { version = "0.1", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.2"
@@ -29,6 +31,6 @@ lazy_static = "1.2"
 [features]
 all = ["coin", "account", "policy", "networks"]
 coin = ["hex", "failure"]
-account = ["hex", "nimiq-macros"]
+account = ["hex", "nimiq-macros", "failure", "enum-display-derive"]
 policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static", "fixed-unsigned"]
 networks = []

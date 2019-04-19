@@ -13,6 +13,7 @@ impl<E, F: Fn(&E)> Listener<E> for F
 
 pub type ListenerHandle = usize;
 
+#[derive(Default)]
 pub struct Notifier<'l, E> {
     listeners: Vec<(ListenerHandle, Box<Listener<E> + 'l>)>,
     next_handle: ListenerHandle
@@ -49,6 +50,7 @@ impl<'l, E> Notifier<'l, E> {
     }
 }
 
+
 pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
     where C: Fn(Arc<T>, &E) + Send + Sync, T: Send + Sync {
     move |event: &E| {
@@ -78,6 +80,7 @@ impl<E, F: Fn(E)> PassThroughListener<E> for F
     }
 }
 
+#[derive(Default)]
 pub struct PassThroughNotifier<'l, E> {
     listener: Option<Box<PassThroughListener<E> + 'l>>,
 }

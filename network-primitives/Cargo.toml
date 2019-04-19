@@ -10,6 +10,7 @@ license = "Apache-2.0"
 
 [badges]
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 beserial = { path = "../beserial" }

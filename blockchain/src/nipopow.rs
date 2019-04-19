@@ -68,7 +68,7 @@ impl<'env> Blockchain<'env> {
 
         let mut block;
         let mut head = &head_info.head;
-        let mut j = i16::max(depth as i16 - Target::from(head.header.n_bits).get_depth() as i16, -1);
+        let mut j = i16::max(i16::from(depth) - i16::from(Target::from(head.header.n_bits).get_depth()), -1);
         while j < head.interlink.hashes.len() as i16 && head.header.height > tail_height {
             let reference = if j < 0 {
                 &head.header.prev_hash
@@ -83,7 +83,7 @@ impl<'env> Blockchain<'env> {
             chain.push(chain_info);
 
             head = &block;
-            j = i16::max(depth as i16 - Target::from(head.header.n_bits).get_depth() as i16, -1);
+            j = i16::max(i16::from(depth) - i16::from(Target::from(head.header.n_bits).get_depth()), -1);
         }
 
         if (chain.is_empty() || chain[chain.len() - 1].head.header.height > 1) && tail_height == 1 {
@@ -133,10 +133,10 @@ impl<'env> Blockchain<'env> {
             .get_block(known_hash, false, Some(&txn))?;
 
         let mut blocks = vec![];
-        let mut depth = Target::from(block.header.n_bits).get_depth() as i16 + block.interlink.len() as i16 - 1;
-        let prove_depth = Target::from(&block_to_prove.header.pow()).get_depth() as i16;
+        let mut depth = i16::from(Target::from(block.header.n_bits).get_depth()) + block.interlink.len() as i16 - 1;
+        let prove_depth = i16::from(Target::from(&block_to_prove.header.pow()).get_depth());
 
-        let index = i16::min(depth - Target::from(block.header.n_bits).get_depth() as i16, block.interlink.len() as i16 - 1);
+        let index = i16::min(depth - i16::from(Target::from(block.header.n_bits).get_depth()), block.interlink.len() as i16 - 1);
         let mut reference = if index < 0 {
             &block.header.prev_hash
         } else {
@@ -166,7 +166,7 @@ impl<'env> Blockchain<'env> {
                 return None;
             }
 
-            let index = i16::min(depth - Target::from(block.header.n_bits).get_depth() as i16, block.interlink.len() as i16 - 1);
+            let index = i16::min(depth - i16::from(Target::from(block.header.n_bits).get_depth()), block.interlink.len() as i16 - 1);
             reference = if index < 0 {
                 &block.header.prev_hash
             } else {
@@ -230,6 +230,6 @@ impl SuperChain {
     }
 
     fn is_locally_good(super_length: u32, underlying_length: u32, depth: u8, delta: f64) -> bool {
-        super_length as f64 > (1f64 - delta) * 2f64.powi(-(depth as i32)) * underlying_length as f64
+        f64::from(super_length) > (1f64 - delta) * 2f64.powi(-i32::from(depth)) * f64::from(underlying_length)
     }
 }

@@ -206,7 +206,7 @@ impl PeerAddress {
         match &self.ty {
             PeerAddressType::Wss(host, _) | PeerAddressType::Ws(host, _) => {
                 // "the use of dotless domains is prohibited [in new gTLDs]" [ https://www.icann.org/resources/board-material/resolutions-new-gtld-2013-08-13-en#1 ]. Old gTLDs rarely use them.
-                if !host[1..host.len()-1].contains(".") {
+                if !host[1..host.len()-1].contains('.') {
                     return false;
                 };
             },

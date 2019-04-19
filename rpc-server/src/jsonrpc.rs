@@ -150,7 +150,7 @@ fn check_authentication<H: Handler>(handler: Arc<H>, authorization: Option<&Head
         if authorization.len() != 2 || authorization[0] != "Basic" {
             return Err(AuthenticationError::InvalidHeader);
         }
-        let authorization = base64::decode(authorization[1].into())
+        let authorization = base64::decode(authorization[1])
             .map_err(|_| AuthenticationError::InvalidHeader)?;
         let authorization = std::str::from_utf8(authorization
             .as_slice()).map_err(|_| AuthenticationError::InvalidHeader)?

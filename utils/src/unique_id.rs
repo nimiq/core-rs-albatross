@@ -6,6 +6,7 @@ pub struct UniqueId(usize);
 
 static GLOBAL_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+#[allow(clippy::new_without_default)]
 impl UniqueId {
     pub fn new() -> Self {
         UniqueId(GLOBAL_COUNTER.fetch_add(1, Ordering::Release))

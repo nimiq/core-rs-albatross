@@ -196,7 +196,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
         .with_nonce(31302)
         .build();
     status = blockchain.push(block3);
-    assert_eq!(status, PushResult::Invalid(PushError::AccountsError(AccountError::InsufficientFunds)));
+    assert_eq!(status, PushResult::Invalid(PushError::AccountsError(AccountError::InsufficientFunds { needed: Coin::from_u64(1000000000).unwrap(), balance: Coin::from_u64(440597429).unwrap() })));
 
     // Tx with wrong sender type
     tx = Transaction::new_basic(
@@ -215,7 +215,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
         .with_nonce(127678)
         .build();
     status = blockchain.push(block3);
-    assert_eq!(status, PushResult::Invalid(PushError::AccountsError(AccountError::TypeMismatch)));
+    assert_eq!(status, PushResult::Invalid(PushError::AccountsError(AccountError::TypeMismatch { expected: AccountType::Basic, got: AccountType::Vesting })));
 }
 
 #[test]

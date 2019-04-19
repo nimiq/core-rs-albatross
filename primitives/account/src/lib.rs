@@ -8,8 +8,9 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 
 use std::cmp::Ordering;
-use std::fmt;
 use std::io;
+
+use failure::Fail;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Hash, Hasher, HashOutput, SerializeContent};
@@ -96,16 +97,13 @@ impl Account {
     }
 
     pub fn balance_add(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
-        match balance.checked_add(value) {
-            Some(result) => Ok(result),
-            None => Err(AccountError::InsufficientFunds)
-        }
+        balance.checked_add(value).ok_or(AccountError::InvalidCoinValue)
     }
 
     pub fn balance_sub(balance: Coin, value: Coin) -> Result<Coin, AccountError> {
         match balance.checked_sub(value) {
             Some(result) => Ok(result),
-            None => Err(AccountError::InsufficientFunds)
+            None => Err(AccountError::InsufficientFunds {balance, needed: value})
         }
     }
 }
@@ -195,8 +193,9 @@ impl AccountTransactionInteraction for Account {
         // Check account balance.
         // This assumes that transaction.value + transaction.fee does not overflow.
         let balance = self.balance();
-        if balance < transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)? {
-            return Err(AccountError::InsufficientFunds);
+        let value = transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?;
+        if balance < value {
+            return Err(AccountError::InsufficientFunds { balance, needed: value});
         }
 
         invoke_account_instance!(*self, with_outgoing_transaction, transaction, block_height)
@@ -244,25 +243,29 @@ impl PartialEq for PrunedAccount {
 }
 
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug, Eq, Fail, PartialEq)]
 pub enum AccountError {
-    InsufficientFunds,
-    TypeMismatch,
+    #[fail(display = "Insufficient funds: needed {}, but has balance {}", needed, balance)]
+    InsufficientFunds { needed: Coin, balance: Coin },
+    // TODO: This still needs to be displayed as debug
+    #[fail(display = "Type mismatch: expected {}, but got {}", expected, got)]
+    TypeMismatch { expected: AccountType, got: AccountType },
+    #[fail(display = "Invalid signature")]
     InvalidSignature,
+    #[fail(display = "Invalid for sender")]
     InvalidForSender,
+    #[fail(display = "Invalid for recipient")]
     InvalidForRecipient,
+    #[fail(display = "Invalid pruning")]
     InvalidPruning,
-    InvalidSerialization(SerializingError),
-    InvalidTransaction(TransactionError),
+    #[fail(display = "Invalid serialization")]
+    InvalidSerialization(#[cause] SerializingError),
+    #[fail(display = "Invalid transaction")]
+    InvalidTransaction(#[cause] TransactionError),
+    #[fail(display = "Invalid coin value")]
     InvalidCoinValue,
+    #[fail(display = "Accounts hash mismatch")]
     AccountsHashMismatch, // XXX This doesn't really belong here
-}
-
-impl fmt::Display for AccountError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // TODO: Don't use debug formatter
-        write!(f, "{:?}", self)
-    }
 }
 
 impl From<SerializingError> for AccountError {
