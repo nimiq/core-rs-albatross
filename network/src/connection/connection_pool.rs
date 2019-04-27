@@ -682,6 +682,7 @@ impl ConnectionPool {
 
         let peer_address = peer.peer_address();
         let mut is_inbound = false;
+        let mut is_simultaneous = false;
         // Read lock.
         {
             let state = self.state.read();
@@ -699,6 +700,7 @@ impl ConnectionPool {
                 let stored_connection_id = state.connections_by_peer_address.get(&peer_address);
                 if let Some(stored_connection_id) = stored_connection_id {
                     if *stored_connection_id != connection_id {
+                        is_simultaneous = true;
                         let stored_connection = state.connections.get(*stored_connection_id).expect("Missing connection");
                         match stored_connection.state() {
                             ConnectionState::Connecting => {
@@ -748,7 +750,7 @@ impl ConnectionPool {
         // Write lock.
         if is_inbound {
             let mut state = self.state.write();
-            assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo already exists");
+            if !is_simultaneous { assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo already exists"); }
             state.connections.get_mut(connection_id).unwrap().set_peer_address(peer_address.clone());
             state.add_peer_address(connection_id, peer_address.clone());
 
