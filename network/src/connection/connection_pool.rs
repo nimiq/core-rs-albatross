@@ -935,9 +935,9 @@ impl ConnectionPool {
             state.remove(connection_id).unwrap();
 
             update_checked!(state.connecting_count, PeerCountUpdate::Remove);
-
-            self.addresses.close(None, peer_address.clone(), CloseType::ConnectionFailed);
         }
+
+        self.addresses.close(None, peer_address.clone(), CloseType::ConnectionFailed);
 
         // Drop the guard before notifying.
         drop(guard);
