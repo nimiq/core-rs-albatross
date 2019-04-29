@@ -221,13 +221,17 @@ impl NimiqMessageStream {
 
             // Detect if this is a new message.
             if self.msg_buf.is_none() {
-                let msg_size = NimiqMessage::peek_length(chunk);
-                if msg_size > MAX_MESSAGE_SIZE {
-                    error!("Max message size exceeded ({} > {})", msg_size, MAX_MESSAGE_SIZE);
-                    return Err(Error::MessageSizeExceeded);
+
+                if let Some(msg_size) = NimiqMessage::peek_length(chunk) {
+                    if msg_size > MAX_MESSAGE_SIZE {
+                        error!("Max message size exceeded ({} > {})", msg_size, MAX_MESSAGE_SIZE);
+                        return Err(Error::MessageSizeExceeded);
+                    }
+                    self.msg_buf = Some(Vec::with_capacity(msg_size));
+                } else {
+                    return Err(Error::InvalidMessageFormat);
                 }
 
-                self.msg_buf = Some(Vec::with_capacity(msg_size));
                 // XXX JS implementation quirk: Already wrap at 255 instead of 256
                 self.receiving_tag = (self.receiving_tag + 1) % 255;
             }

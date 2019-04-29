@@ -164,10 +164,13 @@ impl Message {
         }
     }
 
-    pub fn peek_length(buffer: &[u8]) -> usize {
+    pub fn peek_length(buffer: &[u8]) -> Option<usize> {
         // FIXME: support for message types > 253 is pending (it changes the length position in the chunk).
         // The magic number is 4 bytes and the type is 1 byte, so we want to start at the 6th byte (index 5), and the length field is 4 bytes.
-        BigEndian::read_u32(&buffer[5..9]) as usize
+        if buffer.len() >= 10 {
+            return Some(BigEndian::read_u32(&buffer[5..9]) as usize);
+        }
+        return None;
     }
 }
 
