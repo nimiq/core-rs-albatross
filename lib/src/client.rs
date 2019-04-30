@@ -6,7 +6,7 @@ use futures::{Async, Future, Poll};
 use consensus::consensus::Consensus;
 use database::Environment;
 use network::network::Network;
-use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
+use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed, PeerKeyStore};
 use network_primitives::address::NetAddress;
 use primitives::networks::NetworkId;
 use network_primitives::protocol::Protocol;
@@ -25,6 +25,7 @@ lazy_static! {
 pub struct ClientBuilder {
     protocol: Protocol,
     environment: &'static Environment,
+    peer_key_store: PeerKeyStore,
     hostname: Option<String>,
     port: Option<u16>,
     user_agent: String,
@@ -37,10 +38,11 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    pub fn new(protocol: Protocol, environment: &'static Environment) -> Self {
+    pub fn new(protocol: Protocol, environment: &'static Environment, peer_key_store: PeerKeyStore) -> Self {
         ClientBuilder {
             protocol,
             environment,
+            peer_key_store,
             hostname: None,
             port: None,
             user_agent: DEFAULT_USER_AGENT.clone(),
@@ -101,8 +103,25 @@ impl ClientBuilder {
         })
     }
 
-    pub fn build_network_config(self) -> Result<NetworkConfig, ClientError> {
-        let mut network_config = match self.protocol {
+    pub fn build_consensus(self) -> Result<Arc<Consensus>, ClientError> {
+        // deconstruct builder
+        let Self {
+            environment,
+            peer_key_store,
+            network_id,
+            mempool_config,
+            protocol,
+            hostname,
+            port,
+            reverse_proxy_config,
+            identity_file,
+            identity_password,
+            user_agent,
+            additional_seeds,
+        } = self;
+
+        // build network config
+        let mut network_config = match protocol {
             Protocol::Dumb => {
                 // NOTE: Just ignore hostname and port
                 //if self.hostname.is_some() { return Err(ClientError::UnexpectedHostname) }
@@ -110,35 +129,29 @@ impl ClientBuilder {
                 NetworkConfig::new_dumb_network_config()
             },
             Protocol::Ws => {
-                let hostname = self.hostname.ok_or(ClientError::MissingHostname)?;
-                let port = self.port.unwrap_or(self.protocol.default_port()
+                let hostname = hostname.ok_or(ClientError::MissingHostname)?;
+                let port = port.unwrap_or(self.protocol.default_port()
                     .ok_or(ClientError::MissingPort)?);
-                NetworkConfig::new_ws_network_config(hostname, port, self.reverse_proxy_config)
+                NetworkConfig::new_ws_network_config(hostname, port, reverse_proxy_config)
             },
             Protocol::Wss => {
-                let hostname = self.hostname.ok_or(ClientError::MissingHostname)?;
-                let port = self.port.unwrap_or(self.protocol.default_port()
+                let hostname = hostname.ok_or(ClientError::MissingHostname)?;
+                let port = port.unwrap_or(protocol.default_port()
                     .ok_or(ClientError::MissingPort)?);
-                let identity_file = self.identity_file.ok_or(ClientError::MissingIdentityFile)?;
-                let identity_password = self.identity_password.ok_or(ClientError::MissingIdentityFile)?;
+                let identity_file = identity_file.ok_or(ClientError::MissingIdentityFile)?;
+                let identity_password = identity_password.ok_or(ClientError::MissingIdentityFile)?;
                 NetworkConfig::new_wss_network_config(hostname, port, identity_file, identity_password)
             },
             Protocol::Rtc => {
                 return Err(ClientError::RtcNotImplemented)
             },
         };
-        network_config.set_user_agent(self.user_agent);
-        network_config.set_additional_seeds(self.additional_seeds);
-        Ok(network_config)
-    }
+        network_config.set_user_agent(user_agent);
+        network_config.set_additional_seeds(additional_seeds);
+        network_config.init_persistent(&peer_key_store)?;
 
-    pub fn build_consensus(self) -> Result<Arc<Consensus>, ClientError> {
-        let env = self.environment;
-        let network_id = self.network_id;
-        let mempool_config = self.mempool_config.clone().unwrap_or_else(MempoolConfig::default);
-        let mut network_config = self.build_network_config()?;
-        network_config.init_persistent()?;
-        Ok(Consensus::new(env, network_id, network_config, mempool_config)?)
+        let mempool_config = mempool_config.unwrap_or_else(MempoolConfig::default);
+        Ok(Consensus::new(environment, network_id, network_config, mempool_config)?)
     }
 }
 

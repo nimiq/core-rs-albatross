@@ -7,9 +7,15 @@ description = "Nimiq's Rust client"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs"
 license = "Apache-2.0"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+exclude = ["db", "peer_key.dat"]
 
 [badges]
+gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
@@ -26,9 +32,11 @@ clap = "2.32"
 colored = "1.7"
 chrono = "0.4"
 failure = "0.1"
-log-panics = { version = "2.0", features = ["with-backtrace"] }
 url = "1.7"
 hex = "0.3"
+directories = "1.0"
+human-panic = { version = "1.0", optional = true }
+log-panics = { version = "2.0", features = ["with-backtrace"] }
 nimiq-database = { path = "../database" }
 nimiq-network = { path = "../network" }
 nimiq-primitives = { path = "../primitives", features = ["networks", "coin"] }
@@ -41,7 +49,8 @@ nimiq-keys = { path = "../keys" }
 
 [features]
 default = ["all"]
-all = ["rpc-server", "metrics-server", "deadlock-detection"]
+all = ["rpc-server", "metrics-server", "deadlock-detection", "human-panic"]
 rpc-server = ["nimiq-rpc-server"]
 metrics-server = ["nimiq-metrics-server"]
 deadlock-detection = ["parking_lot"]
+system-install = []

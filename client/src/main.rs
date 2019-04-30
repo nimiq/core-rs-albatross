@@ -6,6 +6,9 @@ extern crate log;
 extern crate parking_lot;
 #[macro_use]
 extern crate serde_derive;
+#[cfg(feature = "human-panic")]
+#[macro_use]
+extern crate human_panic;
 
 extern crate nimiq_database as database;
 extern crate nimiq_lib as lib;
@@ -19,12 +22,20 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_rpc_server as rpc_server;
 extern crate nimiq_keys as keys;
 
+mod deadlock;
+mod logging;
+mod settings;
+mod cmdline;
+mod static_env;
+mod serialization;
+mod files;
 
 use std::io;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::collections::HashSet;
 use std::iter::FromIterator;
+use std::env;
 
 use failure::{Error, Fail};
 use fern::log_file;
@@ -38,7 +49,7 @@ use mempool::MempoolConfig;
 use metrics_server::metrics_server;
 use network_primitives::protocol::Protocol;
 use network_primitives::address::NetAddress;
-use network::network_config::Seed;
+use network::network_config::{Seed, PeerKeyStore};
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::{rpc_server, Credentials, JsonRpcConfig};
@@ -50,13 +61,9 @@ use crate::settings as s;
 use crate::settings::Settings;
 use crate::static_env::ENV;
 use crate::serialization::SeedError;
+use std::path::PathBuf;
+use crate::files::LazyFileLocations;
 
-mod deadlock;
-mod logging;
-mod settings;
-mod cmdline;
-mod static_env;
-mod serialization;
 
 
 #[derive(Debug, Fail)]
@@ -71,30 +78,54 @@ pub enum ConfigError {
     MissingRpcCredentials,
     #[fail(display = "The public key for a seed node is missing. Seed nodes without public_key are currently not implemented.")]
     MissingPublicKey,
+    #[fail(display = "Config file not found")]
+    MissingConfigFile
 }
 
 fn main() {
     #[cfg(feature = "deadlock-detection")]
     deadlock::deadlock_detection();
 
-    log_panics::init();
+    // setup a human-readable panic message
+    #[cfg(feature = "human-panic")]
+    setup_panic!();
 
     if let Err(e) = run() {
         force_log_error_cause_chain(e.as_fail(), Level::Error);
     }
 }
 
+fn find_config_file(cmdline: &Options, files: &mut LazyFileLocations) -> Result<PathBuf, Error> {
+    //  1. try from command line option
+    if let Some(path) = &cmdline.config_file {
+        return Ok(path.into());
+    }
+
+    //  2. try from environment variable
+    if let Ok(path) = env::var("NIMIQ_CONFIG") {
+        return Ok(path.into());
+    }
+
+    //  3. use default location: ~/.home/nimiq/client.toml or /etc/nimiq/client.toml
+    // NOTE: Why is the panic in the error case not printed?
+    Ok(files.config()?)
+}
+
 fn run() -> Result<(), Error> {
     // parse command line arguments
     let cmdline = Options::parse()?;
 
+    // default file locations
+    let mut files = LazyFileLocations::new();
+
     // load config file
-    let config_path = cmdline.config_file.clone().unwrap_or_else(|| "./config.toml".into());
-    let settings = Settings::from_file(config_path)?;
-    if settings.consensus.node_type != s::NodeType::Full {
-        error!("Only full consensus is implemented right now.");
-        unimplemented!();
+    let config_file = find_config_file(&cmdline, &mut files)?;
+    if !config_file.exists() {
+        eprintln!("Can't find config file at: {}", config_file.display());
+        eprintln!("If you haven't configured the Nimiq client yet, do this by copying the config.example.toml to config.toml in the path above and editing it appropriately.");
+        Err(ConfigError::MissingConfigFile)?;
     }
+    let settings = Settings::from_file(&config_file)?;
 
     // Setup logging.
     let mut dispatch = fern::Dispatch::new()
@@ -107,30 +138,47 @@ fn run() -> Result<(), Error> {
     for (module, level) in settings.log.tags.iter().chain(cmdline.log_tags.iter()) {
         dispatch = dispatch.level_for(module.clone(), level.clone());
     }
-    // For now, we only log to stdout.
-    dispatch = dispatch.chain(io::stdout());
     if let Some(ref filename) = settings.log.file {
         dispatch = dispatch.chain(log_file(filename)?);
     }
+    else {
+        dispatch = dispatch.chain(io::stderr());
+    }
     dispatch.apply()?;
+    #[cfg(not(feature = "human-panic"))]
+    log_panics::init();
 
+    info!("Loaded config file from: {}", config_file.display());
     debug!("Command-line options: {:#?}", cmdline);
     debug!("Settings: {:#?}", settings);
 
+    // we only allow full nodes right now
+    if settings.consensus.node_type != s::NodeType::Full {
+        error!("Only full consensus is implemented right now.");
+        unimplemented!();
+    }
+
+    // get network ID
+    let network_id = NetworkId::from(cmdline.network.unwrap_or(settings.consensus.network));
+
     // Start database and obtain a 'static reference to it.
     let default_database_settings = s::DatabaseSettings::default();
-    let env = LmdbEnvironment::new(&settings.database.path,
+    let env = LmdbEnvironment::new(&settings.database.path
+        .unwrap_or_else(|| files.database(network_id).expect("Failed to find database").to_str().unwrap().to_string()),
                                    settings.database.size.unwrap_or_else(|| default_database_settings.size.unwrap()),
                                    settings.database.max_dbs.unwrap_or_else(|| default_database_settings.max_dbs.unwrap()),
                                    open::Flags::empty())?;
     // Initialize the static environment variable
     ENV.initialize(env);
 
+    // open peer key store
+    let peer_key_store = PeerKeyStore::new(settings.peer_key_file.unwrap_or_else(|| files.peer_key().expect("Failed to find peer key file").to_str().unwrap().into()));
+
     // Start building the client with network ID and environment
-    let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), ENV.get());
+    let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), ENV.get(), peer_key_store);
 
     // Map network ID from command-line or config to actual network ID
-    client_builder.with_network_id(NetworkId::from(cmdline.network.unwrap_or(settings.consensus.network)));
+    client_builder.with_network_id(network_id);
 
     // add hostname and port to builder
     if let Some(hostname) = cmdline.hostname.or(settings.network.host) {
@@ -207,6 +255,12 @@ fn run() -> Result<(), Error> {
             if credentials.is_none() {
                 warn!("Running RPC server without authentication! Consider setting a username and password.")
             }
+            if !rpc_settings.corsdomain.is_empty() {
+                warn!("Cross-Origin access is currently not implemented!");
+            }
+            if !rpc_settings.allowip.is_empty() {
+                warn!("'allowip' for RPC server is currently not implemented!");
+            }
             info!("Starting RPC server listening on port {}", port);
             other_futures.push(rpc_server(Arc::clone(&consensus), bind, port, JsonRpcConfig {
                 credentials,
@@ -219,7 +273,7 @@ fn run() -> Result<(), Error> {
     // If the RPC server is enabled, but the client is not compiled with it, inform the user
     #[cfg(not(feature = "rpc-server"))] {
         if settings.rpc_server.is_some() {
-            warn!("RPC server feature not enabled.");
+            warn!("Client was compiled without RPC server");
         }
     }
     // start metrics server if enabled

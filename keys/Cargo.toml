@@ -7,9 +7,14 @@ description = "Ed25519 cryptographic key handling and signatures for Nimiq"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs"
 license = "Apache-2.0"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
+gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]

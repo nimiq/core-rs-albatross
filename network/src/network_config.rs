@@ -80,15 +80,15 @@ impl NetworkConfig {
         }
     }
 
-    pub fn init_persistent(&mut self) -> Result<(), Error> {
+    pub fn init_persistent(&mut self, peer_key_store: &PeerKeyStore) -> Result<(), Error> {
         if self.key_pair.is_some() {
             return Ok(());
         }
 
-        let key_pair = match PeerKeyStore::load_peer_key() {
+        let key_pair = match peer_key_store.load_peer_key() {
             Err(Error::IoError(_)) => {
                 let key_pair = KeyPair::generate();
-                PeerKeyStore::save_peer_key(&key_pair)?;
+                peer_key_store.save_peer_key(&key_pair)?;
                 Ok(key_pair)
             },
             res => res,
@@ -247,13 +247,19 @@ impl From<&ProtocolConfig> for Protocol {
     }
 }
 
-pub struct PeerKeyStore {}
+pub struct PeerKeyStore {
+    path: String,
+}
 
 impl PeerKeyStore {
-    const KEY_FILE: &'static str = "key.db";
+    pub fn new(path: String) -> Self {
+        PeerKeyStore {
+            path
+        }
+    }
 
-    pub fn load_peer_key() -> Result<KeyPair, Error> {
-        match fs::read(PeerKeyStore::KEY_FILE) {
+    pub fn load_peer_key(&self) -> Result<KeyPair, Error> {
+        match fs::read(&self.path) {
             Ok(data) => {
                 Deserialize::deserialize_from_vec(&data).map_err(|_| Error::InvalidPeerKey)
             },
@@ -261,7 +267,7 @@ impl PeerKeyStore {
         }
     }
 
-    pub fn save_peer_key(key_pair: &KeyPair) -> Result<(), Error> {
-        Ok(fs::write(PeerKeyStore::KEY_FILE, key_pair.serialize_to_vec())?)
+    pub fn save_peer_key(&self, key_pair: &KeyPair) -> Result<(), Error> {
+        Ok(fs::write(&self.path, key_pair.serialize_to_vec())?)
     }
 }

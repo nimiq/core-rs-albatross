@@ -4,7 +4,7 @@
 /.idea
 *.iml
 .DS_Store
-client/db
-client/key.db
+/client/db
+/client/peer_key.dat
 Cargo.lock
 /fixed-unsigned/target

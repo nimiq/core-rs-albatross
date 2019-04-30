@@ -25,13 +25,14 @@ pub(crate) struct Settings {
     pub consensus: ConsensusSettings,
     pub rpc_server: Option<RpcServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
-    //pub wallet: Option<WalletSettings>,
     pub reverse_proxy: Option<ReverseProxySettings>,
     #[serde(default)]
     pub log: LogSettings,
     #[serde(default)]
     pub database: DatabaseSettings,
     pub mempool: Option<MempoolSettings>,
+    #[serde(default)]
+    pub peer_key_file: Option<String>,
 }
 
 impl Settings {
@@ -47,9 +48,6 @@ pub(crate) struct NetworkSettings {
     pub port: Option<u16>,
     #[serde(default)]
     pub protocol: Protocol,
-    //#[serde(default)]
-    //pub passive: bool,
-    //#[serde(deserialize_with = "deserialize_seed_list")]
     #[serde(default)]
     pub seed_nodes: Vec<Seed>,
     #[serde(default)]
@@ -66,11 +64,13 @@ pub(crate) enum Seed {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SeedUri {
     pub uri: String
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SeedInfo {
     pub host: String,
     pub port: Option<u16>,
@@ -79,6 +79,7 @@ pub(crate) struct SeedInfo {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SeedList {
     pub list: String,
     pub public_key: Option<String>
@@ -189,12 +190,6 @@ pub(crate) struct RpcServerSettings {
     pub password: Option<String>,
 }
 
-/*#[derive(Debug, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct UiServerSettings {
-    pub port: u16,
-}*/
-
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MetricsServerSettings {
@@ -204,12 +199,6 @@ pub(crate) struct MetricsServerSettings {
     pub port: Option<u16>,
     pub password: Option<String>,
 }
-
-/*#[derive(Debug, Deserialize, Default)]
-pub(crate) struct WalletSettings {
-    pub seed: Option<String>,
-    pub address: Option<String>,
-}*/
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -242,7 +231,7 @@ pub(crate) struct LogSettings {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DatabaseSettings {
-    pub path: String,
+    pub path: Option<String>,
     pub size: Option<usize>,
     pub max_dbs: Option<u32>
 }
@@ -250,7 +239,7 @@ pub(crate) struct DatabaseSettings {
 impl Default for DatabaseSettings {
     fn default() -> Self {
         DatabaseSettings {
-            path: String::from("./db/"),
+            path: None,
             size: Some(1024 * 1024 * 50),
             max_dbs: Some(10)
         }

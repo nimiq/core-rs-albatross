@@ -1,6 +1,7 @@
 use beserial::{Deserialize, Serialize};
+use std::fmt::Display;
 
-#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, Display)]
 #[repr(u8)]
 pub enum NetworkId {
     Test = 1,

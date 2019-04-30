@@ -2,7 +2,11 @@
 #
 #   Nimiq core-rs example configuration file
 #
-#   Copy this to config.toml and edit appropriately.
+#   Copy this to client.toml and edit appropriately.
+#
+#   The client will look for this config file in:
+#    * './' (current directory)
+#    * '$HOME/.config/nimiq'
 #
 ##############################################################################
 
@@ -40,7 +44,7 @@ host = "my.domain"
 #
 #seed_nodes = [
 #	# Add seed nodes from list (e.g. community seed nodes). The public key specified is used to verify the signature of the file.
-#	{ list = "https://nimiq.community/seeds.txt", pubkey = "e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837" },
+#	{ list = "https://nimiq.community/seeds.txt", public_key = "e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837" },
 #	# Specify a Wss seed node with hostname, port (optional) and peer_id (optional), or public_key (optional).
 #	{ host = "seed-15.nimiq-network.com", port = 8443, peer_id = "c705843de04503656f4965a6672e70f0" },
 #	# Specify seed node using a peer's URI.
@@ -58,7 +62,7 @@ host = "my.domain"
 
 ##############################################################################
 #
-# Identity file (PCKS#12) and password for privat key
+# Identity file (PCKS#12) and password for private key
 #
 ##############################################################################
 #[network.tls]
@@ -91,7 +95,9 @@ host = "my.domain"
 #
 # Configure the JSON-RPC server.
 #
-# To enable, uncomment the section header '[rpcServer']
+# To enable, uncomment the section header '[rpc-server]'
+#
+#
 #
 ##############################################################################
 
@@ -113,6 +119,10 @@ host = "my.domain"
 
 # Allow access from remote hosts (ip address) or subnet (network/CIDR). Use this option with caution.
 # Default: []
+#
+# NOTE: This is UNIMPLEMENTED! Don't expose the RPC server to any network you don't trust! If possible bind it only to
+#       localhost and always set a username and a strong password.
+#
 #allowip = ["192.168.0.0/24"]
 
 # Allow only the RPC methods listed here. All methods are allowed if this is empty.
@@ -165,7 +175,7 @@ host = "my.domain"
 # Default: 8444
 #port = 8443
 
-# IP address of the reverse proxy that this node will "see" (i.e. the value of ws._socket.remoteAddress).
+# IP address of the reverse proxy that this node will "see".
 # Possible values: any valid IP address
 # Default: "::ffff:127.0.0.1"
 #address = "::ffff:192.168.10.40"
@@ -177,6 +187,9 @@ host = "my.domain"
 
 # Determines whether the reverse proxy does TLS termination for this node.
 # In that case, we want to advertise our peer address as web socket secure.
+# So if your reverse proxy does the TLS and forwards an unencrypred websocket connection, set this to true and set the
+# network protocol to 'ws'.
+#
 # Default: false
 #with_tls_termination = true
 
@@ -192,7 +205,7 @@ host = "my.domain"
 # Configure global log level.
 # Possible values: "trace", "debug", "info", "warning", "error"
 # Default: "info"
-level = "info"
+level = "debug"
 
 # Define specific log levels for tags.
 # Default: none
@@ -205,7 +218,7 @@ level = "info"
 # Save log output to a file.
 # If not specified, log to stdout.
 # Default: none
-#file = "log.txt"
+#file = "nimiq-client.log"
 
 
 

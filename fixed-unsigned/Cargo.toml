@@ -7,9 +7,13 @@ description = "Fixed precision decimal numbers for Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs"
 license = "Apache-2.0"
+keywords = ["nimiq"]
 
 [badges]
+gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
 travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
