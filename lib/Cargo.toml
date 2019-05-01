@@ -21,9 +21,9 @@ maintenance = { status = "experimental" }
 futures = "0.1"
 failure = "0.1"
 lazy_static = "1.2"
-nimiq-network = { path = "../network" }
-nimiq-consensus = { path = "../consensus" }
-nimiq-database = { path = "../database" }
-nimiq-network-primitives = { path = "../network-primitives", features = ["all"] }
-nimiq-primitives = { path = "../primitives", features = ["networks"] }
-nimiq-mempool = { path = "../mempool" }
+nimiq-network = { path = "../network", version = "0.1.0" }
+nimiq-consensus = { path = "../consensus", version = "0.1.0" }
+nimiq-database = { path = "../database", version = "0.1.0" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["all"] }
+nimiq-primitives = { path = "../primitives", version = "0.1.0", features = ["networks"] }
+nimiq-mempool = { path = "../mempool", version = "0.1.0" }

@@ -1,6 +1,6 @@
 [package]
 name = "nimiq-metrics-server"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 license = "Apache-2.0"
 edition = "2018"
@@ -18,14 +18,14 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
-nimiq-blockchain = { path = "../blockchain", features = ["metrics"] }
-nimiq-consensus = { path = "../consensus" }
-nimiq-network = { path = "../network", features = ["metrics"] }
-nimiq-mempool = { path = "../mempool" }
-nimiq-block = { path = "../primitives/block" }
-beserial = { path = "../beserial" }
 hyper = "0.12"
 futures = "0.1"
 log = "0.4"
 base64 = "0.10"
 failure = "0.1"
+nimiq-blockchain = { path = "../blockchain", version = "0.1.0", features = ["metrics"] }
+nimiq-consensus = { path = "../consensus", version = "0.1.0" }
+nimiq-network = { path = "../network", version = "0.1.0", features = ["metrics"] }
+nimiq-mempool = { path = "../mempool", version = "0.1.0" }
+nimiq-block = { path = "../primitives/block", version = "0.1.0" }
+beserial = { path = "../beserial", version = "0.1.0" }

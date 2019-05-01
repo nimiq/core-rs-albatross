@@ -18,14 +18,14 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
-nimiq-hash = { path = "../hash" }
-beserial = { path = "../beserial" }
-nimiq-macros = { path = "../macros" }
-nimiq-utils = { path = "../utils", features = ["bit-vec", "crc"] }
-nimiq-key-derivation = { path = "../key-derivation", optional = true }
 bit-vec = "0.5"
 hex = "0.3"
 unicode-normalization = "0.1"
+nimiq-hash = { path = "../hash", version = "0.1.0" }
+beserial = { path = "../beserial", version = "0.1.0" }
+nimiq-macros = { path = "../macros", version = "0.1.0" }
+nimiq-utils = { path = "../utils", version = "0.1.0", features = ["bit-vec", "crc"] }
+nimiq-key-derivation = { path = "../key-derivation", version = "0.1.0", optional = true }
 
 [features]
 default = ["key-derivation"]

@@ -21,20 +21,20 @@ maintenance = { status = "experimental" }
 parking_lot = "0.7"
 rand = "0.6"
 log = "0.4"
-beserial = { path = "../beserial" }
-nimiq-hash = { path = "../hash" }
-nimiq-macros = { path = "../macros" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-mempool = { path = "../mempool" }
-nimiq-collections = { path = "../collections" }
-nimiq-messages = { path = "../messages" }
-nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
-nimiq-network = { path = "../network" }
-nimiq-database = { path = "../database", features = ["full-nimiq"] }
-nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
-nimiq-blockchain = { path = "../blockchain", features = ["transaction-store"] }
 weak-table = "0.2"
 failure = "0.1"
 futures = "0.1"
 tokio = "0.1"
+beserial = { path = "../beserial", version = "0.1.0" }
+nimiq-hash = { path = "../hash", version = "0.1.0" }
+nimiq-macros = { path = "../macros", version = "0.1.0" }
+nimiq-block = { path = "../primitives/block", version = "0.1.0" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
+nimiq-mempool = { path = "../mempool", version = "0.1.0" }
+nimiq-collections = { path = "../collections", version = "0.1.0" }
+nimiq-messages = { path = "../messages", version = "0.1.0" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["networks", "time"] }
+nimiq-network = { path = "../network", version = "0.1.0" }
+nimiq-database = { path = "../database", version = "0.1.0", features = ["full-nimiq"] }
+nimiq-utils = { path = "../utils", version = "0.1.0", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
+nimiq-blockchain = { path = "../blockchain", version = "0.1.0", features = ["transaction-store"] }

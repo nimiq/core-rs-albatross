@@ -18,21 +18,21 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../beserial" }
-beserial_derive = { path = "../beserial/beserial_derive"}
-nimiq-keys = { path = "../keys" }
-nimiq-hash = { path = "../hash" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
-nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
-nimiq-macros = { path = "../macros" }
 bitflags = "1.0"
 hex = "0.3"
 lazy_static = "1.2"
 atomic = "0.4"
 url = "1.7"
 failure = "0.1"
+beserial = { path = "../beserial", version = "0.1.0" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
+nimiq-keys = { path = "../keys", version = "0.1.0" }
+nimiq-hash = { path = "../hash", version = "0.1.0" }
+nimiq-block = { path = "../primitives/block", version = "0.1.0" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
+nimiq-primitives = { path = "../primitives", version = "0.1.0", features = ["coin", "networks"] }
+nimiq-utils = { path = "../utils", version = "0.1.0", features = ["observer", "crc", "time"] }
+nimiq-macros = { path = "../macros", version = "0.1.0" }
 
 [features]
 default = ["all"]

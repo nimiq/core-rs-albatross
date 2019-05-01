@@ -22,10 +22,10 @@ curve25519-dalek = "1.0.2"
 ed25519-dalek = "1.0.0-pre.1"
 data-encoding = "2.1"
 sha2 = "0.8"
-beserial = { path = "../beserial" }
-beserial_derive = { path = "../beserial/beserial_derive"}
-nimiq-hash = { path = "../hash" }
-nimiq-macros = { path = "../macros" }
 rand = "0.6"
 hex = "0.3"
 failure = "0.1"
+beserial = { path = "../beserial", version = "0.1.0" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
+nimiq-hash = { path = "../hash", version = "0.1.0" }
+nimiq-macros = { path = "../macros", version = "0.1.0" }

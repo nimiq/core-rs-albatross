@@ -18,12 +18,12 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../../beserial" }
-beserial_derive = { path = "../../beserial/beserial_derive"}
-nimiq-keys = { path = "../../keys" }
-nimiq-hash = { path = "../../hash" }
 hex = "0.3"
-nimiq-account = { path = "../../primitives/account" }
+beserial = { path = "../../beserial", version = "0.1.0" }
+beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1.0" }
+nimiq-keys = { path = "../../keys", version = "0.1.0" }
+nimiq-hash = { path = "../../hash", version = "0.1.0" }
+nimiq-account = { path = "../../primitives/account", version = "0.1.0" }
 
 [dev-dependencies]
-nimiq-primitives = { path = "../../primitives", features = ["coin"] }
+nimiq-primitives = { path = "../../primitives", version = "0.1.0", features = ["coin"] }

@@ -19,9 +19,9 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 blake2-rfc = "0.2"
-libargon2-sys = { path = "../libargon2-sys" }
 hex = "0.3"
 sha2 = "0.8"
-beserial = { path = "../beserial" }
-nimiq-macros = { path = "../macros" }
 byteorder = "1.2"
+beserial = { path = "../beserial", version = "0.1.0" }
+nimiq-macros = { path = "../macros", version = "0.1.0" }
+libargon2-sys = { path = "../libargon2-sys", version = "0.1.0" }

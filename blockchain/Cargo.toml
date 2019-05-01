@@ -18,24 +18,24 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../beserial" }
-beserial_derive = { path = "../beserial/beserial_derive"}
-nimiq-keys = { path = "../keys" }
-nimiq-primitives = { path = "../primitives" }
-nimiq-account = { path = "../primitives/account" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-hash = { path = "../hash" }
-nimiq-accounts = { path = "../accounts" }
-nimiq-database = { path = "../database", features = ["full-nimiq"] }
-nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
-fixed-unsigned = { path = "../fixed-unsigned" }
-nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr", "iterators"] }
-nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
 parking_lot = "0.7"
 log = "0.4"
 hex = "0.3"
 failure = "0.1"
+beserial = { path = "../beserial", version = "0.1.0" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
+nimiq-keys = { path = "../keys", version = "0.1.0" }
+nimiq-primitives = { path = "../primitives", version = "0.1.0" }
+nimiq-account = { path = "../primitives/account", version = "0.1.0" }
+nimiq-block = { path = "../primitives/block", version = "0.1.0" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
+nimiq-hash = { path = "../hash", version = "0.1.0" }
+nimiq-accounts = { path = "../accounts", version = "0.1.0" }
+nimiq-database = { path = "../database", version = "0.1.0", features = ["full-nimiq"] }
+nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1.0" }
+fixed-unsigned = { path = "../fixed-unsigned", version = "0.1.0" }
+nimiq-utils = { path = "../utils", version = "0.1.0", features = ["observer", "unique-ptr", "iterators"] }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["networks", "time"] }
 
 [dev-dependencies]
 atomic = "0.4"

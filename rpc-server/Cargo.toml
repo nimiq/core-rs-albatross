@@ -1,6 +1,6 @@
 [package]
 name = "nimiq-rpc-server"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 license = "Apache-2.0"
 edition = "2018"
@@ -18,14 +18,6 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
-nimiq-consensus = { path = "../consensus" }
-nimiq-network = { path = "../network" }
-nimiq-hash = { path = "../hash" }
-nimiq-network-primitives = { path = "../network-primitives" }
-nimiq-block = { path = "../primitives/block" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-keys = { path = "../keys" }
-beserial = { path = "../beserial" }
 hyper = "0.12"
 json = "0.11"
 futures = "0.1"
@@ -34,3 +26,11 @@ hex = "0.3"
 failure = "0.1"
 parking_lot = "0.7"
 base64 = "0.10"
+nimiq-consensus = { path = "../consensus", version = "0.1.0" }
+nimiq-network = { path = "../network", version = "0.1.0" }
+nimiq-hash = { path = "../hash", version = "0.1.0" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0" }
+nimiq-block = { path = "../primitives/block", version = "0.1.0" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
+nimiq-keys = { path = "../keys", version = "0.1.0" }
+beserial = { path = "../beserial", version = "0.1.0" }

@@ -18,19 +18,19 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../../beserial" }
-beserial_derive = { path = "../../beserial/beserial_derive"}
-fixed-unsigned = { path = "../../fixed-unsigned" }
-nimiq-hash = { path = "../../hash" }
-nimiq-keys = { path = "../../keys" }
-nimiq-utils = { path = "../../utils", features = ["merkle"] }
-nimiq-primitives = { path = "..", features = ["policy", "networks"] }
-nimiq-transaction = { path = "../transaction" }
-nimiq-account = { path = "../account" }
-nimiq-macros = { path = "../../macros" }
 num-bigint = "0.2"
 log = "0.4"
 hex = "0.3"
+beserial = { path = "../../beserial", version = "0.1.0" }
+beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1.0" }
+fixed-unsigned = { path = "../../fixed-unsigned", version = "0.1.0" }
+nimiq-hash = { path = "../../hash", version = "0.1.0" }
+nimiq-keys = { path = "../../keys", version = "0.1.0" }
+nimiq-utils = { path = "../../utils", version = "0.1.0", features = ["merkle"] }
+nimiq-primitives = { path = "..", version = "0.1.0", features = ["policy", "networks"] }
+nimiq-transaction = { path = "../transaction", version = "0.1.0" }
+nimiq-account = { path = "../account", version = "0.1.0" }
+nimiq-macros = { path = "../../macros", version = "0.1.0" }
 
 [dev-dependencies]
 num-traits = "0.2"
