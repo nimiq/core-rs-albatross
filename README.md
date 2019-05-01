@@ -6,7 +6,9 @@
 
 **[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
 
-This repository is **Work in Progress** and should only be used for testing purposes, it is not production ready yet. If you need a client implementation to run in a production environment, please use the [JavaScript implementation](https://github.com/nimiq-network/core/) instead. 
+This repository is **Work in Progress** and is currently in beta-testing phase. If you need a reliable client implementation to run in a production environment, please use the [JavaScript implementation](https://github.com/nimiq-network/core/) instead. Only use this if you can tolerate bugs and want to help beta-testing the Nimiq Rust implementation.
+
+The Nimiq Rust client comes without wallet and can currently not be used to send transactions. As a back-bone node it is more performant that the JavaScript implementation though. 
 
 ## Table of Contents
 
@@ -31,23 +33,93 @@ Besides [Rust](https://www.rust-lang.org/learn/get-started#installing-rust) itse
 - `pkg-config`
 - `libssl-dev` (in Debian/Ubuntu) or `openssl-dev` (in Fedora/Red Hat)
 
+### From crates.io
+
+To download from [crates.io](https://crates.io), compile and install the client:
+
+```bash
+cargo +nightly install nimiq-client
+```
+
+The binary will be installed in your Cargo directory, which is usually at `$HOME/.cargo/bin`, and should be available in your `$PATH`.
+
+### From Git
+
 Compiling the project is achieved through [`cargo`](https://doc.rust-lang.org/cargo/):
 
 ```bash
 git clone https://github.com/nimiq/core-rs
 cd core-rs
-cargo build
+cargo +nightly build
 ```
+
+Note that this will build it in debug mode, which is not as performant. To get the most speed out of the client, build it in release mode:
+
+```bash
+cargo +nightly build --release
+```
+
+If you want to install the client onto your system (into `$HOME/.cargo/bin`), run:
+
+```bash
+cargo +nightly install --path client/
+```
+
+Alternatively you can install directly from git:
+
+```bash
+cargo +nightly install --git https://github.com/nimiq/core-rs.git
+```
+
+
+After installing the client you can use it like you had downloaded it from [crates.io](https://crates.io).
 
 ## Usage
 
-To run the Nimiq Rust Client, navigate into the `client` folder and run:
+
+### Configuration
+
+By default the client will look for a configuration file in `$HOME/.nimiq/client.config`. You need to create this file yourself:
 
 ```bash
+nimiq-client                                                   # Run the client. This will create the example config file.
+cp $HOME/.nimiq/client.example.toml $HOME/.nimiq/client.toml   # Create the config from the example.
+nano $HOME/.nimiq/client.toml                                  # Edit the config. Explanations are included in the file.
+```
+
+You can also specify your own configuration file:
+
+```bash
+nimiq-client -c path/to/client.toml
+```
+
+Take a look at [`client/client.example.toml`](client/config.example.toml) for all the configuration options.
+
+### From crates.io
+
+If you installed the client from [crates.io](https://crates.io), you can just run it with:
+
+```bash
+nimiq-client
+```
+
+### From Git
+
+To run the Nimiq Rust Client from the downloaded sources:
+
+```bash
+cd core-rs/client
 cargo run
 ```
 
 Dependencies and binaries will be downloaded and compiled automatically by Cargo.
+
+If you want to use the release build:
+
+```bash
+cd core-rs/client
+cargo run --release
+```
 
 ## Contributing
 
