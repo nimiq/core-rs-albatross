@@ -6,9 +6,9 @@
 
 **[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
 
-This repository is **Work in Progress** and is currently in beta-testing phase. If you need a reliable client implementation to run in a production environment, please use the [JavaScript implementation](https://github.com/nimiq-network/core/) instead. Only use this if you can tolerate bugs and want to help beta-testing the Nimiq Rust implementation.
+This repository is **Work in Progress** and is currently in beta-testing phase. If you need a reliable client implementation to run in a production environment, please use the [JavaScript implementation](https://github.com/nimiq/core-js/) instead. Only use this if you can tolerate bugs and want to help with beta-testing the Nimiq Rust implementation.
 
-The Nimiq Rust client comes without wallet and can currently not be used to send transactions. As a back-bone node it is more performant that the JavaScript implementation though. 
+The Nimiq Rust client comes without wallet and can currently not be used to send transactions. As a back-bone node it is more performant than the JavaScript implementation though.
 
 ## Table of Contents
 
@@ -72,7 +72,7 @@ cargo +nightly install --git https://github.com/nimiq/core-rs.git
 ```
 
 
-After installing the client you can use it like you had downloaded it from [crates.io](https://crates.io).
+After installing the client you can use it as if you had downloaded it from [crates.io](https://crates.io).
 
 ## Usage
 
@@ -83,7 +83,7 @@ By default the client will look for a configuration file in `$HOME/.nimiq/client
 
 ```bash
 nimiq-client                                                   # Run the client. This will create the example config file.
-cp $HOME/.nimiq/client.example.toml $HOME/.nimiq/client.toml   # Create the config from the example.
+cp $HOME/.nimiq/client.example.toml $HOME/.nimiq/client.toml   # Create your config from the example.
 nano $HOME/.nimiq/client.toml                                  # Edit the config. Explanations are included in the file.
 ```
 
