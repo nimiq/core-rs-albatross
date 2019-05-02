@@ -83,6 +83,21 @@ pub enum MessageType {
     Head = 61,
 
     VerAck = 90,
+
+    // Messages introduced for Albatross
+
+    // Request `PeerAddress`es of nodes that are close to the requested routing ID
+    FindNode = 500,
+
+    // A view change aggregation message (invite, swap, later, no)
+    ViewChange = 501,
+
+    // A pBFT signature aggregation message (invite, swap, later, no, result)
+    PbftProposal = 502,
+    PbftPrepare = 503,
+    PbftCommit = 504
+
+
 }
 
 #[derive(Clone, Debug)]
@@ -256,6 +271,7 @@ impl Deserialize for Message {
             MessageType::GetHead => Message::GetHead,
             MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
+            _ => unimplemented!(),
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.

@@ -7,6 +7,12 @@ bitflags! {
         const NANO  = 0b0000_0001;
         const LIGHT = 0b0000_0010;
         const FULL  = 0b0000_0100;
+
+        // Albatross specific services
+
+        // the node supports multicast for participation in block production
+        // i.e. FindNode, ViewChange, Pbft*
+        const MULTICAST  = 0b0001_0000;
     }
 }
 
