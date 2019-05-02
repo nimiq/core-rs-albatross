@@ -15,6 +15,11 @@ impl AccountTransactionVerification for AccountType {
     fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         match transaction.recipient_type {
             AccountType::Basic => {
+                // Do not allow the contract creation flag to be set for basic transactions.
+                if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                    return Err(TransactionError::InvalidForRecipient);
+                }
+
                 Ok(())
             },
             AccountType::HTLC => {

@@ -51,9 +51,17 @@ pub enum TransactionFormat {
 }
 
 bitflags! {
-    #[derive(Default, Serialize, Deserialize)]
+    #[derive(Default, Serialize)]
     pub struct TransactionFlags: u8 {
         const CONTRACT_CREATION = 0b1;
+    }
+}
+
+// Fail when deserializing invalid flags.
+impl Deserialize for TransactionFlags {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let flag_data: u8 = reader.read_u8()?;
+        Ok(TransactionFlags::from_bits(flag_data).ok_or(SerializingError::InvalidValue)?)
     }
 }
 
