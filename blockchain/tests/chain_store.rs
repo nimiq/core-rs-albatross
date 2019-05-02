@@ -250,3 +250,51 @@ fn it_can_get_blocks_forward() {
     blocks = store.get_blocks_forward(&chain_infos[20].head.header.hash(), 20, false, None);
     assert_eq!(blocks.len(), 0);
 }
+
+#[test]
+fn it_can_remove_chain_info() {
+    let env = VolatileEnvironment::new(3).unwrap();
+    let store = ChainStore::new(&env);
+
+    let block1 = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let hash1 = block1.header.hash::<Blake2bHash>();
+    let info1 = ChainInfo::initial(block1.clone());
+
+    let mut block2_1 = block1.clone();
+    block2_1.header.height = 28883;
+    block2_1.header.interlink_hash = [2u8; Blake2bHash::SIZE].into();
+    let hash2_1 = block2_1.header.hash::<Blake2bHash>();
+    let mut info2_1 = ChainInfo::initial(block2_1);
+    info2_1.on_main_chain = false;
+
+    let mut block2_2 = block1.clone();
+    block2_2.header.height = 28883;
+    block2_2.header.interlink_hash = [5u8; Blake2bHash::SIZE].into();
+    let hash2_2 = block2_2.header.hash::<Blake2bHash>();
+    let mut info2_2 = ChainInfo::initial(block2_2);
+    info2_2.main_chain_successor = Some(Blake2bHash::from([1u8; Blake2bHash::SIZE]));
+
+    let mut txn = WriteTransaction::new(&env);
+    store.put_chain_info(&mut txn, &hash1, &info1, true);
+    store.put_chain_info(&mut txn, &hash2_1, &info2_1, true);
+    store.put_chain_info(&mut txn, &hash2_2, &info2_2, true);
+    txn.commit();
+
+    assert_eq!(store.get_chain_info_at(1, true, None).unwrap(), info1);
+    assert_eq!(store.get_chain_info(&hash1, true, None).unwrap(), info1);
+    txn = WriteTransaction::new(&env);
+    store.remove_chain_info(&mut txn, &hash1, 1);
+    txn.commit();
+    assert!(store.get_chain_info_at(1, true, None).is_none());
+    assert!(store.get_chain_info(&hash1, true, None).is_none());
+
+    assert_eq!(store.get_chain_info_at(28883, true, None).unwrap(), info2_2);
+    assert_eq!(store.get_chain_info(&hash2_1, true, None).unwrap(), info2_1);
+    assert_eq!(store.get_chain_info(&hash2_2, true, None).unwrap(), info2_2);
+    txn = WriteTransaction::new(&env);
+    store.remove_chain_info(&mut txn, &hash2_1, 28883);
+    txn.commit();
+    assert_eq!(store.get_chain_info_at(28883, true, None).unwrap(), info2_2);
+    assert!(store.get_chain_info(&hash2_1, true, None).is_none());
+    assert_eq!(store.get_chain_info(&hash2_2, true, None).unwrap(), info2_2);
+}

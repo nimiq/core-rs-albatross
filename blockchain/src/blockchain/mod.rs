@@ -3,28 +3,28 @@ use std::sync::Arc;
 
 use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 
+use account::AccountError;
 use accounts::Accounts;
+use block::{Block, BlockError, Difficulty, Target, TargetCompact};
+use block::proof::ChainProof;
 use database::{Environment, ReadTransaction, WriteTransaction};
+use fixed_unsigned::RoundHalfUp;
+use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
 use hash::{Blake2bHash, Hash};
 use network_primitives::networks::get_network_info;
 use network_primitives::time::NetworkTime;
-use account::AccountError;
-use block::{Block, BlockError, Difficulty, Target, TargetCompact};
-use block::proof::ChainProof;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use utils::observer::Notifier;
-use fixed_unsigned::RoundHalfUp;
-use fixed_unsigned::types::{FixedUnsigned10, FixedScale10, FixedUnsigned26, FixedScale26};
 
+use crate::blockchain::error::BlockchainError;
 use crate::chain_info::ChainInfo;
-use crate::chain_store::{ChainStore, Direction};
-use crate::transaction_cache::TransactionCache;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
+use crate::chain_store::{ChainStore, Direction};
+use crate::transaction_cache::TransactionCache;
 #[cfg(feature = "transaction-store")]
 use crate::transaction_store::TransactionStore;
-use crate::blockchain::error::BlockchainError;
 
 pub mod transaction_proofs;
 pub mod error;
@@ -243,7 +243,6 @@ impl<'env> Blockchain<'env> {
         let next_target = self.get_next_target(Some(&block.header.prev_hash));
         if block.header.n_bits != TargetCompact::from(next_target) {
             warn!("Rejecting block - difficulty mismatch");
-
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
             return PushResult::Invalid(PushError::DifficultyMismatch);
@@ -403,22 +402,28 @@ impl<'env> Blockchain<'env> {
             assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.header.height));
 
             // Check each fork block against TransactionCache & commit to AccountsTree.
-            for fork_block in fork_chain.iter().rev() {
-                if cache_txn.contains_any(&fork_block.1.head) {
-                    warn!("Failed to apply fork block while rebranching - transaction already included");
-                    // TODO delete invalid fork from store
-                    write_txn.abort();
-                    #[cfg(feature = "metrics")]
-                    self.metrics.note_invalid_block();
-                    return PushResult::Invalid(PushError::InvalidFork);
-                }
+            let mut fork_iter = fork_chain.iter().rev();
+            while let Some(fork_block) = fork_iter.next() {
+                let result = if !cache_txn.contains_any(&fork_block.1.head) {
+                    state.accounts.commit_block(&mut write_txn, &fork_block.1.head).map_err(|e| format!("{}", e))
+                } else {
+                    Err("Transaction already included".to_string())
+                };
 
-                if let Err(e) = state.accounts.commit_block(&mut write_txn, &fork_block.1.head) {
+                if let Err(e) = result {
                     warn!("Failed to apply fork block while rebranching - {}", e);
-                    // TODO delete invalid fork from store
                     write_txn.abort();
+
+                    // Delete invalid fork blocks from store.
+                    let mut write_txn = WriteTransaction::new(self.env);
+                    for block in vec![fork_block].into_iter().chain(fork_iter) {
+                        self.chain_store.remove_chain_info(&mut write_txn, &block.0, block.1.head.header.height)
+                    }
+                    write_txn.commit();
+
                     #[cfg(feature = "metrics")]
                     self.metrics.note_invalid_block();
+
                     return PushResult::Invalid(PushError::InvalidFork);
                 }
 

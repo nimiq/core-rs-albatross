@@ -4,7 +4,10 @@ use atomic::{Atomic, Ordering};
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::{AccountError, AccountType};
-use nimiq_block::{Block, BlockError};
+use nimiq_account::Account;
+use nimiq_account::PrunedAccount;
+use nimiq_account::VestingContract;
+use nimiq_block::{Block, BlockError, TargetCompact};
 use nimiq_blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Hash;
@@ -272,4 +275,71 @@ fn it_rebranches_to_the_harder_chain() {
 
     assert_eq!(blockchain.push(block2_4), PushResult::Rebranched);
     assert!(listener_called.load(Ordering::Relaxed));
+}
+
+#[test]
+fn it_deletes_invalid_forks() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+
+    // Create valid chain
+    let block1_2 = crate::next_block(&blockchain)
+        .with_nonce(83054)
+        .build();
+    assert_eq!(blockchain.push(block1_2), PushResult::Extended);
+    let block1_3 = crate::next_block(&blockchain)
+        .with_nonce(23192)
+        .build();
+    assert_eq!(blockchain.push(block1_3), PushResult::Extended);
+    let block1_4 = crate::next_block(&blockchain)
+        .with_nonce(39719)
+        .build();
+    assert_eq!(blockchain.push(block1_4), PushResult::Extended);
+
+    // Create fork with invalid pruned accounts
+    let fork_env = VolatileEnvironment::new(10).unwrap();
+    let fork = Blockchain::new(&fork_env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+    let pruned_account = PrunedAccount {
+        address: [1u8; Address::SIZE].into(),
+        account: Account::Vesting(VestingContract::new(Coin::from_u64_unchecked(0), [2u8; Address::SIZE].into(), 0, 500, Coin::from_u64_unchecked(2), Coin::from_u64_unchecked(200)))
+    };
+    let block2_2 = crate::next_block(&fork)
+        .with_height(2)
+        .with_pruned_accounts(vec![pruned_account])
+        .with_timestamp(fork.head().header.timestamp + 1)
+        .with_nonce(151483)
+        .build();
+    let hash2_2 = block2_2.header.hash();
+    let nbits2_3 = TargetCompact::from(0x1f00fde6);
+    let interlink2_3 = block2_2.get_next_interlink(&nbits2_3.into());
+    assert_eq!(blockchain.push(block2_2), PushResult::Forked);
+    assert!(blockchain.get_block(&hash2_2, true, false).is_some());
+
+    let block2_3 = crate::next_block(&fork)
+        .with_prev_hash(hash2_2.clone())
+        .with_height(3)
+        .with_nbits(nbits2_3)
+        .with_interlink(interlink2_3)
+        .with_timestamp(fork.head().header.timestamp + 2)
+        .with_nonce(105711)
+        .build();
+    let hash2_3 = block2_3.header.hash();
+    let nbits2_4 = TargetCompact::from(0x1f00fbc9);
+    let interlink2_4 = block2_3.get_next_interlink(&nbits2_4.into());
+    assert_eq!(blockchain.push(block2_3), PushResult::Forked);
+    assert!(blockchain.get_block(&hash2_3, true, false).is_some());
+
+    let block2_4 = crate::next_block(&fork)
+        .with_prev_hash(hash2_3.clone())
+        .with_height(4)
+        .with_nbits(nbits2_4)
+        .with_interlink(interlink2_4)
+        .with_timestamp(fork.head().header.timestamp + 3)
+        .with_nonce(21362)
+        .build();
+    let hash2_4 = block2_4.header.hash();
+    assert_eq!(blockchain.push(block2_4), PushResult::Invalid(PushError::InvalidFork));
+    assert!(blockchain.get_block(&hash2_2, true, false).is_none());
+    assert!(blockchain.get_block(&hash2_3, true, false).is_none());
+    assert!(blockchain.get_block(&hash2_4, true, false).is_none());
 }

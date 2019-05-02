@@ -1,9 +1,9 @@
+use nimiq_account::PrunedAccount;
+use nimiq_block::*;
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_network_primitives::networks::get_network_info;
-use nimiq_account::PrunedAccount;
-use nimiq_block::*;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
@@ -33,6 +33,7 @@ pub fn next_block<'env, 'bc>(blockchain: &'bc Blockchain<'env>) -> BlockBuilder<
 pub struct BlockBuilder<'env, 'bc> {
     blockchain: &'bc Blockchain<'env>,
     header: BlockHeader,
+    interlink: Option<BlockInterlink>,
     body: BlockBody,
 }
 
@@ -51,6 +52,7 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
                 timestamp: 0,
                 nonce: 0
             },
+            interlink: None,
             body: BlockBody {
                 miner: [0u8; Address::SIZE].into(),
                 extra_data: Vec::new(),
@@ -60,8 +62,13 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         }
     }
 
-    pub fn with_difficulty(mut self, difficulty: Difficulty) -> Self {
-        self.header.n_bits = difficulty.into();
+    pub fn with_prev_hash(mut self, prev_hash: Blake2bHash) -> Self {
+        self.header.prev_hash = prev_hash;
+        self
+    }
+
+    pub fn with_nbits(mut self, n_bits: TargetCompact) -> Self {
+        self.header.n_bits = n_bits;
         self
     }
 
@@ -100,6 +107,11 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         self
     }
 
+    pub fn with_interlink(mut self, interlink: BlockInterlink) -> Self {
+        self.interlink = Some(interlink);
+        self
+    }
+
     pub fn build(mut self) -> Block {
         let head = self.blockchain.head();
         let next_target = self.blockchain.get_next_target(None);
@@ -113,13 +125,18 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         if self.header.n_bits == 0.into() {
             self.header.n_bits = TargetCompact::from(&next_target);
         }
+        if self.header.prev_hash == [0u8; Blake2bHash::SIZE].into() {
+            self.header.prev_hash = self.blockchain.head_hash();
+        }
 
-        self.header.prev_hash = self.blockchain.head_hash();
         self.header.body_hash = self.body.hash();
 
-        let interlink = head.get_next_interlink(&next_target);
+        if self.interlink.is_none() {
+            self.interlink = Some(head.get_next_interlink(&next_target));
+        }
+
         let info = get_network_info(self.blockchain.network_id).unwrap();
-        self.header.interlink_hash = interlink.hash(info.genesis_block.header.hash());
+        self.header.interlink_hash = self.interlink.as_ref().unwrap().hash(info.genesis_block.header.hash());
 
         // XXX Use default accounts hash if body fails to apply.
         let state = self.blockchain.state();
@@ -130,7 +147,7 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
 
         Block {
             header: self.header,
-            interlink,
+            interlink: self.interlink.unwrap(),
             body: Some(self.body)
         }
     }

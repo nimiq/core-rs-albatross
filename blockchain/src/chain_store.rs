@@ -83,6 +83,12 @@ impl<'env> ChainStore<'env> {
         txn.put(&self.height_idx, &height, hash);
     }
 
+    pub fn remove_chain_info(&self, txn: &mut WriteTransaction, hash: &Blake2bHash, height: u32) {
+        txn.remove(&self.chain_db, hash);
+        txn.remove(&self.block_db, hash);
+        txn.remove_item(&self.height_idx, &height, hash);
+    }
+
     pub fn get_chain_info_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainInfo> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
