@@ -17,6 +17,10 @@ mod micro_block;
 mod pbft;
 mod slash;
 
+pub use self::block::Block;
+pub use self::macro_block::{MacroBlock, MacroHeader, MacroExtrinsics};
+pub use self::micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
+
 use crate::transaction::TransactionError;
 use beserial::Deserialize;
 use pairing::bls12_381::Bls12;
