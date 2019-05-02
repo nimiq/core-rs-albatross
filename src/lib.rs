@@ -10,6 +10,8 @@ use rand_chacha::ChaChaRng;
 use tiny_keccak::sha3_256;
 
 pub mod bls12_381;
+#[cfg(feature = "beserial")]
+pub mod serialization;
 
 /// Returns a hash of the given message in `G1`.
 pub fn hash_g1<E: Engine, M: AsRef<[u8]>>(msg: M) -> E::G1 {
