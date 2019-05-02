@@ -59,15 +59,15 @@ impl AccountTransactionInteraction for VestingContract {
         Ok(VestingContract::new(balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount))
     }
 
-    fn with_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
+    fn with_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn without_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
+    fn without_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32, _receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
 
         // Check vesting min cap.
@@ -82,10 +82,13 @@ impl AccountTransactionInteraction for VestingContract {
             return Err(AccountError::InvalidSignature);
         }
 
-        Ok(self.with_balance(balance))
+        Ok((self.with_balance(balance), None))
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
+    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+        if receipt.is_some() {
+            return Err(AccountError::InvalidForSender);
+        }
         let balance: Coin = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
         Ok(self.with_balance(balance))
     }

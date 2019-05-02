@@ -1,4 +1,4 @@
-use nimiq_account::AccountReceipt;
+use nimiq_account::Receipt;
 use nimiq_block::*;
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -92,7 +92,7 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         self
     }
 
-    pub fn with_account_receipts(mut self, account_receipts: Vec<AccountReceipt>) -> Self {
+    pub fn with_account_receipts(mut self, account_receipts: Vec<Receipt>) -> Self {
         self.body.account_receipts = account_receipts;
         self
     }

@@ -1,13 +1,13 @@
+use std::collections::btree_map::BTreeMap;
 use std::collections::HashSet;
-use std::ops::Deref;
 use std::hash::BuildHasher;
+use std::ops::Deref;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 use failure::Fail;
-pub use num::{ToPrimitive, FromPrimitive};
+pub use num::{FromPrimitive, ToPrimitive};
 
 pub use crate::types::uvar;
-
 
 mod types;
 #[cfg(feature = "bitvec")]
@@ -289,6 +289,46 @@ impl<T, H> SerializeWithLength for HashSet<T, H>
         let mut size = S::from_usize(self.len()).unwrap().serialized_size();
         for t in self {
             size += t.serialized_size();
+        }
+        size
+    }
+}
+
+// BTreeMaps
+
+impl<K, V> DeserializeWithLength for BTreeMap<K, V>
+    where K: Deserialize + Ord,
+        V: Deserialize
+{
+    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let len: D = Deserialize::deserialize(reader)?;
+        let len_u = len.to_usize().unwrap();
+        let mut v = BTreeMap::new();
+        for _ in 0..len_u {
+            v.insert(K::deserialize(reader)?, V::deserialize(reader)?);
+        }
+        Ok(v)
+    }
+}
+
+impl<K, V> SerializeWithLength for BTreeMap<K, V>
+    where K: Serialize + Ord,
+          V: Serialize
+{
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
+        for (k, v) in self {
+            size += k.serialize(writer)?;
+            size += v.serialize(writer)?;
+        }
+        Ok(size)
+    }
+
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        let mut size = S::from_usize(self.len()).unwrap().serialized_size();
+        for (k, v) in self {
+            size += k.serialized_size();
+            size += v.serialized_size();
         }
         size
     }

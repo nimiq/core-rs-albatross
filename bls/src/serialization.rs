@@ -23,6 +23,25 @@ impl Deserialize for PublicKey {
     }
 }
 
+impl Serialize for PublicKeyAffine {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        // TODO: Not really nice.
+        PublicKey::from(self.clone()).serialize(writer)
+    }
+
+    fn serialized_size(&self) -> usize {
+        PublicKey::SIZE
+    }
+}
+
+impl Deserialize for PublicKeyAffine {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let mut bytes = [0u8; PublicKey::SIZE];
+        reader.read_exact(&mut bytes)?;
+        Ok(PublicKey::from_slice(&bytes).map_err(|_| SerializingError::InvalidValue)?.into())
+    }
+}
+
 impl Serialize for SecretKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let bytes = self.to_bytes();

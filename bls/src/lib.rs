@@ -92,6 +92,8 @@ impl<E: Engine> PartialEq for PublicKey<E> {
     }
 }
 
+impl<E: Engine> Eq for PublicKey<E> {}
+
 impl<E: Engine> PublicKey<E> {
     pub fn from_secret(secret: &SecretKey<E>) -> Self {
         PublicKey {

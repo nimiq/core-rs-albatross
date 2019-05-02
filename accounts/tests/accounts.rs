@@ -1,6 +1,6 @@
 use beserial::Serialize;
 use nimiq_account::{Account, AccountError, AccountTransactionInteraction, AccountType, BasicAccount, PrunedAccount};
-use nimiq_account::AccountReceipt;
+use nimiq_account::Receipt;
 use nimiq_accounts::Accounts;
 use nimiq_block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
 use nimiq_database::ReadTransaction;
@@ -286,7 +286,7 @@ fn it_correctly_prunes_account() {
     }
 
     // Now do proper pruning
-    body.account_receipts = vec![AccountReceipt::Pruned(PrunedAccount {
+    body.account_receipts = vec![Receipt::PrunedAccount(PrunedAccount {
         address: contract_address.clone(),
         account: accounts.get(&contract_address, None)
             .with_outgoing_transaction(&tx_prune, 2).unwrap(),

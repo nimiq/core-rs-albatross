@@ -1,6 +1,6 @@
 use hex;
 
-use account::{Account, AccountType, PrunedAccount, VestingContract, AccountReceipt, AccountReceiptType};
+use account::{Account, AccountType, PrunedAccount, VestingContract, Receipt, ReceiptType};
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{BlockBody, BlockError};
 use hash::{Blake2bHash, Hash};
@@ -73,9 +73,9 @@ fn it_can_deserialize_b169500_body() {
     assert_eq!(body.transactions[2].fee, Coin::ZERO);
     assert_eq!(body.transactions[2].validity_start_height, 169497);
 
-    assert_eq!(body.account_receipts[0].receipt_type(), AccountReceiptType::Pruned);
+    assert_eq!(body.account_receipts[0].receipt_type(), ReceiptType::PrunedAccount);
     let receipt = match &body.account_receipts[0] {
-        AccountReceipt::Pruned(pruned_account) => pruned_account,
+        Receipt::PrunedAccount(pruned_account) => pruned_account,
     };
     assert_eq!(receipt.address, Address::from("ad8e224835e6cc0cadbcf500a49dae46f6769704"));
     assert_eq!(receipt.account.balance(), Coin::ZERO);
@@ -175,7 +175,7 @@ fn verify_rejects_unordered_pruned_accounts() {
     let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
     let mut account = body.account_receipts[0].clone();
     match account {
-        AccountReceipt::Pruned(ref mut account) => account.address = Address::from([1u8; Address::SIZE]),
+        Receipt::PrunedAccount(ref mut account) => account.address = Address::from([1u8; Address::SIZE]),
     }
     body.account_receipts.push(account);
     assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::AccountReceiptsNotOrdered));
@@ -195,6 +195,6 @@ fn verify_rejects_invalid_pruned_accounts() {
             vesting_total_amount: Coin::from_u64(1000).unwrap()
         })
     };
-    body.account_receipts.push(AccountReceipt::Pruned(pruned_account));
+    body.account_receipts.push(Receipt::PrunedAccount(pruned_account));
     assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::InvalidAccountReceipt));
 }

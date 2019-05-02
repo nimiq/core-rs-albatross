@@ -11,6 +11,7 @@ pub enum AccountType {
     Basic = 0,
     Vesting = 1,
     HTLC = 2,
+    Staking = 3,
 }
 
 impl AccountType {
@@ -19,6 +20,7 @@ impl AccountType {
             0 => Some(AccountType::Basic),
             1 => Some(AccountType::Vesting),
             2 => Some(AccountType::HTLC),
+            3 => Some(AccountType::Staking),
             _ => None
         }
     }

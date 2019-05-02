@@ -20,12 +20,15 @@ maintenance = { status = "experimental" }
 [dependencies]
 log = "0.4"
 failure = "0.1"
+parking_lot = "0.7"
 beserial = { path = "../../beserial", version = "0.1.0" }
 beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1.0" }
 nimiq-hash = { path = "../../hash", version = "0.1.0" }
 nimiq-keys = { path = "../../keys", version = "0.1.0" }
 nimiq-transaction = { path = "../transaction", version = "0.1.0" }
 nimiq-primitives = { path = "..", version = "0.1.0", features = ["coin"] }
+nimiq-bls = { path = "../../bls", version = "0.1.0" }
+nimiq-collections = { path = "../../collections" }
 
 [dev-dependencies]
 hex = "0.3"

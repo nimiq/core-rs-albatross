@@ -49,6 +49,9 @@ pub const TWO_THIRD_VALIDATORS: u16 = (2 * ACTIVE_VALIDATORS + 3) / 3;
 
 pub const EPOCH_LENGTH: u32 = 21600;
 
+/// Number of micro blocks to wait for unstaking after next macro block.
+pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.
+
 lazy_static! {
     static ref SUPPLY_CACHE: RwLock<Vec<u64>> = RwLock::new(vec![INITIAL_SUPPLY]);
 }
@@ -100,6 +103,10 @@ fn compute_block_reward(current_supply: u64, block_height: u32) -> u64 {
 
     let remainder = remaining % EMISSION_SPEED;
     (remaining - remainder) / EMISSION_SPEED
+}
+
+pub fn next_macro_block(block_height: u32) -> u32 {
+    unimplemented!() // TODO: Implement
 }
 
 #[cfg(feature = "coin")]

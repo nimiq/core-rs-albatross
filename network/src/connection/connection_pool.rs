@@ -1,17 +1,17 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::LinkedList;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
 use parking_lot::{ReentrantMutex, RwLock, RwLockReadGuard};
 
 use blockchain::Blockchain;
+use collections::SparseVec;
+use network_messages::SignalMessage;
 use network_primitives::address::net_address::{NetAddress, NetAddressType};
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::protocol::Protocol;
-use network_messages::SignalMessage;
 use utils::mutable_once::MutableOnce;
 use utils::observer::PassThroughNotifier;
 use utils::timers::Timers;
@@ -19,8 +19,8 @@ use utils::unique_ptr::UniquePtr;
 
 use crate::address::peer_address_book::PeerAddressBook;
 use crate::connection::{
-    NetworkConnection,
     network_agent::{NetworkAgent, NetworkAgentEvent},
+    NetworkConnection,
     signal_processor::SignalProcessor,
 };
 use crate::error::Error;
@@ -165,7 +165,7 @@ impl ConnectionPoolState {
     /// Add a new connection to the connection pool.
     fn add(&mut self, info: ConnectionInfo) -> ConnectionId {
         let peer_address = info.peer_address();
-        let connection_id = self.connections.insert(info);
+        let connection_id = self.connections.insert(info).unwrap();
 
         // Add to peer address map if available.
         if let Some(peer_address) = peer_address {
@@ -1010,87 +1010,4 @@ pub enum ConnectionPoolEvent {
     Close(ConnectionId, UniquePtr<ConnectionInfo>, CloseType),
     Connection(ConnectionId),
     RecyclingRequest,
-}
-
-/// This is a special vector implementation that has a O(1) remove function.
-/// It never shrinks in size, but reuses available spaces as much as possible.
-struct SparseVec<T> {
-    inner: Vec<Option<T>>,
-    free_indices: LinkedList<usize>,
-}
-
-impl<T> SparseVec<T> {
-    pub fn new() -> Self {
-        SparseVec {
-            inner: Vec::new(),
-            free_indices: LinkedList::new(),
-        }
-    }
-
-    pub fn get(&self, index: usize) -> Option<&T> {
-        self.inner.get(index)?.as_ref()
-    }
-
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.inner.get_mut(index)?.as_mut()
-    }
-
-    pub fn remove(&mut self, index: usize) -> Option<T> {
-        let value = self.inner.get_mut(index)?.take();
-        if value.is_some() {
-            self.free_indices.push_back(index);
-        }
-        value
-    }
-
-    pub fn insert(&mut self, value: T) -> usize {
-        if let Some(index) = self.free_indices.pop_front() {
-            self.inner[index].get_or_insert(value);
-            index
-        } else {
-            let index = self.inner.len();
-            self.inner.push(Some(value));
-            index
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sparse_vec_can_store_objects() {
-        let mut v = SparseVec::new();
-
-        // Insert.
-        let i1 = v.insert(5);
-        assert_eq!(i1, 0);
-        let i2 = v.insert(5);
-        assert_eq!(i2, 1);
-
-        // Read/Write access.
-        assert_eq!(v.get(i1), Some(&5));
-        *v.get_mut(i2).unwrap() = 8;
-        assert_eq!(v.get(i2), Some(&8));
-        assert_eq!(v.get(2), None);
-        assert_eq!(v.free_indices.len(), 0);
-
-        // Remove.
-        assert_eq!(v.remove(i1), Some(5));
-        assert_eq!(v.get(i1), None);
-        let i3 = v.insert(1);
-        assert_eq!(i3, 0);
-
-        assert_eq!(v.remove(i2), Some(8));
-        assert_eq!(v.remove(i2), None);
-        assert_eq!(v.free_indices.len(), 1);
-
-        let i4 = v.insert(2);
-        assert_eq!(i4, 1);
-        assert_eq!(v.free_indices.len(), 0);
-
-        let i5 = v.insert(4);
-        assert_eq!(i5, 2);
-    }
 }

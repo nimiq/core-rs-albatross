@@ -176,7 +176,7 @@ impl<'env> Mempool<'env> {
                 // Test incoming transaction.
                 match recipient_account.with_incoming_transaction(&transaction, block_height) {
                     Err(_) => return ReturnCode::Invalid,
-                    Ok(r) => {
+                    Ok((r, _)) => {
                         // Check recipient account against filter rules.
                         if !state.filter.accepts_recipient_account(&transaction, &recipient_account, &r) {
                             self.state.write().filter.blacklist(hash);
@@ -215,7 +215,7 @@ impl<'env> Mempool<'env> {
                 // Reject the transaction, if after the intrinsic check, the balance went too low
                 sender_account = match sender_account
                     .with_outgoing_transaction(tx, block_height) {
-                    Ok(s) => s,
+                    Ok((s, _)) => s,
                     Err(_) => return ReturnCode::Invalid
                 };
                 tx_count += 1;
@@ -231,7 +231,7 @@ impl<'env> Mempool<'env> {
             // Now, check the new transaction.
             let old_sender_account = sender_account.clone();
             sender_account = match sender_account.with_outgoing_transaction(&transaction, block_height) {
-                Ok(account) => account,
+                Ok((account, _)) => account,
                 Err(_) => return ReturnCode::Invalid // XXX More specific return code here?
             };
 
@@ -247,7 +247,7 @@ impl<'env> Mempool<'env> {
             // tx_opt already contains the first lower/fee byte transaction to check (if there is one remaining).
             while let Some(tx) = tx_opt {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if let Ok(account) = sender_account.with_outgoing_transaction(tx, block_height) {
+                    if let Ok((account, _)) = sender_account.with_outgoing_transaction(tx, block_height) {
                         sender_account = account;
                         tx_count += 1;
                     } else {
@@ -409,13 +409,16 @@ impl<'env> Mempool<'env> {
 
                     // Check if transaction is still valid for sender.
                     let sender_account_res = sender_account.with_outgoing_transaction(&tx, block_height);
-                    if sender_account_res.is_err() {
-                        txs_evicted.push(tx.clone());
-                        continue;
+                    match sender_account_res {
+                        Err(_) => {
+                            txs_evicted.push(tx.clone());
+                            continue;
+                        }
+                        Ok((account, _)) => {
+                            // Transaction ok.
+                            sender_account = account;
+                        }
                     }
-
-                    // Transaction ok.
-                    sender_account = sender_account_res.unwrap();
                 }
             }
         }
@@ -598,7 +601,7 @@ impl<'env> Mempool<'env> {
             if new_is_next {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
                     let tx = new_tx.unwrap();
-                    if let Ok(account) = sender_account.with_outgoing_transaction(*tx, block_height) {
+                    if let Ok((account, _)) = sender_account.with_outgoing_transaction(*tx, block_height) {
                         sender_account = account;
                         tx_count += 1;
                         txs_to_add.push(*tx)
@@ -608,7 +611,7 @@ impl<'env> Mempool<'env> {
             } else {
                 let tx = old_tx.unwrap();
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if let Ok(account) = sender_account.with_outgoing_transaction(tx, block_height) {
+                    if let Ok((account, _)) = sender_account.with_outgoing_transaction(tx, block_height) {
                         sender_account = account;
                         tx_count += 1;
                     } else {

@@ -54,15 +54,15 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         Ok(HashedTimeLockedContract::new(balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value))
     }
 
-    fn with_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
+    fn with_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn without_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
+    fn without_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32, _receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
         let balance: Coin = Account::balance_sub(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
         let proof_buf = &mut &transaction.proof[..];
         let proof_type: ProofType = Deserialize::deserialize(proof_buf)?;
@@ -122,10 +122,13 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
                 }
             }
         }
-        Ok(self.with_balance(balance))
+        Ok((self.with_balance(balance), None))
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
+    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+        if receipt.is_some() {
+            return Err(AccountError::InvalidForSender);
+        }
         let balance: Coin = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
         Ok(self.with_balance(balance))
     }

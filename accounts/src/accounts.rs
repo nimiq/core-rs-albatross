@@ -1,8 +1,8 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 use hex;
 
-use account::{Account, AccountError, AccountTransactionInteraction, AccountType, AccountReceipt, PrunedAccount};
+use account::{Account, AccountError, AccountTransactionInteraction, AccountType, AccountReceipt};
 use beserial::Deserialize;
 use block::{Block, BlockBody};
 use database::{Environment, ReadTransaction, WriteTransaction};
@@ -106,6 +106,8 @@ impl<'env> Accounts<'env> {
     }
 
     pub fn commit_block_body(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32) -> Result<(), AccountError> {
+        let mut receipts = Vec::new();
+        // TODO collect receipts
         self.process_senders(txn, &body.transactions, block_height,
                              |account, transaction, block_height| account.with_outgoing_transaction(transaction, block_height))?;
 
@@ -114,7 +116,7 @@ impl<'env> Accounts<'env> {
 
         self.create_contracts(txn, &body.transactions, block_height)?;
 
-        self.prune_accounts(txn, body)?;
+        self.prune_accounts(txn, body, receipts)?;
 
         self.process_miner_reward(txn, body, block_height,
                                   |account, transaction, block_height| account.with_incoming_transaction(transaction, block_height))?;
@@ -243,11 +245,20 @@ impl<'env> Accounts<'env> {
         Ok(())
     }
 
-    fn prune_accounts(&self, txn: &mut WriteTransaction, body: &BlockBody) -> Result<(), AccountError> {
+    fn prune_accounts(&self, txn: &mut WriteTransaction, body: &BlockBody, mut receipts: Vec<Receipt>) -> Result<(), AccountError> {
         let mut pruned_accounts: HashMap<Address, Account> = HashMap::new();
+        // Collected receipts other than pruning should exist in the body in the same order.
+        receipts.reverse();
+
         for account_receipt in &body.account_receipts {
             match account_receipt {
-                AccountReceipt::Pruned(pruned_account) => { pruned_accounts.insert(pruned_account.address.clone(), pruned_account.account.clone()); },
+                Receipt::PrunedAccount(pruned_account) => { pruned_accounts.insert(pruned_account.address.clone(), pruned_account.account.clone()); },
+                receipt => {
+                    let other_receipt = receipts.pop().ok_or(AccountError::InvalidPruning)?;
+                    if *receipt != other_receipt {
+                        return Err(AccountError::InvalidPruning);
+                    }
+                },
             }
         }
 
@@ -276,13 +287,15 @@ impl<'env> Accounts<'env> {
         Ok(())
     }
 
-    fn restore_accounts(&self, txn: &mut WriteTransaction, body: &BlockBody) -> Result<(), AccountError> {
+    fn restore_accounts(&self, txn: &mut WriteTransaction, body: &BlockBody) -> Result<Vec<Receipt>, AccountError> {
+        let mut receipts = Vec::new();
         for account_receipt in &body.account_receipts {
             match account_receipt {
-                AccountReceipt::Pruned(pruned_account) => { self.tree.put_batch(txn, &pruned_account.address, pruned_account.account.clone()); },
+                Receipt::PrunedAccount(pruned_account) => { self.tree.put_batch(txn, &pruned_account.address, pruned_account.account.clone()); },
+                other => receipts.push(other.clone()),
             }
         }
-        Ok(())
+        Ok(receipts)
     }
 
     pub fn get_accounts_proof(&self, txn: &db::Transaction, addresses: &[Address]) -> AccountsProof {

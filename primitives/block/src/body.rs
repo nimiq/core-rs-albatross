@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, io};
 
-use account::AccountReceipt;
+use account::Receipt;
 use beserial::{Deserialize, Serialize};
 use hash::{Hash, HashOutput, SerializeContent};
 use keys::Address;
@@ -18,7 +18,7 @@ pub struct BlockBody {
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
     #[beserial(len_type(u16))]
-    pub account_receipts: Vec<AccountReceipt>,
+    pub account_receipts: Vec<Receipt>,
 }
 
 impl SerializeContent for BlockBody {
@@ -64,7 +64,7 @@ impl BlockBody {
             }
         }
 
-        let mut previous_acc: Option<&AccountReceipt> = None;
+        let mut previous_acc: Option<&Receipt> = None;
         for acc in &self.account_receipts {
             // Ensure pruned accounts are ordered and unique.
             if let Some(previous) = previous_acc {
@@ -82,11 +82,12 @@ impl BlockBody {
 
             // Check that the account is actually supposed to be pruned.
             match acc {
-                AccountReceipt::Pruned(acc) => {
+                Receipt::PrunedAccount(acc) => {
                     if !acc.account.is_to_be_pruned() {
                         return Err(BlockError::InvalidAccountReceipt);
                     }
                 },
+                _ => unreachable!(),
             }
         }
 

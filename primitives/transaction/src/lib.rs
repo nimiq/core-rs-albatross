@@ -220,9 +220,8 @@ impl Transaction {
         }
 
         // Check that value > 0.
-        if self.value == Coin::ZERO {
-            return Err(TransactionError::ZeroValue);
-        }
+        // We need 0 valued transactions in Albatross,
+        // thus this check has been moved to verify_incoming_transaction.
 
         // Check that value + fee doesn't overflow.
         match self.value.checked_add(self.fee) {

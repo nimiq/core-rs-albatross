@@ -12,7 +12,7 @@ use std::io;
 
 use failure::Fail;
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt, SerializeWithLength, DeserializeWithLength};
 use hash::{Hash, Hasher, HashOutput, SerializeContent};
 use keys::Address;
 pub use primitives::account::AccountType;
@@ -22,24 +22,26 @@ use transaction::{Transaction, TransactionError};
 pub use self::basic_account::BasicAccount;
 pub use self::htlc_contract::HashedTimeLockedContract;
 pub use self::vesting_contract::VestingContract;
+pub use self::staking_contract::StakingContract;
 use primitives::coin::CoinParseError;
 
 pub mod basic_account;
 pub mod htlc_contract;
 pub mod vesting_contract;
+pub mod staking_contract;
 
 pub trait AccountTransactionInteraction: Sized {
     fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
 
     fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
 
-    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
+    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError>;
 
-    fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
+    fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError>;
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
+    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError>;
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
+    fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError>;
 }
 
 macro_rules! invoke_account_instance {
@@ -48,6 +50,30 @@ macro_rules! invoke_account_instance {
             Account::Basic(ref account) => Ok(Account::Basic(account.$name($( $arg ),*)?)),
             Account::Vesting(ref account) => Ok(Account::Vesting(account.$name($( $arg ),*)?)),
             Account::HTLC(ref account) => Ok(Account::HTLC(account.$name($( $arg ),*)?)),
+            Account::Staking(ref account) => Ok(Account::Staking(account.$name($( $arg ),*)?)),
+        }
+    }
+}
+
+macro_rules! invoke_account_instance_receipt {
+    ($on: expr, $name: ident, $( $arg: ident ),*) => {
+        match $on {
+            Account::Basic(ref account) => {
+                let (account, data) = account.$name($( $arg ),*)?;
+                Ok((Account::Basic(account), data))
+            },
+            Account::Vesting(ref account) => {
+                let (account, data) = account.$name($( $arg ),*)?;
+                Ok((Account::Vesting(account), data))
+            },
+            Account::HTLC(ref account) => {
+                let (account, data) = account.$name($( $arg ),*)?;
+                Ok((Account::HTLC(account), data))
+            },
+            Account::Staking(ref account) => {
+                let (account, data) = account.$name($( $arg ),*)?;
+                Ok((Account::Staking(account), data))
+            },
         }
     }
 }
@@ -57,6 +83,7 @@ pub enum Account {
     Basic(BasicAccount),
     Vesting(VestingContract),
     HTLC(HashedTimeLockedContract),
+    Staking(StakingContract),
 }
 
 impl Account {
@@ -70,7 +97,8 @@ impl Account {
         match *self {
             Account::Basic(_) => AccountType::Basic,
             Account::Vesting(_) => AccountType::Vesting,
-            Account::HTLC(_) => AccountType::HTLC
+            Account::HTLC(_) => AccountType::HTLC,
+            Account::Staking(_) => AccountType::Staking,
         }
     }
 
@@ -78,7 +106,8 @@ impl Account {
         match *self {
             Account::Basic(ref account) => account.balance,
             Account::Vesting(ref account) => account.balance,
-            Account::HTLC(ref account) => account.balance
+            Account::HTLC(ref account) => account.balance,
+            Account::Staking(ref account) => account.balance,
         }
     }
 
@@ -91,7 +120,7 @@ impl Account {
 
     pub fn is_to_be_pruned(&self) -> bool {
         match *self {
-            Account::Basic(_) => false,
+            Account::Basic(_) | Account::Staking(_) => false,
             _ => self.balance() == Coin::ZERO,
         }
     }
@@ -123,6 +152,9 @@ impl Serialize for Account {
             Account::HTLC(ref account) => {
                 size += Serialize::serialize(&account, writer)?;
             }
+            Account::Staking(ref account) => {
+                size += Serialize::serialize(&account, writer)?;
+            }
         }
 
         Ok(size)
@@ -139,6 +171,9 @@ impl Serialize for Account {
                 size += Serialize::serialized_size(&account);
             }
             Account::HTLC(ref account) => {
+                size += Serialize::serialized_size(&account);
+            }
+            Account::Staking(ref account) => {
                 size += Serialize::serialized_size(&account);
             }
         }
@@ -164,6 +199,10 @@ impl Deserialize for Account {
                 let account: HashedTimeLockedContract = Deserialize::deserialize(reader)?;
                 Ok(Account::HTLC(account))
             }
+            AccountType::Staking => {
+                let account: StakingContract = Deserialize::deserialize(reader)?;
+                Ok(Account::Staking(account))
+            }
         }
     }
 }
@@ -173,7 +212,8 @@ impl AccountTransactionInteraction for Account {
         match account_type {
             AccountType::Basic => Err(AccountError::InvalidForRecipient),
             AccountType::Vesting => Ok(Account::Vesting(VestingContract::create(balance, transaction, block_height)?)),
-            AccountType::HTLC => Ok(Account::HTLC(HashedTimeLockedContract::create(balance, transaction, block_height)?))
+            AccountType::HTLC => Ok(Account::HTLC(HashedTimeLockedContract::create(balance, transaction, block_height)?)),
+            AccountType::Staking => Err(AccountError::InvalidForRecipient),
         }
     }
 
@@ -181,15 +221,15 @@ impl AccountTransactionInteraction for Account {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        invoke_account_instance!(*self, with_incoming_transaction, transaction, block_height)
+    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
+        invoke_account_instance_receipt!(*self, with_incoming_transaction, transaction, block_height)
     }
 
-    fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        invoke_account_instance!(*self, without_incoming_transaction, transaction, block_height)
+    fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+        invoke_account_instance!(*self, without_incoming_transaction, transaction, block_height, receipt)
     }
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
+    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
         // Check account balance.
         // This assumes that transaction.value + transaction.fee does not overflow.
         let balance = self.balance();
@@ -198,38 +238,54 @@ impl AccountTransactionInteraction for Account {
             return Err(AccountError::InsufficientFunds { balance, needed: value});
         }
 
-        invoke_account_instance!(*self, with_outgoing_transaction, transaction, block_height)
+        invoke_account_instance_receipt!(*self, with_outgoing_transaction, transaction, block_height)
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError> {
-        invoke_account_instance!(*self, without_outgoing_transaction, transaction, block_height)
+    fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+        invoke_account_instance!(*self, without_outgoing_transaction, transaction, block_height, receipt)
     }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum AccountReceiptType {
-    Pruned = 0,
+pub enum ReceiptType {
+    PrunedAccount = 0,
+    Transaction = 1,
 }
 
+/// TODO: Receipts do not necessarily need to be part of the block.
+/// They are only needed for reversion of blocks, but if the blocks have been applied before,
+/// the information can also be stored off-chain.
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub enum AccountReceipt {
-    Pruned(PrunedAccount),
+pub enum Receipt {
+    PrunedAccount(PrunedAccount),
+    Transaction {
+        sender: bool, // A bit inefficient.
+        tx_id: u16,
+        //#[beserial(len_type(u16))]
+        data: Vec<u8>,
+    },
 }
 
-impl AccountReceipt {
-    pub fn receipt_type(&self) -> AccountReceiptType {
+impl Receipt {
+    pub fn receipt_type(&self) -> ReceiptType {
         match self {
-            AccountReceipt::Pruned(_) => AccountReceiptType::Pruned,
+            Receipt::PrunedAccount(_) => ReceiptType::PrunedAccount,
+            Receipt::Transaction {..} => ReceiptType::Transaction,
         }
     }
 }
 
-impl Serialize for AccountReceipt {
+impl Serialize for Receipt {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = self.receipt_type().serialize(writer)?;
         match self {
-            AccountReceipt::Pruned(pruned_account) => size += pruned_account.serialize(writer)?,
+            Receipt::PrunedAccount(pruned_account) => size += pruned_account.serialize(writer)?,
+            Receipt::Transaction { tx_id, sender, data } => {
+                size += tx_id.serialize(writer)?;
+                size += sender.serialize(writer)?;
+                size += SerializeWithLength::serialize::<u16, W>(data, writer)?;
+            },
         }
         Ok(size)
     }
@@ -237,26 +293,36 @@ impl Serialize for AccountReceipt {
     fn serialized_size(&self) -> usize {
         let mut size = self.receipt_type().serialized_size();
         match self {
-            AccountReceipt::Pruned(pruned_account) => size += pruned_account.serialized_size(),
+            Receipt::PrunedAccount(pruned_account) => size += pruned_account.serialized_size(),
+            Receipt::Transaction { tx_id, sender, data } => {
+                size += tx_id.serialized_size();
+                size += sender.serialized_size();
+                size += SerializeWithLength::serialized_size::<u16>(data);
+            },
         }
         size
     }
 }
 
-impl Deserialize for AccountReceipt {
+impl Deserialize for Receipt {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let ty: AccountReceiptType = Deserialize::deserialize(reader)?;
+        let ty: ReceiptType = Deserialize::deserialize(reader)?;
         match ty {
-            AccountReceiptType::Pruned => Ok(AccountReceipt::Pruned(Deserialize::deserialize(reader)?))
+            ReceiptType::PrunedAccount => Ok(Receipt::PrunedAccount(Deserialize::deserialize(reader)?)),
+            ReceiptType::Transaction => Ok(Receipt::Transaction {
+                tx_id: Deserialize::deserialize(reader)?,
+                sender: Deserialize::deserialize(reader)?,
+                data: DeserializeWithLength::deserialize::<u16, R>(reader)?,
+            }),
         }
     }
 }
 
-impl SerializeContent for AccountReceipt {
+impl SerializeContent for Receipt {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
-impl Hash for AccountReceipt {
+impl Hash for Receipt {
     fn hash<H: HashOutput>(&self) -> H  {
         let h = H::Builder::default();
         self.serialize_content(&mut vec![]).unwrap();
@@ -264,16 +330,23 @@ impl Hash for AccountReceipt {
     }
 }
 
-impl Ord for AccountReceipt {
-    fn cmp(&self, other: &AccountReceipt) -> Ordering {
+impl Ord for Receipt {
+    fn cmp(&self, other: &Receipt) -> Ordering {
         match (self, other) {
-            (AccountReceipt::Pruned(a), AccountReceipt::Pruned(b)) => a.cmp(b),
+            (Receipt::PrunedAccount(a), Receipt::PrunedAccount(b)) => a.cmp(b),
+            (Receipt::Transaction { tx_id: tx_id_a, sender: sender_a, data: data_a }, Receipt::Transaction { tx_id: tx_id_b, sender: sender_b, data: data_b }) => {
+                // Ensure order is the same as when processing the block.
+                sender_a.cmp(sender_b).reverse()
+                    .then_with(|| tx_id_a.cmp(tx_id_b))
+                    .then_with(|| data_a.cmp(data_b))
+            },
+            (a, b) => a.receipt_type().cmp(&b.receipt_type())
         }
     }
 }
 
-impl PartialOrd for AccountReceipt {
-    fn partial_cmp(&self, other: &AccountReceipt) -> Option<Ordering> {
+impl PartialOrd for Receipt {
+    fn partial_cmp(&self, other: &Receipt) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
