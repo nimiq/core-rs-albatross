@@ -3,7 +3,6 @@ use beserial::{Deserialize, Serialize};
 use nimiq_keys::{Signature, PublicKey};
 use hash::{Hash, Blake2bHash, HashOutput, SerializeContent};
 use std::io;
-use pairing::bls12_381::Bls12;
 use beserial::WriteBytesExt;
 use beserial::ReadBytesExt;
 use beserial::SerializingError;
@@ -17,13 +16,7 @@ pub struct PbftJustification {
 
 impl PbftJustification {
     pub fn verify(&self, hash: Blake2bHash) -> bool {
-        if !self.prepare.keys.verify(hash.as_bytes(), &self.prepare.signatures) {
-            return false;
-        }
-        if !self.commit.keys.verify(hash.as_bytes(), &self.commit.signatures) {
-            return false;
-        }
-        return true;
+        unimplemented!()
     }
 }
 
@@ -42,7 +35,7 @@ impl Hash for PbftProof { }
 
 impl PbftProof {
     pub fn verify(&self) {
-        self.public_key.verify(&self.signature, self.hash.as_bytes());
+        unimplemented!()
     }
 }
 

@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_keys::Signature;
+use nimiq_bls::bls12_381::Signature;
 use crate::micro_block::MicroHeader;
 
 

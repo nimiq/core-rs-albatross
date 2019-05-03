@@ -29,8 +29,8 @@ enum-display-derive = "0.1"
 beserial = { path = "../beserial", version = "0.1.0" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
 nimiq-bls = { path = "../bls" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
 nimiq-hash = { path = "../hash", version = "0.1.0" }
-nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-keys = { path = "../keys", version = "0.1.0" }
 nimiq-macros = { path = "../macros", version = "0.1.0" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["networks", "subscription", "version"] }

@@ -17,14 +17,14 @@ beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive"}
 fixed-unsigned = { path = "../../fixed-unsigned" }
 nimiq-hash = { path = "../../hash" }
+nimiq-hash_derive = { path = "../../hash/hash_derive" }
 nimiq-keys = { path = "../../keys" }
 nimiq-utils = { path = "../../utils", features = ["merkle"] }
 nimiq-primitives = { path = "..", features = ["policy", "networks"] }
 nimiq-transaction = { path = "../transaction" }
 nimiq-account = { path = "../account" }
 nimiq-macros = { path = "../../macros" }
-nimiq-bls = { git = "https://github.com/nimiq/bls" }
-pairing = { git = "https://github.com/paberr/librustzcash" }
+nimiq-bls = { path = "../../bls" }
 num-bigint = "0.2"
 log = "0.4"
 hex = "0.3"

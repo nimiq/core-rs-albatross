@@ -4,8 +4,6 @@
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
-extern crate nimiq_hash_derive as hash_derive;
-#[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate enum_display_derive;
@@ -21,8 +19,7 @@ extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
 extern crate nimiq_bls as bls;
-
-mod signed;
+extern crate nimiq_block_albatross as block_albatross;
 
 use std::io;
 use std::io::Read;
@@ -48,7 +45,7 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
-use crate::signed::{SignedMessage, ViewChange, PbftPrepareMessage, PbftCommitMessage};
+use block_albatross::{SignedViewChange, SlashInherent};
 
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
@@ -97,7 +94,7 @@ pub enum MessageType {
     GetValidatorAddr = 100,
     ValidatorAddr = 101,
     ViewChange = 102,
-    Slash = 103,
+    SlashInherent = 103,
     PbftProposal = 104,
     PbftPrepare = 105,
     PbftCommit = 106,
@@ -146,11 +143,11 @@ pub enum Message {
     // Albatross
     GetValidatorAddr(Box<GetValidatorAddrMessage>),
     ValidatorAddr(Vec<ValidatorAddrMessage>),
-    ViewChange(Box<SignedMessage<ViewChange>>),
-    Slash(Box<SlashMessage>),
-    PbftProposal(Box<PbftProposalMessage>),
-    PbftPrepare(Box<SignedMessage<PbftPrepareMessage>>),
-    PbftCommit(Box<SignedMessage<PbftCommitMessage>>)
+    ViewChange(Box<SignedViewChange>),
+    SlashInherent(Box<SlashInherent>),
+    PbftProposal(Box<()>), // TODO
+    PbftPrepare(Box<()>), // TODO
+    PbftCommit(Box<()>) // TODO
 }
 
 impl Message {
@@ -192,7 +189,7 @@ impl Message {
             Message::GetValidatorAddr(_) => MessageType::GetValidatorAddr,
             Message::ValidatorAddr(_) => MessageType::ValidatorAddr,
             Message::ViewChange(_) => MessageType::ViewChange,
-            Message::Slash(_) => MessageType::Slash,
+            Message::SlashInherent(_) => MessageType::SlashInherent,
             Message::PbftProposal(_) => MessageType::PbftProposal,
             Message::PbftPrepare(_) => MessageType::PbftPrepare,
             Message::PbftCommit(_) => MessageType::PbftCommit,
@@ -295,7 +292,7 @@ impl Deserialize for Message {
             MessageType::GetValidatorAddr => Message::GetValidatorAddr(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::ValidatorAddr => Message::ValidatorAddr(DeserializeWithLength::deserialize::<u8, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
             MessageType::ViewChange => Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::Slash => Message::Slash(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::SlashInherent => Message::SlashInherent(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftProposal => Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftPrepare => Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftCommit => Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
@@ -362,7 +359,7 @@ impl Serialize for Message {
             Message::GetValidatorAddr(get_validator_addr_message) => get_validator_addr_message.serialize(&mut v)?,
             Message::ValidatorAddr(validator_addrs) => validator_addrs.serialize::<u8, Vec<u8>>(&mut v)?,
             Message::ViewChange(view_change_message) => view_change_message.serialize(&mut v)?,
-            Message::Slash(slash_message) => slash_message.serialize(&mut v)?,
+            Message::SlashInherent(slash_message) => slash_message.serialize(&mut v)?,
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
             Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
@@ -418,7 +415,7 @@ impl Serialize for Message {
             Message::GetValidatorAddr(get_validator_addr_message) => get_validator_addr_message.serialized_size(),
             Message::ValidatorAddr(validator_addr_message) => validator_addr_message.serialized_size::<u8>(),
             Message::ViewChange(view_change_message) => view_change_message.serialized_size(),
-            Message::Slash(slash_message) => slash_message.serialized_size(),
+            Message::SlashInherent(slash_message) => slash_message.serialized_size(),
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialized_size(),
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialized_size(),
             Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
@@ -540,7 +537,7 @@ impl MessageNotifier {
             Message::Head(header) => self.head.read().notify(*header),
             // Albatross
             // TODO
-            _ => warn!("Notify unimplemented for: {}", msg.ty()),
+            _ => panic!("Notify not implemented for: {}", msg.ty()),
         }
     }
 }
@@ -1074,14 +1071,4 @@ pub struct GetValidatorAddrMessage {
 pub struct ValidatorAddrMessage {
     validator_id: ValidatorId,
     peer_address: PeerAddress,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SlashMessage {
-    // TODO
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PbftProposalMessage {
-    // TODO macro block hash
 }

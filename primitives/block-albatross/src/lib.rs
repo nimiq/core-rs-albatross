@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
+extern crate nimiq_hash_derive as hash_derive;
+#[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
 extern crate nimiq_hash as hash;
@@ -16,14 +18,17 @@ mod macro_block;
 mod micro_block;
 mod pbft;
 mod slash;
+mod view_change;
+pub mod signed;
 
-pub use self::block::Block;
-pub use self::macro_block::{MacroBlock, MacroHeader, MacroExtrinsics};
-pub use self::micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
+pub use block::Block;
+pub use macro_block::{MacroBlock, MacroHeader, MacroExtrinsics};
+pub use micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
+pub use view_change::{ViewChange, SignedViewChange};
+pub use slash::SlashInherent;
 
 use crate::transaction::TransactionError;
 use beserial::Deserialize;
-use pairing::bls12_381::Bls12;
 use beserial::SerializingError;
 use beserial::WriteBytesExt;
 use beserial::Serialize;

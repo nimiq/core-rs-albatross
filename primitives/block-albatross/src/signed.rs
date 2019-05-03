@@ -1,9 +1,11 @@
 use beserial::{Serialize, Deserialize, uvar};
-use nimiq_bls::bls12_381::{Signature, SecretKey};
-use hash::{Blake2bHash, Blake2bHasher, SerializeContent, Hasher};
-use byteorder::WriteBytesExt;
+use nimiq_bls::bls12_381::{Signature, SecretKey, PublicKey};
+use nimiq_bls::SigHash;
+use hash::{Blake2bHasher, Blake2bHash, SerializeContent, Hasher, Hash};
+use beserial::WriteBytesExt;
 
 use std::fmt::Debug;
+use std::io::Write;
 
 
 // TODO: To use a binomial swap forest:
@@ -15,9 +17,7 @@ use std::fmt::Debug;
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SignedMessage<M>
-    where M: Message + Clone + Debug + Serialize + Deserialize
-{
+pub struct SignedMessage<M: Message> {
     // the signed message
     //  - view change: (VIEW-CHANGE, i + 1, b)
     //    - i: current view change number
@@ -36,6 +36,12 @@ pub struct SignedMessage<M>
     pub signature: Signature
 }
 
+impl<M: Message> SignedMessage<M> {
+    pub fn verify(&self, public_key: &PublicKey) -> bool {
+        public_key.verify_hash(self.message.hash_with_prefix(), &self.signature)
+    }
+}
+
 
 // XXX The contents of ViewChangeMessage and PbftMessage (and any other message that is signed by
 // a validator) must be distinguishable!
@@ -43,33 +49,27 @@ pub struct SignedMessage<M>
 // prefixed at one place to not accidently create collisions.
 
 // prefix to sign view change messages
-const PREFIX_VIEW_CHANGE: u8 = 0x01;
+pub const PREFIX_VIEW_CHANGE: u8 = 0x01;
 // prefix to sign pbft-prepare messages
-const PREFIX_PBFT_PREPARE: u8 = 0x02;
+pub const PREFIX_PBFT_PREPARE: u8 = 0x02;
 // prefix to sign pbft-commit messages
-const PREFIX_PBFT_COMMIT: u8 = 0x03;
+pub const PREFIX_PBFT_COMMIT: u8 = 0x03;
 // prefix to sign proof of knowledge of secret key
-const PREFIX_POKOSK: u8 = 0x04;
+pub const PREFIX_POKOSK: u8 = 0x04;
 
-pub trait Message: Clone + Debug + SerializeContent {
+pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent {
     const PREFIX: u8;
 
-    fn sign(&self, secret_key: &SecretKey) -> Signature {
+    fn hash_with_prefix(&self) -> SigHash {
         let mut h = Blake2bHasher::new();
         h.write_u8(Self::PREFIX).expect("Failed to write prefix to hasher for signature.");
         self.serialize_content(&mut h).expect("Failed to write message to hasher for signature.");
-        secret_key.sign_hash(h.finish())
+        h.finish()
     }
-}
 
-#[derive(Clone, Debug, Serialize, Deserialize, SerializeContent)]
-pub struct ViewChange {
-    pub view_change_number: uvar,
-    pub block_number: uvar,
-}
-
-impl Message for ViewChange {
-    const PREFIX: u8 = PREFIX_VIEW_CHANGE;
+    fn sign(&self, secret_key: &SecretKey) -> Signature {
+        secret_key.sign_hash(self.hash_with_prefix())
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent)]

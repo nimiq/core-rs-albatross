@@ -36,16 +36,24 @@ pub trait Encoding: Sized {
     fn from_slice(bytes: &[u8]) -> Result<Self, Self::Error>;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct Signature<E: Engine> {
     pub(crate) s: E::G1,
 }
 
-#[derive(Clone, Copy, Debug, Eq)]
+impl<E: Engine> Eq for Signature<E>{}
+impl<E: Engine> PartialEq for Signature<E> {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq(other)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct SecretKey<E: Engine> {
     pub(crate) x: E::Fr,
 }
 
+impl<E: Engine> Eq for SecretKey<E>{}
 impl<E: Engine> PartialEq for SecretKey<E> {
     fn eq(&self, other: &Self) -> bool {
         self.x.eq(&other.x)
@@ -72,11 +80,12 @@ impl<E: Engine> SecretKey<E> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct PublicKey<E: Engine> {
     pub(crate) p_pub: E::G2,
 }
 
+impl<E: Engine> Eq for PublicKey<E>{}
 impl<E: Engine> PartialEq for PublicKey<E> {
     fn eq(&self, other: &Self) -> bool {
         self.p_pub.eq(&other.p_pub)
