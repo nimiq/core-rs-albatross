@@ -7,7 +7,7 @@ use beserial::{Deserialize, Serialize};
 use hash::{Hash, Blake2bHash, SerializeContent};
 use keys::{Signature, PublicKey};
 use transaction::Transaction;
-use crate::AggregateProof;
+use crate::view_change::ViewChangeProof;
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroDigest {
@@ -41,7 +41,7 @@ pub struct MicroExtrinsics {
     pub timestamp: u64,
     pub seed: u64,
     pub seed_signature: Signature,
-    pub view_change_proof: Option<AggregateProof>,
+    pub view_change_proof: Option<ViewChangeProof>,
     #[beserial(len_type(u16))]
     pub slash_inherents: Vec<SlashInherent>,
     #[beserial(len_type(u16))]

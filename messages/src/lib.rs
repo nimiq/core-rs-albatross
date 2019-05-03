@@ -7,8 +7,6 @@ extern crate beserial_derive;
 extern crate bitflags;
 #[macro_use]
 extern crate enum_display_derive;
-#[macro_use]
-extern crate log;
 extern crate nimiq_block as block;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;

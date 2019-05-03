@@ -10,7 +10,7 @@ use rand::{Rng, SeedableRng};
 use rand04_compat::RngExt;
 use rand_chacha::ChaChaRng;
 
-use hash::{Hash, HashOutput, Blake2bHash};
+use hash::{Hash, Blake2bHash};
 
 pub mod bls12_381;
 #[cfg(feature = "beserial")]
@@ -144,7 +144,7 @@ impl<E: Engine> Keypair<E> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug)]
 pub struct AggregatePublicKey<E: Engine>(pub(crate) PublicKey<E>);
 
 impl<E: Engine> AggregatePublicKey<E> {
@@ -185,7 +185,14 @@ impl<E: Engine> AggregatePublicKey<E> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+impl<E: Engine> Eq for AggregatePublicKey<E> {}
+impl<E: Engine> PartialEq for AggregatePublicKey<E> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct AggregateSignature<E: Engine>(pub(crate) Signature<E>);
 
 impl<E: Engine> AggregateSignature<E> {
@@ -234,6 +241,13 @@ impl<E: Engine> AggregateSignature<E> {
             rhs.mul_assign(&E::pairing(hash_to_g1::<E>(h), public_keys[i].p_pub));
         }
         lhs == rhs
+    }
+}
+
+impl<E: Engine> Eq for AggregateSignature<E> {}
+impl<E: Engine> PartialEq for AggregateSignature<E> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
     }
 }
 

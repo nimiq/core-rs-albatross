@@ -1,11 +1,6 @@
 use beserial::{Deserialize, Serialize};
 
-use nimiq_keys::{Signature, PublicKey};
-use hash::{Hash, Blake2bHash, HashOutput, SerializeContent};
-use std::io;
-use beserial::WriteBytesExt;
-use beserial::ReadBytesExt;
-use beserial::SerializingError;
+use hash::SerializeContent;
 use super::signed;
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
@@ -19,3 +14,4 @@ impl signed::Message for ViewChange {
 }
 
 pub type SignedViewChange = signed::SignedMessage<ViewChange>;
+pub type ViewChangeProof = signed::AggregateProof<ViewChange>;

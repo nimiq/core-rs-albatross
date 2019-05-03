@@ -5,8 +5,7 @@ use hash::{Hash, Blake2bHash, SerializeContent};
 use beserial::{Deserialize, Serialize};
 use nimiq_keys::{Signature, PublicKey};
 use std::io;
-use crate::AggregateProof;
-use hash::HashOutput;
+use crate::view_change::ViewChangeProof;
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroDigest {
@@ -43,7 +42,7 @@ pub struct MacroExtrinsics {
     pub seed: u64,
     pub producer_public_key: PublicKey,
     pub seed_signature: Signature,
-    pub view_change_proof: Option<AggregateProof>,
+    pub view_change_proof: Option<ViewChangeProof>,
 }
 
 impl SerializeContent for MacroExtrinsics {
@@ -62,7 +61,7 @@ pub struct MacroBlock {
 impl MacroBlock {
     pub fn verify(&self) -> bool {
         if let Some(justification) = &self.justification {
-            if !justification.verify(self.hash()) {
+            if !justification.verify(self.hash(), unimplemented!("Signature Threshold")) {
                 return false;
             }
         }
