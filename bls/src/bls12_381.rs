@@ -1,13 +1,17 @@
+use std::cmp::Ordering;
+
 use byteorder::{BigEndian, ByteOrder};
-use pairing::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError, Engine};
-use pairing::{PrimeField, PrimeFieldDecodingError};
+use ff::{PrimeField, PrimeFieldDecodingError};
+use group::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError};
 use pairing::bls12_381::{Bls12, Fr, FrRepr, G1Compressed, G2Compressed};
+use pairing::Engine;
 
 use crate::Encoding;
 
 use super::{
     AggregatePublicKey as GenericAggregatePublicKey,
     AggregateSignature as GenericAggregateSignature,
+    hash_g1,
     Keypair as GenericKeyPair,
     PublicKey as GenericPublicKey,
     SecretKey as GenericSecretKey,
@@ -23,6 +27,55 @@ pub type AggregatePublicKey = GenericAggregatePublicKey<Bls12>;
 pub type AggregateSignature = GenericAggregateSignature<Bls12>;
 
 pub type Hash = <Bls12 as Engine>::G1Affine;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq,)]
+pub struct PublicKeyAffine {
+    pub(crate) p_pub: <Bls12 as Engine>::G2Affine,
+}
+
+impl PartialOrd<PublicKeyAffine> for PublicKeyAffine {
+    fn partial_cmp(&self, other: &PublicKeyAffine) -> Option<Ordering> {
+        Some(self.p_pub.lexicographic_cmp(&other.p_pub))
+    }
+}
+
+impl Ord for PublicKeyAffine {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.p_pub.lexicographic_cmp(&other.p_pub)
+    }
+}
+
+impl PublicKeyAffine {
+    pub fn from_secret(secret: &SecretKey) -> Self {
+        PublicKey::from_secret(secret).into()
+    }
+
+    pub fn verify<M: AsRef<[u8]>>(&self, msg: M, signature: &Signature) -> bool {
+        self.verify_hash(hash_g1::<Bls12, M>(msg), signature)
+    }
+
+    pub fn verify_hash<H: Into<<Bls12 as Engine>::G1Affine>>(&self, hash: H, signature: &Signature) -> bool {
+        let lhs = Bls12::pairing(signature.s, <Bls12 as Engine>::G2Affine::one());
+        let rhs = Bls12::pairing(hash.into(), self.p_pub.into_projective());
+        lhs == rhs
+    }
+}
+
+impl From<PublicKey> for PublicKeyAffine {
+    fn from(public_key: PublicKey) -> Self {
+        PublicKeyAffine {
+            p_pub: public_key.p_pub.into_affine(),
+        }
+    }
+}
+
+impl From<PublicKeyAffine> for PublicKey {
+    fn from(public_key: PublicKeyAffine) -> Self {
+        PublicKey {
+            p_pub: public_key.p_pub.into_projective(),
+        }
+    }
+}
 
 impl Encoding for PublicKey {
     type Error = GroupDecodingError;

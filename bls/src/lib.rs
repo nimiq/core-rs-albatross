@@ -1,13 +1,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use ff::Field;
+use group::{CurveAffine, CurveProjective};
 use hashmap_core::HashSet;
-use pairing::{CurveAffine, CurveProjective, Engine, Field};
+use pairing::Engine;
 use rand::{Rng, SeedableRng};
 use rand04_compat::RngExt;
 use rand_chacha::ChaChaRng;
 use tiny_keccak::sha3_256;
 
 pub mod bls12_381;
+#[cfg(feature = "beserial")]
+pub mod serialization;
 
 /// Returns a hash of the given message in `G1`.
 pub fn hash_g1<E: Engine, M: AsRef<[u8]>>(msg: M) -> E::G1 {
@@ -69,10 +73,8 @@ impl<E: Engine> PartialEq for PublicKey<E> {
     }
 }
 
-
 impl<E: Engine> PublicKey<E> {
     pub fn from_secret(secret: &SecretKey<E>) -> Self {
-        // TODO Decide on projective vs affine
         PublicKey {
             p_pub: E::G2Affine::one().mul(secret.x),
         }
