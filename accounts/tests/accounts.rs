@@ -1,5 +1,6 @@
 use beserial::Serialize;
 use nimiq_account::{Account, AccountError, AccountTransactionInteraction, AccountType, BasicAccount, PrunedAccount};
+use nimiq_account::AccountReceipt;
 use nimiq_accounts::Accounts;
 use nimiq_block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
 use nimiq_database::ReadTransaction;
@@ -23,7 +24,7 @@ fn it_can_commit_and_revert_a_block_body() {
         miner: address_miner.clone(),
         extra_data: Vec::new(),
         transactions: Vec::new(),
-        pruned_accounts: Vec::new()
+        account_receipts: Vec::new()
     };
 
     assert_eq!(accounts.get(&address_miner, None).balance(), Coin::ZERO);
@@ -87,7 +88,7 @@ fn it_correctly_rewards_miners() {
         miner: address_miner1.clone(),
         extra_data: Vec::new(),
         transactions: Vec::new(),
-        pruned_accounts: Vec::new()
+        account_receipts: Vec::new()
     };
 
     // address_miner1 mines first block.
@@ -158,7 +159,7 @@ fn it_checks_for_sufficient_funds() {
         miner: address_sender.clone(),
         extra_data: Vec::new(),
         transactions: vec![tx.clone()],
-        pruned_accounts: Vec::new()
+        account_receipts: Vec::new()
     };
 
     let hash1 = accounts.hash(None);
@@ -233,7 +234,7 @@ fn it_correctly_prunes_account() {
         miner: address.clone(),
         extra_data: Vec::new(),
         transactions: Vec::new(),
-        pruned_accounts: Vec::new()
+        account_receipts: Vec::new()
     };
 
     // Give a block reward
@@ -285,11 +286,11 @@ fn it_correctly_prunes_account() {
     }
 
     // Now do proper pruning
-    body.pruned_accounts = vec![PrunedAccount {
+    body.account_receipts = vec![AccountReceipt::Pruned(PrunedAccount {
         address: contract_address.clone(),
         account: accounts.get(&contract_address, None)
             .with_outgoing_transaction(&tx_prune, 2).unwrap(),
-    }];
+    })];
     {
         let mut txn = WriteTransaction::new(&env);
         assert!(accounts.commit_block_body(&mut txn, &body, 3).is_ok());
@@ -315,7 +316,7 @@ fn it_correctly_prunes_account() {
     }
 
     // New revert account
-    body.pruned_accounts = Vec::new();
+    body.account_receipts = Vec::new();
     body.transactions = vec![tx_create.clone()];
     {
         let mut txn = WriteTransaction::new(&env);
@@ -338,7 +339,7 @@ fn can_generate_accounts_proof() {
     let address_recipient1 = Address::from([3u8; Address::SIZE]);
     let address_recipient2 = Address::from([4u8; Address::SIZE]);
 
-    let mut body = BlockBody { miner: address_miner1.clone(), extra_data: Vec::new(), transactions: Vec::new(), pruned_accounts: Vec::new() };
+    let mut body = BlockBody { miner: address_miner1.clone(), extra_data: Vec::new(), transactions: Vec::new(), account_receipts: Vec::new() };
 
     {
         let mut txn = WriteTransaction::new(&env);

@@ -1,4 +1,4 @@
-use nimiq_account::PrunedAccount;
+use nimiq_account::AccountReceipt;
 use nimiq_block::*;
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -57,7 +57,7 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
                 miner: [0u8; Address::SIZE].into(),
                 extra_data: Vec::new(),
                 transactions: Vec::new(),
-                pruned_accounts: Vec::new()
+                account_receipts: Vec::new()
             }
         }
     }
@@ -92,8 +92,8 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         self
     }
 
-    pub fn with_pruned_accounts(mut self, pruned_accounts: Vec<PrunedAccount>) -> Self {
-        self.body.pruned_accounts = pruned_accounts;
+    pub fn with_account_receipts(mut self, account_receipts: Vec<AccountReceipt>) -> Self {
+        self.body.account_receipts = account_receipts;
         self
     }
 

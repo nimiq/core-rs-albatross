@@ -43,7 +43,7 @@ fn create_block(transactions: Vec<Transaction>, height: u32) -> Block {
         miner: Address::default(),
         extra_data: Vec::new(),
         transactions,
-        pruned_accounts: Vec::new(),
+        account_receipts: Vec::new(),
     };
     let interlink = BlockInterlink::default();
 

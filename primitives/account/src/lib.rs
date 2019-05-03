@@ -206,6 +206,78 @@ impl AccountTransactionInteraction for Account {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum AccountReceiptType {
+    Pruned = 0,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum AccountReceipt {
+    Pruned(PrunedAccount),
+}
+
+impl AccountReceipt {
+    pub fn receipt_type(&self) -> AccountReceiptType {
+        match self {
+            AccountReceipt::Pruned(_) => AccountReceiptType::Pruned,
+        }
+    }
+}
+
+impl Serialize for AccountReceipt {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = self.receipt_type().serialize(writer)?;
+        match self {
+            AccountReceipt::Pruned(pruned_account) => size += pruned_account.serialize(writer)?,
+        }
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = self.receipt_type().serialized_size();
+        match self {
+            AccountReceipt::Pruned(pruned_account) => size += pruned_account.serialized_size(),
+        }
+        size
+    }
+}
+
+impl Deserialize for AccountReceipt {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let ty: AccountReceiptType = Deserialize::deserialize(reader)?;
+        match ty {
+            AccountReceiptType::Pruned => Ok(AccountReceipt::Pruned(Deserialize::deserialize(reader)?))
+        }
+    }
+}
+
+impl SerializeContent for AccountReceipt {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+}
+
+impl Hash for AccountReceipt {
+    fn hash<H: HashOutput>(&self) -> H  {
+        let h = H::Builder::default();
+        self.serialize_content(&mut vec![]).unwrap();
+        h.finish()
+    }
+}
+
+impl Ord for AccountReceipt {
+    fn cmp(&self, other: &AccountReceipt) -> Ordering {
+        match (self, other) {
+            (AccountReceipt::Pruned(a), AccountReceipt::Pruned(b)) => a.cmp(b),
+        }
+    }
+}
+
+impl PartialOrd for AccountReceipt {
+    fn partial_cmp(&self, other: &AccountReceipt) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Clone, Eq, Debug, Serialize, Deserialize)]
 pub struct PrunedAccount {
     pub address: Address,

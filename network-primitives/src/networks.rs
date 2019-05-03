@@ -96,7 +96,7 @@ lazy_static! {
                         miner: [0u8; Address::SIZE].into(),
                         extra_data: b"love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".to_vec(),
                         transactions: vec![],
-                        pruned_accounts: vec![],
+                        account_receipts: vec![],
                     }),
                 },
                 genesis_hash: "264aaf8a4f9828a76c550635da078eb466306a189fcc03710bee9f649c869d12".into(),
@@ -1239,7 +1239,7 @@ lazy_static! {
                         miner: [0u8; Address::SIZE].into(),
                         extra_data: b"TestNet".to_vec(),
                         transactions: vec![],
-                        pruned_accounts: vec![]
+                        account_receipts: vec![]
                     })
                 },
                 genesis_hash: "1fc28119e35b1418713218192012c7eda9e1d6d142ce8138a313366bd6068300".into(),
@@ -1419,7 +1419,7 @@ lazy_static! {
                         miner: [0u8; Address::SIZE].into(),
                         extra_data: b"DevNet".to_vec(),
                         transactions: vec![],
-                        pruned_accounts: vec![]
+                        account_receipts: vec![]
                     })
                 },
                 genesis_hash: "5fbc78d778f12485b121cb43c4c0e50d51a06a3def993e19d5862e8fdd4874c4".into(),

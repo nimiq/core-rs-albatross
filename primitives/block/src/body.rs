@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, io};
 
-use account::PrunedAccount;
+use account::AccountReceipt;
 use beserial::{Deserialize, Serialize};
 use hash::{Hash, HashOutput, SerializeContent};
 use keys::Address;
@@ -18,7 +18,7 @@ pub struct BlockBody {
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
     #[beserial(len_type(u16))]
-    pub pruned_accounts: Vec<PrunedAccount>,
+    pub account_receipts: Vec<AccountReceipt>,
 }
 
 impl SerializeContent for BlockBody {
@@ -64,16 +64,16 @@ impl BlockBody {
             }
         }
 
-        let mut previous_acc: Option<&PrunedAccount> = None;
-        for acc in &self.pruned_accounts {
+        let mut previous_acc: Option<&AccountReceipt> = None;
+        for acc in &self.account_receipts {
             // Ensure pruned accounts are ordered and unique.
             if let Some(previous) = previous_acc {
                 match previous.cmp(acc) {
                     Ordering::Equal => {
-                        return Err(BlockError::DuplicatePrunedAccount);
+                        return Err(BlockError::DuplicateAccountReceipt);
                     }
                     Ordering::Greater => {
-                        return Err(BlockError::PrunedAccountsNotOrdered);
+                        return Err(BlockError::AccountReceiptsNotOrdered);
                     }
                     _ => (),
                 }
@@ -81,8 +81,12 @@ impl BlockBody {
             previous_acc = Some(acc);
 
             // Check that the account is actually supposed to be pruned.
-            if !acc.account.is_to_be_pruned() {
-                return Err(BlockError::InvalidPrunedAccount);
+            match acc {
+                AccountReceipt::Pruned(acc) => {
+                    if !acc.account.is_to_be_pruned() {
+                        return Err(BlockError::InvalidAccountReceipt);
+                    }
+                },
             }
         }
 
@@ -91,13 +95,13 @@ impl BlockBody {
     }
 
     pub fn get_merkle_leaves<H: HashOutput>(&self) -> Vec<H> {
-        let mut vec: Vec<H> = Vec::with_capacity(2 + self.transactions.len() + self.pruned_accounts.len());
+        let mut vec: Vec<H> = Vec::with_capacity(2 + self.transactions.len() + self.account_receipts.len());
         vec.push(self.miner.hash());
         vec.push(self.extra_data.hash());
         for t in &self.transactions {
             vec.push(t.hash());
         }
-        for p in &self.pruned_accounts {
+        for p in &self.account_receipts {
             vec.push(p.hash());
         }
         vec
