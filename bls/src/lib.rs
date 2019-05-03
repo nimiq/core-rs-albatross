@@ -44,7 +44,7 @@ pub struct Signature<E: Engine> {
 impl<E: Engine> Eq for Signature<E>{}
 impl<E: Engine> PartialEq for Signature<E> {
     fn eq(&self, other: &Self) -> bool {
-        self.eq(other)
+        self.s.eq(&other.s)
     }
 }
 
