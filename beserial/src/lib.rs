@@ -1,14 +1,19 @@
 use std::collections::HashSet;
 use std::ops::Deref;
+use std::hash::BuildHasher;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 use failure::Fail;
 pub use num::ToPrimitive;
 
 pub use crate::types::uvar;
-use std::hash::BuildHasher;
+
 
 mod types;
+#[cfg(feature = "bitvec")]
+mod bitvec;
+
+
 
 // Base traits
 

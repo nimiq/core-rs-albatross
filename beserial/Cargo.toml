@@ -21,3 +21,4 @@ maintenance = { status = "experimental" }
 byteorder = "1.2"
 num = "0.2"
 failure = "0.1"
+bitvec = { version = "0.10", optional = true }
