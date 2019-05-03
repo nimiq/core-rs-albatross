@@ -24,7 +24,7 @@ nimiq-primitives = { path = "..", features = ["policy", "networks"] }
 nimiq-transaction = { path = "../transaction" }
 nimiq-account = { path = "../account" }
 nimiq-macros = { path = "../../macros" }
-nimiq-bls = { path = "../../bls" }
+nimiq-bls = { path = "../../bls", features = ["beserial"]}
 bitvec = "0.10"
 num-bigint = "0.2"
 log = "0.4"

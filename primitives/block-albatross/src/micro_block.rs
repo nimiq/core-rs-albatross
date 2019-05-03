@@ -1,27 +1,130 @@
 use std::fmt;
-
 use std::io;
 
-use crate::slash::SlashInherent;
+use account::PrunedAccount;
 use beserial::{Deserialize, Serialize};
+use crate::BlockError;
+use crate::slash::SlashInherent;
+use crate::view_change::{ViewChange, ViewChangeProof};
 use hash::{Hash, Blake2bHash, SerializeContent};
-use keys::{Signature, PublicKey};
+use keys::PublicKey;
+use nimiq_bls::bls12_381::Signature;
+use primitives::networks::NetworkId;
+use std::cmp::Ordering;
 use transaction::Transaction;
-use crate::view_change::ViewChangeProof;
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
-pub struct MicroDigest {
-    pub validator: PublicKey,
-    pub block_number: u32,
-    pub view_number: u16,
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MicroBlock {
+    pub header: MicroHeader,
+    pub justification: MicroJustification,
+    pub extrinsics: MicroExtrinsics,
 }
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroHeader {
+    pub version: u16,
+
+    // Digest
+    pub block_number: u32,
+    pub view_number: u16,
+
     pub parent_hash: Blake2bHash,
-    pub digest: MicroDigest,
     pub extrinsics_root: Blake2bHash,
     pub state_root: Blake2bHash,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MicroJustification {
+    pub signature: Signature,
+    pub view_change_proof: Option<ViewChangeProof>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MicroExtrinsics {
+    pub timestamp: u64,
+    pub seed: Signature,
+    #[beserial(len_type(u16))]
+    pub slash_inherents: Vec<SlashInherent>,
+
+    #[beserial(len_type(u8))]
+    pub extra_data: Vec<u8>,
+    #[beserial(len_type(u16))]
+    pub transactions: Vec<Transaction>,
+    #[beserial(len_type(u16))]
+    pub pruned_accounts: Vec<PrunedAccount>,
+}
+
+impl MicroBlock {
+    pub fn verify(&self, network_id: NetworkId) -> bool {
+        if !self.extrinsics.verify(self.header.block_number, network_id).is_err() {
+            return false;
+        }
+
+        if self.header.view_number >= 1 && self.justification.view_change_proof.is_none() {
+            return false;
+        }
+
+        if let Some(view_change_proof) = &self.justification.view_change_proof {
+            // check view change proof
+        }
+
+        return true;
+    }
+}
+
+impl MicroExtrinsics {
+    pub fn verify(&self, block_height: u32, network_id: NetworkId) -> Result<(), BlockError> {
+        let mut previous_tx: Option<&Transaction> = None;
+        for tx in &self.transactions {
+            // Ensure transactions are ordered and unique.
+            if let Some(previous) = previous_tx {
+                match previous.cmp_block_order(tx) {
+                    Ordering::Equal => {
+                        return Err(BlockError::DuplicateTransaction);
+                    }
+                    Ordering::Greater => {
+                        return Err(BlockError::TransactionsNotOrdered);
+                    }
+                    _ => (),
+                }
+            }
+            previous_tx = Some(tx);
+
+            // Check that the transaction is within its validity window.
+            if !tx.is_valid_at(block_height) {
+                return Err(BlockError::ExpiredTransaction);
+            }
+
+            // Check intrinsic transaction invariants.
+            if let Err(e) = tx.verify(network_id) {
+                return Err(BlockError::InvalidTransaction(e));
+            }
+        }
+
+        let mut previous_acc: Option<&PrunedAccount> = None;
+        for acc in &self.pruned_accounts {
+            // Ensure pruned accounts are ordered and unique.
+            if let Some(previous) = previous_acc {
+                match previous.cmp(acc) {
+                    Ordering::Equal => {
+                        return Err(BlockError::DuplicatePrunedAccount);
+                    }
+                    Ordering::Greater => {
+                        return Err(BlockError::PrunedAccountsNotOrdered);
+                    }
+                    _ => (),
+                }
+            }
+            previous_acc = Some(acc);
+
+            // Check that the account is actually supposed to be pruned.
+            if !acc.account.is_to_be_pruned() {
+                return Err(BlockError::InvalidPrunedAccount);
+            }
+        }
+
+        return Ok(());
+    }
 }
 
 impl SerializeContent for MicroHeader {
@@ -32,20 +135,8 @@ impl Hash for MicroHeader { }
 
 impl fmt::Display for MicroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "[#{} view {}, type Micro]", self.digest.block_number, self.digest.view_number)
+        write!(f, "[#{} view {}, type Micro]", self.block_number, self.view_number)
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct MicroExtrinsics {
-    pub timestamp: u64,
-    pub seed: u64,
-    pub seed_signature: Signature,
-    pub view_change_proof: Option<ViewChangeProof>,
-    #[beserial(len_type(u16))]
-    pub slash_inherents: Vec<SlashInherent>,
-    #[beserial(len_type(u16))]
-    pub transactions: Vec<Transaction>,
 }
 
 impl SerializeContent for MicroExtrinsics {
@@ -53,10 +144,3 @@ impl SerializeContent for MicroExtrinsics {
 }
 
 impl Hash for MicroExtrinsics { }
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MicroBlock {
-    pub header: MicroHeader,
-    pub extrinsics: MicroExtrinsics,
-    pub justification: Signature,
-}

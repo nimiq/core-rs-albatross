@@ -29,9 +29,7 @@ use crate::transaction::TransactionError;
 pub enum BlockError {
     UnsupportedVersion,
     FromTheFuture,
-    InvalidPoW,
     SizeExceeded,
-    InterlinkHashMismatch,
     BodyHashMismatch,
 
     DuplicateTransaction,
