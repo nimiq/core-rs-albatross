@@ -19,14 +19,18 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 bitflags = "1.0"
+bitvec = "0.10"
 byteorder = "1.2"
 hex = "0.3"
+log = "0.4"
 parking_lot = "0.7"
 rand = "0.6"
 enum-display-derive = "0.1"
 beserial = { path = "../beserial", version = "0.1.0" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
+nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash", version = "0.1.0" }
+nimiq-hash_derive = { path = "../hash/hash_derive" }
 nimiq-keys = { path = "../keys", version = "0.1.0" }
 nimiq-macros = { path = "../macros", version = "0.1.0" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["networks", "subscription", "version"] }

@@ -6,16 +6,18 @@ use group::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError};
 use pairing::bls12_381::{Bls12, Fr, FrRepr, G1Compressed, G2Compressed};
 use pairing::Engine;
 
-use crate::Encoding;
+use hash::{Hash, HashOutput};
 
 use super::{
     AggregatePublicKey as GenericAggregatePublicKey,
     AggregateSignature as GenericAggregateSignature,
-    hash_g1,
+    hash_to_g1,
     Keypair as GenericKeyPair,
     PublicKey as GenericPublicKey,
     SecretKey as GenericSecretKey,
     Signature as GenericSignature,
+    Encoding,
+    SigHash
 };
 
 pub type PublicKey = GenericPublicKey<Bls12>;
@@ -25,8 +27,6 @@ pub type KeyPair = GenericKeyPair<Bls12>;
 
 pub type AggregatePublicKey = GenericAggregatePublicKey<Bls12>;
 pub type AggregateSignature = GenericAggregateSignature<Bls12>;
-
-pub type Hash = <Bls12 as Engine>::G1Affine;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq,)]
 pub struct PublicKeyAffine {
@@ -50,11 +50,15 @@ impl PublicKeyAffine {
         PublicKey::from_secret(secret).into()
     }
 
-    pub fn verify<M: AsRef<[u8]>>(&self, msg: M, signature: &Signature) -> bool {
-        self.verify_hash(hash_g1::<Bls12, M>(msg), signature)
+    pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
+        self.verify_g1(hash_to_g1::<Bls12>(msg.hash()), signature)
     }
 
-    pub fn verify_hash<H: Into<<Bls12 as Engine>::G1Affine>>(&self, hash: H, signature: &Signature) -> bool {
+    pub fn verify_hash(&self, hash: SigHash, signature: &Signature) -> bool {
+        self.verify_g1(hash_to_g1::<Bls12>(hash), signature)
+    }
+
+    fn verify_g1<H: Into<<Bls12 as Engine>::G1Affine>>(&self, hash: H, signature: &Signature) -> bool {
         let lhs = Bls12::pairing(signature.s, <Bls12 as Engine>::G2Affine::one());
         let rhs = Bls12::pairing(hash.into(), self.p_pub.into_projective());
         lhs == rhs

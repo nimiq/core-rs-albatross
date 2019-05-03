@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate nimiq_hash as hash;
+
 use ff::Field;
 use group::{CurveAffine, CurveProjective};
 use hashmap_core::HashSet;
@@ -7,17 +9,21 @@ use pairing::Engine;
 use rand::{Rng, SeedableRng};
 use rand04_compat::RngExt;
 use rand_chacha::ChaChaRng;
-use tiny_keccak::sha3_256;
+
+use hash::{Hash, HashOutput, Blake2bHash};
 
 pub mod bls12_381;
 #[cfg(feature = "beserial")]
 pub mod serialization;
 
-/// Returns a hash of the given message in `G1`.
-pub fn hash_g1<E: Engine, M: AsRef<[u8]>>(msg: M) -> E::G1 {
-    let digest = sha3_256(msg.as_ref());
-    ChaChaRng::from_seed(digest).gen04()
+/// Hash used for signatures
+pub type SigHash = Blake2bHash;
+
+/// Map hash to point in G1
+pub(crate) fn hash_to_g1<E: Engine>(h: SigHash) -> E::G1 {
+    ChaChaRng::from_seed(h.into()).gen04()
 }
+
 
 pub trait Encoding: Sized {
     type Error;
@@ -53,12 +59,16 @@ impl<E: Engine> SecretKey<E> {
         }
     }
 
-    pub fn sign<M: AsRef<[u8]>>(&self, msg: M) -> Signature<E> {
-        self.sign_hash(hash_g1::<E, M>(msg))
+    pub fn sign<M: Hash>(&self, msg: &M) -> Signature<E> {
+        self.sign_hash(msg.hash())
     }
 
-    pub fn sign_hash<H: Into<E::G1Affine>>(&self, hash: H) -> Signature<E> {
-        Signature { s: hash.into().mul(self.x) }
+    pub fn sign_hash(&self, hash: SigHash) -> Signature<E> {
+        self.sign_g1(hash_to_g1::<E>(hash))
+    }
+
+    fn sign_g1<H: Into<E::G1Affine>>(&self, h: H) -> Signature<E> {
+        Signature { s: h.into().mul(self.x) }
     }
 }
 
@@ -80,13 +90,17 @@ impl<E: Engine> PublicKey<E> {
         }
     }
 
-    pub fn verify<M: AsRef<[u8]>>(&self, msg: M, signature: &Signature<E>) -> bool {
-        self.verify_hash(hash_g1::<E, M>(msg), signature)
+    pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature<E>) -> bool {
+        self.verify_hash(msg.hash(), signature)
     }
 
-    pub fn verify_hash<H: Into<E::G1Affine>>(&self, hash: H, signature: &Signature<E>) -> bool {
+    pub fn verify_hash(&self, hash: SigHash, signature: &Signature<E>) -> bool {
+        self.verify_g1(hash_to_g1::<E>(hash), signature)
+    }
+
+    fn verify_g1<H: Into<E::G1Affine>>(&self, h: H, signature: &Signature<E>) -> bool {
         let lhs = E::pairing(signature.s, E::G2Affine::one());
-        let rhs = E::pairing(hash.into(), self.p_pub);
+        let rhs = E::pairing(h.into(), self.p_pub);
         lhs == rhs
     }
 }
@@ -104,12 +118,20 @@ impl<E: Engine> Keypair<E> {
         Keypair { secret, public }
     }
 
-    pub fn sign<M: AsRef<[u8]>>(&self, msg: M) -> Signature<E> {
-        self.secret.sign(msg)
+    pub fn sign<M: Hash>(&self, msg: &M) -> Signature<E> {
+        self.secret.sign::<M>(msg)
     }
 
-    pub fn verify<M: AsRef<[u8]>>(&self, msg: M, signature: &Signature<E>) -> bool {
-        self.public.verify(msg, signature)
+    pub fn sign_hash(&self, hash: SigHash) -> Signature<E> {
+        self.secret.sign_hash(hash)
+    }
+
+    pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature<E>) -> bool {
+        self.public.verify::<M>(msg, signature)
+    }
+
+    pub fn verify_hash<H>(&self, hash: SigHash, signature: &Signature<E>) -> bool {
+        self.public.verify_hash(hash, signature)
     }
 }
 
@@ -143,12 +165,13 @@ impl<E: Engine> AggregatePublicKey<E> {
         self.0.p_pub.add_assign(&other.0.p_pub);
     }
 
+
     /// Verify an aggregate signature over the same message.
-    pub fn verify<M: AsRef<[u8]>>(&self, msg: M, signature: &AggregateSignature<E>) -> bool {
-        self.0.verify(msg, &signature.0)
+    pub fn verify<M: Hash>(&self, msg: &M, signature: &AggregateSignature<E>) -> bool {
+        self.0.verify::<M>(msg, &signature.0)
     }
 
-    pub fn verify_hash<H: Into<E::G1Affine>>(&self, hash: H, signature: &AggregateSignature<E>) -> bool {
+    pub fn verify_hash(&self, hash: SigHash, signature: &AggregateSignature<E>) -> bool {
         self.0.verify_hash(hash, &signature.0)
     }
 }
@@ -177,22 +200,29 @@ impl<E: Engine> AggregateSignature<E> {
         self.0.s.add_assign(&other.0.s);
     }
 
-    pub fn verify<M: AsRef<[u8]>>(&self, public_keys: &[PublicKey<E>], msgs: &[M]) -> bool {
+    pub fn verify<M: Hash>(&self, public_keys: &[PublicKey<E>], msgs: &[M]) -> bool {
         // Number of messages must coincide with number of public keys.
         if public_keys.len() != msgs.len() {
-            return false;
+            panic!("Different amount of messages and public keys");
         }
-        // Messages must be distinct.
-        let messages: HashSet<&[u8]> = msgs.iter().map(|msg| msg.as_ref()).collect();
-        if messages.len() != msgs.len() {
-            return false;
+
+        // compute hashes
+        let mut hashes: Vec<SigHash> = msgs.iter().rev().map(|msg| msg.hash::<SigHash>()).collect();
+
+        // check that hashes are distinct
+        let distinct_hashes: HashSet<&SigHash> = hashes.iter().collect();
+        if distinct_hashes.len() != hashes.len() {
+            panic!("Messages are not distinct");
         }
+
         // Check pairings.
         let lhs = E::pairing(self.0.s, E::G2Affine::one());
         let mut rhs = E::Fqk::one();
         for i in 0..public_keys.len() {
-            let h = hash_g1::<E, &[u8]>(msgs[i].as_ref());
-            rhs.mul_assign(&E::pairing(h, public_keys[i].p_pub));
+            // garantueed to be available, since we check that there are as many messages/hashes
+            // as public_keys.
+            let h = hashes.pop().unwrap();
+            rhs.mul_assign(&E::pairing(hash_to_g1::<E>(h), public_keys[i].p_pub));
         }
         lhs == rhs
     }

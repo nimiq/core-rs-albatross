@@ -78,7 +78,7 @@ pub trait Hash: SerializeContent {
     }
 }
 
-pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize + Sized + SerializeContent + Debug {
+pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize + Sized + SerializeContent + Debug + std::hash::Hash {
     type Builder: Hasher<Output=Self>;
 
     fn as_bytes(&self) -> &[u8];
