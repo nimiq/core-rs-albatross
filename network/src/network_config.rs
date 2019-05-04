@@ -1,7 +1,5 @@
-use std::fs;
 use std::time::SystemTime;
 
-use beserial::{Deserialize, Serialize};
 use keys::{KeyPair, PublicKey};
 use network_primitives::address::net_address::NetAddress;
 use network_primitives::address::peer_address::{PeerAddress, PeerAddressType};
@@ -10,6 +8,7 @@ use network_primitives::address::seed_list::SeedList;
 use network_primitives::protocol::{Protocol, ProtocolFlags};
 use network_primitives::services::Services;
 use utils::time::systemtime_to_timestamp;
+use utils::key_store::{Error as KeyStoreError, KeyStore};
 use network_primitives::address::{PeerUri};
 
 use crate::error::Error;
@@ -85,10 +84,10 @@ impl NetworkConfig {
             return Ok(());
         }
 
-        let key_pair = match peer_key_store.load_peer_key() {
-            Err(Error::IoError(_)) => {
+        let key_pair = match peer_key_store.load_key() {
+            Err(KeyStoreError::IoError(_)) => {
                 let key_pair = KeyPair::generate();
-                peer_key_store.save_peer_key(&key_pair)?;
+                peer_key_store.save_key(&key_pair)?;
                 Ok(key_pair)
             },
             res => res,
@@ -244,30 +243,5 @@ impl From<&ProtocolConfig> for Protocol {
             },
             ProtocolConfig::Wss { .. } => Protocol::Wss,
         }
-    }
-}
-
-pub struct PeerKeyStore {
-    path: String,
-}
-
-impl PeerKeyStore {
-    pub fn new(path: String) -> Self {
-        PeerKeyStore {
-            path
-        }
-    }
-
-    pub fn load_peer_key(&self) -> Result<KeyPair, Error> {
-        match fs::read(&self.path) {
-            Ok(data) => {
-                Deserialize::deserialize_from_vec(&data).map_err(|_| Error::InvalidPeerKey)
-            },
-            Err(e) => Err(Error::IoError(e)),
-        }
-    }
-
-    pub fn save_peer_key(&self, key_pair: &KeyPair) -> Result<(), Error> {
-        Ok(fs::write(&self.path, key_pair.serialize_to_vec())?)
     }
 }

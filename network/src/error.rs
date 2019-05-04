@@ -1,5 +1,5 @@
 use failure::Fail;
-use tokio::io::Error as IoError;
+use utils::key_store::Error as KeyStoreError;
 
 use network_primitives::networks::NetworkId;
 use network_primitives::address::peer_uri::PeerUriError;
@@ -9,12 +9,10 @@ use crate::websocket::error::ServerStartError;
 
 #[derive(Fail, Debug)]
 pub enum Error {
-    #[fail(display = "PeerKey could not be deserialized")]
-    InvalidPeerKey,
     #[fail(display = "PeerKey has not been initialized")]
     UninitializedPeerKey,
     #[fail(display = "{}", _0)]
-    IoError(#[cause] IoError),
+    KeyStoreError(#[cause] KeyStoreError),
     #[fail(display = "{}", _0)]
     ServerStartError(#[cause] ServerStartError),
     #[fail(display = "Could not load network info for id {:?}", _0)]
@@ -23,9 +21,9 @@ pub enum Error {
     InvalidSeed(#[cause] SeedError)
 }
 
-impl From<IoError> for Error {
-    fn from(e: IoError) -> Self {
-        Error::IoError(e)
+impl From<KeyStoreError> for Error {
+    fn from(e: KeyStoreError) -> Self {
+        Error::KeyStoreError(e)
     }
 }
 

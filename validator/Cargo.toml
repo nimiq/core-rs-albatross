@@ -14,9 +14,9 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 beserial = { path = "../beserial" }
+nimiq-bls = { path = "../bls" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
-nimiq-keys = { path = "../keys" }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }
 nimiq-network = { path = "../network" }
@@ -26,6 +26,7 @@ nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-on
 failure = "0.1"
 log = "0.4"
 parking_lot = "0.7"
+rand = "0.6"
 
 [features]
 metrics = []

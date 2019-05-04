@@ -23,12 +23,14 @@ futures = { version = "0.1", optional = true }
 parking_lot = { version = "0.7", optional = true }
 tokio = { version = "0.1", optional = true }
 log = { version = "0.4", optional = true }
+failure = { version = "0.1", optional = true }
 nimiq-hash = { path = "../hash", version = "0.1.0", optional = true }
 beserial = { path = "../beserial", version = "0.1.0", optional = true }
 nimiq-collections = { path = "../collections", version = "0.1.0", optional = true }
 
 [features]
 crc = []
+key-store = ["failure"]
 iterators = []
 locking = ["futures", "parking_lot"]
 merkle = ["beserial", "nimiq-hash", "bit-vec"]
@@ -41,6 +43,6 @@ throttled-queue = ["nimiq-collections"]
 rate-limit = []
 unique-id = []
 # Compiles this package with all features.
-all = ["bit-vec", "crc", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr", "throttled-queue", "rate-limit", "unique-id"]
+all = ["bit-vec", "crc", "key-store", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr", "throttled-queue", "rate-limit", "unique-id"]
 # Compiles this package with the features needed for the nimiq client.
-full-nimiq = ["crc", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr"]
+full-nimiq = ["crc", "iterators", "key-store", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr"]

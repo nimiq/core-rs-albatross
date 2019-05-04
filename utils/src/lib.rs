@@ -4,6 +4,8 @@ extern crate log;
 
 #[cfg(feature = "crc")]
 pub mod crc;
+#[cfg(feature = "key-store")]
+pub mod key_store;
 #[cfg(feature = "merkle")]
 pub mod merkle;
 #[cfg(feature = "locking")]

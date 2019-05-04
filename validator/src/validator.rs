@@ -11,12 +11,13 @@ use consensus::{Consensus, ConsensusEvent};
 
 // use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
-use keys::{KeyPair, PublicKey};
+use bls::bls12_381::SecretKey;
 use mempool::{Mempool, MempoolEvent, MempoolConfig};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
 use network_primitives::networks::NetworkId;
 // use network_primitives::time::NetworkTime;
 // use transaction::Transaction;
+use utils::key_store::{Error as KeyStoreError, KeyStore};
 use utils::mutable_once::MutableOnce;
 // use utils::observer::Notifier;
 // use utils::timers::Timers;
@@ -28,7 +29,7 @@ use crate::error::Error;
 pub struct Validator {
     consensus: Arc<Consensus>,
     validator_network: Arc<ValidatorNetwork>,
-    validator_key_pair: KeyPair,
+    validator_key: SecretKey,
 
     state: RwLock<ValidatorState>,
 
@@ -42,14 +43,22 @@ impl Validator {
         let consensus = Consensus::new(env, network_id, network_config, mempool_config)?;
         let validator_network = ValidatorNetwork::new(Arc::clone(&consensus.network));
 
-        // FIXME: this should go into a proper persistent storage
-        // May be generalize the KeyStore used by NetworkConfig?
-        let validator_key_pair = KeyPair::generate();
+
+        let key_store = KeyStore::new("validator_key.db".to_string());
+
+        let validator_key = match key_store.load_key() {
+            Err(KeyStoreError::IoError(_)) => {
+                let secret_key = SecretKey::generate(&mut rand::thread_rng());
+                key_store.save_key(&secret_key)?;
+                Ok(secret_key)
+            },
+            res => res,
+        }?;
 
         let this = Arc::new(Validator {
             consensus,
             validator_network,
-            validator_key_pair,
+            validator_key,
 
             state: RwLock::new(ValidatorState {}),
 
