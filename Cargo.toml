@@ -30,5 +30,6 @@ members = [
     "lib",
     "messages",
     "fixed-unsigned",
-    "bls"
+    "bls",
+    "validator"
 ]

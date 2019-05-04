@@ -20,3 +20,6 @@ pub mod consensus_agent;
 pub mod inventory;
 pub mod error;
 mod accounts_chunk_cache;
+
+pub use self::consensus::{Consensus, ConsensusEvent};
+pub use self::error::Error;
