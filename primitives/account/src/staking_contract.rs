@@ -86,19 +86,24 @@ struct PausingReceipt {
  1. Staking:
     - Transaction from staking address to contract
     - Transfers value into a new or existing entry in the potential_validators list
+    - Normal transaction, signed by staking/sender address
  2. Restaking:
     - Transaction with 0 value from any address to contract (address only provides fees)
     - Replaces a BlsPublicKey and sets the last_restaking time
+    - Transaction is signed by sender address that provides the fee
+    - Data is additionally signed by the old BLS key
  3. Pausing:
     - Transaction with 0 value from original staking address to contract
     - Removes a balance (set in transaction data) from a staker
       (may remove staker from potential_validators list entirely)
     - Puts balance into a new entry into the inactive_validators,
       setting the pause_time for this balance
-  4. Unstaking:
+    - Signed by staking/sender address
+ 4. Unstaking:
     - Transaction from the contract to an original staking address
     - If condition of block_height ≥ next_macro_block_after(pause_time) + UNSTAKING_DELAY is met,
       transfers value from inactive_validators entry/entries
+    - Signed by staking/sender address
 
   Reverting transactions:
   Since transactions need to be revertable, the with_{incoming,outgoing}_transaction functions
