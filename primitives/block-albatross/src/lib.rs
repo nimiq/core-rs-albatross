@@ -8,6 +8,7 @@ extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
+extern crate nimiq_collections as collections;
 
 mod block;
 mod macro_block;

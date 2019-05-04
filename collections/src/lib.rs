@@ -8,6 +8,11 @@ pub mod unique_linked_list;
 pub mod queue;
 pub mod limit_hash_set;
 
+
+#[cfg(feature = "bitset")]
+pub mod bitset;
+
+
 pub use self::linked_list::LinkedList;
 pub use self::unique_linked_list::UniqueLinkedList;
 pub use self::queue::Queue;

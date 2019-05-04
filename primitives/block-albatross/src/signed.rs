@@ -1,13 +1,11 @@
-use beserial::{Serialize, Deserialize, uvar};
+use std::fmt::Debug;
+use std::marker::PhantomData;
+
+use beserial::{Serialize, Deserialize, uvar, WriteBytesExt, ToPrimitive};
 use nimiq_bls::bls12_381::{Signature, SecretKey, PublicKey, AggregateSignature, AggregatePublicKey};
 use nimiq_bls::SigHash;
 use hash::{Blake2bHasher, SerializeContent, Hasher};
-use beserial::WriteBytesExt;
-
-use std::fmt::Debug;
-use bitvec::{BitVec, BigEndian};
-use std::marker::PhantomData;
-use beserial::ToPrimitive;
+use collections::bitset::BitSet;
 
 
 // TODO: To use a binomial swap forest:
@@ -80,9 +78,7 @@ pub enum AggregateError {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AggregateProof<M> {
-    pub num_signers: u32,
-    //#[beserial(len_type(u32))]
-    //pub signers: BitVec<BigEndian, u8>,
+    pub signers: BitSet,
     pub public_key: AggregatePublicKey,
     pub signature: AggregateSignature,
     #[beserial(skip)]
@@ -91,56 +87,44 @@ pub struct AggregateProof<M> {
 
 impl<M: Message> AggregateProof<M> {
     pub fn new() -> Self {
-        /*Self {
-            num_signers: 0,
-            signers: BitVec::new(),
+        Self::with_capacity(0)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            signers: BitSet::with_capacity(capacity),
             public_key: AggregatePublicKey::new(),
             signature: AggregateSignature::new(),
             _message: PhantomData,
-        }*/
-        unimplemented!()
+        }
     }
 
     pub fn contains(&self, signed: &SignedMessage<M>) -> bool {
-        /*let pk_idx = signed.pk_idx.to_usize().unwrap();
-        self.signers.get(pk_idx).unwrap_or(false)*/
-        unimplemented!()
+        let pk_idx = signed.pk_idx.to_usize().unwrap();
+        self.signers.contains(pk_idx)
     }
 
     /// Adds a signed message to an aggregate proof
     /// NOTE: This method assumes the signature of the message was already checked
     pub fn add_signature(&mut self, public_key: &PublicKey, signed: &SignedMessage<M>) {
-        /*debug_assert!(signed.verify(public_key));
+        debug_assert!(signed.verify(public_key));
         let pk_idx = signed.pk_idx.to_usize().unwrap();
-        if !self.signers.get(pk_idx).unwrap_or(false) {
-            if pk_idx >= self.signers.len() {
-                self.signers.resize(pk_idx, false);
+        if !self.signers.contains(pk_idx) {
+            if !self.signers.contains(pk_idx) {
+                self.signers.insert(pk_idx);
+                self.public_key.aggregate(public_key);
+                self.signature.aggregate(&signed.signature);
             }
-            self.num_signers += 1;
-            self.signers.set(pk_idx, true);
-            self.public_key.aggregate(public_key);
-            self.signature.aggregate(&signed.signature);
-        }*/
-        unimplemented!()
+        }
     }
 
     pub fn merge(&mut self, proof: &AggregateProof<M>) -> Result<(), AggregateError> {
-        unimplemented!("TODO: Check if this is implemented correctly");
-//        if (self.signers & proof.signers).any() {
-//            return Err(AggregateError::Overlapping)
-//        }
-//        self.num_signers += proof.num_signers;
-//        self.signers |= &proof.signers;
-//        self.public_key.merge_into(&proof.public_key);
-//        self.signature.merge_into(&proof.signature);
-//        Ok(())
         unimplemented!()
     }
 
     // Verify message against aggregate signature and optionally check if a threshold was reached
     pub fn verify(&self, message: &M, threshold: Option<usize>) -> bool {
-/*        self.signers.count_ones() >= threshold.unwrap_or(0)
-            && self.public_key.verify_hash(message.hash_with_prefix(), &self.signature)*/
-        unimplemented!()
+        self.signers.len() >= threshold.unwrap_or(0)
+            && self.public_key.verify_hash(message.hash_with_prefix(), &self.signature)
     }
 }

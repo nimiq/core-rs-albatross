@@ -13,7 +13,7 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../../beserial", features = ["bitvec"] }
+beserial = { path = "../../beserial" }
 beserial_derive = { path = "../../beserial/beserial_derive"}
 fixed-unsigned = { path = "../../fixed-unsigned" }
 nimiq-hash = { path = "../../hash" }
@@ -25,7 +25,7 @@ nimiq-transaction = { path = "../transaction" }
 nimiq-account = { path = "../account" }
 nimiq-macros = { path = "../../macros" }
 nimiq-bls = { path = "../../bls", features = ["beserial"]}
-bitvec = "0.10"
+nimiq-collections = { path = "../../collections", features = ["bitset"] }
 num-bigint = "0.2"
 log = "0.4"
 hex = "0.3"
