@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use hex;
 
-use account::{Account, AccountError, AccountTransactionInteraction, AccountType};
+use account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount};
 use beserial::Deserialize;
 use block::{Block, BlockBody};
 use database::{Environment, ReadTransaction, WriteTransaction};
@@ -106,29 +106,13 @@ impl<'env> Accounts<'env> {
     }
 
     pub fn commit_block_body(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32) -> Result<(), AccountError> {
-        // Process sender accounts.
-        for transaction in &body.transactions {
-            self.process_transaction(txn, &transaction.sender, Some(transaction.sender_type), transaction, block_height,
-                                     |account, transaction, block_height| account.with_outgoing_transaction(transaction, block_height))?;
-        }
+        self.process_senders(txn, &body.transactions, block_height,
+                             |account, transaction, block_height| account.with_outgoing_transaction(transaction, block_height))?;
 
-        // Process recipient accounts.
-        for transaction in &body.transactions {
-            let recipient_type = if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-                None
-            } else {
-                Some(transaction.recipient_type)
-            };
-            self.process_transaction(txn, &transaction.recipient, recipient_type, transaction, block_height,
-                                     |account, transaction, block_height| account.with_incoming_transaction(transaction, block_height))?;
-        }
+        self.process_recipients(txn, &body.transactions, block_height,
+                                |account, transaction, block_height| account.with_incoming_transaction(transaction, block_height))?;
 
-        // Create contracts.
-        for transaction in &body.transactions {
-            if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-                self.create_contract(txn, transaction, block_height)?;
-            }
-        }
+        self.create_contracts(txn, &body.transactions, block_height)?;
 
         self.prune_accounts(txn, body)?;
 
@@ -143,38 +127,44 @@ impl<'env> Accounts<'env> {
         self.process_miner_reward(txn, body, block_height,
                                   |account, transaction, block_height| account.without_incoming_transaction(transaction, block_height))?;
 
-        // Restore pruned accounts.
         self.restore_accounts(txn, body)?;
 
-        // Revert created contracts.
-        for transaction in &body.transactions {
-            if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-                self.revert_contract(txn, transaction, block_height)?;
-            }
-        }
+        self.revert_contracts(txn, &body.transactions, block_height)?;
 
-        // Process recipient accounts.
-        for transaction in &body.transactions {
-            let recipient_type = if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-                None
-            } else {
-                Some(transaction.recipient_type)
-            };
-            self.process_transaction(txn, &transaction.recipient, recipient_type, transaction, block_height,
-                                     |account, transaction, block_height| account.without_incoming_transaction(transaction, block_height))?;
-        }
+        self.process_recipients(txn, &body.transactions, block_height,
+                                |account, transaction, block_height| account.without_incoming_transaction(transaction, block_height))?;
 
-        // Process sender accounts.
-        for transaction in &body.transactions {
-            self.process_transaction(txn, &transaction.sender, Some(transaction.sender_type), transaction, block_height,
-                                     |account, transaction, block_height| account.without_outgoing_transaction(transaction, block_height))?;
-        }
+        self.process_senders(txn, &body.transactions, block_height,
+                             |account, transaction, block_height| account.without_outgoing_transaction(transaction, block_height))?;
 
         self.tree.finalize_batch(txn);
         Ok(())
     }
 
-    fn process_transaction<F>(&self, txn: &mut WriteTransaction, address: &Address, account_type: Option<AccountType>, transaction: &Transaction, block_height: u32, account_op: F) -> Result<(), AccountError>
+    fn process_senders<F>(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, block_height: u32, account_op: F) -> Result<(), AccountError>
+        where F: Fn(Account, &Transaction, u32) -> Result<Account, AccountError> {
+
+        for transaction in transactions {
+            self.process_transaction(txn, &transaction.sender, Some(transaction.sender_type), transaction, block_height, &account_op)?;
+        }
+        Ok(())
+    }
+
+    fn process_recipients<F>(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, block_height: u32, account_op: F) -> Result<(), AccountError>
+        where F: Fn(Account, &Transaction, u32) -> Result<Account, AccountError> {
+
+        for transaction in transactions {
+            let recipient_type = if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                None
+            } else {
+                Some(transaction.recipient_type)
+            };
+            self.process_transaction(txn, &transaction.recipient, recipient_type, transaction, block_height, &account_op)?;
+        }
+        Ok(())
+    }
+
+    fn process_transaction<F>(&self, txn: &mut WriteTransaction, address: &Address, account_type: Option<AccountType>, transaction: &Transaction, block_height: u32, account_op: &F) -> Result<(), AccountError>
         where F: Fn(Account, &Transaction, u32) -> Result<Account, AccountError> {
 
         let account = self.get(address, Some(txn));
@@ -210,7 +200,16 @@ impl<'env> Accounts<'env> {
             NetworkId::Main, // XXX ignored
         );
 
-        self.process_transaction(txn, &body.miner, Some(AccountType::Basic), &coinbase_tx, block_height, account_op)
+        self.process_transaction(txn, &body.miner, Some(AccountType::Basic), &coinbase_tx, block_height, &account_op)
+    }
+
+    fn create_contracts(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, block_height: u32) -> Result<(), AccountError> {
+        for transaction in transactions {
+            if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                self.create_contract(txn, transaction, block_height)?;
+            }
+        }
+        Ok(())
     }
 
     fn create_contract(&self, txn: &mut WriteTransaction, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
@@ -219,6 +218,15 @@ impl<'env> Accounts<'env> {
         let recipient_account = self.get(&transaction.recipient, Some(txn));
         let new_recipient_account = Account::new_contract(transaction.recipient_type, recipient_account.balance(), transaction, block_height)?;
         self.tree.put_batch(txn, &transaction.recipient, new_recipient_account);
+        Ok(())
+    }
+
+    fn revert_contracts(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, block_height: u32) -> Result<(), AccountError> {
+        for transaction in transactions {
+            if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                self.revert_contract(txn, transaction, block_height)?;
+            }
+        }
         Ok(())
     }
 
@@ -275,5 +283,29 @@ impl<'env> Accounts<'env> {
 
     pub fn get_accounts_proof(&self, txn: &db::Transaction, addresses: &[Address]) -> AccountsProof {
         self.tree.get_accounts_proof(txn, addresses)
+    }
+
+    pub fn collect_pruned_accounts(&self, transactions: &Vec<Transaction>, block_height: u32) -> Result<Vec<PrunedAccount>, AccountError> {
+        let mut txn = WriteTransaction::new(&self.env);
+
+        self.process_senders(&mut txn, transactions, block_height,
+                             |account, transaction, block_height| account.with_outgoing_transaction(transaction, block_height))?;
+        self.process_recipients(&mut txn, transactions, block_height,
+                                |account, transaction, block_height| account.with_incoming_transaction(transaction, block_height))?;
+        self.create_contracts(&mut txn, transactions, block_height)?;
+
+        let mut pruned_accounts = BTreeSet::new();
+        for transaction in transactions {
+            let sender_account = self.get(&transaction.sender, Some(&txn));
+            if sender_account.is_to_be_pruned() {
+                pruned_accounts.insert(PrunedAccount {
+                    address: transaction.sender.clone(),
+                    account: sender_account
+                });
+            }
+        }
+
+        txn.abort();
+        Ok(pruned_accounts.into_iter().collect())
     }
 }

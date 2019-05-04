@@ -27,6 +27,8 @@ impl SerializeContent for BlockHeader {
 impl Hash for BlockHeader {}
 
 impl BlockHeader {
+    pub const SIZE: usize = 146;
+
     pub fn verify_proof_of_work(&self) -> bool {
         let target: Target = self.n_bits.into();
         target.is_met_by(&self.pow())

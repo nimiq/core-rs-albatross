@@ -25,8 +25,8 @@ impl Deserialize for Block {
 
 impl Block {
     pub const VERSION: u16 = 1;
+    pub const MAX_SIZE: usize = 100_000; // 100 kb
     const TIMESTAMP_DRIFT_MAX: u64 = 600 * 1000;
-    const MAX_SIZE: usize = 100_000; // 100 kb
 
     pub fn verify(&self, timestamp_now: u64, network_id: NetworkId, genesis_hash: Blake2bHash) -> Result<(), BlockError> {
         // XXX Check that the block version is supported.

@@ -309,7 +309,7 @@ impl JsonRpcHandler {
         let include_transactions = params.get(0).and_then(JsonValue::as_bool)
             .unwrap_or(false);
 
-        Ok(JsonValue::Array(self.consensus.mempool.get_all_transactions()
+        Ok(JsonValue::Array(self.consensus.mempool.get_transactions(usize::max_value(), 0f64)
             .iter()
             .map(|tx| if include_transactions {
                 self.transaction_to_obj(tx, None, None)
@@ -321,7 +321,7 @@ impl JsonRpcHandler {
 
     fn mempool(&self, _params: Array) -> Result<JsonValue, JsonValue> {
         // Transactions sorted by fee/byte, ascending
-        let transactions = self.consensus.mempool.get_all_transactions();
+        let transactions = self.consensus.mempool.get_transactions(usize::max_value(), 0f64);
         let bucket_values: [u64; 14] = [0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
         let mut bucket_counts: [u32; 14] = [0; 14];
         let mut i = 0;

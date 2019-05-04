@@ -15,7 +15,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
 use account::AccountTransactionInteraction;
 use accounts::Accounts;
@@ -28,7 +28,6 @@ use transaction::{Transaction, TransactionFlags};
 use utils::observer::Notifier;
 
 use crate::filter::{MempoolFilter, Rules};
-use parking_lot::RwLockUpgradableReadGuard;
 
 pub mod filter;
 
@@ -308,57 +307,53 @@ impl<'env> Mempool<'env> {
         self.state.read().transactions_by_hash.get(hash).cloned()
     }
 
-    pub fn get_transactions(&self, max_size: usize, min_fee_per_byte: f64) -> Vec<Arc<Transaction>> {
+    pub fn get_transactions(&self, max_count: usize, min_fee_per_byte: f64) -> Vec<Arc<Transaction>> {
+        self.state.read().transactions_sorted_fee.iter()
+            .filter(|tx| tx.fee_per_byte() >= min_fee_per_byte)
+            .take(max_count)
+            .cloned()
+            .collect()
+    }
+
+    pub fn get_transactions_for_block(&self, max_size: usize) -> Vec<Transaction> {
         let mut txs = Vec::new();
         let mut size = 0;
 
         let state = self.state.read();
-        let valid_txs: Vec<&Arc<Transaction>> = state.transactions_sorted_fee.iter().filter(|tx| tx.fee_per_byte() >= min_fee_per_byte).collect();
-        for tx in valid_txs {
+        for tx in state.transactions_sorted_fee.iter() {
             let tx_size = tx.serialized_size();
             if size + tx_size <= max_size {
-                txs.push(tx.clone());
+                txs.push(Transaction::clone(tx));
                 size += tx_size;
             } else if max_size - size < Transaction::MIN_SIZE {
                 // Break if we can't fit the smallest possible transaction anymore.
                 break;
             }
         };
-
         txs
     }
 
-    pub fn get_all_transactions(&self) -> Vec<Arc<Transaction>> {
-        let state = self.state.read();
-        state.transactions_sorted_fee.iter().map(Arc::clone).collect()
-    }
-
-    pub fn get_transactions_for_block(&self, max_size: usize) -> Vec<Arc<Transaction>> {
-        let _transactions = self.get_transactions(max_size, 0f64);
-        // TODO get to be pruned accounts and remove transactions to fit max_size
-        unimplemented!();
-    }
-
-    pub fn get_transactions_by_addresses(&self, addresses: HashSet<Address>, max_transactions: usize) -> Vec<Arc<Transaction>> {
+    pub fn get_transactions_by_addresses(&self, addresses: HashSet<Address>, max_count: usize) -> Vec<Arc<Transaction>> {
         let mut txs = Vec::new();
 
         let state = self.state.read();
         for address in addresses {
             // Fetch transactions by sender first.
             if let Some(transactions) = state.transactions_by_sender.get(&address) {
-                for tx in transactions.iter().rev() {
-                    txs.push(tx.clone());
+                for tx in transactions.iter().rev().take(max_count - txs.len()) {
+                    txs.push(Arc::clone(tx));
                 }
             }
             // Fetch transactions by recipient second.
             if let Some(transactions) = state.transactions_by_recipient.get(&address) {
-                for tx in transactions.iter().rev() {
-                    txs.push(tx.clone());
+                for tx in transactions.iter().rev().take(max_count - txs.len()) {
+                    txs.push(Arc::clone(tx));
                 }
             }
+            if txs.len() >= max_count {
+                break
+            };
         }
-        // TODO: optimize this to not push txs that are going to be discarded anyways
-        txs.truncate(max_transactions);
         txs
     }
 

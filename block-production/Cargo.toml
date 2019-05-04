@@ -1,0 +1,33 @@
+[package]
+name = "nimiq-block-production"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+license = "Apache-2.0"
+edition = "2018"
+description = "Block Production logic for the Nimiq Rust implementation"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+
+[badges]
+gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+beserial = { path = "../beserial", version = "0.1.0" }
+nimiq-block = { path = "../primitives/block", version = "0.1.0" }
+nimiq-blockchain = { path = "../blockchain", version = "0.1.0" }
+nimiq-hash = { path = "../hash", version = "0.1.0" }
+nimiq-keys = { path = "../keys", version = "0.1.0" }
+nimiq-mempool = { path = "../mempool", version = "0.1.0" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["networks"] }
+
+[dev-dependencies]
+nimiq-account = { path = "../primitives/account", version = "0.1.0" }
+nimiq-database = { path = "../database", version = "0.1.0" }
+nimiq-primitives = { path = "../primitives", version = "0.1.0" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }

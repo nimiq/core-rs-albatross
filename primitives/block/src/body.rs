@@ -102,4 +102,12 @@ impl BlockBody {
         }
         vec
     }
+
+    pub fn get_metadata_size(extra_data_size: usize) -> usize {
+        return Address::SIZE
+            + /*extra_data size*/ 1
+            + extra_data_size
+            + /*transactions size*/ 2
+            + /*pruned_accounts size*/ 2;
+    }
 }
