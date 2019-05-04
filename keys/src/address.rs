@@ -30,11 +30,11 @@ impl Address {
     pub fn from_user_friendly_address(friendly_addr: &str) -> Result<Address, AddressParseError> {
         let friendly_addr_wospace = str::replace(friendly_addr, " ", "");
 
-        if friendly_addr_wospace[0..2].to_uppercase() != Address::CCODE {
-            return Err(AddressParseError::WrongCountryCode);
-        }
         if friendly_addr_wospace.len() != 36 {
             return Err(AddressParseError::WrongLength);
+        }
+        if friendly_addr_wospace[0..2].to_uppercase() != Address::CCODE {
+            return Err(AddressParseError::WrongCountryCode);
         }
         let mut twisted_str = String::with_capacity(friendly_addr_wospace.len());
         twisted_str.push_str(&friendly_addr_wospace[4..]);
