@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io;
 
-use account::PrunedAccount;
+use account::AccountReceipt;
 use beserial::{Deserialize, Serialize};
 use crate::BlockError;
 use crate::slash::SlashInherent;
@@ -51,7 +51,7 @@ pub struct MicroExtrinsics {
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
     #[beserial(len_type(u16))]
-    pub pruned_accounts: Vec<PrunedAccount>,
+    pub account_receipts: Vec<AccountReceipt>,
 }
 
 impl MicroBlock {
@@ -101,16 +101,16 @@ impl MicroExtrinsics {
             }
         }
 
-        let mut previous_acc: Option<&PrunedAccount> = None;
-        for acc in &self.pruned_accounts {
+        let mut previous_acc: Option<&AccountReceipt> = None;
+        for acc in &self.account_receipts {
             // Ensure pruned accounts are ordered and unique.
             if let Some(previous) = previous_acc {
                 match previous.cmp(acc) {
                     Ordering::Equal => {
-                        return Err(BlockError::DuplicatePrunedAccount);
+                        return Err(BlockError::DuplicateAccountReceipt);
                     }
                     Ordering::Greater => {
-                        return Err(BlockError::PrunedAccountsNotOrdered);
+                        return Err(BlockError::AccountReceiptsNotOrdered);
                     }
                     _ => (),
                 }
@@ -118,8 +118,12 @@ impl MicroExtrinsics {
             previous_acc = Some(acc);
 
             // Check that the account is actually supposed to be pruned.
-            if !acc.account.is_to_be_pruned() {
-                return Err(BlockError::InvalidPrunedAccount);
+            match acc {
+                AccountReceipt::Pruned(acc) => {
+                    if !acc.account.is_to_be_pruned() {
+                        return Err(BlockError::InvalidAccountReceipt);
+                    }
+                },
             }
         }
 
