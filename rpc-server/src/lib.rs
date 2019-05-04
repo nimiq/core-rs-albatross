@@ -3,39 +3,48 @@ extern crate json;
 #[macro_use]
 extern crate log;
 extern crate nimiq_block as block;
+extern crate nimiq_block_production as block_production;
+extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_network as network;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_transaction as transaction;
+extern crate nimiq_utils as utils;
 
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::collections::{HashSet, HashMap};
+use std::time::SystemTime;
 
 use futures::future::Future;
+use hex;
 use hyper::Server;
 use json::{Array, JsonValue, Null};
 use json::object::Object;
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-use block::{Block, Difficulty};
+use block::{Block, BlockHeader, Difficulty};
+use block_production::BlockProducer;
+use blockchain::PushResult;
 use consensus::consensus::{Consensus, ConsensusEvent};
 use hash::{Argon2dHash, Blake2bHash, Hash};
-use hex;
 use keys::Address;
 use network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
 use network::connection::close_type::CloseType;
 use network::connection::connection_info::ConnectionInfo;
-use network_primitives::address::{PeerId, PeerUri};
-use transaction::{Transaction, TransactionReceipt};
 use network::connection::connection_pool::ConnectionId;
 use network::peer_scorer::Score;
+use network_primitives::address::{PeerId, PeerUri};
+use transaction::{Transaction, TransactionReceipt};
+use utils::time::systemtime_to_timestamp;
 
-use crate::error::{Error, AuthenticationError};
+use crate::error::{AuthenticationError, Error};
+use utils::merkle::MerklePath;
+use hash::Blake2bHasher;
 
 pub mod jsonrpc;
 pub mod error;
@@ -345,6 +354,7 @@ impl JsonRpcHandler {
         Ok(JsonValue::Object(transactions_per_bucket))
     }
 
+
     // Blockchain
 
     fn block_number(&self, _params: Array) -> Result<JsonValue, JsonValue> {
@@ -369,6 +379,66 @@ impl JsonRpcHandler {
 
     fn get_block_by_number(&self, params: Array) -> Result<JsonValue, JsonValue> {
         Ok(self.block_to_obj(&self.block_by_number(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
+    }
+
+
+    // Block production
+
+    fn get_work(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let block = self.produce_block(params)?;
+        let block_bytes = block.serialize_to_vec();
+
+        Ok(object!{
+            "data" => hex::encode(&block_bytes[..BlockHeader::SIZE]),
+            "suffix" => hex::encode(&block_bytes[BlockHeader::SIZE..]),
+            "target" => u32::from(block.header.n_bits),
+            "algorithm" => "nimiq-argon2",
+        })
+    }
+
+    fn get_block_template(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let block = self.produce_block(params)?;
+        let header = block.header;
+        let json_header = object!{
+            "version" => header.version,
+            "prevHash" => header.prev_hash.to_hex(),
+            "interlinkHash" => header.interlink_hash.to_hex(),
+            "accountsHash" => header.accounts_hash.to_hex(),
+            "nBits" => u32::from(header.n_bits),
+            "height" => header.height,
+        };
+        let body = block.body.unwrap();
+        let merkle_path = MerklePath::new::<Blake2bHasher, Blake2bHash>(&body.get_merkle_leaves::<Blake2bHash>(), &body.miner.hash::<Blake2bHash>());
+        let json_body = object!{
+            "hash" => header.body_hash.to_hex(),
+            "minerAddr" => body.miner.to_hex(),
+            "extraData" => hex::encode(body.extra_data),
+            "transactions" => JsonValue::Array(body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, None, Some(i))).collect()),
+            "merkleHashes" => JsonValue::Array(merkle_path.hashes().iter().map(|hash| JsonValue::String(hash.to_hex())).skip(1).collect()),
+            "prunedAccounts" => JsonValue::Array(body.pruned_accounts.iter().map(|acc| JsonValue::String(hex::encode(acc.serialize_to_vec()))).collect()),
+        };
+
+        Ok(object!{
+            "header" => json_header,
+            "interlink" => hex::encode(block.interlink.serialize_to_vec()),
+            "target" => u32::from(header.n_bits),
+            "body" => json_body,
+        })
+    }
+
+    fn submit_block(&self, params: Array) -> Result<JsonValue, JsonValue> {
+        let block = params.get(0).and_then(JsonValue::as_str)
+            .ok_or_else(|| object!{"message" => "Block must be a string"})
+            .and_then(|s| hex::decode(s)
+                .map_err(|_| object!{"message" => "Block must be hex-encoded"}))
+            .and_then(|b| Block::deserialize_from_vec(&b)
+                .map_err(|_| object!{"message" => "Invalid block data"}))?;
+
+        match self.consensus.blockchain.push(block) {
+            PushResult::Extended | PushResult::Rebranched => Ok(object!{"message" => "Ok"}),
+            PushResult::Forked => Ok(object!{"message" => "Forked"}),
+            _ => Err(object!{"message" => "Block rejected"})
+        }
     }
 
 
@@ -490,10 +560,6 @@ impl JsonRpcHandler {
         rpc_not_implemented()
     }
 
-    fn push_transaction(&self, _transaction: &Transaction) -> Result<JsonValue, JsonValue> {
-        rpc_not_implemented()
-    }
-
     fn get_transaction_by_hash_helper(&self, hash: &Blake2bHash) -> Result<JsonValue, JsonValue> {
         // Get transaction info, which includes Block hash, transaction hash, and transaction index.
         // Return an error if the transaction doesn't exist.
@@ -550,6 +616,27 @@ impl JsonRpcHandler {
             "transactionIndex" => index.map(|i| i.into()).unwrap_or(Null)
         }
     }
+
+    fn push_transaction(&self, _transaction: &Transaction) -> Result<JsonValue, JsonValue> {
+        rpc_not_implemented()
+    }
+
+    fn produce_block(&self, params: Array) -> Result<Block, JsonValue> {
+        let miner = params.get(0).and_then(JsonValue::as_str)
+            .ok_or_else(|| object!{"message" => "Miner address must be a string"})
+            .and_then(|s| Address::from_any_str(s)
+                .map_err(|_| object!{"message" => "Invalid miner address"}))?;
+
+        let extra_data = params.get(1).unwrap_or(&Null).as_str()
+            .ok_or_else(|| object!{"message" => "Extra data must be a string"})
+            .and_then(|s| hex::decode(s)
+                .map_err(|_| object!{"message" => "Extra data must be hex-encoded"}))?;
+
+        let timestamp = (systemtime_to_timestamp(SystemTime::now()) / 1000) as u32;
+
+        let producer = BlockProducer::new(self.consensus.blockchain.clone(), self.consensus.mempool.clone());
+        return Ok(producer.next_block(timestamp, miner, extra_data));
+    }
 }
 
 impl jsonrpc::Handler for JsonRpcHandler {
@@ -589,6 +676,11 @@ impl jsonrpc::Handler for JsonRpcHandler {
             "getBlockTransactionCountByNumber" => Some(JsonRpcHandler::get_block_transaction_count_by_number),
             "getBlockByHash" => Some(JsonRpcHandler::get_block_by_hash),
             "getBlockByNumber" => Some(JsonRpcHandler::get_block_by_number),
+
+            // Block production
+            "getWork" => Some(JsonRpcHandler::get_work),
+            "getBlockTemplate" => Some(JsonRpcHandler::get_block_template),
+            "submitBlock" => Some(JsonRpcHandler::submit_block),
 
             _ => None
         }

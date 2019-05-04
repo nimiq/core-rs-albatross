@@ -123,6 +123,10 @@ impl<H> MerklePath<H> where H: HashOutput {
         self.nodes.is_empty()
     }
 
+    pub fn hashes(&self) -> Vec<H> {
+        self.nodes.iter().map(|node| node.hash.clone()).collect()
+    }
+
     /// Compress "left" field of every node in the MerklePath to a bit vector.
     fn compress(&self) -> Vec<u8> {
         // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them.
