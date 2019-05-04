@@ -24,7 +24,7 @@ use block::Block;
 use blockchain::{Blockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use transaction::Transaction;
+use transaction::{Transaction, TransactionFlags};
 use utils::observer::Notifier;
 
 use crate::filter::{MempoolFilter, Rules};
@@ -166,12 +166,15 @@ impl<'env> Mempool<'env> {
                     return ReturnCode::Invalid;
                 }
 
-                // Retrieve recipient account and test incoming transaction.
+                // Retrieve recipient account and check account type.
                 recipient_account = accounts.get(&transaction.recipient, None);
-                if recipient_account.account_type() != transaction.recipient_type {
+                let is_contract_creation = transaction.flags.contains(TransactionFlags::CONTRACT_CREATION);
+                let is_type_change = recipient_account.account_type() != transaction.recipient_type;
+                if is_contract_creation != is_type_change {
                     return ReturnCode::Invalid;
                 }
 
+                // Test incoming transaction.
                 match recipient_account.with_incoming_transaction(&transaction, block_height) {
                     Err(_) => return ReturnCode::Invalid,
                     Ok(r) => {
@@ -183,7 +186,7 @@ impl<'env> Mempool<'env> {
                     }
                 }
 
-                // Retrieve sender account and test account type.
+                // Retrieve sender account and check account type.
                 sender_account = accounts.get(&transaction.sender, None);
                 if sender_account.account_type() != transaction.sender_type {
                     return ReturnCode::Invalid;
