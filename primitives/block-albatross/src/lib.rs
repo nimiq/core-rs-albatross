@@ -22,6 +22,7 @@ pub use macro_block::{MacroBlock, MacroHeader, MacroExtrinsics};
 pub use micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
 pub use view_change::{ViewChange, SignedViewChange};
 pub use slash::SlashInherent;
+pub use pbft::{PbftPrepareMessage, PbftCommitMessage};
 
 use crate::transaction::TransactionError;
 

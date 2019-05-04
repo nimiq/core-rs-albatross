@@ -43,7 +43,7 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
-use block_albatross::{SignedViewChange, SlashInherent};
+use block_albatross::{SignedViewChange, SlashInherent, PbftPrepareMessage, PbftCommitMessage, MacroBlock};
 
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
@@ -143,9 +143,9 @@ pub enum Message {
     ValidatorAddr(Vec<ValidatorAddrMessage>),
     ViewChange(Box<SignedViewChange>),
     SlashInherent(Box<SlashInherent>),
-    PbftProposal(Box<()>), // TODO
-    PbftPrepare(Box<()>), // TODO
-    PbftCommit(Box<()>) // TODO
+    PbftProposal(Box<MacroBlock>),
+    PbftPrepare(Box<PbftPrepareMessage>),
+    PbftCommit(Box<PbftCommitMessage>),
 }
 
 impl Message {

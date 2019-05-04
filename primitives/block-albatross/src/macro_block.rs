@@ -70,11 +70,12 @@ impl MacroBlock {
 
 impl MacroJustification {
     pub fn verify(&self, block_hash: Blake2bHash, threshold: usize) -> bool {
-        // both have to be valid & >k sigs from prepare must be included in commit
+        /*// both have to be valid & >k sigs from prepare must be included in commit
         self.prepare.verify(&PbftPrepareMessage { block_hash: block_hash.clone() }, None)
             && self.commit.verify(&PbftCommitMessage { block_hash }, None)
             // TODO: Try to do this without cloning
-            && (self.prepare.signers.clone() & self.commit.signers.clone()).count_ones() > threshold
+            && (self.prepare.signers.clone() & self.commit.signers.clone()).count_ones() > threshold*/
+        unimplemented!()
     }
 }
 

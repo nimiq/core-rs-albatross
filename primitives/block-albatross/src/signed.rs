@@ -81,8 +81,8 @@ pub enum AggregateError {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AggregateProof<M> {
     pub num_signers: u32,
-    #[beserial(len_type(u32))]
-    pub signers: BitVec<BigEndian, u8>,
+    //#[beserial(len_type(u32))]
+    //pub signers: BitVec<BigEndian, u8>,
     pub public_key: AggregatePublicKey,
     pub signature: AggregateSignature,
     #[beserial(skip)]
@@ -91,24 +91,26 @@ pub struct AggregateProof<M> {
 
 impl<M: Message> AggregateProof<M> {
     pub fn new() -> Self {
-        Self {
+        /*Self {
             num_signers: 0,
             signers: BitVec::new(),
             public_key: AggregatePublicKey::new(),
             signature: AggregateSignature::new(),
             _message: PhantomData,
-        }
+        }*/
+        unimplemented!()
     }
 
     pub fn contains(&self, signed: &SignedMessage<M>) -> bool {
-        let pk_idx = signed.pk_idx.to_usize().unwrap();
-        self.signers.get(pk_idx).unwrap_or(false)
+        /*let pk_idx = signed.pk_idx.to_usize().unwrap();
+        self.signers.get(pk_idx).unwrap_or(false)*/
+        unimplemented!()
     }
 
     /// Adds a signed message to an aggregate proof
     /// NOTE: This method assumes the signature of the message was already checked
     pub fn add_signature(&mut self, public_key: &PublicKey, signed: &SignedMessage<M>) {
-        debug_assert!(signed.verify(public_key));
+        /*debug_assert!(signed.verify(public_key));
         let pk_idx = signed.pk_idx.to_usize().unwrap();
         if !self.signers.get(pk_idx).unwrap_or(false) {
             if pk_idx >= self.signers.len() {
@@ -118,7 +120,8 @@ impl<M: Message> AggregateProof<M> {
             self.signers.set(pk_idx, true);
             self.public_key.aggregate(public_key);
             self.signature.aggregate(&signed.signature);
-        }
+        }*/
+        unimplemented!()
     }
 
     pub fn merge(&mut self, proof: &AggregateProof<M>) -> Result<(), AggregateError> {
@@ -131,11 +134,13 @@ impl<M: Message> AggregateProof<M> {
 //        self.public_key.merge_into(&proof.public_key);
 //        self.signature.merge_into(&proof.signature);
 //        Ok(())
+        unimplemented!()
     }
 
     // Verify message against aggregate signature and optionally check if a threshold was reached
     pub fn verify(&self, message: &M, threshold: Option<usize>) -> bool {
-        self.signers.count_ones() >= threshold.unwrap_or(0)
-            && self.public_key.verify_hash(message.hash_with_prefix(), &self.signature)
+/*        self.signers.count_ones() >= threshold.unwrap_or(0)
+            && self.public_key.verify_hash(message.hash_with_prefix(), &self.signature)*/
+        unimplemented!()
     }
 }
