@@ -216,6 +216,7 @@ pub(crate) struct ReverseProxySettings {
 #[serde(deny_unknown_fields)]
 pub(crate) struct LogSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
+    #[serde(default)]
     pub level: Option<LevelFilter>,
     #[serde(default)]
     pub timestamps: bool,

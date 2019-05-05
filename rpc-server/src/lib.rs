@@ -127,9 +127,7 @@ impl JsonRpcHandler {
 
     fn peer_list(&self, _params: Array) -> Result<JsonValue, JsonValue> {
         let mut scores: HashMap<ConnectionId, Score> = HashMap::new();
-        trace!("[SCORE] Num scores: {}", self.consensus.network.scorer().connection_scores().len());
         for (id, score) in self.consensus.network.scorer().connection_scores() {
-            trace!("[SCORE] id={}, score={}", id, score);
             scores.insert(*id, *score);
         }
 

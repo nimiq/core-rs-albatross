@@ -465,8 +465,8 @@ impl InventoryAgent {
             }
         }
 
-        debug!("[INV] {} vectors, {} new blocks, {} new txs",
-               num_vectors, unknown_blocks.len(), unknown_txs.len());
+        trace!("[INV] {} vectors, {} new blocks, {} new txs from {}",
+               num_vectors, unknown_blocks.len(), unknown_txs.len(), self.peer.peer_address());
 
         // Re-take state write lock.
         let mut state = self.state.write();
@@ -500,7 +500,7 @@ impl InventoryAgent {
         //let lock = self.mutex.lock();
 
         let hash = block.header.hash::<Blake2bHash>();
-        debug!("[BLOCK] #{} ({} txs) from {}", block.header.height, block.body.as_ref().unwrap().transactions.len(), self.peer.peer_address());
+        trace!("[BLOCK] #{} ({} txs) from {}", block.header.height, block.body.as_ref().unwrap().transactions.len(), self.peer.peer_address());
 
         // Check if we have requested this block.
         let vector = InvVector::new(InvVectorType::Block, hash);
@@ -523,16 +523,8 @@ impl InventoryAgent {
 
         self.inv_mgr.write().note_vector_received(&vector);
 
-        // TODO do this async (then we need a form of synchronizer to process the blocks in the right order)
-        // XXX Debug
-        let start = Instant::now();
-        let height = block.header.height;
-        let num_txs = block.body.as_ref().unwrap().transactions.len();
-
+        // Process block & notify.
         let result = self.blockchain.push(block);
-
-        debug!("Block #{} ({} txs) took {}ms to process", height, num_txs, utils::time::duration_as_millis(&(Instant::now() - start)));
-
         self.notifier.read().notify(InventoryEvent::BlockProcessed(vector.hash.clone(), result));
 
         // Mark object as received.
@@ -540,13 +532,13 @@ impl InventoryAgent {
     }
 
     fn on_header(&self, header: BlockHeader) {
-        debug!("[HEADER] #{} {}", header.height, header.hash::<Blake2bHash>());
+        trace!("[HEADER] #{} {}", header.height, header.hash::<Blake2bHash>());
         warn!("Unsolicited header message received from {}, discarding", self.peer.peer_address());
     }
 
     fn on_tx(&self, msg: TxMessage) {
         let hash = msg.transaction.hash::<Blake2bHash>();
-        debug!("[TX] from {} value {} fee {}", msg.transaction.sender, msg.transaction.value, msg.transaction.fee);
+        trace!("[TX] from {} value {} fee {}", msg.transaction.sender, msg.transaction.value, msg.transaction.fee);
 
         // Check if we have requested this transaction.
         let vector = InvVector::new(InvVectorType::Transaction, hash.clone());
@@ -581,7 +573,7 @@ impl InventoryAgent {
     }
 
     fn on_mempool(&self) {
-        debug!("[MEMPOOL]");
+        trace!("[MEMPOOL] from {}", self.peer.peer_address());
 
         let state = self.state.read();
         // Query mempool for transactions
@@ -616,7 +608,7 @@ impl InventoryAgent {
     }
 
     fn on_not_found(&self, vectors: Vec<InvVector>) {
-        debug!("[NOTFOUND] {} vectors", vectors.len());
+        trace!("[NOTFOUND] {} vectors", vectors.len());
 
         // Remove unknown objects from in-flight list.
         let agent = &*self.self_weak;
@@ -982,7 +974,7 @@ impl InventoryAgent {
         let num_vectors = vectors.len();
         if num_vectors > 0 {
             self.peer.channel.send_or_close(Message::Inv(vectors));
-            debug!("[INV] Sent {} vectors to {}", num_vectors, self.peer.peer_address());
+            debug!("Sent {} InvVectors to {}", num_vectors, self.peer.peer_address());
         }
     }
 
@@ -1003,7 +995,7 @@ impl InventoryAgent {
         let num_vectors = vectors.len();
         if num_vectors > 0 {
             self.peer.channel.send_or_close(Message::Inv(vectors));
-            debug!("[INV] Sent {} vectors to {}", num_vectors, self.peer.peer_address());
+            debug!("Sent {} InvVectors to {}", num_vectors, self.peer.peer_address());
         }
     }
 

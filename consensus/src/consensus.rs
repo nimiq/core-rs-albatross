@@ -130,6 +130,8 @@ impl Consensus {
     }
 
     fn on_peer_joined(&self, peer: Peer) {
+        info!("Connected to {}", peer.peer_address());
+
         let peer_arc = Arc::new(peer);
         let agent = ConsensusAgent::new(
             self.blockchain.clone(),
@@ -159,6 +161,8 @@ impl Consensus {
     }
 
     fn on_peer_left(&self, peer: Peer) {
+        info!("Disconnected from {}", peer.peer_address());
+
         {
             let mut state = self.state.write();
 
@@ -183,7 +187,7 @@ impl Consensus {
         {
             let mut state = self.state.write();
             if state.sync_peer.as_ref().map_or(false, |sync_peer| sync_peer == &peer) {
-                trace!("Finished sync with peer {}", peer.peer_address());
+                debug!("Finished sync with peer {}", peer.peer_address());
                 state.sync_peer = None;
             }
         }
@@ -192,16 +196,22 @@ impl Consensus {
     }
 
     fn on_peer_out_of_sync(&self, peer: Arc<Peer>) {
-        warn!("Peer {} out of sync, resyncing", peer.peer_address());
+        warn!("Peer {} out of sync, re-syncing", peer.peer_address());
         self.sync_blockchain();
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent) {
         let state = self.state.read();
 
-        // Don't relay transactions if we are not synced yet.
+        // Don't relay blocks if we are not synced yet.
         if !state.established {
+            let height = self.blockchain.height();
+            if height % 100 == 0 {
+                info!("Now at block #{}", height);
+            }
             return;
+        } else {
+            info!("Now at block #{}", self.blockchain.height());
         }
 
         let blocks;
@@ -247,6 +257,11 @@ impl Consensus {
     fn sync_blockchain(&self) {
         let mut state = self.state.write();
 
+        // Wait for ongoing sync to finish.
+        if state.sync_peer.is_some() {
+            return;
+        }
+
         let mut num_synced_full_nodes: usize = 0;
         let candidates: Vec<&Arc<ConsensusAgent>> = state.agents.values()
             .filter(|&agent| {
@@ -261,25 +276,17 @@ impl Consensus {
         let mut rng = thread_rng();
         let agent = candidates.choose(&mut rng).map(|&agent| agent.clone());
 
-        // Report consensus-lost if we are synced with less than the minimum number of full nodes or have no connections at all.
-        let consensus_lost = state.established && (num_synced_full_nodes < Self::MIN_FULL_NODES || state.agents.is_empty());
-
-        // Wait for ongoing sync to finish.
-        if state.sync_peer.is_some() {
-            return;
-        }
-
-        let established = state.established;
-        let num_agents = state.agents.len();
-
-        if consensus_lost {
+        // Report consensus-lost if we are synced with less than the minimum number of full nodes.
+        if state.established && num_synced_full_nodes < Self::MIN_FULL_NODES {
             state.established = false;
+            info!("Consensus lost");
             // FIXME we're still holding state write lock when notifying here.
             self.notifier.read().notify(ConsensusEvent::Lost);
         }
 
         if let Some(agent) = agent {
             state.sync_peer = Some(agent.peer.clone());
+            let established = state.established;
             drop(state);
 
             // Notify listeners when we start syncing and have not established consensus yet.
@@ -287,16 +294,15 @@ impl Consensus {
                 self.notifier.read().notify(ConsensusEvent::Syncing);
             }
 
-            trace!("Syncing blockchain with peer {}", agent.peer.peer_address());
+            debug!("Syncing blockchain with peer {}", agent.peer.peer_address());
             agent.sync();
         } else {
             // We are synced with all connected peers.
-
             // Report consensus-established if we are connected to the minimum number of full nodes.
             if num_synced_full_nodes >= Self::MIN_FULL_NODES {
-                if !established {
-                    trace!("Synced with all connected peers ({}), consensus established.", num_agents);
-                    debug!("Blockchain: height={}, head_hash={:?}", self.blockchain.height(), self.blockchain.head_hash());
+                if !state.established {
+                    info!("Synced with all connected peers ({}), consensus established", state.agents.len());
+                    info!("Blockchain at block #{} [{}]", self.blockchain.height(), self.blockchain.head_hash());
 
                     state.established = true;
                     drop(state);
@@ -308,7 +314,7 @@ impl Consensus {
                     self.network.set_allow_inbound_connections(true);
                 }
             } else {
-                trace!("Waiting for more peer connections to be established.");
+                info!("Waiting for more peer connections...");
                 drop(state);
 
                 // Otherwise, wait until more peer connections are established.

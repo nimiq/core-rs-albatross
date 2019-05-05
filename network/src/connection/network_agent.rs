@@ -225,7 +225,7 @@ impl NetworkAgent {
     }
 
     fn on_version(&mut self, msg: VersionMessage) {
-        debug!("[VERSION] {} {} {}", &msg.peer_address, &msg.head_hash, &msg.user_agent.unwrap_or_else(|| String::from("None")));
+        trace!("[VERSION] {} {} {}", &msg.peer_address, &msg.head_hash, &msg.user_agent.as_ref().unwrap_or(&"None".to_string()));
 
         let now = SystemTime::now();
 
@@ -304,8 +304,9 @@ impl NetworkAgent {
             self.channel.clone(),
             msg.version,
             msg.head_hash.clone(),
-            peer_address.timestamp as i64 - systemtime_to_timestamp(now) as i64)
-        );
+            peer_address.timestamp as i64 - systemtime_to_timestamp(now) as i64,
+            msg.user_agent
+        ));
 
         self.peer_challenge_nonce = Some(msg.challenge_nonce.clone());
         self.version_received = true;
@@ -334,7 +335,7 @@ impl NetworkAgent {
     }
 
     fn on_ver_ack(&mut self, msg: VerAckMessage) {
-        debug!("[VERACK] from {}", self.channel.address_info.peer_address()
+        trace!("[VERACK] from {}", self.channel.address_info.peer_address()
             .map_or("<unknown>".to_string(), |p| p.to_string()));
 
         // Make sure this is a valid message in our current state.
@@ -447,7 +448,7 @@ impl NetworkAgent {
             return;
         }
 
-        debug!("[ADDR] {} addresses from {}", msg.addresses.len(), peer_address);
+        trace!("[ADDR] {} addresses from {}", msg.addresses.len(), peer_address);
 
         // XXX Discard any addresses beyond the ones we requested
         // and check the addresses the peer sent to us.

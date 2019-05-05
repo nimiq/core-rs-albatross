@@ -122,7 +122,7 @@ fn run() -> Result<(), Error> {
     let config_file = find_config_file(&cmdline, &mut files)?;
     if !config_file.exists() {
         eprintln!("Can't find config file at: {}", config_file.display());
-        eprintln!("If you haven't configured the Nimiq client yet, do this by copying the config.example.toml to config.toml in the path above and editing it appropriately.");
+        eprintln!("If you haven't configured the Nimiq client yet, do this by copying the client.example.toml to client.toml in the path above and editing it appropriately.");
         Err(ConfigError::MissingConfigFile)?;
     }
     let settings = Settings::from_file(&config_file)?;
@@ -297,8 +297,8 @@ fn run() -> Result<(), Error> {
     // Run client and other futures
     tokio::run(
         client.and_then(|c| c.connect()) // Run Nimiq client
-            .map(|_| info!("Client finished")) // Map Result to None
-            .map_err(|e| error!("Client failed: {}", e))
+            .map(|_| info!("Client initialized")) // Map Result to None
+            .map_err(|e| error!("Client initialization failed: {}", e))
             .and_then( move |_| future::join_all(other_futures)) // Run other futures (e.g. RPC server)
             .map(|_| info!("Other futures finished"))
     );

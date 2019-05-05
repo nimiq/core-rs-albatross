@@ -15,15 +15,17 @@ pub struct Peer {
     pub version: u32,
     pub head_hash: Blake2bHash,
     pub time_offset: i64,
+    pub user_agent: Option<String>,
 }
 
 impl Peer {
-    pub fn new(channel: Arc<PeerChannel>, version: u32, head_hash: Blake2bHash, time_offset: i64) -> Self {
+    pub fn new(channel: Arc<PeerChannel>, version: u32, head_hash: Blake2bHash, time_offset: i64, user_agent: Option<String>) -> Self {
         Peer {
             channel,
             version,
             head_hash,
             time_offset,
+            user_agent
         }
     }
 

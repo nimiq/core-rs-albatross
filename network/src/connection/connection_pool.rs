@@ -800,15 +800,15 @@ impl ConnectionPool {
         drop(state);
         drop(guard);
 
+        debug!("Peer joined: {} {} (version={}, services={:?}, userAgent={})", &peer_address,
+               peer.net_address().map_or("<unknown>".to_string(), |n| n.to_string()),
+               peer.version, peer_address.services, peer.user_agent.as_ref().unwrap_or(&"None".to_string()));
+
         // Let listeners know about this peer.
         self.notifier.read().notify(ConnectionPoolEvent::PeerJoined(peer.as_ref().clone()));
 
         // Let listeners know that the peers changed.
         self.notifier.read().notify(ConnectionPoolEvent::PeersChanged);
-
-        debug!("[PEER-JOINED] {} {} (version={:?}, services={:?}, headHash={})", &peer_address, peer.net_address()
-            .map_or("<unknown>".to_string(), |n| n.to_string()), peer.version, peer_address.services, peer.head_hash);
-
     }
 
     /// Callback upon closing of connection.
@@ -849,7 +849,7 @@ impl ConnectionPool {
 
                     established_peer_left = true;
 
-                    debug!("[PEER-LEFT] {} {} (version={:?}, closeType={:?})", info.peer_address().unwrap(), net_address.unwrap(), info.peer().map(|p| p.version), ty);
+                    debug!("Peer left: {} {} (version={:?}, closeType={:?})", info.peer_address().unwrap(), net_address.unwrap(), info.peer().map(|p| p.version), ty);
                 } else {
                     match info.network_connection().map(NetworkConnection::inbound) {
                         Some(true) => {

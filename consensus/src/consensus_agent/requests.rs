@@ -25,7 +25,7 @@ use crate::consensus_agent::ConsensusAgent;
 
 impl ConsensusAgent {
     pub(super) fn on_get_chain_proof(&self) {
-        debug!("[GET-CHAIN-PROOF]");
+        trace!("[GET-CHAIN-PROOF] from {}", self.peer.peer_address());
         if !self.state.write().chain_proof_limit.note_single() {
             warn!("Rejecting GetChainProof message - rate-limit exceeded");
             self.peer.channel.close(CloseType::RateLimitExceeded);
@@ -37,7 +37,7 @@ impl ConsensusAgent {
     }
 
     pub(super) fn on_get_block_proof(&self, msg: GetBlockProofMessage) {
-        debug!("[GET-BLOCK-PROOF]");
+        trace!("[GET-BLOCK-PROOF] from {}", self.peer.peer_address());
         if !self.state.write().block_proof_limit.note_single() {
             warn!("Rejecting GetBlockProof message - rate-limit exceeded");
             self.peer.channel.send_or_close(BlockProofMessage::empty());
@@ -49,7 +49,7 @@ impl ConsensusAgent {
     }
 
     pub(super) fn on_get_transaction_receipts(&self, msg: GetTransactionReceiptsMessage) {
-        debug!("[GET-TRANSACTION-RECEIPTS]");
+        trace!("[GET-TRANSACTION-RECEIPTS] from {}", self.peer.peer_address());
         if !self.state.write().transaction_receipts_limit.note_single() {
             warn!("Rejecting GetTransactionReceipts message - rate-limit exceeded");
             self.peer.channel.send_or_close(TransactionReceiptsMessage::empty());
@@ -62,7 +62,7 @@ impl ConsensusAgent {
     }
 
     pub(super) fn on_get_transactions_proof(&self, msg: GetTransactionsProofMessage) {
-        debug!("[GET-TRANSACTIONS-PROOF]");
+        trace!("[GET-TRANSACTIONS-PROOF] from {}", self.peer.peer_address());
         if !self.state.write().transactions_proof_limit.note_single() {
             warn!("Rejecting GetTransactionsProofMessage message - rate-limit exceeded");
             self.peer.channel.send_or_close(TransactionsProofMessage::new(msg.block_hash, None));
@@ -75,7 +75,7 @@ impl ConsensusAgent {
     }
 
     pub(super) fn on_get_accounts_proof(&self, msg: GetAccountsProofMessage) {
-        debug!("[GET-ACCOUNTS-PROOF]");
+        trace!("[GET-ACCOUNTS-PROOF] from {}", self.peer.peer_address());
         if !self.state.write().accounts_proof_limit.note_single() {
             warn!("Rejecting GetAccountsProof message - rate-limit exceeded");
             self.peer.channel.send_or_close(AccountsProofMessage::new(msg.block_hash, None));
@@ -93,7 +93,7 @@ impl ConsensusAgent {
     }
 
     pub(super) fn on_get_accounts_tree_chunk(&self, msg: GetAccountsTreeChunkMessage) {
-        debug!("[GET-ACCOUNTS-TREE-CHUNK]");
+        trace!("[GET-ACCOUNTS-TREE-CHUNK] from {}", self.peer.peer_address());
         let get_chunk_future = self.accounts_chunk_cache.get_chunk(&msg.block_hash, &msg.start_prefix);
         let peer = self.peer.clone();
         let future = get_chunk_future.then(move |chunk_res| {
