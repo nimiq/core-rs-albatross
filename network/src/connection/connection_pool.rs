@@ -533,7 +533,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
 
         let agent;
         let connection_id;
-        // Aquire write lock and release it again before notifying listeners.
+        // Acquire write lock and release it again before notifying listeners.
         {
             let mut state = self.state.write();
             if connection.outbound() {
@@ -564,7 +564,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
             }
 
             // Register close listener early to clean up correctly in case _checkConnection() closes the connection.
-            let info = state.connections.get(connection_id).expect("Missing connection");
+            let info = state.connections.get(connection_id).unwrap_or_else(|| panic!("Missing connection #{} in on_close", connection_id));
 
             // There is a chance that there was a race condition in the websocket connector
             // and that the connection should actually have been aborted.
@@ -594,7 +594,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
             }
 
             // The extra lookup is needed to satisfy the borrow checker.
-            let info = state.connections.get_mut(connection_id).expect("Missing connection");
+            let info = state.connections.get_mut(connection_id).unwrap_or_else(|| panic!("Missing connection #{} in on_close", connection_id));
             info.drop_connection_handle();
 
             let conn_type = if info.network_connection().unwrap().inbound() { "inbound" } else { "outbound" };
@@ -641,7 +641,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
         // Read lock.
         {
             let state = self.state.read();
-            let info = state.get_connection(connection_id).expect("Missing connection");
+            let info = state.get_connection(connection_id).unwrap_or_else(|| panic!("Missing connection #{} in on_close", connection_id));
 
             // Close connection if peer's address is banned.
             let peer_address = peer.peer_address();
@@ -655,7 +655,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
             if let Some(stored_connection_id) = stored_connection_id {
                 if *stored_connection_id != connection_id {
                     // If we already have an established connection to this peer, close this connection.
-                    let stored_connection = state.connections.get(*stored_connection_id).expect("Missing connection");
+                    let stored_connection = state.connections.get(*stored_connection_id).unwrap_or_else(|| panic!("Missing connection #{} in on_close", *stored_connection_id));
                     if stored_connection.state() == ConnectionState::Established {
                         Self::close(info.network_connection(), CloseType::DuplicateConnection);
                         return false;
@@ -685,7 +685,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
         // Read lock.
         {
             let state = self.state.read();
-            let info = state.connections.get(connection_id).expect("Missing connection");
+            let info = state.connections.get(connection_id).unwrap_or_else(|| panic!("Missing connection #{} in on_close", connection_id));
             let network_connection = info.network_connection().unwrap();
 
             if network_connection.inbound() {
@@ -699,7 +699,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
                 let stored_connection_id = state.connections_by_peer_address.get(&peer_address);
                 if let Some(stored_connection_id) = stored_connection_id {
                     if *stored_connection_id != connection_id {
-                        let stored_connection = state.connections.get(*stored_connection_id).expect("Missing connection");
+                        let stored_connection = state.connections.get(*stored_connection_id).unwrap_or_else(|| panic!("Missing connection #{} in on_close", *stored_connection_id));
                         match stored_connection.state() {
                             ConnectionState::Connecting => {
                                 // Abort the stored connection attempt and accept this connection.
@@ -763,7 +763,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
             self.notifier.read().notify(ConnectionPoolEvent::RecyclingRequest);
         }
 
-        // Aquire write lock and release it again before notifying listeners.
+        // Acquire write lock and release it again before notifying listeners.
         {
             let mut state = self.state.write();
             // Set ConnectionInfo to Established state.
@@ -778,7 +778,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
         }
 
         let state = self.state.read();
-        let info = state.get_connection(connection_id).expect("Missing connection");
+        let info = state.get_connection(connection_id).unwrap_or_else(|| panic!("Missing connection #{} in on_close", connection_id));
 
         // Setup signal forwarding.
         if Network::<B>::SIGNALING_ENABLED {
@@ -822,16 +822,16 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
             // - inbound connections post handshake (peerAddress is verified)
             {
                 let state = self.state.read();
-                let info = state.get_connection(connection_id).expect("Missing connection in on_close");
+                let info = state.get_connection(connection_id).unwrap_or_else(|| panic!("Missing connection #{}", connection_id));
                 if let Some(peer_address) = info.peer_address() {
                     self.addresses.close(info.peer_channel(), peer_address, ty);
                 }
             }
 
-            // Aquire write lock and release it again before notifying listeners.
+            // Acquire write lock and release it again before notifying listeners.
             {
                 let mut state = self.state.write();
-                info = state.remove(connection_id).expect("Missing connection in on_close");
+                info = state.remove(connection_id).unwrap_or_else(|| panic!("Missing connection #{}", connection_id));
 
                 // Check if the handshake with this peer has completed.
                 if info.state() == ConnectionState::Established {
@@ -863,7 +863,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
                             // Only sets a timer and won't reenter connection pool.
                             self.notifier.read().notify(ConnectionPoolEvent::ConnectError(info.peer_address().expect("PeerAddress not set").clone(), ty));
                         },
-                        _ => unreachable!("Invalid state, closing connection with network connection not set"),
+                        _ => unreachable!(format!("Invalid state, closing connection #{} with network connection not set", connection_id)),
                     }
                 }
             }
@@ -923,11 +923,11 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
         let guard = self.change_lock.lock();
         debug!("Connection to {} failed with error {}", peer_address, error);
 
-        // Aquire write lock and release it again before notifying listeners.
+        // Acquire write lock and release it again before notifying listeners.
         {
             let mut state = self.state.write();
             let connection_id = *state.connections_by_peer_address.get(&peer_address).expect("PeerAddress not stored");
-            let info = state.connections.get(connection_id).expect("Missing connection");
+            let info = state.connections.get(connection_id).unwrap_or_else(|| panic!("Missing connection #{}", connection_id));
             assert_eq!(info.state(), ConnectionState::Connecting, "ConnectionInfo state not Connecting, but {:?} ({})", info.state(), peer_address);
             state.remove(connection_id).unwrap();
 
