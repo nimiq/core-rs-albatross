@@ -3,6 +3,7 @@ extern crate beserial_derive;
 #[macro_use]
 extern crate nimiq_hash_derive as hash_derive;
 extern crate nimiq_account as account;
+extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
@@ -18,8 +19,8 @@ mod slash;
 mod view_change;
 pub mod signed;
 
-pub use block::Block;
-pub use macro_block::{MacroBlock, MacroHeader, MacroExtrinsics};
+pub use block::{Block, BlockHeader};
+pub use macro_block::{MacroBlock, MacroHeader};
 pub use micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
 pub use view_change::{ViewChange, SignedViewChange};
 pub use slash::SlashInherent;

@@ -13,7 +13,6 @@ use crate::pbft::PbftCommitMessage;
 pub struct MacroBlock {
     pub header: MacroHeader,
     pub justification: Option<MacroJustification>,
-    pub extrinsics: Option<MacroExtrinsics>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -27,9 +26,11 @@ pub struct MacroHeader {
     pub view_number: u16,
     pub parent_macro_hash: Blake2bHash,
 
+    pub seed: Signature,
     pub parent_hash: Blake2bHash,
-    pub extrinsics_root: Blake2bHash,
     pub state_root: Blake2bHash,
+
+    pub timestamp: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -37,12 +38,6 @@ pub struct MacroJustification {
     pub prepare: signed::AggregateProof<PbftPrepareMessage>,
     pub commit: signed::AggregateProof<PbftCommitMessage>,
     pub view_change_proof: Option<ViewChangeProof>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct MacroExtrinsics {
-    pub timestamp: u64,
-    pub seed: Signature,
 }
 
 impl MacroBlock {
@@ -84,12 +79,6 @@ impl SerializeContent for MacroHeader {
 }
 
 impl Hash for MacroHeader { }
-
-impl SerializeContent for MacroExtrinsics {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
-}
-
-impl Hash for MacroExtrinsics { }
 
 impl fmt::Display for MacroBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {

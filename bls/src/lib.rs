@@ -251,7 +251,7 @@ impl<E: Engine> PartialEq for AggregateSignature<E> {
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use std::vec::Vec;
 
@@ -371,4 +371,4 @@ mod tests {
             true
         );
     }
-}
+}*/

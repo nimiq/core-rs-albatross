@@ -7,7 +7,6 @@ use crate::BlockError;
 use crate::slash::SlashInherent;
 use crate::view_change::{ViewChange, ViewChangeProof};
 use hash::{Hash, Blake2bHash, SerializeContent};
-use keys::PublicKey;
 use nimiq_bls::bls12_381::Signature;
 use primitives::networks::NetworkId;
 use std::cmp::Ordering;
@@ -17,10 +16,10 @@ use transaction::Transaction;
 pub struct MicroBlock {
     pub header: MicroHeader,
     pub justification: MicroJustification,
-    pub extrinsics: MicroExtrinsics,
+    pub extrinsics: Option<MicroExtrinsics>,
 }
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroHeader {
     pub version: u16,
 
@@ -31,6 +30,9 @@ pub struct MicroHeader {
     pub parent_hash: Blake2bHash,
     pub extrinsics_root: Blake2bHash,
     pub state_root: Blake2bHash,
+
+    pub seed: Signature,
+    pub timestamp: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -41,8 +43,6 @@ pub struct MicroJustification {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroExtrinsics {
-    pub timestamp: u64,
-    pub seed: Signature,
     #[beserial(len_type(u16))]
     pub slash_inherents: Vec<SlashInherent>,
 
@@ -56,8 +56,10 @@ pub struct MicroExtrinsics {
 
 impl MicroBlock {
     pub fn verify(&self, network_id: NetworkId) -> bool {
-        if !self.extrinsics.verify(self.header.block_number, network_id).is_err() {
-            return false;
+        if let Some(ref extrinsics) = self.extrinsics {
+            if !extrinsics.verify(self.header.block_number, network_id).is_err() {
+                return false;
+            }
         }
 
         if self.header.view_number >= 1 && self.justification.view_change_proof.is_none() {
