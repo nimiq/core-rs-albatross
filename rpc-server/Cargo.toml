@@ -29,6 +29,7 @@ base64 = "0.10"
 beserial = { path = "../beserial", version = "0.1.0" }
 nimiq-consensus = { path = "../consensus", version = "0.1.0" }
 nimiq-blockchain = { path = "../blockchain", version = "0.1.0" }
+nimiq-mempool = { path = "../mempool", version = "0.1.0" }
 nimiq-network = { path = "../network", version = "0.1.0" }
 nimiq-hash = { path = "../hash", version = "0.1.0" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0" }

@@ -8,6 +8,7 @@ extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
+extern crate nimiq_mempool as mempool;
 extern crate nimiq_network as network;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_transaction as transaction;
@@ -31,8 +32,9 @@ use block::{Block, BlockHeader, Difficulty};
 use block_production::BlockProducer;
 use blockchain::PushResult;
 use consensus::consensus::{Consensus, ConsensusEvent};
-use hash::{Argon2dHash, Blake2bHash, Hash};
+use hash::{Argon2dHash, Blake2bHash, Blake2bHasher, Hash};
 use keys::Address;
+use mempool::ReturnCode;
 use network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
 use network::connection::close_type::CloseType;
 use network::connection::connection_info::ConnectionInfo;
@@ -40,11 +42,10 @@ use network::connection::connection_pool::ConnectionId;
 use network::peer_scorer::Score;
 use network_primitives::address::{PeerId, PeerUri};
 use transaction::{Transaction, TransactionReceipt};
+use utils::merkle::MerklePath;
 use utils::time::systemtime_to_timestamp;
 
 use crate::error::{AuthenticationError, Error};
-use utils::merkle::MerklePath;
-use hash::Blake2bHasher;
 
 pub mod jsonrpc;
 pub mod error;
@@ -206,7 +207,7 @@ impl JsonRpcHandler {
             .map_err(|_| object!{"message" => "Raw transaction must be a hex string"} )?;
         let transaction: Transaction = Deserialize::deserialize_from_vec(&raw)
             .map_err(|_| object!{"message" => "Transaction can't be deserialized"} )?;
-        self.push_transaction(&transaction)
+        self.push_transaction(transaction)
     }
 
     fn create_raw_transaction(&self, params: Array) -> Result<JsonValue, JsonValue> {
@@ -215,7 +216,7 @@ impl JsonRpcHandler {
     }
 
     fn send_transaction(&self, params: Array) -> Result<JsonValue, JsonValue> {
-        self.push_transaction(&self.obj_to_transaction(params.get(0).unwrap_or(&Null))?)
+        self.push_transaction(self.obj_to_transaction(params.get(0).unwrap_or(&Null))?)
     }
 
 
@@ -615,8 +616,11 @@ impl JsonRpcHandler {
         }
     }
 
-    fn push_transaction(&self, _transaction: &Transaction) -> Result<JsonValue, JsonValue> {
-        rpc_not_implemented()
+    fn push_transaction(&self, transaction: Transaction) -> Result<JsonValue, JsonValue> {
+        match self.consensus.mempool.push_transaction(transaction) {
+            ReturnCode::Accepted | ReturnCode::Known => Ok(object!{"message" => "Ok"}),
+            code => Err(object!{"message" => format!("Rejected: {:?}", code)})
+        }
     }
 
     fn produce_block(&self, params: Array) -> Result<Block, JsonValue> {
