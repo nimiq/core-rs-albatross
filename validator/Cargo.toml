@@ -22,7 +22,8 @@ nimiq-mempool = { path = "../mempool" }
 nimiq-network = { path = "../network" }
 nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
-
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-messages = { path = "../messages" }
 failure = "0.1"
 log = "0.4"
 parking_lot = "0.7"

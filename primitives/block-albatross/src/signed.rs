@@ -7,6 +7,7 @@ use nimiq_bls::SigHash;
 use hash::{Blake2bHasher, SerializeContent, Hasher};
 use collections::bitset::BitSet;
 
+// TODO: Move this to primitives?
 
 // TODO: To use a binomial swap forest:
 //  * instead of pk_idx use a bitvec
@@ -30,7 +31,7 @@ pub struct SignedMessage<M: Message> {
 
     // index of public key of signer
     // XXX they need to be indexable, because we will include a bitmap of all signers in the block
-    pub pk_idx: uvar,
+    pub pk_idx: u16,
 
     // signature over message
     pub signature: Signature
@@ -48,14 +49,17 @@ impl<M: Message> SignedMessage<M> {
 // Therefore all signed messages should be prefixed with a standarized type. We should keep those
 // prefixed at one place to not accidently create collisions.
 
-// prefix to sign view change messages
+/// prefix to sign view change messages
 pub const PREFIX_VIEW_CHANGE: u8 = 0x01;
-// prefix to sign pbft-prepare messages
+/// prefix to sign pbft-prepare messages
 pub const PREFIX_PBFT_PREPARE: u8 = 0x02;
-// prefix to sign pbft-commit messages
+/// prefix to sign pbft-commit messages
 pub const PREFIX_PBFT_COMMIT: u8 = 0x03;
-// prefix to sign proof of knowledge of secret key
+/// prefix to sign proof of knowledge of secret key
 pub const PREFIX_POKOSK: u8 = 0x04;
+/// prefix to sign a validator info
+pub const PREFIX_VALIDATOR_INFO: u8 = 0x05;
+
 
 pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent {
     const PREFIX: u8;
@@ -82,7 +86,7 @@ pub struct AggregateProof<M> {
     pub signers: BitSet,
 
     /// The cumulative amount of slots that signed this proof
-    pub slots: uvar,
+    pub slots: u16,
 
     /// The aggregate public key of the signers
     pub public_key: AggregatePublicKey,
@@ -98,7 +102,7 @@ impl<M: Message> AggregateProof<M> {
     pub fn new() -> Self {
         Self {
             signers: BitSet::with_capacity(0), // TODO: Fix this by the size of the active validator set
-            slots: uvar::from(0),
+            slots: 0,
             public_key: AggregatePublicKey::new(),
             signature: AggregateSignature::new(),
             _message: PhantomData,
@@ -106,32 +110,38 @@ impl<M: Message> AggregateProof<M> {
     }
 
     pub fn contains(&self, signed: &SignedMessage<M>) -> bool {
-        let pk_idx = signed.pk_idx.to_usize().unwrap();
-        self.signers.contains(pk_idx)
+        self.signers.contains(signed.pk_idx as usize)
     }
 
     /// Adds a signed message to an aggregate proof
     /// NOTE: This method assumes the signature of the message was already checked
-    pub fn add_signature(&mut self, public_key: &PublicKey, slots: usize, signed: &SignedMessage<M>) {
+    pub fn add_signature(&mut self, public_key: &PublicKey, slots: u16, signed: &SignedMessage<M>) -> bool {
         debug_assert!(signed.verify(public_key));
-        let pk_idx = signed.pk_idx.to_usize().unwrap();
+        let pk_idx = signed.pk_idx as usize;
         if !self.signers.contains(pk_idx) {
-            if !self.signers.contains(pk_idx) {
-                self.signers.insert(pk_idx);
-                self.slots = uvar::from(u64::from(self.slots) + slots as u64);
-                self.public_key.aggregate(public_key);
-                self.signature.aggregate(&signed.signature);
-            }
+            self.signers.insert(pk_idx);
+            self.slots += slots;
+            self.public_key.aggregate(public_key);
+            self.signature.aggregate(&signed.signature);
+            true
         }
+        else { false }
     }
 
     pub fn merge(&mut self, proof: &AggregateProof<M>) -> Result<(), AggregateError> {
         unimplemented!()
     }
 
-    // Verify message against aggregate signature and optionally check if a threshold was reached
-    pub fn verify(&self, message: &M, threshold: Option<usize>) -> bool {
-        self.signers.len() >= threshold.unwrap_or(0)
+    // Verify message against aggregate signature and check if a threshold was reached
+    pub fn verify(&self, message: &M, threshold: u16) -> bool {
+        self.slots >= threshold
             && self.public_key.verify_hash(message.hash_with_prefix(), &self.signature)
+    }
+
+    pub fn clear(&mut self) {
+        self.signers.clear();
+        self.slots = 0;
+        self.public_key = AggregatePublicKey::new();
+        self.signature = AggregateSignature::new();
     }
 }

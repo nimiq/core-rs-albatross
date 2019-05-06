@@ -28,7 +28,7 @@ use crate::error::Error;
 
 pub struct Validator {
     consensus: Arc<Consensus>,
-    validator_network: Arc<ValidatorNetwork>,
+    validator_network: Arc<RwLock<ValidatorNetwork>>,
     validator_key: SecretKey,
 
     state: RwLock<ValidatorState>,
@@ -41,7 +41,7 @@ pub struct ValidatorState {}
 impl Validator {
     pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {
         let consensus = Consensus::new(env, network_id, network_config, mempool_config)?;
-        let validator_network = ValidatorNetwork::new(Arc::clone(&consensus.network));
+        let validator_network = ValidatorNetwork::new(Arc::clone(&consensus.network), Arc::clone(&consensus));
 
 
         let key_store = KeyStore::new("validator_key.db".to_string());

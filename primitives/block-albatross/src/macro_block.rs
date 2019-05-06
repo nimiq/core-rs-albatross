@@ -62,7 +62,7 @@ impl MacroBlock {
 }
 
 impl MacroJustification {
-    pub fn verify(&self, block_hash: Blake2bHash, threshold: usize) -> bool {
+    pub fn verify(&self, block_hash: Blake2bHash, threshold: u16) -> bool {
         self.pbft_proof.verify(block_hash, threshold)
     }
 }

@@ -12,6 +12,10 @@ extern crate nimiq_block as block;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_hash as hash;
+extern crate nimiq_bls as bls;
+extern crate nimiq_block_albatross as block_albastross;
+#[macro_use]
+extern crate nimiq_hash_derive;
 #[macro_use]
 extern crate lazy_static;
 
@@ -29,6 +33,8 @@ pub mod protocol;
 pub mod subscription;
 #[cfg(feature = "time")]
 pub mod time;
+#[cfg(feature = "validator")]
+pub mod validator_info;
 
 pub const IPV4_SUBNET_MASK: u8 = 24;
 pub const IPV6_SUBNET_MASK: u8 = 96;

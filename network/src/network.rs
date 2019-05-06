@@ -9,7 +9,7 @@ use blockchain::Blockchain;
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
 use utils::mutable_once::MutableOnce;
-use utils::observer::PassThroughNotifier;
+use utils::observer::Notifier;
 use utils::timers::Timers;
 
 use crate::address::peer_address_book::PeerAddressBook;
@@ -36,8 +36,8 @@ enum NetworkTimer {
 }
 
 pub enum NetworkEvent {
-    PeerJoined(Peer),
-    PeerLeft(Peer),
+    PeerJoined(Arc<Peer>),
+    PeerLeft(Arc<Peer>),
     PeersChanged,
 }
 
@@ -51,7 +51,7 @@ pub struct Network {
     pub connections: Arc<ConnectionPool>,
     scorer: Arc<RwLock<PeerScorer>>,
     timers: Timers<NetworkTimer>,
-    pub notifier: RwLock<PassThroughNotifier<'static, NetworkEvent>>,
+    pub notifier: RwLock<Notifier<'static, NetworkEvent>>,
     self_weak: MutableOnce<Weak<Network>>,
 }
 
@@ -90,7 +90,7 @@ impl Network {
             connections: connections.clone(),
             scorer: Arc::new(RwLock::new(PeerScorer::new(net_config, addresses, connections.clone()))),
             timers: Timers::new(),
-            notifier: RwLock::new(PassThroughNotifier::new()),
+            notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
         });
         unsafe { this.self_weak.replace(Arc::downgrade(&this)) };
@@ -143,12 +143,12 @@ impl Network {
 
     fn on_peer_joined(&self, peer: Peer) {
         self.update_time_offset();
-        self.notifier.read().notify(NetworkEvent::PeerJoined(peer));
+        self.notifier.read().notify(NetworkEvent::PeerJoined(Arc::new(peer)));
     }
 
     fn on_peer_left(&self, peer: Peer) {
         self.update_time_offset();
-        self.notifier.read().notify(NetworkEvent::PeerLeft(peer));
+        self.notifier.read().notify(NetworkEvent::PeerLeft(Arc::new(peer)));
     }
 
     fn on_peers_changed(&self, this: Arc<Network>) {

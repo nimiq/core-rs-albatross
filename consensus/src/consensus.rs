@@ -99,11 +99,11 @@ impl Consensus {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
         let weak = Arc::downgrade(this);
-        this.network.notifier.write().register(move |e: NetworkEvent| {
+        this.network.notifier.write().register(move |e: &NetworkEvent| {
             let this = upgrade_weak!(weak);
             match e {
-                NetworkEvent::PeerJoined(peer) => this.on_peer_joined(peer),
-                NetworkEvent::PeerLeft(peer) => this.on_peer_left(peer),
+                NetworkEvent::PeerJoined(peer) => this.on_peer_joined(Arc::clone(peer)),
+                NetworkEvent::PeerLeft(peer) => this.on_peer_left(Arc::clone(peer)),
                 _ => {}
             }
         });
@@ -129,19 +129,17 @@ impl Consensus {
         });
     }
 
-    fn on_peer_joined(&self, peer: Peer) {
+    fn on_peer_joined(&self, peer: Arc<Peer>) {
         info!("Connected to {}", peer.peer_address());
-
-        let peer_arc = Arc::new(peer);
         let agent = ConsensusAgent::new(
             self.blockchain.clone(),
             self.mempool.clone(),
             self.inv_mgr.clone(),
             self.accounts_chunk_cache.clone(),
-            peer_arc.clone());
+            peer.clone());
 
         let weak = self.self_weak.clone();
-        let peer_arc_moved = peer_arc.clone();
+        let peer_arc_moved = peer.clone();
         agent.notifier.write().register(move |e: &ConsensusAgentEvent| {
             let this = upgrade_weak!(weak);
             match e {
@@ -157,16 +155,14 @@ impl Consensus {
             this.sync_blockchain();
         }, Self::SYNC_THROTTLE);
 
-        self.state.write().agents.insert(peer_arc, agent);
+        self.state.write().agents.insert(peer, agent);
     }
 
-    fn on_peer_left(&self, peer: Peer) {
+    fn on_peer_left(&self, peer: Arc<Peer>) {
         info!("Disconnected from {}", peer.peer_address());
-
         {
             let mut state = self.state.write();
 
-            let peer = Arc::new(peer);
             state.agents.remove(&peer);
 
             // Reset syncPeer if it left during the sync.

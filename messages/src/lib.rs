@@ -43,8 +43,8 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
-use block_albatross::{SignedViewChange, SlashInherent, PbftPrepareMessage, PbftCommitMessage, MacroBlock};
-
+use block_albatross::{SignedViewChange, SlashInherent, PbftPrepareMessage, PbftCommitMessage, MacroBlock, SignedPbftPrepareMessage, SignedPbftCommitMessage};
+use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
 #[repr(u64)]
@@ -89,8 +89,8 @@ pub enum MessageType {
     VerAck = 90,
 
     // Albatross
-    GetValidatorAddr = 100,
-    ValidatorAddr = 101,
+    ValidatorQuery = 100,
+    ValidatorInfo = 101,
     ViewChange = 102,
     SlashInherent = 103,
     PbftProposal = 104,
@@ -139,13 +139,13 @@ pub enum Message {
     VerAck(Box<VerAckMessage>),
 
     // Albatross
-    GetValidatorAddr(Box<GetValidatorAddrMessage>),
-    ValidatorAddr(Vec<ValidatorAddrMessage>),
+    ValidatorQuery(Box<ValidatorQueryMessage>),
+    ValidatorInfo(Vec<SignedValidatorInfo>),
     ViewChange(Box<SignedViewChange>),
     SlashInherent(Box<SlashInherent>),
     PbftProposal(Box<MacroBlock>),
-    PbftPrepare(Box<PbftPrepareMessage>),
-    PbftCommit(Box<PbftCommitMessage>),
+    PbftPrepare(Box<SignedPbftPrepareMessage>),
+    PbftCommit(Box<SignedPbftCommitMessage>),
 }
 
 impl Message {
@@ -184,8 +184,8 @@ impl Message {
             Message::Head(_) => MessageType::Head,
             Message::VerAck(_) => MessageType::VerAck,
             // Albatross
-            Message::GetValidatorAddr(_) => MessageType::GetValidatorAddr,
-            Message::ValidatorAddr(_) => MessageType::ValidatorAddr,
+            Message::ValidatorQuery(_) => MessageType::ValidatorQuery,
+            Message::ValidatorInfo(_) => MessageType::ValidatorInfo,
             Message::ViewChange(_) => MessageType::ViewChange,
             Message::SlashInherent(_) => MessageType::SlashInherent,
             Message::PbftProposal(_) => MessageType::PbftProposal,
@@ -287,8 +287,8 @@ impl Deserialize for Message {
             MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
             // Albatross
-            MessageType::GetValidatorAddr => Message::GetValidatorAddr(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::ValidatorAddr => Message::ValidatorAddr(DeserializeWithLength::deserialize::<u8, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
+            MessageType::ValidatorQuery => Message::ValidatorQuery(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::ValidatorInfo => Message::ValidatorInfo(DeserializeWithLength::deserialize::<u8, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
             MessageType::ViewChange => Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::SlashInherent => Message::SlashInherent(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftProposal => Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?),
@@ -354,8 +354,8 @@ impl Serialize for Message {
             Message::Head(header) => header.serialize(&mut v)?,
             Message::VerAck(verack_message) => verack_message.serialize(&mut v)?,
             // Albatross
-            Message::GetValidatorAddr(get_validator_addr_message) => get_validator_addr_message.serialize(&mut v)?,
-            Message::ValidatorAddr(validator_addrs) => validator_addrs.serialize::<u8, Vec<u8>>(&mut v)?,
+            Message::ValidatorQuery(validator_query) => validator_query.serialize(&mut v)?,
+            Message::ValidatorInfo(validator_infos) => validator_infos.serialize::<u8, Vec<u8>>(&mut v)?,
             Message::ViewChange(view_change_message) => view_change_message.serialize(&mut v)?,
             Message::SlashInherent(slash_message) => slash_message.serialize(&mut v)?,
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
@@ -410,8 +410,8 @@ impl Serialize for Message {
             Message::Head(header) => header.serialized_size(),
             Message::VerAck(verack_message) => verack_message.serialized_size(),
             // Albatross
-            Message::GetValidatorAddr(get_validator_addr_message) => get_validator_addr_message.serialized_size(),
-            Message::ValidatorAddr(validator_addr_message) => validator_addr_message.serialized_size::<u8>(),
+            Message::ValidatorQuery(validator_query) => validator_query.serialized_size(),
+            Message::ValidatorInfo(validator_info) => validator_info.serialized_size::<u8>(),
             Message::ViewChange(view_change_message) => view_change_message.serialized_size(),
             Message::SlashInherent(slash_message) => slash_message.serialized_size(),
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialized_size(),
@@ -457,6 +457,11 @@ pub struct MessageNotifier {
     pub head: RwLock<PassThroughNotifier<'static, BlockHeader>>,
     // Albatross
     // TODO
+    pub validator_info: RwLock<PassThroughNotifier<'static, Vec<SignedValidatorInfo>>>,
+    pub view_change: RwLock<PassThroughNotifier<'static, SignedViewChange>>,
+    pub pbft_proposal:  RwLock<PassThroughNotifier<'static, ()>>,
+    pub pbft_prepare: RwLock<PassThroughNotifier<'static, ()>>,
+    pub pbft_commit: RwLock<PassThroughNotifier<'static, ()>>,
 }
 
 impl MessageNotifier {
@@ -496,6 +501,11 @@ impl MessageNotifier {
             head: RwLock::new(PassThroughNotifier::new()),
             // Albatross
             // TODO
+            validator_info: RwLock::new(PassThroughNotifier::new()),
+            view_change: RwLock::new(PassThroughNotifier::new()),
+            pbft_proposal: RwLock::new(PassThroughNotifier::new()),
+            pbft_prepare: RwLock::new(PassThroughNotifier::new()),
+            pbft_commit: RwLock::new(PassThroughNotifier::new()),
         }
     }
 
@@ -535,6 +545,7 @@ impl MessageNotifier {
             Message::Head(header) => self.head.read().notify(*header),
             // Albatross
             // TODO
+            Message::ValidatorInfo(validator_info) => self.validator_info.read().notify(validator_info),
             _ => panic!("Notify not implemented for: {}", msg.ty()),
         }
     }
@@ -1040,21 +1051,8 @@ impl VerAckMessage {
     }
 }
 
-
-// TODO: move somewhere else
-//
-// XXX We need a bit vector (as array) to have the common prefix define for handel.
-//     For gossip the public key would be fine I think.
-//
-// XXX If we can map public key to ID, we can unicast to the active validator once we collected
-//     all signatures for view change or pbft-commit
-use hex::FromHex;
-create_typed_array!(ValidatorId, u8, 16);
-add_hex_io_fns_typed_arr!(ValidatorId, ValidatorId::SIZE);
-
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetValidatorAddrMessage {
+pub struct ValidatorQueryMessage {
     validator_id: ValidatorId,
 
     // 0  : find the address of the validator with the given ID
@@ -1064,9 +1062,3 @@ pub struct GetValidatorAddrMessage {
     closest: u8, // 0 if exact
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-// TODO: rename, this is not a single message itself, but included as a Vec
-pub struct ValidatorAddrMessage {
-    validator_id: ValidatorId,
-    peer_address: PeerAddress,
-}

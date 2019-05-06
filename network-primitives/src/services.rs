@@ -10,9 +10,8 @@ bitflags! {
 
         // Albatross specific services
 
-        // the node supports multicast for participation in block production
-        // i.e. FindNode, ViewChange, Pbft*
-        const MULTICAST  = 0b0001_0000;
+        // Node supports validator protocol
+        const VALIDATOR  = 0b0100_0000_0000;
     }
 }
 
@@ -28,6 +27,8 @@ impl ServiceFlags {
     pub fn is_nano_node(self) -> bool {
         self.contains(ServiceFlags::NANO)
     }
+
+    pub fn is_validator(self) -> bool { self.contains(ServiceFlags::VALIDATOR) }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
