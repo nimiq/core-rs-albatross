@@ -28,6 +28,7 @@ nimiq-tree-primitives = { path = "../accounts/tree-primitives" }
 fixed-unsigned = { path = "../fixed-unsigned" }
 nimiq-utils = { path = "../utils", features = ["observer", "unique-ptr", "iterators"] }
 nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
+nimiq-blockchain-base = { path = "../blockchain-base" }
 parking_lot = "0.7"
 log = "0.4"
 hex = "0.3"

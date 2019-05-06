@@ -45,7 +45,7 @@ impl<M: Message> SignedMessage<M> {
     }
 
     /// Create SignedMessage from message.
-    pub fn from_message(&self, message: M, secret_key: &SecretKey, pk_idx: u16) -> Self {
+    pub fn from_message(message: M, secret_key: &SecretKey, pk_idx: u16) -> Self {
         let signature = message.sign(secret_key);
         Self {
             message,

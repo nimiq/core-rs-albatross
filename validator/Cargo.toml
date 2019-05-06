@@ -14,6 +14,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 beserial = { path = "../beserial" }
+nimiq-account = { path = "../primitives/account" }
 nimiq-bls = { path = "../bls" }
 nimiq-consensus = { path = "../consensus" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
@@ -27,6 +28,8 @@ nimiq-messages = { path = "../messages" }
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-blockchain-base = { path = "../blockchain-base" }
+
 failure = "0.1"
 log = "0.4"
 parking_lot = "0.7"

@@ -1,3 +1,5 @@
+#![feature(type_alias_enum_variants)]
+
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
@@ -15,8 +17,9 @@ extern crate nimiq_account as account;
 extern crate nimiq_block_albatross as block;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
+extern crate nimiq_blockchain_base as blockchain_base;
 
-mod blockchain;
+pub mod blockchain;
 mod chain_info;
 mod chain_store;
 mod transaction_cache;

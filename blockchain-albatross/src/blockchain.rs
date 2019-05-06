@@ -1,31 +1,42 @@
 use std::cmp;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::convert::TryInto;
 use std::sync::Arc;
 
+use failure::Fail;
 use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
+use parking_lot::MutexGuard;
 
+use account::{AccountError, Inherent, InherentType};
+use account::Account;
 use accounts::Accounts;
-use bls::bls12_381::{Signature, PublicKey};
-use block::{Block, BlockHeader, BlockType, BlockError, MacroBlock, ValidatorSlots, MicroBlock};
+use block::{Block, BlockError, BlockHeader, BlockType, MacroBlock, MicroBlock, ValidatorSlots};
 use block::ViewChange;
+use blockchain_base::AbstractBlockchain;
+use blockchain_base::Direction;
+use bls::bls12_381::{PublicKey, Signature};
 use database::{Environment, ReadTransaction, WriteTransaction};
+use fixed_unsigned::RoundHalfUp;
+use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
 use hash::{Blake2bHash, Hash};
+use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
-use account::{AccountError, Inherent, InherentType};
 use primitives::networks::NetworkId;
-use primitives::slot::Slot;
 use primitives::policy;
-
-use utils::observer::Notifier;
-use failure::Fail;
-use fixed_unsigned::RoundHalfUp;
-use fixed_unsigned::types::{FixedUnsigned10, FixedScale10, FixedUnsigned26, FixedScale26};
+use primitives::slot::Slot;
+use transaction::{TransactionReceipt, TransactionsProof};
+use tree_primitives::accounts_proof::AccountsProof;
+use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
-use crate::chain_store::{ChainStore, Direction};
+use crate::chain_store::ChainStore;
 use crate::transaction_cache::TransactionCache;
-use std::collections::HashMap;
-use std::convert::TryInto;
+
+pub type PushResult = blockchain_base::PushResult;
+pub type PushError = blockchain_base::PushError<BlockError>;
+pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
 
 pub struct Blockchain<'env> {
     pub(crate) env: &'env Environment,
@@ -55,24 +66,6 @@ impl<'env> BlockchainState<'env> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PushResult {
-    Known,
-    Extended,
-    Rebranched,
-    Forked,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PushError {
-    Orphan,
-    InvalidBlock(BlockError),
-    InvalidSuccessor,
-    DifficultyMismatch,
-    DuplicateTransaction,
-    AccountsError(AccountError),
-    InvalidFork,
-}
 
 #[derive(Debug, Fail, Clone, PartialEq, Eq)]
 pub enum BlockchainError {
@@ -84,14 +77,6 @@ pub enum BlockchainError {
     InconsistentState,
     #[fail(display = "No network for: {:?}", _0)]
     NoNetwork(NetworkId),
-}
-
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum BlockchainEvent {
-    Finalized,
-    Extended(Blake2bHash),
-    Rebranched(Vec<(Blake2bHash, Block)>, Vec<(Blake2bHash, Block)>),
 }
 
 impl<'env> Blockchain<'env> {
@@ -194,6 +179,8 @@ impl<'env> Blockchain<'env> {
             push_lock: Mutex::new(()),
         })
     }
+
+    pub fn macro_head_hash(&self) -> Blake2bHash { unimplemented!(); }
 
     /// Verification required for macro block proposals and micro blocks
     pub fn push_verify_dry(&self, block: &Block) -> Result<(), PushError> {
@@ -692,5 +679,77 @@ impl<'env> Blockchain<'env> {
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
         self.state.read()
+    }
+}
+
+impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
+    type Block = Block;
+
+    fn network_id(&self) -> NetworkId {
+        unimplemented!()
+    }
+
+    fn head_block(&self) -> Self::Block {
+        unimplemented!()
+    }
+
+    fn head_hash(&self) -> Blake2bHash {
+        unimplemented!()
+    }
+
+    fn head_height(&self) -> u32 {
+        unimplemented!()
+    }
+
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Self::Block> {
+        unimplemented!()
+    }
+
+    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Self::Block> {
+        unimplemented!()
+    }
+
+    fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
+        unimplemented!()
+    }
+
+    fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Self::Block> {
+        unimplemented!()
+    }
+
+    fn push(&self, block: Self::Block) -> Result<PushResult, PushError> {
+        unimplemented!()
+    }
+
+    fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
+        unimplemented!()
+    }
+
+    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof> {
+        unimplemented!()
+    }
+
+    fn get_transactions_proof(&self, block_hash: &Blake2bHash, addresses: &HashSet<Address>) -> Option<TransactionsProof> {
+        unimplemented!()
+    }
+
+    fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt> {
+        unimplemented!()
+    }
+
+    fn register_listener<T: Listener<BlockchainEvent> + 'env>(&self, listener: T) -> ListenerHandle {
+        unimplemented!()
+    }
+
+    fn lock(&self) -> MutexGuard<()> {
+        unimplemented!()
+    }
+
+    fn get_account(&self, address: &Address) -> Account {
+        unimplemented!()
+    }
+
+    fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool {
+        unimplemented!()
     }
 }
