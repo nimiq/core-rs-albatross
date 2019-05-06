@@ -6,8 +6,9 @@ use futures::{Async, Future, Poll};
 use consensus::consensus::Consensus;
 use database::Environment;
 use network::network::Network;
-use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed, PeerKeyStore};
+use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
 use network_primitives::address::NetAddress;
+use utils::key_store::KeyStore;
 use primitives::networks::NetworkId;
 use network_primitives::protocol::Protocol;
 use mempool::MempoolConfig;
@@ -25,7 +26,7 @@ lazy_static! {
 pub struct ClientBuilder {
     protocol: Protocol,
     environment: &'static Environment,
-    peer_key_store: PeerKeyStore,
+    peer_key_store: KeyStore,
     hostname: Option<String>,
     port: Option<u16>,
     user_agent: String,
@@ -38,7 +39,7 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    pub fn new(protocol: Protocol, environment: &'static Environment, peer_key_store: PeerKeyStore) -> Self {
+    pub fn new(protocol: Protocol, environment: &'static Environment, peer_key_store: KeyStore) -> Self {
         ClientBuilder {
             protocol,
             environment,

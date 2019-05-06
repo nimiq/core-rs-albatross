@@ -21,6 +21,7 @@ extern crate nimiq_primitives as primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
 extern crate nimiq_keys as keys;
+extern crate nimiq_utils as utils;
 
 mod deadlock;
 mod logging;
@@ -49,7 +50,8 @@ use mempool::MempoolConfig;
 use metrics_server::metrics_server;
 use network_primitives::protocol::Protocol;
 use network_primitives::address::NetAddress;
-use network::network_config::{Seed, PeerKeyStore};
+use network::network_config::Seed;
+use utils::key_store::KeyStore;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::{rpc_server, Credentials, JsonRpcConfig};
@@ -172,7 +174,7 @@ fn run() -> Result<(), Error> {
     ENV.initialize(env);
 
     // open peer key store
-    let peer_key_store = PeerKeyStore::new(settings.peer_key_file.unwrap_or_else(|| files.peer_key().expect("Failed to find peer key file").to_str().unwrap().into()));
+    let peer_key_store = KeyStore::new(settings.peer_key_file.unwrap_or_else(|| files.peer_key().expect("Failed to find peer key file").to_str().unwrap().into()));
 
     // Start building the client with network ID and environment
     let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), ENV.get(), peer_key_store);

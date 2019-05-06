@@ -68,7 +68,7 @@ impl<'env> BlockProducer<'env> {
             miner,
             extra_data,
             transactions,
-            pruned_accounts
+            account_receipts: pruned_accounts
         }
     }
 

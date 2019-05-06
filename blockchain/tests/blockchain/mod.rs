@@ -6,6 +6,7 @@ use beserial::{Deserialize, Serialize};
 use nimiq_account::{AccountError, AccountType};
 use nimiq_account::Account;
 use nimiq_account::PrunedAccount;
+use nimiq_account::AccountReceipt;
 use nimiq_account::VestingContract;
 use nimiq_block::{Block, BlockError, TargetCompact};
 use nimiq_blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
@@ -299,13 +300,13 @@ fn it_deletes_invalid_forks() {
     // Create fork with invalid pruned accounts
     let fork_env = VolatileEnvironment::new(10).unwrap();
     let fork = Blockchain::new(&fork_env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
-    let pruned_account = PrunedAccount {
+    let pruned_account = AccountReceipt::Pruned(PrunedAccount {
         address: [1u8; Address::SIZE].into(),
         account: Account::Vesting(VestingContract::new(Coin::from_u64_unchecked(0), [2u8; Address::SIZE].into(), 0, 500, Coin::from_u64_unchecked(2), Coin::from_u64_unchecked(200)))
-    };
+    });
     let block2_2 = crate::next_block(&fork)
         .with_height(2)
-        .with_pruned_accounts(vec![pruned_account])
+        .with_account_receipts(vec![pruned_account])
         .with_timestamp(fork.head().header.timestamp + 1)
         .with_nonce(151483)
         .build();

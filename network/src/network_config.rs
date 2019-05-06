@@ -79,7 +79,7 @@ impl NetworkConfig {
         }
     }
 
-    pub fn init_persistent(&mut self, peer_key_store: &PeerKeyStore) -> Result<(), Error> {
+    pub fn init_persistent(&mut self, peer_key_store: &KeyStore) -> Result<(), Error> {
         if self.key_pair.is_some() {
             return Ok(());
         }

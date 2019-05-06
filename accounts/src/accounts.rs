@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use hex;
 
-use account::{Account, AccountError, AccountTransactionInteraction, AccountType, AccountReceipt};
+use account::{Account, AccountError, AccountTransactionInteraction, AccountType, AccountReceipt, PrunedAccount};
 use beserial::Deserialize;
 use block::{Block, BlockBody};
 use database::{Environment, ReadTransaction, WriteTransaction};
@@ -289,7 +289,7 @@ impl<'env> Accounts<'env> {
         self.tree.get_accounts_proof(txn, addresses)
     }
 
-    pub fn collect_pruned_accounts(&self, transactions: &Vec<Transaction>, block_height: u32) -> Result<Vec<PrunedAccount>, AccountError> {
+    pub fn collect_pruned_accounts(&self, transactions: &Vec<Transaction>, block_height: u32) -> Result<Vec<AccountReceipt>, AccountError> {
         let mut txn = WriteTransaction::new(&self.env);
 
         self.process_senders(&mut txn, transactions, block_height,
@@ -302,10 +302,10 @@ impl<'env> Accounts<'env> {
         for transaction in transactions {
             let sender_account = self.get(&transaction.sender, Some(&txn));
             if sender_account.is_to_be_pruned() {
-                pruned_accounts.insert(PrunedAccount {
+                pruned_accounts.insert(AccountReceipt::Pruned(PrunedAccount {
                     address: transaction.sender.clone(),
                     account: sender_account
-                });
+                }));
             }
         }
 

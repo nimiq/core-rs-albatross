@@ -27,3 +27,4 @@ nimiq-database = { path = "../database", version = "0.1.0" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["all"] }
 nimiq-primitives = { path = "../primitives", version = "0.1.0", features = ["networks"] }
 nimiq-mempool = { path = "../mempool", version = "0.1.0" }
+nimiq-utils = { path = "../utils", version = "0.1.0" }

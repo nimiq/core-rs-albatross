@@ -414,7 +414,7 @@ impl JsonRpcHandler {
             "extraData" => hex::encode(body.extra_data),
             "transactions" => JsonValue::Array(body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, None, Some(i))).collect()),
             "merkleHashes" => JsonValue::Array(merkle_path.hashes().iter().map(|hash| JsonValue::String(hash.to_hex())).skip(1).collect()),
-            "prunedAccounts" => JsonValue::Array(body.pruned_accounts.iter().map(|acc| JsonValue::String(hex::encode(acc.serialize_to_vec()))).collect()),
+            "prunedAccounts" => JsonValue::Array(body.account_receipts.iter().map(|acc| JsonValue::String(hex::encode(acc.serialize_to_vec()))).collect()),
         };
 
         Ok(object!{
