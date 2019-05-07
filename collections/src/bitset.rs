@@ -6,7 +6,7 @@ use std::fmt;
 
 #[inline]
 fn index_and_mask(value: usize) -> (usize, u64) {
-    (value >> 3, 1u64 << (value & 63))
+    (value >> 6, 1u64 << (value & 63))
 }
 
 
@@ -25,7 +25,7 @@ impl BitSet {
     }
 
     pub fn with_capacity(nbits: usize) -> Self {
-        let nblocks = nbits + if nbits & 63 == 0 { 0 } else { 1 };
+        let nblocks = (nbits >> 6) + if nbits & 63 == 0 { 0 } else { 1 };
         Self {
             store: Vec::with_capacity(nblocks),
             count: 0,
