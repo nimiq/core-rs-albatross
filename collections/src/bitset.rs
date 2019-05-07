@@ -114,14 +114,17 @@ impl BitSet {
         let it = self.store.iter();
         it.enumerate().flat_map(|(i, &block)| {
             let mut values: Vec<usize> = Vec::with_capacity(64);
-            let mut j = 0;
-            let mut x = block;
-            while x > 0 {
-                if x & 1 != 0 {
-                    values.push(j * 64 + i)
+            if block != 0 {
+                let mut j = 0;
+                let mut x = block;
+                while x > 0 {
+                    if x & 1 != 0 {
+                        values.push(j * 64 + i)
+                    }
+                    // XXX we can skip multiple trailing zeros by using u64::trailing_zeros
+                    x >>= 1;
+                    j += 1
                 }
-                x >>= 1;
-                j += 1
             }
             values.into_iter()
         })
