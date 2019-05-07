@@ -42,6 +42,7 @@ impl ValidatorNetwork {
             validator_agents: HashMap::new(),
             view_changes: BTreeMap::new(),
             pbft_proof: PbftProof::new(),
+            // XXX For view change: threshold = (2 * n + 3) / 3 - which equals ceil(2f + 1) where n = 3f + 1
             threshold: unimplemented!("Select number of slots * 2/3"),
             self_weak: Weak::new(),
             notifier: RwLock::new(PassThroughNotifier::new()),
@@ -89,15 +90,18 @@ impl ValidatorNetwork {
 
     /// When a view change was received by a ValidatorAgent
     fn on_view_change_message(&mut self, view_change: SignedViewChange) {
-        let (public_key, slots) = self.get_validator_slots(view_change.pk_idx);
-
-        // TODO: I'd like to have the signature verification in the ValidatorAgent, but it
-        //       currently doesn't have access to the validator list. This might change later.
-        if view_change.verify(&public_key) {
-            self.commit_view_change(view_change, &public_key, slots);
+        if let Some((public_key, slots)) = self.get_validator_slots(view_change.pk_idx) {
+            // TODO: I'd like to have the signature verification in the ValidatorAgent, but it
+            //       currently doesn't have access to the validator list. This might change later.
+            if view_change.verify(&public_key) {
+                self.commit_view_change(view_change, &public_key, slots);
+            }
+            else {
+                info!("Invalid view change message")
+            }
         }
         else {
-            info!("Invalid view change message")
+            warn!("Invalid validator index: {}", view_change.pk_idx);
         }
     }
 
@@ -126,9 +130,13 @@ impl ValidatorNetwork {
 
     /// When a pBFT prepare was received by a ValidatorAgent
     fn on_pbft_prepare_message(&mut self, prepare: SignedPbftPrepareMessage) {
-        let (public_key, slots) = self.get_validator_slots(prepare.pk_idx);
-        if prepare.verify(&public_key) {
-            self.commit_pbft_prepare(prepare, &public_key, slots);
+        if let Some((public_key, slots)) = self.get_validator_slots(prepare.pk_idx) {
+            if prepare.verify(&public_key) {
+                self.commit_pbft_prepare(prepare, &public_key, slots);
+            }
+        }
+        else {
+            warn!("Invalid validator index: {}", prepare.pk_idx);
         }
     }
 
@@ -153,9 +161,13 @@ impl ValidatorNetwork {
 
     /// When a pBFT commit was received by a ValidatorAgent
     fn on_pbft_commit_message(&mut self, commit: SignedPbftCommitMessage) {
-        let (public_key, slots) = self.get_validator_slots(commit.pk_idx);
-        if commit.verify(&public_key) {
-            self.commit_pbft_commit(commit, &public_key, slots);
+        if let Some((public_key, slots)) = self.get_validator_slots(commit.pk_idx) {
+            if commit.verify(&public_key) {
+                self.commit_pbft_commit(commit, &public_key, slots);
+            }
+        }
+        else {
+            warn!("Invalid validator index: {}", commit.pk_idx);
         }
     }
 
@@ -186,7 +198,7 @@ impl ValidatorNetwork {
         }
     }
 
-    fn get_validator_slots(&self, pk_idx: u16) -> (PublicKey, u16) {
+    fn get_validator_slots(&self, pk_idx: u16) -> Option<(PublicKey, u16)> {
         unimplemented!("get public key, slots for pk_idx");
     }
 }
