@@ -170,7 +170,7 @@ fn it_can_create_contract_from_transaction() {
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let contract = VestingContract {
+    let mut contract = VestingContract {
         balance: Coin::from_u64(1000).unwrap(),
         owner: Address::from([1u8; 20]),
         vesting_start: 0,
@@ -182,8 +182,9 @@ fn it_does_not_support_incoming_transactions() {
     let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from_u64(1).unwrap(), Coin::from_u64(1000).unwrap(), 1, NetworkId::Dummy);
     tx.recipient_type = AccountType::Vesting;
 
-    assert_eq!(contract.with_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
-    assert_eq!(contract.without_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
+    assert_eq!(contract.check_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
+    assert_eq!(contract.commit_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
+    assert_eq!(contract.revert_incoming_transaction(&tx, 2, None), Err(AccountError::InvalidForRecipient));
 }
 
 #[test]
@@ -234,9 +235,10 @@ fn it_can_apply_and_revert_valid_transaction() {
     let signature_proof = SignatureProof::from(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
 
-    let mut contract = start_contract.with_outgoing_transaction(&tx, 200).unwrap();
+    let mut contract = start_contract.clone();
+    contract.commit_outgoing_transaction(&tx, 200).unwrap();
     assert_eq!(contract.balance, Coin::from_u64(800).unwrap());
-    contract = contract.without_outgoing_transaction(&tx, 1).unwrap();
+    contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 
     let start_contract = VestingContract {
@@ -248,9 +250,10 @@ fn it_can_apply_and_revert_valid_transaction() {
         vesting_total_amount: Coin::from_u64(1000).unwrap(),
     };
 
-    let mut contract = start_contract.with_outgoing_transaction(&tx, 200).unwrap();
+    let mut contract = start_contract.clone();
+    contract.commit_outgoing_transaction(&tx, 200).unwrap();
     assert_eq!(contract.balance, Coin::from_u64(800).unwrap());
-    contract = contract.without_outgoing_transaction(&tx, 1).unwrap();
+    contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 }
 
@@ -262,7 +265,7 @@ fn it_refuses_invalid_transaction() {
     let key_pair = KeyPair::from(priv_key);
     let key_pair_alt = KeyPair::from(priv_key_alt);
 
-    let start_contract = VestingContract {
+    let mut start_contract = VestingContract {
         balance: Coin::from_u64(1000).unwrap(),
         owner: Address::from(&key_pair.public),
         vesting_start: 0,
@@ -278,11 +281,20 @@ fn it_refuses_invalid_transaction() {
     let signature = key_pair_alt.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair_alt.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 200), Err(AccountError::InvalidSignature));
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 200), Err(AccountError::InvalidSignature));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 200), Err(AccountError::InvalidSignature));
 
     // Funds still vested
     let signature = key_pair.sign(&tx.serialize_content()[..]);
     let signature_proof = SignatureProof::from(key_pair.public, signature);
     tx.proof = signature_proof.serialize_to_vec();
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 100), Err(AccountError::InsufficientFunds { needed: Coin::from_u64(900).unwrap(), balance: Coin::from_u64(800).unwrap() }));
+
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 100), Err(AccountError::InsufficientFunds {
+        needed: Coin::from_u64(900).unwrap(),
+        balance: Coin::from_u64(800).unwrap()
+    }));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 100), Err(AccountError::InsufficientFunds {
+        needed: Coin::from_u64(900).unwrap(),
+        balance: Coin::from_u64(800).unwrap()
+    }));
 }

@@ -18,7 +18,7 @@ pub struct BlockBody {
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
     #[beserial(len_type(u16))]
-    pub account_receipts: Vec<Receipt>,
+    pub receipts: Vec<Receipt>,
 }
 
 impl SerializeContent for BlockBody {
@@ -65,15 +65,15 @@ impl BlockBody {
         }
 
         let mut previous_acc: Option<&Receipt> = None;
-        for acc in &self.account_receipts {
+        for acc in &self.receipts {
             // Ensure pruned accounts are ordered and unique.
             if let Some(previous) = previous_acc {
                 match previous.cmp(acc) {
                     Ordering::Equal => {
-                        return Err(BlockError::DuplicateAccountReceipt);
+                        return Err(BlockError::DuplicateReceipt);
                     }
                     Ordering::Greater => {
-                        return Err(BlockError::AccountReceiptsNotOrdered);
+                        return Err(BlockError::ReceiptsNotOrdered);
                     }
                     _ => (),
                 }
@@ -84,7 +84,7 @@ impl BlockBody {
             match acc {
                 Receipt::PrunedAccount(acc) => {
                     if !acc.account.is_to_be_pruned() {
-                        return Err(BlockError::InvalidAccountReceipt);
+                        return Err(BlockError::InvalidReceipt);
                     }
                 },
                 _ => unreachable!(),
@@ -96,13 +96,13 @@ impl BlockBody {
     }
 
     pub fn get_merkle_leaves<H: HashOutput>(&self) -> Vec<H> {
-        let mut vec: Vec<H> = Vec::with_capacity(2 + self.transactions.len() + self.account_receipts.len());
+        let mut vec: Vec<H> = Vec::with_capacity(2 + self.transactions.len() + self.receipts.len());
         vec.push(self.miner.hash());
         vec.push(self.extra_data.hash());
         for t in &self.transactions {
             vec.push(t.hash());
         }
-        for p in &self.account_receipts {
+        for p in &self.receipts {
             vec.push(p.hash());
         }
         vec

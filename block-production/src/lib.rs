@@ -47,18 +47,18 @@ impl<'env> BlockProducer<'env> {
             - interlink_size
             - BlockBody::get_metadata_size(extra_data.len());
         let mut transactions = self.mempool.get_transactions_for_block(max_size);
-        let mut pruned_accounts = self.blockchain.state().accounts()
-            .collect_pruned_accounts(&transactions, self.blockchain.height() + 1)
-            .expect("Failed to collect pruned accounts during block production");
+        let mut receipts = self.blockchain.state().accounts()
+            .collect_receipts(&transactions, self.blockchain.height() + 1)
+            .expect("Failed to collect receipts during block production");
 
         let mut size = transactions.iter().fold(0, |size, tx| size + tx.serialized_size())
-            + pruned_accounts.iter().fold(0, |size, pruned_account| size + pruned_account.serialized_size());
+            + receipts.iter().fold(0, |size, pruned_account| size + pruned_account.serialized_size());
         if size > max_size {
             while size > max_size {
                 size -= transactions.pop().serialized_size();
             }
-            pruned_accounts = self.blockchain.state().accounts()
-                .collect_pruned_accounts(&transactions, self.blockchain.height() + 1)
+            receipts = self.blockchain.state().accounts()
+                .collect_receipts(&transactions, self.blockchain.height() + 1)
                 .expect("Failed to collect pruned accounts during block production");
         }
 
@@ -68,7 +68,7 @@ impl<'env> BlockProducer<'env> {
             miner,
             extra_data,
             transactions,
-            account_receipts: pruned_accounts
+            receipts: receipts
         }
     }
 

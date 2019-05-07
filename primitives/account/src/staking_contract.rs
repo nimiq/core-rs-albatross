@@ -9,9 +9,7 @@ use parking_lot::Mutex;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use keys::Address;
 use nimiq_bls::bls12_381::{PublicKey as BlsPublicKey, PublicKeyAffine as BlsPublicKeyAffine};
-use nimiq_collections::SparseVec;
 use primitives::coin::Coin;
-use primitives::policy;
 use transaction::{SignatureProof, Transaction};
 use transaction::account::{parse_and_verify_staking_transaction, StakingTransactionData, StakingTransactionType};
 
@@ -20,40 +18,40 @@ use crate::AccountTransactionInteraction;
 use super::{Account, AccountError, AccountType};
 
 #[derive(Clone, Debug)]
-pub struct PotentialValidator {
+pub struct ActiveStake {
+    balance: Coin,
     staking_address: Address,
     payout_address: Option<Address>,
-    balance: Coin,
-    key_info: Arc<Mutex<KeyInfo>>,
+    validator_info: Arc<Mutex<ValidatorInfo>>,
 }
 
-impl PotentialValidator {
+impl ActiveStake {
     fn with_balance(&self, balance: Coin) -> Self {
-        PotentialValidator {
+        ActiveStake {
+            balance,
             staking_address: self.staking_address.clone(),
             payout_address: self.payout_address.clone(),
-            balance,
-            key_info: self.key_info.clone(),
+            validator_info: Arc::clone(&self.validator_info),
         }
     }
 }
 
-impl PartialEq for PotentialValidator {
-    fn eq(&self, other: &PotentialValidator) -> bool {
+impl PartialEq for ActiveStake {
+    fn eq(&self, other: &ActiveStake) -> bool {
         self.balance == other.balance
             && self.staking_address == other.staking_address
     }
 }
 
-impl Eq for PotentialValidator {}
+impl Eq for ActiveStake {}
 
-impl PartialOrd for PotentialValidator {
-    fn partial_cmp(&self, other: &PotentialValidator) -> Option<Ordering> {
+impl PartialOrd for ActiveStake {
+    fn partial_cmp(&self, other: &ActiveStake) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for PotentialValidator {
+impl Ord for ActiveStake {
     fn cmp(&self, other: &Self) -> Ordering {
         self.balance.cmp(&other.balance)
             .then_with(|| self.staking_address.cmp(&other.staking_address))
@@ -61,47 +59,49 @@ impl Ord for PotentialValidator {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct KeyInfo {
-    last_restaking: u32,
-    validator_key: BlsPublicKey,
+pub struct ValidatorInfo {
+    public_key: BlsPublicKey,
+    last_keepalive: u32,
+    #[beserial(skip)]
+    num_stakes: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct PausingTransaction {
+pub struct InactiveStake {
     balance: Coin,
-    pause_time: u32,
+    retire_time: u32,
 }
 
 #[derive(Serialize, Deserialize)]
-struct RestakingReceipt {
-    prev_last_restaking: u32,
+struct KeepaliveReceipt {
+    last_keepalive: u32,
 }
 
 #[derive(Serialize, Deserialize)]
-struct PausingReceipt {
+struct RetireReceipt {
 }
 
 /*
  Here's an explanation of how the different transactions work.
- 1. Staking:
+ 1. Stake:
     - Transaction from staking address to contract
     - Transfers value into a new or existing entry in the potential_validators list
     - Normal transaction, signed by staking/sender address
- 2. Restaking:
+ 2. Keepalive:
     - Transaction with 0 value from any address to contract (address only provides fees)
     - Replaces a BlsPublicKey and sets the last_restaking time
     - Transaction is signed by sender address that provides the fee
     - Data is additionally signed by the old BLS key
- 3. Pausing:
+ 3. Retire:
     - Transaction with 0 value from original staking address to contract
     - Removes a balance (set in transaction data) from a staker
-      (may remove staker from potential_validators list entirely)
-    - Puts balance into a new entry into the inactive_validators,
-      setting the pause_time for this balance
+      (may remove staker from active_stake list entirely)
+    - Puts balance into a new entry into the inactive_stake,
+      setting the retire_time for this balance
     - Signed by staking/sender address
- 4. Unstaking:
-    - Transaction from the contract to an original staking address
-    - If condition of block_height ≥ next_macro_block_after(pause_time) + UNSTAKING_DELAY is met,
+ 4. Unstake:
+    - Transaction from the contract to an external address
+    - If condition of block_height ≥ next_macro_block_after(retire_time) + UNSTAKE_DELAY is met,
       transfers value from inactive_validators entry/entries
     - Signed by staking/sender address
 
@@ -111,57 +111,47 @@ struct PausingReceipt {
   Internally, this data can be serialized/deserialized.
 
   Objects:
-  PotentialValidator: A potential validator is characterized by the tuple
-    (staking_address, balance, optional payout_address, validator_key_id).
-    It makes sense to store validator keys separately, to allow easy restaking transactions without
+  ActiveStake: Active stake is characterized by the tuple:
+    (balance, staking_address, optional payout_address, validator_key_id).
+    It makes sense to store validator keys separately, to allow easy keepalive transactions without
     scanning all uses of the same validator key.
-  KeyInfo: The separate information on the validator key, represented by the tuple:
-    (validator_key, last_restaking).
-  PausingTransaction: The information for a single pause transaction, represented by the tuple
-    (balance, pause_time).
-    If a validator pauses multiple times, we need to keep track of the pause_time for every
-    pausing transaction.
+  InactiveStake: The information for a single retire transaction, represented by the tuple
+    (balance, retire_time).
+    If a staker retires multiple times, we need to keep track of the retire_time for every
+    retire transaction.
+  ValidatorInfo: The separate information on the validator key, represented by the tuple:
+    (validator_key, last_keepalive).
 
   Internal lookups required:
-  - Staking requires a way to get from a staking address to a PotentialValidator object.
-  - Restaking requires a way to get from an old BlsPublicKey to a KeyInfo object.
-  - Pausing requires a way to get from a staking address to a PotentialValidator object
-    and from a staking address to the list of PausingTransaction objects.
-  - Unstaking requires a way to get from a staking address to the list of PausintTransaction objects.
-  - Retrieving the list of potential validators that are actually considered for the selection
-    requires a list of PotentialValidator objects ordered by its balance.
+  - Stake requires a way to get from a staking address to an ActiveStake object.
+  - Keepalive requires a way to get from an old BlsPublicKey to a ValidatorInfo object.
+  - Retire requires a way to get from a staking address to an ActiveStake object
+    and from a staking address to the list of InactiveStake objects.
+  - Unstake requires a way to get from a staking address to the list of InactiveStake objects.
+  - Retrieving the list of active stakes that are actually considered for the selection
+    requires a list of ActiveStake objects ordered by its balance.
  */
 #[derive(Clone, Debug)]
 pub struct StakingContract {
     pub balance: Coin,
-    pub potential_validators: BTreeSet<Arc<PotentialValidator>>, // A list might be sufficient.
-    pub validators_by_address: HashMap<Address, Arc<PotentialValidator>>,
-    pub keys: BTreeMap<BlsPublicKeyAffine, Arc<Mutex<KeyInfo>>>, // TODO: HashMap is not yet possible, since Hash trait is missing. Implement Hash for PublicKeyAffine.
-    pub inactive_validators: HashMap<Address, Vec<PausingTransaction>>,
+    pub active_stake: BTreeSet<Arc<ActiveStake>>, // A list might be sufficient.
+    pub stake_by_address: HashMap<Address, Arc<ActiveStake>>,
+    pub inactive_stake: HashMap<Address, Vec<InactiveStake>>,
+    pub validator_infos: BTreeMap<BlsPublicKeyAffine, Arc<Mutex<ValidatorInfo>>>, // TODO: HashMap is not yet possible, since Hash trait is missing. Implement Hash for PublicKeyAffine.
 }
 
 impl StakingContract {
     /// Adds funds to stake of `address` and adds `validator_key` if not yet present.
     fn stake(&mut self, address: Address, validator_key: BlsPublicKey, payout_address: Option<Address>,
              balance: Coin, block_height: u32) -> Result<(), AccountError> {
-        let validator_key_affine = BlsPublicKeyAffine::from(validator_key.clone());
-
-        // Add or get key info.
-        let key_info = self.keys.entry(validator_key_affine).or_insert_with(|| Arc::new(Mutex::new(KeyInfo {
-            last_restaking: block_height,
-            validator_key,
-        }))).clone();
-
-        // Add funds to stake.
-        if let Some(validator_data) = self.validators_by_address.remove(&address) {
-            self.potential_validators.remove(&validator_data);
-
+        if let Some(validator_data) = self.stake_by_address.get(&address) {
             // Only accept with same validator key.
-            if validator_data.key_info.lock().ne(&key_info.lock()) {
+            if validator_data.validator_info.lock().public_key != validator_key {
                 return Err(AccountError::InvalidForRecipient);
             }
 
             // Never allow overwriting the payout address without unstaking.
+            // XXX Why would we this be required?
             if payout_address.is_some() && validator_data.payout_address != payout_address {
                 return Err(AccountError::InvalidForRecipient);
             }
@@ -170,18 +160,28 @@ impl StakingContract {
                 .with_balance(validator_data.balance.checked_add(balance)
                     .ok_or(AccountError::InvalidCoinValue)?));
 
-            self.potential_validators.insert(new_validator_data.clone());
-            self.validators_by_address.insert(address, new_validator_data);
+            self.active_stake.remove(validator_data);
+            self.active_stake.insert(new_validator_data.clone());
+            self.stake_by_address.insert(address, new_validator_data);
         } else {
-            let validator = Arc::new(PotentialValidator {
+            let validator_key_affine = BlsPublicKeyAffine::from(validator_key.clone());
+            let validator_info = Arc::clone(self.validator_infos
+                .entry(validator_key_affine)
+                .or_insert_with(|| Arc::new(Mutex::new(ValidatorInfo {
+                    public_key: validator_key,
+                    last_keepalive: block_height,
+                    num_stakes: 0
+                }))));
+            validator_info.lock().num_stakes += 1;
+
+            let stake = Arc::new(ActiveStake {
                 balance,
                 payout_address,
-                key_info,
+                validator_info,
                 staking_address: address.clone(),
             });
-
-            self.potential_validators.insert(validator.clone());
-            self.validators_by_address.insert(address, validator);
+            self.active_stake.insert(Arc::clone(&stake));
+            self.stake_by_address.insert(address, stake);
         }
 
         self.balance.checked_add(balance)
@@ -193,32 +193,56 @@ impl StakingContract {
     /// Reverts a staking transaction.
     fn revert_stake(&mut self, address: Address, validator_key: BlsPublicKey,
              balance: Coin) -> Result<(), AccountError> {
-        unimplemented!()
+        if let Some(validator_data) = self.stake_by_address.get(&address) {
+            match validator_data.balance.cmp(&balance) {
+                Ordering::Greater => {
+                    // TODO what do want to check here?
+
+                    let new_validator_data = Arc::new(validator_data
+                        .with_balance(validator_data.balance.checked_sub(balance)
+                            .ok_or(AccountError::InvalidCoinValue)?));
+
+                    self.active_stake.remove(validator_data);
+                    self.active_stake.insert(new_validator_data.clone());
+                    self.stake_by_address.insert(address, new_validator_data);
+                    Ok(())
+                },
+                Ordering::Equal => {
+                    unimplemented!()
+                },
+                Ordering::Less => {
+                    Err(AccountError::InvalidForRecipient)
+                }
+            }
+        } else {
+            Err(AccountError::InvalidForRecipient)
+        }
     }
 
-    /// Replace validator key and update `last_restaking`. Also produces receipt.
-    fn restake(&mut self, old_validator_key: BlsPublicKey, new_validator_key: BlsPublicKey,
-               block_height: u32) -> Result<RestakingReceipt, AccountError> {
+    /// Replace validator key and update `last_keepalive`. Also produces receipt.
+    fn keepalive(&mut self, old_validator_key: BlsPublicKey, new_validator_key: BlsPublicKey,
+                 block_height: u32) -> Result<KeepaliveReceipt, AccountError> {
         let old_validator_key_affine = BlsPublicKeyAffine::from(old_validator_key);
         let new_validator_key_affine = BlsPublicKeyAffine::from(new_validator_key.clone());
 
         // Remove old index.
-        if let Some(key_info) = self.keys.remove(&old_validator_key_affine) {
+        if let Some(validator_info) = self.validator_infos.remove(&old_validator_key_affine) {
             let receipt;
             {
-                let mut key_info_guard = key_info.lock();
+                let mut info_locked = validator_info.lock();
+
                 // Produce receipt.
-                receipt = RestakingReceipt {
-                    prev_last_restaking: key_info_guard.last_restaking,
+                receipt = KeepaliveReceipt {
+                    last_keepalive: info_locked.last_keepalive,
                 };
 
                 // Update values.
-                key_info_guard.last_restaking = block_height;
-                key_info_guard.validator_key = new_validator_key;
+                info_locked.public_key = new_validator_key;
+                info_locked.last_keepalive = block_height;
             }
 
             // Add new index.
-            self.keys.insert(new_validator_key_affine, key_info);
+            self.validator_infos.insert(new_validator_key_affine, validator_info);
 
             Ok(receipt)
         } else {
@@ -226,24 +250,24 @@ impl StakingContract {
         }
     }
 
-    /// Reverts a restaking.
-    fn revert_restake(&mut self, old_validator_key: BlsPublicKey, new_validator_key: BlsPublicKey,
-               receipt: RestakingReceipt) -> Result<(), AccountError> {
+    /// Reverts a keepalive.
+    fn revert_keepalive(&mut self, old_validator_key: BlsPublicKey, new_validator_key: BlsPublicKey,
+                        receipt: KeepaliveReceipt) -> Result<(), AccountError> {
         let old_validator_key_affine = BlsPublicKeyAffine::from(old_validator_key.clone());
         let new_validator_key_affine = BlsPublicKeyAffine::from(new_validator_key);
 
         // Remove new index.
-        if let Some(key_info) = self.keys.remove(&new_validator_key_affine) {
+        if let Some(validator_info) = self.validator_infos.remove(&new_validator_key_affine) {
             {
-                let mut key_info_guard = key_info.lock();
+                let mut info_locked = validator_info.lock();
 
                 // Update values.
-                key_info_guard.last_restaking = receipt.prev_last_restaking;
-                key_info_guard.validator_key = old_validator_key;
+                info_locked.public_key = old_validator_key;
+                info_locked.last_keepalive = receipt.last_keepalive;
             }
 
             // Add new index.
-            self.keys.insert(old_validator_key_affine, key_info);
+            self.validator_infos.insert(old_validator_key_affine, validator_info);
 
             Ok(())
         } else {
@@ -251,33 +275,34 @@ impl StakingContract {
         }
     }
 
-    /// Removes stake from the potential validator set.
-    fn pause(&mut self, address: Address, balance: Coin) -> Result<PausingReceipt, AccountError> {
+    /// Removes stake from the active stake list.
+    fn retire(&mut self, address: Address, balance: Coin) -> Result<RetireReceipt, AccountError> {
         unimplemented!()
     }
 
     /// Removes stake from the potential validator set.
-    fn revert_pause(&mut self, address: Address, balance: Coin, receipt: PausingReceipt) -> Result<(), AccountError> {
+    fn revert_retire(&mut self, address: Address, balance: Coin, receipt: RetireReceipt) -> Result<(), AccountError> {
         unimplemented!()
     }
 
     /// Retrieves the size-bounded list of potential validators.
     /// The algorithm works as follows in psuedo-code:
-    /// list = sorted list of potential validators (per address) by balances ascending
-    /// potential_validators = empty list
-    /// min_stake = 0
-    /// current_stake = 0
-    /// loop {
-    ///     next_validator = list.pop() // Takes highest balance.
-    ///     if next_validator.balance < min_stake {
-    ///         break;
-    ///     }
-    ///
-    ///     current_stake += next_validator.balance
-    ///     potential_validators.push(next_validator)
-    ///     min_stake = current_stake / MAX_POTENTIAL_VALIDATORS
-    /// }
-    pub fn potential_validators(&self) -> Vec<(BlsPublicKey, Address)> {
+    // XXX librustdoc test fails if this pseudo-code is in a doc comment.
+    // list = sorted list of potential validators (per address) by balances ascending
+    // potential_validators = empty list
+    // min_stake = 0
+    // current_stake = 0
+    // loop {
+    //     next_validator = list.pop() // Takes highest balance.
+    //     if next_validator.balance < min_stake {
+    //         break
+    //     }
+    //
+    //     current_stake += next_validator.balance
+    //     potential_validators.push(next_validator)
+    //     min_stake = current_stake / MAX_POTENTIAL_VALIDATORS
+    // }
+    pub fn potential_validators(&self) -> Vec<(BlsPublicKey, Coin, Address, Option<Address>)> {
         unimplemented!()
     }
 }
@@ -291,70 +316,74 @@ impl AccountTransactionInteraction for StakingContract {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
+    fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
+        unimplemented!()
+    }
+
+    fn commit_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
         let data = parse_and_verify_staking_transaction(transaction)?;
         let address = transaction.sender.clone();
 
-        let mut contract = self.clone();
         let mut receipt;
-
         match data {
             StakingTransactionData::Staking { validator_key, payout_address, .. } => {
-                contract.stake(address, validator_key,
+                self.stake(address, validator_key,
                                payout_address, transaction.value, block_height)?;
                 receipt = None;
             },
             StakingTransactionData::Restaking { old_validator_key, new_validator_key, .. } => {
-                receipt = Some(contract.restake(old_validator_key, new_validator_key, block_height)?
+                receipt = Some(self.keepalive(old_validator_key, new_validator_key, block_height)?
                     .serialize_to_vec());
             },
             StakingTransactionData::Pausing { balance } => {
-                receipt = Some(contract.pause(address, balance)?
+                receipt = Some(self.retire(address, balance)?
                     .serialize_to_vec());
             },
         }
 
-        Ok((contract, receipt))
+        Ok(receipt)
     }
 
-    fn without_incoming_transaction(&self, transaction: &Transaction, _block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+    fn revert_incoming_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         let data = parse_and_verify_staking_transaction(transaction)?;
         let address = transaction.sender.clone();
 
-        let mut contract = self.clone();
-
         match data {
             StakingTransactionData::Staking { validator_key, .. } => {
-                contract.revert_stake(address, validator_key,transaction.value)?;
+                self.revert_stake(address, validator_key,transaction.value)?;
             },
             StakingTransactionData::Restaking { old_validator_key, new_validator_key, .. } => {
                 if let Some(mut receipt) = receipt {
                     let receipt = Deserialize::deserialize_from_vec(&receipt)?;
-                    contract.revert_restake(old_validator_key, new_validator_key, receipt)?;
+                    self.revert_keepalive(old_validator_key, new_validator_key, receipt)?;
                 } else {
-                    return Err(AccountError::InvalidPruning);
+                    return Err(AccountError::InvalidReceipt);
                 }
             },
             StakingTransactionData::Pausing { balance } => {
                 if let Some(mut receipt) = receipt {
                     let receipt = Deserialize::deserialize_from_vec(&receipt)?;
-                    contract.revert_pause(address, balance, receipt)?;
+                    self.revert_retire(address, balance, receipt)?;
                 } else {
-                    return Err(AccountError::InvalidPruning);
+                    return Err(AccountError::InvalidReceipt);
                 }
             },
         }
 
-        Ok(contract)
+        Ok(())
     }
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
+    fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
+        unimplemented!()
+    }
+
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
         // Remove balance from the inactive list.
         // Returns a receipt containing the pause_times and balances.
         unimplemented!()
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+    fn revert_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         // Needs to reconstruct the previous state by transferring the transaction value back to
         // inactive validator entries using the receipt.
         unimplemented!()

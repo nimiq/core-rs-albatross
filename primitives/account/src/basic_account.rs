@@ -21,29 +21,41 @@ impl AccountTransactionInteraction for BasicAccount {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn with_incoming_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
-        let balance: Coin = Account::balance_add(self.balance, transaction.value)?;
-        Ok((BasicAccount { balance }, None))
+    fn check_incoming_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
+        Account::balance_add(self.balance, transaction.value)?;
+        Ok(())
     }
 
-    fn without_incoming_transaction(&self, transaction: &Transaction, _block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+    fn commit_incoming_transaction(&mut self, transaction: &Transaction, _block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
+        self.balance = Account::balance_add(self.balance, transaction.value)?;
+        Ok(None)
+    }
+
+    fn revert_incoming_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidForRecipient);
         }
-        let balance: Coin = Account::balance_sub(self.balance, transaction.value)?;
-        Ok(BasicAccount { balance })
+
+        self.balance = Account::balance_sub(self.balance, transaction.value)?;
+        Ok(())
     }
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
-        let balance: Coin = Account::balance_sub(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
-        Ok((BasicAccount { balance }, None))
+    fn check_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
+        Account::balance_sub(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        Ok(())
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
+        self.balance = Account::balance_sub(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        Ok(None)
+    }
+
+    fn revert_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidForSender);
         }
-        let balance: Coin = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
-        Ok(BasicAccount { balance })
+
+        self.balance = Account::balance_add(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        Ok(())
     }
 }

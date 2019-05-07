@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io;
 
-use account::AccountReceipt;
+use account::Receipt;
 use beserial::{Deserialize, Serialize};
 use crate::BlockError;
 use crate::slash::SlashInherent;
@@ -51,7 +51,7 @@ pub struct MicroExtrinsics {
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
     #[beserial(len_type(u16))]
-    pub account_receipts: Vec<AccountReceipt>,
+    pub receipts: Vec<Receipt>,
 }
 
 impl MicroBlock {
@@ -107,29 +107,33 @@ impl MicroExtrinsics {
             }
         }
 
-        let mut previous_acc: Option<&AccountReceipt> = None;
-        for acc in &self.account_receipts {
+        let mut previous_receipt: Option<&Receipt> = None;
+        for receipt in &self.receipts {
             // Ensure pruned accounts are ordered and unique.
-            if let Some(previous) = previous_acc {
-                match previous.cmp(acc) {
+            if let Some(previous) = previous_receipt {
+                match previous.cmp(receipt) {
                     Ordering::Equal => {
-                        return Err(BlockError::DuplicateAccountReceipt);
+                        return Err(BlockError::DuplicateReceipt);
                     }
                     Ordering::Greater => {
-                        return Err(BlockError::AccountReceiptsNotOrdered);
+                        return Err(BlockError::ReceiptsNotOrdered);
                     }
                     _ => (),
                 }
             }
-            previous_acc = Some(acc);
+            previous_receipt = Some(receipt);
 
             // Check that the account is actually supposed to be pruned.
-            match acc {
-                AccountReceipt::Pruned(acc) => {
+            match receipt {
+                Receipt::PrunedAccount(acc) => {
                     if !acc.account.is_to_be_pruned() {
-                        return Err(BlockError::InvalidAccountReceipt);
+                        return Err(BlockError::InvalidReceipt);
                     }
                 },
+                Receipt::Transaction {..} => {
+                    // TODO
+                    unimplemented!()
+                }
             }
         }
 

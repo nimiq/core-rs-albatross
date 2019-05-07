@@ -20,7 +20,7 @@ fn it_can_deserialize_genesis_body() {
     assert_eq!(body.miner, Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]));
     assert_eq!(body.extra_data, "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".as_bytes().to_vec());
     assert_eq!(body.transactions.len(), 0);
-    assert_eq!(body.account_receipts.len(), 0);
+    assert_eq!(body.receipts.len(), 0);
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn it_can_deserialize_b169500_body() {
     assert_eq!(body.miner, Address::from(&hex::decode("b403040ff02b4a9a4d10f8a4beff71750cd3aa7f").unwrap()[..]));
     assert_eq!(body.extra_data, "Nimbus-960ecd4b819600000022f8e1104f0ff802507997622".as_bytes().to_vec());
     assert_eq!(body.transactions.len(), 3);
-    assert_eq!(body.account_receipts.len(), 1);
+    assert_eq!(body.receipts.len(), 1);
 
     assert_eq!(body.transactions[0].format(), TransactionFormat::Extended);
     assert_eq!(body.transactions[0].sender, Address::from("ad8e224835e6cc0cadbcf500a49dae46f6769704"));
@@ -73,9 +73,10 @@ fn it_can_deserialize_b169500_body() {
     assert_eq!(body.transactions[2].fee, Coin::ZERO);
     assert_eq!(body.transactions[2].validity_start_height, 169497);
 
-    assert_eq!(body.account_receipts[0].receipt_type(), ReceiptType::PrunedAccount);
-    let receipt = match &body.account_receipts[0] {
+    assert_eq!(body.receipts[0].receipt_type(), ReceiptType::PrunedAccount);
+    let receipt = match &body.receipts[0] {
         Receipt::PrunedAccount(pruned_account) => pruned_account,
+        _ => unreachable!()
     };
     assert_eq!(receipt.address, Address::from("ad8e224835e6cc0cadbcf500a49dae46f6769704"));
     assert_eq!(receipt.account.balance(), Coin::ZERO);
@@ -114,7 +115,7 @@ fn verify_accepts_an_empty_body() {
         miner: Address::from([1u8; Address::SIZE]),
         extra_data: Vec::new(),
         transactions: Vec::new(),
-        account_receipts: Vec::new()
+        receipts: Vec::new()
     };
     assert!(body.verify(1, NetworkId::Main).is_ok());
 }
@@ -165,20 +166,21 @@ fn verify_rejects_expired_transactions() {
 #[test]
 fn verify_rejects_duplicate_pruned_accounts() {
     let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
-    let account = body.account_receipts[0].clone();
-    body.account_receipts.push(account);
-    assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::DuplicateAccountReceipt));
+    let account = body.receipts[0].clone();
+    body.receipts.push(account);
+    assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::DuplicateReceipt));
 }
 
 #[test]
 fn verify_rejects_unordered_pruned_accounts() {
     let mut body: BlockBody = BlockBody::deserialize_from_vec(&hex::decode(B169500_BODY).unwrap()).unwrap();
-    let mut account = body.account_receipts[0].clone();
+    let mut account = body.receipts[0].clone();
     match account {
         Receipt::PrunedAccount(ref mut account) => account.address = Address::from([1u8; Address::SIZE]),
+        _ => ()
     }
-    body.account_receipts.push(account);
-    assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::AccountReceiptsNotOrdered));
+    body.receipts.push(account);
+    assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::ReceiptsNotOrdered));
 }
 
 #[test]
@@ -195,6 +197,6 @@ fn verify_rejects_invalid_pruned_accounts() {
             vesting_total_amount: Coin::from_u64(1000).unwrap()
         })
     };
-    body.account_receipts.push(Receipt::PrunedAccount(pruned_account));
-    assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::InvalidAccountReceipt));
+    body.receipts.push(Receipt::PrunedAccount(pruned_account));
+    assert_eq!(body.verify(169500, NetworkId::Main), Err(BlockError::InvalidReceipt));
 }

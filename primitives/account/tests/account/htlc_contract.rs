@@ -130,7 +130,7 @@ fn it_can_create_contract_from_transaction() {
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
-    let contract = HashedTimeLockedContract {
+    let mut contract = HashedTimeLockedContract {
         balance: Coin::from_u64(1000).unwrap(),
         sender: Address::from([1u8; 20]),
         recipient: Address::from([2u8; 20]),
@@ -144,8 +144,9 @@ fn it_does_not_support_incoming_transactions() {
     let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from_u64(1).unwrap(), Coin::from_u64(1000).unwrap(), 1, NetworkId::Dummy);
     tx.recipient_type = AccountType::HTLC;
 
-    assert_eq!(contract.with_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
-    assert_eq!(contract.without_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
+    assert_eq!(contract.check_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
+    assert_eq!(contract.commit_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
+    assert_eq!(contract.revert_incoming_transaction(&tx, 2, None), Err(AccountError::InvalidForRecipient));
 }
 
 fn prepare_outgoing_transaction() -> (HashedTimeLockedContract, Transaction, AnyHash, SignatureProof, SignatureProof) {
@@ -323,9 +324,10 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let mut contract = start_contract.with_outgoing_transaction(&tx, 1).unwrap();
+    let mut contract = start_contract.clone();
+    contract.commit_outgoing_transaction(&tx, 1).unwrap();
     assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
-    contract = contract.without_outgoing_transaction(&tx, 1).unwrap();
+    contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 
     // early resolve
@@ -335,9 +337,10 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let mut contract = start_contract.with_outgoing_transaction(&tx, 1).unwrap();
+    let mut contract = start_contract.clone();
+    contract.commit_outgoing_transaction(&tx, 1).unwrap();
     assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
-    contract = contract.without_outgoing_transaction(&tx, 1).unwrap();
+    contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 
     // timeout resolve
@@ -346,16 +349,17 @@ fn it_can_apply_and_revert_valid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
 
-    let mut contract = start_contract.with_outgoing_transaction(&tx, 101).unwrap();
+    let mut contract = start_contract.clone();
+    contract.commit_outgoing_transaction(&tx, 101).unwrap();
     assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
-    contract = contract.without_outgoing_transaction(&tx, 1).unwrap();
+    contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 }
 
 #[test]
 #[allow(unused_must_use)]
 fn it_refuses_invalid_transaction() {
-    let (start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) = prepare_outgoing_transaction();
+    let (mut start_contract, mut tx, pre_image, sender_signature_proof, recipient_signature_proof) = prepare_outgoing_transaction();
 
     // regular transfer: timeout passed
     let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
@@ -366,7 +370,8 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&pre_image, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 101), Err(AccountError::InvalidForSender));
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 101), Err(AccountError::InvalidForSender));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 101), Err(AccountError::InvalidForSender));
 
     // regular transfer: hash mismatch
     let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
@@ -377,7 +382,8 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&pre_image, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 1), Err(AccountError::InvalidForSender));
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 1), Err(AccountError::InvalidForSender));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 1), Err(AccountError::InvalidForSender));
 
     // regular transfer: invalid signature
     let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
@@ -388,7 +394,8 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&pre_image, &mut proof);
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 1), Err(AccountError::InvalidSignature));
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 1), Err(AccountError::InvalidSignature));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 1), Err(AccountError::InvalidSignature));
 
     // regular transfer: underflow
     let mut proof = Vec::with_capacity(3 + 2 * AnyHash::SIZE + recipient_signature_proof.serialized_size());
@@ -399,7 +406,14 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(&(<[u8; 32]>::from(pre_image))))), &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 1), Err(AccountError::InsufficientFunds { needed: Coin::from_u64(500).unwrap(), balance: Coin::from_u64(0).unwrap() }));
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 1), Err(AccountError::InsufficientFunds {
+        needed: Coin::from_u64(500).unwrap(),
+        balance: Coin::from_u64(0).unwrap()
+    }));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 1), Err(AccountError::InsufficientFunds {
+        needed: Coin::from_u64(500).unwrap(),
+        balance: Coin::from_u64(0).unwrap()
+    }));
 
     // early resolve: invalid signature
     let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size() + sender_signature_proof.serialized_size());
@@ -407,19 +421,22 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&sender_signature_proof, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 1), Err(AccountError::InvalidSignature));
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 1), Err(AccountError::InvalidSignature));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 1), Err(AccountError::InvalidSignature));
 
     // timeout resolve: timeout not expired
     let mut proof = Vec::with_capacity(1 + sender_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
     Serialize::serialize(&sender_signature_proof, &mut proof);
     tx.proof = proof;
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 1), Err(AccountError::InvalidForSender));
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 1), Err(AccountError::InvalidForSender));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 1), Err(AccountError::InvalidForSender));
 
     // timeout resolve: invalid signature
     let mut proof = Vec::with_capacity(1 + recipient_signature_proof.serialized_size());
     Serialize::serialize(&ProofType::TimeoutResolve, &mut proof);
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
-    assert_eq!(start_contract.with_outgoing_transaction(&tx, 101), Err(AccountError::InvalidSignature));
+    assert_eq!(start_contract.check_outgoing_transaction(&tx, 101), Err(AccountError::InvalidSignature));
+    assert_eq!(start_contract.commit_outgoing_transaction(&tx, 101), Err(AccountError::InvalidSignature));
 }

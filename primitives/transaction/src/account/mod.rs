@@ -280,7 +280,7 @@ impl StakingTransactionData {
     pub fn verify(&self) -> bool {
         match self {
             StakingTransactionData::Staking { validator_key, proof_of_knowledge, .. } => {
-                validator_key.verify(&validator_key.to_bytes()[..], &proof_of_knowledge)
+                validator_key.verify(validator_key, &proof_of_knowledge)
             },
             StakingTransactionData::Restaking {
                 old_validator_key,
@@ -292,8 +292,8 @@ impl StakingTransactionData {
                 content.append(&mut new_validator_key.serialize_to_vec());
                 content.append(&mut proof_of_knowledge.serialize_to_vec());
 
-                new_validator_key.verify(&new_validator_key.to_bytes()[..], &proof_of_knowledge) &&
-                    old_validator_key.verify(content, signature) &&
+                new_validator_key.verify(new_validator_key, &proof_of_knowledge) &&
+                    old_validator_key.verify(&content, signature) &&
                     old_validator_key != new_validator_key
             },
             StakingTransactionData::Pausing { .. } => {

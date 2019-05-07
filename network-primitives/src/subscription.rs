@@ -48,7 +48,7 @@ impl Subscription {
             Subscription::Addresses(addresses) => addresses.contains(&transaction.sender),
             Subscription::MinFee(min_fee) => {
                 // TODO: Potential overflow for u64
-                min_fee.checked_factor(transaction.serialized_size() as u64)
+                min_fee.checked_mul(transaction.serialized_size() as u64)
                     .map(|block_fee| transaction.fee >= block_fee)
                     .unwrap_or(true)
             }

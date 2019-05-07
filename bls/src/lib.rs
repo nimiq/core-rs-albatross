@@ -85,7 +85,6 @@ pub struct PublicKey<E: Engine> {
     pub(crate) p_pub: E::G2,
 }
 
-impl<E: Engine> Eq for PublicKey<E>{}
 impl<E: Engine> PartialEq for PublicKey<E> {
     fn eq(&self, other: &Self) -> bool {
         self.p_pub.eq(&other.p_pub)
@@ -115,6 +114,7 @@ impl<E: Engine> PublicKey<E> {
         lhs == rhs
     }
 }
+
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Keypair<E: Engine> {

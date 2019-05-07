@@ -65,7 +65,7 @@ mod tests {
         assert_eq!(v.get(i1), Some(&5));
         *v.get_mut(i2).unwrap() = 8;
         assert_eq!(v.get(i2), Some(&8));
-        assert_eq!(v.get(2), None);
+        assert_eq!(v.get(2 as usize), None);
         assert_eq!(v.free_indices.len(), 0);
 
         // Remove.

@@ -34,7 +34,7 @@ fn it_can_deserialize_genesis_block() {
             "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".as_bytes().to_vec()
         );
         assert_eq!(body.transactions.len(), 0);
-        assert_eq!(body.account_receipts.len(), 0);
+        assert_eq!(body.receipts.len(), 0);
     } else {
         panic!("Body should be present");
     }
@@ -68,7 +68,7 @@ fn it_can_deserialize_block_108273() {
         assert_eq!(body.miner, Address::from(&hex::decode("432715a84417723b0889b22b6917de391ab2fa48").unwrap()[..]));
         assert_eq!(body.extra_data, hex::decode("736b79706f6f6c2d7368312d32").unwrap());
         assert_eq!(body.transactions.len(), 2);
-        assert_eq!(body.account_receipts.len(), 0);
+        assert_eq!(body.receipts.len(), 0);
         assert_eq!(body.transactions[0].sender, Address::from(&hex::decode("8a3eed6de76d21fe6f5ef1a1a8f0f2c2c070c4f3").unwrap()[..]));
         assert_eq!(body.transactions[0].recipient, Address::from(&hex::decode("47d18f75e7bc7036e0bb496252acd74f0bf8c645").unwrap()[..]));
         assert_eq!(body.transactions[0].value, Coin::from_u64(3300000).unwrap());

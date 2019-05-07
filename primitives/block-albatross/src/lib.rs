@@ -44,9 +44,9 @@ pub enum BlockError {
     ExpiredTransaction,
     TransactionsNotOrdered,
 
-    DuplicateAccountReceipt,
-    AccountReceiptsNotOrdered,
-    InvalidAccountReceipt,
+    DuplicateReceipt,
+    InvalidReceipt,
+    ReceiptsNotOrdered,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

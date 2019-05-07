@@ -29,7 +29,7 @@ fn push_same_tx_twice() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), account_receipts: Vec::new() };
+    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
     blockchain.state().accounts().commit_block_body(&mut txn, &body, 1).unwrap();
     txn.commit();
@@ -77,7 +77,7 @@ fn push_and_get_valid_tx() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), account_receipts: Vec::new() };
+    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
     blockchain.state().accounts().commit_block_body(&mut txn, &body, 1).unwrap();
     txn.commit();
@@ -107,7 +107,7 @@ fn push_and_get_two_tx_same_user() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), account_receipts: Vec::new() };
+    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
     blockchain.state().accounts().commit_block_body(&mut txn, &body, 1).unwrap();
     txn.commit();
@@ -143,7 +143,7 @@ fn reject_free_tx_beyond_limit() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), account_receipts: Vec::new() };
+    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
     blockchain.state().accounts().commit_block_body(&mut txn, &body, 1).unwrap();
     txn.commit();

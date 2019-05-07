@@ -57,7 +57,7 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
                 miner: [0u8; Address::SIZE].into(),
                 extra_data: Vec::new(),
                 transactions: Vec::new(),
-                account_receipts: Vec::new()
+                receipts: Vec::new()
             }
         }
     }
@@ -92,8 +92,8 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         self
     }
 
-    pub fn with_account_receipts(mut self, account_receipts: Vec<Receipt>) -> Self {
-        self.body.account_receipts = account_receipts;
+    pub fn with_receipts(mut self, receipts: Vec<Receipt>) -> Self {
+        self.body.receipts = receipts;
         self
     }
 

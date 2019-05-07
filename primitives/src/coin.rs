@@ -118,7 +118,7 @@ impl Coin {
     }
 
     #[inline]
-    pub fn checked_factor(self, times: u64) -> Option<Coin> {
+    pub fn checked_mul(self, times: u64) -> Option<Coin> {
         match self.0.checked_mul(times) {
             Some(val) => Coin::from_u64(val).ok(),
             None => None,

@@ -275,6 +275,10 @@ impl Transaction {
         res.append(&mut self.flags.serialize_to_vec());
         res
     }
+
+    pub fn total_value(&self) -> Option<Coin> {
+        self.value.checked_add(self.fee)
+    }
 }
 
 impl Serialize for Transaction {

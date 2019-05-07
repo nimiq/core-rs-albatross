@@ -59,18 +59,21 @@ impl AccountTransactionInteraction for VestingContract {
         Ok(VestingContract::new(balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount))
     }
 
-    fn with_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
+    fn check_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn without_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32, _receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+    fn commit_incoming_transaction(&mut self, _transaction: &Transaction, _block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
-        let balance: Coin = Account::balance_sub(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
+    fn revert_incoming_transaction(&mut self, _transaction: &Transaction, _block_height: u32, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        Err(AccountError::InvalidForRecipient)
+    }
 
+    fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
         // Check vesting min cap.
+        let balance: Coin = Account::balance_sub(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
         let min_cap = self.min_cap(block_height);
         if balance < min_cap {
             return Err(AccountError::InsufficientFunds { balance, needed: min_cap });
@@ -82,14 +85,21 @@ impl AccountTransactionInteraction for VestingContract {
             return Err(AccountError::InvalidSignature);
         }
 
-        Ok((self.with_balance(balance), None))
+        Ok(())
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
+        self.check_outgoing_transaction(transaction, block_height)?;
+        self.balance = Account::balance_sub(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        Ok(None)
+    }
+
+    fn revert_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidForSender);
         }
-        let balance: Coin = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;
-        Ok(self.with_balance(balance))
+
+        self.balance = Account::balance_add(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        Ok(())
     }
 }

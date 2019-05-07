@@ -35,45 +35,28 @@ pub trait AccountTransactionInteraction: Sized {
 
     fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
 
-    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError>;
 
-    fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError>;
+    fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError>;
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError>;
+    fn commit_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError>;
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError>;
+    fn revert_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError>;
+
+
+    fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError>;
+
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError>;
+
+    fn revert_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError>;
 }
 
 macro_rules! invoke_account_instance {
     ($on: expr, $name: ident, $( $arg: ident ),*) => {
         match $on {
-            Account::Basic(ref account) => Ok(Account::Basic(account.$name($( $arg ),*)?)),
-            Account::Vesting(ref account) => Ok(Account::Vesting(account.$name($( $arg ),*)?)),
-            Account::HTLC(ref account) => Ok(Account::HTLC(account.$name($( $arg ),*)?)),
-            Account::Staking(ref account) => Ok(Account::Staking(account.$name($( $arg ),*)?)),
-        }
-    }
-}
-
-macro_rules! invoke_account_instance_receipt {
-    ($on: expr, $name: ident, $( $arg: ident ),*) => {
-        match $on {
-            Account::Basic(ref account) => {
-                let (account, data) = account.$name($( $arg ),*)?;
-                Ok((Account::Basic(account), data))
-            },
-            Account::Vesting(ref account) => {
-                let (account, data) = account.$name($( $arg ),*)?;
-                Ok((Account::Vesting(account), data))
-            },
-            Account::HTLC(ref account) => {
-                let (account, data) = account.$name($( $arg ),*)?;
-                Ok((Account::HTLC(account), data))
-            },
-            Account::Staking(ref account) => {
-                let (account, data) = account.$name($( $arg ),*)?;
-                Ok((Account::Staking(account), data))
-            },
+            Account::Basic(account) => account.$name($( $arg ),*),
+            Account::Vesting(account) => account.$name($( $arg ),*),
+            Account::HTLC(account) => account.$name($( $arg ),*),
+            Account::Staking(account) => account.$name($( $arg ),*),
         }
     }
 }
@@ -221,28 +204,29 @@ impl AccountTransactionInteraction for Account {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn with_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
-        invoke_account_instance_receipt!(*self, with_incoming_transaction, transaction, block_height)
+    fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
+        invoke_account_instance!(self, check_incoming_transaction, transaction, block_height)
     }
 
-    fn without_incoming_transaction(&self, transaction: &Transaction, block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
-        invoke_account_instance!(*self, without_incoming_transaction, transaction, block_height, receipt)
+    fn commit_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
+        self.check_incoming_transaction(transaction, block_height)?;
+        invoke_account_instance!(self, commit_incoming_transaction, transaction, block_height)
     }
 
-    fn with_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(Self, Option<Vec<u8>>), AccountError> {
-        // Check account balance.
-        // This assumes that transaction.value + transaction.fee does not overflow.
-        let balance = self.balance();
-        let value = transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?;
-        if balance < value {
-            return Err(AccountError::InsufficientFunds { balance, needed: value});
-        }
-
-        invoke_account_instance_receipt!(*self, with_outgoing_transaction, transaction, block_height)
+    fn revert_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        invoke_account_instance!(self, revert_incoming_transaction, transaction, block_height, receipt)
     }
 
-    fn without_outgoing_transaction(&self, transaction: &Transaction, block_height: u32, receipt: Option<Vec<u8>>) -> Result<Self, AccountError> {
-        invoke_account_instance!(*self, without_outgoing_transaction, transaction, block_height, receipt)
+    fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
+        invoke_account_instance!(self, check_outgoing_transaction, transaction, block_height)
+    }
+
+    fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
+        invoke_account_instance!(self, commit_outgoing_transaction, transaction, block_height)
+    }
+
+    fn revert_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        invoke_account_instance!(self, revert_outgoing_transaction, transaction, block_height, receipt)
     }
 }
 
@@ -260,8 +244,8 @@ pub enum ReceiptType {
 pub enum Receipt {
     PrunedAccount(PrunedAccount),
     Transaction {
+        tx_idx: u16,
         sender: bool, // A bit inefficient.
-        tx_id: u16,
         //#[beserial(len_type(u16))]
         data: Vec<u8>,
     },
@@ -281,8 +265,8 @@ impl Serialize for Receipt {
         let mut size = self.receipt_type().serialize(writer)?;
         match self {
             Receipt::PrunedAccount(pruned_account) => size += pruned_account.serialize(writer)?,
-            Receipt::Transaction { tx_id, sender, data } => {
-                size += tx_id.serialize(writer)?;
+            Receipt::Transaction { tx_idx, sender, data } => {
+                size += tx_idx.serialize(writer)?;
                 size += sender.serialize(writer)?;
                 size += SerializeWithLength::serialize::<u16, W>(data, writer)?;
             },
@@ -294,8 +278,8 @@ impl Serialize for Receipt {
         let mut size = self.receipt_type().serialized_size();
         match self {
             Receipt::PrunedAccount(pruned_account) => size += pruned_account.serialized_size(),
-            Receipt::Transaction { tx_id, sender, data } => {
-                size += tx_id.serialized_size();
+            Receipt::Transaction { tx_idx, sender, data } => {
+                size += tx_idx.serialized_size();
                 size += sender.serialized_size();
                 size += SerializeWithLength::serialized_size::<u16>(data);
             },
@@ -310,7 +294,7 @@ impl Deserialize for Receipt {
         match ty {
             ReceiptType::PrunedAccount => Ok(Receipt::PrunedAccount(Deserialize::deserialize(reader)?)),
             ReceiptType::Transaction => Ok(Receipt::Transaction {
-                tx_id: Deserialize::deserialize(reader)?,
+                tx_idx: Deserialize::deserialize(reader)?,
                 sender: Deserialize::deserialize(reader)?,
                 data: DeserializeWithLength::deserialize::<u16, R>(reader)?,
             }),
@@ -334,10 +318,10 @@ impl Ord for Receipt {
     fn cmp(&self, other: &Receipt) -> Ordering {
         match (self, other) {
             (Receipt::PrunedAccount(a), Receipt::PrunedAccount(b)) => a.cmp(b),
-            (Receipt::Transaction { tx_id: tx_id_a, sender: sender_a, data: data_a }, Receipt::Transaction { tx_id: tx_id_b, sender: sender_b, data: data_b }) => {
+            (Receipt::Transaction { tx_idx: tx_idx_a, sender: sender_a, data: data_a }, Receipt::Transaction { tx_idx: tx_idx_b, sender: sender_b, data: data_b }) => {
                 // Ensure order is the same as when processing the block.
                 sender_a.cmp(sender_b).reverse()
-                    .then_with(|| tx_id_a.cmp(tx_id_b))
+                    .then_with(|| tx_idx_a.cmp(tx_idx_b))
                     .then_with(|| data_a.cmp(data_b))
             },
             (a, b) => a.receipt_type().cmp(&b.receipt_type())
@@ -401,8 +385,8 @@ pub enum AccountError {
     InvalidForSender,
     #[fail(display = "Invalid for recipient")]
     InvalidForRecipient,
-    #[fail(display = "Invalid pruning")]
-    InvalidPruning,
+    #[fail(display = "Invalid receipt")]
+    InvalidReceipt,
     #[fail(display = "Invalid serialization")]
     InvalidSerialization(#[cause] SerializingError),
     #[fail(display = "Invalid transaction")]

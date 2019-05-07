@@ -166,6 +166,7 @@ impl<'env> Mempool<'env> {
                 }
 
                 // Retrieve recipient account and check account type.
+                // TODO Eliminate copy
                 recipient_account = accounts.get(&transaction.recipient, None);
                 let is_contract_creation = transaction.flags.contains(TransactionFlags::CONTRACT_CREATION);
                 let is_type_change = recipient_account.account_type() != transaction.recipient_type;
@@ -174,11 +175,17 @@ impl<'env> Mempool<'env> {
                 }
 
                 // Test incoming transaction.
-                match recipient_account.with_incoming_transaction(&transaction, block_height) {
+                match recipient_account.check_incoming_transaction(&transaction, block_height) {
                     Err(_) => return ReturnCode::Invalid,
-                    Ok((r, _)) => {
+                    Ok(_) => {
                         // Check recipient account against filter rules.
-                        if !state.filter.accepts_recipient_account(&transaction, &recipient_account, &r) {
+                        // FIXME This boldly assumes that the account balance after the incoming transaction is old_balance + transaction.value.
+                        let old_balance = recipient_account.balance();
+                        let new_balance = match old_balance.checked_add(transaction.value) {
+                            Some(balance) => balance,
+                            None => return ReturnCode::Invalid
+                        };
+                        if !state.filter.accepts_recipient_balance(&transaction, old_balance, new_balance) {
                             self.state.write().filter.blacklist(hash);
                             return ReturnCode::Filtered;
                         }
@@ -186,6 +193,7 @@ impl<'env> Mempool<'env> {
                 }
 
                 // Retrieve sender account and check account type.
+                // TODO Eliminate copy
                 sender_account = accounts.get(&transaction.sender, None);
                 if sender_account.account_type() != transaction.sender_type {
                     return ReturnCode::Invalid;
@@ -213,13 +221,10 @@ impl<'env> Mempool<'env> {
                     break;
                 }
                 // Reject the transaction, if after the intrinsic check, the balance went too low
-                sender_account = match sender_account
-                    .with_outgoing_transaction(tx, block_height) {
-                    Ok((s, _)) => s,
-                    Err(_) => return ReturnCode::Invalid
-                };
+                if sender_account.commit_outgoing_transaction(tx, block_height).is_err() {
+                    return ReturnCode::Invalid
+                }
                 tx_count += 1;
-
                 tx_opt = tx_iter.next_back();
             }
 
@@ -229,14 +234,13 @@ impl<'env> Mempool<'env> {
             }
 
             // Now, check the new transaction.
-            let old_sender_account = sender_account.clone();
-            sender_account = match sender_account.with_outgoing_transaction(&transaction, block_height) {
-                Ok((account, _)) => account,
-                Err(_) => return ReturnCode::Invalid // XXX More specific return code here?
+            let old_sender_balance = sender_account.balance();
+            if sender_account.commit_outgoing_transaction(&transaction, block_height).is_err() {
+                return ReturnCode::Invalid // XXX More specific return code here?
             };
 
             // Check sender account against filter rules.
-            if !state.filter.accepts_sender_account(&transaction, &old_sender_account, &sender_account) {
+            if !state.filter.accepts_sender_balance(&transaction, old_sender_balance, sender_account.balance()) {
                 self.state.write().filter.blacklist(hash);
                 return ReturnCode::Filtered;
             }
@@ -247,8 +251,7 @@ impl<'env> Mempool<'env> {
             // tx_opt already contains the first lower/fee byte transaction to check (if there is one remaining).
             while let Some(tx) = tx_opt {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if let Ok((account, _)) = sender_account.with_outgoing_transaction(tx, block_height) {
-                        sender_account = account;
+                    if sender_account.commit_outgoing_transaction(tx, block_height).is_ok() {
                         tx_count += 1;
                     } else {
                         txs_to_remove.push(tx.clone())
@@ -256,7 +259,6 @@ impl<'env> Mempool<'env> {
                 } else {
                     txs_to_remove.push(tx.clone())
                 }
-
                 tx_opt = tx_iter.next_back();
             }
         }
@@ -385,6 +387,7 @@ impl<'env> Mempool<'env> {
             let block_height = blockchain_state.main_chain().head.header.height + 1;
 
             for (address, transactions) in state.transactions_by_sender.iter() {
+                // TODO Eliminate copy
                 let mut sender_account = accounts.get(&address, None);
                 for tx in transactions.iter().rev() {
                     // Check if the transaction has expired.
@@ -400,24 +403,16 @@ impl<'env> Mempool<'env> {
                     }
 
                     // Check if transaction is still valid for recipient.
+                    // TODO Eliminate copy
                     let recipient_account = accounts.get(&tx.recipient, None);
-
-                    if recipient_account.with_incoming_transaction(&tx, block_height).is_err() {
+                    if recipient_account.check_incoming_transaction(&tx, block_height).is_err() {
                         txs_evicted.push(tx.clone());
                         continue;
                     }
 
                     // Check if transaction is still valid for sender.
-                    let sender_account_res = sender_account.with_outgoing_transaction(&tx, block_height);
-                    match sender_account_res {
-                        Err(_) => {
-                            txs_evicted.push(tx.clone());
-                            continue;
-                        }
-                        Ok((account, _)) => {
-                            // Transaction ok.
-                            sender_account = account;
-                        }
+                    if sender_account.commit_outgoing_transaction(&tx, block_height).is_err() {
+                        txs_evicted.push(tx.clone());
                     }
                 }
             }
@@ -474,8 +469,9 @@ impl<'env> Mempool<'env> {
                         continue;
                     }
 
+                    // TODO Eliminate copy
                     let recipient_account = accounts.get(&tx.recipient, None);
-                    if recipient_account.with_incoming_transaction(&tx, block_height).is_err() {
+                    if recipient_account.check_incoming_transaction(&tx, block_height).is_err() {
                         // This transaction cannot be accepted by the recipient anymore.
                         // XXX The transaction is lost!
                         continue;
@@ -582,6 +578,7 @@ impl<'env> Mempool<'env> {
         let mut txs_to_add = Vec::new();
         let mut txs_to_remove = Vec::new();
 
+        // TODO Eliminate copy
         let mut sender_account = accounts.get(sender, None);
         let mut tx_count = 0;
 
@@ -601,8 +598,7 @@ impl<'env> Mempool<'env> {
             if new_is_next {
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
                     let tx = new_tx.unwrap();
-                    if let Ok((account, _)) = sender_account.with_outgoing_transaction(*tx, block_height) {
-                        sender_account = account;
+                    if sender_account.commit_outgoing_transaction(*tx, block_height).is_ok() {
                         tx_count += 1;
                         txs_to_add.push(*tx)
                     }
@@ -611,8 +607,7 @@ impl<'env> Mempool<'env> {
             } else {
                 let tx = old_tx.unwrap();
                 if tx_count < TRANSACTIONS_PER_SENDER_MAX {
-                    if let Ok((account, _)) = sender_account.with_outgoing_transaction(tx, block_height) {
-                        sender_account = account;
+                    if sender_account.commit_outgoing_transaction(tx, block_height).is_ok() {
                         tx_count += 1;
                     } else {
                         txs_to_remove.push(tx.clone())

@@ -6,7 +6,7 @@ use group::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError};
 use pairing::bls12_381::{Bls12, Fr, FrRepr, G1Compressed, G2Compressed};
 use pairing::Engine;
 
-use hash::{Hash, HashOutput};
+use hash::Hash;
 
 use super::{
     AggregatePublicKey as GenericAggregatePublicKey,
@@ -50,7 +50,7 @@ impl PublicKeyAffine {
         PublicKey::from_secret(secret).into()
     }
 
-    pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
+    pub fn verify<M: Hash>(&self, msg: M, signature: &Signature) -> bool {
         self.verify_g1(hash_to_g1::<Bls12>(msg.hash()), signature)
     }
 

@@ -48,9 +48,11 @@ impl MempoolFilter {
          )
     }
 
-    pub fn accepts_recipient_account(&self, tx: &Transaction, old_account: &Account, new_account: &Account) -> bool {
-        new_account.balance() >= self.rules.recipient_balance && (
-            !old_account.is_initial() ||
+    pub fn accepts_recipient_balance(&self, tx: &Transaction, old_balance: Coin, new_balance: Coin) -> bool {
+        new_balance >= self.rules.recipient_balance && (
+            // XXX This does not precisely capture Account::is_initial() as it will incorrectly classify
+            // contracts with zero value as non-existent.
+            old_balance != Coin::ZERO ||
                 (tx.fee >= self.rules.creation_fee &&
                     tx.fee_per_byte() >= self.rules.creation_fee_per_byte &&
                     tx.value >= self.rules.creation_value
@@ -58,10 +60,11 @@ impl MempoolFilter {
         )
     }
 
-    pub fn accepts_sender_account(&self, _tx: &Transaction, _old_account: &Account, new_account: &Account) -> bool {
-        new_account.balance() >= self.rules.sender_balance ||
-            new_account.is_initial() ||
-            new_account.is_to_be_pruned()
+    pub fn accepts_sender_balance(&self, _tx: &Transaction, _old_balance: Coin, new_balance: Coin) -> bool {
+        new_balance >= self.rules.sender_balance ||
+            // XXX This does not precisely capture Account::is_initial() || Account.is_to_be_pruned()
+            // as it will ignore contracts that will not be pruned with zero value.
+            new_balance == Coin::ZERO
     }
 }
 

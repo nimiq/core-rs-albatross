@@ -40,7 +40,8 @@ pub enum BlockError {
     ExpiredTransaction,
     TransactionsNotOrdered,
 
-    DuplicateAccountReceipt,
-    AccountReceiptsNotOrdered,
-    InvalidAccountReceipt,
+    DuplicateReceipt,
+    InvalidReceipt,
+    ReceiptsNotOrdered,
 }
+
