@@ -74,7 +74,7 @@ impl BitSet {
         }
     }
 
-    fn apply_op<O: Fn(u64, u64) -> u64>(&self, other: Self, op: O) -> Self {
+    fn apply_op<O: Fn(u64, u64) -> u64>(&self, other: &Self, op: O) -> Self {
         let mut store: Vec<u64> = Vec::new();
         let mut count: usize = 0;
 
@@ -163,9 +163,17 @@ impl Default for BitSet {
 }
 
 impl BitAnd for BitSet {
-    type Output = Self;
+    type Output = BitSet;
 
-    fn bitand(self, other: Self) -> Self {
+    fn bitand(self, other: Self) -> Self::Output {
+        self.apply_op(&other, BitAnd::bitand)
+    }
+}
+
+impl BitAnd for &BitSet {
+    type Output = BitSet;
+
+    fn bitand(self, other: Self) -> Self::Output {
         self.apply_op(other, BitAnd::bitand)
     }
 }
@@ -177,9 +185,17 @@ impl BitAndAssign for BitSet {
 }
 
 impl BitOr for BitSet {
-    type Output = Self;
+    type Output = BitSet;
 
-    fn bitor(self, other: Self) -> Self {
+    fn bitor(self, other: Self) -> Self::Output {
+        self.apply_op(&other, BitOr::bitor)
+    }
+}
+
+impl BitOr for &BitSet {
+    type Output = BitSet;
+
+    fn bitor(self, other: Self) -> Self::Output {
         self.apply_op(other, BitOr::bitor)
     }
 }
