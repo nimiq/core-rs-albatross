@@ -78,21 +78,27 @@ pub enum AggregateError {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AggregateProof<M> {
+    /// Indices of validators that signed this proof
     pub signers: BitSet,
+
+    /// The cumulative amount of slots that signed this proof
+    pub slots: uvar,
+
+    /// The aggregate public key of the signers
     pub public_key: AggregatePublicKey,
+
+    /// The aggregate signature
     pub signature: AggregateSignature,
+
     #[beserial(skip)]
     _message: PhantomData<M>
 }
 
 impl<M: Message> AggregateProof<M> {
     pub fn new() -> Self {
-        Self::with_capacity(0)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            signers: BitSet::with_capacity(capacity),
+            signers: BitSet::with_capacity(0), // TODO: Fix this by the size of the active validator set
+            slots: uvar::from(0),
             public_key: AggregatePublicKey::new(),
             signature: AggregateSignature::new(),
             _message: PhantomData,
@@ -106,12 +112,13 @@ impl<M: Message> AggregateProof<M> {
 
     /// Adds a signed message to an aggregate proof
     /// NOTE: This method assumes the signature of the message was already checked
-    pub fn add_signature(&mut self, public_key: &PublicKey, signed: &SignedMessage<M>) {
+    pub fn add_signature(&mut self, public_key: &PublicKey, slots: usize, signed: &SignedMessage<M>) {
         debug_assert!(signed.verify(public_key));
         let pk_idx = signed.pk_idx.to_usize().unwrap();
         if !self.signers.contains(pk_idx) {
             if !self.signers.contains(pk_idx) {
                 self.signers.insert(pk_idx);
+                self.slots = uvar::from(u64::from(self.slots) + slots as u64);
                 self.public_key.aggregate(public_key);
                 self.signature.aggregate(&signed.signature);
             }

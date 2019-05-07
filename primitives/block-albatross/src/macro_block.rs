@@ -6,8 +6,7 @@ use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_bls::bls12_381::{PublicKey, Signature};
 use crate::signed;
-use crate::pbft::PbftPrepareMessage;
-use crate::pbft::PbftCommitMessage;
+use crate::pbft::PbftProof;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
@@ -35,8 +34,7 @@ pub struct MacroHeader {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroJustification {
-    pub prepare: signed::AggregateProof<PbftPrepareMessage>,
-    pub commit: signed::AggregateProof<PbftCommitMessage>,
+    pub pbft_proof: PbftProof,
     pub view_change_proof: Option<ViewChangeProof>,
 }
 
@@ -65,12 +63,7 @@ impl MacroBlock {
 
 impl MacroJustification {
     pub fn verify(&self, block_hash: Blake2bHash, threshold: usize) -> bool {
-        /*// both have to be valid & >k sigs from prepare must be included in commit
-        self.prepare.verify(&PbftPrepareMessage { block_hash: block_hash.clone() }, None)
-            && self.commit.verify(&PbftCommitMessage { block_hash }, None)
-            // TODO: Try to do this without cloning
-            && (self.prepare.signers.clone() & self.commit.signers.clone()).count_ones() > threshold*/
-        unimplemented!()
+        self.pbft_proof.verify(block_hash, threshold)
     }
 }
 

@@ -22,9 +22,10 @@ pub mod signed;
 pub use block::{Block, BlockHeader};
 pub use macro_block::{MacroBlock, MacroHeader};
 pub use micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
-pub use view_change::{ViewChange, SignedViewChange};
+pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof};
 pub use slash::SlashInherent;
-pub use pbft::{PbftPrepareMessage, PbftCommitMessage};
+pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, SignedPbftPrepareMessage,
+               SignedPbftCommitMessage};
 
 use crate::transaction::TransactionError;
 
