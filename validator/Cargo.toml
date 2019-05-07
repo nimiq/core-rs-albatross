@@ -24,6 +24,7 @@ nimiq-network-primitives = { path = "../network-primitives", features = ["networ
 nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
 nimiq-block-albatross = { path = "../primitives/block-albatross" }
 nimiq-messages = { path = "../messages" }
+nimiq-hash = { path = "../hash" }
 failure = "0.1"
 log = "0.4"
 parking_lot = "0.7"

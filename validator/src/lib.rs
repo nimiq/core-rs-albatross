@@ -12,6 +12,7 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_utils as utils;
 extern crate nimiq_messages as messages;
 extern crate nimiq_block_albatross as block_albatross;
+extern crate nimiq_hash as hash;
 
 pub mod validator;
 pub mod validator_network;

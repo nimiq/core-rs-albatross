@@ -4,13 +4,13 @@ use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
-use messages::Message;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage, MacroBlock};
 
 
 pub enum ValidatorAgentEvent {
     ValidatorInfo(ValidatorInfo),
     ViewChange { view_change: SignedViewChange, public_key: PublicKey, slots: u16 },
+    PbftProposal(MacroBlock),
     PbftPrepare { prepare: SignedPbftPrepareMessage, public_key: PublicKey, slots: u16 },
     PbftCommit { commit: SignedPbftCommitMessage, public_key: PublicKey, slots: u16 }
 }
@@ -35,8 +35,6 @@ impl ValidatorAgent {
     }
 
     fn init_listeners(this: &Arc<RwLock<Self>>) {
-        let this_weak = Arc::downgrade(this);
-
         this.read().peer.channel.msg_notifier.validator_info.write()
             .register(weak_passthru_listener(Arc::downgrade(this), |this, signed_infos: Vec<SignedValidatorInfo>| {
                 this.read().on_validator_infos(signed_infos);
@@ -44,6 +42,10 @@ impl ValidatorAgent {
         this.read().peer.channel.msg_notifier.view_change.write()
             .register(weak_passthru_listener( Arc::downgrade(this), |this, signed_view_change| {
                 this.read().on_view_change_message(signed_view_change);
+            }));
+        this.read().peer.channel.msg_notifier.pbft_proposal.write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, block| {
+                this.read().on_pbft_proposal_message(block);
             }));
         this.read().peer.channel.msg_notifier.pbft_prepare.write()
             .register(weak_passthru_listener(Arc::downgrade(this), |this, prepare| {
