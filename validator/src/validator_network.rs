@@ -74,7 +74,18 @@ impl ValidatorNetwork {
             let weak = Weak::clone(&self.self_weak);
             agent.read().notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), |this, event| {
                 match event {
-                    ValidatorAgentEvent::ValidatorInfo(info) => this.write().on_validator_info(info),
+                    ValidatorAgentEvent::ValidatorInfo(info) => {
+                        this.write().on_validator_info(info)
+                    },
+                    ValidatorAgentEvent::ViewChange { view_change, public_key, slots } => {
+                        this.write().commit_view_change(view_change, &public_key, slots);
+                    }
+                    ValidatorAgentEvent::PbftPrepare { prepare, public_key, slots } => {
+                        this.write().commit_pbft_prepare(prepare, &public_key, slots);
+                    }
+                    ValidatorAgentEvent::PbftCommit { commit, public_key, slots } => {
+                        this.write().commit_pbft_commit(commit, &public_key, slots)
+                    }
                 }
             }));
         }
@@ -86,23 +97,6 @@ impl ValidatorNetwork {
 
     fn on_validator_info(&mut self, info: ValidatorInfo) {
         unimplemented!()
-    }
-
-    /// When a view change was received by a ValidatorAgent
-    fn on_view_change_message(&mut self, view_change: SignedViewChange) {
-        if let Some((public_key, slots)) = self.get_validator_slots(view_change.pk_idx) {
-            // TODO: I'd like to have the signature verification in the ValidatorAgent, but it
-            //       currently doesn't have access to the validator list. This might change later.
-            if view_change.verify(&public_key) {
-                self.commit_view_change(view_change, &public_key, slots);
-            }
-            else {
-                info!("Invalid view change message")
-            }
-        }
-        else {
-            warn!("Invalid validator index: {}", view_change.pk_idx);
-        }
     }
 
     /// Commit a view change to the proofs being build and relay it if it's new
@@ -128,18 +122,6 @@ impl ValidatorNetwork {
         unimplemented!("Notify that we have a view change proof")
     }
 
-    /// When a pBFT prepare was received by a ValidatorAgent
-    fn on_pbft_prepare_message(&mut self, prepare: SignedPbftPrepareMessage) {
-        if let Some((public_key, slots)) = self.get_validator_slots(prepare.pk_idx) {
-            if prepare.verify(&public_key) {
-                self.commit_pbft_prepare(prepare, &public_key, slots);
-            }
-        }
-        else {
-            warn!("Invalid validator index: {}", prepare.pk_idx);
-        }
-    }
-
     /// Commit a pBFT prepare
     pub fn commit_pbft_prepare(&mut self, prepare: SignedPbftPrepareMessage, public_key: &PublicKey, slots: u16) {
         // aggregate prepare signature - if new, relay
@@ -156,18 +138,6 @@ impl ValidatorNetwork {
         //       gossiping. So we have to verify here too.
         if self.pbft_proof.verify(prepare.message.block_hash, self.threshold) {
             unimplemented!("Notify that we have a pBFT proof")
-        }
-    }
-
-    /// When a pBFT commit was received by a ValidatorAgent
-    fn on_pbft_commit_message(&mut self, commit: SignedPbftCommitMessage) {
-        if let Some((public_key, slots)) = self.get_validator_slots(commit.pk_idx) {
-            if commit.verify(&public_key) {
-                self.commit_pbft_commit(commit, &public_key, slots);
-            }
-        }
-        else {
-            warn!("Invalid validator index: {}", commit.pk_idx);
         }
     }
 
@@ -191,14 +161,16 @@ impl ValidatorNetwork {
     }
 
     fn broadcast_active(&self, msg: Message) {
-        for (peer, agent) in self.validator_agents.iter() {
-            // TODO: in order to do this without cloning, we need to pass references all the way
-            // to the websocket. We can easily just serialize a reference.
-            peer.channel.send_or_close(msg.clone());
-        }
+        self.broadcast(msg, true);
     }
 
-    fn get_validator_slots(&self, pk_idx: u16) -> Option<(PublicKey, u16)> {
-        unimplemented!("get public key, slots for pk_idx");
+    fn broadcast(&self, msg: Message, active: bool) {
+        for (peer, agent) in self.validator_agents.iter() {
+            if !active || agent.read().is_active() {
+                // TODO: in order to do this without cloning, we need to pass references all the way
+                // to the websocket. We can easily just serialize a reference.
+                peer.channel.send_or_close(msg.clone());
+            }
+        }
     }
 }

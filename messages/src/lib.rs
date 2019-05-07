@@ -43,7 +43,7 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
-use block_albatross::{SignedViewChange, SlashInherent, PbftPrepareMessage, PbftCommitMessage, MacroBlock, SignedPbftPrepareMessage, SignedPbftCommitMessage};
+use block_albatross::{SignedViewChange, SlashInherent, MacroBlock, SignedPbftPrepareMessage, SignedPbftCommitMessage};
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
@@ -459,9 +459,9 @@ pub struct MessageNotifier {
     // TODO
     pub validator_info: RwLock<PassThroughNotifier<'static, Vec<SignedValidatorInfo>>>,
     pub view_change: RwLock<PassThroughNotifier<'static, SignedViewChange>>,
-    pub pbft_proposal:  RwLock<PassThroughNotifier<'static, ()>>,
-    pub pbft_prepare: RwLock<PassThroughNotifier<'static, ()>>,
-    pub pbft_commit: RwLock<PassThroughNotifier<'static, ()>>,
+    pub pbft_proposal:  RwLock<PassThroughNotifier<'static, MacroBlock>>,
+    pub pbft_prepare: RwLock<PassThroughNotifier<'static, SignedPbftPrepareMessage>>,
+    pub pbft_commit: RwLock<PassThroughNotifier<'static, SignedPbftCommitMessage>>,
 }
 
 impl MessageNotifier {
@@ -546,6 +546,10 @@ impl MessageNotifier {
             // Albatross
             // TODO
             Message::ValidatorInfo(validator_info) => self.validator_info.read().notify(validator_info),
+            Message::ViewChange(view_change) => self.view_change.read().notify(*view_change),
+            Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
+            Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
+            Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
             _ => panic!("Notify not implemented for: {}", msg.ty()),
         }
     }

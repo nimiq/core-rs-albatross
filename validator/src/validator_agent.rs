@@ -5,11 +5,14 @@ use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
 use messages::Message;
-use block_albatross::SignedViewChange;
+use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage, MacroBlock};
 
 
 pub enum ValidatorAgentEvent {
-    ValidatorInfo(ValidatorInfo)
+    ValidatorInfo(ValidatorInfo),
+    ViewChange { view_change: SignedViewChange, public_key: PublicKey, slots: u16 },
+    PbftPrepare { prepare: SignedPbftPrepareMessage, public_key: PublicKey, slots: u16 },
+    PbftCommit { commit: SignedPbftCommitMessage, public_key: PublicKey, slots: u16 }
 }
 
 pub struct ValidatorAgent {
@@ -36,13 +39,20 @@ impl ValidatorAgent {
 
         this.read().peer.channel.msg_notifier.validator_info.write()
             .register(weak_passthru_listener(Arc::downgrade(this), |this, signed_infos: Vec<SignedValidatorInfo>| {
-            this.read().on_validator_infos(signed_infos);
-        }));
+                this.read().on_validator_infos(signed_infos);
+            }));
         this.read().peer.channel.msg_notifier.view_change.write()
             .register(weak_passthru_listener( Arc::downgrade(this), |this, signed_view_change| {
-            this.read().on_view_change(signed_view_change);
-        }));
-        // TODO: Register other listeners (pBFT messages)
+                this.read().on_view_change_message(signed_view_change);
+            }));
+        this.read().peer.channel.msg_notifier.pbft_prepare.write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, prepare| {
+                this.read().on_pbft_prepare_message(prepare);
+            }));
+        this.read().peer.channel.msg_notifier.pbft_commit.write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, commit| {
+                this.read().on_pbft_commit_message(commit);
+            }));
     }
 
     fn on_validator_infos(&self, signed_infos: Vec<SignedValidatorInfo>) {
@@ -54,17 +64,84 @@ impl ValidatorAgent {
                 continue;
             }
             self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(signed_info.message));
-            /*if *self.peer.peer_address() == signed_info.message.peer_address {
-                debug!("Got validator info for peer: {}", self.peer.peer_address());
-                self.validator_info = Some(signed_info.message);
-            }*/
         }
     }
 
-    fn on_view_change(&self, signed_view_change: SignedViewChange) {
-        let signature_okay = signed_view_change.verify(unimplemented!());
-        debug!("[VIEW-CHANGE] Received view change: {:#?}, signature_okay={}", signed_view_change.message, signature_okay);
-        unimplemented!();
+    /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
+    fn on_view_change_message(&self, view_change: SignedViewChange) {
+        debug!("[VIEW-CHANGE] Received view change from {}: {:#?}", self.peer.peer_address(), view_change.message);
+        if !self.in_current_epoch(view_change.message.block_number) {
+            debug!("[VIEW-CHANGE] View change for old epoch: block_number={}", view_change.message.block_number);
+        }
+        else if let Some((public_key, slots)) = self.get_validator_slots(view_change.pk_idx) {
+            if view_change.verify(&public_key) {
+                self.notifier.read().notify(ValidatorAgentEvent::ViewChange {
+                    view_change,
+                    public_key,
+                    slots
+                });
+            }
+            else {
+                debug!("[VIEW-CHANGE] Invalid signature");
+            }
+        }
+        else {
+            debug!("[VIEW-CHANGE] Invalid validator index: {}", view_change.pk_idx);
+        }
+    }
+
+    /// When a pbft block proposal is received
+    /// TODO:
+    ///  1. verify the block
+    ///  2. signal it to network
+    ///  3. network stores block_hash (if known, abort)
+    ///  4. relay proposal
+    ///  - signal to validator?
+    ///  - check that producer is the valid pbft leader
+    fn on_pbft_proposal_message(&self, proposal: MacroBlock) {
+        unimplemented!()
+    }
+
+    /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
+    fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
+        debug!("[PBFT-PREPARE] Received prepare from {}: {:#?}", self.peer.peer_address(), prepare.message);
+        // TODO: check that the block_hash is the hash of the proposed block
+        if let Some((public_key, slots)) = self.get_validator_slots(prepare.pk_idx) {
+            if prepare.verify(&public_key) {
+                self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
+                    prepare,
+                    public_key,
+                    slots
+                });
+            }
+            else {
+                debug!("[PBFT-PREPARE] Invalid signature");
+            }
+        }
+        else {
+            debug!("[PBFT-PREPARE] Invalid validator index: {}", prepare.pk_idx);
+        }
+    }
+
+    /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
+    fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
+        debug!("[PBFT-COMMIT] Received commit from {}: {:#?}", self.peer.peer_address(), commit.message);
+        // TODO: check that the block_hash is the hash of the proposed block
+        if let Some((public_key, slots)) = self.get_validator_slots(commit.pk_idx) {
+            if commit.verify(&public_key) {
+                self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
+                    commit,
+                    public_key,
+                    slots
+                });
+            }
+            else {
+                debug!("[PBFT-COMMIT] Invalid signature");
+            }
+        }
+        else {
+            warn!("[PBFT-COMMIT] Invalid validator index: {}", commit.pk_idx);
+        }
     }
 
     pub fn set_info(&mut self, validator_info: ValidatorInfo) {
@@ -92,5 +169,18 @@ impl ValidatorAgent {
         self.validator_info.as_ref()
             .map(|info| info.pk_idx.is_some())
             .unwrap_or(false)
+    }
+
+
+    /// TODO: Those methods should be implemented somewhere else
+
+    /// get a validator's public key and number of slots
+    fn get_validator_slots(&self, pk_idx: u16) -> Option<(PublicKey, u16)> {
+        unimplemented!("get public key, slots for pk_idx");
+    }
+
+    /// check if a block number is in the current epoch
+    fn in_current_epoch(&self, block_number: u64) -> bool {
+        unimplemented!("check if block number is in current epoch");
     }
 }
