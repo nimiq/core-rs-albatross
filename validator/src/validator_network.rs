@@ -10,7 +10,7 @@ use std::collections::btree_map::BTreeMap;
 use block_albatross::{
     ViewChange, SignedViewChange, ViewChangeProof,
     SignedPbftPrepareMessage, SignedPbftCommitMessage, PbftProof,
-    MacroHeader, SignedPbftProposal
+    MacroHeader, SignedPbftProposal, PbftProposal
 };
 use consensus::Consensus;
 use bls::bls12_381::PublicKey;
@@ -27,7 +27,7 @@ pub enum ValidatorNetworkError {
 
 pub enum ValidatorNetworkEvent {
     ViewChangeComplete(ViewChange),
-    PbftProposal(MacroHeader),
+    PbftProposal(PbftProposal),
     PbftPrepareComplete(Blake2bHash),
     PbftCommitComplete(Blake2bHash),
 }
@@ -141,7 +141,7 @@ impl ValidatorNetwork {
     pub fn commit_pbft_proposal(&self, proposal: SignedPbftProposal) {
         // TODO: Check if we know this block
         if let Some((header, proof)) = &self.pbft_proof {
-            if *header != proposal.message {
+            if *header != proposal.message.header {
                 debug!("Received second block proposal: {:#?}", proposal.message);
             }
         }

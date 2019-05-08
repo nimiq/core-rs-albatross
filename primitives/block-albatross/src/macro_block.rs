@@ -5,7 +5,6 @@ use crate::view_change::ViewChangeProof;
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHash, Hash, SerializeContent};
 use bls::bls12_381::{PublicKey, Signature};
-use crate::signed;
 use crate::pbft::PbftProof;
 use primitives::policy::TWO_THIRD_VALIDATORS;
 
@@ -37,10 +36,6 @@ pub struct MacroHeader {
 pub struct MacroJustification {
     pub pbft_proof: PbftProof,
     pub view_change_proof: Option<ViewChangeProof>,
-}
-
-impl signed::Message for MacroHeader {
-    const PREFIX: u8 = signed::PREFIX_PBFT_PROPOSAL;
 }
 
 impl MacroBlock {

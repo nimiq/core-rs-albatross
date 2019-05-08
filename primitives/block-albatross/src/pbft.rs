@@ -4,11 +4,23 @@ use hash::{Blake2bHash, SerializeContent};
 use super::signed;
 use bls::bls12_381::PublicKey;
 use super::MacroHeader;
+use crate::ViewChangeProof;
 
 
-pub type SignedPbftProposal = signed::SignedMessage<MacroHeader>;
+/// A macro block proposed by the pBFT-leader.
+#[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
+pub struct PbftProposal {
+    pub header: MacroHeader,
+    pub view_change: Option<ViewChangeProof>,
+}
+pub type SignedPbftProposal = signed::SignedMessage<PbftProposal>;
+
+impl signed::Message for PbftProposal {
+    const PREFIX: u8 = signed::PREFIX_PBFT_PROPOSAL;
+}
 
 
+/// a pBFT prepare message - references the proposed macro block by hash
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
 pub struct PbftPrepareMessage {
     pub block_hash: Blake2bHash, // 32 bytes
@@ -21,6 +33,7 @@ impl signed::Message for PbftPrepareMessage {
 pub type SignedPbftPrepareMessage = signed::SignedMessage<PbftPrepareMessage>;
 
 
+/// A pBFT commit message - references the proposed macro block by hash
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
 pub struct PbftCommitMessage {
     pub block_hash: Blake2bHash, // 32 bytes
@@ -33,6 +46,9 @@ impl signed::Message for PbftCommitMessage {
 pub type SignedPbftCommitMessage = signed::SignedMessage<PbftCommitMessage>;
 
 
+/// A pBFT proof - which is a composition of the prepare proof and the commit proof
+/// It verifies both proofs individually and then checks that at least `threshold` validators who
+/// signed the prepare also signed the commit.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PbftProof {
     pub prepare: signed::AggregateProof<PbftPrepareMessage>,

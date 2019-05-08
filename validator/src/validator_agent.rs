@@ -99,7 +99,7 @@ impl ValidatorAgent {
     /// When a pbft block proposal is received
     /// TODO: check correctness of proposed block (i.e. parent hashes, timestamp, seed)
     fn on_pbft_proposal_message(&self, proposal: SignedPbftProposal) {
-        debug!("[PBFT-PROPOSAL] Macro block proposal: {}", proposal.message.hash::<Blake2bHash>());
+        debug!("[PBFT-PROPOSAL] Macro block proposal: {:#?}", proposal.message);
         if let Some(public_key) = self.get_pbft_leader() {
             if !proposal.verify(&public_key) {
                 debug!("[PBFT-PROPOSAL] Invalid signature");
