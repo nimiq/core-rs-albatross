@@ -14,6 +14,7 @@ extern crate nimiq_account as account;
 extern crate nimiq_block as block;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
+extern crate nimiq_block_albatross as block_albatross;
 
 pub mod chain_info;
 pub mod chain_store;
