@@ -43,7 +43,8 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
-use block_albatross::{SignedViewChange, SlashInherent, MacroBlock, SignedPbftPrepareMessage, SignedPbftCommitMessage};
+use block_albatross::{SignedViewChange, SlashInherent, MacroHeader, SignedPbftPrepareMessage,
+                      SignedPbftCommitMessage, SignedPbftProposal};
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
@@ -143,7 +144,7 @@ pub enum Message {
     ValidatorInfo(Vec<SignedValidatorInfo>),
     ViewChange(Box<SignedViewChange>),
     SlashInherent(Box<SlashInherent>),
-    PbftProposal(Box<MacroBlock>),
+    PbftProposal(Box<SignedPbftProposal>),
     PbftPrepare(Box<SignedPbftPrepareMessage>),
     PbftCommit(Box<SignedPbftCommitMessage>),
 }
@@ -459,7 +460,7 @@ pub struct MessageNotifier {
     // TODO
     pub validator_info: RwLock<PassThroughNotifier<'static, Vec<SignedValidatorInfo>>>,
     pub view_change: RwLock<PassThroughNotifier<'static, SignedViewChange>>,
-    pub pbft_proposal:  RwLock<PassThroughNotifier<'static, MacroBlock>>,
+    pub pbft_proposal:  RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
     pub pbft_prepare: RwLock<PassThroughNotifier<'static, SignedPbftPrepareMessage>>,
     pub pbft_commit: RwLock<PassThroughNotifier<'static, SignedPbftCommitMessage>>,
 }

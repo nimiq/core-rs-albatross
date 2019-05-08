@@ -10,16 +10,24 @@ use std::collections::btree_map::BTreeMap;
 use block_albatross::{
     ViewChange, SignedViewChange, ViewChangeProof,
     SignedPbftPrepareMessage, SignedPbftCommitMessage, PbftProof,
-    MacroBlock
+    MacroHeader, SignedPbftProposal
 };
 use consensus::Consensus;
 use bls::bls12_381::PublicKey;
 use hash::Blake2bHash;
+use primitives::policy::TWO_THIRD_VALIDATORS;
+use failure::Fail;
 
+
+#[derive(Clone, Debug, Fail)]
+pub enum ValidatorNetworkError {
+    #[fail(display = "pBFT already started with different header")]
+    PbftStartedWithDifferentHeader,
+}
 
 pub enum ValidatorNetworkEvent {
     ViewChangeComplete(ViewChange),
-    PbftProposal(MacroBlock),
+    PbftProposal(MacroHeader),
     PbftPrepareComplete(Blake2bHash),
     PbftCommitComplete(Blake2bHash),
 }
@@ -32,11 +40,9 @@ pub struct ValidatorNetwork {
     /// clear after macro block
     view_changes: BTreeMap<ViewChange, ViewChangeProof>,
 
-    /// the current pbft proof (exists between proposal and macro block proofed)
-    pbft_proof: PbftProof,
-
-    /// The signature threshold for view-changes and pbft proofs
-    threshold: u16,
+    /// the current proposed macro header and pbft proof
+    /// (exists between proposal and macro block proofed)
+    pbft_proof: Option<(MacroHeader, PbftProof)>,
 
     self_weak: Weak<RwLock<ValidatorNetwork>>,
     // XXX We might need recursive read locks.
@@ -53,9 +59,7 @@ impl ValidatorNetwork {
             network,
             validator_agents: HashMap::new(),
             view_changes: BTreeMap::new(),
-            pbft_proof: PbftProof::new(),
-            // XXX For view change: threshold = (2 * n + 3) / 3 - which equals ceil(2f + 1) where n = 3f + 1
-            threshold: 342,
+            pbft_proof: None,
             self_weak: Weak::new(),
             notifier: RwLock::new(PassThroughNotifier::new()),
         }));
@@ -92,7 +96,7 @@ impl ValidatorNetwork {
                         this.write().commit_view_change(view_change, &public_key, slots);
                     },
                     ValidatorAgentEvent::PbftProposal(block) => {
-                        this.write().on_pbft_proposal_message(block);
+                        this.write().commit_pbft_proposal(block);
                     },
                     ValidatorAgentEvent::PbftPrepare { prepare, public_key, slots } => {
                         this.write().commit_pbft_prepare(prepare, &public_key, slots);
@@ -124,7 +128,7 @@ impl ValidatorNetwork {
         // Aggregate signature - if it wasn't included yet, relay it
         if proof.add_signature(&public_key, slots, &view_change) {
             // if we have enough signatures, notify listeners
-            if proof.verify(&view_change.message, self.threshold) {
+            if proof.verify(&view_change.message, TWO_THIRD_VALIDATORS) {
                 self.notifier.read()
                     .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.message.clone()))
             }
@@ -134,50 +138,84 @@ impl ValidatorNetwork {
         }
     }
 
-    fn on_pbft_proposal_message(&mut self, block: MacroBlock) {
-        unimplemented!("Notify that we have a view change proof")
+    pub fn commit_pbft_proposal(&self, proposal: SignedPbftProposal) {
+        // TODO: Check if we know this block
+        if let Some((header, proof)) = &self.pbft_proof {
+            if *header != proposal.message {
+                debug!("Received second block proposal: {:#?}", proposal.message);
+            }
+        }
+        else {
+            // notify Jeff ;P
+            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(proposal.message.clone()));
+
+            // relay proposal
+            self.broadcast_active(Message::PbftProposal(Box::new(proposal)));
+        }
     }
 
     /// Commit a pBFT prepare
     pub fn commit_pbft_prepare(&mut self, prepare: SignedPbftPrepareMessage, public_key: &PublicKey, slots: u16) {
-        // aggregate prepare signature - if new, relay
-        if self.pbft_proof.add_prepare_signature(&public_key, slots, &prepare) {
-            // notify if we reach threshold on prepare to begin commit
-            if self.pbft_proof.prepare.verify(&prepare.message, self.threshold) {
-                self.notifier.read()
-                    .notify(ValidatorNetworkEvent::PbftPrepareComplete(prepare.message.block_hash.clone().clone()))
-            }
+        if let Some((header, proof)) = &mut self.pbft_proof {
+            // aggregate prepare signature - if new, relay
+            if proof.add_prepare_signature(&public_key, slots, &prepare) {
+                // notify if we reach threshold on prepare to begin commit
+                if proof.prepare.verify(&prepare.message, TWO_THIRD_VALIDATORS) {
+                    self.notifier.read()
+                        .notify(ValidatorNetworkEvent::PbftPrepareComplete(prepare.message.block_hash.clone().clone()))
+                }
 
-            // NOTE: It might happen that we receive the prepare message after the commit. So we have
-            //       to verify here too.
-            if self.pbft_proof.verify(prepare.message.block_hash.clone(), self.threshold) {
-                self.notifier.read()
-                    .notify(ValidatorNetworkEvent::PbftCommitComplete(prepare.message.block_hash.clone()))
-            }
+                // NOTE: It might happen that we receive the prepare message after the commit. So we have
+                //       to verify here too.
+                if proof.verify(prepare.message.block_hash.clone(), TWO_THIRD_VALIDATORS) {
+                    self.notifier.read()
+                        .notify(ValidatorNetworkEvent::PbftCommitComplete(prepare.message.block_hash.clone()))
+                }
 
-            // broadcast new pbft prepare signature
-            self.broadcast_active(Message::PbftPrepare(Box::new(prepare)));
+                // broadcast new pbft prepare signature
+                self.broadcast_active(Message::PbftPrepare(Box::new(prepare)));
+            }
+        }
+        else {
+            debug!("Not in pBFT phase");
         }
     }
 
     /// Commit a pBFT commit
     pub fn commit_pbft_commit(&mut self, commit: SignedPbftCommitMessage, public_key: &PublicKey, slots: u16) {
-        // aggregate commit signature - if new, relay
-        if self.pbft_proof.add_commit_signature(&public_key, slots, &commit) {
-            if self.pbft_proof.verify(commit.message.block_hash.clone(), self.threshold) {
-                self.notifier.read()
-                    .notify(ValidatorNetworkEvent::PbftCommitComplete(commit.message.block_hash.clone()))
-            }
+        if let Some((header, proof)) = &mut self.pbft_proof {
+            // aggregate commit signature - if new, relay
+            if proof.add_commit_signature(&public_key, slots, &commit) {
+                if proof.verify(commit.message.block_hash.clone(), TWO_THIRD_VALIDATORS) {
+                    self.notifier.read()
+                        .notify(ValidatorNetworkEvent::PbftCommitComplete(commit.message.block_hash.clone()))
+                }
 
-            self.broadcast_active(Message::PbftCommit(Box::new(commit)))
+                self.broadcast_active(Message::PbftCommit(Box::new(commit)))
+            }
         }
+        else {
+            debug!("Not in pBFT phase");
+        }
+    }
+
+    pub fn start_pbft(&mut self, proposal: MacroHeader) -> Result<(), ValidatorNetworkError> {
+        if let Some((header, _)) = &self.pbft_proof {
+            if *header != proposal {
+                return Err(ValidatorNetworkError::PbftStartedWithDifferentHeader);
+            }
+        }
+        else {
+            self.pbft_proof = Some((proposal, PbftProof::new()));
+        }
+        Ok(())
     }
 
     // TODO: register in consensus for macro blocks
     pub fn on_finality(&mut self) {
         debug!("Clearing view change and pBFT proof");
         self.view_changes.clear();
-        self.pbft_proof.clear();
+        self.pbft_proof = None
     }
 
     fn broadcast_active(&self, msg: Message) {
@@ -188,7 +226,7 @@ impl ValidatorNetwork {
         for (peer, agent) in self.validator_agents.iter() {
             if !active || agent.read().is_active() {
                 // TODO: in order to do this without cloning, we need to pass references all the way
-                // to the websocket. We can easily just serialize a reference.
+                // to the websocket. We could easily just serialize a reference.
                 peer.channel.send_or_close(msg.clone());
             }
         }
@@ -198,7 +236,11 @@ impl ValidatorNetwork {
         self.view_changes.get(view_change)
     }
 
-    pub fn get_pbft_proof(&self) -> &PbftProof {
-        &self.pbft_proof
+    pub fn get_pbft_header(&self) -> Option<&MacroHeader> {
+        self.pbft_proof.as_ref().map(|p| &p.0)
+    }
+
+    pub fn get_pbft_proof(&self) -> Option<&PbftProof> {
+        self.pbft_proof.as_ref().map(|p| &p.1)
     }
 }

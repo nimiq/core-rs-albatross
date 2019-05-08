@@ -4,9 +4,10 @@ use std::fmt;
 use crate::view_change::ViewChangeProof;
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_bls::bls12_381::{PublicKey, Signature};
+use bls::bls12_381::{PublicKey, Signature};
 use crate::signed;
 use crate::pbft::PbftProof;
+use primitives::policy::TWO_THIRD_VALIDATORS;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
@@ -38,6 +39,10 @@ pub struct MacroJustification {
     pub view_change_proof: Option<ViewChangeProof>,
 }
 
+impl signed::Message for MacroHeader {
+    const PREFIX: u8 = signed::PREFIX_PBFT_PROPOSAL;
+}
+
 impl MacroBlock {
     pub fn verify(&self) -> bool {
         if self.header.block_number >= 1 && self.justification.is_none() {
@@ -45,7 +50,7 @@ impl MacroBlock {
         }
 
         if let Some(justification) = &self.justification {
-            if !justification.verify(self.hash(), unimplemented!("Signature Threshold")) {
+            if !justification.verify(self.hash(), TWO_THIRD_VALIDATORS) {
                 return false;
             }
         }

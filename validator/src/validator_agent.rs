@@ -4,13 +4,15 @@ use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
-use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage, MacroBlock};
+use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
+                      MacroHeader, SignedPbftProposal};
+use hash::{Hash, Blake2bHash};
 
 
 pub enum ValidatorAgentEvent {
     ValidatorInfo(ValidatorInfo),
     ViewChange { view_change: SignedViewChange, public_key: PublicKey, slots: u16 },
-    PbftProposal(MacroBlock),
+    PbftProposal(SignedPbftProposal),
     PbftPrepare { prepare: SignedPbftPrepareMessage, public_key: PublicKey, slots: u16 },
     PbftCommit { commit: SignedPbftCommitMessage, public_key: PublicKey, slots: u16 }
 }
@@ -20,6 +22,8 @@ pub struct ValidatorAgent {
     validator_info: Option<ValidatorInfo>,
     pub notifier: RwLock<PassThroughNotifier<'static, ValidatorAgentEvent>>,
 }
+
+
 
 impl ValidatorAgent {
     pub fn new(peer: Arc<Peer>) -> Arc<RwLock<Self>> {
@@ -93,15 +97,20 @@ impl ValidatorAgent {
     }
 
     /// When a pbft block proposal is received
-    /// TODO:
-    ///  1. verify the block
-    ///  2. signal it to network
-    ///  3. network stores block_hash (if known, abort)
-    ///  4. relay proposal
-    ///  - signal to validator?
-    ///  - check that producer is the valid pbft leader
-    fn on_pbft_proposal_message(&self, proposal: MacroBlock) {
-        unimplemented!()
+    /// TODO: check correctness of proposed block (i.e. parent hashes, timestamp, seed)
+    fn on_pbft_proposal_message(&self, proposal: SignedPbftProposal) {
+        debug!("[PBFT-PROPOSAL] Macro block proposal: {}", proposal.message.hash::<Blake2bHash>());
+        if let Some(public_key) = self.get_pbft_leader() {
+            if !proposal.verify(&public_key) {
+                debug!("[PBFT-PROPOSAL] Invalid signature");
+            }
+            else {
+                self.notifier.read().notify(ValidatorAgentEvent::PbftProposal(proposal));
+            }
+        }
+        else {
+            debug!("[PBFT-PROPOSAL] No pBFT leader");
+        }
     }
 
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
@@ -184,5 +193,9 @@ impl ValidatorAgent {
     /// check if a block number is in the current epoch
     fn in_current_epoch(&self, block_number: u32) -> bool {
         unimplemented!("check if block number is in current epoch");
+    }
+
+    fn get_pbft_leader(&self) -> Option<&PublicKey> {
+        unimplemented!()
     }
 }

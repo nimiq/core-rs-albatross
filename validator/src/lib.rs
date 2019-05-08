@@ -13,6 +13,7 @@ extern crate nimiq_utils as utils;
 extern crate nimiq_messages as messages;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_hash as hash;
+extern crate nimiq_primitives as primitives;
 
 pub mod validator;
 pub mod validator_network;

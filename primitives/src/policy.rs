@@ -40,6 +40,13 @@ const EMISSION_TAIL_REWARD: u64 = 4000;
 /// Emission speed.
 const EMISSION_SPEED: u64 = 4_194_304;
 
+/// Number of active validators
+pub const ACTIVE_VALIDATORS: u16 = 512;
+
+/// ceil(2/3) of active validators
+// (2 * n + 3) / 3 = ceil(2f + 1) where n = 3f + 1
+pub const TWO_THIRD_VALIDATORS: u16 = (2 * ACTIVE_VALIDATORS + 3) / 3;
+
 lazy_static! {
     static ref SUPPLY_CACHE: RwLock<Vec<u64>> = RwLock::new(vec![INITIAL_SUPPLY]);
 }

@@ -25,7 +25,7 @@ pub use micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
 pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof};
 pub use slash::SlashInherent;
 pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, SignedPbftPrepareMessage,
-               SignedPbftCommitMessage};
+               SignedPbftCommitMessage, SignedPbftProposal};
 
 use crate::transaction::TransactionError;
 

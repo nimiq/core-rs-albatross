@@ -51,14 +51,16 @@ impl<M: Message> SignedMessage<M> {
 
 /// prefix to sign view change messages
 pub const PREFIX_VIEW_CHANGE: u8 = 0x01;
+/// prefix to sign a pbft-proposal
+pub const PREFIX_PBFT_PROPOSAL: u8 = 0x02;
 /// prefix to sign pbft-prepare messages
-pub const PREFIX_PBFT_PREPARE: u8 = 0x02;
+pub const PREFIX_PBFT_PREPARE: u8 = 0x03;
 /// prefix to sign pbft-commit messages
-pub const PREFIX_PBFT_COMMIT: u8 = 0x03;
+pub const PREFIX_PBFT_COMMIT: u8 = 0x04;
 /// prefix to sign proof of knowledge of secret key
-pub const PREFIX_POKOSK: u8 = 0x04;
+pub const PREFIX_POKOSK: u8 = 0x05;
 /// prefix to sign a validator info
-pub const PREFIX_VALIDATOR_INFO: u8 = 0x05;
+pub const PREFIX_VALIDATOR_INFO: u8 = 0x06;
 
 
 pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent {

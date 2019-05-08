@@ -3,6 +3,10 @@ use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHash, SerializeContent};
 use super::signed;
 use bls::bls12_381::PublicKey;
+use super::MacroHeader;
+
+
+pub type SignedPbftProposal = signed::SignedMessage<MacroHeader>;
 
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
