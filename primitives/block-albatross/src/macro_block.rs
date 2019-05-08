@@ -22,7 +22,7 @@ pub struct MacroHeader {
     #[beserial(len_type(u16))]
     pub validators: Vec<PublicKey>,
     pub block_number: u32,
-    pub view_number: u16,
+    pub view_number: u32,
     pub parent_macro_hash: Blake2bHash,
 
     pub seed: Signature,

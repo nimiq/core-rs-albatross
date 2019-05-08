@@ -25,7 +25,7 @@ pub struct MicroHeader {
 
     // Digest
     pub block_number: u32,
-    pub view_number: u16,
+    pub view_number: u32,
 
     pub parent_hash: Blake2bHash,
     pub extrinsics_root: Blake2bHash,

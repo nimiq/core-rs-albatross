@@ -38,7 +38,7 @@ impl Block {
         }
     }
 
-    pub fn view_number(&self) -> u16 {
+    pub fn view_number(&self) -> u32 {
         match self {
             Block::Macro(ref block) => block.header.view_number,
             Block::Micro(ref block) => block.header.view_number,
