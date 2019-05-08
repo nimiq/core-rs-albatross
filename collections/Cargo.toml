@@ -21,6 +21,7 @@ maintenance = { status = "experimental" }
 itertools = { version = "0.8", optional = true }
 beserial = { path = "../beserial", optional = true }
 beserial_derive = { path = "../beserial/beserial_derive", optional = true }
+num-traits = "0.2"
 
 [dev-dependencies]
 rand = "0.6"
