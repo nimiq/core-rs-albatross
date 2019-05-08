@@ -182,7 +182,7 @@ impl ValidatorAgent {
     }
 
     /// check if a block number is in the current epoch
-    fn in_current_epoch(&self, block_number: u64) -> bool {
+    fn in_current_epoch(&self, block_number: u32) -> bool {
         unimplemented!("check if block number is in current epoch");
     }
 }

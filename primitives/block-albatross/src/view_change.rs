@@ -5,7 +5,7 @@ use super::signed;
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent, Hash)]
 pub struct ViewChange {
-    pub block_number: u64,
+    pub block_number: u32,
     pub new_view_number: u32,
 }
 
