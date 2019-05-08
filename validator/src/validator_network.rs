@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use parking_lot::RwLock;
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
 use network_primitives::validator_info::ValidatorInfo;
-use utils::observer::{PassThroughNotifier, weak_passthru_listener};
+use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
 use messages::Message;
 use std::collections::btree_map::BTreeMap;
 use block_albatross::{
@@ -21,8 +21,10 @@ use failure::Fail;
 
 #[derive(Clone, Debug, Fail)]
 pub enum ValidatorNetworkError {
-    #[fail(display = "pBFT already started with different header")]
-    PbftStartedWithDifferentHeader,
+    #[fail(display = "pBFT already started with different proposal")]
+    IncorrectProposal,
+    #[fail(display = "Not in pBFT voting phase")]
+    NotInPbftPhase
 }
 
 pub enum ValidatorNetworkEvent {
@@ -42,7 +44,7 @@ pub struct ValidatorNetwork {
 
     /// the current proposed macro header and pbft proof
     /// (exists between proposal and macro block proofed)
-    pbft_proof: Option<(MacroHeader, PbftProof)>,
+    pbft_proof: Option<(PbftProposal, PbftProof)>,
 
     self_weak: Weak<RwLock<ValidatorNetwork>>,
     // XXX We might need recursive read locks.
@@ -72,14 +74,13 @@ impl ValidatorNetwork {
         this.write().self_weak = Arc::downgrade(this);
         let weak = Arc::downgrade(this);
 
-        this.read().network.notifier.write().register(move |e: &NetworkEvent| {
-            let this = upgrade_weak!(weak);
-            match e {
-                NetworkEvent::PeerJoined(peer) => this.write().on_peer_joined(peer),
-                NetworkEvent::PeerLeft(peer) => this.write().on_peer_left(peer),
+        this.read().network.notifier.write().register(weak_listener(Arc::downgrade(this), |this, event| {
+            match event {
+                NetworkEvent::PeerJoined(peer) => this.write().on_peer_joined(&peer),
+                NetworkEvent::PeerLeft(peer) => this.write().on_peer_left(&peer),
                 _ => {}
             }
-        });
+        }));
     }
 
     fn on_peer_joined(&mut self, peer: &Arc<Peer>) {
@@ -90,7 +91,7 @@ impl ValidatorNetwork {
             agent.read().notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), |this, event| {
                 match event {
                     ValidatorAgentEvent::ValidatorInfo(info) => {
-                        this.write().on_validator_info(info)
+                        this.write().on_validator_info(info);
                     },
                     ValidatorAgentEvent::ViewChange { view_change, public_key, slots } => {
                         this.write().commit_view_change(view_change, &public_key, slots);
@@ -102,7 +103,7 @@ impl ValidatorNetwork {
                         this.write().commit_pbft_prepare(prepare, &public_key, slots);
                     },
                     ValidatorAgentEvent::PbftCommit { commit, public_key, slots } => {
-                        this.write().commit_pbft_commit(commit, &public_key, slots)
+                        this.write().commit_pbft_commit(commit, &public_key, slots);
                     },
                 }
             }));
@@ -138,14 +139,34 @@ impl ValidatorNetwork {
         }
     }
 
-    pub fn commit_pbft_proposal(&self, proposal: SignedPbftProposal) {
-        // TODO: Check if we know this block
-        if let Some((header, proof)) = &self.pbft_proof {
-            if *header != proposal.message.header {
-                debug!("Received second block proposal: {:#?}", proposal.message);
+    /// Commit a macro block proposal
+    pub fn commit_pbft_proposal(&mut self, proposal: SignedPbftProposal) {
+        let commit = if let Some((current_proposal, proof)) = &self.pbft_proof {
+            if *current_proposal == proposal.message {
+                // if we already know the proposal, ignore it
+                false
+            }
+            else if proposal.message.view_number <= current_proposal.view_number {
+                // if it has a lower view number than the current one, ignore it
+                debug!("Ignoring new macro block proposal with lower view change: {:#?}", proposal.message);
+                false
+            }
+            else {
+                // if it has a higher view number, commit it
+                debug!("New macro block proposal with higher view change: {:#?}", proposal.message);
+                true
             }
         }
         else {
+            // if we don't have a proposal yet, commit it
+            debug!("New macro block proposal: {:#?}", proposal.message);
+            true
+        };
+
+        if commit {
+            // remember proposal
+            self.pbft_proof = Some((proposal.message.clone(), PbftProof::new()));
+
             // notify Jeff ;P
             self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(proposal.message.clone()));
 
@@ -155,7 +176,7 @@ impl ValidatorNetwork {
     }
 
     /// Commit a pBFT prepare
-    pub fn commit_pbft_prepare(&mut self, prepare: SignedPbftPrepareMessage, public_key: &PublicKey, slots: u16) {
+    pub fn commit_pbft_prepare(&mut self, prepare: SignedPbftPrepareMessage, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
         if let Some((header, proof)) = &mut self.pbft_proof {
             // aggregate prepare signature - if new, relay
             if proof.add_prepare_signature(&public_key, slots, &prepare) {
@@ -175,14 +196,16 @@ impl ValidatorNetwork {
                 // broadcast new pbft prepare signature
                 self.broadcast_active(Message::PbftPrepare(Box::new(prepare)));
             }
+            Ok(())
         }
         else {
             debug!("Not in pBFT phase");
+            Err(ValidatorNetworkError::NotInPbftPhase)
         }
     }
 
     /// Commit a pBFT commit
-    pub fn commit_pbft_commit(&mut self, commit: SignedPbftCommitMessage, public_key: &PublicKey, slots: u16) {
+    pub fn commit_pbft_commit(&mut self, commit: SignedPbftCommitMessage, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
         if let Some((header, proof)) = &mut self.pbft_proof {
             // aggregate commit signature - if new, relay
             if proof.add_commit_signature(&public_key, slots, &commit) {
@@ -191,24 +214,15 @@ impl ValidatorNetwork {
                         .notify(ValidatorNetworkEvent::PbftCommitComplete(commit.message.block_hash.clone()))
                 }
 
+                // broadcast new pbft commit signature
                 self.broadcast_active(Message::PbftCommit(Box::new(commit)))
             }
+            Ok(())
         }
         else {
             debug!("Not in pBFT phase");
+            Err(ValidatorNetworkError::NotInPbftPhase)
         }
-    }
-
-    pub fn start_pbft(&mut self, proposal: MacroHeader) -> Result<(), ValidatorNetworkError> {
-        if let Some((header, _)) = &self.pbft_proof {
-            if *header != proposal {
-                return Err(ValidatorNetworkError::PbftStartedWithDifferentHeader);
-            }
-        }
-        else {
-            self.pbft_proof = Some((proposal, PbftProof::new()));
-        }
-        Ok(())
     }
 
     // TODO: register in consensus for macro blocks
@@ -236,7 +250,7 @@ impl ValidatorNetwork {
         self.view_changes.get(view_change)
     }
 
-    pub fn get_pbft_header(&self) -> Option<&MacroHeader> {
+    pub fn get_pbft_proposal(&self) -> Option<&PbftProposal> {
         self.pbft_proof.as_ref().map(|p| &p.0)
     }
 

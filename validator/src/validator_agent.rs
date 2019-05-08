@@ -5,8 +5,9 @@ use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      MacroHeader, SignedPbftProposal};
+                      MacroHeader, SignedPbftProposal, ViewChange};
 use hash::{Hash, Blake2bHash};
+use primitives::policy::TWO_THIRD_VALIDATORS;
 
 
 pub enum ValidatorAgentEvent {
@@ -22,8 +23,6 @@ pub struct ValidatorAgent {
     validator_info: Option<ValidatorInfo>,
     pub notifier: RwLock<PassThroughNotifier<'static, ValidatorAgentEvent>>,
 }
-
-
 
 impl ValidatorAgent {
     pub fn new(peer: Arc<Peer>) -> Arc<RwLock<Self>> {
@@ -101,12 +100,27 @@ impl ValidatorAgent {
     fn on_pbft_proposal_message(&self, proposal: SignedPbftProposal) {
         debug!("[PBFT-PROPOSAL] Macro block proposal: {:#?}", proposal.message);
         if let Some(public_key) = self.get_pbft_leader() {
+            // check the signature of the proposal
+            // XXX We ignore the `pk_idx` field in the `SignedMessage`
             if !proposal.verify(&public_key) {
                 debug!("[PBFT-PROPOSAL] Invalid signature");
+                return
             }
-            else {
-                self.notifier.read().notify(ValidatorAgentEvent::PbftProposal(proposal));
+
+            // check the view change proof
+            if let Some(view_change_proof) = &proposal.message.view_change {
+                let view_change = ViewChange {
+                    block_number: self.get_block_number(),
+                    new_view_number: proposal.message.view_number,
+                };
+                if !view_change_proof.verify(&view_change, TWO_THIRD_VALIDATORS) {
+                    debug!("[PBFT-PROPOSAL] Invalid view change proof: {:?}", view_change_proof);
+                    return
+                }
             }
+
+
+            self.notifier.read().notify(ValidatorAgentEvent::PbftProposal(proposal));
         }
         else {
             debug!("[PBFT-PROPOSAL] No pBFT leader");
@@ -196,6 +210,10 @@ impl ValidatorAgent {
     }
 
     fn get_pbft_leader(&self) -> Option<&PublicKey> {
+        unimplemented!()
+    }
+
+    fn get_block_number(&self) -> u32 {
         unimplemented!()
     }
 }
