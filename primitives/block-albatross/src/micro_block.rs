@@ -7,8 +7,8 @@ use crate::BlockError;
 use crate::slash::SlashInherent;
 use crate::view_change::{ViewChange, ViewChangeProof};
 use hash::{Hash, Blake2bHash, SerializeContent};
-use nimiq_bls::bls12_381::Signature;
 use primitives::networks::NetworkId;
+use nimiq_bls::bls12_381::Signature;
 use std::cmp::Ordering;
 use transaction::Transaction;
 
@@ -71,6 +71,10 @@ impl MicroBlock {
         }
 
         return true;
+    }
+
+    pub fn serialize_without_signature(&self) -> Vec<u8> {
+        unimplemented!()
     }
 }
 

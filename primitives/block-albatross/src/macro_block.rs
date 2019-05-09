@@ -7,11 +7,13 @@ use hash::{Blake2bHash, Hash, SerializeContent};
 use bls::bls12_381::{PublicKey, Signature};
 use crate::pbft::PbftProof;
 use primitives::policy::TWO_THIRD_VALIDATORS;
+use crate::signed;
+use crate::Slot;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
     pub header: MacroHeader,
-    pub justification: Option<MacroJustification>,
+    pub justification: Option<PbftProof>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -20,7 +22,7 @@ pub struct MacroHeader {
 
     // Digest
     #[beserial(len_type(u16))]
-    pub validators: Vec<PublicKey>,
+    pub slot_allocation: Vec<Slot>,
     pub block_number: u32,
     pub view_number: u32,
     pub parent_macro_hash: Blake2bHash,
@@ -32,10 +34,8 @@ pub struct MacroHeader {
     pub timestamp: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct MacroJustification {
-    pub pbft_proof: PbftProof,
-    pub view_change_proof: Option<ViewChangeProof>,
+impl signed::Message for MacroHeader {
+    const PREFIX: u8 = signed::PREFIX_PBFT_PROPOSAL;
 }
 
 impl MacroBlock {
@@ -58,12 +58,6 @@ impl MacroBlock {
 
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
-    }
-}
-
-impl MacroJustification {
-    pub fn verify(&self, block_hash: Blake2bHash, threshold: u16) -> bool {
-        self.pbft_proof.verify(block_hash, threshold)
     }
 }
 

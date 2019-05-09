@@ -19,15 +19,18 @@ mod slash;
 mod view_change;
 pub mod signed;
 
-pub use block::{Block, BlockHeader};
+pub use block::{Block, BlockType, BlockHeader};
 pub use macro_block::{MacroBlock, MacroHeader};
 pub use micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
 pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof};
 pub use slash::SlashInherent;
-pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, SignedPbftPrepareMessage,
-               SignedPbftCommitMessage, SignedPbftProposal, PbftProposal};
+pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, SignedPbftPrepareMessage, SignedPbftCommitMessage, SignedPbftProposal, PbftProposal};
 
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use bls::bls12_381::PublicKey;
 use crate::transaction::TransactionError;
+use keys::Address;
+
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum BlockError {
@@ -44,4 +47,11 @@ pub enum BlockError {
     DuplicateAccountReceipt,
     AccountReceiptsNotOrdered,
     InvalidAccountReceipt,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Slot {
+    pub public_key: PublicKey,
+    pub reward_address: Address,
+    pub slashing_address: Address,
 }

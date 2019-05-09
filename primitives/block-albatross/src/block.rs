@@ -2,13 +2,14 @@ use std::fmt;
 
 use crate::micro_block::{MicroBlock, MicroHeader};
 use crate::macro_block::{MacroBlock, MacroHeader};
-use hash::{Hash, Blake2bHash};
-use nimiq_bls::bls12_381::Signature;
+use crate::signed::AggregateProof;
+use crate::view_change::ViewChangeProof;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use hash::{Hash, Blake2bHash};
+use primitives::networks::NetworkId;
+use nimiq_bls::bls12_381::Signature;
 use std::cmp::Ordering;
 use transaction::Transaction;
-use crate::view_change::ViewChangeProof;
-use crate::signed::AggregateProof;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -24,7 +25,14 @@ pub enum Block {
 }
 
 impl Block {
-    pub fn version(self) -> u16 {
+    pub fn verify(&self, network_id: NetworkId) -> bool {
+        match self {
+            Block::Macro(ref block) => block.verify(),
+            Block::Micro(ref block) => block.verify(network_id),
+        }
+    }
+
+    pub fn version(&self) -> u16 {
         match self {
             Block::Macro(ref block) => block.header.version,
             Block::Micro(ref block) => block.header.version,
@@ -59,17 +67,17 @@ impl Block {
         }
     }
 
-    pub fn view_change_proof(&self) -> &Option<ViewChangeProof> {
-        match self {
-            Block::Macro(ref block) => &block.justification.as_ref().unwrap().view_change_proof, // TODO
-            Block::Micro(ref block) => &block.justification.view_change_proof,
-        }
-    }
-
     pub fn seed(&self) -> &Signature {
         match self {
             Block::Macro(ref block) => &block.header.seed,
             Block::Micro(ref block) => &block.header.seed,
+        }
+    }
+
+    pub fn state_root(&self) -> &Blake2bHash {
+        match self {
+            Block::Macro(ref block) => &block.header.state_root,
+            Block::Micro(ref block) => &block.header.state_root,
         }
     }
 
