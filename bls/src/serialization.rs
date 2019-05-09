@@ -21,12 +21,8 @@ impl Serialize for PublicKey {
 impl SerializeContent for PublicKey {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
-//impl<'a> SerializeContent for &'a PublicKey {
-//    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
-//}
 
 impl Hash for PublicKey { }
-//impl<'a> Hash for &'a PublicKey { }
 
 impl Deserialize for PublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {

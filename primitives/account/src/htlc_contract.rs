@@ -1,10 +1,9 @@
 use beserial::{Deserialize, Serialize};
 use keys::Address;
 use primitives::account::*;
-pub use primitives::account::{AnyHash, HashAlgorithm, ProofType};
 use primitives::coin::Coin;
 use transaction::{SignatureProof, Transaction};
-use transaction::account::parse_and_verify_htlc_creation_transaction;
+use transaction::account::htlc_contract::{AnyHash, CreationTransactionData, HashAlgorithm, ProofType};
 
 use crate::{Account, AccountError};
 use crate::AccountTransactionInteraction;
@@ -50,8 +49,8 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
     }
 
     fn create(balance: Coin, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
-        let (sender, recipient, hash_algorithm, hash_root, hash_count, timeout) = parse_and_verify_htlc_creation_transaction(transaction)?;
-        Ok(HashedTimeLockedContract::new(balance, sender, recipient, hash_algorithm, hash_root, hash_count, timeout, transaction.value))
+        let data = CreationTransactionData::parse(transaction)?;
+        Ok(HashedTimeLockedContract::new(balance, data.sender, data.recipient, data.hash_algorithm, data.hash_root, data.hash_count, data.timeout, transaction.value))
     }
 
     fn check_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
@@ -138,7 +137,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
     fn revert_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         if receipt.is_some() {
-            return Err(AccountError::InvalidForSender);
+            return Err(AccountError::InvalidReceipt);
         }
 
         self.balance = Account::balance_add(self.balance, transaction.value.checked_add(transaction.fee).ok_or(AccountError::InvalidCoinValue)?)?;

@@ -33,7 +33,7 @@ impl AccountTransactionInteraction for BasicAccount {
 
     fn revert_incoming_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         if receipt.is_some() {
-            return Err(AccountError::InvalidForRecipient);
+            return Err(AccountError::InvalidReceipt);
         }
 
         self.balance = Account::balance_sub(self.balance, transaction.value)?;
@@ -52,7 +52,7 @@ impl AccountTransactionInteraction for BasicAccount {
 
     fn revert_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         if receipt.is_some() {
-            return Err(AccountError::InvalidForSender);
+            return Err(AccountError::InvalidReceipt);
         }
 
         self.balance = Account::balance_add(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;

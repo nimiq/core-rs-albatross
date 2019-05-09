@@ -1,4 +1,3 @@
-use account::Account;
 use collections::LimitHashSet;
 use nimiq_hash::Blake2bHash;
 use primitives::coin::Coin;

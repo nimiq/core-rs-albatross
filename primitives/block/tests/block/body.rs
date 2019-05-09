@@ -191,10 +191,10 @@ fn verify_rejects_invalid_pruned_accounts() {
         account: Account::Vesting(VestingContract {
             balance: Coin::from_u64(1000).unwrap(),
             owner: Address::from([1u8; Address::SIZE]),
-            vesting_start: 1,
-            vesting_step_blocks: 1,
-            vesting_step_amount: Coin::ZERO,
-            vesting_total_amount: Coin::from_u64(1000).unwrap()
+            start: 1,
+            step_blocks: 1,
+            step_amount: Coin::ZERO,
+            total_amount: Coin::from_u64(1000).unwrap()
         })
     };
     body.receipts.push(Receipt::PrunedAccount(pruned_account));

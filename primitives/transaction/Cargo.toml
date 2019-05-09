@@ -13,6 +13,7 @@ travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master"
 
 [dependencies]
 bitflags = "1.0"
+hex = "0.3"
 log = "0.4"
 failure = "0.1"
 beserial = { path = "../../beserial", version = "0.1.0" }
@@ -22,6 +23,7 @@ nimiq-keys = { path = "../../keys", version = "0.1.0" }
 nimiq-utils = { path = "../../utils", version = "0.1.0", features = ["merkle"] }
 nimiq-primitives = { path = "..", version = "0.1.0", features = ["policy", "networks", "account", "coin"] }
 nimiq-bls = { path = "../../bls", version = "0.1.0", features = ["beserial"] }
+nimiq-macros = { path = "../../macros", version = "0.1.0" }
 
 [dev-dependencies]
 hex = "0.3"

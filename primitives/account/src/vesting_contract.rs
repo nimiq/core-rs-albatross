@@ -2,42 +2,40 @@ use beserial::{Deserialize, Serialize};
 use keys::Address;
 use primitives::coin::Coin;
 use transaction::{SignatureProof, Transaction};
-use transaction::account::parse_and_verify_vesting_creation_transaction;
-
+use transaction::account::vesting_contract::CreationTransactionData;
+use crate::{Account, AccountError, AccountType};
 use crate::AccountTransactionInteraction;
-
-use super::{Account, AccountError, AccountType};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct VestingContract {
     pub balance: Coin,
     pub owner: Address,
-    pub vesting_start: u32,
-    pub vesting_step_blocks: u32,
-    pub vesting_step_amount: Coin,
-    pub vesting_total_amount: Coin,
+    pub start: u32,
+    pub step_blocks: u32,
+    pub step_amount: Coin,
+    pub total_amount: Coin,
 }
 
 impl VestingContract {
-    pub fn new(balance: Coin, owner: Address, vesting_start: u32, vesting_step_blocks: u32, vesting_step_amount: Coin, vesting_total_amount: Coin) -> Self {
-        VestingContract { balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount }
+    pub fn new(balance: Coin, owner: Address, start: u32, step_blocks: u32, step_amount: Coin, total_amount: Coin) -> Self {
+        VestingContract { balance, owner, start, step_blocks, step_amount, total_amount }
     }
 
     pub fn with_balance(&self, balance: Coin) -> Self {
         VestingContract {
             balance,
             owner: self.owner.clone(),
-            vesting_start: self.vesting_start,
-            vesting_step_blocks: self.vesting_step_blocks,
-            vesting_step_amount: self.vesting_step_amount,
-            vesting_total_amount: self.vesting_total_amount,
+            start: self.start,
+            step_blocks: self.step_blocks,
+            step_amount: self.step_amount,
+            total_amount: self.total_amount,
         }
     }
 
     pub fn min_cap(&self, block_height: u32) -> Coin {
-        if self.vesting_step_blocks > 0 && self.vesting_step_amount > Coin::ZERO {
-            let steps = (f64::from(block_height - self.vesting_start) / f64::from(self.vesting_step_blocks)).floor();
-            let min_cap = u64::from(self.vesting_total_amount) as f64 - steps * u64::from(self.vesting_step_amount) as f64;
+        if self.step_blocks > 0 && self.step_amount > Coin::ZERO {
+            let steps = (f64::from(block_height - self.start) / f64::from(self.step_blocks)).floor();
+            let min_cap = u64::from(self.total_amount) as f64 - steps * u64::from(self.step_amount) as f64;
             Coin::from_u64(min_cap.max(0f64) as u64).unwrap() // Since all parameters have been validated, this will be safe as well.
         } else {
             Coin::ZERO
@@ -55,8 +53,8 @@ impl AccountTransactionInteraction for VestingContract {
     }
 
     fn create(balance: Coin, transaction: &Transaction, _block_height: u32) -> Result<Self, AccountError> {
-        let (owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount) = parse_and_verify_vesting_creation_transaction(transaction)?;
-        Ok(VestingContract::new(balance, owner, vesting_start, vesting_step_blocks, vesting_step_amount, vesting_total_amount))
+        let data = CreationTransactionData::parse(transaction)?;
+        Ok(VestingContract::new(balance, data.owner, data.start, data.step_blocks, data.step_amount, data.total_amount))
     }
 
     fn check_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
@@ -96,7 +94,7 @@ impl AccountTransactionInteraction for VestingContract {
 
     fn revert_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         if receipt.is_some() {
-            return Err(AccountError::InvalidForSender);
+            return Err(AccountError::InvalidReceipt);
         }
 
         self.balance = Account::balance_add(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;

@@ -1,11 +1,15 @@
+extern crate beserial;
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate log;
+extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
+#[macro_use]
+extern crate nimiq_macros as macros;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_utils as utils;
 
@@ -215,13 +219,13 @@ impl Transaction {
         }
 
         // Check that sender != recipient.
-        if self.recipient == self.sender {
-            return Err(TransactionError::SenderEqualsRecipient);
-        }
+        // This is no longer true for stake retire transactions.
+        // Check moved to AccountType::verify_incoming_transaction()
 
         // Check that value > 0.
-        // We need 0 valued transactions in Albatross,
-        // thus this check has been moved to verify_incoming_transaction.
+        if self.value == Coin::ZERO {
+            return Err(TransactionError::ZeroValue);
+        }
 
         // Check that value + fee doesn't overflow.
         match self.value.checked_add(self.fee) {
