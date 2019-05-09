@@ -34,12 +34,23 @@ pub struct SignedMessage<M: Message> {
     pub pk_idx: u16,
 
     // signature over message
-    pub signature: Signature
+    signature: Signature
 }
 
 impl<M: Message> SignedMessage<M> {
+    /// Verify signed message
     pub fn verify(&self, public_key: &PublicKey) -> bool {
         public_key.verify_hash(self.message.hash_with_prefix(), &self.signature)
+    }
+
+    /// Create SignedMessage from message.
+    pub fn from_message(&self, message: M, secret_key: &SecretKey, pk_idx: u16) -> Self {
+        let signature = message.sign(secret_key);
+        Self {
+            message,
+            pk_idx,
+            signature,
+        }
     }
 }
 
