@@ -1,12 +1,12 @@
 use beserial::{Deserialize, Serialize, SerializingError};
-use hash::{Blake2bHasher, Hasher, Sha256Hasher};
-use keys::{Address, KeyPair, PrivateKey};
+use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
+use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, HashedTimeLockedContract};
-use primitives::coin::Coin;
-use primitives::networks::NetworkId;
-use transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
-use transaction::account::AccountTransactionVerification;
-use transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
+use nimiq_primitives::coin::Coin;
+use nimiq_primitives::networks::NetworkId;
+use nimiq_transaction::{SignatureProof, Transaction, TransactionError, TransactionFlags};
+use nimiq_transaction::account::AccountTransactionVerification;
+use nimiq_transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
 
 const HTLC: &str = "00000000000000001b215589344cf570d36bec770825eae30b73213924786862babbdb05e7c4430612135eb2a836812303daebe368963c60d22098a5e9f1ebcb8e54d0b7beca942a2a0a9d95391804fe8f01000296350000000000000001";
 
