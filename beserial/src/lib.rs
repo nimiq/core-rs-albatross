@@ -8,6 +8,7 @@ use failure::Fail;
 pub use num::{FromPrimitive, ToPrimitive};
 
 pub use crate::types::uvar;
+use std::sync::Arc;
 
 mod types;
 #[cfg(feature = "bitvec")]
@@ -247,6 +248,24 @@ impl<T: Deserialize> Deserialize for Box<T> {
 }
 
 impl<T: Serialize> Serialize for Box<T> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        Ok(T::serialize(self.deref(), writer)?)
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.deref().serialized_size()
+    }
+}
+
+// Arc
+
+impl<T: Deserialize> Deserialize for Arc<T> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        Ok(Arc::new(T::deserialize(reader)?))
+    }
+}
+
+impl<T: Serialize> Serialize for Arc<T> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         Ok(T::serialize(self.deref(), writer)?)
     }

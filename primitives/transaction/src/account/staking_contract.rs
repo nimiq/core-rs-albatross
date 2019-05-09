@@ -2,6 +2,8 @@ use beserial::{Deserialize, ReadBytesExt, Serialize};
 use bls::bls12_381::{PublicKey as BlsPublicKey, Signature as BlsSignature};
 use keys::Address;
 use primitives::account::AccountType;
+use primitives::coin::Coin;
+use primitives::policy;
 
 use crate::{Transaction, TransactionError, TransactionFlags};
 use crate::account::AccountTransactionVerification;
@@ -19,7 +21,13 @@ impl AccountTransactionVerification for StakingContractVerifier {
         }
 
         if transaction.sender != transaction.recipient {
+            // Staking transaction
             StakingTransactionData::parse(transaction)?.verify()?;
+
+            if transaction.value < Coin::from_u64_unchecked(policy::MIN_STAKE) {
+                warn!("Stake value below minimum");
+                return Err(TransactionError::InvalidForRecipient);
+            }
         }
 
         Ok(())

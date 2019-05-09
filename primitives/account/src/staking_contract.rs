@@ -14,7 +14,7 @@ use transaction::account::staking_contract::StakingTransactionData;
 use crate::{Account, AccountError, AccountType};
 use crate::AccountTransactionInteraction;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActiveStake {
     staker_address: Address,
     balance: Coin,
@@ -50,13 +50,13 @@ pub struct InactiveStake {
     retire_time: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 struct ActiveStakeReceipt {
     validator_key: BlsPublicKey,
     reward_address: Option<Address>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 struct InactiveStakeReceipt {
     retire_time: u32,
 }
@@ -470,17 +470,93 @@ impl AccountTransactionInteraction for StakingContract {
 
 impl Serialize for StakingContract {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        unimplemented!()
+        let mut size = 0;
+        size += Serialize::serialize(&self.balance, writer)?;
+
+        size += Serialize::serialize(&(self.active_stake_sorted.len() as u32), writer)?;
+        for active_stake in self.active_stake_sorted.iter() {
+            let inactive_stake = self.inactive_stake_by_address.get(&active_stake.staker_address);
+            size += Serialize::serialize(active_stake, writer)?;
+            size += Serialize::serialize(&inactive_stake, writer)?;
+        }
+
+        // Collect remaining inactive stakes.
+        let mut inactive_stakes = Vec::new();
+        for (staker_address, inactive_stake) in self.inactive_stake_by_address.iter() {
+            if !self.active_stake_by_address.contains_key(staker_address) {
+                inactive_stakes.push((staker_address, inactive_stake));
+            }
+        }
+        inactive_stakes.sort_by(|a, b|a.0.cmp(b.0)
+            .then_with(|| a.1.balance.cmp(&b.1.balance))
+            .then_with(|| a.1.retire_time.cmp(&b.1.retire_time)));
+
+        size += Serialize::serialize(&(inactive_stakes.len() as u32), writer)?;
+        for (staker_address, inactive_stake) in inactive_stakes {
+            size += Serialize::serialize(staker_address, writer)?;
+            size += Serialize::serialize(inactive_stake, writer)?;
+        }
+
+        Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
-        unimplemented!()
+        let mut size = 0;
+        size += Serialize::serialized_size(&self.balance);
+
+        size += Serialize::serialized_size(&0u32);
+        for active_stake in self.active_stake_sorted.iter() {
+            let inactive_stake = self.inactive_stake_by_address.get(&active_stake.staker_address);
+            size += Serialize::serialized_size(active_stake);
+            size += Serialize::serialized_size(&inactive_stake);
+        }
+
+        size += Serialize::serialized_size(&0u32);
+        for (staker_address, inactive_stake) in self.inactive_stake_by_address.iter() {
+            if !self.active_stake_by_address.contains_key(staker_address) {
+                size += Serialize::serialized_size(staker_address);
+                size += Serialize::serialized_size(inactive_stake);
+            }
+        }
+
+        size
     }
 }
 
 impl Deserialize for StakingContract {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        unimplemented!()
+        let balance = Deserialize::deserialize(reader)?;
+
+        let mut active_stake_sorted = BTreeSet::new();
+        let mut active_stake_by_address = HashMap::new();
+        let mut inactive_stake_by_address = HashMap::new();
+
+        let num_active_stakes: u32 = Deserialize::deserialize(reader)?;
+        for i in 0..num_active_stakes {
+            let active_stake: Arc<ActiveStake> = Deserialize::deserialize(reader)?;
+            let inactive_stake: Option<InactiveStake> = Deserialize::deserialize(reader)?;
+
+            active_stake_sorted.insert(Arc::clone(&active_stake));
+            active_stake_by_address.insert(active_stake.staker_address.clone(), Arc::clone(&active_stake));
+
+            if inactive_stake.is_some() {
+                inactive_stake_by_address.insert(active_stake.staker_address.clone(), inactive_stake.unwrap());
+            }
+        }
+
+        let num_inactive_stakes: u32 = Deserialize::deserialize(reader)?;
+        for i in 0..num_inactive_stakes {
+            let staker_address = Deserialize::deserialize(reader)?;
+            let inactive_stake = Deserialize::deserialize(reader)?;
+            inactive_stake_by_address.insert(staker_address, inactive_stake);
+        }
+
+        Ok(StakingContract {
+            balance,
+            active_stake_sorted,
+            active_stake_by_address,
+            inactive_stake_by_address,
+        })
     }
 }
 

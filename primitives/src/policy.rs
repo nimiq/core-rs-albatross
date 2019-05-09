@@ -25,32 +25,20 @@ pub const DIFFICULTY_MAX_ADJUSTMENT_FACTOR: f64 = 2f64;
 /// Number of blocks a transaction is valid.
 pub const TRANSACTION_VALIDITY_WINDOW: u32 = 120;
 
-/// Total supply in satoshis.
+/// Total supply in units.
 pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
 
-/// Initial supply in satoshis.
+/// Initial supply in units.
 const INITIAL_SUPPLY: u64 = 252_000_000_000_000;
 
 /// First block using constant tail emission until total supply is reached.
 const EMISSION_TAIL_START: u32 = 48_692_960;
 
-/// Constant tail emission in satoshis until total supply is reached.
+/// Constant tail emission in units until total supply is reached.
 const EMISSION_TAIL_REWARD: u64 = 4000;
 
 /// Emission speed.
 const EMISSION_SPEED: u64 = 4_194_304;
-
-/// Number of active validators
-pub const ACTIVE_VALIDATORS: u16 = 512;
-
-/// ceil(2/3) of active validators
-// (2 * n + 3) / 3 = ceil(2f + 1) where n = 3f + 1
-pub const TWO_THIRD_VALIDATORS: u16 = (2 * ACTIVE_VALIDATORS + 3) / 3;
-
-pub const EPOCH_LENGTH: u32 = 21600;
-
-/// Number of micro blocks to wait for unstaking after next macro block.
-pub const UNSTAKE_DELAY: u32 = 100; // TODO: Set.
 
 lazy_static! {
     static ref SUPPLY_CACHE: RwLock<Vec<u64>> = RwLock::new(vec![INITIAL_SUPPLY]);
@@ -105,17 +93,37 @@ fn compute_block_reward(current_supply: u64, block_height: u32) -> u64 {
     (remaining - remainder) / EMISSION_SPEED
 }
 
-pub fn next_macro_block(block_height: u32) -> u32 {
-    // TODO: Implement
-    (block_height / 100 + 1) * 100 // Mock
-}
-
 #[cfg(feature = "coin")]
 pub fn block_reward_at(block_height: u32) -> Coin {
     assert!(block_height >= 1, "block_height must be >= 1");
     let current_supply = supply_after(block_height - 1);
     Coin::from_u64(compute_block_reward(current_supply, block_height)).unwrap()
 }
+
+
+/* Albatross */
+
+/// Number of active validators
+pub const ACTIVE_VALIDATORS: u16 = 512;
+
+/// ceil(2/3) of active validators
+// (2 * n + 3) / 3 = ceil(2f + 1) where n = 3f + 1
+pub const TWO_THIRD_VALIDATORS: u16 = (2 * ACTIVE_VALIDATORS + 3) / 3;
+
+/// Number of micro blocks between two macro blocks
+pub const EPOCH_LENGTH: u32 = 21600;
+
+/// Number of micro blocks to wait before unstaking after next macro block.
+pub const UNSTAKE_DELAY: u32 = 100; // TODO: Set.
+
+/// Minimum stake in units
+pub const MIN_STAKE: u64 = 100_000_000;
+
+/// Returns the height of the next macro block after given `block_height`
+pub fn next_macro_block(block_height: u32) -> u32 {
+    (block_height / EPOCH_LENGTH + 1) * EPOCH_LENGTH
+}
+
 
 #[cfg(test)]
 mod tests {
