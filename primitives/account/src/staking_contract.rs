@@ -561,9 +561,10 @@ impl Deserialize for StakingContract {
 }
 
 // Not really useful traits for StakingContracts.
+// FIXME Assume a single staking contract for now, i.e. all staking contracts are equal.
 impl PartialEq for StakingContract {
     fn eq(&self, other: &StakingContract) -> bool {
-        unimplemented!()
+        true
     }
 }
 
@@ -571,12 +572,12 @@ impl Eq for StakingContract {}
 
 impl PartialOrd for StakingContract {
     fn partial_cmp(&self, other: &StakingContract) -> Option<Ordering> {
-        unimplemented!()
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for StakingContract {
     fn cmp(&self, other: &Self) -> Ordering {
-        unimplemented!()
+        Ordering::Equal
     }
 }
