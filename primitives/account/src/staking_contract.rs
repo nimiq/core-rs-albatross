@@ -1,15 +1,13 @@
 use std::cmp::Ordering;
-use std::collections::btree_map::BTreeMap;
 use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-use parking_lot::Mutex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use bls::bls12_381::PublicKey as BlsPublicKey;
 use keys::Address;
 use primitives::coin::Coin;
+use primitives::policy;
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::StakingTransactionData;
 
@@ -52,36 +50,31 @@ pub struct InactiveStake {
     retire_time: u32,
 }
 
-
 #[derive(Serialize, Deserialize)]
-struct StakeReceipt {
+struct ActiveStakeReceipt {
     validator_key: BlsPublicKey,
     reward_address: Option<Address>,
 }
 
 #[derive(Serialize, Deserialize)]
-struct RetireReceipt {
-    validator_key: BlsPublicKey,
-    reward_address: Option<Address>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct UnstakeReceipt {
+struct InactiveStakeReceipt {
     retire_time: u32,
 }
 
-/*
+/**
  Here's an explanation of how the different transactions work.
  1. Stake:
     - Transaction from staking address to contract
-    - Transfers value into a new or existing entry in the potential_validators list
+    - Transfers value into a new or existing entry in the active_stake list
+    - Existing entries are updated with potentially new validator_key and reward_address
     - Normal transaction, signed by staking/sender address
  2. Retire:
     - Transaction from staking contract to itself
     - Removes a balance (the transaction value) from the active stake of a staker
       (may remove staker from active stake list entirely)
-    - Puts balance into a new entry into the inactive_stake,
-      setting the retire_time for this balance
+    - Puts the balance into the inactive_stake list, recording the retire_time.
+    - If a staker retires multiple times, balance is added to the existing entry and
+      retire_time is reset.
     - Signed by staking/sender address
  3. Unstake:
     - Transaction from the contract to an external address
@@ -95,12 +88,10 @@ struct UnstakeReceipt {
   Internally, this data can be serialized/deserialized.
 
   Objects:
-  ActiveStake: Active stake is characterized by the tuple
+  ActiveStake: Stake considered for validator selection, characterized by the tuple
     (staker_address, balance, validator_key, optional reward_address).
-  InactiveStake: The information for a single retire transaction, represented by the tuple
+  InactiveStake: Stake ignored for validator selection, represented by the tuple
     (balance, retire_time).
-    If a staker retires multiple times, we need to keep track of the retire_time for every
-    retire transaction.
 
   Internal lookups required:
   - Stake requires a way to get from a staker address to an ActiveStake object
@@ -115,12 +106,12 @@ pub struct StakingContract {
     pub balance: Coin,
     pub active_stake_sorted: BTreeSet<Arc<ActiveStake>>, // A list might be sufficient.
     pub active_stake_by_address: HashMap<Address, Arc<ActiveStake>>,
-    pub inactive_stake_by_address: HashMap<Address, Vec<InactiveStake>>,
+    pub inactive_stake_by_address: HashMap<Address, InactiveStake>,
 }
 
 impl StakingContract {
-    /// Adds funds to stake of `address` and adds `validator_key` if not yet present.
-    fn stake(&mut self, staker_address: &Address, value: Coin, validator_key: BlsPublicKey, reward_address: Option<Address>) -> Result<Option<StakeReceipt>, AccountError> {
+    /// Adds funds to stake of `address`.
+    fn stake(&mut self, staker_address: &Address, value: Coin, validator_key: BlsPublicKey, reward_address: Option<Address>) -> Result<Option<ActiveStakeReceipt>, AccountError> {
         self.balance = Account::balance_add(self.balance, value)?;
 
         if let Some(active_stake) = self.active_stake_by_address.remove(staker_address) {
@@ -135,7 +126,7 @@ impl StakingContract {
             self.active_stake_sorted.insert(Arc::clone(&new_active_stake));
             self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
 
-            Ok(Some(StakeReceipt {
+            Ok(Some(ActiveStakeReceipt {
                 validator_key: active_stake.validator_key.clone(),
                 reward_address: active_stake.reward_address.clone(),
             }))
@@ -154,15 +145,12 @@ impl StakingContract {
     }
 
     /// Reverts a stake transaction.
-    fn revert_stake(&mut self, staker_address: &Address, value: Coin, receipt: Option<StakeReceipt>) -> Result<(), AccountError> {
+    fn revert_stake(&mut self, staker_address: &Address, value: Coin, receipt: Option<ActiveStakeReceipt>) -> Result<(), AccountError> {
         self.balance = Account::balance_sub(self.balance, value)?;
 
-        let active_stake = self.active_stake_by_address.get(&staker_address);
-        if active_stake.is_none() {
-            return Err(AccountError::InvalidForRecipient);
-        }
+        let active_stake = self.active_stake_by_address.get(&staker_address)
+            .ok_or(AccountError::InvalidForRecipient)?;
 
-        let active_stake = active_stake.unwrap();
         match active_stake.balance.cmp(&value) {
             Ordering::Greater => {
                 if receipt.is_none() {
@@ -198,44 +186,178 @@ impl StakingContract {
     }
 
     /// Removes stake from the active stake list.
-    fn retire(&mut self, staker_address: &Address, value: Coin) -> Result<Option<RetireReceipt>, AccountError> {
-        unimplemented!()
+    fn retire_sender(&mut self, staker_address: &Address, total_value: Coin, block_height: u32) -> Result<Option<ActiveStakeReceipt>, AccountError> {
+        let active_stake = self.active_stake_by_address.remove(staker_address)
+            .ok_or(AccountError::InvalidForSender)?;
+
+        self.active_stake_sorted.remove(&active_stake);
+
+        if active_stake.balance > total_value {
+            let new_active_stake = Arc::new(ActiveStake {
+                staker_address: staker_address.clone(),
+                balance: Account::balance_sub(active_stake.balance, total_value)?,
+                validator_key: active_stake.validator_key.clone(),
+                reward_address: active_stake.reward_address.clone(),
+            });
+
+            self.active_stake_sorted.insert(Arc::clone(&new_active_stake));
+            self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
+
+            Ok(None)
+        } else {
+            assert_eq!(active_stake.balance, total_value);
+            Ok(Some(ActiveStakeReceipt {
+                validator_key: active_stake.validator_key.clone(),
+                reward_address: active_stake.reward_address.clone(),
+            }))
+        }
+    }
+
+    /// Reverts the sender side of a retire transaction.
+    fn revert_retire_sender(&mut self, staker_address: &Address, total_value: Coin, receipt: Option<ActiveStakeReceipt>) -> Result<(), AccountError> {
+        if let Some(active_stake) = self.active_stake_by_address.remove(staker_address) {
+            if receipt.is_some() {
+                return Err(AccountError::InvalidReceipt);
+            }
+
+            let new_active_stake = Arc::new(ActiveStake {
+                staker_address: staker_address.clone(),
+                balance: Account::balance_add(active_stake.balance, total_value)?,
+                validator_key: active_stake.validator_key.clone(),
+                reward_address: active_stake.reward_address.clone(),
+            });
+
+            self.active_stake_sorted.remove(&active_stake);
+            self.active_stake_sorted.insert(Arc::clone(&new_active_stake));
+            self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
+        } else {
+            let receipt = receipt.ok_or(AccountError::InvalidReceipt)?;
+            let new_active_stake = Arc::new(ActiveStake {
+                staker_address: staker_address.clone(),
+                balance: total_value,
+                validator_key: receipt.validator_key,
+                reward_address: receipt.reward_address,
+            });
+
+            self.active_stake_sorted.insert(Arc::clone(&new_active_stake));
+            self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
+        }
+        Ok(())
+    }
+
+    /// Adds state to the inactive stake list.
+    fn retire_recipient(&mut self, staker_address: &Address, value: Coin, block_height: u32) -> Result<Option<InactiveStakeReceipt>, AccountError> {
+        if let Some(inactive_stake) = self.inactive_stake_by_address.remove(staker_address) {
+            let new_inactive_stake = InactiveStake {
+                balance: Account::balance_add(inactive_stake.balance, value)?,
+                retire_time: block_height,
+            };
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
+
+            Ok(Some(InactiveStakeReceipt {
+                retire_time: inactive_stake.retire_time,
+            }))
+        } else {
+            let new_inactive_stake = InactiveStake {
+                balance: value,
+                retire_time: block_height,
+            };
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
+
+            Ok(None)
+        }
     }
 
     /// Reverts a retire transaction.
-    fn revert_retire(&mut self, staker_address: &Address, value: Coin, receipt: Option<RetireReceipt>) -> Result<(), AccountError> {
-        unimplemented!()
+    fn revert_retire_recipient(&mut self, staker_address: &Address, value: Coin, receipt: Option<InactiveStakeReceipt>) -> Result<(), AccountError> {
+        let inactive_stake = self.inactive_stake_by_address.remove(staker_address)
+            .ok_or(AccountError::InvalidForRecipient)?;
+
+        if inactive_stake.balance > value {
+            let receipt = receipt.ok_or(AccountError::InvalidReceipt)?;
+            let new_inactive_stake = InactiveStake {
+                balance: Account::balance_sub(inactive_stake.balance, value)?,
+                retire_time: receipt.retire_time,
+            };
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
+        } else if receipt.is_some() {
+            return Err(AccountError::InvalidReceipt)
+        }
+        Ok(())
     }
 
     /// Removes stake from the inactive stake list.
-    fn unstake(&mut self, staker_address: &Address, value: Coin) -> Result<Option<UnstakeReceipt>, AccountError> {
-        unimplemented!()
+    fn unstake(&mut self, staker_address: &Address, total_value: Coin) -> Result<Option<InactiveStakeReceipt>, AccountError> {
+        self.balance = Account::balance_sub(self.balance, total_value)?;
+
+        let inactive_stake = self.inactive_stake_by_address.remove(staker_address)
+            .ok_or(AccountError::InvalidForSender)?;
+
+        if inactive_stake.balance > total_value {
+            let new_inactive_stake = InactiveStake {
+                balance: Account::balance_sub(inactive_stake.balance, total_value)?,
+                retire_time: inactive_stake.retire_time,
+            };
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
+
+            Ok(None)
+        } else {
+            assert_eq!(inactive_stake.balance, total_value);
+            Ok(Some(InactiveStakeReceipt {
+                retire_time: inactive_stake.retire_time,
+            }))
+        }
     }
 
     /// Reverts a unstake transaction.
-    fn revert_unstake(&mut self, staker_address: &Address, value: Coin, receipt: Option<UnstakeReceipt>) -> Result<(), AccountError> {
-        unimplemented!()
+    fn revert_unstake(&mut self, staker_address: &Address, total_value: Coin, receipt: Option<InactiveStakeReceipt>) -> Result<(), AccountError> {
+        self.balance = Account::balance_add(self.balance, total_value)?;
+
+        if let Some(inactive_stake) = self.inactive_stake_by_address.remove(staker_address) {
+            if receipt.is_some() {
+                return Err(AccountError::InvalidReceipt);
+            }
+
+            let new_inactive_stake = InactiveStake {
+                balance: Account::balance_add(inactive_stake.balance, total_value)?,
+                retire_time: inactive_stake.retire_time,
+            };
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
+        } else {
+            let receipt = receipt.ok_or(AccountError::InvalidReceipt)?;
+            let new_inactive_stake = InactiveStake {
+                balance: total_value,
+                retire_time: receipt.retire_time,
+            };
+            self.inactive_stake_by_address.insert(staker_address.clone(), new_inactive_stake);
+        }
+        Ok(())
     }
 
     /// Retrieves the size-bounded list of potential validators.
-    /// The algorithm works as follows in psuedo-code:
-    // XXX librustdoc test fails if this pseudo-code is in a doc comment.
-    // list = sorted list of potential validators (per address) by balances ascending
-    // potential_validators = empty list
-    // min_stake = 0
-    // current_stake = 0
-    // loop {
-    //     next_validator = list.pop() // Takes highest balance.
-    //     if next_validator.balance < min_stake {
-    //         break
-    //     }
-    //
-    //     current_stake += next_validator.balance
-    //     potential_validators.push(next_validator)
-    //     min_stake = current_stake / MAX_POTENTIAL_VALIDATORS
-    // }
-    pub fn potential_validators(&self) -> Vec<(BlsPublicKey, Coin, Address, Option<Address>)> {
-        unimplemented!()
+    // FIXME naming
+    pub fn potential_validators(&self, max_validators: u64) -> Vec<Arc<ActiveStake>> {
+        let mut validators = Vec::new();
+        let mut min_stake = Coin::ZERO;
+        let mut total_stake = Coin::ZERO;
+
+        // Iterate from highest balance to lowest.
+        for validator in self.active_stake_sorted.iter() {
+            if validator.balance <= min_stake {
+                break;
+            }
+
+            total_stake += validator.balance;
+            min_stake = Coin::from_u64_unchecked(u64::from(total_stake) / max_validators);
+            validators.push(Arc::clone(validator));
+        }
+
+        validators
+    }
+
+    fn get_signer(transaction: &Transaction) -> Result<Address, AccountError> {
+        let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
+        Ok(signature_proof.compute_signer())
     }
 }
 
@@ -249,61 +371,100 @@ impl AccountTransactionInteraction for StakingContract {
     }
 
     fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
-        unimplemented!()
+        Ok(())
     }
 
     fn commit_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
-        let data = StakingTransactionData::parse(transaction)?;
-
-        match data {
-            StakingTransactionData::Stake { validator_key, reward_address, .. } => {
-                Ok(self.stake(&transaction.sender, transaction.value, validator_key, reward_address)?
-                    .map(|receipt| receipt.serialize_to_vec()))
-            },
-            StakingTransactionData::Retire => {
-                Ok(self.retire(&transaction.sender, transaction.value)?
-                    .map(|receipt| receipt.serialize_to_vec()))
-            },
+        if transaction.sender != transaction.recipient {
+            // Stake transaction
+            let data = StakingTransactionData::parse(transaction)?;
+            Ok(self.stake(&transaction.sender, transaction.value, data.validator_key, data.reward_address)?
+                .map(|receipt| receipt.serialize_to_vec()))
+        } else {
+            // Retire transaction
+            // XXX Get staker address from transaction proof. This violates the model that only the
+            // sender account should evaluate the proof. However, retire is a self transaction, so
+            // this contract is both sender and receiver.
+            let staker_address = Self::get_signer(transaction)?;
+            Ok(self.retire_recipient(&staker_address, transaction.value, block_height)?
+                   .map(|receipt| receipt.serialize_to_vec()))
         }
     }
 
     fn revert_incoming_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
-        let data = StakingTransactionData::parse(transaction)?;
-
-        match data {
-            StakingTransactionData::Stake { .. } => {
-                if let Some(receipt) = receipt {
-                    let receipt = Deserialize::deserialize_from_vec(&receipt)?;
-                    self.revert_stake(&transaction.sender, transaction.value, receipt)
-                } else {
-                    Err(AccountError::InvalidReceipt)
-                }
-            },
-            StakingTransactionData::Retire => {
-                if let Some(receipt) = receipt {
-                    let receipt = Deserialize::deserialize_from_vec(&receipt)?;
-                    self.revert_retire(&transaction.sender, transaction.value, receipt)
-                } else {
-                    Err(AccountError::InvalidReceipt)
-                }
-            },
+        if transaction.sender != transaction.recipient {
+            // Stake transaction
+            let receipt = match receipt {
+                Some(v) => Deserialize::deserialize_from_vec(v)?,
+                _ => None
+            };
+            self.revert_stake(&transaction.sender, transaction.value, receipt)
+        } else {
+            // Retire transaction
+            let staker_address = Self::get_signer(transaction)?;
+            let receipt = match receipt {
+                Some(v) => Deserialize::deserialize_from_vec(v)?,
+                _ => None
+            };
+            self.revert_retire_recipient(&staker_address, transaction.value, receipt)
         }
     }
 
     fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
-        unimplemented!()
+        let staker_address = Self::get_signer(transaction)?;
+        if transaction.sender != transaction.recipient {
+            // Unstake transaction
+            let inactive_stake = self.inactive_stake_by_address.get(&staker_address)
+                .ok_or(AccountError::InvalidForSender)?;
+
+            // Check unstake delay.
+            if block_height < policy::next_macro_block(inactive_stake.retire_time) + policy::UNSTAKE_DELAY {
+                return Err(AccountError::InvalidForSender);
+            }
+
+            Account::balance_sufficient(inactive_stake.balance, transaction.total_value()?)
+        } else {
+            // Retire transaction
+            let active_stake = self.active_stake_by_address.get(&staker_address)
+                .ok_or(AccountError::InvalidForSender)?;
+
+            Account::balance_sufficient(active_stake.balance, transaction.total_value()?)
+        }
     }
 
     fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
-        // Remove balance from the inactive list.
-        // Returns a receipt containing the pause_times and balances.
-        unimplemented!()
+        self.check_outgoing_transaction(transaction, block_height)?;
+
+        let staker_address = Self::get_signer(transaction)?;
+        if transaction.sender != transaction.recipient {
+            // Unstake transaction
+            Ok(self.unstake(&staker_address, transaction.total_value()?)?
+                .map(|receipt| receipt.serialize_to_vec()))
+        } else {
+            // Retire transaction
+            Ok(self.retire_sender(&staker_address, transaction.total_value()?, block_height)?
+                .map(|receipt| receipt.serialize_to_vec()))
+        }
     }
 
     fn revert_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
-        // Needs to reconstruct the previous state by transferring the transaction value back to
-        // inactive validator entries using the receipt.
-        unimplemented!()
+        let staker_address = Self::get_signer(transaction)?;
+
+        if transaction.sender != transaction.recipient {
+            // Unstake transaction
+            let receipt = match receipt {
+                Some(v) => Deserialize::deserialize_from_vec(v)?,
+                _ => None
+            };
+            self.revert_unstake(&staker_address, transaction.total_value()?, receipt)
+        } else {
+            // Retire transaction
+            let receipt = match receipt {
+                Some(v) => Deserialize::deserialize_from_vec(v)?,
+                _ => None
+            };
+            self.revert_retire_sender(&staker_address, transaction.total_value()?, receipt)
+        }
     }
 }
 

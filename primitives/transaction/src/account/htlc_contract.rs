@@ -1,4 +1,4 @@
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
+use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use hex::FromHex;
 use keys::Address;
@@ -129,7 +129,7 @@ pub enum ProofType {
 create_typed_array!(AnyHash, u8, 32);
 add_hex_io_fns_typed_arr!(AnyHash, AnyHash::SIZE);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreationTransactionData {
     pub sender: Address,
     pub recipient: Address,
@@ -141,8 +141,7 @@ pub struct CreationTransactionData {
 
 impl CreationTransactionData {
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
-        Ok(Deserialize::deserialize(&mut &transaction.data[..])
-            .map_err(|e| TransactionError::from(e))?)
+        Ok(Deserialize::deserialize(&mut &transaction.data[..])?)
     }
 
     pub fn verify(&self) -> Result<(), TransactionError> {
@@ -151,25 +150,5 @@ impl CreationTransactionData {
             return Err(TransactionError::InvalidData);
         }
         Ok(())
-    }
-}
-
-impl Deserialize for CreationTransactionData {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let sender = Deserialize::deserialize(reader)?;
-        let recipient = Deserialize::deserialize(reader)?;
-        let hash_algorithm = Deserialize::deserialize(reader)?;
-        let hash_root = Deserialize::deserialize(reader)?;
-        let hash_count = Deserialize::deserialize(reader)?;
-        let timeout = Deserialize::deserialize(reader)?;
-
-        Ok(CreationTransactionData {
-            sender,
-            recipient,
-            hash_algorithm,
-            hash_root,
-            hash_count,
-            timeout
-        })
     }
 }

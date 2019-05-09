@@ -21,8 +21,7 @@ impl AccountTransactionInteraction for BasicAccount {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_incoming_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
-        Account::balance_add(self.balance, transaction.value)?;
+    fn check_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
         Ok(())
     }
 
@@ -41,12 +40,11 @@ impl AccountTransactionInteraction for BasicAccount {
     }
 
     fn check_outgoing_transaction(&self, transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
-        Account::balance_sub(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
-        Ok(())
+        Account::balance_sufficient(self.balance, transaction.total_value()?)
     }
 
     fn commit_outgoing_transaction(&mut self, transaction: &Transaction, _block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
-        self.balance = Account::balance_sub(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        self.balance = Account::balance_sub(self.balance, transaction.total_value()?)?;
         Ok(None)
     }
 
@@ -55,7 +53,7 @@ impl AccountTransactionInteraction for BasicAccount {
             return Err(AccountError::InvalidReceipt);
         }
 
-        self.balance = Account::balance_add(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        self.balance = Account::balance_add(self.balance, transaction.total_value()?)?;
         Ok(())
     }
 }

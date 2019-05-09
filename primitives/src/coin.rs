@@ -1,6 +1,6 @@
 use std::fmt;
 use std::io;
-use std::ops::{Add, Sub};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::str::FromStr;
 
 use failure::Fail;
@@ -50,12 +50,26 @@ impl Add<Coin> for Coin {
     }
 }
 
+impl AddAssign<Coin> for Coin {
+    #[inline]
+    fn add_assign(&mut self, rhs: Coin) {
+        self.0 += rhs.0;
+    }
+}
+
 impl Sub<Coin> for Coin {
     type Output = Coin;
 
     #[inline]
     fn sub(self, rhs: Coin) -> Coin {
         Coin(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign<Coin> for Coin {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Coin) {
+        self.0 -= rhs.0;
     }
 }
 

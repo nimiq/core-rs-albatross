@@ -119,6 +119,14 @@ impl Account {
             None => Err(AccountError::InsufficientFunds {balance, needed: value})
         }
     }
+
+    pub fn balance_sufficient(balance: Coin, value: Coin) -> Result<(), AccountError> {
+        if balance < value {
+            Err(AccountError::InsufficientFunds {balance, needed: value})
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl Serialize for Account {

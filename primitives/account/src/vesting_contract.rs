@@ -71,7 +71,7 @@ impl AccountTransactionInteraction for VestingContract {
 
     fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
         // Check vesting min cap.
-        let balance: Coin = Account::balance_sub(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        let balance: Coin = Account::balance_sub(self.balance, transaction.total_value()?)?;
         let min_cap = self.min_cap(block_height);
         if balance < min_cap {
             return Err(AccountError::InsufficientFunds { balance, needed: min_cap });
@@ -88,7 +88,7 @@ impl AccountTransactionInteraction for VestingContract {
 
     fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
         self.check_outgoing_transaction(transaction, block_height)?;
-        self.balance = Account::balance_sub(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        self.balance = Account::balance_sub(self.balance, transaction.total_value()?)?;
         Ok(None)
     }
 
@@ -97,7 +97,7 @@ impl AccountTransactionInteraction for VestingContract {
             return Err(AccountError::InvalidReceipt);
         }
 
-        self.balance = Account::balance_add(self.balance, transaction.total_value().ok_or(AccountError::InvalidCoinValue)?)?;
+        self.balance = Account::balance_add(self.balance, transaction.total_value()?)?;
         Ok(())
     }
 }
