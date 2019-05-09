@@ -19,8 +19,8 @@ pub enum ValidatorAgentEvent {
 }
 
 pub struct ValidatorAgent {
-    peer: Arc<Peer>,
-    validator_info: Option<ValidatorInfo>,
+    pub(crate) peer: Arc<Peer>,
+    pub(crate) validator_info: Option<ValidatorInfo>,
     pub notifier: RwLock<PassThroughNotifier<'static, ValidatorAgentEvent>>,
 }
 
@@ -168,15 +168,6 @@ impl ValidatorAgent {
         }
     }
 
-    pub fn set_info(&mut self, validator_info: ValidatorInfo) {
-        if *self.peer.peer_address() == validator_info.peer_address {
-            self.validator_info = Some(validator_info);
-        }
-        else {
-            warn!("Tried to set ValidatorInfo in ValidatorAgent with different peer addresses.");
-        }
-    }
-
     pub fn get_public_key(&self) -> Option<&PublicKey> {
         self.validator_info.as_ref().map(|info| &info.public_key)
     }
@@ -184,17 +175,6 @@ impl ValidatorAgent {
     pub fn get_validator_id(&self) -> Option<&ValidatorId> {
         self.validator_info.as_ref().map(|info| &info.validator_id)
     }
-
-    pub fn get_pk_idx(&self) -> Option<u16> {
-        self.validator_info.as_ref().and_then(|info| info.pk_idx)
-    }
-
-    pub fn is_active(&self) -> bool {
-        self.validator_info.as_ref()
-            .map(|info| info.pk_idx.is_some())
-            .unwrap_or(false)
-    }
-
 
     /// TODO: Those methods should be implemented somewhere else
 

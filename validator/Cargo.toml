@@ -25,7 +25,7 @@ nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-on
 nimiq-block-albatross = { path = "../primitives/block-albatross" }
 nimiq-messages = { path = "../messages" }
 nimiq-hash = { path = "../hash" }
-nimiq-primitives=  { path = "../primitives" }
+nimiq-primitives =  { path = "../primitives" }
 failure = "0.1"
 log = "0.4"
 parking_lot = "0.7"

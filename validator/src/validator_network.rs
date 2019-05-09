@@ -3,7 +3,8 @@ use network::{Network, Peer, NetworkEvent};
 use std::collections::HashMap;
 use parking_lot::RwLock;
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
-use network_primitives::validator_info::ValidatorInfo;
+use network_primitives::validator_info::{ValidatorInfo, ValidatorId};
+use network_primitives::address::PeerId;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
 use messages::Message;
 use std::collections::btree_map::BTreeMap;
@@ -44,7 +45,17 @@ pub enum ValidatorNetworkEvent {
 
 pub struct ValidatorNetwork {
     network: Arc<Network>,
-    validator_agents: HashMap<Arc<Peer>, Arc<RwLock<ValidatorAgent>>>,
+
+    /// The peers that are connected that have the validator service flag set. So this is not
+    /// exactly the set of validators. Potential validators should set this flag and then broadcast
+    /// a `ValidatorInfo`.
+    agents: HashMap<PeerId, Arc<RwLock<ValidatorAgent>>>,
+
+    /// Peers for which we received a `ValidatorInfo` and thus have a BLS public key
+    validators: HashMap<ValidatorId, Arc<RwLock<ValidatorAgent>>>,
+
+    /// Subset of validators that only includes validators that are active in the current epoch.
+    active: HashMap<ValidatorId, Arc<RwLock<ValidatorAgent>>>,
 
     /// maps (view-change-number, block-number) to the proof that is being aggregated
     /// clear after macro block
@@ -69,7 +80,9 @@ impl ValidatorNetwork {
     pub fn new(network: Arc<Network>, consensus: Arc<Consensus>) -> Arc<RwLock<Self>> {
         let this = Arc::new(RwLock::new(ValidatorNetwork {
             network,
-            validator_agents: HashMap::new(),
+            agents: HashMap::new(),
+            validators: HashMap::new(),
+            active: HashMap::new(),
             view_changes: BTreeMap::new(),
             pbft_proof: None,
             self_weak: Weak::new(),
@@ -96,8 +109,11 @@ impl ValidatorNetwork {
     fn on_peer_joined(&mut self, peer: &Arc<Peer>) {
         if peer.peer_address().services.is_validator() {
             let agent = ValidatorAgent::new(Arc::clone(peer));
-            self.validator_agents.insert(Arc::clone(peer), Arc::clone(&agent));
 
+            // insert into set of all agents that have the validator service flag
+            self.agents.insert(peer.peer_address().peer_id.clone(), Arc::clone(&agent));
+
+            // register for messages received by agent
             agent.read().notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), |this, event| {
                 match event {
                     ValidatorAgentEvent::ValidatorInfo(info) => {
@@ -121,12 +137,45 @@ impl ValidatorNetwork {
     }
 
     fn on_peer_left(&mut self, peer: &Arc<Peer>) {
-        self.validator_agents.remove(peer);
+        if let Some(agent) = self.agents.remove(&peer.peer_address().peer_id) {
+            if let Some(info) = &agent.read().validator_info {
+                self.validators.remove(&info.validator_id);
+                self.active.remove(&info.validator_id);
+            }
+        }
     }
 
     fn on_validator_info(&mut self, info: ValidatorInfo) {
-        // TODO: make validator_agents a mapping from PeerAddress/Id to ValidatorAgent
-        unimplemented!()
+        if let Some(agent) = self.agents.get(&info.peer_address.peer_id) {
+            if let Some(current_info) = &agent.read().validator_info {
+                if current_info.validator_id == info.validator_id {
+                    // didn't change, do nothing
+                    return;
+                }
+
+                // if the validator ID changed, remove peer from validator agents first
+                self.validators.remove(&current_info.validator_id);
+            }
+
+            // add peer to validator agents
+            self.validators.insert(info.validator_id.clone(), Arc::clone(agent));
+
+            // TODO: check if active validator and put into `active` list
+
+            // put validator info into agent
+            agent.write().validator_info = Some(info);
+        }
+    }
+
+    /// Called when we reach finality - i.e. when a macro block was produced
+    // TODO: register in consensus for macro blocks
+    fn on_finality(&mut self) {
+        debug!("Clearing view change and pBFT proof");
+        self.view_changes.clear();
+        self.pbft_proof = None;
+        // TODO: Remove validators with keys that don't have stake anymore?
+        // TODO: Compute set of validator agents that are now active.
+        self.active.clear();
     }
 
     /// Commit a view change to the proofs being build and relay it if it's new
@@ -248,24 +297,17 @@ impl ValidatorNetwork {
         }
     }
 
-    // TODO: register in consensus for macro blocks
-    pub fn on_finality(&mut self) {
-        debug!("Clearing view change and pBFT proof");
-        self.view_changes.clear();
-        self.pbft_proof = None
+    /// Broadcast to all known active validators
+    pub fn broadcast_active(&self, msg: Message) {
+        for (_, agent) in self.active.iter() {
+            agent.read().peer.channel.send_or_close(msg.clone())
+        }
     }
 
-    fn broadcast_active(&self, msg: Message) {
-        self.broadcast(msg, true);
-    }
-
-    fn broadcast(&self, msg: Message, active: bool) {
-        for (peer, agent) in self.validator_agents.iter() {
-            if !active || agent.read().is_active() {
-                // TODO: in order to do this without cloning, we need to pass references all the way
-                // to the websocket. We could easily just serialize a reference.
-                peer.channel.send_or_close(msg.clone());
-            }
+    /// Broadcast to all known validators
+    pub fn broadcast_all(&self, msg: Message) {
+        for (_, agent) in self.validators.iter() {
+            agent.read().peer.channel.send_or_close(msg.clone());
         }
     }
 

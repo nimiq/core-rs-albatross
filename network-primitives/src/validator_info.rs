@@ -20,9 +20,6 @@ pub struct ValidatorInfo {
 
     /// The validator's peer address
     pub peer_address: PeerAddress,
-
-    /// If the validator is active, this is it's index in the active validator list
-    pub pk_idx: Option<u16>,
 }
 
 impl Message for ValidatorInfo {
