@@ -14,7 +14,7 @@ use block_albatross::{
 };
 use consensus::Consensus;
 use bls::bls12_381::PublicKey;
-use hash::Blake2bHash;
+use hash::{Blake2bHash, Hash};
 use primitives::policy::TWO_THIRD_VALIDATORS;
 use failure::Fail;
 
@@ -28,9 +28,17 @@ pub enum ValidatorNetworkError {
 }
 
 pub enum ValidatorNetworkEvent {
+    /// When a valid view change was completed
     ViewChangeComplete(ViewChange),
+
+    /// When a valid macro block is proposed by the correct pBFT-leader. This can happen multiple
+    /// times during an epoch - i.e. when a proposal with a higher view number is received.
     PbftProposal(PbftProposal),
+
+    /// When enough prepare signatures are collected for a proposed macro block
     PbftPrepareComplete(Blake2bHash),
+
+    /// When enough commit signatures from signers that also signed prepare messages are collected
     PbftCommitComplete(Blake2bHash),
 }
 
@@ -42,9 +50,11 @@ pub struct ValidatorNetwork {
     /// clear after macro block
     view_changes: BTreeMap<ViewChange, ViewChangeProof>,
 
-    /// the current proposed macro header and pbft proof
-    /// (exists between proposal and macro block proofed)
-    pbft_proof: Option<(PbftProposal, PbftProof)>,
+    /// The current proposed macro header and pbft proof.
+    ///
+    /// This exists between proposal and macro block finalized. The header hash is stored for
+    /// efficiency reasons.
+    pbft_proof: Option<(PbftProposal, Blake2bHash, PbftProof)>,
 
     self_weak: Weak<RwLock<ValidatorNetwork>>,
     // XXX We might need recursive read locks.
@@ -96,8 +106,8 @@ impl ValidatorNetwork {
                     ValidatorAgentEvent::ViewChange { view_change, public_key, slots } => {
                         this.write().commit_view_change(view_change, &public_key, slots);
                     },
-                    ValidatorAgentEvent::PbftProposal(block) => {
-                        this.write().commit_pbft_proposal(block);
+                    ValidatorAgentEvent::PbftProposal(proposal) => {
+                        this.write().commit_pbft_proposal(proposal);
                     },
                     ValidatorAgentEvent::PbftPrepare { prepare, public_key, slots } => {
                         this.write().commit_pbft_prepare(prepare, &public_key, slots);
@@ -141,7 +151,7 @@ impl ValidatorNetwork {
 
     /// Commit a macro block proposal
     pub fn commit_pbft_proposal(&mut self, proposal: SignedPbftProposal) {
-        let commit = if let Some((current_proposal, proof)) = &self.pbft_proof {
+        let commit = if let Some((current_proposal, _, proof)) = &self.pbft_proof {
             if *current_proposal == proposal.message {
                 // if we already know the proposal, ignore it
                 false
@@ -165,9 +175,10 @@ impl ValidatorNetwork {
 
         if commit {
             // remember proposal
-            self.pbft_proof = Some((proposal.message.clone(), PbftProof::new()));
+            let block_hash = proposal.message.header.hash::<Blake2bHash>();
+            self.pbft_proof = Some((proposal.message.clone(), block_hash, PbftProof::new()));
 
-            // notify Jeff ;P
+            // notify Jeff, a.k.a notify `Validator`
             self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(proposal.message.clone()));
 
             // relay proposal
@@ -177,7 +188,13 @@ impl ValidatorNetwork {
 
     /// Commit a pBFT prepare
     pub fn commit_pbft_prepare(&mut self, prepare: SignedPbftPrepareMessage, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
-        if let Some((header, proof)) = &mut self.pbft_proof {
+        if let Some((proposal, block_hash, proof)) = &mut self.pbft_proof {
+            // check if this prepare is for our current proposed block
+            if prepare.message.block_hash != *block_hash {
+                debug!("Prepare for unknown block: {}", prepare.message.block_hash);
+                return Err(ValidatorNetworkError::IncorrectProposal);
+            }
+
             // aggregate prepare signature - if new, relay
             if proof.add_prepare_signature(&public_key, slots, &prepare) {
                 // notify if we reach threshold on prepare to begin commit
@@ -206,7 +223,13 @@ impl ValidatorNetwork {
 
     /// Commit a pBFT commit
     pub fn commit_pbft_commit(&mut self, commit: SignedPbftCommitMessage, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
-        if let Some((header, proof)) = &mut self.pbft_proof {
+        if let Some((header, block_hash, proof)) = &mut self.pbft_proof {
+            // check if this prepare is for our current proposed block
+            if commit.message.block_hash != *block_hash {
+                debug!("Prepare for unknown block: {}", block_hash);
+                return Err(ValidatorNetworkError::IncorrectProposal);
+            }
+
             // aggregate commit signature - if new, relay
             if proof.add_commit_signature(&public_key, slots, &commit) {
                 if proof.verify(commit.message.block_hash.clone(), TWO_THIRD_VALIDATORS) {
@@ -254,7 +277,11 @@ impl ValidatorNetwork {
         self.pbft_proof.as_ref().map(|p| &p.0)
     }
 
-    pub fn get_pbft_proof(&self) -> Option<&PbftProof> {
+    pub fn get_pbft_proposal_hash(&self) -> Option<&Blake2bHash> {
         self.pbft_proof.as_ref().map(|p| &p.1)
+    }
+
+    pub fn get_pbft_proof(&self) -> Option<&PbftProof> {
+        self.pbft_proof.as_ref().map(|p| &p.2)
     }
 }

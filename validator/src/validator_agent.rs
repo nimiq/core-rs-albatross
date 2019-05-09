@@ -97,6 +97,7 @@ impl ValidatorAgent {
 
     /// When a pbft block proposal is received
     /// TODO: check correctness of proposed block (i.e. parent hashes, timestamp, seed)
+    ///         i.e. call `nata.verify_macro_header(&proposal.message.header)` xD
     fn on_pbft_proposal_message(&self, proposal: SignedPbftProposal) {
         debug!("[PBFT-PROPOSAL] Macro block proposal: {:#?}", proposal.message);
         if let Some(public_key) = self.get_pbft_leader() {
@@ -130,7 +131,6 @@ impl ValidatorAgent {
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
         debug!("[PBFT-PREPARE] Received prepare from {}: {:#?}", self.peer.peer_address(), prepare.message);
-        // TODO: check that the block_hash is the hash of the proposed block
         if let Some((public_key, slots)) = self.get_validator_slots(prepare.pk_idx) {
             if prepare.verify(&public_key) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
@@ -151,7 +151,6 @@ impl ValidatorAgent {
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
         debug!("[PBFT-COMMIT] Received commit from {}: {:#?}", self.peer.peer_address(), commit.message);
-        // TODO: check that the block_hash is the hash of the proposed block
         if let Some((public_key, slots)) = self.get_validator_slots(commit.pk_idx) {
             if commit.verify(&public_key) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
