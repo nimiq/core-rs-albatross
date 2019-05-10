@@ -151,42 +151,32 @@ impl StakingContract {
         let active_stake = self.active_stake_by_address.get(&staker_address)
             .ok_or(AccountError::InvalidForRecipient)?;
 
-        match active_stake.balance.cmp(&value) {
-            Ordering::Greater => {
-                if receipt.is_none() {
-                    return Err(AccountError::InvalidReceipt);
-                }
+        if active_stake.balance > value {
+            let receipt = receipt.ok_or(AccountError::InvalidReceipt)?;
+            let new_active_stake = Arc::new(ActiveStake {
+                staker_address: active_stake.staker_address.clone(),
+                balance: Account::balance_sub(active_stake.balance, value)?,
+                validator_key: receipt.validator_key,
+                reward_address: receipt.reward_address,
+            });
 
-                let receipt = receipt.unwrap();
-                let new_active_stake = Arc::new(ActiveStake {
-                    staker_address: active_stake.staker_address.clone(),
-                    balance: Account::balance_sub(active_stake.balance, value)?,
-                    validator_key: receipt.validator_key,
-                    reward_address: receipt.reward_address,
-                });
-
-                self.active_stake_sorted.remove(active_stake);
-                self.active_stake_sorted.insert(Arc::clone(&new_active_stake));
-                self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
-                Ok(())
-            },
-            Ordering::Equal => {
-                if receipt.is_some() {
-                    return Err(AccountError::InvalidReceipt);
-                }
-
-                self.active_stake_sorted.remove(active_stake);
-                self.active_stake_by_address.remove(staker_address);
-                Ok(())
-            },
-            Ordering::Less => {
-                Err(AccountError::InvalidForRecipient)
+            self.active_stake_sorted.remove(active_stake);
+            self.active_stake_sorted.insert(Arc::clone(&new_active_stake));
+            self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
+        } else {
+            assert_eq!(active_stake.balance, value);
+            if receipt.is_some() {
+                return Err(AccountError::InvalidReceipt);
             }
+
+            self.active_stake_sorted.remove(active_stake);
+            self.active_stake_by_address.remove(staker_address);
         }
+        Ok(())
     }
 
     /// Removes stake from the active stake list.
-    fn retire_sender(&mut self, staker_address: &Address, total_value: Coin, block_height: u32) -> Result<Option<ActiveStakeReceipt>, AccountError> {
+    fn retire_sender(&mut self, staker_address: &Address, total_value: Coin, _block_height: u32) -> Result<Option<ActiveStakeReceipt>, AccountError> {
         let active_stake = self.active_stake_by_address.remove(staker_address)
             .ok_or(AccountError::InvalidForSender)?;
 
@@ -370,7 +360,7 @@ impl AccountTransactionInteraction for StakingContract {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
+    fn check_incoming_transaction(&self, _: &Transaction, _: u32) -> Result<(), AccountError> {
         Ok(())
     }
 
@@ -532,7 +522,7 @@ impl Deserialize for StakingContract {
         let mut inactive_stake_by_address = HashMap::new();
 
         let num_active_stakes: u32 = Deserialize::deserialize(reader)?;
-        for i in 0..num_active_stakes {
+        for _ in 0..num_active_stakes {
             let active_stake: Arc<ActiveStake> = Deserialize::deserialize(reader)?;
             let inactive_stake: Option<InactiveStake> = Deserialize::deserialize(reader)?;
 
@@ -545,7 +535,7 @@ impl Deserialize for StakingContract {
         }
 
         let num_inactive_stakes: u32 = Deserialize::deserialize(reader)?;
-        for i in 0..num_inactive_stakes {
+        for _ in 0..num_inactive_stakes {
             let staker_address = Deserialize::deserialize(reader)?;
             let inactive_stake = Deserialize::deserialize(reader)?;
             inactive_stake_by_address.insert(staker_address, inactive_stake);
@@ -563,7 +553,7 @@ impl Deserialize for StakingContract {
 // Not really useful traits for StakingContracts.
 // FIXME Assume a single staking contract for now, i.e. all staking contracts are equal.
 impl PartialEq for StakingContract {
-    fn eq(&self, other: &StakingContract) -> bool {
+    fn eq(&self, _other: &StakingContract) -> bool {
         true
     }
 }
@@ -577,7 +567,7 @@ impl PartialOrd for StakingContract {
 }
 
 impl Ord for StakingContract {
-    fn cmp(&self, other: &Self) -> Ordering {
+    fn cmp(&self, _other: &Self) -> Ordering {
         Ordering::Equal
     }
 }
