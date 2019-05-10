@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use weak_table::PtrWeakHashSet;
 
-use blockchain::{Blockchain, Direction, PushResult};
+use blockchain::{Blockchain, Direction, PushError, PushResult};
 use collections::{LimitHashSet, UniqueLinkedList};
 use hash::{Blake2bHash, Hash};
 use mempool::{Mempool, ReturnCode};
@@ -145,7 +145,7 @@ pub enum InventoryEvent {
     KnownTransactionAnnounced,
     NoNewObjectsAnnounced,
     AllObjectsReceived,
-    BlockProcessed(Blake2bHash, PushResult),
+    BlockProcessed(Blake2bHash, Result<PushResult, PushError>),
     TransactionProcessed(Blake2bHash, ReturnCode),
     GetBlocksTimeout,
 }

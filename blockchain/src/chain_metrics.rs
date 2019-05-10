@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::PushResult;
+use crate::{PushResult, PushError};
 
 #[derive(Default)]
 pub struct BlockchainMetrics {
@@ -14,14 +14,14 @@ pub struct BlockchainMetrics {
 
 impl BlockchainMetrics {
     #[inline]
-    pub fn note(&self, push_result: PushResult) {
+    pub fn note(&self, push_result: Result<PushResult, PushError>) {
         match push_result {
-            PushResult::Invalid(_) => self.note_invalid_block(),
-            PushResult::Orphan => self.note_orphan_block(),
-            PushResult::Known => self.note_known_block(),
-            PushResult::Extended => self.note_extended_block(),
-            PushResult::Rebranched => self.note_rebranched_block(),
-            PushResult::Forked => self.note_forked_block(),
+            Ok(PushResult::Known) => self.note_known_block(),
+            Ok(PushResult::Extended) => self.note_extended_block(),
+            Ok(PushResult::Rebranched) => self.note_rebranched_block(),
+            Ok(PushResult::Forked) => self.note_forked_block(),
+            Err(PushError::Orphan) => self.note_orphan_block(),
+            Err(_) => self.note_invalid_block(),
         }
     }
 

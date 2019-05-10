@@ -34,6 +34,7 @@ pub enum BlockError {
     SizeExceeded,
     InterlinkHashMismatch,
     BodyHashMismatch,
+    AccountsHashMismatch,
 
     DuplicateTransaction,
     InvalidTransaction(TransactionError),

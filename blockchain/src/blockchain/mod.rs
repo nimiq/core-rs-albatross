@@ -69,8 +69,6 @@ impl<'env> BlockchainState<'env> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PushResult {
-    Invalid(PushError),
-    Orphan,
     Known,
     Extended,
     Rebranched,
@@ -79,6 +77,7 @@ pub enum PushResult {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PushError {
+    Orphan,
     InvalidBlock(BlockError),
     InvalidSuccessor,
     DifficultyMismatch,
@@ -197,7 +196,7 @@ impl<'env> Blockchain<'env> {
         })
     }
 
-    pub fn push(&self, block: Block) -> PushResult {
+    pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
         // We expect full blocks (with body).
         assert!(block.body.is_some(), "Block body expected");
 
@@ -207,7 +206,7 @@ impl<'env> Blockchain<'env> {
             warn!("Rejecting block - verification failed ({:?})", e);
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
-            return PushResult::Invalid(PushError::InvalidBlock(e))
+            return Err(PushError::InvalidBlock(e));
         }
 
         // Only one push operation at a time.
@@ -218,7 +217,7 @@ impl<'env> Blockchain<'env> {
         if self.chain_store.get_chain_info(&hash, false, None).is_some() {
             #[cfg(feature = "metrics")]
             self.metrics.note_known_block();
-            return PushResult::Known;
+            return Ok(PushResult::Known);
         }
 
         // Check if the block's immediate predecessor is part of the chain.
@@ -227,7 +226,7 @@ impl<'env> Blockchain<'env> {
             warn!("Rejecting block - unknown predecessor");
             #[cfg(feature = "metrics")]
             self.metrics.note_orphan_block();
-            return PushResult::Orphan;
+            return Err(PushError::Orphan);
         }
 
         // Check that the block is a valid successor of its predecessor.
@@ -236,7 +235,7 @@ impl<'env> Blockchain<'env> {
             warn!("Rejecting block - not a valid successor");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
-            return PushResult::Invalid(PushError::InvalidSuccessor);
+            return Err(PushError::InvalidSuccessor);
         }
 
         // Check that the difficulty is correct.
@@ -245,7 +244,7 @@ impl<'env> Blockchain<'env> {
             warn!("Rejecting block - difficulty mismatch");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
-            return PushResult::Invalid(PushError::DifficultyMismatch);
+            return Err(PushError::DifficultyMismatch);
         }
 
         // Block looks good, create ChainInfo.
@@ -270,10 +269,10 @@ impl<'env> Blockchain<'env> {
 
         #[cfg(feature = "metrics")]
         self.metrics.note_forked_block();
-        PushResult::Forked
+        Ok(PushResult::Forked)
     }
 
-    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> PushResult {
+    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(self.env);
         {
             let state = self.state.read();
@@ -284,16 +283,16 @@ impl<'env> Blockchain<'env> {
                 txn.abort();
                 #[cfg(feature = "metrics")]
                 self.metrics.note_invalid_block();
-                return PushResult::Invalid(PushError::DuplicateTransaction);
+                return Err(PushError::DuplicateTransaction);
             }
 
             // Commit block to AccountsTree.
-            if let Err(e) = state.accounts.commit_block(&mut txn, &chain_info.head) {
-                warn!("Rejecting block - commit failed: {}", e);
+            if let Err(e) = self.commit_accounts(&state.accounts, &mut txn, &chain_info.head) {
+                warn!("Rejecting block - commit failed: {:?}", e);
                 txn.abort();
                 #[cfg(feature = "metrics")]
                 self.metrics.note_invalid_block();
-                return PushResult::Invalid(PushError::AccountsError(e));
+                return Err(e);
             }
         }
 
@@ -331,10 +330,10 @@ impl<'env> Blockchain<'env> {
 
         #[cfg(feature = "metrics")]
         self.metrics.note_extended_block();
-        PushResult::Extended
+        Ok(PushResult::Extended)
     }
 
-    fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo) -> PushResult {
+    fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo) -> Result<PushResult, PushError> {
         debug!("Rebranching to fork {}, height #{}, total_difficulty {}", block_hash, chain_info.head.header.height, chain_info.total_difficulty);
 
         // Find the common ancestor between our current main chain and the fork chain.
@@ -370,9 +369,7 @@ impl<'env> Blockchain<'env> {
             current = (state.head_hash.clone(), state.main_chain.clone());
 
             while current.0 != ancestor.0 {
-                if let Err(e) = state.accounts.revert_block(&mut write_txn, &current.1.head) {
-                    panic!("Failed to revert main chain while rebranching - {}", e);
-                }
+                self.revert_accounts(&state.accounts, &mut write_txn, &current.1.head);
 
                 cache_txn.revert_block(&current.1.head);
 
@@ -405,13 +402,13 @@ impl<'env> Blockchain<'env> {
             let mut fork_iter = fork_chain.iter().rev();
             while let Some(fork_block) = fork_iter.next() {
                 let result = if !cache_txn.contains_any(&fork_block.1.head) {
-                    state.accounts.commit_block(&mut write_txn, &fork_block.1.head).map_err(|e| format!("{}", e))
+                    self.commit_accounts(&state.accounts, &mut write_txn, &fork_block.1.head)
                 } else {
-                    Err("Transaction already included".to_string())
+                    Err(PushError::DuplicateTransaction)
                 };
 
                 if let Err(e) = result {
-                    warn!("Failed to apply fork block while rebranching - {}", e);
+                    warn!("Failed to apply fork block while rebranching - {:?}", e);
                     write_txn.abort();
 
                     // Delete invalid fork blocks from store.
@@ -424,7 +421,7 @@ impl<'env> Blockchain<'env> {
                     #[cfg(feature = "metrics")]
                     self.metrics.note_invalid_block();
 
-                    return PushResult::Invalid(PushError::InvalidFork);
+                    return Err(PushError::InvalidFork);
                 }
 
                 cache_txn.push_block(&fork_block.1.head);
@@ -495,7 +492,42 @@ impl<'env> Blockchain<'env> {
 
         #[cfg(feature = "metrics")]
         self.metrics.note_rebranched_block();
-        PushResult::Rebranched
+        Ok(PushResult::Rebranched)
+    }
+
+    fn commit_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
+        let header = &block.header;
+        let body = block.body.as_ref().unwrap();
+
+        // Commit block to AccountsTree.
+        let receipts = accounts.commit(txn, &body.transactions, &body.miner, header.height);
+        if let Err(e) = receipts {
+            return Err(PushError::AccountsError(e));
+        }
+
+        // Verify accounts hash.
+        if header.accounts_hash != accounts.hash(Some(&txn)) {
+            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
+        }
+
+        // Verify receipts.
+        if body.receipts != receipts.unwrap() {
+            return Err(PushError::InvalidBlock(BlockError::InvalidReceipt));
+        }
+
+        Ok(())
+    }
+
+    fn revert_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, block: &Block) {
+        let header = &block.header;
+        let body = block.body.as_ref().unwrap();
+
+        assert_eq!(header.accounts_hash, accounts.hash(Some(&txn)),
+            "Failed to revert - inconsistent state");
+
+        if let Err(e) = accounts.revert(txn, &body.transactions, &body.miner, header.height, &body.receipts) {
+            panic!("Failed to revert - {}", e);
+        }
     }
 
     pub fn get_next_target(&self, head_hash: Option<&Blake2bHash>) -> Target {

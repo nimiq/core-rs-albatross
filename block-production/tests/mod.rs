@@ -23,11 +23,11 @@ fn it_can_produce_empty_blocks() {
     let producer = BlockProducer::new(blockchain.clone(), mempool);
     let mut block = producer.next_block(1523727060, miner.clone(), Vec::new());
     block.header.nonce = 34932;
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     let mut block = producer.next_block(1523727120, miner, Vec::new());
     block.header.nonce = 5648;
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn it_can_produce_nonempty_blocks() {
     let producer = BlockProducer::new(Arc::clone(&blockchain), Arc::clone(&mempool));
     let mut block = producer.next_block(1523727060, miner.clone(), Vec::new());
     block.header.nonce = 34932;
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     // Create vesting contract
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 4);
@@ -65,7 +65,7 @@ fn it_can_produce_nonempty_blocks() {
 
     let mut block = producer.next_block(1523727120, miner.clone(), Vec::new());
     block.header.nonce = 30367;
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     let contract = blockchain.state().accounts().get(&contract_address, None);
     assert_eq!(contract.account_type(), AccountType::Vesting);
@@ -100,7 +100,7 @@ fn it_can_produce_nonempty_blocks() {
 
     let mut block = producer.next_block(1523727180, miner.clone(), Vec::new());
     block.header.nonce = 11673;
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     let contract = blockchain.state().accounts().get(&contract_address, None);
     assert_eq!(contract.account_type(), AccountType::Basic);

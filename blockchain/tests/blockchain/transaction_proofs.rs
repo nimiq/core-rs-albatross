@@ -25,7 +25,7 @@ fn it_can_compute_trivial_transactions_proof() {
         .build();
 
     let mut status = blockchain.push(block2);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     // Push block 3 containing a tx.
     let mut tx = Transaction::new_basic(
@@ -46,7 +46,7 @@ fn it_can_compute_trivial_transactions_proof() {
     let body_hash = block3.header.body_hash.clone();
     let block_hash = block3.header.hash();
     status = blockchain.push(block3);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     // Generate transactions proof.
     let mut addresses = HashSet::new();

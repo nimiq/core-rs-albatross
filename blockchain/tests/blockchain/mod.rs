@@ -32,7 +32,7 @@ fn it_can_load_a_stored_chain() {
     {
         let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
         let status = blockchain.push(block);
-        assert_eq!(status, PushResult::Extended);
+        assert_eq!(status, Ok(PushResult::Extended));
     }
 
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
@@ -47,19 +47,19 @@ fn it_can_extend_the_main_chain() {
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     let mut status = blockchain.push(block);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     block = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
     status = blockchain.push(block);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     block = Block::deserialize_from_vec(&hex::decode(BLOCK_4).unwrap()).unwrap();
     status = blockchain.push(block);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     block = Block::deserialize_from_vec(&hex::decode(BLOCK_5).unwrap()).unwrap();
     status = blockchain.push(block);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 }
 
 #[test]
@@ -69,10 +69,10 @@ fn it_detects_known_blocks() {
 
     let block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     let mut status = blockchain.push(block.clone());
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     status = blockchain.push(block);
-    assert_eq!(status, PushResult::Known);
+    assert_eq!(status, Ok(PushResult::Known));
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn it_rejects_orphan_blocks() {
 
     let block = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
     let status = blockchain.push(block);
-    assert_eq!(status, PushResult::Orphan);
+    assert_eq!(status, Err(PushError::Orphan));
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn it_rejects_intrisically_invalid_blocks() {
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     block.header.nonce = 1;
     let status = blockchain.push(block);
-    assert_eq!(status, PushResult::Invalid(PushError::InvalidBlock(BlockError::InvalidPoW)));
+    assert_eq!(status, Err(PushError::InvalidBlock(BlockError::InvalidPoW)));
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn it_rejects_invalid_successors() {
     block.header.nonce = 54095;
 
     let status = blockchain.push(block);
-    assert_eq!(status, PushResult::Invalid(PushError::InvalidSuccessor));
+    assert_eq!(status, Err(PushError::InvalidSuccessor));
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn it_rejects_blocks_with_invalid_difficulty() {
     block.header.nonce = 51485;
 
     let status = blockchain.push(block);
-    assert_eq!(status, PushResult::Invalid(PushError::DifficultyMismatch));
+    assert_eq!(status, Err(PushError::DifficultyMismatch));
 }
 
 #[test]
@@ -136,7 +136,7 @@ fn it_rejects_blocks_with_duplicate_transactions() {
         .build();
 
     let mut status = blockchain.push(block2);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     // Push block 3 containing a tx.
     let mut tx = Transaction::new_basic(
@@ -155,14 +155,14 @@ fn it_rejects_blocks_with_duplicate_transactions() {
         .with_nonce(23026)
         .build();
     status = blockchain.push(block3);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     let block4 = crate::next_block(&blockchain)
         .with_transactions(vec![tx])
         .with_nonce(6471)
         .build();
     status = blockchain.push(block4);
-    assert_eq!(status, PushResult::Invalid(PushError::DuplicateTransaction));
+    assert_eq!(status, Err(PushError::DuplicateTransaction));
 }
 
 #[test]
@@ -179,7 +179,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
         .build();
 
     let mut status = blockchain.push(block2);
-    assert_eq!(status, PushResult::Extended);
+    assert_eq!(status, Ok(PushResult::Extended));
 
     // Tx exceeding funds
     let mut tx = Transaction::new_basic(
@@ -197,7 +197,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
         .with_nonce(31302)
         .build();
     status = blockchain.push(block3);
-    assert_eq!(status, PushResult::Invalid(PushError::AccountsError(AccountError::InsufficientFunds { needed: Coin::from_u64(1000000000).unwrap(), balance: Coin::from_u64(440597429).unwrap() })));
+    assert_eq!(status, Err(PushError::AccountsError(AccountError::InsufficientFunds { needed: Coin::from_u64(1000000000).unwrap(), balance: Coin::from_u64(440597429).unwrap() })));
 
     // Tx with wrong sender type
     tx = Transaction::new_basic(
@@ -216,7 +216,7 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
         .with_nonce(127678)
         .build();
     status = blockchain.push(block3);
-    assert_eq!(status, PushResult::Invalid(PushError::AccountsError(AccountError::TypeMismatch { expected: AccountType::Basic, got: AccountType::Vesting })));
+    assert_eq!(status, Err(PushError::AccountsError(AccountError::TypeMismatch { expected: AccountType::Basic, got: AccountType::Vesting })));
 }
 
 #[test]
@@ -227,10 +227,10 @@ fn it_detects_fork_blocks() {
     let mut block = crate::next_block(&blockchain)
         .with_nonce(83054)
         .build();
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
-    assert_eq!(blockchain.push(block), PushResult::Forked);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Forked));
 }
 
 #[test]
@@ -241,24 +241,24 @@ fn it_rebranches_to_the_harder_chain() {
     let block1_2 = crate::next_block(&blockchain)
         .with_nonce(83054)
         .build();
-    assert_eq!(blockchain.push(block1_2.clone()), PushResult::Extended);
+    assert_eq!(blockchain.push(block1_2.clone()), Ok(PushResult::Extended));
 
     let block1_3 = crate::next_block(&blockchain)
         .with_nonce(23192)
         .build();
-    assert_eq!(blockchain.push(block1_3.clone()), PushResult::Extended);
+    assert_eq!(blockchain.push(block1_3.clone()), Ok(PushResult::Extended));
 
     let block1_4 = crate::next_block(&blockchain)
         .with_nonce(39719)
         .build();
 
     let block2_2 = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
-    assert_eq!(blockchain.push(block2_2.clone()), PushResult::Forked);
+    assert_eq!(blockchain.push(block2_2.clone()), Ok(PushResult::Forked));
 
     let block2_3 = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
-    assert_eq!(blockchain.push(block2_3.clone()), PushResult::Rebranched);
+    assert_eq!(blockchain.push(block2_3.clone()), Ok(PushResult::Rebranched));
 
-    assert_eq!(blockchain.push(block1_4.clone()), PushResult::Rebranched);
+    assert_eq!(blockchain.push(block1_4.clone()), Ok(PushResult::Rebranched));
 
     let block2_4 = Block::deserialize_from_vec(&hex::decode(BLOCK_4).unwrap()).unwrap();
 
@@ -271,7 +271,7 @@ fn it_rebranches_to_the_harder_chain() {
         listener_called1.store(true, Ordering::Relaxed);
     });
 
-    assert_eq!(blockchain.push(block2_4), PushResult::Rebranched);
+    assert_eq!(blockchain.push(block2_4), Ok(PushResult::Rebranched));
     assert!(listener_called.load(Ordering::Relaxed));
 }
 
@@ -284,15 +284,15 @@ fn it_deletes_invalid_forks() {
     let block1_2 = crate::next_block(&blockchain)
         .with_nonce(83054)
         .build();
-    assert_eq!(blockchain.push(block1_2), PushResult::Extended);
+    assert_eq!(blockchain.push(block1_2), Ok(PushResult::Extended));
     let block1_3 = crate::next_block(&blockchain)
         .with_nonce(23192)
         .build();
-    assert_eq!(blockchain.push(block1_3), PushResult::Extended);
+    assert_eq!(blockchain.push(block1_3), Ok(PushResult::Extended));
     let block1_4 = crate::next_block(&blockchain)
         .with_nonce(39719)
         .build();
-    assert_eq!(blockchain.push(block1_4), PushResult::Extended);
+    assert_eq!(blockchain.push(block1_4), Ok(PushResult::Extended));
 
     // Create fork with invalid pruned accounts
     let fork_env = VolatileEnvironment::new(10).unwrap();
@@ -305,12 +305,12 @@ fn it_deletes_invalid_forks() {
         .with_height(2)
         .with_receipts(vec![pruned_account])
         .with_timestamp(fork.head().header.timestamp + 1)
-        .with_nonce(151483)
+        .with_nonce(31097)
         .build();
     let hash2_2 = block2_2.header.hash();
     let nbits2_3 = TargetCompact::from(0x1f00fde6);
     let interlink2_3 = block2_2.get_next_interlink(&nbits2_3.into());
-    assert_eq!(blockchain.push(block2_2), PushResult::Forked);
+    assert_eq!(blockchain.push(block2_2), Ok(PushResult::Forked));
     assert!(blockchain.get_block(&hash2_2, true, false).is_some());
 
     let block2_3 = crate::next_block(&fork)
@@ -319,12 +319,12 @@ fn it_deletes_invalid_forks() {
         .with_nbits(nbits2_3)
         .with_interlink(interlink2_3)
         .with_timestamp(fork.head().header.timestamp + 2)
-        .with_nonce(105711)
+        .with_nonce(15210)
         .build();
     let hash2_3 = block2_3.header.hash();
     let nbits2_4 = TargetCompact::from(0x1f00fbc9);
     let interlink2_4 = block2_3.get_next_interlink(&nbits2_4.into());
-    assert_eq!(blockchain.push(block2_3), PushResult::Forked);
+    assert_eq!(blockchain.push(block2_3), Ok(PushResult::Forked));
     assert!(blockchain.get_block(&hash2_3, true, false).is_some());
 
     let block2_4 = crate::next_block(&fork)
@@ -333,10 +333,10 @@ fn it_deletes_invalid_forks() {
         .with_nbits(nbits2_4)
         .with_interlink(interlink2_4)
         .with_timestamp(fork.head().header.timestamp + 3)
-        .with_nonce(21362)
+        .with_nonce(16023)
         .build();
     let hash2_4 = block2_4.header.hash();
-    assert_eq!(blockchain.push(block2_4), PushResult::Invalid(PushError::InvalidFork));
+    assert_eq!(blockchain.push(block2_4), Err(PushError::InvalidFork));
     assert!(blockchain.get_block(&hash2_2, true, false).is_none());
     assert!(blockchain.get_block(&hash2_3, true, false).is_none());
     assert!(blockchain.get_block(&hash2_4, true, false).is_none());

@@ -82,7 +82,7 @@ impl<'env> BlockProducer<'env> {
         let interlink_hash = interlink.hash(genesis_hash);
         let body_hash = body.hash();
         let accounts_hash = self.blockchain.state().accounts()
-            .hash_with_block_body(body, height)
+            .hash_with(&body.transactions, &body.miner, height)
             .expect("Failed to compute accounts hash during block production");
 
         BlockHeader {

@@ -19,7 +19,7 @@ fn it_can_compute_trivial_chain_proofs() {
     let block = crate::next_block(&blockchain)
         .with_nonce(83054)
         .build();
-    assert_eq!(blockchain.push(block.clone()), PushResult::Extended);
+    assert_eq!(blockchain.push(block.clone()), Ok(PushResult::Extended));
 
     let proof = blockchain.get_chain_proof();
     assert_eq!(proof.prefix.len(), 1);
@@ -30,7 +30,7 @@ fn it_can_compute_trivial_chain_proofs() {
     let block = crate::next_block(&blockchain)
         .with_nonce(23192)
         .build();
-    assert_eq!(blockchain.push(block.clone()), PushResult::Extended);
+    assert_eq!(blockchain.push(block.clone()), Ok(PushResult::Extended));
 
     let proof = blockchain.get_chain_proof();
     assert_eq!(proof.prefix.len(), 1);
@@ -49,19 +49,19 @@ fn it_can_compute_trivial_block_proofs() {
         .with_nonce(83054)
         .build();
     let hash_to_prove1 = block.header.hash::<Blake2bHash>();
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     let block = crate::next_block(&blockchain)
         .with_nonce(23192)
         .build();
     let hash_to_prove2 = block.header.hash::<Blake2bHash>();
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     let block = crate::next_block(&blockchain)
         .with_nonce(39719)
         .build();
     let known_hash1 = block.header.hash::<Blake2bHash>();
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     let proof = blockchain.get_block_proof(&hash_to_prove1, &known_hash1).unwrap();
     assert_eq!(proof.len(), 1);
@@ -72,7 +72,7 @@ fn it_can_compute_trivial_block_proofs() {
         .with_nonce(1644)
         .build();
     let known_hash2 = block.header.hash::<Blake2bHash>();
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     let proof = blockchain.get_block_proof(&hash_to_prove1, &known_hash2).unwrap();
     assert_eq!(proof.len(), 1);
@@ -99,7 +99,7 @@ fn it_can_compute_empty_block_proofs() {
     let block = crate::next_block(&blockchain)
         .with_nonce(83054)
         .build();
-    assert_eq!(blockchain.push(block), PushResult::Extended);
+    assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     let head_hash2 = blockchain.head_hash();
     let proof = blockchain.get_block_proof(&head_hash2, &head_hash2);

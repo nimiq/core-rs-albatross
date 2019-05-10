@@ -142,7 +142,7 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
         let state = self.blockchain.state();
         let accounts = state.accounts();
         self.header.accounts_hash = accounts
-            .hash_with_block_body(&self.body, self.header.height)
+            .hash_with(&self.body.transactions, &self.body.miner, self.header.height)
             .unwrap_or([0u8; Blake2bHash::SIZE].into());
 
         Block {

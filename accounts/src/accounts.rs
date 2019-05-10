@@ -4,7 +4,6 @@ use hex;
 
 use account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt};
 use beserial::Deserialize;
-use block::{Block, BlockBody};
 use database::{Environment, ReadTransaction, WriteTransaction};
 use database as db;
 use hash::Blake2bHash;
@@ -45,7 +44,7 @@ impl<'env> Accounts<'env> {
 
         let genesis_header = &network_info.genesis_block.header;
         let genesis_body = network_info.genesis_block.body.as_ref().unwrap();
-        self.commit_block_body(txn, genesis_body, genesis_header.height)
+        self.commit(txn, &genesis_body.transactions, &genesis_body.miner, genesis_header.height)
             .expect("Failed to commit genesis block body");
 
         assert_eq!(self.tree.root_hash(txn), genesis_header.accounts_hash,
@@ -77,78 +76,78 @@ impl<'env> Accounts<'env> {
         }
     }
 
-    pub fn hash_with_block_body(&self, body: &BlockBody, block_height: u32) -> Result<Blake2bHash, AccountError> {
+    pub fn hash_with(&self, transactions: &Vec<Transaction>, reward_address: &Address, block_height: u32) -> Result<Blake2bHash, AccountError> {
         let mut txn = WriteTransaction::new(self.env);
 
-        self.commit_block_body(&mut txn, body, block_height)?;
-
+        self.commit(&mut txn, transactions, reward_address, block_height)?;
         let hash = self.hash(Some(&txn));
+
         txn.abort();
         Ok(hash)
     }
 
-    pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), AccountError> {
-        assert!(block.body.is_some(), "Cannot commit block without body");
-
-        self.commit_block_body(txn, block.body.as_ref().unwrap(), block.header.height)?;
-
-        if block.header.accounts_hash != self.tree.root_hash(txn) {
-            return Err(AccountError::AccountsHashMismatch);
-        }
-
-        Ok(())
-    }
-
-    pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), AccountError> {
-        assert!(block.body.is_some(), "Cannot revert block without body");
-
-        if block.header.accounts_hash != self.tree.root_hash(txn) {
-            return Err(AccountError::AccountsHashMismatch);
-        }
-
-        Ok(self.revert_block_body(txn, block.body.as_ref().unwrap(), block.header.height)?)
-    }
-
-    pub fn commit_block_body(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32) -> Result<(), AccountError> {
+    pub fn commit(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, reward_address: &Address, block_height: u32) -> Result<Vec<Receipt>, AccountError> {
         let mut receipts = Vec::new();
 
-        receipts.append(&mut self.process_senders(txn, &body.transactions, block_height, HashMap::new(),
-                             |account, transaction, block_height, _receipt| account.commit_outgoing_transaction(transaction, block_height))?);
+        receipts.append(&mut self.process_senders(txn, transactions, block_height, HashMap::new(),
+                             |account, transaction, block_height, _| account.commit_outgoing_transaction(transaction, block_height))?);
 
-        receipts.append(&mut self.process_recipients(txn, &body.transactions, block_height, HashMap::new(),
-                                |account, transaction, block_height, _receipt| account.commit_incoming_transaction(transaction, block_height))?);
+        receipts.append(&mut self.process_recipients(txn, transactions, block_height, HashMap::new(),
+                                |account, transaction, block_height, _| account.commit_incoming_transaction(transaction, block_height))?);
 
-        self.create_contracts(txn, &body.transactions, block_height)?;
+        self.create_contracts(txn, transactions, block_height)?;
 
-        receipts.append(&mut self.prune_accounts(txn, &body.transactions)?);
+        receipts.append(&mut self.prune_accounts(txn, transactions)?);
 
-        Self::verify_receipts(&receipts, &body.receipts)?;
-
-        self.process_block_reward(txn, body, block_height,
-                                  |account, transaction, block_height, _receipt| account.commit_incoming_transaction(transaction, block_height))?;
+        self.process_block_reward(txn, transactions, reward_address, block_height,
+                                  |account, transaction, block_height, _| account.commit_incoming_transaction(transaction, block_height))?;
 
         self.tree.finalize_batch(txn);
-        Ok(())
+        Ok(receipts)
     }
 
-    pub fn revert_block_body(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32) -> Result<(), AccountError> {
-        self.process_block_reward(txn, body, block_height,
+    pub fn revert(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, reward_address: &Address, block_height: u32, receipts: &Vec<Receipt>) -> Result<(), AccountError> {
+        self.process_block_reward(txn, transactions, reward_address, block_height,
                                   |account, transaction, block_height, receipt| account.revert_incoming_transaction(transaction, block_height, receipt).map(|_| None))?;
 
-        let (sender_receipts, recipient_receipts, pruned_accounts) = Self::prepare_receipts(&body.receipts);
+        let (sender_receipts, recipient_receipts, pruned_accounts) = Self::prepare_receipts(receipts);
 
         self.restore_accounts(txn, pruned_accounts)?;
 
-        self.revert_contracts(txn, &body.transactions, block_height)?;
+        self.revert_contracts(txn, transactions, block_height)?;
 
-        self.process_recipients(txn, &body.transactions, block_height, recipient_receipts,
+        self.process_recipients(txn, transactions, block_height, recipient_receipts,
                                 |account, transaction, block_height, receipt| account.revert_incoming_transaction(transaction, block_height, receipt).map(|_| None))?;
 
-        self.process_senders(txn, &body.transactions, block_height, sender_receipts,
+        self.process_senders(txn, transactions, block_height, sender_receipts,
                              |account, transaction, block_height, receipt| account.revert_outgoing_transaction(transaction, block_height, receipt).map(|_| None))?;
 
         self.tree.finalize_batch(txn);
         Ok(())
+    }
+
+    pub fn collect_receipts(&self, transactions: &Vec<Transaction>, block_height: u32) -> Result<Vec<Receipt>, AccountError> {
+        let mut txn = WriteTransaction::new(&self.env);
+        let mut receipts = BTreeSet::new();
+
+        self.process_senders(&mut txn, transactions, block_height, HashMap::new(),
+                             |account, transaction, block_height, _| account.commit_outgoing_transaction(transaction, block_height))?
+            .into_iter()
+            .for_each(|receipt| { receipts.insert(receipt); () });
+
+        self.process_recipients(&mut txn, transactions, block_height, HashMap::new(),
+                                |account, transaction, block_height, _| account.commit_incoming_transaction(transaction, block_height))?
+            .into_iter()
+            .for_each(|receipt| { receipts.insert(receipt); () });
+
+        self.create_contracts(&mut txn, transactions, block_height)?;
+
+        self.prune_accounts(&mut txn, transactions)?
+            .into_iter()
+            .for_each(|receipt| { receipts.insert(receipt); () });
+
+        txn.abort();
+        Ok(receipts.into_iter().collect())
     }
 
     fn process_senders<F>(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, block_height: u32, mut receipts: HashMap<u16, &Vec<u8>>, account_op: F) -> Result<Vec<Receipt>, AccountError>
@@ -212,19 +211,19 @@ impl<'env> Accounts<'env> {
         Ok(receipt)
     }
 
-    fn process_block_reward<F>(&self, txn: &mut WriteTransaction, body: &BlockBody, block_height: u32, account_op: F) -> Result<(), AccountError>
+    fn process_block_reward<F>(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, reward_address: &Address, block_height: u32, account_op: F) -> Result<(), AccountError>
         where F: Fn(&mut Account, &Transaction, u32, Option<&Vec<u8>>) -> Result<Option<Vec<u8>>, AccountError> {
 
         // Sum up transaction fees.
         let mut fees = policy::block_reward_at(block_height);
-        for tx in &body.transactions {
+        for tx in transactions {
             fees = Account::balance_add(fees, tx.fee)?;
         }
 
         // "Coinbase" transaction.
         let coinbase_tx = Transaction::new_basic(
             Address::from([0u8; Address::SIZE]),
-            body.miner.clone(),
+            reward_address.clone(),
             fees,
             Coin::ZERO,
             block_height,
@@ -232,7 +231,7 @@ impl<'env> Accounts<'env> {
         );
 
         // Coinbase transaction must not produce a receipt.
-        match self.process_transaction(txn, &body.miner, Some(AccountType::Basic), &coinbase_tx, block_height, None, &account_op)? {
+        match self.process_transaction(txn, reward_address, Some(AccountType::Basic), &coinbase_tx, block_height, None, &account_op)? {
             Some(_) => Err(AccountError::InvalidForRecipient),
             None => Ok(())
         }
@@ -301,38 +300,6 @@ impl<'env> Accounts<'env> {
             self.tree.put_batch(txn, &pruned_account.address, pruned_account.account.clone());
         }
         Ok(())
-    }
-
-    pub fn collect_receipts(&self, transactions: &Vec<Transaction>, block_height: u32) -> Result<Vec<Receipt>, AccountError> {
-        let mut txn = WriteTransaction::new(&self.env);
-        let mut receipts = BTreeSet::new();
-
-        self.process_senders(&mut txn, transactions, block_height, HashMap::new(),
-                             |account, transaction, block_height, _receipt| account.commit_outgoing_transaction(transaction, block_height))?
-            .into_iter()
-            .for_each(|receipt| { receipts.insert(receipt); () });
-
-        self.process_recipients(&mut txn, transactions, block_height, HashMap::new(),
-                                |account, transaction, block_height, _receipt| account.commit_incoming_transaction(transaction, block_height))?
-            .into_iter()
-            .for_each(|receipt| { receipts.insert(receipt); () });
-
-        self.create_contracts(&mut txn, transactions, block_height)?;
-
-        self.prune_accounts(&mut txn, transactions)?
-            .into_iter()
-            .for_each(|receipt| { receipts.insert(receipt); () });
-
-        txn.abort();
-        Ok(receipts.into_iter().collect())
-    }
-
-    fn verify_receipts(expected: &Vec<Receipt>, actual: &Vec<Receipt>) -> Result<(), AccountError> {
-        if expected == actual {
-            Ok(())
-        } else {
-            Err(AccountError::InvalidReceipt)
-        }
     }
 
     fn prepare_receipts(receipts: &Vec<Receipt>) -> (HashMap<u16, &Vec<u8>>, HashMap<u16, &Vec<u8>>, Vec<&PrunedAccount>) {

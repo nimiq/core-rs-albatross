@@ -434,8 +434,8 @@ impl JsonRpcHandler {
                 .map_err(|_| object!{"message" => "Invalid block data"}))?;
 
         match self.consensus.blockchain.push(block) {
-            PushResult::Extended | PushResult::Rebranched => Ok(object!{"message" => "Ok"}),
-            PushResult::Forked => Ok(object!{"message" => "Forked"}),
+            Ok(PushResult::Forked) => Ok(object!{"message" => "Forked"}),
+            Ok(_) => Ok(object!{"message" => "Ok"}),
             _ => Err(object!{"message" => "Block rejected"})
         }
     }

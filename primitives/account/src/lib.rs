@@ -402,8 +402,6 @@ pub enum AccountError {
     InvalidTransaction(#[cause] TransactionError),
     #[fail(display = "Invalid coin value")]
     InvalidCoinValue,
-    #[fail(display = "Accounts hash mismatch")]
-    AccountsHashMismatch, // XXX This doesn't really belong here
 }
 
 impl From<SerializingError> for AccountError {

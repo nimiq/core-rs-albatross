@@ -6,7 +6,7 @@ use parking_lot::MutexGuard;
 use parking_lot::RwLock;
 use rand::Rng;
 
-use blockchain::{Blockchain, PushResult};
+use blockchain::{Blockchain, PushError, PushResult};
 use hash::Blake2bHash;
 use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
@@ -334,30 +334,30 @@ impl ConsensusAgent {
         }
     }
 
-    fn on_block_processed(&self, hash: &Blake2bHash, result: &PushResult) {
+    fn on_block_processed(&self, hash: &Blake2bHash, result: &Result<PushResult, PushError>) {
         match result {
-            PushResult::Invalid(_) => {
-                self.peer.channel.close(CloseType::InvalidBlock);
-            },
-            PushResult::Extended | PushResult::Rebranched => {
+            Ok(PushResult::Extended) | Ok(PushResult::Rebranched) => {
                 let mut state = self.state.write();
                 if state.syncing {
                     state.num_blocks_extending += 1;
                 }
             },
-            PushResult::Forked => {
+            Ok(PushResult::Forked) => {
                 let mut state = self.state.write();
                 if state.syncing {
                     state.num_blocks_forking += 1;
                     state.fork_head = Some(hash.clone());
                 }
             }
-            PushResult::Orphan => {
-                self.on_orphan_block(hash);
-            }
-            PushResult::Known => {
+            Ok(PushResult::Known) => {
                 debug!("Known block {} from {}", hash, self.peer.peer_address());
             }
+            Err(PushError::Orphan) => {
+                self.on_orphan_block(hash);
+            },
+            Err(_) => {
+                self.peer.channel.close(CloseType::InvalidBlock);
+            },
         }
     }
 
