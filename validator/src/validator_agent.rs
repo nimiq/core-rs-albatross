@@ -5,9 +5,10 @@ use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      MacroHeader, SignedPbftProposal, ViewChange};
+                      MacroHeader, SignedPbftProposal, ViewChange, Block, MacroBlock};
 use hash::{Hash, Blake2bHash};
 use primitives::policy::TWO_THIRD_VALIDATORS;
+use blockchain_albatross::blockchain::Blockchain;
 
 
 pub enum ValidatorAgentEvent {
@@ -20,14 +21,16 @@ pub enum ValidatorAgentEvent {
 
 pub struct ValidatorAgent {
     pub(crate) peer: Arc<Peer>,
+    pub(crate) blockchain: Arc<Blockchain<'static>>,
     pub(crate) validator_info: Option<ValidatorInfo>,
     pub notifier: RwLock<PassThroughNotifier<'static, ValidatorAgentEvent>>,
 }
 
 impl ValidatorAgent {
-    pub fn new(peer: Arc<Peer>) -> Arc<RwLock<Self>> {
+    pub fn new(peer: Arc<Peer>, blockchain: Arc<Blockchain<'static>>) -> Arc<RwLock<Self>> {
         let agent = Arc::new(RwLock::new(Self {
-            peer: Arc::clone(&peer),
+            peer,
+            blockchain,
             validator_info: None,
             notifier: RwLock::new(PassThroughNotifier::new()),
         }));
@@ -75,10 +78,10 @@ impl ValidatorAgent {
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
     fn on_view_change_message(&self, view_change: SignedViewChange) {
         debug!("[VIEW-CHANGE] Received view change from {}: {:#?}", self.peer.peer_address(), view_change.message);
-        if !self.in_current_epoch(view_change.message.block_number) {
+        if !self.blockchain.is_in_current_epoch(view_change.message.block_number) {
             debug!("[VIEW-CHANGE] View change for old epoch: block_number={}", view_change.message.block_number);
         }
-        else if let Some((public_key, slots)) = self.get_validator_slots(view_change.pk_idx) {
+        else if let Some((public_key, slots)) = self.blockchain.get_current_validator_by_idx(view_change.pk_idx) {
             if view_change.verify(&public_key) {
                 self.notifier.read().notify(ValidatorAgentEvent::ViewChange {
                     view_change,
@@ -96,11 +99,26 @@ impl ValidatorAgent {
     }
 
     /// When a pbft block proposal is received
-    /// TODO: check correctness of proposed block (i.e. parent hashes, timestamp, seed)
-    ///         i.e. call `nata.verify_macro_header(&proposal.message.header)` xD
     fn on_pbft_proposal_message(&self, proposal: SignedPbftProposal) {
         debug!("[PBFT-PROPOSAL] Macro block proposal: {:#?}", proposal.message);
-        if let Some(public_key) = self.get_pbft_leader() {
+
+        let block_number = proposal.message.header.block_number;
+        let view_number = proposal.message.view_number;
+
+        if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number) {
+            let public_key = &slot.public_key;
+
+            // check the validity of the block
+            // TODO: In order to do this without cloning we need the method:
+            // `Blockchain::verify_macro_header(_: &MacroHeader) -> Result<(), PushResult>`
+            let block = Block::Macro(MacroBlock {
+                header: proposal.message.header.clone(),
+                justification: None
+            });
+            if let Err(_) = self.blockchain.push_verify_dry(&block) {
+                debug!("[PBFT-PROPOSAL] Invalid macro block header");
+            }
+
             // check the signature of the proposal
             // XXX We ignore the `pk_idx` field in the `SignedMessage`
             if !proposal.verify(&public_key) {
@@ -110,10 +128,7 @@ impl ValidatorAgent {
 
             // check the view change proof
             if let Some(view_change_proof) = &proposal.message.view_change {
-                let view_change = ViewChange {
-                    block_number: self.get_block_number(),
-                    new_view_number: proposal.message.view_number,
-                };
+                let view_change = ViewChange { block_number, new_view_number: view_number };
                 if !view_change_proof.verify(&view_change, TWO_THIRD_VALIDATORS) {
                     debug!("[PBFT-PROPOSAL] Invalid view change proof: {:?}", view_change_proof);
                     return
@@ -131,7 +146,7 @@ impl ValidatorAgent {
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
         debug!("[PBFT-PREPARE] Received prepare from {}: {:#?}", self.peer.peer_address(), prepare.message);
-        if let Some((public_key, slots)) = self.get_validator_slots(prepare.pk_idx) {
+        if let Some((public_key, slots)) = self.blockchain.get_current_validator_by_idx(prepare.pk_idx) {
             if prepare.verify(&public_key) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
                     prepare,
@@ -151,7 +166,7 @@ impl ValidatorAgent {
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
         debug!("[PBFT-COMMIT] Received commit from {}: {:#?}", self.peer.peer_address(), commit.message);
-        if let Some((public_key, slots)) = self.get_validator_slots(commit.pk_idx) {
+        if let Some((public_key, slots)) = self.blockchain.get_current_validator_by_idx(commit.pk_idx) {
             if commit.verify(&public_key) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
                     commit,
@@ -174,25 +189,5 @@ impl ValidatorAgent {
 
     pub fn get_validator_id(&self) -> Option<&ValidatorId> {
         self.validator_info.as_ref().map(|info| &info.validator_id)
-    }
-
-    /// TODO: Those methods should be implemented somewhere else
-
-    /// get a validator's public key and number of slots
-    fn get_validator_slots(&self, pk_idx: u16) -> Option<(PublicKey, u16)> {
-        unimplemented!("get public key, slots for pk_idx");
-    }
-
-    /// check if a block number is in the current epoch
-    fn in_current_epoch(&self, block_number: u32) -> bool {
-        unimplemented!("check if block number is in current epoch");
-    }
-
-    fn get_pbft_leader(&self) -> Option<&PublicKey> {
-        unimplemented!()
-    }
-
-    fn get_block_number(&self) -> u32 {
-        unimplemented!()
     }
 }

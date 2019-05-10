@@ -13,7 +13,7 @@ use block_albatross::{
     SignedPbftPrepareMessage, SignedPbftCommitMessage, PbftProof,
     MacroHeader, SignedPbftProposal, PbftProposal
 };
-use consensus::Consensus;
+use blockchain_albatross::blockchain::Blockchain;
 use bls::bls12_381::PublicKey;
 use hash::{Blake2bHash, Hash};
 use primitives::policy::TWO_THIRD_VALIDATORS;
@@ -45,6 +45,7 @@ pub enum ValidatorNetworkEvent {
 
 pub struct ValidatorNetwork {
     network: Arc<Network>,
+    blockchain: Arc<Blockchain<'static>>,
 
     /// The peers that are connected that have the validator service flag set. So this is not
     /// exactly the set of validators. Potential validators should set this flag and then broadcast
@@ -77,9 +78,10 @@ pub struct ValidatorNetwork {
 }
 
 impl ValidatorNetwork {
-    pub fn new(network: Arc<Network>, consensus: Arc<Consensus>) -> Arc<RwLock<Self>> {
+    pub fn new(network: Arc<Network>, blockchain: Arc<Blockchain<'static>>) -> Arc<RwLock<Self>> {
         let this = Arc::new(RwLock::new(ValidatorNetwork {
             network,
+            blockchain,
             agents: HashMap::new(),
             validators: HashMap::new(),
             active: HashMap::new(),
@@ -108,7 +110,7 @@ impl ValidatorNetwork {
 
     fn on_peer_joined(&mut self, peer: &Arc<Peer>) {
         if peer.peer_address().services.is_validator() {
-            let agent = ValidatorAgent::new(Arc::clone(peer));
+            let agent = ValidatorAgent::new(Arc::clone(peer), Arc::clone(&self.blockchain));
 
             // insert into set of all agents that have the validator service flag
             self.agents.insert(peer.peer_address().peer_id.clone(), Arc::clone(&agent));
