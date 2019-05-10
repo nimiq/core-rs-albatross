@@ -113,11 +113,11 @@ impl<'env> Blockchain<'env> {
 
     pub fn get_next_block_type(&self) -> BlockType { unimplemented!() }
 
-    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> (PublicKey, /* number of slots */ u16) { unimplemented!() }
+    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<(PublicKey, /* number of slots */ u16)> { unimplemented!() }
 
-    pub fn is_in_current_epoch(block_number: u32) { unimplemented!() }
+    pub fn is_in_current_epoch(&self, block_number: u32) -> bool { unimplemented!() }
 
-    pub fn get_block_producer_at(block_number: u32, view_number: u32) -> (/*Index in slot list*/ u16, Slot) { unimplemented!() }
+    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, Slot)> { unimplemented!() }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
         self.state.read()
