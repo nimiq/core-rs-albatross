@@ -13,7 +13,7 @@ extern crate nimiq_transaction as transaction;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_hash as hash;
 extern crate nimiq_bls as bls;
-extern crate nimiq_block_albatross as block_albastross;
+extern crate nimiq_block_albatross as block_albatross;
 #[macro_use]
 extern crate nimiq_hash_derive;
 #[macro_use]

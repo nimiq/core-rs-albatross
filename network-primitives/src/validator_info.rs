@@ -1,4 +1,4 @@
-use block_albastross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
+use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
 use crate::address::peer_address::PeerAddress;
 use bls::bls12_381::PublicKey;
 use beserial::{Serialize, Deserialize};
