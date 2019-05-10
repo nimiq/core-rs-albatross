@@ -3,7 +3,7 @@ use network::{Network, Peer, NetworkEvent};
 use std::collections::HashMap;
 use parking_lot::RwLock;
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
-use network_primitives::validator_info::{ValidatorInfo, ValidatorId};
+use network_primitives::validator_info::{ValidatorInfo, ValidatorId, SignedValidatorInfo};
 use network_primitives::address::PeerId;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
 use messages::Message;
@@ -135,37 +135,47 @@ impl ValidatorNetwork {
                     },
                 }
             }));
+
+            // send known validator infos to peer
+            let infos = self.validators.iter()
+                .filter_map(|(_, validator)| {
+                    validator.read().validator_info.clone()
+                }).collect::<Vec<SignedValidatorInfo>>();
+            peer.channel.send_or_close(Message::ValidatorInfo(infos));
         }
     }
 
     fn on_peer_left(&mut self, peer: &Arc<Peer>) {
         if let Some(agent) = self.agents.remove(&peer.peer_address().peer_id) {
             if let Some(info) = &agent.read().validator_info {
-                self.validators.remove(&info.validator_id);
-                self.active.remove(&info.validator_id);
+                self.validators.remove(&info.message.validator_id);
+                self.active.remove(&info.message.validator_id);
             }
         }
     }
 
-    fn on_validator_info(&mut self, info: ValidatorInfo) {
-        if let Some(agent) = self.agents.get(&info.peer_address.peer_id) {
+    fn on_validator_info(&mut self, info: SignedValidatorInfo) {
+        if let Some(agent) = self.agents.get(&info.message.peer_address.peer_id) {
             if let Some(current_info) = &agent.read().validator_info {
-                if current_info.validator_id == info.validator_id {
+                if current_info.message.validator_id == info.message.validator_id {
                     // didn't change, do nothing
                     return;
                 }
 
                 // if the validator ID changed, remove peer from validator agents first
-                self.validators.remove(&current_info.validator_id);
+                self.validators.remove(&current_info.message.validator_id);
             }
 
             // add peer to validator agents
-            self.validators.insert(info.validator_id.clone(), Arc::clone(agent));
+            self.validators.insert(info.message.validator_id.clone(), Arc::clone(agent));
 
             // TODO: check if active validator and put into `active` list
 
             // put validator info into agent
             agent.write().validator_info = Some(info);
+        }
+        else {
+            debug!("ValidatorInfo for unknown peer: {:?}", info);
         }
     }
 
@@ -311,6 +321,11 @@ impl ValidatorNetwork {
         for (_, agent) in self.validators.iter() {
             agent.read().peer.channel.send_or_close(msg.clone());
         }
+    }
+
+    /// Broadcast our own validator info
+    pub fn broadcast_info(&self, info: SignedValidatorInfo) {
+        self.broadcast_all(Message::ValidatorInfo(vec![info]));
     }
 
     pub fn get_view_change_proof(&self, view_change: &ViewChange) -> Option<&ViewChangeProof> {

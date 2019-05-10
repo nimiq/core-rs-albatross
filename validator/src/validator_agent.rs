@@ -12,7 +12,7 @@ use blockchain_albatross::blockchain::Blockchain;
 
 
 pub enum ValidatorAgentEvent {
-    ValidatorInfo(ValidatorInfo),
+    ValidatorInfo(SignedValidatorInfo),
     ViewChange { view_change: SignedViewChange, public_key: PublicKey, slots: u16 },
     PbftProposal(SignedPbftProposal),
     PbftPrepare { prepare: SignedPbftPrepareMessage, public_key: PublicKey, slots: u16 },
@@ -22,7 +22,8 @@ pub enum ValidatorAgentEvent {
 pub struct ValidatorAgent {
     pub(crate) peer: Arc<Peer>,
     pub(crate) blockchain: Arc<Blockchain<'static>>,
-    pub(crate) validator_info: Option<ValidatorInfo>,
+    // TODO: store the signed info in case other peers need it
+    pub(crate) validator_info: Option<SignedValidatorInfo>,
     pub notifier: RwLock<PassThroughNotifier<'static, ValidatorAgentEvent>>,
 }
 
@@ -66,12 +67,14 @@ impl ValidatorAgent {
     fn on_validator_infos(&self, signed_infos: Vec<SignedValidatorInfo>) {
         debug!("[VALIDATOR-INFO] contains {} validator infos", signed_infos.len());
         for signed_info in signed_infos {
+            // TODO: first check if we already know this validator. If so, we don't need to check
+            // the signature of this info.
             let signature_okay = signed_info.verify(&signed_info.message.public_key);
             debug!("[VALIDATOR-INFO] {:#?}, signature_okay={}", signed_info.message, signature_okay);
             if !signature_okay {
                 continue;
             }
-            self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(signed_info.message));
+            self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(signed_info));
         }
     }
 
@@ -184,10 +187,10 @@ impl ValidatorAgent {
     }
 
     pub fn get_public_key(&self) -> Option<&PublicKey> {
-        self.validator_info.as_ref().map(|info| &info.public_key)
+        self.validator_info.as_ref().map(|info| &info.message.public_key)
     }
 
     pub fn get_validator_id(&self) -> Option<&ValidatorId> {
-        self.validator_info.as_ref().map(|info| &info.validator_id)
+        self.validator_info.as_ref().map(|info| &info.message.validator_id)
     }
 }
