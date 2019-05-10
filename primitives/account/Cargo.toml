@@ -32,3 +32,4 @@ nimiq-collections = { path = "../../collections" }
 
 [dev-dependencies]
 hex = "0.3"
+rand = "0.6"

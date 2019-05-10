@@ -177,6 +177,8 @@ impl StakingContract {
 
     /// Removes stake from the active stake list.
     fn retire_sender(&mut self, staker_address: &Address, total_value: Coin, _block_height: u32) -> Result<Option<ActiveStakeReceipt>, AccountError> {
+        self.balance = Account::balance_sub(self.balance, total_value)?;
+
         let active_stake = self.active_stake_by_address.remove(staker_address)
             .ok_or(AccountError::InvalidForSender)?;
 
@@ -205,6 +207,8 @@ impl StakingContract {
 
     /// Reverts the sender side of a retire transaction.
     fn revert_retire_sender(&mut self, staker_address: &Address, total_value: Coin, receipt: Option<ActiveStakeReceipt>) -> Result<(), AccountError> {
+        self.balance = Account::balance_add(self.balance, total_value)?;
+
         if let Some(active_stake) = self.active_stake_by_address.remove(staker_address) {
             if receipt.is_some() {
                 return Err(AccountError::InvalidReceipt);
@@ -237,6 +241,8 @@ impl StakingContract {
 
     /// Adds state to the inactive stake list.
     fn retire_recipient(&mut self, staker_address: &Address, value: Coin, block_height: u32) -> Result<Option<InactiveStakeReceipt>, AccountError> {
+        self.balance = Account::balance_add(self.balance, value)?;
+
         if let Some(inactive_stake) = self.inactive_stake_by_address.remove(staker_address) {
             let new_inactive_stake = InactiveStake {
                 balance: Account::balance_add(inactive_stake.balance, value)?,
@@ -260,6 +266,8 @@ impl StakingContract {
 
     /// Reverts a retire transaction.
     fn revert_retire_recipient(&mut self, staker_address: &Address, value: Coin, receipt: Option<InactiveStakeReceipt>) -> Result<(), AccountError> {
+        self.balance = Account::balance_sub(self.balance, value)?;
+
         let inactive_stake = self.inactive_stake_by_address.remove(staker_address)
             .ok_or(AccountError::InvalidForRecipient)?;
 
@@ -385,7 +393,7 @@ impl AccountTransactionInteraction for StakingContract {
         if transaction.sender != transaction.recipient {
             // Stake transaction
             let receipt = match receipt {
-                Some(v) => Deserialize::deserialize_from_vec(v)?,
+                Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
                 _ => None
             };
             self.revert_stake(&transaction.sender, transaction.value, receipt)
@@ -393,7 +401,7 @@ impl AccountTransactionInteraction for StakingContract {
             // Retire transaction
             let staker_address = Self::get_signer(transaction)?;
             let receipt = match receipt {
-                Some(v) => Deserialize::deserialize_from_vec(v)?,
+                Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
                 _ => None
             };
             self.revert_retire_recipient(&staker_address, transaction.value, receipt)
@@ -443,14 +451,14 @@ impl AccountTransactionInteraction for StakingContract {
         if transaction.sender != transaction.recipient {
             // Unstake transaction
             let receipt = match receipt {
-                Some(v) => Deserialize::deserialize_from_vec(v)?,
+                Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
                 _ => None
             };
             self.revert_unstake(&staker_address, transaction.total_value()?, receipt)
         } else {
             // Retire transaction
             let receipt = match receipt {
-                Some(v) => Deserialize::deserialize_from_vec(v)?,
+                Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
                 _ => None
             };
             self.revert_retire_sender(&staker_address, transaction.total_value()?, receipt)
@@ -570,4 +578,18 @@ impl Ord for StakingContract {
     fn cmp(&self, _other: &Self) -> Ordering {
         Ordering::Equal
     }
+}
+
+#[test]
+fn it_can_de_serialize_an_active_stake_receipt() {
+    const ACTIVE_STAKE_RECEIPT: &str = "96b94e8a2fa79cb3d96bfde5ed2fa693aa6bec225e944b23c96b1c83dda67b34b62d105763bdf3cd378de9e4d8809fb00f815e309ec94126f22d77ef81fe00fa3a51a6c750349efda2133ca2f0e1b04094c4e2ce08b73c72fccedc33e127259f010303030303030303030303030303030303030303";
+    const BLS_PUBLIC_KEY: &str = "96b94e8a2fa79cb3d96bfde5ed2fa693aa6bec225e944b23c96b1c83dda67b34b62d105763bdf3cd378de9e4d8809fb00f815e309ec94126f22d77ef81fe00fa3a51a6c750349efda2133ca2f0e1b04094c4e2ce08b73c72fccedc33e127259f";
+
+    let bytes: Vec<u8> = hex::decode(ACTIVE_STAKE_RECEIPT).unwrap();
+    let asr: ActiveStakeReceipt = Deserialize::deserialize(&mut &bytes[..]).unwrap();
+    let bls_bytes: Vec<u8> = hex::decode(BLS_PUBLIC_KEY).unwrap();
+    let bls_pubkey: BlsPublicKey = Deserialize::deserialize(&mut &bls_bytes[..]).unwrap();
+    assert_eq!(asr.validator_key, bls_pubkey);
+
+    assert_eq!(hex::encode(asr.serialize_to_vec()), ACTIVE_STAKE_RECEIPT);
 }
