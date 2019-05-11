@@ -18,7 +18,7 @@ use nimiq_transaction::account::staking_contract::StakingTransactionData;
 use nimiq_account::staking_contract::ActiveStake;
 
 const CONTRACT_1: &str = "00000000000000000000000000000000";
-const CONTRACT_2: &str = "0000000023c34600000000025e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e0000000008f0d180a9edd1613b714ec6107f4ffd532e52727c4f3a2897b3000e9ebccf076e8ffdf4b424f7e798d31dc67bbf9b3776096f101740b3f992ba8a5d0e20860f8d3466b7b58fb6b918eebb3c014bf6bb1cbdcb045c184d673c3db6435f454a1c530b9dfc012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a000202020202020202020202020202020202020202000000001ad27480a2f7d485efe6fabad3d780d1ea5ad690bd027a5328f44b612cad1f33347c8df5bde90a340c30877a21861e2173f6cfda0715d35ac2941437bf7e73d7e48fcf6e1901249134532ad1826ad1e396caed2d4d1d11e82d79f93946b21800a00971f0000000000000";
+const CONTRACT_2: &str = "0000000023c34600000000020202020202020202020202020202020202020202000000001ad27480a2f7d485efe6fabad3d780d1ea5ad690bd027a5328f44b612cad1f33347c8df5bde90a340c30877a21861e2173f6cfda0715d35ac2941437bf7e73d7e48fcf6e1901249134532ad1826ad1e396caed2d4d1d11e82d79f93946b21800a00971f000005e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e0000000008f0d180a9edd1613b714ec6107f4ffd532e52727c4f3a2897b3000e9ebccf076e8ffdf4b424f7e798d31dc67bbf9b3776096f101740b3f992ba8a5d0e20860f8d3466b7b58fb6b918eebb3c014bf6bb1cbdcb045c184d673c3db6435f454a1c530b9dfc012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0000000000";
 
 #[test]
 fn it_can_de_serialize_a_staking_contract() {
@@ -369,6 +369,58 @@ fn it_can_apply_unstaking_transaction() {
     assert_eq!(contract.active_stake_sorted.len(), 1);
     assert_eq!(contract.inactive_stake_by_address.len(), 0);
     assert_eq!(contract.balance, Coin::from_u64(300_000_000).unwrap());
+}
+
+
+
+#[test]
+fn it_can_build_a_validator_set() {
+    // Helper function for building a staking transaction.
+    // `order` sets the first byte of the address as a marker.
+    // It also controls the secondary index when building the potential validator list.
+    let stake = |amount: u64, order: u16| {
+        let bls_pair = BlsKeyPair::generate(&mut thread_rng());
+        let mut tx = make_incoming_transaction();
+        tx.value = amount.try_into().unwrap();
+        let mut address_buf = [0u8; 20];
+        address_buf[0] = (order & 0xFF) as u8;
+        tx.sender = Address::from(address_buf);
+        tx.data = StakingTransactionData {
+            validator_key: bls_pair.public.clone(),
+            reward_address: None,
+            proof_of_knowledge: bls_pair.sign(&bls_pair.public),
+        }.serialize_to_vec();
+        tx
+    };
+
+    // Create arbitrary BLS signature as seed
+    let bls_pair = BlsKeyPair::generate(&mut thread_rng());
+    let seed = bls_pair.sign(&bls_pair.public);
+
+    // Fill contract with same stakes
+    let mut contract = make_empty_contract();
+    contract.commit_incoming_transaction(&stake(10_000,  0xFE), 2).unwrap();
+    contract.commit_incoming_transaction(&stake(130_000, 0x00), 2).unwrap();
+    contract.commit_incoming_transaction(&stake(12,      0xFF), 2).unwrap();
+
+    // Test potential validator selection by stake
+    let validator_set = contract.build_validator_set(&seed, 1, 1);
+    assert_eq!(validator_set.active.len(), 1);
+    assert_eq!(validator_set.active[0].staking_address.as_bytes()[0], 0x00);
+
+    // Fill contract with same stakes
+    let mut contract = make_empty_contract();
+    contract.commit_incoming_transaction(&stake(100_000_000, 0x03), 2).unwrap();
+    contract.commit_incoming_transaction(&stake(100_000_000, 0xFF), 2).unwrap();
+    contract.commit_incoming_transaction(&stake(100_000_000, 0x04), 2).unwrap();
+
+    // Test potential validator selection by secondary index
+    let validator_set = contract.build_validator_set(&seed, 1, 1);
+    assert_eq!(validator_set.min_required_stake, Coin::try_from(100_000_000).unwrap());
+    assert_eq!(validator_set.active.len(), 1);
+    assert_eq!(validator_set.active[0].staking_address.as_bytes()[0], 0x03);
+
+    // TODO More tests
 }
 
 fn make_empty_contract() -> StakingContract {

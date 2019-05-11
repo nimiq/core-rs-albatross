@@ -4,7 +4,7 @@ use std::ops::*;
 use num_traits::identities::Zero;
 
 pub struct SegmentTree<T, U>
-    where T: Copy + Ord + Eq + Clone,
+    where T: Ord + Eq + Clone,
           U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq {
     root: Option<Box<Node<T, U>>>,
     size: usize,
@@ -18,7 +18,7 @@ pub struct Range<U>
 }
 
 struct Node<T, U>
-    where T: Copy + Ord + Eq + Clone,
+    where T: Ord + Eq + Clone,
           U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq {
     key:      T,
     weight:   U,
@@ -26,11 +26,14 @@ struct Node<T, U>
 }
 
 impl <T, U> SegmentTree<T, U>
-    where T: Copy + Ord + Eq + Clone,
+    where T: Ord + Eq + Clone,
           U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq {
 
+    /// Builds a new segment tree.
+    ///
+    /// weight keys must be in ascending order and must not contain duplicates
     pub fn new(weights: &mut [(T, U)]) -> Self {
-        weights.sort_by(|(key_a, _), (key_b, _)| key_a.cmp(&key_b));
+        debug_assert!(weights.windows(2).all(|w| w[0].0 < w[1].0));
         SegmentTree {
             root: Self::build_tree(&weights),
             size: weights.len(),
@@ -41,7 +44,7 @@ impl <T, U> SegmentTree<T, U>
         match entries.len() {
             0 => None,
             1 => Some(Box::new(Node {
-                key:      entries[0].0,
+                key:      entries[0].0.clone(),
                 weight:   entries[0].1,
                 children: None,
             })),
@@ -136,4 +139,11 @@ impl <T, U> SegmentTree<T, U>
         return self.size;
     }
 
+    pub fn range(&self) -> U {
+        if let Some(ref root) = self.root {
+           root.weight
+        } else {
+            U::zero()
+        }
+    }
 }

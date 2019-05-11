@@ -1,11 +1,15 @@
-use std::cmp::Ordering;
+use std::cmp::{Ordering, min};
 use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::Arc;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use bls::bls12_381::PublicKey as BlsPublicKey;
+use bls::bls12_381::Signature as BlsSignature;
+use collections::SegmentTree;
 use keys::Address;
+use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
 use primitives::policy;
 use transaction::{SignatureProof, Transaction};
@@ -38,9 +42,31 @@ impl PartialOrd for ActiveStake {
 }
 
 impl Ord for ActiveStake {
+    // Highest to low balances
     fn cmp(&self, other: &Self) -> Ordering {
-        self.balance.cmp(&other.balance)
+        other.balance.cmp(&self.balance)
             .then_with(|| self.staker_address.cmp(&other.staker_address))
+    }
+}
+
+pub struct ValidatorSet {
+    pub active: Vec<ActiveValidator>,
+    pub min_required_stake: Coin,
+}
+
+pub struct ActiveValidator {
+    pub staking_address: Address,
+    pub reward_address_opt: Option<Address>,
+}
+
+impl ActiveValidator {
+    #[inline]
+    pub fn reward_address(&self) -> &Address {
+        if let Some(ref addr) = self.reward_address_opt {
+            addr
+        } else {
+            &self.staking_address
+        }
     }
 }
 
@@ -332,25 +358,60 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Retrieves the size-bounded list of potential validators.
+    /// Retrieves the size-bounded list of active validators.
     // FIXME naming
-    pub fn potential_validators(&self, max_validators: u64) -> Vec<Arc<ActiveStake>> {
-        let mut validators = Vec::new();
+    pub fn build_validator_set(&self, seed: &BlsSignature, max_considered: usize, max_picked: u32) -> ValidatorSet {
+        let mut potential_validators = Vec::new();
         let mut min_stake = Coin::ZERO;
         let mut total_stake = Coin::ZERO;
 
+        let n_considered = min(self.active_stake_by_address.len(), max_considered);
+        let n_picked = min(n_considered, max_picked as usize);
+
+        // Build potential validator set and find minimum stake.
         // Iterate from highest balance to lowest.
         for validator in self.active_stake_sorted.iter() {
-            if validator.balance <= min_stake {
+            if validator.balance <= min_stake
+                || potential_validators.len() == n_considered {
                 break;
             }
 
             total_stake += validator.balance;
-            min_stake = Coin::from_u64_unchecked(u64::from(total_stake) / max_validators);
-            validators.push(Arc::clone(validator));
+            min_stake = Coin::from_u64_unchecked(u64::from(total_stake) / n_considered as u64);
+            potential_validators.push(Arc::clone(validator));
         }
 
-        validators
+        // Build lookup tree of all potential validators
+        let mut weights: Vec<(Address, u64)> = potential_validators.iter()
+            .map(|stake| (stake.staker_address.clone(), stake.balance.into())).collect();
+        let lookup = SegmentTree::new(&mut weights);
+
+        // Build active validator set: Use the VRF to pick validators
+        let mut validator_keys = Vec::<ActiveValidator>::with_capacity(n_picked as usize);
+        for i in 0..n_picked {
+            // Hash seed and index
+            let mut hash_state = Blake2bHasher::new();
+            seed.serialize(&mut hash_state);
+            hash_state.write(&i.to_be_bytes());
+            let hash = hash_state.finish();
+
+            // Get number from first 8 bytes
+            let mut num_bytes = [0u8; 8];
+            num_bytes.copy_from_slice(&hash.as_bytes()[..8]);
+            let num = u64::from_be_bytes(num_bytes);
+
+            let index = num % u64::from(lookup.range());
+            let staking_address = lookup.find(index).unwrap();
+            let active_stake = &self.active_stake_by_address[&staking_address];
+            validator_keys.push(ActiveValidator {
+                staking_address:    active_stake.staker_address.clone(),
+                reward_address_opt: active_stake.reward_address.as_ref().map(|s| s.clone())
+            });
+        }
+        ValidatorSet {
+            active: validator_keys,
+            min_required_stake: min_stake,
+        }
     }
 
     fn get_signer(transaction: &Transaction) -> Result<Address, AccountError> {
