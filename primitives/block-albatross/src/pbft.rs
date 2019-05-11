@@ -6,6 +6,7 @@ use bls::bls12_381::PublicKey;
 use super::MacroHeader;
 use crate::ViewChangeProof;
 use crate::signed::UntrustedAggregateProof;
+use crate::ValidatorSlots;
 
 
 /// A macro block proposed by the pBFT-leader.
@@ -111,7 +112,7 @@ pub struct UntrustedPbftProof {
 
 impl UntrustedPbftProof {
     pub fn into_trusted<F>(&self, f: F) -> PbftProof
-        where F: Fn(u16) -> (PublicKey, /*number of slots*/ u16) + Clone
+        where F: Fn(u16) -> ValidatorSlots + Clone
     {
         PbftProof {
             prepare: self.prepare.into_trusted(f.clone()),

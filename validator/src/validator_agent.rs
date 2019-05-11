@@ -7,7 +7,7 @@ use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
                       SignedPbftProposal, ViewChange, Block, MacroBlock, ForkProof};
 use primitives::policy::TWO_THIRD_VALIDATORS;
-use blockchain_albatross::blockchain::Blockchain;
+use blockchain_albatross::Blockchain;
 
 
 pub enum ValidatorAgentEvent {

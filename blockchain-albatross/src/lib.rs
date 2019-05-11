@@ -16,4 +16,9 @@ extern crate nimiq_block_albatross as block;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 
-pub mod blockchain;
+mod blockchain;
+mod chain_info;
+mod chain_store;
+mod transaction_cache;
+
+pub use blockchain::Blockchain;

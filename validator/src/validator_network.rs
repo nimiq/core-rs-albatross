@@ -13,7 +13,7 @@ use block_albatross::{
     SignedPbftPrepareMessage, SignedPbftCommitMessage, PbftProof,
     SignedPbftProposal, PbftProposal, ForkProof
 };
-use blockchain_albatross::blockchain::Blockchain;
+use blockchain_albatross::Blockchain;
 use bls::bls12_381::PublicKey;
 use hash::{Blake2bHash, Hash};
 use primitives::policy::TWO_THIRD_VALIDATORS;
