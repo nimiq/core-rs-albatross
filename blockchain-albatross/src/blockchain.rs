@@ -5,7 +5,7 @@ use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 
 use accounts::Accounts;
 use bls::bls12_381::{Signature, PublicKey};
-use block::{Block, BlockType, BlockError, MacroBlock, MicroBlock, Slot};
+use block::{Block, BlockType, BlockError, MacroBlock, ValidatorSlots, MicroBlock, Slot};
 use block::ViewChange;
 use database::{Environment, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
@@ -109,11 +109,11 @@ impl<'env> Blockchain<'env> {
 
     pub fn get_next_validator_list(&self) -> Vec<Slot> { unimplemented!() }
 
-    pub fn get_next_validator_set(&self) -> Vec<(PublicKey, u16)> { unimplemented!() }
+    pub fn get_next_validator_set(&self) -> Vec<ValidatorSlots> { unimplemented!() }
 
     pub fn get_next_block_type(&self) -> BlockType { unimplemented!() }
 
-    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<(PublicKey, /* number of slots */ u16)> { unimplemented!() }
+    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<ValidatorSlots> { unimplemented!() }
 
     pub fn is_in_current_epoch(&self, block_number: u32) -> bool { unimplemented!() }
 

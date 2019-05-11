@@ -7,7 +7,7 @@ use hex::FromHex;
 use hash::Blake2bHash;
 use keys::Address;
 use keys::PublicKey;
-use block_albatross::{Block, MacroBlock, MacroHeader, PbftProof};
+use block_albatross::{Block, MacroBlock, MacroHeader, MacroExtrinsics, PbftProof};
 pub use primitives::networks::NetworkId;
 use bls::bls12_381::{
     Signature as BlsSignature,
@@ -117,16 +117,21 @@ lazy_static! {
                 genesis_block: Block::Macro(MacroBlock {
                     header: MacroHeader {
                         version: 1,
-                        slot_allocation: vec![/*TODO*/],
+                        validators: vec![/*TODO*/],
                         block_number: 1,
                         view_number: 0,
                         parent_macro_hash: "0000000000000000000000000000000000000000000000000000000000000000".into(),
                         seed: block_seed("b85dce329205d9872ff281de313d3dfe5a6ed78334979fb4fcc26894944e9803ee3585265a99fb32aaacf8c5c9ef5952"),
                         parent_hash: "0000000000000000000000000000000000000000000000000000000000000000".into(),
                         state_root: "0000000000000000000000000000000000000000000000000000000000000000".into(),
+                        extrinsics_root: "0000000000000000000000000000000000000000000000000000000000000000".into(),
                         timestamp: 1557544624831,
                     },
                     justification: None, // PbftProof::new(),
+                    extrinsics: Some(MacroExtrinsics {
+                        slot_allocation: vec![/*TODO*/],
+                        slashing_amount: 100000
+                    })
                 }),
                 genesis_hash: "a0390a392858a08ea4b5b96ad64d24f438e903597ac13469fbc8fbe592bc24aa".into(),
                 genesis_accounts: vec![

@@ -84,12 +84,12 @@ impl ValidatorAgent {
         if !self.blockchain.is_in_current_epoch(view_change.message.block_number) {
             debug!("[VIEW-CHANGE] View change for old epoch: block_number={}", view_change.message.block_number);
         }
-        else if let Some((public_key, slots)) = self.blockchain.get_current_validator_by_idx(view_change.pk_idx) {
-            if view_change.verify(&public_key) {
+        else if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(view_change.pk_idx) {
+            if view_change.verify(&validator_slots.public_key) {
                 self.notifier.read().notify(ValidatorAgentEvent::ViewChange {
                     view_change,
-                    public_key,
-                    slots
+                    public_key: validator_slots.public_key,
+                    slots: validator_slots.slots
                 });
             }
             else {
@@ -116,7 +116,8 @@ impl ValidatorAgent {
             // `Blockchain::verify_macro_header(_: &MacroHeader) -> Result<(), PushResult>`
             let block = Block::Macro(MacroBlock {
                 header: proposal.message.header.clone(),
-                justification: None
+                justification: None,
+                extrinsics: None
             });
             if let Err(_) = self.blockchain.push_verify_dry(&block) {
                 debug!("[PBFT-PROPOSAL] Invalid macro block header");
@@ -149,12 +150,12 @@ impl ValidatorAgent {
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
         debug!("[PBFT-PREPARE] Received prepare from {}: {:#?}", self.peer.peer_address(), prepare.message);
-        if let Some((public_key, slots)) = self.blockchain.get_current_validator_by_idx(prepare.pk_idx) {
-            if prepare.verify(&public_key) {
+        if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(prepare.pk_idx) {
+            if prepare.verify(&validator_slots.public_key) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
                     prepare,
-                    public_key,
-                    slots
+                    public_key: validator_slots.public_key,
+                    slots: validator_slots.slots
                 });
             }
             else {
@@ -169,12 +170,12 @@ impl ValidatorAgent {
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
         debug!("[PBFT-COMMIT] Received commit from {}: {:#?}", self.peer.peer_address(), commit.message);
-        if let Some((public_key, slots)) = self.blockchain.get_current_validator_by_idx(commit.pk_idx) {
-            if commit.verify(&public_key) {
+        if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(commit.pk_idx) {
+            if commit.verify(&validator_slots.public_key) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
                     commit,
-                    public_key,
-                    slots
+                    public_key: validator_slots.public_key,
+                    slots: validator_slots.slots
                 });
             }
             else {

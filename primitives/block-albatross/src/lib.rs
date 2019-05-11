@@ -20,7 +20,7 @@ mod view_change;
 pub mod signed;
 
 pub use block::{Block, BlockType, BlockHeader};
-pub use macro_block::{MacroBlock, MacroHeader};
+pub use macro_block::{MacroBlock, MacroHeader, MacroExtrinsics, ValidatorSlots};
 pub use micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
 pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof};
 pub use slash::SlashInherent;

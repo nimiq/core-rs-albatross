@@ -108,13 +108,14 @@ fn generate_header(csprng: &mut ChaChaRng, time: &DateTime<Utc>, stakes: &Vec<Ge
 
     MacroHeader {
         version: 1,
-        slot_allocation: vec![],
+        validators: vec![],
         block_number: 1,
         view_number: 0,
         parent_macro_hash: "0000000000000000000000000000000000000000000000000000000000000000".into(),
         seed,
         parent_hash: "0000000000000000000000000000000000000000000000000000000000000000".into(),
         state_root: "0000000000000000000000000000000000000000000000000000000000000000".into(),
+        extrinsics_root: "0000000000000000000000000000000000000000000000000000000000000000".into(),
         timestamp: u64::try_from(time.timestamp_millis()).expect("Timestamp negative"),
     }
 }

@@ -14,15 +14,16 @@ use crate::Slot;
 pub struct MacroBlock {
     pub header: MacroHeader,
     pub justification: Option<UntrustedPbftProof>,
+    pub extrinsics: Option<MacroExtrinsics>
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroHeader {
     pub version: u16,
 
-    // Digest
     #[beserial(len_type(u16))]
-    pub slot_allocation: Vec<Slot>,
+    pub validators: Vec<ValidatorSlots>,
+
     pub block_number: u32,
     pub view_number: u32,
     pub parent_macro_hash: Blake2bHash,
@@ -30,8 +31,22 @@ pub struct MacroHeader {
     pub seed: Signature,
     pub parent_hash: Blake2bHash,
     pub state_root: Blake2bHash,
+    pub extrinsics_root: Blake2bHash,
 
     pub timestamp: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MacroExtrinsics {
+    #[beserial(len_type(u16))]
+    pub slot_allocation: Vec<Slot>,
+    pub slashing_amount: u64
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ValidatorSlots {
+    pub public_key: PublicKey,
+    pub slots: u16
 }
 
 impl signed::Message for MacroHeader {
