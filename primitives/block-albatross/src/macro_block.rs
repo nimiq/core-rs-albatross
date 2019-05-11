@@ -5,7 +5,7 @@ use crate::view_change::ViewChangeProof;
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHash, Hash, SerializeContent};
 use bls::bls12_381::{PublicKey, Signature};
-use crate::pbft::PbftProof;
+use crate::pbft::UntrustedPbftProof;
 use primitives::policy::TWO_THIRD_VALIDATORS;
 use crate::signed;
 use crate::Slot;
@@ -13,7 +13,7 @@ use crate::Slot;
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
     pub header: MacroHeader,
-    pub justification: Option<PbftProof>,
+    pub justification: Option<UntrustedPbftProof>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -42,12 +42,6 @@ impl MacroBlock {
     pub fn verify(&self) -> bool {
         if self.header.block_number >= 1 && self.justification.is_none() {
             return false;
-        }
-
-        if let Some(justification) = &self.justification {
-            if !justification.verify(self.hash(), TWO_THIRD_VALIDATORS) {
-                return false;
-            }
         }
         return true;
     }

@@ -180,7 +180,7 @@ pub struct UntrustedAggregateProof<M: Message> {
 }
 
 impl<M: Message> UntrustedAggregateProof<M> {
-    pub fn into_trusted<F>(self, f: F) -> AggregateProof<M>
+    pub fn into_trusted<F>(&self, f: F) -> AggregateProof<M>
         where F: Fn(u16) -> (PublicKey, /*number of slots*/ u16)
     {
         // aggregate signatures and count votes
@@ -192,10 +192,10 @@ impl<M: Message> UntrustedAggregateProof<M> {
             slots += n;
         }
         AggregateProof {
-            signers: self.signers,
+            signers: self.signers.clone(),
             slots,
             public_key,
-            signature: self.signature,
+            signature: self.signature.clone(),
             _message: PhantomData,
         }
     }

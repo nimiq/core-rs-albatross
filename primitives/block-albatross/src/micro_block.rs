@@ -11,6 +11,7 @@ use primitives::networks::NetworkId;
 use nimiq_bls::bls12_381::Signature;
 use std::cmp::Ordering;
 use transaction::Transaction;
+use crate::signed;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroBlock {
@@ -38,7 +39,7 @@ pub struct MicroHeader {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroJustification {
     pub signature: Signature,
-    pub view_change_proof: Option<ViewChangeProof>,
+    pub view_change_proof: Option<signed::UntrustedAggregateProof<ViewChange>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

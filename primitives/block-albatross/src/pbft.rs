@@ -5,6 +5,7 @@ use super::signed;
 use bls::bls12_381::PublicKey;
 use super::MacroHeader;
 use crate::ViewChangeProof;
+use crate::signed::UntrustedAggregateProof;
 
 
 /// A macro block proposed by the pBFT-leader.
@@ -89,8 +90,32 @@ impl PbftProof {
         self.commit.add_signature(public_key, slots, commit)
     }
 
+    pub fn into_untrusted(self) -> UntrustedPbftProof {
+        UntrustedPbftProof {
+            prepare: self.prepare.into_untrusted(),
+            commit: self.commit.into_untrusted()
+        }
+    }
+
     pub fn clear(&mut self) {
         self.prepare.clear();
         self.commit.clear();
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UntrustedPbftProof {
+    pub prepare: signed::UntrustedAggregateProof<PbftPrepareMessage>,
+    pub commit: signed::UntrustedAggregateProof<PbftCommitMessage>,
+}
+
+impl UntrustedPbftProof {
+    pub fn into_trusted<F>(&self, f: F) -> PbftProof
+        where F: Fn(u16) -> (PublicKey, /*number of slots*/ u16) + Clone
+    {
+        PbftProof {
+            prepare: self.prepare.into_trusted(f.clone()),
+            commit: self.commit.into_trusted(f)
+        }
     }
 }

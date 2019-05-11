@@ -24,7 +24,7 @@ pub use macro_block::{MacroBlock, MacroHeader};
 pub use micro_block::{MicroBlock, MicroHeader, MicroExtrinsics};
 pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof};
 pub use slash::SlashInherent;
-pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, SignedPbftPrepareMessage, SignedPbftCommitMessage, SignedPbftProposal, PbftProposal};
+pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, UntrustedPbftProof, SignedPbftPrepareMessage, SignedPbftCommitMessage, SignedPbftProposal, PbftProposal};
 
 use beserial::{Deserialize, Serialize};
 use bls::bls12_381::PublicKey;
@@ -38,6 +38,7 @@ pub enum BlockError {
     FromTheFuture,
     SizeExceeded,
     BodyHashMismatch,
+    AccountsHashMismatch,
 
     DuplicateTransaction,
     InvalidTransaction(TransactionError),
@@ -54,4 +55,5 @@ pub struct Slot {
     pub public_key: PublicKey,
     pub reward_address: Address,
     pub slashing_address: Address,
+    pub slot_number: u16,
 }
