@@ -70,7 +70,7 @@ pub struct NimiqMessageStream {
 }
 
 impl NimiqMessageStream {
-    pub(super) fn new(ws_socket: WebSocketStream<MaybeTlsStream<TcpStream>>, outbound: bool) -> Result<Self, Error> {
+    pub(super) fn new(ws_socket: WebSocketLayer, outbound: bool) -> Result<Self, Error> {
         let peer_addr = ws_socket.peer_addr().map_err(Error::NetAddressMissing)?;
         Ok(NimiqMessageStream {
             inner: ws_socket,

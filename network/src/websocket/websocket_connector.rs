@@ -5,9 +5,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use futures::future::poll_fn;
+use futures::sync::oneshot;
 use futures::prelude::*;
 use native_tls::{Identity, TlsAcceptor};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
@@ -21,6 +22,7 @@ use network_primitives::protocol::ProtocolFlags;
 use utils::observer::PassThroughNotifier;
 
 use crate::connection::{AddressInfo, NetworkConnection};
+use crate::connection::close_type::CloseType;
 use crate::network_config::{NetworkConfig, ProtocolConfig};
 use crate::websocket::{
     nimiq_accept_async,
@@ -38,15 +40,41 @@ use crate::websocket::error::ServerStartError;
 // connection should be aborted (f.e. if we are connecting to the same peer,
 // once as a client and once as the server). This is equivalent to the `abort()`
 // method on the WebSocketConnector on the JavaScript implementation.
-pub struct ConnectionHandle(AtomicBool);
+pub struct ConnectionHandle {
+    closing_tx: Mutex<Option<oneshot::Sender<(CloseType)>>>,
+    closed: AtomicBool,
+}
 
 impl ConnectionHandle {
-    pub fn abort(&self) {
-        self.0.store(true, Ordering::Release);
+    pub fn new(closing_tx: oneshot::Sender<CloseType>) -> Self {
+        Self {
+            closing_tx: Mutex::new(Some(closing_tx)),
+            closed: AtomicBool::new(false),
+        }
+    }
+
+    pub fn abort(&self, ty: CloseType) -> bool {
+        debug!("Closing connection, reason: {:?}", ty);
+
+        // Don't close if already done and atomically mark as closed.
+        if self.closed.swap(true, Ordering::Release) {
+            return false;
+        }
+
+        // Send out oneshot with CloseType to close the connection from our end.
+        let mut closing_tx = self.closing_tx.lock();
+        assert!(closing_tx.is_some(), "Trying to close already closed connection.");
+        let closing_tx = closing_tx.take().unwrap();
+        if closing_tx.send(ty).is_err() {
+            // Already closed by remote.
+            return false;
+        }
+
+        return true;
     }
 
     pub fn is_aborted(&self) -> bool {
-        self.0.load(Ordering::Acquire)
+        self.closed.load(Ordering::Acquire)
     }
 }
 
@@ -177,21 +205,17 @@ impl WebSocketConnector {
         let url = Url::parse(&peer_address.as_uri().to_string()).map_err(ConnectError::InvalidUri)?;
         let error_notifier = Arc::clone(&self.notifier);
         let error_peer_address = Arc::clone(&peer_address);
-        let connection_handle = Arc::new(ConnectionHandle(AtomicBool::new(false)));
-        let connection_handle_for_closure = Arc::clone(&connection_handle);
+        let (tx, rx) = oneshot::channel::<CloseType>();
+        let connection_handle = Arc::new(ConnectionHandle::new(tx));
 
         let connect = nimiq_connect_async(url)
             .timeout(Self::CONNECT_TIMEOUT)
             .map(move |msg_stream| {
-                if !connection_handle_for_closure.is_aborted() {
-                    let shared_stream: SharedNimiqMessageStream = msg_stream.into();
-                    let net_address = Some(Arc::new(shared_stream.net_address()));
-                    let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, Some(peer_address)));
-                    notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
-                    tokio::spawn(ncfut);
-                } else {
-                    notifier.read().notify(WebSocketConnectorEvent::Error(peer_address.clone(), ConnectError::AbortedByUs));
-                }
+                let shared_stream: SharedNimiqMessageStream = msg_stream.into();
+                let net_address = Some(Arc::new(shared_stream.net_address()));
+                let (nc, ncfut) = NetworkConnection::new_connection_setup(shared_stream, AddressInfo::new(net_address, Some(peer_address)));
+                notifier.read().notify(WebSocketConnectorEvent::Connection(nc));
+                tokio::spawn(ncfut);
             })
             .map_err(move |error| {
                 if error.is_inner() {
@@ -205,7 +229,7 @@ impl WebSocketConnector {
                 }
             });
 
-            tokio::spawn(connect);
+            tokio::spawn(connect.select2(rx).map(|_| ()).map_err(|_| ()));
 
             Ok(connection_handle)
     }
