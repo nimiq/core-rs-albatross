@@ -10,6 +10,9 @@ mod hash;
 #[cfg(feature = "block")]
 mod block;
 
+#[cfg(feature = "block-albatross")]
+mod block_albatross;
+
 #[cfg(feature = "account")]
 mod accounts;
 

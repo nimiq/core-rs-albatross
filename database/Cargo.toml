@@ -29,12 +29,14 @@ beserial = { path = "../beserial", version = "0.1.0" }
 nimiq-hash = { path = "../hash", version = "0.1.0", optional = true }
 nimiq-keys = { path = "../keys", version = "0.1.0", optional = true }
 nimiq-block = { path = "../primitives/block", version = "0.1.0", optional = true }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1.0", optional = true }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1.0", optional = true }
 
 [features]
 # Compiles this package with all features needed for the nimiq client.
-full-nimiq = ["hash", "block", "account", "keys"]
+full-nimiq = ["hash", "block", "block-albatross", "account", "keys"]
 hash = ["nimiq-hash"]
 block = ["nimiq-block"]
+block-albatross = ["nimiq-block-albatross"]
 account = ["nimiq-tree-primitives"]
 keys = ["nimiq-keys"]
