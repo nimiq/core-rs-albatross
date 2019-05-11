@@ -2,10 +2,8 @@ use beserial::{Deserialize, Serialize};
 use primitives::coin::Coin;
 use transaction::Transaction;
 
-use crate::Account;
-use crate::AccountError;
-use crate::AccountTransactionInteraction;
-use crate::AccountType;
+use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
+use crate::inherent::{Inherent, InherentType, AccountInherentInteraction};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct BasicAccount {
@@ -54,6 +52,31 @@ impl AccountTransactionInteraction for BasicAccount {
         }
 
         self.balance = Account::balance_add(self.balance, transaction.total_value()?)?;
+        Ok(())
+    }
+}
+
+impl AccountInherentInteraction for BasicAccount {
+    fn check_inherent(&self, inherent: &Inherent) -> Result<(), AccountError> {
+        match inherent.ty {
+            InherentType::Reward => Ok(()),
+            InherentType::Slash => Err(AccountError::InvalidInherent),
+        }
+    }
+
+    fn commit_inherent(&mut self, inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
+        self.check_inherent(inherent)?;
+        self.balance = Account::balance_add(self.balance, inherent.value)?;
+        Ok(None)
+    }
+
+    fn revert_inherent(&mut self, inherent: &Inherent, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        if receipt.is_some() {
+            return Err(AccountError::InvalidReceipt);
+        }
+
+        self.check_inherent(inherent)?;
+        self.balance = Account::balance_sub(self.balance, inherent.value)?;
         Ok(())
     }
 }

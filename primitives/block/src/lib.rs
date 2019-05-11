@@ -40,6 +40,7 @@ pub enum BlockError {
     InvalidTransaction(TransactionError),
     ExpiredTransaction,
     TransactionsNotOrdered,
+    FeeOverflow,
 
     DuplicateReceipt,
     InvalidReceipt,

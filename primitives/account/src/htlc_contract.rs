@@ -5,8 +5,8 @@ use primitives::coin::Coin;
 use transaction::{SignatureProof, Transaction};
 use transaction::account::htlc_contract::{AnyHash, CreationTransactionData, HashAlgorithm, ProofType};
 
-use crate::{Account, AccountError};
-use crate::AccountTransactionInteraction;
+use crate::{Account, AccountError, AccountTransactionInteraction};
+use crate::inherent::{AccountInherentInteraction, Inherent};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct HashedTimeLockedContract {
@@ -142,5 +142,19 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
         self.balance = Account::balance_add(self.balance, transaction.total_value()?)?;
         Ok(())
+    }
+}
+
+impl AccountInherentInteraction for HashedTimeLockedContract {
+    fn check_inherent(&self, _inherent: &Inherent) -> Result<(), AccountError> {
+        Err(AccountError::InvalidInherent)
+    }
+
+    fn commit_inherent(&mut self, _inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
+        Err(AccountError::InvalidInherent)
+    }
+
+    fn revert_inherent(&mut self, _inherent: &Inherent, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        Err(AccountError::InvalidInherent)
     }
 }

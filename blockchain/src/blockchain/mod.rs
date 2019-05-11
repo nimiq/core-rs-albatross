@@ -117,7 +117,6 @@ impl<'env> Blockchain<'env> {
 
         // Check that chain/accounts state is consistent.
         let accounts = Accounts::new(env);
-
         if main_chain.head.header.accounts_hash != accounts.hash(None) {
             return Err(BlockchainError::InconsistentState);
         }
@@ -164,6 +163,17 @@ impl<'env> Blockchain<'env> {
         let accounts = Accounts::new(env);
         let mut txn = WriteTransaction::new(env);
         accounts.init(&mut txn, network_id);
+
+        // Commit genesis block to accounts.
+        let genesis_header = &network_info.genesis_block.header;
+        let genesis_transactions = &network_info.genesis_block.body.as_ref().unwrap().transactions;
+        let genesis_inherents = vec![network_info.genesis_block.get_reward_inherent()];
+        accounts
+            .commit(&mut txn, genesis_transactions, &genesis_inherents, genesis_header.height)
+            .expect("Failed to commit genesis block body");
+
+        assert_eq!(accounts.hash(Some(&txn)), genesis_header.accounts_hash,
+                   "Genesis AccountHash mismatch");
 
         // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
@@ -500,10 +510,8 @@ impl<'env> Blockchain<'env> {
         let body = block.body.as_ref().unwrap();
 
         // Commit block to AccountsTree.
-        let receipts = accounts.commit(txn, &body.transactions, &body.miner, header.height);
-        if let Err(e) = receipts {
-            return Err(PushError::AccountsError(e));
-        }
+        let mut receipts = accounts.commit(txn, &body.transactions, &vec![block.get_reward_inherent()], header.height)
+            .map_err(|e| PushError::AccountsError(e))?;
 
         // Verify accounts hash.
         if header.accounts_hash != accounts.hash(Some(&txn)) {
@@ -511,7 +519,8 @@ impl<'env> Blockchain<'env> {
         }
 
         // Verify receipts.
-        if body.receipts != receipts.unwrap() {
+        receipts.sort();
+        if body.receipts != receipts {
             return Err(PushError::InvalidBlock(BlockError::InvalidReceipt));
         }
 
@@ -525,7 +534,8 @@ impl<'env> Blockchain<'env> {
         assert_eq!(header.accounts_hash, accounts.hash(Some(&txn)),
             "Failed to revert - inconsistent state");
 
-        if let Err(e) = accounts.revert(txn, &body.transactions, &body.miner, header.height, &body.receipts) {
+        // Revert AccountsTree.
+        if let Err(e) = accounts.revert(txn, &body.transactions, &vec![block.get_reward_inherent()], header.height, &body.receipts) {
             panic!("Failed to revert - {}", e);
         }
     }

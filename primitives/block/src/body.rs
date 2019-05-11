@@ -1,10 +1,13 @@
 use std::{cmp::Ordering, io};
 
 use account::Receipt;
+use account::inherent::{Inherent, InherentType};
 use beserial::{Deserialize, Serialize};
 use hash::{Hash, HashOutput, SerializeContent};
 use keys::Address;
+use primitives::coin::Coin;
 use primitives::networks::NetworkId;
+use primitives::policy;
 use transaction::Transaction;
 use utils::merkle;
 
@@ -37,6 +40,8 @@ impl Hash for BlockBody {
 #[allow(unreachable_code)]
 impl BlockBody {
     pub fn verify(&self, block_height: u32, network_id: NetworkId) -> Result<(), BlockError> {
+        let mut total_fees = Coin::ZERO;
+
         let mut previous_tx: Option<&Transaction> = None;
         for tx in &self.transactions {
             // Ensure transactions are ordered and unique.
@@ -62,13 +67,17 @@ impl BlockBody {
             if let Err(e) = tx.verify(network_id) {
                 return Err(BlockError::InvalidTransaction(e));
             }
+
+            // Check for fee overflow.
+            total_fees = total_fees.checked_add(tx.fee)
+                .ok_or(BlockError::FeeOverflow)?;
         }
 
-        let mut previous_acc: Option<&Receipt> = None;
-        for acc in &self.receipts {
-            // Ensure pruned accounts are ordered and unique.
-            if let Some(previous) = previous_acc {
-                match previous.cmp(acc) {
+        let mut previous_receipt: Option<&Receipt> = None;
+        for receipt in &self.receipts {
+            // Ensure receipts are ordered and unique.
+            if let Some(previous) = previous_receipt {
+                match previous.cmp(receipt) {
                     Ordering::Equal => {
                         return Err(BlockError::DuplicateReceipt);
                     }
@@ -78,16 +87,16 @@ impl BlockBody {
                     _ => (),
                 }
             }
-            previous_acc = Some(acc);
+            previous_receipt = Some(receipt);
 
             // Check that the account is actually supposed to be pruned.
-            match acc {
+            match receipt {
                 Receipt::PrunedAccount(acc) => {
                     if !acc.account.is_to_be_pruned() {
                         return Err(BlockError::InvalidReceipt);
                     }
                 },
-                _ => unreachable!(),
+                _ => return Err(BlockError::InvalidReceipt)
             }
         }
 
@@ -108,11 +117,27 @@ impl BlockBody {
         vec
     }
 
+    /// Can panic on unverified blocks if the total fees overflow.
+    pub fn total_fees(&self) -> Coin {
+        self.transactions.iter().fold(Coin::ZERO, |sum, tx| sum + tx.fee)
+    }
+
+    /// Can panic on unverified blocks if the total fees overflow.
+    // XXX Does this really belong here?
+    pub fn get_reward_inherent(&self, block_height: u32) -> Inherent {
+        Inherent {
+            ty: InherentType::Reward,
+            target: self.miner.clone(),
+            value: policy::block_reward_at(block_height) + self.total_fees(),
+            data: vec![]
+        }
+    }
+
     pub fn get_metadata_size(extra_data_size: usize) -> usize {
         return Address::SIZE
             + /*extra_data size*/ 1
             + extra_data_size
             + /*transactions size*/ 2
-            + /*pruned_accounts size*/ 2;
+            + /*receipts size*/ 2;
     }
 }

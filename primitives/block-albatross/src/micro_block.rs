@@ -133,6 +133,10 @@ impl MicroExtrinsics {
                 Receipt::Transaction {..} => {
                     // TODO
                     unimplemented!()
+                },
+                Receipt::Inherent {..} => {
+                    // TODO
+                    unimplemented!()
                 }
             }
         }

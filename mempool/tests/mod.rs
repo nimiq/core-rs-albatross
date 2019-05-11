@@ -31,7 +31,7 @@ fn push_same_tx_twice() {
     // Give address_a balance
     let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
-    blockchain.state().accounts().commit(&mut txn, &body.transactions, &body.miner, 1).unwrap();
+    blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
     txn.commit();
 
     // Generate and sign transaction from address_a
@@ -79,7 +79,7 @@ fn push_and_get_valid_tx() {
     // Give address_a balance
     let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
-    blockchain.state().accounts().commit(&mut txn, &body.transactions, &body.miner, 1).unwrap();
+    blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
     txn.commit();
 
     // Generate and sign transaction from address_a
@@ -109,7 +109,7 @@ fn push_and_get_two_tx_same_user() {
     // Give address_a balance
     let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
-    blockchain.state().accounts().commit(&mut txn, &body.transactions, &body.miner, 1).unwrap();
+    blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
     txn.commit();
 
     // Generate, sign and push 1st transaction from address_a
@@ -145,7 +145,7 @@ fn reject_free_tx_beyond_limit() {
     // Give address_a balance
     let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
     let mut txn = WriteTransaction::new(&env);
-    blockchain.state().accounts().commit(&mut txn, &body.transactions, &body.miner, 1).unwrap();
+    blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
     txn.commit();
 
     for i in 0..10 + 1 {

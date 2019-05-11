@@ -26,7 +26,7 @@ pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof};
 pub use slash::SlashInherent;
 pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, SignedPbftPrepareMessage, SignedPbftCommitMessage, SignedPbftProposal, PbftProposal};
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use beserial::{Deserialize, Serialize};
 use bls::bls12_381::PublicKey;
 use crate::transaction::TransactionError;
 use keys::Address;

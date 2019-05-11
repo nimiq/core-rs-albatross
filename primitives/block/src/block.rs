@@ -1,8 +1,9 @@
+use account::inherent::Inherent;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use hash::{Argon2dHash, Blake2bHash, Hash};
+use primitives::networks::NetworkId;
 
 use crate::{BlockBody, BlockError, BlockHeader, BlockInterlink, Target};
-use primitives::networks::NetworkId;
 
 #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize)]
 pub struct Block {
@@ -132,6 +133,12 @@ impl Block {
         }
 
         BlockInterlink::new(hashes, &hash)
+    }
+
+    // XXX Does this really belong here?
+    pub fn get_reward_inherent(&self) -> Inherent {
+        assert!(self.body.is_some(), "Body needed for reward inherent");
+        self.body.as_ref().unwrap().get_reward_inherent(self.header.height)
     }
 
     pub fn into_light(mut self) -> Block {

@@ -3,8 +3,9 @@ use keys::Address;
 use primitives::coin::Coin;
 use transaction::{SignatureProof, Transaction};
 use transaction::account::vesting_contract::CreationTransactionData;
-use crate::{Account, AccountError, AccountType};
-use crate::AccountTransactionInteraction;
+
+use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
+use crate::inherent::{AccountInherentInteraction, Inherent};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 pub struct VestingContract {
@@ -99,5 +100,19 @@ impl AccountTransactionInteraction for VestingContract {
 
         self.balance = Account::balance_add(self.balance, transaction.total_value()?)?;
         Ok(())
+    }
+}
+
+impl AccountInherentInteraction for VestingContract {
+    fn check_inherent(&self, _inherent: &Inherent) -> Result<(), AccountError> {
+        Err(AccountError::InvalidInherent)
+    }
+
+    fn commit_inherent(&mut self, _inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
+        Err(AccountError::InvalidInherent)
+    }
+
+    fn revert_inherent(&mut self, _inherent: &Inherent, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        Err(AccountError::InvalidInherent)
     }
 }

@@ -15,8 +15,8 @@ use primitives::policy;
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::StakingTransactionData;
 
-use crate::{Account, AccountError, AccountType};
-use crate::AccountTransactionInteraction;
+use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
+use crate::inherent::{AccountInherentInteraction, Inherent, InherentType};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActiveStake {
@@ -524,6 +524,25 @@ impl AccountTransactionInteraction for StakingContract {
             };
             self.revert_retire_sender(&staker_address, transaction.total_value()?, receipt)
         }
+    }
+}
+
+impl AccountInherentInteraction for StakingContract {
+    fn check_inherent(&self, inherent: &Inherent) -> Result<(), AccountError> {
+        match inherent.ty {
+            InherentType::Slash => {
+                unimplemented!()
+            },
+            InherentType::Reward => Err(AccountError::InvalidInherent)
+        }
+    }
+
+    fn commit_inherent(&mut self, inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
+        unimplemented!()
+    }
+
+    fn revert_inherent(&mut self, inherent: &Inherent, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        unimplemented!()
     }
 }
 

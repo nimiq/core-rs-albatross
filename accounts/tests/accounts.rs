@@ -29,7 +29,7 @@ fn it_can_commit_and_revert_a_block_body() {
     assert_eq!(accounts.get(&address_miner, None).balance(), Coin::ZERO);
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 1).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).is_ok());
         txn.commit();
     }
 
@@ -49,7 +49,7 @@ fn it_can_commit_and_revert_a_block_body() {
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 2).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(2)], 2).is_ok());
         txn.commit();
     }
 
@@ -60,7 +60,7 @@ fn it_can_commit_and_revert_a_block_body() {
 
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.revert(&mut txn, &body.transactions, &body.miner, 2, &body.receipts).is_ok());
+        assert!(accounts.revert(&mut txn, &body.transactions, &vec![body.get_reward_inherent(2)], 2, &body.receipts).is_ok());
         txn.commit();
     }
 
@@ -94,7 +94,7 @@ fn it_correctly_rewards_miners() {
     assert_eq!(accounts.get(&address_miner1, None).balance(), Coin::ZERO);
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 1).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).is_ok());
         txn.commit();
     }
 
@@ -128,7 +128,7 @@ fn it_correctly_rewards_miners() {
     assert_eq!(accounts.get(&address_miner2, None).balance(), Coin::ZERO);
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 2).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(2)], 2).is_ok());
         txn.commit();
     }
 
@@ -168,7 +168,7 @@ fn it_checks_for_sufficient_funds() {
     // Fails as address_sender does not have any funds.
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 1).is_err());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).is_err());
     }
 
     assert_eq!(accounts.get(&address_sender, None).balance(), Coin::ZERO);
@@ -180,7 +180,7 @@ fn it_checks_for_sufficient_funds() {
 
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 1).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).is_ok());
         txn.commit();
     }
 
@@ -195,7 +195,7 @@ fn it_checks_for_sufficient_funds() {
 
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 2).is_err());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(2)], 2).is_err());
     }
 
     assert_eq!(accounts.get(&address_sender, None).balance(), policy::block_reward_at(1));
@@ -210,7 +210,7 @@ fn it_checks_for_sufficient_funds() {
 
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 2).is_err());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(2)], 2).is_err());
     }
 
     assert_eq!(accounts.get(&address_sender, None).balance(), policy::block_reward_at(1));
@@ -239,7 +239,7 @@ fn it_correctly_prunes_account() {
     // Give a block reward
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 1).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).is_ok());
         txn.commit();
     }
 
@@ -254,7 +254,7 @@ fn it_correctly_prunes_account() {
     body.transactions = vec![tx_create.clone()];
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 2).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(2)], 2).is_ok());
         txn.commit();
     }
 
@@ -271,7 +271,7 @@ fn it_correctly_prunes_account() {
     })];
     {
         let mut txn = WriteTransaction::new(&env);
-        assert_eq!(accounts.commit(&mut txn, &body.transactions, &body.miner, 3), Ok(body.receipts.clone()));
+        assert_eq!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(3)], 3), Ok(body.receipts.clone()));
         txn.commit();
     }
 
@@ -283,7 +283,7 @@ fn it_correctly_prunes_account() {
     // Now revert pruning
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.revert(&mut txn, &body.transactions, &body.miner, 3, &body.receipts).is_ok());
+        assert!(accounts.revert(&mut txn, &body.transactions, &vec![body.get_reward_inherent(3)], 3, &body.receipts).is_ok());
         txn.commit();
     }
 
@@ -298,7 +298,7 @@ fn it_correctly_prunes_account() {
     body.transactions = vec![tx_create.clone()];
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.revert(&mut txn, &body.transactions, &body.miner, 2, &body.receipts).is_ok());
+        assert!(accounts.revert(&mut txn, &body.transactions, &vec![body.get_reward_inherent(2)], 2, &body.receipts).is_ok());
         txn.commit();
     }
 
@@ -322,7 +322,7 @@ fn can_generate_accounts_proof() {
 
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 1).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).is_ok());
         txn.commit();
     }
     let value1 = Coin::from_u64(5).unwrap();
@@ -337,7 +337,7 @@ fn can_generate_accounts_proof() {
 
     {
         let mut txn = WriteTransaction::new(&env);
-        assert!(accounts.commit(&mut txn, &body.transactions, &body.miner, 2).is_ok());
+        assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(2)], 2).is_ok());
         txn.commit();
     }
 

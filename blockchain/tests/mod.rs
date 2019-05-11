@@ -140,9 +140,9 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
 
         // XXX Use default accounts hash if body fails to apply.
         let state = self.blockchain.state();
-        let accounts = state.accounts();
-        self.header.accounts_hash = accounts
-            .hash_with(&self.body.transactions, &self.body.miner, self.header.height)
+        let inherents = vec![self.body.get_reward_inherent(self.header.height)];
+        self.header.accounts_hash = state.accounts()
+            .hash_with(&self.body.transactions, &inherents, self.header.height)
             .unwrap_or([0u8; Blake2bHash::SIZE].into());
 
         Block {
