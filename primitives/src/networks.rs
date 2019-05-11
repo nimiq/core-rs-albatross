@@ -8,5 +8,6 @@ pub enum NetworkId {
     Dev = 2,
     Bounty = 3,
     Dummy = 4,
+    AlbatrossTest = 5,
     Main = 42,
 }

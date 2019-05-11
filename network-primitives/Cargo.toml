@@ -34,6 +34,7 @@ nimiq-block-albatross = { path = "../primitives/block-albatross" }
 nimiq-bls = { path = "../bls" }
 nimiq-transaction = { path = "../primitives/transaction" }
 nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
+nimiq-account = { path = "../primitives/account" }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 nimiq-macros = { path = "../macros" }
 

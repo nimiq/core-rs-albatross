@@ -119,7 +119,8 @@ impl Encoding for SecretKey {
     fn to_bytes(&self) -> Self::ByteArray {
         let mut key = [0u8; Self::SIZE];
         let repr = self.x.into_repr();
-        assert_eq!(repr.as_ref().len(), Self::SIZE);
+        // repr.as_ref() returns aslice of u64's, so multiply with 8!
+        assert_eq!(repr.as_ref().len() * 8, Self::SIZE);
         BigEndian::write_u64_into(repr.as_ref(), key.as_mut());
         key
     }

@@ -1,0 +1,35 @@
+
+[package]
+name = "albatross-genesis"
+version = "0.1.0"
+authors = ["Janosch Gräf <janosch@nimiq.com>"]
+edition = "2018"
+
+[[bin]]
+name = "nimiq-genesis"
+path = "src/genesis/main.rs"
+
+[[bin]]
+name = "nimiq-keygen-bls"
+path = "src/keygen/main.rs"
+
+[dependencies]
+nimiq-bls = { path = "../bls" }
+nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
+nimiq-primitives = { path = "../primitives" }
+nimiq-account = { path = "../primitives/account" }
+nimiq-network-primitives = { path = "../network-primitives/" }
+beserial = { path = "../beserial" }
+lazy_static = "1.3"
+rand = "0.6"
+rand04_compat = "0.1"
+rand_chacha = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+serde = "1.0"
+serde_derive = "1.0"
+toml = "0.5"
+hex = "0.3"
+log = "0.4.6"
+simple_logger = "1.0.1"

@@ -14,6 +14,7 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_hash as hash;
 extern crate nimiq_bls as bls;
 extern crate nimiq_block_albatross as block_albatross;
+extern crate nimiq_account as account;
 #[macro_use]
 extern crate nimiq_hash_derive;
 #[macro_use]
@@ -27,6 +28,8 @@ pub mod services;
 pub mod version;
 #[cfg(feature = "networks")]
 pub mod networks;
+#[cfg(feature = "networks")]
+pub mod networks_albatross;
 #[cfg(feature = "protocol")]
 pub mod protocol;
 #[cfg(feature = "subscription")]

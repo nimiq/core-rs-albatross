@@ -32,5 +32,6 @@ members = [
     "messages",
     "fixed-unsigned",
     "bls",
-    "validator"
+    "validator",
+    "albatross-tools",
 ]

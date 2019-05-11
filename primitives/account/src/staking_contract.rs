@@ -18,6 +18,7 @@ use transaction::account::staking_contract::StakingTransactionData;
 use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
 use crate::inherent::{AccountInherentInteraction, Inherent, InherentType};
 
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActiveStake {
     staker_address: Address,
@@ -77,7 +78,7 @@ pub struct InactiveStake {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
-struct ActiveStakeReceipt {
+pub struct ActiveStakeReceipt {
     validator_key: BlsPublicKey,
     reward_address: Option<Address>,
 }
@@ -137,7 +138,8 @@ pub struct StakingContract {
 
 impl StakingContract {
     /// Adds funds to stake of `address`.
-    fn stake(&mut self, staker_address: &Address, value: Coin, validator_key: BlsPublicKey, reward_address: Option<Address>) -> Result<Option<ActiveStakeReceipt>, AccountError> {
+    /// XXX This is public to fill the genesis staking contract
+    pub fn stake(&mut self, staker_address: &Address, value: Coin, validator_key: BlsPublicKey, reward_address: Option<Address>) -> Result<Option<ActiveStakeReceipt>, AccountError> {
         self.balance = Account::balance_add(self.balance, value)?;
 
         if let Some(active_stake) = self.active_stake_by_address.remove(staker_address) {
@@ -659,6 +661,18 @@ impl Ord for StakingContract {
         Ordering::Equal
     }
 }
+
+impl Default for StakingContract {
+    fn default() -> Self {
+        StakingContract {
+            balance: Coin::from_u64(0).unwrap(),
+            active_stake_sorted: BTreeSet::new(),
+            active_stake_by_address: HashMap::new(),
+            inactive_stake_by_address: HashMap::new()
+        }
+    }
+}
+
 
 #[test]
 fn it_can_de_serialize_an_active_stake_receipt() {

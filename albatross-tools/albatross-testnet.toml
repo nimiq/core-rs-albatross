@@ -1,0 +1,16 @@
+
+seed_message = "Albatross TestNet"
+
+# Example: "2019-05-10T23:56:52.776772644+00:00"
+#timestamp = ""
+
+[[stakes]]
+staker_address = "NQ57 UC15 80L7 LHCK DBTB 709R M91Q PRG5 DL00"
+reward_address = "NQ57 UC15 80L7 LHCK DBTB 709R M91Q PRG5 DL00"
+balance = 123
+# secret_key = "8049c38d5b20373723dd5fec59a489d65d7ce695be53b1823c4e989cf3458538"
+validator_key = "85a92a104422b30cf669285eb2436414c5201f86f986f38b1e59806aefd39c0fea8f96e9d81bba942914234752288287136f26c34a836b7fe5cfba642d6ac579e0683648a5df8fac8f8d4ff9b0f38aaf053118d3021d21a3df10b67536ba5b9f"
+
+[[accounts]]
+address = "NQ57 UC15 80L7 LHCK DBTB 709R M91Q PRG5 DL00"
+balance = 123
