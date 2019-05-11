@@ -110,7 +110,7 @@ impl BitSet {
         self.count = count;
     }
 
-    fn iter<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
         let it = self.store.iter();
         it.enumerate().flat_map(|(i, &block)| {
             let mut values: Vec<usize> = Vec::with_capacity(64);

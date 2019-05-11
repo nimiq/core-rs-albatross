@@ -157,4 +157,46 @@ impl<M: Message> AggregateProof<M> {
         self.public_key = AggregatePublicKey::new();
         self.signature = AggregateSignature::new();
     }
+
+    pub fn into_untrusted(self) -> UntrustedAggregateProof<M> {
+        UntrustedAggregateProof {
+            signers: self.signers,
+            signature: self.signature,
+            _message: PhantomData
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UntrustedAggregateProof<M: Message> {
+    /// Indices of validators that signed this proof
+    pub signers: BitSet,
+
+    /// The aggregate signature
+    pub signature: AggregateSignature,
+
+    #[beserial(skip)]
+    _message: PhantomData<M>
+}
+
+impl<M: Message> UntrustedAggregateProof<M> {
+    pub fn into_trusted<F>(self, f: F) -> AggregateProof<M>
+        where F: Fn(u16) -> (PublicKey, /*number of slots*/ u16)
+    {
+        // aggregate signatures and count votes
+        let mut public_key = AggregatePublicKey::new();
+        let mut slots = 0;
+        for pk_idx in self.signers.iter() {
+            let (pk, n) = f(pk_idx as u16);
+            public_key.aggregate(&pk);
+            slots += n;
+        }
+        AggregateProof {
+            signers: self.signers,
+            slots,
+            public_key,
+            signature: self.signature,
+            _message: PhantomData,
+        }
+    }
 }
