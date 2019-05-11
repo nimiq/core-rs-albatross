@@ -1,3 +1,5 @@
+use std::convert::{TryFrom, TryInto};
+
 use num_bigint::BigUint;
 use num_traits::pow;
 use parking_lot::RwLock;
@@ -97,7 +99,7 @@ fn compute_block_reward(current_supply: u64, block_height: u32) -> u64 {
 pub fn block_reward_at(block_height: u32) -> Coin {
     assert!(block_height >= 1, "block_height must be >= 1");
     let current_supply = supply_after(block_height - 1);
-    Coin::from_u64(compute_block_reward(current_supply, block_height)).unwrap()
+    compute_block_reward(current_supply, block_height).try_into().unwrap()
 }
 
 
@@ -131,20 +133,20 @@ mod tests {
 
     #[test]
     fn it_correctly_computes_block_reward() {
-        assert_eq!(block_reward_at(1), Coin::from_u64(440597534).unwrap());
-        assert_eq!(block_reward_at(2), Coin::from_u64(440597429).unwrap());
-        assert_eq!(block_reward_at(3), Coin::from_u64(440597324).unwrap());
-        assert_eq!(block_reward_at(1000), Coin::from_u64(440492605).unwrap());
-        assert_eq!(block_reward_at(4999), Coin::from_u64(440072823).unwrap());
-        assert_eq!(block_reward_at(5000), Coin::from_u64(440072718).unwrap());
-        assert_eq!(block_reward_at(5001), Coin::from_u64(440072613).unwrap());
-        assert_eq!(block_reward_at(5002), Coin::from_u64(440072508).unwrap());
-        assert_eq!(block_reward_at(100000), Coin::from_u64(430217207).unwrap());
-        assert_eq!(block_reward_at(10000000), Coin::from_u64(40607225).unwrap());
-        assert_eq!(block_reward_at(48692959), Coin::from_u64(4001).unwrap());
-        assert_eq!(block_reward_at(48692960), Coin::from_u64(4000).unwrap());
-        assert_eq!(block_reward_at(52888984), Coin::from_u64(4000).unwrap());
-        assert_eq!(block_reward_at(52888985), Coin::from_u64(0).unwrap());
+        assert_eq!(block_reward_at(1), Coin::try_from(440597534).unwrap());
+        assert_eq!(block_reward_at(2), Coin::try_from(440597429).unwrap());
+        assert_eq!(block_reward_at(3), Coin::try_from(440597324).unwrap());
+        assert_eq!(block_reward_at(1000), Coin::try_from(440492605).unwrap());
+        assert_eq!(block_reward_at(4999), Coin::try_from(440072823).unwrap());
+        assert_eq!(block_reward_at(5000), Coin::try_from(440072718).unwrap());
+        assert_eq!(block_reward_at(5001), Coin::try_from(440072613).unwrap());
+        assert_eq!(block_reward_at(5002), Coin::try_from(440072508).unwrap());
+        assert_eq!(block_reward_at(100000), Coin::try_from(430217207).unwrap());
+        assert_eq!(block_reward_at(10000000), Coin::try_from(40607225).unwrap());
+        assert_eq!(block_reward_at(48692959), Coin::try_from(4001).unwrap());
+        assert_eq!(block_reward_at(48692960), Coin::try_from(4000).unwrap());
+        assert_eq!(block_reward_at(52888984), Coin::try_from(4000).unwrap());
+        assert_eq!(block_reward_at(52888985), Coin::try_from(0).unwrap());
     }
 
     #[test]

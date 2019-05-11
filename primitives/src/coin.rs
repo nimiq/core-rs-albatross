@@ -1,9 +1,11 @@
+use std::convert::TryFrom;
 use std::fmt;
 use std::io;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::str::FromStr;
 
 use failure::Fail;
+use num_traits::identities::Zero;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
@@ -20,16 +22,6 @@ impl Coin {
     // JavaScript's Number.MAX_SAFE_INTEGER: 2^53 - 1
     pub const MAX_SAFE_VALUE: u64 = 9_007_199_254_740_991u64;
 
-    // TODO: Replace by TryFrom as it becomes stable
-    #[inline]
-    pub fn from_u64(val: u64) -> Result<Coin, CoinParseError> {
-        if val <= Coin::MAX_SAFE_VALUE {
-            Ok(Coin(val))
-        } else {
-            Err(CoinParseError::Overflow)
-        }
-    }
-
     #[inline]
     pub fn from_u64_unchecked(val: u64) -> Coin {
         Coin(val)
@@ -39,6 +31,19 @@ impl Coin {
 impl From<Coin> for u64 {
     #[inline]
     fn from(coin: Coin) -> Self { coin.0 }
+}
+
+impl TryFrom<u64> for Coin {
+    type Error = CoinParseError;
+
+    #[inline]
+    fn try_from(val: u64) -> Result<Self, Self::Error> {
+        if val <= Coin::MAX_SAFE_VALUE {
+            Ok(Coin(val))
+        } else {
+            Err(CoinParseError::Overflow)
+        }
+    }
 }
 
 impl Add<Coin> for Coin {
@@ -70,6 +75,16 @@ impl SubAssign<Coin> for Coin {
     #[inline]
     fn sub_assign(&mut self, rhs: Coin) {
         self.0 -= rhs.0;
+    }
+}
+
+impl Zero for Coin {
+    fn zero() -> Self {
+        return Self::ZERO;
+    }
+
+    fn is_zero(&self) -> bool {
+        return self.0 == 0;
     }
 }
 
@@ -118,7 +133,7 @@ impl Coin {
     #[inline]
     pub fn checked_add(self, rhs: Coin) -> Option<Coin> {
         match self.0.checked_add(rhs.0) {
-            Some(val) => Coin::from_u64(val).ok(),
+            Some(val) => Coin::try_from(val).ok(),
             None => None,
         }
     }
@@ -126,7 +141,7 @@ impl Coin {
     #[inline]
     pub fn checked_sub(self, rhs: Coin) -> Option<Coin> {
         match self.0.checked_sub(rhs.0) {
-            Some(val) => Coin::from_u64(val).ok(),
+            Some(val) => Coin::try_from(val).ok(),
             None => None,
         }
     }
@@ -134,7 +149,7 @@ impl Coin {
     #[inline]
     pub fn checked_mul(self, times: u64) -> Option<Coin> {
         match self.0.checked_mul(times) {
-            Some(val) => Coin::from_u64(val).ok(),
+            Some(val) => Coin::try_from(val).ok(),
             None => None,
         }
     }
@@ -194,6 +209,6 @@ impl FromStr for Coin {
             .checked_mul(Coin::LUNAS_PER_COIN).ok_or(CoinParseError::Overflow)?
             .checked_add(frac_part).ok_or(CoinParseError::Overflow)?;
 
-        Ok(Coin::from_u64(value)?)
+        Ok(Coin::try_from(value)?)
     }
 }

@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use atomic::{Atomic, Ordering};
@@ -142,8 +143,8 @@ fn it_rejects_blocks_with_duplicate_transactions() {
     let mut tx = Transaction::new_basic(
         miner.clone(),
         [2u8; Address::SIZE].into(),
-        Coin::from_u64(10).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        Coin::try_from(10).unwrap(),
+        Coin::try_from(0).unwrap(),
         1,
         NetworkId::Main
     );
@@ -185,8 +186,8 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
     let mut tx = Transaction::new_basic(
         miner.clone(),
         [2u8; Address::SIZE].into(),
-        Coin::from_u64(1000000000).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        Coin::try_from(1000000000).unwrap(),
+        Coin::try_from(0).unwrap(),
         1,
         NetworkId::Main
     );
@@ -197,14 +198,14 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
         .with_nonce(31302)
         .build();
     status = blockchain.push(block3);
-    assert_eq!(status, Err(PushError::AccountsError(AccountError::InsufficientFunds { needed: Coin::from_u64(1000000000).unwrap(), balance: Coin::from_u64(440597429).unwrap() })));
+    assert_eq!(status, Err(PushError::AccountsError(AccountError::InsufficientFunds { needed: Coin::try_from(1000000000).unwrap(), balance: Coin::try_from(440597429).unwrap() })));
 
     // Tx with wrong sender type
     tx = Transaction::new_basic(
         miner.clone(),
         [2u8; Address::SIZE].into(),
-        Coin::from_u64(1000).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        Coin::try_from(1000).unwrap(),
+        Coin::try_from(0).unwrap(),
         1,
         NetworkId::Main
     );

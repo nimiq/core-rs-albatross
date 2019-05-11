@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::str::FromStr;
 
 use account::Account;
@@ -290,11 +291,11 @@ mod tests {
     #[test]
     fn it_can_create_valid_chunk() {
         let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-        let account1 = Account::Basic(account::BasicAccount { balance: Coin::from_u64(5).unwrap() });
+        let account1 = Account::Basic(account::BasicAccount { balance: Coin::try_from(5).unwrap() });
         let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
-        let account2 = Account::Basic(account::BasicAccount { balance: Coin::from_u64(55).unwrap() });
+        let account2 = Account::Basic(account::BasicAccount { balance: Coin::try_from(55).unwrap() });
         let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
-        let account3 = Account::Basic(account::BasicAccount { balance: Coin::from_u64(55555555).unwrap() });
+        let account3 = Account::Basic(account::BasicAccount { balance: Coin::try_from(55555555).unwrap() });
 
         let env = database::volatile::VolatileEnvironment::new(10).unwrap();
         let tree = AccountsTree::new(&env);

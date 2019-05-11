@@ -6,6 +6,7 @@ use beserial::Deserialize;
 use network_primitives::subscription::{Subscription, SubscriptionType};
 use primitives::coin::Coin;
 use keys::Address;
+use std::convert::TryFrom;
 use std::collections::HashSet;
 
 // Nimiq.Subscription.fromAddresses([Nimiq.Address.fromUserFriendlyAddress("NQ43 P4RM 6KUV RP79 QMTR SE0K FJRQ K22P MD35"),Nimiq.Address.fromUserFriendlyAddress("NQ29 8MRT RYYN CNCE XRN5 DGYG HA2G CAVC MPDJ")]).serialize().toString()
@@ -41,7 +42,7 @@ fn test_subscription_minfee() {
     let vec = hex::decode(SUBSCRIPTION_MINFEE).unwrap();
     let subscription: Subscription = Deserialize::deserialize(&mut &vec[..]).unwrap();
     match subscription {
-        Subscription::MinFee(fee) => assert_eq!(Coin::from_u64(42u64).unwrap(), fee),
+        Subscription::MinFee(fee) => assert_eq!(Coin::try_from(42u64).unwrap(), fee),
         _ => assert!(false)
     };
 }

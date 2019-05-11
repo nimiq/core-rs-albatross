@@ -1,3 +1,5 @@
+use std::convert::{TryFrom, TryInto};
+
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, VestingContract};
@@ -12,12 +14,12 @@ const CONTRACT: &str = "00002fbf9bd9c800fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22
 fn it_can_deserialize_a_vesting_contract() {
     let bytes: Vec<u8> = hex::decode(CONTRACT).unwrap();
     let contract: VestingContract = Deserialize::deserialize(&mut &bytes[..]).unwrap();
-    assert_eq!(contract.balance, Coin::from_u64(52500000000000).unwrap());
+    assert_eq!(contract.balance, 52500000000000.try_into().unwrap());
     assert_eq!(contract.owner, Address::from("fd34ab7265a0e48c454ccbf4c9c61dfdf68f9a22"));
     assert_eq!(contract.start, 1);
-    assert_eq!(contract.step_amount, Coin::from_u64(2625000000000).unwrap());
+    assert_eq!(contract.step_amount, 2625000000000.try_into().unwrap());
     assert_eq!(contract.step_blocks, 259200);
-    assert_eq!(contract.total_amount, Coin::from_u64(52500000000000).unwrap());
+    assert_eq!(contract.total_amount, 52500000000000.try_into().unwrap());
 }
 
 #[test]
@@ -44,8 +46,8 @@ fn it_can_verify_creation_transaction() {
         owner.clone(),
         AccountType::Basic,
         AccountType::Vesting,
-        Coin::from_u64(100).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        100.try_into().unwrap(),
+        0.try_into().unwrap(),
         0,
         NetworkId::Dummy,
     );
@@ -73,7 +75,7 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize(&sender, &mut data);
     Serialize::serialize(&100u32, &mut data);
     Serialize::serialize(&100u32, &mut data);
-    Serialize::serialize(&Coin::from_u64(100).unwrap(), &mut data);
+    Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(AccountType::verify_incoming_transaction(&transaction), Ok(()));
@@ -84,8 +86,8 @@ fn it_can_verify_creation_transaction() {
     Serialize::serialize(&sender, &mut data);
     Serialize::serialize(&100u32, &mut data);
     Serialize::serialize(&100u32, &mut data);
-    Serialize::serialize(&Coin::from_u64(100).unwrap(), &mut data);
-    Serialize::serialize(&Coin::from_u64(100).unwrap(), &mut data);
+    Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
+    Serialize::serialize(&Coin::try_from(100).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
     assert_eq!(AccountType::verify_incoming_transaction(&transaction), Ok(()));
@@ -104,19 +106,19 @@ fn it_can_create_contract_from_transaction() {
         owner.clone(),
         AccountType::Basic,
         AccountType::Vesting,
-        Coin::from_u64(100).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        100.try_into().unwrap(),
+        0.try_into().unwrap(),
         0,
         NetworkId::Dummy,
     );
-    match VestingContract::create(Coin::from_u64(100).unwrap(), &transaction, 0) {
+    match VestingContract::create(100.try_into().unwrap(), &transaction, 0) {
         Ok(contract) => {
-            assert_eq!(contract.balance, Coin::from_u64(100).unwrap());
+            assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
             assert_eq!(contract.start, 0);
             assert_eq!(contract.step_blocks, 1000);
-            assert_eq!(contract.step_amount, Coin::from_u64(100).unwrap());
-            assert_eq!(contract.total_amount, Coin::from_u64(100).unwrap());
+            assert_eq!(contract.step_amount, 100.try_into().unwrap());
+            assert_eq!(contract.total_amount, 100.try_into().unwrap());
         }
         Err(_) => assert!(false)
     }
@@ -126,17 +128,17 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&owner, &mut data);
     Serialize::serialize(&0u32, &mut data);
     Serialize::serialize(&100u32, &mut data);
-    Serialize::serialize(&Coin::from_u64(50).unwrap(), &mut data);
+    Serialize::serialize(&Coin::try_from(50).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
-    match VestingContract::create(Coin::from_u64(100).unwrap(), &transaction, 0) {
+    match VestingContract::create(100.try_into().unwrap(), &transaction, 0) {
         Ok(contract) => {
-            assert_eq!(contract.balance, Coin::from_u64(100).unwrap());
+            assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
             assert_eq!(contract.start, 0);
             assert_eq!(contract.step_blocks, 100);
-            assert_eq!(contract.step_amount, Coin::from_u64(50).unwrap());
-            assert_eq!(contract.total_amount, Coin::from_u64(100).unwrap());
+            assert_eq!(contract.step_amount, 50.try_into().unwrap());
+            assert_eq!(contract.total_amount, 100.try_into().unwrap());
         }
         Err(_) => assert!(false)
     }
@@ -146,18 +148,18 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&owner, &mut data);
     Serialize::serialize(&0u32, &mut data);
     Serialize::serialize(&100u32, &mut data);
-    Serialize::serialize(&Coin::from_u64(50).unwrap(), &mut data);
-    Serialize::serialize(&Coin::from_u64(150).unwrap(), &mut data);
+    Serialize::serialize(&Coin::try_from(50).unwrap(), &mut data);
+    Serialize::serialize(&Coin::try_from(150).unwrap(), &mut data);
     transaction.data = data;
     transaction.recipient = transaction.contract_creation_address();
-    match VestingContract::create(Coin::from_u64(100).unwrap(), &transaction, 0) {
+    match VestingContract::create(100.try_into().unwrap(), &transaction, 0) {
         Ok(contract) => {
-            assert_eq!(contract.balance, Coin::from_u64(100).unwrap());
+            assert_eq!(contract.balance, 100.try_into().unwrap());
             assert_eq!(contract.owner, owner);
             assert_eq!(contract.start, 0);
             assert_eq!(contract.step_blocks, 100);
-            assert_eq!(contract.step_amount, Coin::from_u64(50).unwrap());
-            assert_eq!(contract.total_amount, Coin::from_u64(150).unwrap());
+            assert_eq!(contract.step_amount, 50.try_into().unwrap());
+            assert_eq!(contract.total_amount, 150.try_into().unwrap());
         }
         Err(_) => assert!(false)
     }
@@ -167,21 +169,21 @@ fn it_can_create_contract_from_transaction() {
     Serialize::serialize(&owner, &mut transaction.data);
     Serialize::serialize(&0u16, &mut transaction.data);
     transaction.recipient = transaction.contract_creation_address();
-    assert_eq!(VestingContract::create(Coin::from_u64(0).unwrap(), &transaction, 0), Err(AccountError::InvalidTransaction(TransactionError::InvalidData)))
+    assert_eq!(VestingContract::create(0.try_into().unwrap(), &transaction, 0), Err(AccountError::InvalidTransaction(TransactionError::InvalidData)))
 }
 
 #[test]
 fn it_does_not_support_incoming_transactions() {
     let mut contract = VestingContract {
-        balance: Coin::from_u64(1000).unwrap(),
+        balance: 1000.try_into().unwrap(),
         owner: Address::from([1u8; 20]),
         start: 0,
         step_blocks: 100,
-        step_amount: Coin::from_u64(100).unwrap(),
-        total_amount: Coin::from_u64(1000).unwrap(),
+        step_amount: 100.try_into().unwrap(),
+        total_amount: 1000.try_into().unwrap(),
     };
 
-    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from_u64(1).unwrap(), Coin::from_u64(1000).unwrap(), 1, NetworkId::Dummy);
+    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), 1.try_into().unwrap(), 1000.try_into().unwrap(), 1, NetworkId::Dummy);
     tx.recipient_type = AccountType::Vesting;
 
     assert_eq!(contract.check_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
@@ -194,7 +196,7 @@ fn it_can_verify_outgoing_transactions() {
     let sender_priv_key: PrivateKey = Deserialize::deserialize_from_vec(&hex::decode("9d5bd02379e7e45cf515c788048f5cf3c454ffabd3e83bd1d7667716c325c3c0").unwrap()).unwrap();
 
     let key_pair = KeyPair::from(sender_priv_key);
-    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from_u64(1).unwrap(), Coin::from_u64(1000).unwrap(), 1, NetworkId::Dummy);
+    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), 1.try_into().unwrap(), 1000.try_into().unwrap(), 1, NetworkId::Dummy);
     tx.sender_type = AccountType::Vesting;
 
     assert!(match AccountType::verify_outgoing_transaction(&tx) {
@@ -222,15 +224,15 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     let key_pair = KeyPair::from(sender_priv_key);
     let start_contract = VestingContract {
-        balance: Coin::from_u64(1000).unwrap(),
+        balance: 1000.try_into().unwrap(),
         owner: Address::from(&key_pair.public),
         start: 0,
         step_blocks: 100,
-        step_amount: Coin::from_u64(100).unwrap(),
-        total_amount: Coin::from_u64(1000).unwrap(),
+        step_amount: 100.try_into().unwrap(),
+        total_amount: 1000.try_into().unwrap(),
     };
 
-    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from_u64(200).unwrap(), Coin::from_u64(0).unwrap(), 1, NetworkId::Dummy);
+    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), 200.try_into().unwrap(), 0.try_into().unwrap(), 1, NetworkId::Dummy);
     tx.sender_type = AccountType::Vesting;
 
     let signature = key_pair.sign(&tx.serialize_content()[..]);
@@ -239,22 +241,22 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     let mut contract = start_contract.clone();
     contract.commit_outgoing_transaction(&tx, 200).unwrap();
-    assert_eq!(contract.balance, Coin::from_u64(800).unwrap());
+    assert_eq!(contract.balance, 800.try_into().unwrap());
     contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 
     let start_contract = VestingContract {
-        balance: Coin::from_u64(1000).unwrap(),
+        balance: 1000.try_into().unwrap(),
         owner: Address::from(&key_pair.public),
         start: 200,
         step_blocks: 0,
-        step_amount: Coin::from_u64(100).unwrap(),
-        total_amount: Coin::from_u64(1000).unwrap(),
+        step_amount: 100.try_into().unwrap(),
+        total_amount: 1000.try_into().unwrap(),
     };
 
     let mut contract = start_contract.clone();
     contract.commit_outgoing_transaction(&tx, 200).unwrap();
-    assert_eq!(contract.balance, Coin::from_u64(800).unwrap());
+    assert_eq!(contract.balance, 800.try_into().unwrap());
     contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 }
@@ -268,15 +270,15 @@ fn it_refuses_invalid_transaction() {
     let key_pair_alt = KeyPair::from(priv_key_alt);
 
     let mut start_contract = VestingContract {
-        balance: Coin::from_u64(1000).unwrap(),
+        balance: 1000.try_into().unwrap(),
         owner: Address::from(&key_pair.public),
         start: 0,
         step_blocks: 100,
-        step_amount: Coin::from_u64(100).unwrap(),
-        total_amount: Coin::from_u64(1000).unwrap(),
+        step_amount: 100.try_into().unwrap(),
+        total_amount: 1000.try_into().unwrap(),
     };
 
-    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from_u64(200).unwrap(), Coin::from_u64(0).unwrap(), 1, NetworkId::Dummy);
+    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), 200.try_into().unwrap(), 0.try_into().unwrap(), 1, NetworkId::Dummy);
     tx.sender_type = AccountType::Vesting;
 
     // Invalid signature
@@ -292,11 +294,11 @@ fn it_refuses_invalid_transaction() {
     tx.proof = signature_proof.serialize_to_vec();
 
     assert_eq!(start_contract.check_outgoing_transaction(&tx, 100), Err(AccountError::InsufficientFunds {
-        needed: Coin::from_u64(900).unwrap(),
-        balance: Coin::from_u64(800).unwrap()
+        needed: 900.try_into().unwrap(),
+        balance: 800.try_into().unwrap()
     }));
     assert_eq!(start_contract.commit_outgoing_transaction(&tx, 100), Err(AccountError::InsufficientFunds {
-        needed: Coin::from_u64(900).unwrap(),
-        balance: Coin::from_u64(800).unwrap()
+        needed: 900.try_into().unwrap(),
+        balance: 800.try_into().unwrap()
     }));
 }

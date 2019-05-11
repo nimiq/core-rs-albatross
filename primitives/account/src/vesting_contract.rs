@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use beserial::{Deserialize, Serialize};
 use keys::Address;
 use primitives::coin::Coin;
@@ -37,7 +39,7 @@ impl VestingContract {
         if self.step_blocks > 0 && self.step_amount > Coin::ZERO {
             let steps = (f64::from(block_height - self.start) / f64::from(self.step_blocks)).floor();
             let min_cap = u64::from(self.total_amount) as f64 - steps * u64::from(self.step_amount) as f64;
-            Coin::from_u64(min_cap.max(0f64) as u64).unwrap() // Since all parameters have been validated, this will be safe as well.
+            (min_cap.max(0f64) as u64).try_into().unwrap() // Since all parameters have been validated, this will be safe as well.
         } else {
             Coin::ZERO
         }

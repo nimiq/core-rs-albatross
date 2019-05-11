@@ -8,6 +8,7 @@ use bls::bls12_381::{
     SecretKey as BlsSecretKey,
 };
 use bls::Encoding;
+use std::convert::TryFrom;
 use std::fs::read_to_string;
 use std::path::Path;
 
@@ -57,7 +58,7 @@ pub fn deserialize_nimiq_address<'de, D>(deserializer: D) -> Result<Address, D::
 
 pub(crate) fn deserialize_coin<'de, D>(deserializer: D) -> Result<Coin, D::Error> where D: Deserializer<'de> {
     let value = u64::deserialize(deserializer)?;
-    Coin::from_u64(value).map_err(Error::custom)
+    Coin::try_from(value).map_err(Error::custom)
 }
 
 pub(crate) fn deserialize_bls_public_key<'de, D>(deserializer: D) -> Result<BlsPublicKey, D::Error> where D: Deserializer<'de> {

@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use beserial::{Deserialize, Serialize, SerializingError};
 use nimiq_hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use nimiq_keys::{Address, KeyPair, PrivateKey};
@@ -21,7 +23,7 @@ fn it_can_deserialize_a_htlc() {
     assert_eq!(htlc.sender, Address::from("1b215589344cf570d36bec770825eae30b732139"));
     assert_eq!(htlc.recipient, Address::from("24786862babbdb05e7c4430612135eb2a8368123"));
     assert_eq!(htlc.timeout, 169525);
-    assert_eq!(htlc.total_amount, Coin::from_u64(1).unwrap());
+    assert_eq!(htlc.total_amount, 1.try_into().unwrap());
 }
 
 #[test]
@@ -52,8 +54,8 @@ fn it_can_verify_creation_transaction() {
         sender.clone(),
         AccountType::Basic,
         AccountType::HTLC,
-        Coin::from_u64(100).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        100.try_into().unwrap(),
+        0.try_into().unwrap(),
         0,
         NetworkId::Dummy,
     );
@@ -109,14 +111,14 @@ fn it_can_create_contract_from_transaction() {
         sender.clone(),
         AccountType::Basic,
         AccountType::HTLC,
-        Coin::from_u64(100).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        100.try_into().unwrap(),
+        0.try_into().unwrap(),
         0,
         NetworkId::Dummy,
     );
-    match HashedTimeLockedContract::create(Coin::from_u64(100).unwrap(), &transaction, 0) {
+    match HashedTimeLockedContract::create(100.try_into().unwrap(), &transaction, 0) {
         Ok(htlc) => {
-            assert_eq!(htlc.balance, Coin::from_u64(100).unwrap());
+            assert_eq!(htlc.balance, 100.try_into().unwrap());
             assert_eq!(htlc.sender, sender);
             assert_eq!(htlc.recipient, recipient);
             assert_eq!(htlc.hash_root, AnyHash::from([0u8; 32]));
@@ -131,17 +133,17 @@ fn it_can_create_contract_from_transaction() {
 #[test]
 fn it_does_not_support_incoming_transactions() {
     let mut contract = HashedTimeLockedContract {
-        balance: Coin::from_u64(1000).unwrap(),
+        balance: 1000.try_into().unwrap(),
         sender: Address::from([1u8; 20]),
         recipient: Address::from([2u8; 20]),
         hash_algorithm: HashAlgorithm::Blake2b,
         hash_root: AnyHash::from([3u8; 32]),
         hash_count: 1,
         timeout: 100,
-        total_amount: Coin::from_u64(1000).unwrap(),
+        total_amount: 1000.try_into().unwrap(),
     };
 
-    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), Coin::from_u64(1).unwrap(), Coin::from_u64(1000).unwrap(), 1, NetworkId::Dummy);
+    let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), 1.try_into().unwrap(), 1000.try_into().unwrap(), 1, NetworkId::Dummy);
     tx.recipient_type = AccountType::HTLC;
 
     assert_eq!(contract.check_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
@@ -161,14 +163,14 @@ fn prepare_outgoing_transaction() -> (HashedTimeLockedContract, Transaction, Any
     let hash_root = AnyHash::from(<[u8; 32]>::from(Blake2bHasher::default().digest(Blake2bHasher::default().digest(&pre_image.as_bytes()).as_bytes())));
 
     let start_contract = HashedTimeLockedContract {
-        balance: Coin::from_u64(1000).unwrap(),
+        balance: 1000.try_into().unwrap(),
         sender: sender.clone(),
         recipient: recipient.clone(),
         hash_algorithm: HashAlgorithm::Blake2b,
         hash_root,
         hash_count: 2,
         timeout: 100,
-        total_amount: Coin::from_u64(1000).unwrap(),
+        total_amount: 1000.try_into().unwrap(),
     };
 
     let tx = Transaction::new_contract_creation(
@@ -176,8 +178,8 @@ fn prepare_outgoing_transaction() -> (HashedTimeLockedContract, Transaction, Any
         Address::from([0u8; 20]),
         AccountType::HTLC,
         AccountType::Basic,
-        Coin::from_u64(1000).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        1000.try_into().unwrap(),
+        0.try_into().unwrap(),
         1,
         NetworkId::Dummy);
 
@@ -326,7 +328,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     let mut contract = start_contract.clone();
     contract.commit_outgoing_transaction(&tx, 1).unwrap();
-    assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
+    assert_eq!(contract.balance, 0.try_into().unwrap());
     contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 
@@ -339,7 +341,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     let mut contract = start_contract.clone();
     contract.commit_outgoing_transaction(&tx, 1).unwrap();
-    assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
+    assert_eq!(contract.balance, 0.try_into().unwrap());
     contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 
@@ -351,7 +353,7 @@ fn it_can_apply_and_revert_valid_transaction() {
 
     let mut contract = start_contract.clone();
     contract.commit_outgoing_transaction(&tx, 101).unwrap();
-    assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
+    assert_eq!(contract.balance, 0.try_into().unwrap());
     contract.revert_outgoing_transaction(&tx, 1, None).unwrap();
     assert_eq!(contract, start_contract);
 }
@@ -407,12 +409,12 @@ fn it_refuses_invalid_transaction() {
     Serialize::serialize(&recipient_signature_proof, &mut proof);
     tx.proof = proof;
     assert_eq!(start_contract.check_outgoing_transaction(&tx, 1), Err(AccountError::InsufficientFunds {
-        needed: Coin::from_u64(500).unwrap(),
-        balance: Coin::from_u64(0).unwrap()
+        needed: 500.try_into().unwrap(),
+        balance: 0.try_into().unwrap()
     }));
     assert_eq!(start_contract.commit_outgoing_transaction(&tx, 1), Err(AccountError::InsufficientFunds {
-        needed: Coin::from_u64(500).unwrap(),
-        balance: Coin::from_u64(0).unwrap()
+        needed: 500.try_into().unwrap(),
+        balance: 0.try_into().unwrap()
     }));
 
     // early resolve: invalid signature

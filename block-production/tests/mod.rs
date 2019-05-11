@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use beserial::Serialize;
@@ -53,8 +54,8 @@ fn it_can_produce_nonempty_blocks() {
         miner.clone(),
         AccountType::Basic,
         AccountType::Vesting,
-        Coin::from_u64(100).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        Coin::try_from(100).unwrap(),
+        Coin::try_from(0).unwrap(),
         0,
         NetworkId::Main,
     );
@@ -69,13 +70,13 @@ fn it_can_produce_nonempty_blocks() {
 
     let contract = blockchain.state().accounts().get(&contract_address, None);
     assert_eq!(contract.account_type(), AccountType::Vesting);
-    assert_eq!(contract.balance(), Coin::from_u64(100).unwrap());
+    assert_eq!(contract.balance(), Coin::try_from(100).unwrap());
 
     // Prune vesting contract with 2 transactions
     let mut tx = Transaction::new_basic(
         contract_address.clone(),
         miner.clone(),
-        Coin::from_u64(49).unwrap(),
+        Coin::try_from(49).unwrap(),
         Coin::ZERO,
         0,
         NetworkId::Main,
@@ -88,7 +89,7 @@ fn it_can_produce_nonempty_blocks() {
     let mut tx = Transaction::new_basic(
         contract_address.clone(),
         miner.clone(),
-        Coin::from_u64(51).unwrap(),
+        Coin::try_from(51).unwrap(),
         Coin::ZERO,
         0,
         NetworkId::Main,

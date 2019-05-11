@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use nimiq_blockchain::transaction_cache::TransactionCache;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
@@ -33,7 +35,7 @@ fn it_can_push_blocks() {
         let tx1 = Transaction::new_basic(
             [1u8; Address::SIZE].into(),
             [2u8; Address::SIZE].into(),
-            Coin::from_u64((i + 1) * 50).unwrap(),
+            Coin::try_from((i + 1) * 50).unwrap(),
             Coin::ZERO,
             b.header.height,
             NetworkId::Main
@@ -41,8 +43,8 @@ fn it_can_push_blocks() {
         let tx2 = Transaction::new_basic(
             [9u8; Address::SIZE].into(),
             [5u8; Address::SIZE].into(),
-            Coin::from_u64((i + 1) * 300).unwrap(),
-            Coin::from_u64(i).unwrap(),
+            Coin::try_from((i + 1) * 300).unwrap(),
+            Coin::try_from(i).unwrap(),
             b.header.height,
             NetworkId::Main
         );
@@ -88,7 +90,7 @@ fn it_can_revert_blocks() {
         let tx1 = Transaction::new_basic(
             [1u8; Address::SIZE].into(),
             [2u8; Address::SIZE].into(),
-            Coin::from_u64((i + 1) * 50).unwrap(),
+            Coin::try_from((i + 1) * 50).unwrap(),
             Coin::ZERO,
             b.header.height,
             NetworkId::Main
@@ -96,8 +98,8 @@ fn it_can_revert_blocks() {
         let tx2 = Transaction::new_basic(
             [9u8; Address::SIZE].into(),
             [5u8; Address::SIZE].into(),
-            Coin::from_u64((i + 1) * 300).unwrap(),
-            Coin::from_u64(i).unwrap(),
+            Coin::try_from((i + 1) * 300).unwrap(),
+            Coin::try_from(i).unwrap(),
             b.header.height,
             NetworkId::Main
         );
@@ -160,7 +162,7 @@ fn it_removes_blocks_outside_the_validity_window() {
         let tx1 = Transaction::new_basic(
             [1u8; Address::SIZE].into(),
             [2u8; Address::SIZE].into(),
-            Coin::from_u64((i + 1) * 50).unwrap(),
+            Coin::try_from((i + 1) * 50).unwrap(),
             Coin::ZERO,
             b.header.height,
             NetworkId::Main
@@ -168,8 +170,8 @@ fn it_removes_blocks_outside_the_validity_window() {
         let tx2 = Transaction::new_basic(
             [9u8; Address::SIZE].into(),
             [5u8; Address::SIZE].into(),
-            Coin::from_u64((i + 1) * 300).unwrap(),
-            Coin::from_u64(i).unwrap(),
+            Coin::try_from((i + 1) * 300).unwrap(),
+            Coin::try_from(i).unwrap(),
             b.header.height,
             NetworkId::Main
         );
@@ -219,7 +221,7 @@ fn it_can_prepend_blocks() {
         let tx1 = Transaction::new_basic(
             [1u8; Address::SIZE].into(),
             [2u8; Address::SIZE].into(),
-            Coin::from_u64((i + 1) * 50).unwrap(),
+            Coin::try_from((i + 1) * 50).unwrap(),
             Coin::ZERO,
             b.header.height,
             NetworkId::Main
@@ -227,8 +229,8 @@ fn it_can_prepend_blocks() {
         let tx2 = Transaction::new_basic(
             [9u8; Address::SIZE].into(),
             [5u8; Address::SIZE].into(),
-            Coin::from_u64((i + 1) * 300).unwrap(),
-            Coin::from_u64(i).unwrap(),
+            Coin::try_from((i + 1) * 300).unwrap(),
+            Coin::try_from(i).unwrap(),
             b.header.height,
             NetworkId::Main
         );

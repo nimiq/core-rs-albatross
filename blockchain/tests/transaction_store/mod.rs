@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use nimiq_block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
 use nimiq_blockchain::transaction_store::*;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -14,24 +16,24 @@ fn create_transactions() -> (Transaction, Transaction, Transaction) {
     let tx1 = Transaction::new_basic(
         [1u8; Address::SIZE].into(),
         [2u8; Address::SIZE].into(),
-        Coin::from_u64(10).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        Coin::try_from(10).unwrap(),
+        Coin::try_from(0).unwrap(),
         1,
         NetworkId::Main
     );
     let tx2 = Transaction::new_basic(
         [4u8; Address::SIZE].into(),
         [2u8; Address::SIZE].into(),
-        Coin::from_u64(12).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        Coin::try_from(12).unwrap(),
+        Coin::try_from(0).unwrap(),
         1,
         NetworkId::Main
     );
     let tx3 = Transaction::new_basic(
         [1u8; Address::SIZE].into(),
         [5u8; Address::SIZE].into(),
-        Coin::from_u64(14).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        Coin::try_from(14).unwrap(),
+        Coin::try_from(0).unwrap(),
         1,
         NetworkId::Main
     );

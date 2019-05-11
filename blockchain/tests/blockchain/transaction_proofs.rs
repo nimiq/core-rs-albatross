@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use beserial::Serialize;
@@ -31,8 +32,8 @@ fn it_can_compute_trivial_transactions_proof() {
     let mut tx = Transaction::new_basic(
         miner.clone(),
         [2u8; Address::SIZE].into(),
-        Coin::from_u64(10).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        Coin::try_from(10).unwrap(),
+        Coin::try_from(0).unwrap(),
         1,
         NetworkId::Main
     );

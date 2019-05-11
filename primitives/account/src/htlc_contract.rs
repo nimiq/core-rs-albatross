@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use beserial::{Deserialize, Serialize};
 use keys::Address;
 use primitives::account::*;
@@ -97,7 +99,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 
                 // Check min cap.
                 let cap_ratio = 1f64 - (f64::from(hash_depth) / f64::from(self.hash_count));
-                let min_cap = Coin::from_u64((cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64)?;
+                let min_cap = Coin::try_from((cap_ratio * u64::from(self.total_amount) as f64).floor().max(0f64) as u64)?;
                 if balance < min_cap {
                     return Err(AccountError::InsufficientFunds {balance, needed: min_cap});
                 }

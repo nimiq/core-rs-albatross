@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use beserial::Serialize;
 use nimiq_account::{Account, AccountTransactionInteraction, AccountType, BasicAccount, PrunedAccount};
 use nimiq_account::Receipt;
@@ -39,7 +41,7 @@ fn it_can_commit_and_revert_a_block_body() {
     let tx = Transaction::new_basic(
         address_miner.clone(),
         address_recipient.clone(),
-        Coin::from_u64(10).unwrap(),
+        Coin::try_from(10).unwrap(),
         Coin::ZERO,
         1,
         NetworkId::Main
@@ -53,9 +55,9 @@ fn it_can_commit_and_revert_a_block_body() {
         txn.commit();
     }
 
-    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::from_u64(10).unwrap());
+    assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::try_from(10).unwrap());
     assert_eq!(accounts.get(&address_miner, None).balance(),
-               policy::block_reward_at(1) + policy::block_reward_at(2) - Coin::from_u64(10).unwrap());
+               policy::block_reward_at(1) + policy::block_reward_at(2) - Coin::try_from(10).unwrap());
     assert_ne!(hash1, accounts.hash(None));
 
     {
@@ -100,10 +102,10 @@ fn it_correctly_rewards_miners() {
 
     assert_eq!(accounts.get(&address_miner1, None).balance(), policy::block_reward_at(1));
 
-    let value1 = Coin::from_u64(5).unwrap();
-    let fee1 = Coin::from_u64(3).unwrap();
-    let value2 = Coin::from_u64(7).unwrap();
-    let fee2 = Coin::from_u64(11).unwrap();
+    let value1 = Coin::try_from(5).unwrap();
+    let fee1 = Coin::try_from(3).unwrap();
+    let value2 = Coin::try_from(7).unwrap();
+    let fee2 = Coin::try_from(11).unwrap();
     let tx1 = Transaction::new_basic(
         address_miner1.clone(),
         address_recipient1.clone(),
@@ -148,7 +150,7 @@ fn it_checks_for_sufficient_funds() {
     let mut tx = Transaction::new_basic(
         address_sender.clone(),
         address_recipient.clone(),
-        Coin::from_u64(10).unwrap(),
+        Coin::try_from(10).unwrap(),
         Coin::ZERO,
         1,
         NetworkId::Main
@@ -190,7 +192,7 @@ fn it_checks_for_sufficient_funds() {
     assert_ne!(hash1, hash2);
 
     // Single transaction exceeding funds.
-    tx.value = policy::block_reward_at(1) + Coin::from_u64(10).unwrap();
+    tx.value = policy::block_reward_at(1) + Coin::try_from(10).unwrap();
     body.transactions = vec![tx.clone()];
 
     {
@@ -203,9 +205,9 @@ fn it_checks_for_sufficient_funds() {
     assert_eq!(hash2, accounts.hash(None));
 
     // Multiple transactions exceeding funds.
-    tx.value = Coin::from_u64(u64::from(policy::block_reward_at(1)) / 2 + 10).unwrap();
+    tx.value = Coin::try_from(u64::from(policy::block_reward_at(1)) / 2 + 10).unwrap();
     let mut tx2 = tx.clone();
-    tx2.value = tx2.value + Coin::from_u64(10).unwrap();
+    tx2.value = tx2.value + Coin::try_from(10).unwrap();
     body.transactions = vec![tx, tx2];
 
     {
@@ -248,7 +250,7 @@ fn it_correctly_prunes_account() {
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 4);
     address.serialize(&mut data).unwrap();
     1u32.serialize(&mut data).unwrap();
-    let mut tx_create = Transaction::new_contract_creation(data, address.clone(), AccountType::Basic, AccountType::Vesting, Coin::from_u64(100).unwrap(), Coin::from_u64(0).unwrap(), 1, NetworkId::Dummy);
+    let mut tx_create = Transaction::new_contract_creation(data, address.clone(), AccountType::Basic, AccountType::Vesting, Coin::try_from(100).unwrap(), Coin::try_from(0).unwrap(), 1, NetworkId::Dummy);
     tx_create.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_create.serialize_content())).serialize_to_vec();
     let contract_address = tx_create.contract_creation_address();
     body.transactions = vec![tx_create.clone()];
@@ -259,7 +261,7 @@ fn it_correctly_prunes_account() {
     }
 
     // Now prune it
-    let mut tx_prune = Transaction::new_basic(contract_address.clone(), address.clone(), Coin::from_u64(100).unwrap(), Coin::from_u64(0).unwrap(), 2, NetworkId::Dummy);
+    let mut tx_prune = Transaction::new_basic(contract_address.clone(), address.clone(), Coin::try_from(100).unwrap(), Coin::try_from(0).unwrap(), 2, NetworkId::Dummy);
     tx_prune.sender_type = AccountType::Vesting;
     tx_prune.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_prune.serialize_content())).serialize_to_vec();
     body.transactions = vec![tx_prune.clone()];
@@ -278,7 +280,7 @@ fn it_correctly_prunes_account() {
     // Check that the account was pruned correctly
     let account_after_prune = accounts.get(&contract_address, None);
     assert_eq!(account_after_prune.account_type(), AccountType::Basic);
-    assert_eq!(account_after_prune.balance(), Coin::from_u64(0).unwrap());
+    assert_eq!(account_after_prune.balance(), Coin::try_from(0).unwrap());
 
     // Now revert pruning
     {
@@ -289,7 +291,7 @@ fn it_correctly_prunes_account() {
 
     // Check that the account was recovered correctly
     if let Account::Vesting(vesting_contract) = accounts.get(&contract_address, None) {
-        assert_eq!(vesting_contract.balance, Coin::from_u64(100).unwrap());
+        assert_eq!(vesting_contract.balance, Coin::try_from(100).unwrap());
         assert_eq!(vesting_contract.owner, address);
     }
 
@@ -305,7 +307,7 @@ fn it_correctly_prunes_account() {
     // Check that the account is really gone
     let account_after_prune = accounts.get(&contract_address, None);
     assert_eq!(account_after_prune.account_type(), AccountType::Basic);
-    assert_eq!(account_after_prune.balance(), Coin::from_u64(0).unwrap());
+    assert_eq!(account_after_prune.balance(), Coin::try_from(0).unwrap());
     assert_eq!(accounts.hash(None), initial_hash);
 }
 
@@ -325,10 +327,10 @@ fn can_generate_accounts_proof() {
         assert!(accounts.commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).is_ok());
         txn.commit();
     }
-    let value1 = Coin::from_u64(5).unwrap();
-    let fee1 = Coin::from_u64(3).unwrap();
-    let value2 = Coin::from_u64(7).unwrap();
-    let fee2 = Coin::from_u64(11).unwrap();
+    let value1 = Coin::try_from(5).unwrap();
+    let fee1 = Coin::try_from(3).unwrap();
+    let value2 = Coin::try_from(7).unwrap();
+    let fee2 = Coin::try_from(11).unwrap();
     let tx1 = Transaction::new_basic(address_miner1.clone(), address_recipient1.clone(), value1, fee1, 2, NetworkId::Main);
     let tx2 = Transaction::new_basic(address_miner1.clone(), address_recipient2.clone(), value2, fee2, 2, NetworkId::Main);
 

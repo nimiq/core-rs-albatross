@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use hex;
 
 use nimiq_accounts::tree::AccountsTree;
@@ -10,7 +11,7 @@ use nimiq_primitives::coin::Coin;
 #[test]
 fn it_can_put_and_get_a_balance() {
     let address = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-    let mut account = Account::Basic(BasicAccount { balance: Coin::from_u64(20).unwrap() });
+    let mut account = Account::Basic(BasicAccount { balance: Coin::try_from(20).unwrap() });
 
     let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
@@ -25,7 +26,7 @@ fn it_can_put_and_get_a_balance() {
 
     // 2. Increase balance, put, and check.
     if let Account::Basic(ref mut basic_account) = account {
-        basic_account.balance = Coin::from_u64(50).unwrap();
+        basic_account.balance = Coin::try_from(50).unwrap();
     }
     tree.put(&mut txn, &address, account.clone());
 
@@ -48,11 +49,11 @@ fn it_can_put_and_get_a_balance() {
 #[test]
 fn it_can_put_and_get_multiple_balances() {
     let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-    let account1 = Account::Basic(BasicAccount { balance: Coin::from_u64(5).unwrap() });
+    let account1 = Account::Basic(BasicAccount { balance: Coin::try_from(5).unwrap() });
     let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
-    let account2 = Account::Basic(BasicAccount { balance: Coin::from_u64(55).unwrap() });
+    let account2 = Account::Basic(BasicAccount { balance: Coin::try_from(55).unwrap() });
     let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
-    let account3 = Account::Basic(BasicAccount { balance: Coin::from_u64(55555555).unwrap() });
+    let account3 = Account::Basic(BasicAccount { balance: Coin::try_from(55555555).unwrap() });
 
     let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
@@ -82,8 +83,8 @@ fn it_can_put_and_get_multiple_balances() {
 #[test]
 fn it_is_invariant_to_history() {
     let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-    let account1 = Account::Basic(BasicAccount { balance: Coin::from_u64(5).unwrap() });
-    let account2 = Account::Basic(BasicAccount { balance: Coin::from_u64(55).unwrap() });
+    let account1 = Account::Basic(BasicAccount { balance: Coin::try_from(5).unwrap() });
+    let account2 = Account::Basic(BasicAccount { balance: Coin::try_from(55).unwrap() });
 
     let env = VolatileEnvironment::new(10).unwrap();
     let tree = AccountsTree::new(&env);
@@ -106,11 +107,11 @@ fn it_is_invariant_to_history() {
 #[test]
 fn it_is_invariant_to_insertion_order() {
     let address1 = Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]);
-    let account1 = Account::Basic(BasicAccount { balance: Coin::from_u64(5).unwrap() });
+    let account1 = Account::Basic(BasicAccount { balance: Coin::try_from(5).unwrap() });
     let address2 = Address::from(&hex::decode("1000000000000000000000000000000000000000").unwrap()[..]);
-    let account2 = Account::Basic(BasicAccount { balance: Coin::from_u64(55).unwrap() });
+    let account2 = Account::Basic(BasicAccount { balance: Coin::try_from(55).unwrap() });
     let address3 = Address::from(&hex::decode("1200000000000000000000000000000000000000").unwrap()[..]);
-    let account3 = Account::Basic(BasicAccount { balance: Coin::from_u64(55555555).unwrap() });
+    let account3 = Account::Basic(BasicAccount { balance: Coin::try_from(55555555).unwrap() });
 
     let empty_account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 
@@ -191,11 +192,11 @@ fn it_is_invariant_to_insertion_order() {
 #[test]
 fn it_can_merge_nodes_while_pruning() {
     let address1 = Address::from(&hex::decode("0102030405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
-    let account1 = Account::Basic(BasicAccount { balance: Coin::from_u64(5).unwrap() });
+    let account1 = Account::Basic(BasicAccount { balance: Coin::try_from(5).unwrap() });
     let address2 = Address::from(&hex::decode("0103030405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
-    let account2 = Account::Basic(BasicAccount { balance: Coin::from_u64(55).unwrap() });
+    let account2 = Account::Basic(BasicAccount { balance: Coin::try_from(55).unwrap() });
     let address3 = Address::from(&hex::decode("0103040405060708090a0b0c0d0e0f1011121314").unwrap()[..]);
-    let account3 = Account::Basic(BasicAccount { balance: Coin::from_u64(55555555).unwrap() });
+    let account3 = Account::Basic(BasicAccount { balance: Coin::try_from(55555555).unwrap() });
 
     let empty_account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 

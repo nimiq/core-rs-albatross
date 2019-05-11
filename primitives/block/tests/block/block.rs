@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use hex;
 
 use beserial::{Deserialize, Serialize};
@@ -71,12 +72,12 @@ fn it_can_deserialize_block_108273() {
         assert_eq!(body.receipts.len(), 0);
         assert_eq!(body.transactions[0].sender, Address::from(&hex::decode("8a3eed6de76d21fe6f5ef1a1a8f0f2c2c070c4f3").unwrap()[..]));
         assert_eq!(body.transactions[0].recipient, Address::from(&hex::decode("47d18f75e7bc7036e0bb496252acd74f0bf8c645").unwrap()[..]));
-        assert_eq!(body.transactions[0].value, Coin::from_u64(3300000).unwrap());
+        assert_eq!(body.transactions[0].value, 3300000.try_into().unwrap());
         assert_eq!(body.transactions[0].fee, Coin::ZERO);
         assert_eq!(body.transactions[0].validity_start_height, 108271);
         assert_eq!(body.transactions[1].sender, Address::from(&hex::decode("2dcf5d9271c2e80680c17d6d66b8a3f0f03f734a").unwrap()[..]));
         assert_eq!(body.transactions[1].recipient, Address::from(&hex::decode("c1fb2d53a6d7e0011e85c7f81f5b7a76088c154a").unwrap()[..]));
-        assert_eq!(body.transactions[1].value, Coin::from_u64(837520).unwrap());
+        assert_eq!(body.transactions[1].value, 837520.try_into().unwrap());
         assert_eq!(body.transactions[1].fee, Coin::ZERO);
         assert_eq!(body.transactions[1].validity_start_height, 108271);
     } else {

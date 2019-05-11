@@ -1,5 +1,7 @@
 use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
+use std::sync::Arc;
 use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize};
@@ -19,7 +21,7 @@ const CONTRACT_2: &str = "0000000023c3460000000002020202020202020202020202020202
 fn it_can_de_serialize_a_staking_contract() {
     let bytes_1: Vec<u8> = hex::decode(CONTRACT_1).unwrap();
     let contract_1: StakingContract = Deserialize::deserialize(&mut &bytes_1[..]).unwrap();
-    assert_eq!(contract_1.balance, Coin::from_u64(0).unwrap());
+    assert_eq!(contract_1.balance, 0.try_into().unwrap());
     assert_eq!(contract_1.active_stake_by_address.len(), 0);
     assert_eq!(contract_1.active_stake_sorted.len(), 0);
     assert_eq!(contract_1.inactive_stake_by_address.len(), 0);
@@ -30,7 +32,7 @@ fn it_can_de_serialize_a_staking_contract() {
 
     let bytes_2: Vec<u8> = hex::decode(CONTRACT_2).unwrap();
     let contract_2: StakingContract = Deserialize::deserialize(&mut &bytes_2[..]).unwrap();
-    assert_eq!(contract_2.balance, Coin::from_u64(600_000_000).unwrap());
+    assert_eq!(contract_2.balance, 600_000_000.try_into().unwrap());
     assert_eq!(contract_2.active_stake_by_address.len(), 2);
     assert_eq!(contract_2.active_stake_sorted.len(), 2);
     assert_eq!(contract_2.inactive_stake_by_address.len(), 0);
@@ -49,8 +51,8 @@ fn it_does_not_support_contract_creation() {
         sender.clone(),
         AccountType::Basic,
         AccountType::Staking,
-        Coin::from_u64(100).unwrap(),
-        Coin::from_u64(0).unwrap(),
+        100.try_into().unwrap(),
+        0.try_into().unwrap(),
         0,
         NetworkId::Dummy,
     );
@@ -76,7 +78,7 @@ fn it_can_verify_staking_transaction() {
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Ok(()));
 
     // Below minimum stake
-    tx.value = Coin::from_u64(123).unwrap();
+    tx.value = 123.try_into().unwrap();
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Err(TransactionError::InvalidForRecipient));
 
     // Invalid proof of knowledge
@@ -106,7 +108,7 @@ fn it_can_apply_staking_transaction() {
     assert_eq!(contract.check_incoming_transaction(&tx_1, 2), Ok(()));
     assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
     assert_eq!(contract.active_stake_by_address.len(), 1);
-    assert_eq!(contract.balance, Coin::from_u64(150_000_000).unwrap());
+    assert_eq!(contract.balance, 150_000_000.try_into().unwrap());
 
     // Same stake again
     let mut tx_2 = make_incoming_transaction();
@@ -114,7 +116,7 @@ fn it_can_apply_staking_transaction() {
     assert_eq!(contract.check_incoming_transaction(&tx_2, 3), Ok(()));
     let receipt_2 = contract.commit_incoming_transaction(&tx_2, 3).unwrap().unwrap();
     assert_eq!(contract.active_stake_by_address.len(), 1);
-    assert_eq!(contract.balance, Coin::from_u64(300_000_000).unwrap());
+    assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
 
     // Stake again, changing validator key
     let mut tx_3 = make_incoming_transaction();
@@ -128,7 +130,7 @@ fn it_can_apply_staking_transaction() {
     assert_eq!(contract.check_incoming_transaction(&tx_3, 4), Ok(()));
     let receipt_3 = contract.commit_incoming_transaction(&tx_3, 4).unwrap().unwrap();
     assert_eq!(contract.active_stake_by_address.len(), 1);
-    assert_eq!(contract.balance, Coin::from_u64(450_000_000).unwrap());
+    assert_eq!(contract.balance, 450_000_000.try_into().unwrap());
 
     // Stake on new account with reward address
     let mut tx_4 = make_incoming_transaction();
@@ -139,19 +141,19 @@ fn it_can_apply_staking_transaction() {
     assert_eq!(contract.check_incoming_transaction(&tx_4, 5), Ok(()));
     assert_eq!(contract.commit_incoming_transaction(&tx_4, 5), Ok(None));
     assert_eq!(contract.active_stake_by_address.len(), 2);
-    assert_eq!(contract.balance, Coin::from_u64(600_000_000).unwrap());
+    assert_eq!(contract.balance, 600_000_000.try_into().unwrap());
 
     // Revert everything
     assert_eq!(contract.revert_incoming_transaction(&tx_4, 5, None), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64(450_000_000).unwrap());
+    assert_eq!(contract.balance, 450_000_000.try_into().unwrap());
     assert_eq!(contract.revert_incoming_transaction(&tx_3, 4, Some(&receipt_3)), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64(300_000_000).unwrap());
+    assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
     assert_eq!(contract.revert_incoming_transaction(&tx_2, 3, Some(&receipt_2)), Ok(()));
     assert_eq!(contract.active_stake_by_address.len(), 1);
-    assert_eq!(contract.balance, Coin::from_u64(150_000_000).unwrap());
+    assert_eq!(contract.balance, 150_000_000.try_into().unwrap());
     assert_eq!(contract.revert_incoming_transaction(&tx_1, 2, None), Ok(()));
     assert_eq!(contract.active_stake_by_address.len(), 0);
-    assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
+    assert_eq!(contract.balance, 0.try_into().unwrap());
 }
 
 fn test_proof_verification<F>(incoming: bool, make_tx: F) where F: Fn() -> Transaction {
@@ -209,23 +211,23 @@ fn it_can_apply_retiring_transaction() {
     assert_eq!(contract.active_stake_by_address.len(), 1);
     assert_eq!(contract.active_stake_sorted.len(), 1);
     assert_eq!(contract.inactive_stake_by_address.len(), 1);
-    assert_eq!(contract.balance, Coin::from_u64(299_999_766).unwrap());
+    assert_eq!(contract.balance, 299_999_766.try_into().unwrap());
 
     // Try to retire too much stake
     let mut tx_2 = make_outgoing_transaction();
-    tx_2.value = Coin::from_u64(200_000_000).unwrap();
+    tx_2.value = 200_000_000.try_into().unwrap();
     tx_2.recipient = tx_2.sender.clone();
     tx_2.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_2.serialize_content())).serialize_to_vec();
     let funds_error = AccountError::InsufficientFunds {
-        needed:  Coin::from_u64(200_000_234).unwrap(),
-        balance: Coin::from_u64(150_000_000).unwrap(),
+        needed:  200_000_234.try_into().unwrap(),
+        balance: 150_000_000.try_into().unwrap(),
     };
     assert_eq!(contract.check_outgoing_transaction(&tx_2, 3), Err(funds_error.clone()));
     assert_eq!(contract.commit_outgoing_transaction(&tx_2, 3), Err(funds_error.clone()));
 
     // Retire second half of stake in two transactions
     let mut tx_3 = make_outgoing_transaction();
-    tx_3.value = Coin::from_u64(74_999_766).unwrap();
+    tx_3.value = 74_999_766.try_into().unwrap();
     tx_3.recipient = tx_3.sender.clone();
     tx_3.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_3.serialize_content())).serialize_to_vec();
     assert_eq!(contract.check_outgoing_transaction(&tx_3, 3), Ok(()));
@@ -240,7 +242,7 @@ fn it_can_apply_retiring_transaction() {
     assert_eq!(contract.active_stake_by_address.len(), 0);
     assert_eq!(contract.active_stake_sorted.len(), 0);
     assert_eq!(contract.inactive_stake_by_address.len(), 1);
-    assert_eq!(contract.balance, Coin::from_u64(299_999_298).unwrap());
+    assert_eq!(contract.balance, 299_999_298.try_into().unwrap());
 
     // Try to retire nonexistent funds
     assert_eq!(contract.check_outgoing_transaction(&tx_3, 4), Err(AccountError::InvalidForSender));
@@ -257,7 +259,7 @@ fn it_can_apply_retiring_transaction() {
     assert_eq!(contract.active_stake_by_address.len(), 1);
     assert_eq!(contract.active_stake_sorted.len(), 1);
     assert_eq!(contract.inactive_stake_by_address.len(), 0);
-    assert_eq!(contract.balance, Coin::from_u64(300_000_000).unwrap());
+    assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
 }
 
 #[test]
@@ -276,12 +278,12 @@ fn it_can_apply_unstaking_transaction() {
     let recipient = Address::from(&key_pair.public);
     let bls_pair = BlsKeyPair::generate(&mut thread_rng());
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
-    let fee = Coin::from_u64(234).unwrap();
+    let fee = Coin::try_from(234).unwrap();
 
     let make_retire = |total_cost: u64| -> Transaction {
         let mut tx = make_outgoing_transaction();
         tx.recipient = tx.sender.clone();
-        tx.value = Coin::from_u64(total_cost).unwrap() - fee;
+        tx.value = Coin::try_from(total_cost).unwrap() - fee;
         tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())).serialize_to_vec();
         tx
     };
@@ -289,7 +291,7 @@ fn it_can_apply_unstaking_transaction() {
     let make_unstake = |total_cost: u64| -> Transaction {
         let mut tx = make_outgoing_transaction();
         tx.recipient = recipient.clone();
-        tx.value = Coin::from_u64(total_cost).unwrap() - fee;
+        tx.value = Coin::try_from(total_cost).unwrap() - fee;
         tx.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx.serialize_content())).serialize_to_vec();
         tx
     };
@@ -298,13 +300,13 @@ fn it_can_apply_unstaking_transaction() {
     let tx_1 = make_retire(150_000_000 - 234);
     assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2), Ok(None));
     assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
-    assert_eq!(contract.balance, Coin::from_u64(299_999_766).unwrap());
+    assert_eq!(contract.balance, 299_999_766.try_into().unwrap());
 
     // Try to unstake too much
     let tx_2 = make_unstake(999_999_999);
     let funds_error = AccountError::InsufficientFunds {
-        needed:  Coin::from_u64(999_999_999).unwrap(),
-        balance: Coin::from_u64(149_999_532).unwrap(),
+        needed:  999_999_999.try_into().unwrap(),
+        balance: 149_999_532.try_into().unwrap(),
     };
     assert_eq!(contract.check_outgoing_transaction(&tx_2, 40003), Err(funds_error.clone()));
     assert_eq!(contract.commit_outgoing_transaction(&tx_2, 40003), Err(funds_error.clone()));
@@ -313,13 +315,13 @@ fn it_can_apply_unstaking_transaction() {
     let tx_3 = make_unstake(75_000_000 - 234);
     assert_eq!(contract.check_outgoing_transaction(&tx_3, 40003), Ok(()));
     assert_eq!(contract.commit_outgoing_transaction(&tx_3, 40003), Ok(None));
-    assert_eq!(contract.balance, Coin::from_u64(225_000_000).unwrap());
+    assert_eq!(contract.balance, 225_000_000.try_into().unwrap());
 
     // Block 40004: Unstake another quarter
     let tx_4 = tx_3.clone();
     assert_eq!(contract.check_outgoing_transaction(&tx_4, 40004), Ok(()));
     let receipt_4 = contract.commit_outgoing_transaction(&tx_4, 40004).unwrap().unwrap();
-    assert_eq!(contract.balance, Coin::from_u64(150_000_234).unwrap());
+    assert_eq!(contract.balance, 150_000_234.try_into().unwrap());
 
     // Revert block 40004
     assert_eq!(contract.revert_outgoing_transaction(&tx_4, 40004, Some(&receipt_4)), Ok(()));
@@ -338,13 +340,13 @@ fn it_can_apply_unstaking_transaction() {
     let tx_7 = make_unstake(225_000_000 - 234);
     assert_eq!(contract.check_outgoing_transaction(&tx_7, 100000), Ok(()));
     let receipt_7 = contract.commit_outgoing_transaction(&tx_7, 100000).unwrap().unwrap();
-    assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
+    assert_eq!(contract.balance, 0.try_into().unwrap());
 
     // Contract is empty at this point
     assert_eq!(contract.active_stake_by_address.len(), 0);
     assert_eq!(contract.active_stake_sorted.len(), 0);
     assert_eq!(contract.inactive_stake_by_address.len(), 0);
-    assert_eq!(contract.balance, Coin::from_u64(0).unwrap());
+    assert_eq!(contract.balance, 0.try_into().unwrap());
 
     // Try to unstake nonexistent funds
     let tx_8 = tx_3.clone();
@@ -363,7 +365,7 @@ fn it_can_apply_unstaking_transaction() {
     assert_eq!(contract.active_stake_by_address.len(), 1);
     assert_eq!(contract.active_stake_sorted.len(), 1);
     assert_eq!(contract.inactive_stake_by_address.len(), 0);
-    assert_eq!(contract.balance, Coin::from_u64(300_000_000).unwrap());
+    assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
 }
 
 
@@ -420,7 +422,7 @@ fn it_can_build_a_validator_set() {
 
 fn make_empty_contract() -> StakingContract {
     return StakingContract {
-        balance: Coin::from_u64(0).unwrap(),
+        balance: 0.try_into().unwrap(),
         active_stake_sorted: BTreeSet::new(),
         active_stake_by_address: HashMap::new(),
         inactive_stake_by_address: HashMap::new(),
@@ -430,7 +432,7 @@ fn make_empty_contract() -> StakingContract {
 fn make_sample_contract(key_pair: &KeyPair, bls_pair: &BlsKeyPair) -> StakingContract {
     let mut contract = make_empty_contract();
     let mut tx = make_incoming_transaction();
-    tx.value = Coin::from_u64(300_000_000).unwrap();
+    tx.value = 300_000_000.try_into().unwrap();
     tx.sender = Address::from(&key_pair.public);
 
     let proof_of_knowledge = bls_pair.sign_hash(Deserialize::deserialize_from_vec(&[0x41u8; 32].to_vec()).unwrap());
@@ -451,8 +453,8 @@ fn make_incoming_transaction() -> Transaction {
     let mut tx = Transaction::new_basic(
         Address::from([2u8; 20]),
         Address::from([1u8; 20]),
-        Coin::from_u64(150_000_000).unwrap(),
-        Coin::from_u64(234).unwrap(),
+        150_000_000.try_into().unwrap(),
+        234.try_into().unwrap(),
         1, NetworkId::Dummy,
     );
     tx.recipient_type = AccountType::Staking;
@@ -463,8 +465,8 @@ fn make_outgoing_transaction() -> Transaction {
     let mut tx = Transaction::new_basic(
         Address::from([1u8; 20]),
         Address::from([2u8; 20]),
-        Coin::from_u64(149_999_766).unwrap(),
-        Coin::from_u64(234).unwrap(),
+        149_999_766.try_into().unwrap(),
+        234.try_into().unwrap(),
         1, NetworkId::Dummy,
     );
     tx.sender_type = AccountType::Staking;

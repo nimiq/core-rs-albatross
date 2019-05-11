@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -120,7 +121,7 @@ impl s::Seed {
 
 pub(crate) fn deserialize_coin<'de, D>(deserializer: D) -> Result<Coin, D::Error> where D: Deserializer<'de> {
     let value = u64::deserialize(deserializer)?;
-    Coin::from_u64(value).map_err(Error::custom)
+    Coin::try_from(value).map_err(Error::custom)
 }
 
 pub(crate) fn deserialize_string<'de, D, T>(deserializer: D) -> Result<T, D::Error>

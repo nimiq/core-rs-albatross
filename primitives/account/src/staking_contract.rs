@@ -665,7 +665,7 @@ impl Ord for StakingContract {
 impl Default for StakingContract {
     fn default() -> Self {
         StakingContract {
-            balance: Coin::from_u64(0).unwrap(),
+            balance: Coin::ZERO,
             active_stake_sorted: BTreeSet::new(),
             active_stake_by_address: HashMap::new(),
             inactive_stake_by_address: HashMap::new()
