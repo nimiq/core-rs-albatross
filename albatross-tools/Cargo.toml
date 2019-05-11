@@ -10,8 +10,12 @@ name = "nimiq-genesis"
 path = "src/genesis/main.rs"
 
 [[bin]]
-name = "nimiq-keygen-bls"
-path = "src/keygen/main.rs"
+name = "nimiq-bls"
+path = "src/bls/main.rs"
+
+[[bin]]
+name = "nimiq-address"
+path = "src/address/main.rs"
 
 [dependencies]
 nimiq-bls = { path = "../bls" }

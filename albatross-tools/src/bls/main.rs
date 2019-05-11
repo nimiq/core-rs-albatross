@@ -2,11 +2,10 @@ extern crate nimiq_bls as bls;
 
 use bls::bls12_381::{SecretKey, PublicKey};
 use bls::Encoding;
-use rand_chacha::ChaChaRng;
-use rand::FromEntropy;
+use rand::rngs::OsRng;
 
 fn main() {
-    let mut csprng = ChaChaRng::from_entropy();
+    let mut csprng = OsRng::new().expect("OS RNG not available");
     let secret_key = SecretKey::generate(&mut csprng);
     let public_key = PublicKey::from_secret(&secret_key);
 
