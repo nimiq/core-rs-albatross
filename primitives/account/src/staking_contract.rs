@@ -56,6 +56,7 @@ pub struct ValidatorSet {
 }
 
 pub struct ActiveValidator {
+    pub validator_key: BlsPublicKey,
     pub staking_address: Address,
     pub reward_address_opt: Option<Address>,
 }
@@ -86,6 +87,13 @@ pub struct ActiveStakeReceipt {
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 struct InactiveStakeReceipt {
     retire_time: u32,
+}
+
+#[derive(Default, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+struct SlashReceipt {
+    active: Option<ActiveStakeReceipt>,
+    split: Coin,
+    inactive: Option<InactiveStakeReceipt>,
 }
 
 /**
@@ -389,7 +397,7 @@ impl StakingContract {
         let lookup = SegmentTree::new(&mut weights);
 
         // Build active validator set: Use the VRF to pick validators
-        let mut validator_keys = Vec::<ActiveValidator>::with_capacity(n_picked as usize);
+        let mut validators = Vec::<ActiveValidator>::with_capacity(n_picked as usize);
         for i in 0..n_picked {
             // Hash seed and index
             let mut hash_state = Blake2bHasher::new();
@@ -405,13 +413,14 @@ impl StakingContract {
             let index = num % u64::from(lookup.range());
             let staking_address = lookup.find(index).unwrap();
             let active_stake = &self.active_stake_by_address[&staking_address];
-            validator_keys.push(ActiveValidator {
+            validators.push(ActiveValidator {
+                validator_key:      active_stake.validator_key.clone(),
                 staking_address:    active_stake.staker_address.clone(),
                 reward_address_opt: active_stake.reward_address.as_ref().map(|s| s.clone())
             });
         }
         ValidatorSet {
-            active: validator_keys,
+            active: validators,
             min_required_stake: min_stake,
         }
     }
@@ -533,18 +542,187 @@ impl AccountInherentInteraction for StakingContract {
     fn check_inherent(&self, inherent: &Inherent) -> Result<(), AccountError> {
         match inherent.ty {
             InherentType::Slash => {
-                unimplemented!()
+                // Inherent has extra data
+                if inherent.data.len() > 0 {
+                    return Err(AccountError::InvalidInherent);
+                }
+
+                // Inherent slashes nothing
+                if inherent.value == Coin::ZERO {
+                    return Err(AccountError::InvalidInherent);
+                }
+
+                // Inherent slashes more than staked in total
+                if inherent.value > self.balance {
+                    return Err(AccountError::InvalidForTarget);
+                }
+
+                // Inherent slashes more than staked by address
+                let mut combined_funds = Coin::ZERO;
+                if let Some(ref active_stake) = self.active_stake_by_address.get(&inherent.target) {
+                    combined_funds = Account::balance_add(combined_funds, active_stake.balance)?;
+                }
+                if let Some(ref inactive_stake) = self.inactive_stake_by_address.get(&inherent.target) {
+                    combined_funds = Account::balance_add(combined_funds, inactive_stake.balance)?;
+                }
+                if inherent.value > combined_funds {
+                    return Err(AccountError::InvalidForTarget)
+                }
+
+                Ok(())
             },
-            InherentType::Reward => Err(AccountError::InvalidInherent)
+            InherentType::Reward => Err(AccountError::InvalidForTarget)
         }
     }
 
     fn commit_inherent(&mut self, inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
-        unimplemented!()
+        self.check_inherent(inherent)?;
+        self.balance = Account::balance_sub(self.balance, inherent.value)?;
+
+        let mut receipt: SlashReceipt = Default::default();
+        let mut active_slashed = false;
+
+        let mut to_pay = inherent.value;
+
+        if let Some(active_stake) = self.active_stake_by_address.remove(&inherent.target) {
+            self.active_stake_sorted.remove(&active_stake);
+            if to_pay < active_stake.balance {
+                // Slash active stake partially
+                self.active_stake_sorted.remove(&active_stake);
+                let mut new_active_stake = active_stake.clone();
+                Arc::make_mut(&mut new_active_stake).balance =
+                    Account::balance_sub(new_active_stake.balance, to_pay)?;
+
+                self.active_stake_sorted.insert(new_active_stake.clone());
+                self.active_stake_by_address.insert(inherent.target.clone(), new_active_stake);
+
+                return Ok(None);
+            } else {
+                // Slash active stake entirely
+                receipt.active = Some(ActiveStakeReceipt {
+                    validator_key: active_stake.validator_key.clone(),
+                    reward_address: active_stake.reward_address.clone(),
+                });
+                to_pay = Account::balance_sub(to_pay, active_stake.balance)?;
+                if to_pay == Coin::ZERO {
+                    // No more slashing needed
+                    return Ok(Some(receipt.serialize_to_vec()));
+                }
+                active_slashed = true;
+            }
+        }
+
+        if let Some(inactive_stake) = self.inactive_stake_by_address.get_mut(&inherent.target) {
+            if active_slashed {
+                receipt.split = to_pay;
+            }
+
+            return if to_pay < inactive_stake.balance {
+                // Slash inactive stake partially
+                inactive_stake.balance = Account::balance_sub(inactive_stake.balance, to_pay)?;
+
+                if !active_slashed {
+                    Ok(None)
+                } else {
+                    Ok(Some(receipt.serialize_to_vec()))
+                }
+            } else if to_pay == inactive_stake.balance {
+                // Slash inactive stake entirely
+                receipt.inactive = Some(InactiveStakeReceipt {
+                    retire_time: inactive_stake.retire_time,
+                });
+                self.inactive_stake_by_address.remove(&inherent.target);
+                Ok(Some(receipt.serialize_to_vec()))
+            } else {
+                return Err(AccountError::InvalidForTarget);
+            }
+        }
+
+        Err(AccountError::InvalidForTarget)
     }
 
     fn revert_inherent(&mut self, inherent: &Inherent, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
-        unimplemented!()
+        if receipt.is_none() {
+            // No receipt: Either inactive or active stake was partially slashed
+
+            if let Some(active_stake) = self.active_stake_by_address.remove(&inherent.target) {
+                // Revert partial slash of active stake
+                self.active_stake_sorted.remove(&active_stake);
+                let mut new_active_stake = active_stake.clone();
+                Arc::make_mut(&mut new_active_stake).balance =
+                    Account::balance_add(new_active_stake.balance, inherent.value)?;
+
+                self.active_stake_sorted.insert(new_active_stake.clone());
+                self.active_stake_by_address.insert(inherent.target.clone(), new_active_stake);
+                self.balance = Account::balance_add(self.balance, inherent.value)?;
+
+                return Ok(());
+            }
+
+            if let Some(inactive_stake) = self.inactive_stake_by_address.get_mut(&inherent.target) {
+                // Revert partial slash of inactive stake
+                inactive_stake.balance = Account::balance_add(inactive_stake.balance, inherent.value)?;
+                self.balance = Account::balance_add(self.balance, inherent.value)?;
+                return Ok(());
+            }
+
+            return Err(AccountError::InvalidReceipt);
+        }
+
+        let receipt_bytes = receipt.unwrap();
+        let receipt: SlashReceipt = Deserialize::deserialize_from_vec(receipt_bytes)?;
+
+        self.balance = Account::balance_add(self.balance, inherent.value)?;
+
+        if let Some(ref active_receipt) = receipt.active {
+            // Add back entire active stake
+            let active_value = Account::balance_sub(inherent.value, receipt.split)?;
+            if self.active_stake_by_address.get(&inherent.target).is_some() {
+                return Err(AccountError::InvalidForTarget);
+            }
+            let active_receipt = receipt.active.as_ref().unwrap();
+
+            let active_stake = Arc::new(ActiveStake {
+                staker_address: inherent.target.clone(),
+                balance: active_value,
+                validator_key: active_receipt.validator_key.clone(),
+                reward_address: active_receipt.reward_address.clone(),
+            });
+
+            self.active_stake_sorted.insert(Arc::clone(&active_stake));
+            self.active_stake_by_address.insert(inherent.target.clone(), active_stake);
+
+            // Nothing split, done reverting
+            if receipt.split == Coin::ZERO {
+                return Ok(());
+            }
+        }
+
+        let inactive_balance = if receipt.split == Coin::ZERO {
+            inherent.value
+        } else {
+            receipt.split
+        };
+
+        if let Some(ref inactive_receipt) = receipt.inactive {
+            // Add back entire inactive stake
+            let previous = self.inactive_stake_by_address.insert(inherent.target.clone(), InactiveStake {
+                balance: inactive_balance,
+                retire_time: inactive_receipt.retire_time,
+            });
+            if previous.is_some() {
+                return Err(AccountError::InvalidForTarget);
+            }
+        } else {
+            // Add partial inactive stake
+            let inactive_stake = self.inactive_stake_by_address.get_mut(&inherent.target);
+            if inactive_stake.is_none() {
+                return Err(AccountError::InvalidForTarget);
+            }
+            let inactive_stake = inactive_stake.unwrap();
+            inactive_stake.balance = Account::balance_add(inactive_stake.balance, inactive_balance)?;
+        }
+        Ok(())
     }
 }
 

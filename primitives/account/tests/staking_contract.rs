@@ -6,13 +6,14 @@ use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::bls12_381::KeyPair as BlsKeyPair;
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::{Address, KeyPair, PublicKey, PrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, StakingContract};
 use nimiq_transaction::{SignatureProof, Transaction, TransactionError};
 use nimiq_transaction::account::AccountTransactionVerification;
 use nimiq_transaction::account::staking_contract::StakingTransactionData;
+use nimiq_account::inherent::{AccountInherentInteraction, Inherent, InherentType};
 
 const CONTRACT_1: &str = "00000000000000000000000000000000";
 const CONTRACT_2: &str = "0000000023c34600000000020202020202020202020202020202020202020202000000001ad27480a2f7d485efe6fabad3d780d1ea5ad690bd027a5328f44b612cad1f33347c8df5bde90a340c30877a21861e2173f6cfda0715d35ac2941437bf7e73d7e48fcf6e1901249134532ad1826ad1e396caed2d4d1d11e82d79f93946b21800a00971f000005e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e0000000008f0d180a9edd1613b714ec6107f4ffd532e52727c4f3a2897b3000e9ebccf076e8ffdf4b424f7e798d31dc67bbf9b3776096f101740b3f992ba8a5d0e20860f8d3466b7b58fb6b918eebb3c014bf6bb1cbdcb045c184d673c3db6435f454a1c530b9dfc012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0000000000";
@@ -368,7 +369,162 @@ fn it_can_apply_unstaking_transaction() {
     assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
 }
 
+fn bls_key_pair() -> BlsKeyPair {
+    const BLS_PUBKEY: &str = "a8086fc5b40e74d396f0cf4373196fe0c2fe8fcbef2c8a628c5c1df83226f6780b9662488462dd198ea284734a61f67c0fee126ed2fc2714d0165a7ff66c67bc9daaea6b3544711163089b2dbc7caa05037a63f8a2a63eb96fcba0bfbc449052";
+    const BLS_PRIVKEY: &str = "9059dc56d44e503e22f6eb1bd59a8ddf776d0ccbeb7f7dae65f976f175699b41";
 
+    BlsKeyPair {
+        secret: Deserialize::deserialize(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
+        public: Deserialize::deserialize(&mut &hex::decode(BLS_PUBKEY).unwrap()[..]).unwrap(),
+    }
+}
+
+fn ed25519_key_pair() -> KeyPair {
+    const PRIVKEY: &str = "fc9b15259bf42d3e7415b75a41db8e3280280bffa7ffbe5903a5537ac9b45f75";
+    let priv_key: PrivateKey = Deserialize::deserialize(&mut &hex::decode(PRIVKEY).unwrap()[..]).unwrap();
+    priv_key.into()
+}
+
+#[test]
+fn it_can_verify_inherent() {
+    let mut contract = make_sample_contract(&ed25519_key_pair(), &bls_key_pair());
+
+    // Reward inherent
+    let inherent_1 = Inherent {
+        ty: InherentType::Reward,
+        target: Address::from([0u8; 20]),
+        value: Coin::ZERO,
+        data: Vec::new(),
+    };
+    assert_eq!(contract.check_inherent(&inherent_1), Err(AccountError::InvalidForTarget));
+    assert_eq!(contract.commit_inherent(&inherent_1), Err(AccountError::InvalidForTarget));
+
+    // Slash inherent that doesn't slash anything
+    let mut inherent_2 = inherent_1.clone();
+    inherent_2.ty = InherentType::Slash;
+    assert_eq!(contract.check_inherent(&inherent_2), Err(AccountError::InvalidInherent));
+    assert_eq!(contract.commit_inherent(&inherent_2), Err(AccountError::InvalidInherent));
+
+    // Slash inherent with extra data
+    let mut inherent_3 = inherent_2.clone();
+    inherent_3.value = Coin::from_u64_unchecked(38u64);
+    inherent_3.data = Vec::from(&[42u8][..]);
+    assert_eq!(contract.check_inherent(&inherent_3), Err(AccountError::InvalidInherent));
+    assert_eq!(contract.commit_inherent(&inherent_3), Err(AccountError::InvalidInherent));
+}
+
+#[test]
+fn it_can_apply_slash_inherent() {
+    let bls_pair = bls_key_pair();
+    let key_pair = ed25519_key_pair();
+    let mut contract = make_sample_contract(&key_pair, &bls_pair);
+    let address = Address::from(&key_pair.public);
+
+    let make_slash = |value: u64| Inherent {
+        ty: InherentType::Slash,
+        target: address.clone(),
+        value: Coin::from_u64_unchecked(value),
+        data: Vec::new(),
+    };
+
+    // Slash part of active stake
+    let slash_1 = make_slash(150_000_000);
+    assert_eq!(contract.check_inherent(&slash_1), Ok(()));
+    assert_eq!(contract.commit_inherent(&slash_1), Ok(None));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(150_000_000u64));
+
+    // Slash too much (active)
+    let mut tmp_contract = contract.clone();
+    let slash_too_much = make_slash(900_000_000);
+    assert_eq!(tmp_contract.check_inherent(&slash_too_much), Err(AccountError::InvalidForTarget));
+    assert_eq!(tmp_contract.commit_inherent(&slash_too_much), Err(AccountError::InvalidForTarget));
+
+    // Slash entire active stake
+    let slash_2 = slash_1.clone();
+    assert_eq!(contract.check_inherent(&slash_2), Ok(()));
+    let receipt_2 = contract.commit_inherent(&slash_2).unwrap().unwrap();
+    assert_eq!(contract.balance, Coin::ZERO);
+    // Also check serialized form
+    assert_eq!(hex::encode(&receipt_2), "01a8086fc5b40e74d396f0cf4373196fe0c2fe8fcbef2c8a628c5c1df83226f6780b9662488462dd198ea284734a61f67c0fee126ed2fc2714d0165a7ff66c67bc9daaea6b3544711163089b2dbc7caa05037a63f8a2a63eb96fcba0bfbc449052010303030303030303030303030303030303030303000000000000000000");
+
+    // Slash on empty contract
+    let mut tmp_contract = contract.clone();
+    assert_eq!(tmp_contract.check_inherent(&slash_too_much), Err(AccountError::InvalidForTarget));
+    assert_eq!(tmp_contract.commit_inherent(&slash_too_much), Err(AccountError::InvalidForTarget));
+
+    // Revert to nothing slashed
+    assert_eq!(contract.revert_inherent(&slash_2, Some(&receipt_2)), Ok(()));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(150_000_000u64));
+    assert_eq!(contract.revert_inherent(&slash_1, None), Ok(()));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+
+    // Retire stake (make inactive)
+    let mut retire = Transaction::new_basic(
+        Address::from([0u8; 20]),
+        Address::from([0u8; 20]),
+        Coin::from_u64_unchecked(100_000_000u64),
+        Coin::from_u64_unchecked(0u64),
+        1, NetworkId::Dummy
+    );
+    retire.proof = SignatureProof::from(
+        key_pair.public.clone(),
+        key_pair.sign(&retire.serialize_content()),
+    ).serialize_to_vec();
+    retire.sender_type = AccountType::Staking;
+    retire.recipient_type = AccountType::Staking;
+    assert_eq!(contract.commit_outgoing_transaction(&retire, 2), Ok(None));
+    assert_eq!(contract.commit_incoming_transaction(&retire, 2), Ok(None));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+
+    // Slash too much (inactive + active)
+    let mut tmp_contract = contract.clone();
+    assert_eq!(tmp_contract.check_inherent(&slash_too_much), Err(AccountError::InvalidForTarget));
+    assert_eq!(tmp_contract.commit_inherent(&slash_too_much), Err(AccountError::InvalidForTarget));
+
+    // Mixed (inactive + active) partial slash
+    let slash_3 = make_slash(200_000_000u64);
+    assert_eq!(contract.check_inherent(&slash_3), Ok(()));
+    let receipt_3 = contract.commit_inherent(&slash_3).unwrap().unwrap();
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(100_000_000u64));
+
+    // Slash part of inactive stake
+    let slash_4 = make_slash(50_000_000u64);
+    assert_eq!(contract.check_inherent(&slash_4), Ok(()));
+    assert_eq!(contract.commit_inherent(&slash_4), Ok(None));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(50_000_000u64));
+    
+    // Slash too much (active)
+    let mut tmp_contract = contract.clone();
+    assert_eq!(tmp_contract.check_inherent(&slash_too_much), Err(AccountError::InvalidForTarget));
+    assert_eq!(tmp_contract.commit_inherent(&slash_too_much), Err(AccountError::InvalidForTarget));
+    
+    // Slash entire inactive stake
+    let slash_5 = make_slash(50_000_000u64);
+    assert_eq!(contract.check_inherent(&slash_5), Ok(()));
+    let receipt_5 = contract.commit_inherent(&slash_5).unwrap().unwrap();
+    assert_eq!(contract.balance, Coin::ZERO);
+
+    // Revert to mixed state
+    assert_eq!(contract.revert_inherent(&slash_5, Some(&receipt_5)), Ok(()));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(50_000_000u64));
+    assert_eq!(contract.revert_inherent(&slash_4, None), Ok(()));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(100_000_000u64));
+    assert_eq!(contract.revert_inherent(&slash_3, Some(&receipt_3)), Ok(()));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+
+    // Slash entire mixed stake (inactive + active)
+    let slash_6 = make_slash(300_000_000u64);
+    assert_eq!(contract.check_inherent(&slash_6), Ok(()));
+    let receipt_6 = contract.commit_inherent(&slash_6).unwrap().unwrap();
+    assert_eq!(contract.balance, Coin::ZERO);
+
+    // Revert everything
+    assert_eq!(contract.revert_inherent(&slash_6, Some(&receipt_6)), Ok(()));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+    assert_eq!(contract.revert_incoming_transaction(&retire, 2, None), Ok(()));
+    assert_eq!(contract.revert_outgoing_transaction(&retire, 2, None), Ok(()));
+    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+}
 
 #[test]
 fn it_can_build_a_validator_set() {

@@ -432,6 +432,8 @@ pub enum AccountError {
     InvalidForSender,
     #[fail(display = "Invalid for recipient")]
     InvalidForRecipient,
+    #[fail(display = "Invalid for target")]
+    InvalidForTarget,
     #[fail(display = "Invalid receipt")]
     InvalidReceipt,
     #[fail(display = "Invalid serialization")]
