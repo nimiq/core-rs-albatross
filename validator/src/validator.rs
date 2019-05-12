@@ -28,7 +28,7 @@ use crate::error::Error;
 
 pub struct Validator {
     consensus: Arc<Consensus>,
-    validator_network: Arc<RwLock<ValidatorNetwork>>,
+    validator_network: Arc<ValidatorNetwork>,
     validator_key: SecretKey,
 
     state: RwLock<ValidatorState>,
