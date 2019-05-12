@@ -20,12 +20,12 @@ fn write_genesis_rs(directory: &PathBuf, name: &str, genesis_hash: &Blake2bHash)
             accounts: include_bytes!(concat!(env!("OUT_DIR"), "/genesis/{}/accounts.dat")),
     }}"#, name, genesis_hash, name);
     debug!("Writing genesis source code: {}", &genesis_rs);
-    fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes());
+    fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes()).unwrap();
 }
 
 fn generate_powchain(name: &str, out_dir: &PathBuf, powchain: PowChainGenesis) {
     let directory = out_dir.join(name);
-    fs::create_dir_all(&directory);
+    fs::create_dir_all(&directory).unwrap();
     let genesis_hash = powchain.generate_genesis_hash().unwrap();
 
     powchain.write_to_files(&directory).unwrap();
@@ -36,7 +36,7 @@ fn generate_albatross(name: &str, out_dir: &PathBuf, src_dir: &PathBuf) {
     info!("Generating Albatross genesis config: {}", name);
 
     let directory = out_dir.join(name);
-    fs::create_dir_all(&directory);
+    fs::create_dir_all(&directory).unwrap();
 
     let mut builder = GenesisBuilder::default();
     builder
@@ -50,7 +50,8 @@ fn generate_albatross(name: &str, out_dir: &PathBuf, src_dir: &PathBuf) {
 
 fn main() {
     setup_panic!();
-    simple_logger::init_with_level(Level::Debug);
+    simple_logger::init_with_level(Level::Debug)
+        .map_err(|e| eprintln!("Failed to initialize logging: {}", e));
 
     let out_dir = Path::new(&env::var("OUT_DIR").unwrap()).join("genesis");
     let src_dir = Path::new("src").join("genesis");

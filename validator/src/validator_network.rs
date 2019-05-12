@@ -3,7 +3,7 @@ use network::{Network, Peer, NetworkEvent};
 use std::collections::HashMap;
 use parking_lot::RwLock;
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
-use network_primitives::validator_info::{ValidatorInfo, ValidatorId, SignedValidatorInfo};
+use network_primitives::validator_info::{ValidatorId, SignedValidatorInfo};
 use network_primitives::address::PeerId;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
 use messages::Message;
@@ -11,7 +11,7 @@ use std::collections::btree_map::BTreeMap;
 use block_albatross::{
     ViewChange, SignedViewChange, ViewChangeProof,
     SignedPbftPrepareMessage, SignedPbftCommitMessage, PbftProof,
-    MacroHeader, SignedPbftProposal, PbftProposal
+    SignedPbftProposal, PbftProposal
 };
 use blockchain_albatross::blockchain::Blockchain;
 use bls::bls12_381::PublicKey;
@@ -97,7 +97,6 @@ impl ValidatorNetwork {
 
     fn init_listeners(this: &Arc<RwLock<ValidatorNetwork>>) {
         this.write().self_weak = Arc::downgrade(this);
-        let weak = Arc::downgrade(this);
 
         this.read().network.notifier.write().register(weak_listener(Arc::downgrade(this), |this, event| {
             match event {
@@ -122,16 +121,20 @@ impl ValidatorNetwork {
                         this.write().on_validator_info(info);
                     },
                     ValidatorAgentEvent::ViewChange { view_change, public_key, slots } => {
-                        this.write().commit_view_change(view_change, &public_key, slots);
+                        this.write().commit_view_change(view_change, &public_key, slots)
+                            .unwrap_or_else(|e| warn!("Failed to commit view change: {}", e));
                     },
                     ValidatorAgentEvent::PbftProposal(proposal) => {
-                        this.write().commit_pbft_proposal(proposal);
+                        this.write().commit_pbft_proposal(proposal)
+                            .unwrap_or_else(|e| warn!("Failed to commit pBFT proposal: {}", e));
                     },
                     ValidatorAgentEvent::PbftPrepare { prepare, public_key, slots } => {
-                        this.write().commit_pbft_prepare(prepare, &public_key, slots);
+                        this.write().commit_pbft_prepare(prepare, &public_key, slots)
+                            .unwrap_or_else(|e| warn!("Failed to commit pBFT prepare: {}", e));
                     },
                     ValidatorAgentEvent::PbftCommit { commit, public_key, slots } => {
-                        this.write().commit_pbft_commit(commit, &public_key, slots);
+                        this.write().commit_pbft_commit(commit, &public_key, slots)
+                            .unwrap_or_else(|e| warn!("Failed to commit pBFT commit: {}", e));
                     },
                 }
             }));
@@ -191,7 +194,7 @@ impl ValidatorNetwork {
     }
 
     /// Commit a view change to the proofs being build and relay it if it's new
-    pub fn commit_view_change(&mut self, view_change: SignedViewChange, public_key: &PublicKey, slots: u16) {
+    pub fn commit_view_change(&mut self, view_change: SignedViewChange, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
         // get the proof with the specific block number and view change number
         // if it doesn't exist, create a new one.
         let proof = self.view_changes.entry(view_change.message.clone())
@@ -208,11 +211,13 @@ impl ValidatorNetwork {
             // broadcast new view change signature
             self.broadcast_active(Message::ViewChange(Box::new(view_change.clone())));
         }
+
+        Ok(())
     }
 
     /// Commit a macro block proposal
-    pub fn commit_pbft_proposal(&mut self, proposal: SignedPbftProposal) {
-        let commit = if let Some((current_proposal, _, proof)) = &self.pbft_proof {
+    pub fn commit_pbft_proposal(&mut self, proposal: SignedPbftProposal) -> Result<(), ValidatorNetworkError> {
+        let commit = if let Some((current_proposal, _, _)) = &self.pbft_proof {
             if *current_proposal == proposal.message {
                 // if we already know the proposal, ignore it
                 false
@@ -245,11 +250,13 @@ impl ValidatorNetwork {
             // relay proposal
             self.broadcast_active(Message::PbftProposal(Box::new(proposal)));
         }
+
+        Ok(())
     }
 
     /// Commit a pBFT prepare
     pub fn commit_pbft_prepare(&mut self, prepare: SignedPbftPrepareMessage, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
-        if let Some((proposal, block_hash, proof)) = &mut self.pbft_proof {
+        if let Some((_, block_hash, proof)) = &mut self.pbft_proof {
             // check if this prepare is for our current proposed block
             if prepare.message.block_hash != *block_hash {
                 debug!("Prepare for unknown block: {}", prepare.message.block_hash);
@@ -284,7 +291,7 @@ impl ValidatorNetwork {
 
     /// Commit a pBFT commit
     pub fn commit_pbft_commit(&mut self, commit: SignedPbftCommitMessage, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
-        if let Some((header, block_hash, proof)) = &mut self.pbft_proof {
+        if let Some((_, block_hash, proof)) = &mut self.pbft_proof {
             // check if this prepare is for our current proposed block
             if commit.message.block_hash != *block_hash {
                 debug!("Prepare for unknown block: {}", block_hash);

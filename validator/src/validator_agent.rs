@@ -1,12 +1,11 @@
 use std::sync::Arc;
-use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo, ValidatorId};
+use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      MacroHeader, SignedPbftProposal, ViewChange, Block, MacroBlock};
-use hash::{Hash, Blake2bHash};
+                      SignedPbftProposal, ViewChange, Block, MacroBlock};
 use primitives::policy::TWO_THIRD_VALIDATORS;
 use blockchain_albatross::blockchain::Blockchain;
 

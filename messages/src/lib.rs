@@ -43,7 +43,7 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::PassThroughNotifier;
-use block_albatross::{SignedViewChange, SlashInherent, MacroHeader, SignedPbftPrepareMessage,
+use block_albatross::{SignedViewChange, SlashInherent, SignedPbftPrepareMessage,
                       SignedPbftCommitMessage, SignedPbftProposal};
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 

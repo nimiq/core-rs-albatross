@@ -55,7 +55,7 @@ impl PowChainGenesis {
         info!("Writing accounts to {}", accounts_path.display());
         let mut file = OpenOptions::new().create(true).write(true).open(&accounts_path)?;
         //AccountsList(self.generate_accounts()?).serialize(&mut file)?;
-        file.write_all(&hex::decode(self.genesis_accounts)?);
+        file.write_all(&hex::decode(self.genesis_accounts)?)?;
 
         Ok(())
     }

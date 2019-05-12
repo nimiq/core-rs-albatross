@@ -5,7 +5,7 @@ use crate::address::peer_address::PeerAddressType;
 use crate::address::PeerId;
 use crate::services::ServiceFlags;
 use crate::address::seed_list::SeedList;
-use beserial::{Deserialize, DeserializeWithLength, Serialize, ReadBytesExt, SerializingError, WriteBytesExt};
+use beserial::Deserialize;
 use hash::Blake2bHash;
 use keys::Address;
 use account::Account;

@@ -476,7 +476,7 @@ impl Deserialize for AccountsList {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let count: u16 = Deserialize::deserialize(reader)?;
         let mut accounts: Vec<(Address, Account)> = Vec::new();
-        for i in 0..count {
+        for _ in 0..count {
             accounts.push((
                 Deserialize::deserialize(reader)?,
                 Deserialize::deserialize(reader)?

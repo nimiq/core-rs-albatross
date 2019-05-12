@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
-use hex;
-
 use account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt};
 use account::inherent::{AccountInherentInteraction, Inherent};
-use beserial::Deserialize;
 use database::{Environment, ReadTransaction, WriteTransaction};
 use database as db;
 use hash::Blake2bHash;
