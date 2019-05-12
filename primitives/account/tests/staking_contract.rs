@@ -557,9 +557,9 @@ fn it_can_build_a_validator_set() {
     contract.commit_incoming_transaction(&stake(12,      0xFF), 2).unwrap();
 
     // Test potential validator selection by stake
-    let validator_set = contract.build_validator_set(&seed, 1, 1);
-    assert_eq!(validator_set.active.len(), 1);
-    assert_eq!(validator_set.active[0].staking_address.as_bytes()[0], 0x00);
+    let (_, validator_list) = contract.build_validator_set(&seed, 1, 1);
+    assert_eq!(validator_list.len(), 1);
+    assert_eq!(validator_list[0].slashing_address.as_bytes()[0], 0x00);
 
     // Fill contract with same stakes
     let mut contract = make_empty_contract();
@@ -568,10 +568,10 @@ fn it_can_build_a_validator_set() {
     contract.commit_incoming_transaction(&stake(100_000_000, 0x04), 2).unwrap();
 
     // Test potential validator selection by secondary index
-    let validator_set = contract.build_validator_set(&seed, 1, 1);
-    assert_eq!(validator_set.min_required_stake, Coin::from_u64_unchecked(100_000_000));
-    assert_eq!(validator_set.active.len(), 1);
-    assert_eq!(validator_set.active[0].staking_address.as_bytes()[0], 0x03);
+    let (min_required_stake, validator_list) = contract.build_validator_set(&seed, 1, 1);
+    assert_eq!(min_required_stake, Coin::from_u64_unchecked(100_000_000));
+    assert_eq!(validator_list.len(), 1);
+    assert_eq!(validator_list[0].slashing_address.as_bytes()[0], 0x03);
 
     // TODO More tests
 }

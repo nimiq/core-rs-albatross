@@ -25,6 +25,18 @@ pub type SecretKey = GenericSecretKey<Bls12>;
 pub type Signature = GenericSignature<Bls12>;
 pub type KeyPair = GenericKeyPair<Bls12>;
 
+impl PartialOrd<PublicKey> for PublicKey {
+    fn partial_cmp(&self, other: &PublicKey) -> Option<Ordering> {
+        PublicKeyAffine::from(self.clone()).partial_cmp(&PublicKeyAffine::from(other.clone()))
+    }
+}
+
+impl Ord for PublicKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        PublicKeyAffine::from(self.clone()).cmp(&PublicKeyAffine::from(other.clone()))
+    }
+}
+
 pub type AggregatePublicKey = GenericAggregatePublicKey<Bls12>;
 pub type AggregateSignature = GenericAggregateSignature<Bls12>;
 

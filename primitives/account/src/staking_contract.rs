@@ -11,8 +11,11 @@ use bls::bls12_381::Signature as BlsSignature;
 use collections::SegmentTree;
 use keys::Address;
 use hash::{Blake2bHasher, Hasher};
-use primitives::coin::Coin;
-use primitives::policy;
+use primitives::{
+    policy,
+    coin::Coin,
+    slot::Slot,
+};
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::StakingTransactionData;
 
@@ -59,11 +62,6 @@ impl Ord for ActiveStake {
         other.balance.cmp(&self.balance)
             .then_with(|| self.staker_address.cmp(&other.staker_address))
     }
-}
-
-pub struct ValidatorSet {
-    pub active: Vec<ActiveValidator>,
-    pub min_required_stake: Coin,
 }
 
 pub struct ActiveValidator {
@@ -381,7 +379,7 @@ impl StakingContract {
 
     /// Retrieves the size-bounded list of active validators.
     // FIXME naming
-    pub fn build_validator_set(&self, seed: &BlsSignature, max_considered: usize, max_picked: u32) -> ValidatorSet {
+    pub fn build_validator_set(&self, seed: &BlsSignature, max_considered: usize, max_picked: u32) -> (Coin, Vec<Slot>) {
         let mut potential_validators = Vec::new();
         let mut min_stake = Coin::ZERO;
         let mut total_stake = Coin::ZERO;
@@ -408,7 +406,7 @@ impl StakingContract {
         let lookup = SegmentTree::new(&mut weights);
 
         // Build active validator set: Use the VRF to pick validators
-        let mut validators = Vec::<ActiveValidator>::with_capacity(n_picked as usize);
+        let mut validators = Vec::<Slot>::with_capacity(n_picked as usize);
         for i in 0..n_picked {
             // Hash seed and index
             let mut hash_state = Blake2bHasher::new();
@@ -424,16 +422,19 @@ impl StakingContract {
             let index = num % u64::from(lookup.range());
             let staking_address = lookup.find(index).unwrap();
             let active_stake = &self.active_stake_by_address[&staking_address];
-            validators.push(ActiveValidator {
-                validator_key:      active_stake.validator_key.clone(),
-                staking_address:    active_stake.staker_address.clone(),
-                reward_address_opt: active_stake.reward_address.as_ref().map(|s| s.clone())
+            // If a reward address is not explicitly defined, it means it's the same as the staking address
+            let reward_address = active_stake.reward_address.clone().unwrap_or_else(|| active_stake.staker_address.clone());
+            validators.push(Slot {
+                reward_address,
+                public_key:         active_stake.validator_key.clone(),
+                slashing_address:   active_stake.staker_address.clone(),
             });
         }
-        ValidatorSet {
-            active: validators,
-            min_required_stake: min_stake,
-        }
+
+        // Sorting by public key allows us to later compress this in the MacroHeader by removing duplicates
+        validators.sort_unstable_by(|a, b| b.public_key.cmp(&a.public_key));
+
+        (min_stake, validators)
     }
 
     fn get_signer(transaction: &Transaction) -> Result<Address, AccountError> {
