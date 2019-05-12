@@ -9,7 +9,7 @@ use block::{Block, BlockType, BlockError, MacroBlock, ValidatorSlots, MicroBlock
 use block::ViewChange;
 use database::{Environment, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
-use network_primitives::networks::get_network_info;
+use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
 use account::AccountError;
 use primitives::networks::NetworkId;

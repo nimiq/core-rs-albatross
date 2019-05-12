@@ -1,8 +1,8 @@
 use nimiq_blockchain::{chain_info::ChainInfo, chain_store::ChainStore};
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_network_primitives::networks::{get_network_info, NetworkId};
-use nimiq_block::Difficulty;
+use nimiq_network_primitives::networks::{NetworkInfo, NetworkId};
+use nimiq_block::{Difficulty, Block};
 
 #[test]
 fn it_can_store_the_chain_head() {
@@ -22,7 +22,7 @@ fn it_can_store_the_chain_head() {
 fn it_can_store_chain_info_with_body() {
     let env = VolatileEnvironment::new(3).unwrap();
     let store = ChainStore::new(&env);
-    let genesis_block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let genesis_hash = genesis_block.header.hash();
     let chain_info = ChainInfo::initial(genesis_block);
     assert!(chain_info.head.body.is_some());
@@ -43,7 +43,7 @@ fn it_can_store_chain_info_with_body() {
 fn it_can_store_chain_info_without_body() {
     let env = VolatileEnvironment::new(3).unwrap();
     let store = ChainStore::new(&env);
-    let genesis_block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let genesis_hash = genesis_block.header.hash();
     let chain_info = ChainInfo::initial(genesis_block);
 
@@ -64,7 +64,7 @@ fn it_can_retrieve_chain_info_by_height() {
     let env = VolatileEnvironment::new(3).unwrap();
     let store = ChainStore::new(&env);
 
-    let block1 = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let block1 = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let hash1 = block1.header.hash::<Blake2bHash>();
     let info1 = ChainInfo::initial(block1.clone());
 
@@ -114,7 +114,7 @@ fn it_can_get_blocks_backward() {
     let store = ChainStore::new(&env);
 
     let mut txn = WriteTransaction::new(&env);
-    let mut block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     store.put_chain_info(&mut txn, &block.header.hash::<Blake2bHash>(), &ChainInfo::initial(block.clone()), true);
 
     for _ in 0..20 {
@@ -180,8 +180,8 @@ fn it_can_get_blocks_forward() {
     let store = ChainStore::new(&env);
 
     let mut txn = WriteTransaction::new(&env);
-    let network_info = get_network_info(NetworkId::Main).unwrap();
-    let mut block = network_info.genesis_block.clone();
+    let network_info = NetworkInfo::from_network_id(NetworkId::Main);
+    let mut block = network_info.genesis_block::<Block>().clone();
     let mut chain_infos = vec![ChainInfo::initial(block.clone())];
 
     let mut hash;
@@ -232,12 +232,12 @@ fn it_can_get_blocks_forward() {
     assert!(blocks[0].body.is_none());
     assert!(blocks[18].body.is_none());
 
-    blocks = store.get_blocks_forward(&network_info.genesis_hash, 20, false, None);
+    blocks = store.get_blocks_forward(&network_info.genesis_hash(), 20, false, None);
     assert_eq!(blocks.len(), 20);
     assert_eq!(blocks[0].header.height, 2);
     assert_eq!(blocks[19].header.height, 21);
 
-    blocks = store.get_blocks_forward(&network_info.genesis_hash, 20, false, None);
+    blocks = store.get_blocks_forward(&network_info.genesis_hash(), 20, false, None);
     assert_eq!(blocks.len(), 20);
     assert_eq!(blocks[0].header.height, 2);
     assert_eq!(blocks[19].header.height, 21);
@@ -256,7 +256,7 @@ fn it_can_remove_chain_info() {
     let env = VolatileEnvironment::new(3).unwrap();
     let store = ChainStore::new(&env);
 
-    let block1 = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let block1 = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let hash1 = block1.header.hash::<Blake2bHash>();
     let info1 = ChainInfo::initial(block1.clone());
 

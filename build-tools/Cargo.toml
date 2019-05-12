@@ -1,6 +1,5 @@
-
 [package]
-name = "albatross-genesis"
+name = "nimiq-build-tools"
 version = "0.1.0"
 authors = ["Janosch Gräf <janosch@nimiq.com>"]
 edition = "2018"
@@ -9,22 +8,14 @@ edition = "2018"
 name = "nimiq-genesis"
 path = "src/genesis/main.rs"
 
-[[bin]]
-name = "nimiq-bls"
-path = "src/bls/main.rs"
-
-[[bin]]
-name = "nimiq-address"
-path = "src/address/main.rs"
-
 [dependencies]
-nimiq-bls = { path = "../bls" }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
+nimiq-bls = { path = "../bls", optional = true }
+nimiq-block = { path = "../primitives/block", optional = true }
+nimiq-block-albatross = { path = "../primitives/block-albatross", optional = true }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-account = { path = "../primitives/account" }
-nimiq-network-primitives = { path = "../network-primitives/" }
 beserial = { path = "../beserial" }
 lazy_static = "1.3"
 rand = "0.6"
@@ -37,3 +28,9 @@ toml = "0.5"
 hex = "0.3"
 log = "0.4.6"
 simple_logger = "1.0.1"
+failure = "0.1"
+
+[features]
+default = ["albatross", "powchain"]
+albatross = ["nimiq-bls", "nimiq-block-albatross"]
+powchain = ["nimiq-block"]

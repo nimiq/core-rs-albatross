@@ -13,7 +13,7 @@ use keys::Signature;
 use crate::network_config::{NetworkConfig, Seed};
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::peer_uri::{PeerUri, PeerUriError};
-use network_primitives::networks::{ get_network_info, NetworkId };
+use network_primitives::networks::{NetworkInfo, NetworkId};
 
 use utils::observer::Notifier;
 
@@ -66,7 +66,7 @@ impl PeerAddressSeeder {
     }
 
     pub fn collect(&self, network_id: NetworkId, network_config: Arc<NetworkConfig>) {
-        let network_info = get_network_info(network_id).expect("This was validated by PeerAddressBook::new()");
+        let network_info = NetworkInfo::from_network_id(network_id);
 
         // Get additional seed lists from the config file (in Iterator form)
         let additional_seedlists = network_config.additional_seeds().iter()
@@ -79,7 +79,7 @@ impl PeerAddressSeeder {
 
         // Create a new Iterator chaining the hardcoded seed lists with the seed lists from the config file
         // TODO: Optimize this to use references instead of cloning
-        let seed_lists = network_info.seed_lists.iter().cloned().chain(additional_seedlists);
+        let seed_lists = network_info.seed_lists().iter().cloned().chain(additional_seedlists);
 
         // Process all seed lists asynchronously
         for seed_list in seed_lists {

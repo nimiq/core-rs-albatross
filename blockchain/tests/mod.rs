@@ -3,7 +3,7 @@ use nimiq_block::*;
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_primitives::networks::get_network_info;
+use nimiq_network_primitives::networks::NetworkInfo;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 
@@ -135,8 +135,8 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
             self.interlink = Some(head.get_next_interlink(&next_target));
         }
 
-        let info = get_network_info(self.blockchain.network_id).unwrap();
-        self.header.interlink_hash = self.interlink.as_ref().unwrap().hash(info.genesis_block.header.hash());
+        let info = NetworkInfo::from_network_id(self.blockchain.network_id);
+        self.header.interlink_hash = self.interlink.as_ref().unwrap().hash(info.genesis_hash().clone());
 
         // XXX Use default accounts hash if body fails to apply.
         let state = self.blockchain.state();

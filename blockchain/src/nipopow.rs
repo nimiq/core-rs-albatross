@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use database::{Transaction, ReadTransaction};
 use hash::Blake2bHash;
-use network_primitives::networks::get_network_info;
+use network_primitives::networks::NetworkInfo;
 use block::{Block, BlockHeader, Target};
 use block::proof::ChainProof;
 use utils::iterators::Merge;
@@ -87,7 +87,7 @@ impl<'env> Blockchain<'env> {
         }
 
         if (chain.is_empty() || chain[chain.len() - 1].head.header.height > 1) && tail_height == 1 {
-            let genesis_block = get_network_info(self.network_id).unwrap().genesis_block.clone();
+            let genesis_block = NetworkInfo::from_network_id(self.network_id).genesis_block::<Block>().clone();
             chain.push(ChainInfo::initial(genesis_block.into_light()));
         }
 

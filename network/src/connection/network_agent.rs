@@ -12,7 +12,7 @@ use blockchain::Blockchain;
 use network_messages::*;
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::PeerId;
-use network_primitives::networks::get_network_info;
+use network_primitives::networks::NetworkInfo;
 use network_primitives::protocol::Protocol;
 use network_primitives::version;
 use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
@@ -163,11 +163,11 @@ impl NetworkAgent {
         // Kick off the handshake by telling the peer our version, network address & blockchain head hash.
         // Firefox sends the data-channel-open event too early, so sending the version message might fail.
         // Try again in this case.
-        let network_info = get_network_info(self.blockchain.network_id).unwrap();
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id);
         let msg = VersionMessage::new(
             self.network_config.peer_address(),
             self.blockchain.head_hash(),
-            network_info.genesis_hash.clone(),
+            network_info.genesis_hash().clone(),
             self.challenge_nonce.clone(),
             self.network_config.user_agent().clone());
         if self.channel.send(msg).is_err() {
@@ -256,8 +256,8 @@ impl NetworkAgent {
         }
 
         // Check if the peer is working on the same genesis block.
-        let network_info = get_network_info(self.blockchain.network_id).unwrap();
-        if network_info.genesis_hash != msg.genesis_hash {
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id);
+        if *network_info.genesis_hash() != msg.genesis_hash {
             self.channel.close(CloseType::DifferentGenesisBlock);
             return;
         }

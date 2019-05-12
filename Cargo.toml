@@ -33,5 +33,6 @@ members = [
     "fixed-unsigned",
     "bls",
     "validator",
-    "albatross-tools",
+    "tools",
+    "build-tools"
 ]

@@ -20,7 +20,7 @@ use network_messages::{
     Message,
     TxMessage
 };
-use network_primitives::networks::get_network_info;
+use network_primitives::networks::NetworkInfo;
 use network_primitives::subscription::Subscription;
 use block::{Block, BlockHeader};
 use transaction::Transaction;
@@ -770,8 +770,8 @@ impl InventoryAgent {
         // chain, ignore the rest. If none of the requested hashes is found,
         // pick the genesis block hash. Send the main chain starting from the
         // picked hash back to the peer.
-        let network_info = get_network_info(self.blockchain.network_id).unwrap();
-        let mut start_block_hash = network_info.genesis_hash.clone();
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id);
+        let mut start_block_hash = network_info.genesis_hash().clone();
         for locator in msg.locators.iter() {
             if self.blockchain.get_block(locator, false, false).is_some() {
                 // We found a block, ignore remaining block locator hashes.

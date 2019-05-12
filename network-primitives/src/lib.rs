@@ -26,10 +26,10 @@ pub mod address;
 pub mod services;
 #[cfg(feature = "version")]
 pub mod version;
+
 #[cfg(feature = "networks")]
 pub mod networks;
-#[cfg(feature = "networks")]
-pub mod networks_albatross;
+
 #[cfg(feature = "protocol")]
 pub mod protocol;
 #[cfg(feature = "subscription")]

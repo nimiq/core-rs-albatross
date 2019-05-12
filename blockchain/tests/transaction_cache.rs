@@ -3,11 +3,12 @@ use std::convert::TryFrom;
 use nimiq_blockchain::transaction_cache::TransactionCache;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_primitives::networks::get_network_info;
+use nimiq_network_primitives::networks::NetworkInfo;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
+use nimiq_block::Block;
 
 #[test]
 fn it_can_push_blocks() {
@@ -15,7 +16,7 @@ fn it_can_push_blocks() {
     assert!(cache.is_empty());
     assert_eq!(cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW);
 
-    let mut block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let mut hash = block.header.hash::<Blake2bHash>();
     let tail_hash = hash.clone();
 
@@ -75,7 +76,7 @@ fn it_can_push_blocks() {
 #[test]
 fn it_can_revert_blocks() {
     let mut cache = TransactionCache::new();
-    let mut block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let mut hash = block.header.hash::<Blake2bHash>();
     cache.push_block(&block);
 
@@ -147,7 +148,7 @@ fn it_can_revert_blocks() {
 #[test]
 fn it_removes_blocks_outside_the_validity_window() {
     let mut cache = TransactionCache::new();
-    let mut block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let mut hash = block.header.hash::<Blake2bHash>();
     cache.push_block(&block);
 
@@ -209,7 +210,7 @@ fn it_removes_blocks_outside_the_validity_window() {
 #[test]
 fn it_can_prepend_blocks() {
     let mut cache = TransactionCache::new();
-    let mut block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let mut hash = block.header.hash::<Blake2bHash>();
 
     let mut blocks = vec![block.clone()];

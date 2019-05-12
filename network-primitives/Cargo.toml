@@ -9,6 +9,7 @@ repository = "https://github.com/nimiq/core-rs"
 license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
+build = "build.rs"
 
 [badges]
 gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
@@ -37,6 +38,13 @@ nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
 nimiq-account = { path = "../primitives/account" }
 nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
 nimiq-macros = { path = "../macros" }
+
+[build-dependencies]
+nimiq-build-tools = { path = "../build-tools" }
+nimiq-hash = { path = "../hash" }
+human-panic = { version = "1.0" }
+log = "0.4"
+simple_logger = "1.0"
 
 [features]
 default = ["all"]

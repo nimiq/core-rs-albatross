@@ -6,7 +6,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_primitives::networks::get_network_info;
+use nimiq_network_primitives::networks::NetworkInfo;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;
@@ -74,7 +74,7 @@ fn it_can_store_and_remove_transactions() {
     let (tx1, tx2, tx3) = create_transactions();
 
     // Block 1 (empty)
-    let block1 = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let block1 = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let infos1 = TransactionInfo::from_block(&block1);
     assert_eq!(infos1.len(), 0);
 

@@ -3,13 +3,13 @@ use fixed_unsigned::types::FixedUnsigned10;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_blockchain::{super_block_counts::SuperBlockCounts, chain_info::ChainInfo};
-use nimiq_network_primitives::networks::get_network_info;
-use nimiq_block::Difficulty;
+use nimiq_network_primitives::networks::NetworkInfo;
+use nimiq_block::{Difficulty, Block};
 use nimiq_primitives::networks::NetworkId;
 
 #[test]
 fn it_is_correctly_initialized() {
-    let genesis_block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let chain_info = ChainInfo::initial(genesis_block.clone());
     let mut super_block_counts = SuperBlockCounts::default();
     super_block_counts.add(0); // Depth for target is 0
@@ -23,7 +23,7 @@ fn it_is_correctly_initialized() {
 
 #[test]
 fn it_can_be_serialized_and_deserialized() {
-    let mut genesis_block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let mut genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     genesis_block.body = None;
     let chain_info = ChainInfo::initial(genesis_block);
 
@@ -35,7 +35,7 @@ fn it_can_be_serialized_and_deserialized() {
 
 #[test]
 fn serialize_strips_body() {
-    let genesis_block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let mut chain_info = ChainInfo::initial(genesis_block.clone());
 
     let mut v: Vec<u8> = Vec::with_capacity(chain_info.serialized_size());
@@ -48,7 +48,7 @@ fn serialize_strips_body() {
 
 #[test]
 fn it_calculates_successor_correctly() {
-    let genesis_block = get_network_info(NetworkId::Main).unwrap().genesis_block.clone();
+    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let chain_info = ChainInfo::initial(genesis_block.clone());
     let next_info = chain_info.next(genesis_block.clone());
     let mut super_block_counts = SuperBlockCounts::default();

@@ -1,8 +1,7 @@
-
+name = "albatross-test"
 seed_message = "Albatross TestNet"
-
-# Example: "2019-05-10T23:56:52.776772644+00:00"
-#timestamp = ""
+signing_key = "230cf5070e9362108e3549360b84be23826c23839124b917629fb525db3baece"
+timestamp="2019-05-10T23:56:52.776772644+00:00"
 
 [[stakes]]
 staker_address = "NQ57 UC15 80L7 LHCK DBTB 709R M91Q PRG5 DL00"

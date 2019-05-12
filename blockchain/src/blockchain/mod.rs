@@ -11,7 +11,7 @@ use database::{Environment, ReadTransaction, WriteTransaction};
 use fixed_unsigned::RoundHalfUp;
 use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
 use hash::{Blake2bHash, Hash};
-use network_primitives::networks::get_network_info;
+use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
 use primitives::policy;
@@ -103,8 +103,8 @@ impl<'env> Blockchain<'env> {
 
     fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
-        let network_info = get_network_info(network_id).unwrap();
-        let genesis_info = chain_store.get_chain_info(&network_info.genesis_hash, false, None);
+        let network_info = NetworkInfo::from_network_id(network_id);
+        let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
 
         if !genesis_info.map(|i| i.on_main_chain).unwrap_or(false) {
             return Err(BlockchainError::InvalidGenesisBlock)
@@ -155,9 +155,10 @@ impl<'env> Blockchain<'env> {
 
     fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
-        let network_info = get_network_info(network_id).ok_or_else(|| BlockchainError::NoNetwork(network_id))?;
-        let main_chain = ChainInfo::initial(network_info.genesis_block.clone());
-        let head_hash = network_info.genesis_hash.clone();
+        let network_info = NetworkInfo::from_network_id(network_id);
+        let genesis_block = network_info.genesis_block::<Block>();
+        let main_chain = ChainInfo::initial(genesis_block.clone());
+        let head_hash = network_info.genesis_hash().clone();
 
         // Initialize accounts.
         let accounts = Accounts::new(env);
@@ -165,9 +166,9 @@ impl<'env> Blockchain<'env> {
         accounts.init(&mut txn, network_id);
 
         // Commit genesis block to accounts.
-        let genesis_header = &network_info.genesis_block.header;
-        let genesis_transactions = &network_info.genesis_block.body.as_ref().unwrap().transactions;
-        let genesis_inherents = vec![network_info.genesis_block.get_reward_inherent()];
+        let genesis_header = &genesis_block.header;
+        let genesis_transactions = &genesis_block.body.as_ref().unwrap().transactions;
+        let genesis_inherents = vec![genesis_block.get_reward_inherent()];
         accounts
             .commit(&mut txn, genesis_transactions, &genesis_inherents, genesis_header.height)
             .expect("Failed to commit genesis block body");
@@ -211,8 +212,8 @@ impl<'env> Blockchain<'env> {
         assert!(block.body.is_some(), "Block body expected");
 
         // Check (sort of) intrinsic block invariants.
-        let info = get_network_info(self.network_id).unwrap();
-        if let Err(e) = block.verify(self.network_time.now(), self.network_id, info.genesis_block.header.hash()) {
+        let genesis_hash = NetworkInfo::from_network_id(self.network_id).genesis_hash().clone();
+        if let Err(e) = block.verify(self.network_time.now(), self.network_id, genesis_hash) {
             warn!("Rejecting block - verification failed ({:?})", e);
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
@@ -671,13 +672,13 @@ impl<'env> Blockchain<'env> {
         }
 
         // Push the genesis block hash.
-        let network_info = get_network_info(self.network_id).unwrap();
-        if locators.is_empty() || locators.last().unwrap() != &network_info.genesis_hash {
+        let genesis_hash = NetworkInfo::from_network_id(self.network_id).genesis_hash();
+        if locators.is_empty() || locators.last().unwrap() != genesis_hash {
             // Respect max count, make space for genesis hash if necessary
             if locators.len() >= max_count {
                 locators.pop();
             }
-            locators.push(network_info.genesis_hash.clone());
+            locators.push(genesis_hash.clone());
         }
 
         locators

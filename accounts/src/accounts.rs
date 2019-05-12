@@ -9,7 +9,7 @@ use database::{Environment, ReadTransaction, WriteTransaction};
 use database as db;
 use hash::Blake2bHash;
 use keys::Address;
-use network_primitives::networks::get_network_info;
+use network_primitives::networks::NetworkInfo;
 use primitives::networks::NetworkId;
 use transaction::{Transaction, TransactionFlags};
 use tree_primitives::accounts_proof::AccountsProof;
@@ -29,14 +29,9 @@ impl<'env> Accounts<'env> {
     }
 
     pub fn init(&self, txn: &mut WriteTransaction, network_id: NetworkId) {
-        let network_info = get_network_info(network_id).unwrap();
-        let account_bytes = hex::decode(&network_info.genesis_accounts).unwrap();
-        let reader = &mut &account_bytes[..];
-        let count = u16::deserialize(reader).unwrap();
+        let network_info = NetworkInfo::from_network_id(network_id);
 
-        for _ in 0..count {
-            let address = Address::deserialize(reader).unwrap();
-            let account = Account::deserialize(reader).unwrap();
+        for (address, account) in network_info.genesis_accounts() {
             self.tree.put_batch(txn, &address, account);
         }
         self.tree.finalize_batch(txn);

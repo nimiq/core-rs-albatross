@@ -17,7 +17,7 @@ use rand::{Rng, rngs::OsRng};
 use network_primitives::address::net_address::NetAddress;
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::PeerId;
-use network_primitives::networks::{get_network_info, NetworkId};
+use network_primitives::networks::{NetworkInfo, NetworkId};
 use network_primitives::protocol::{Protocol, ProtocolFlags};
 use network_primitives::services::ServiceFlags;
 use utils::iterators::Alternate;
@@ -300,12 +300,7 @@ impl PeerAddressBook {
         };
 
         // Init hardcoded seed peers.
-        if let Some(network_info) = get_network_info(network_id) {
-            // TODO: This may be optimized by using Vec<Arc<>> instead of cloning
-            this.add(None, network_info.seed_peers.clone());
-        } else {
-            return Err(Error::InvalidNetworkInfo(network_id));
-        }
+        this.add(None, NetworkInfo::from_network_id(network_id).seed_peers().clone());
 
         // Init seed peers from config file.
         let additional_seeds: Vec<PeerAddress> = this.network_config.additional_seeds().iter()

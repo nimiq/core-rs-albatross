@@ -13,7 +13,7 @@ use blockchain::Blockchain;
 use hash::Hash;
 use keys::Address;
 use mempool::Mempool;
-use network_primitives::networks::get_network_info;
+use network_primitives::networks::NetworkInfo;
 
 pub struct BlockProducer<'env> {
     blockchain: Arc<Blockchain<'env>>,
@@ -80,7 +80,7 @@ impl<'env> BlockProducer<'env> {
         let timestamp = u32::max(timestamp, self.blockchain.head().header.timestamp + 1);
 
         let prev_hash = self.blockchain.head_hash();
-        let genesis_hash = get_network_info(self.blockchain.network_id).unwrap().genesis_hash.clone();
+        let genesis_hash = NetworkInfo::from_network_id(self.blockchain.network_id).genesis_hash().clone();
         let interlink_hash = interlink.hash(genesis_hash);
         let body_hash = body.hash();
         let accounts_hash = self.blockchain.state().accounts()
