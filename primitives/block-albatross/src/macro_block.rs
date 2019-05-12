@@ -9,7 +9,7 @@ use primitives::policy::TWO_THIRD_VALIDATORS;
 use crate::BlockError;
 use crate::pbft::UntrustedPbftProof;
 use crate::signed;
-use crate::Slot;
+use primitives::slot::Slot;
 use crate::view_change::ViewChangeProof;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

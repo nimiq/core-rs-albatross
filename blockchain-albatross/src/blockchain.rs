@@ -5,7 +5,7 @@ use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 
 use accounts::Accounts;
 use bls::bls12_381::{Signature, PublicKey};
-use block::{Block, BlockType, BlockError, MacroBlock, ValidatorSlots, MicroBlock, Slot};
+use block::{Block, BlockType, BlockError, MacroBlock, ValidatorSlots, MicroBlock};
 use block::ViewChange;
 use database::{Environment, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
@@ -13,6 +13,7 @@ use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
 use account::AccountError;
 use primitives::networks::NetworkId;
+use primitives::slot::Slot;
 use primitives::policy;
 
 use utils::observer::Notifier;

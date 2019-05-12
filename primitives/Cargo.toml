@@ -29,13 +29,16 @@ beserial = { path = "../beserial", version = "0.1.0" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
 nimiq-macros = { path = "../macros", version = "0.1.0", optional = true }
 fixed-unsigned = { path = "../fixed-unsigned", version = "0.1.0", optional = true }
+nimiq-bls = { path = "../bls", features = ["beserial"], optional = true }
+nimiq-keys = { path = "../keys", optional = true }
 
 [dev-dependencies]
 lazy_static = "1.2"
 
 [features]
-all = ["coin", "account", "policy", "networks"]
+all = ["coin", "account", "policy", "networks", "slot"]
 coin = ["hex", "failure"]
 account = ["hex", "nimiq-macros", "failure", "enum-display-derive"]
 policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static", "fixed-unsigned"]
 networks = []
+slot = ["nimiq-bls", "nimiq-keys"]

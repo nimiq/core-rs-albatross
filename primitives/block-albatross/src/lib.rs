@@ -54,11 +54,3 @@ pub enum BlockError {
 }
 
 impl block_base::BlockError for BlockError {}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Slot {
-    pub public_key: PublicKey,
-    pub reward_address: Address,
-    pub slashing_address: Address,
-    pub slot_number: u16,
-}
