@@ -11,6 +11,7 @@ use blockchain::{Blockchain, BlockchainEvent};
 use database::Environment;
 use mempool::{Mempool, MempoolEvent, MempoolConfig};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
+use network_messages::NimiqMessageAdapter;
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
 use transaction::Transaction;
@@ -26,10 +27,10 @@ use crate::inventory::InventoryManager;
 
 pub struct Consensus {
     pub blockchain: Arc<Blockchain<'static>>,
-    pub mempool: Arc<Mempool<'static>>,
+    pub mempool: Arc<Mempool<'static, Blockchain<'static>>>,
     pub network: Arc<Network>,
 
-    inv_mgr: Arc<RwLock<InventoryManager>>,
+    inv_mgr: Arc<RwLock<InventoryManager<Blockchain<'static>, NimiqMessageAdapter>>>,
     timers: Timers<ConsensusTimer>,
     accounts_chunk_cache: Arc<AccountsChunkCache>,
 
@@ -55,7 +56,7 @@ enum ConsensusTimer {
 
 struct ConsensusState {
     established: bool,
-    agents: HashMap<Arc<Peer>, Arc<ConsensusAgent>>,
+    agents: HashMap<Arc<Peer>, Arc<ConsensusAgent<Blockchain<'static>, NimiqMessageAdapter>>>,
 
     sync_peer: Option<Arc<Peer>>,
 }
@@ -220,7 +221,9 @@ impl Consensus {
             },
             BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
                 blocks = adopted_blocks.iter().map(|(_, block)| block).collect();
-            }
+            },
+            // TODO Do we have to do anything here?
+            BlockchainEvent::Finalized => return,
         }
 
         for agent in state.agents.values() {
@@ -259,7 +262,7 @@ impl Consensus {
         }
 
         let mut num_synced_full_nodes: usize = 0;
-        let candidates: Vec<&Arc<ConsensusAgent>> = state.agents.values()
+        let candidates: Vec<&Arc<ConsensusAgent<Blockchain<'static>, NimiqMessageAdapter>>> = state.agents.values()
             .filter(|&agent| {
                 let synced = agent.synced();
                 if synced && agent.peer.peer_address().services.is_full_node() {

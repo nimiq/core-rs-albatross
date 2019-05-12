@@ -1,14 +1,9 @@
 use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
 use block::Block;
+use blockchain_base::Direction;
 
 use crate::chain_info::ChainInfo;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Direction {
-    Forward,
-    Backward,
-}
 
 #[derive(Debug)]
 pub struct ChainStore<'env> {

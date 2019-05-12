@@ -1,3 +1,5 @@
+#![feature(type_alias_enum_variants)]
+
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
@@ -14,7 +16,7 @@ extern crate nimiq_account as account;
 extern crate nimiq_block as block;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
-extern crate nimiq_block_albatross as block_albatross;
+extern crate nimiq_blockchain_base as blockchain_base;
 
 pub mod chain_info;
 pub mod chain_store;
@@ -27,6 +29,5 @@ pub mod chain_metrics;
 #[cfg(feature = "transaction-store")]
 pub mod transaction_store;
 
-pub use self::blockchain::{Blockchain, BlockchainEvent, PushResult, PushError};
+pub use self::blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
 pub use self::blockchain::error::BlockchainError;
-pub use self::chain_store::Direction;

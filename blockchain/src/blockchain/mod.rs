@@ -1,33 +1,42 @@
 use std::cmp;
+use std::collections::HashSet;
 use std::sync::Arc;
 
-use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
+use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard};
 
-use account::AccountError;
+use account::Account;
 use accounts::Accounts;
 use block::{Block, BlockError, Difficulty, Target, TargetCompact};
 use block::proof::ChainProof;
+use blockchain_base::{AbstractBlockchain, Direction};
 use database::{Environment, ReadTransaction, WriteTransaction};
 use fixed_unsigned::RoundHalfUp;
 use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
 use hash::{Blake2bHash, Hash};
+use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use utils::observer::Notifier;
+use transaction::{TransactionReceipt, TransactionsProof};
+use tree_primitives::accounts_proof::AccountsProof;
+use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::blockchain::error::BlockchainError;
 use crate::chain_info::ChainInfo;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
-use crate::chain_store::{ChainStore, Direction};
+use crate::chain_store::ChainStore;
 use crate::transaction_cache::TransactionCache;
 #[cfg(feature = "transaction-store")]
 use crate::transaction_store::TransactionStore;
 
 pub mod transaction_proofs;
 pub mod error;
+
+pub type PushResult = blockchain_base::PushResult;
+pub type PushError = blockchain_base::PushError<BlockError>;
+pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
 
 pub struct Blockchain<'env> {
     pub(crate) env: &'env Environment,
@@ -65,31 +74,6 @@ impl<'env> BlockchainState<'env> {
     pub fn main_chain(&self) -> &ChainInfo {
         &self.main_chain
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PushResult {
-    Known,
-    Extended,
-    Rebranched,
-    Forked,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PushError {
-    Orphan,
-    InvalidBlock(BlockError),
-    InvalidSuccessor,
-    DifficultyMismatch,
-    DuplicateTransaction,
-    AccountsError(AccountError),
-    InvalidFork,
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BlockchainEvent {
-    Extended(Blake2bHash),
-    Rebranched(Vec<(Blake2bHash, Block)>, Vec<(Blake2bHash, Block)>),
 }
 
 impl<'env> Blockchain<'env> {
@@ -733,5 +717,79 @@ impl<'env> Blockchain<'env> {
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
         self.state.read()
+    }
+}
+
+impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
+    type Block = Block;
+
+    fn network_id(&self) -> NetworkId {
+        self.network_id
+    }
+
+    fn head_block(&self) -> Self::Block {
+        // FIXME Do we really want to clone here?
+        // Or do we want to return a MappedRwLockedReadGuard from the AbstractBlockchain trait?
+        self.state.read().main_chain.head.clone()
+    }
+
+    fn head_hash(&self) -> Blake2bHash {
+        self.head_hash()
+    }
+
+    fn head_height(&self) -> u32 {
+        self.height()
+    }
+
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Self::Block> {
+        self.get_block(hash, false, include_body)
+    }
+
+    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Self::Block> {
+        self.get_block_at(height, include_body)
+    }
+
+    fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
+        self.get_block_locators(max_count)
+    }
+
+    fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Self::Block> {
+        self.get_blocks(start_block_hash, count, include_body, direction)
+    }
+
+    fn push(&self, block: Self::Block) -> Result<PushResult, PushError> {
+        self.push(block)
+    }
+
+    fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
+        self.contains(hash, include_forks)
+    }
+
+    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof> {
+        self.get_accounts_proof(block_hash, addresses)
+    }
+
+    fn get_transactions_proof(&self, block_hash: &Blake2bHash, addresses: &HashSet<Address>) -> Option<TransactionsProof> {
+        self.get_transactions_proof(block_hash, addresses)
+    }
+
+    fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt> {
+        self.get_transaction_receipts_by_address(address, sender_limit, recipient_limit)
+    }
+
+    fn register_listener<T: Listener<BlockchainEvent> + 'env>(&self, listener: T) -> ListenerHandle {
+        self.notifier.write().register(listener)
+    }
+
+    fn lock(&self) -> MutexGuard<()> {
+        self.push_lock.lock()
+    }
+
+    fn get_account(&self, address: &Address) -> Account {
+        self.state.read().accounts.get(address, None)
+    }
+
+    fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool {
+        self.state.read().transaction_cache.contains(tx_hash)
     }
 }

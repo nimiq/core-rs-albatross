@@ -1,6 +1,5 @@
 use beserial::{Deserialize, Serialize, ReadBytesExt, WriteBytesExt, SerializingError};
 use keys::Address;
-use block::Block;
 use transaction::Transaction;
 use primitives::coin::Coin;
 use std::collections::HashSet;
@@ -34,7 +33,7 @@ impl Subscription {
         }
     }
 
-    pub fn matches_block(&self, _block: &Block) -> bool {
+    pub fn matches_block(&self) -> bool {
         match self {
             Subscription::None => false,
             _ => true

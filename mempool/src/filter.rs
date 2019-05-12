@@ -49,7 +49,7 @@ impl MempoolFilter {
 
     pub fn accepts_recipient_balance(&self, tx: &Transaction, old_balance: Coin, new_balance: Coin) -> bool {
         new_balance >= self.rules.recipient_balance && (
-            // XXX This does not precisely capture Account::is_initial() as it will incorrectly classify
+            // XXX This does not precisely capture Account::is_initial() as it will always classify
             // contracts with zero value as non-existent.
             old_balance != Coin::ZERO ||
                 (tx.fee >= self.rules.creation_fee &&

@@ -6,23 +6,24 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use weak_table::PtrWeakHashSet;
 
-use blockchain::{Blockchain, Direction, PushError, PushResult};
+use block_base::{Block, BlockHeader, BlockError};
+use blockchain_base::{AbstractBlockchain, Direction, PushError, PushResult};
 use collections::{LimitHashSet, UniqueLinkedList};
 use hash::{Blake2bHash, Hash};
 use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_messages::{
+    MessageAdapter,
     GetBlocksDirection,
     GetBlocksMessage,
     InvVector,
     InvVectorType,
     Message,
-    TxMessage
+    TxMessage,
 };
 use network_primitives::networks::NetworkInfo;
 use network_primitives::subscription::Subscription;
-use block::{Block, BlockHeader};
 use transaction::Transaction;
 use utils::{
     self,
@@ -40,13 +41,13 @@ enum InventoryManagerTimer {
     Request(InvVector)
 }
 
-pub struct InventoryManager {
-    vectors_to_request: HashMap<InvVector, (Weak<InventoryAgent>, PtrWeakHashSet<Weak<InventoryAgent>>)>,
-    self_weak: Weak<RwLock<InventoryManager>>,
+pub struct InventoryManager<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> {
+    vectors_to_request: HashMap<InvVector, (Weak<InventoryAgent<B, MA>>, PtrWeakHashSet<Weak<InventoryAgent<B, MA>>>)>,
+    self_weak: Weak<RwLock<InventoryManager<B, MA>>>,
     timers: Timers<InventoryManagerTimer>,
 }
 
-impl InventoryManager {
+impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> InventoryManager<B, MA> {
     const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
     pub fn new() -> Arc<RwLock<Self>> {
@@ -59,7 +60,7 @@ impl InventoryManager {
         this
     }
 
-    fn ask_to_request_vector(&mut self, agent: &InventoryAgent, vector: &InvVector) {
+    fn ask_to_request_vector(&mut self, agent: &InventoryAgent<B, MA>, vector: &InvVector) {
         if self.vectors_to_request.contains_key(vector) {
             let record = self.vectors_to_request.get_mut(&vector).unwrap();
             let current_opt = record.0.upgrade();
@@ -83,7 +84,7 @@ impl InventoryManager {
         }
     }
 
-    fn request_vector(&mut self, agent: &InventoryAgent, vector: &InvVector) {
+    fn request_vector(&mut self, agent: &InventoryAgent<B, MA>, vector: &InvVector) {
         agent.queue_vector(vector.clone());
 
         let weak = self.self_weak.clone();
@@ -100,7 +101,7 @@ impl InventoryManager {
         self.vectors_to_request.remove(vector);
     }
 
-    fn note_vector_not_received(&mut self, agent_weak: &Weak<InventoryAgent>, vector: &InvVector) {
+    fn note_vector_not_received(&mut self, agent_weak: &Weak<InventoryAgent<B, MA>>, vector: &InvVector) {
         self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
         let record_opt = self.vectors_to_request.get_mut(vector);
         if record_opt.is_none() {
@@ -138,14 +139,14 @@ impl InventoryManager {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum InventoryEvent {
+pub enum InventoryEvent<BE: BlockError> {
     NewBlockAnnounced,
     KnownBlockAnnounced(Blake2bHash),
     NewTransactionAnnounced,
     KnownTransactionAnnounced,
     NoNewObjectsAnnounced,
     AllObjectsReceived,
-    BlockProcessed(Blake2bHash, Result<PushResult, PushError>),
+    BlockProcessed(Blake2bHash, Result<PushResult, PushError<BE>>),
     TransactionProcessed(Blake2bHash, ReturnCode),
     GetBlocksTimeout,
 }
@@ -228,19 +229,19 @@ struct InventoryAgentState {
     last_subscription_change: Instant,
 }
 
-pub struct InventoryAgent {
-    blockchain: Arc<Blockchain<'static>>,
-    mempool: Arc<Mempool<'static>>,
+pub struct InventoryAgent<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> {
+    blockchain: Arc<B>,
+    mempool: Arc<Mempool<'static, B>>,
     peer: Arc<Peer>,
-    inv_mgr: Arc<RwLock<InventoryManager>>,
+    inv_mgr: Arc<RwLock<InventoryManager<B, MA>>>,
     state: RwLock<InventoryAgentState>,
-    pub notifier: RwLock<Notifier<'static, InventoryEvent>>,
-    self_weak: MutableOnce<Weak<InventoryAgent>>,
+    pub notifier: RwLock<Notifier<'static, InventoryEvent<<B::Block as Block>::Error>>>,
+    self_weak: MutableOnce<Weak<InventoryAgent<B, MA>>>,
     timers: Timers<InventoryAgentTimer>,
     mutex: Mutex<()>,
 }
 
-impl InventoryAgent {
+impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> InventoryAgent<B, MA> {
     /// Time to wait after the last received inv message before sending get-data.
     const REQUEST_THROTTLE: Duration = Duration::from_millis(500);
     /// Maximum time to wait after sending out get-data or receiving the last object for this request.
@@ -271,7 +272,7 @@ impl InventoryAgent {
 
     const SUBSCRIPTION_CHANGE_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<B>, mempool: Arc<Mempool<'static, B>>, inv_mgr: Arc<RwLock<InventoryManager<B, MA>>>, peer: Arc<Peer>) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
             blockchain,
             mempool,
@@ -331,12 +332,12 @@ impl InventoryAgent {
         msg_notifier.inv.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, vectors: Vec<InvVector>| this.on_inv(vectors)));
-        msg_notifier.block.write().register(weak_passthru_listener(
+        MA::register_block_listener(msg_notifier, weak_passthru_listener(
             Arc::downgrade(this),
-            |this, block: Block| this.on_block(block)));
-        msg_notifier.header.write().register(weak_passthru_listener(
+            |this, block| this.on_block(block)));
+        MA::register_header_listener(msg_notifier, weak_passthru_listener(
             Arc::downgrade(this),
-            |this, header: BlockHeader| this.on_header(header)));
+            |this, header| this.on_header(header)));
         msg_notifier.tx.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, msg: TxMessage| this.on_tx(msg)));
@@ -496,14 +497,14 @@ impl InventoryAgent {
         }
     }
 
-    fn on_block(&self, mut block: Block) {
+    fn on_block(&self, mut block: B::Block) {
         //let lock = self.mutex.lock();
 
-        let hash = block.header.hash::<Blake2bHash>();
-        trace!("[BLOCK] #{} ({} txs) from {}", block.header.height, block.body.as_ref().unwrap().transactions.len(), self.peer.peer_address());
+        let hash = block.hash();
+        trace!("[BLOCK] #{} ({} txs) from {}", block.height(), block.transactions().map(|txs| txs.len()).unwrap_or(0), self.peer.peer_address());
 
         // Check if we have requested this block.
-        let vector = InvVector::new(InvVectorType::Block, hash);
+        let vector = InvVector::from_block_hash(hash);
         let state = self.state.read();
         if !state.objects_in_flight.contains(&vector) && !state.objects_that_flew.contains(&vector) {
             warn!("Unsolicited block from {} - discarding", self.peer.peer_address());
@@ -513,10 +514,10 @@ impl InventoryAgent {
         drop(state);
 
         // Use already known (verified) transactions from mempool to set validity.
-        if let Some(ref mut block_body) = block.body {
-            for i in 0..block_body.transactions.len() {
-                if let Some(mempool_tx) = self.mempool.get_transaction(&block_body.transactions[i].hash()) {
-                    block_body.transactions[i].check_set_valid(&mempool_tx);
+        if let Some(ref mut transactions) = block.transactions_mut() {
+            for i in 0..transactions.len() {
+                if let Some(mempool_tx) = self.mempool.get_transaction(&transactions[i].hash()) {
+                    transactions[i].check_set_valid(&mempool_tx);
                 }
             }
         }
@@ -531,8 +532,8 @@ impl InventoryAgent {
         self.on_object_received(&vector);
     }
 
-    fn on_header(&self, header: BlockHeader) {
-        trace!("[HEADER] #{} {}", header.height, header.hash::<Blake2bHash>());
+    fn on_header(&self, header: <B::Block as Block>::Header) {
+        trace!("[HEADER] #{} {}", header.height(), header.hash());
         warn!("Unsolicited header message received from {}, discarding", self.peer.peer_address());
     }
 
@@ -596,7 +597,7 @@ impl InventoryAgent {
         while !transactions.is_empty() {
             let max_vectors = std::cmp::min(transactions.len(), InvVector::VECTORS_MAX_COUNT);
             let vectors: Vec<InvVector> = transactions.drain(..max_vectors).
-                map(|tx| InvVector::from_transaction(tx.as_ref())).
+                map(|tx| InvVector::from_tx_hash(tx.hash())).
                 collect();
 
             self.peer.channel.send_or_close(Message::Inv(vectors));
@@ -770,10 +771,10 @@ impl InventoryAgent {
         // chain, ignore the rest. If none of the requested hashes is found,
         // pick the genesis block hash. Send the main chain starting from the
         // picked hash back to the peer.
-        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id);
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id());
         let mut start_block_hash = network_info.genesis_hash().clone();
         for locator in msg.locators.iter() {
-            if self.blockchain.get_block(locator, false, false).is_some() {
+            if self.blockchain.get_block(locator, false).is_some() {
                 // We found a block, ignore remaining block locator hashes.
                 start_block_hash = locator.clone();
                 break;
@@ -793,7 +794,7 @@ impl InventoryAgent {
         );
 
         let vectors = blocks.iter().map(|block| {
-            InvVector::from_block(block)
+            InvVector::from_block_hash(block.hash())
         }).collect();
 
         // Send the vectors back to the requesting peer.
@@ -818,10 +819,10 @@ impl InventoryAgent {
             match vector.ty {
                 InvVectorType::Block => {
                     // TODO raw blocks. Needed?
-                    let block_opt = self.blockchain.get_block(&vector.hash, false, true);
+                    let block_opt = self.blockchain.get_block(&vector.hash, true);
                     match block_opt {
                         Some(block) => {
-                            if self.peer.channel.send(Message::Block(Box::new(block))).is_err() {
+                            if self.peer.channel.send(MA::new_block_message(block)).is_err() {
                                 self.peer.channel.close(CloseType::SendFailed);
                                 return;
                             }
@@ -871,10 +872,10 @@ impl InventoryAgent {
             match vector.ty {
                 InvVectorType::Block => {
                     // TODO raw blocks. Needed?
-                    let block_opt = self.blockchain.get_block(&vector.hash, false, true);
+                    let block_opt = self.blockchain.get_block(&vector.hash, false);
                     match block_opt {
                         Some(block) => {
-                            if self.peer.channel.send(Message::Header(Box::new(block.header))).is_err() {
+                            if self.peer.channel.send(MA::new_header_message(block.header())).is_err() {
                                 self.peer.channel.close(CloseType::SendFailed);
                                 return;
                             }
@@ -895,13 +896,13 @@ impl InventoryAgent {
         }
     }
 
-    pub fn relay_block(&self, block: &Block) -> bool {
+    pub fn relay_block(&self, block: &B::Block) -> bool {
         // Only relay block if it matches the peer's subscription.
-        if !self.state.read().remote_subscription.matches_block(block) {
+        if !self.state.read().remote_subscription.matches_block() {
             return false;
         }
 
-        let vector = InvVector::from_block(block);
+        let vector = InvVector::from_block_hash(block.hash());
 
         // Don't relay block to this peer if it already knows it.
         if self.state.read().known_objects.contains(&vector) {
@@ -926,7 +927,7 @@ impl InventoryAgent {
             return false;
         }
 
-        let vector = InvVector::from_transaction(transaction);
+        let vector = InvVector::from_tx_hash(transaction.hash());
 
         // Don't relay transaction to this peer if it already knows it.
         if self.state.read().known_objects.contains(&vector) {
@@ -949,7 +950,7 @@ impl InventoryAgent {
     }
 
     pub fn remove_transaction(&self, transaction: &Transaction) {
-        let vector = InvVector::from_transaction(transaction);
+        let vector = InvVector::from_tx_hash(transaction.hash());
         let mut state = self.state.write();
 
         // Remove transaction from relay queues.

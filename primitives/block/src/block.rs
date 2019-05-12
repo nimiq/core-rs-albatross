@@ -1,7 +1,9 @@
 use account::inherent::Inherent;
+use block_base;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use primitives::networks::NetworkId;
+use transaction::Transaction;
 
 use crate::{BlockBody, BlockError, BlockHeader, BlockInterlink, Target};
 
@@ -148,5 +150,30 @@ impl Block {
 
     pub fn is_light(&self) -> bool {
         self.body.is_none()
+    }
+}
+
+impl block_base::Block for Block {
+    type Header = BlockHeader;
+    type Error = BlockError;
+
+    fn hash(&self) -> Blake2bHash {
+        self.header.hash()
+    }
+
+    fn height(&self) -> u32 {
+        self.header.height
+    }
+
+    fn header(&self) -> BlockHeader {
+        self.header.clone()
+    }
+
+    fn transactions(&self) -> Option<&Vec<Transaction>> {
+        self.body.as_ref().map(|body| &body.transactions)
+    }
+
+    fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
+        self.body.as_mut().map(|body| &mut body.transactions)
     }
 }

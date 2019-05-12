@@ -17,11 +17,11 @@ use network_primitives::networks::NetworkInfo;
 
 pub struct BlockProducer<'env> {
     blockchain: Arc<Blockchain<'env>>,
-    mempool: Arc<Mempool<'env>>,
+    mempool: Arc<Mempool<'env, Blockchain<'env>>>,
 }
 
 impl<'env> BlockProducer<'env> {
-    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env>>) -> Self {
+    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>) -> Self {
         BlockProducer { blockchain, mempool }
     }
 

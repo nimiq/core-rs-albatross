@@ -1,15 +1,18 @@
+use std::cmp::Ordering;
 use std::fmt;
 
-use crate::micro_block::{MicroBlock, MicroHeader};
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use block_base;
+use hash::{Blake2bHash, Hash};
+use nimiq_bls::bls12_381::Signature;
+use primitives::networks::NetworkId;
+use transaction::Transaction;
+
+use crate::BlockError;
 use crate::macro_block::{MacroBlock, MacroHeader};
+use crate::micro_block::{MicroBlock, MicroHeader};
 use crate::signed::AggregateProof;
 use crate::view_change::ViewChangeProof;
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use hash::{Hash, Blake2bHash};
-use primitives::networks::NetworkId;
-use nimiq_bls::bls12_381::Signature;
-use std::cmp::Ordering;
-use transaction::Transaction;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -25,7 +28,7 @@ pub enum Block {
 }
 
 impl Block {
-    pub fn verify(&self, network_id: NetworkId) -> bool {
+    pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
         match self {
             Block::Macro(ref block) => block.verify(),
             Block::Micro(ref block) => block.verify(network_id),
@@ -89,9 +92,24 @@ impl Block {
     }
 
     pub fn header(&self) -> BlockHeader {
+        // TODO Can we eliminate the clone()s here?
         match self {
             Block::Macro(ref block) => BlockHeader::Macro(block.header.clone()),
             Block::Micro(ref block) => BlockHeader::Micro(block.header.clone()),
+        }
+    }
+
+    pub fn transactions(&self) -> Option<&Vec<Transaction>> {
+        match self {
+            Block::Macro(_) => None,
+            Block::Micro(ref block) => block.extrinsics.as_ref().map(|ex| &ex.transactions)
+        }
+    }
+
+    pub fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
+        match self {
+            Block::Macro(_) => None,
+            Block::Micro(ref mut block) => block.extrinsics.as_mut().map(|ex| &mut ex.transactions)
         }
     }
 
@@ -156,8 +174,31 @@ impl BlockHeader {
             BlockHeader::Macro(_) => BlockType::Macro
         }
     }
+
+    pub fn block_number(&self) -> u32 {
+        match self {
+            BlockHeader::Micro(ref header) => header.block_number,
+            BlockHeader::Macro(ref header) => header.block_number,
+        }
+    }
+
+    pub fn hash(&self) -> Blake2bHash {
+        match self {
+            BlockHeader::Macro(ref header) => header.hash(),
+            BlockHeader::Micro(ref header) => header.hash(),
+        }
+    }
 }
 
+impl block_base::BlockHeader for BlockHeader {
+    fn hash(&self) -> Blake2bHash {
+        BlockHeader::hash(self)
+    }
+
+    fn height(&self) -> u32 {
+        self.block_number()
+    }
+}
 
 impl Serialize for BlockHeader {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
@@ -189,5 +230,30 @@ impl Deserialize for BlockHeader {
             BlockType::Micro => BlockHeader::Macro(Deserialize::deserialize(reader)?)
         };
         Ok(header)
+    }
+}
+
+impl block_base::Block for Block {
+    type Header = BlockHeader;
+    type Error = BlockError;
+
+    fn hash(&self) -> Blake2bHash {
+        self.hash()
+    }
+
+    fn height(&self) -> u32 {
+        self.block_number()
+    }
+
+    fn header(&self) -> Self::Header {
+        self.header()
+    }
+
+    fn transactions(&self) -> Option<&Vec<Transaction>> {
+        self.transactions()
+    }
+
+    fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
+        self.transactions_mut()
     }
 }

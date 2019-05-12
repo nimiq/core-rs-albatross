@@ -1,14 +1,16 @@
-use std::io;
 use std::fmt;
+use std::io;
 
-use crate::view_change::ViewChangeProof;
 use beserial::{Deserialize, Serialize};
-use hash::{Blake2bHash, Hash, SerializeContent};
 use bls::bls12_381::{PublicKey, Signature};
-use crate::pbft::UntrustedPbftProof;
+use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::policy::TWO_THIRD_VALIDATORS;
+
+use crate::BlockError;
+use crate::pbft::UntrustedPbftProof;
 use crate::signed;
 use crate::Slot;
+use crate::view_change::ViewChangeProof;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
@@ -54,11 +56,11 @@ impl signed::Message for MacroHeader {
 }
 
 impl MacroBlock {
-    pub fn verify(&self) -> bool {
+    pub fn verify(&self) -> Result<(), BlockError> {
         if self.header.block_number >= 1 && self.justification.is_none() {
-            return false;
+            return Err(BlockError::NoJustification);
         }
-        return true;
+        Ok(())
     }
 
     pub fn is_finalized(&self) -> bool {

@@ -1,6 +1,7 @@
 use std::io;
 
 use beserial::{Deserialize, Serialize};
+use block_base;
 use hash::{Argon2dHash, Blake2bHash, Hash, SerializeContent};
 
 use crate::{Target, TargetCompact};
@@ -61,5 +62,15 @@ impl BlockHeader {
 
     pub fn timestamp_in_millis(&self) -> u64 {
         u64::from(self.timestamp) * 1000
+    }
+}
+
+impl block_base::BlockHeader for BlockHeader {
+    fn hash(&self) -> Blake2bHash {
+        Hash::hash(self)
+    }
+
+    fn height(&self) -> u32 {
+        self.height
     }
 }

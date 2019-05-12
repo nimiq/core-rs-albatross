@@ -1,10 +1,14 @@
+#![feature(type_alias_enum_variants)]
+
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate nimiq_macros as macros;
 
 extern crate nimiq_mempool as mempool;
+extern crate nimiq_block_base as block_base;
 extern crate nimiq_blockchain as blockchain;
+extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_messages as network_messages;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_utils as utils;

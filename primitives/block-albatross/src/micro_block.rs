@@ -56,22 +56,20 @@ pub struct MicroExtrinsics {
 }
 
 impl MicroBlock {
-    pub fn verify(&self, network_id: NetworkId) -> bool {
+    pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
         if let Some(ref extrinsics) = self.extrinsics {
-            if !extrinsics.verify(self.header.block_number, network_id).is_err() {
-                return false;
-            }
+            extrinsics.verify(self.header.block_number, network_id)?;
         }
 
         if self.header.view_number >= 1 && self.justification.view_change_proof.is_none() {
-            return false;
+            return Err(BlockError::NoViewChangeProof);
         }
 
         if let Some(view_change_proof) = &self.justification.view_change_proof {
             // check view change proof
         }
 
-        return true;
+        Ok(())
     }
 
     pub fn serialize_without_signature(&self) -> Vec<u8> {

@@ -6,25 +6,26 @@ use parking_lot::MutexGuard;
 use parking_lot::RwLock;
 use rand::Rng;
 
-use blockchain::{Blockchain, PushError, PushResult};
+use beserial::Serialize;
+use block_base::Block;
+use blockchain_base::{AbstractBlockchain, PushError, PushResult};
 use hash::Blake2bHash;
 use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_messages::{
+    MessageAdapter,
     GetBlocksMessage,
     MessageType,
     RejectMessage,
     RejectMessageCode,
 };
 use network_primitives::subscription::Subscription;
-use block::Block;
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
-use beserial::Serialize;
 
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 use crate::accounts_chunk_cache::AccountsChunkCache;
@@ -82,24 +83,24 @@ enum ConsensusAgentTimer {
 }
 
 
-pub struct ConsensusAgent {
-    pub(crate) blockchain: Arc<Blockchain<'static>>,
+pub struct ConsensusAgent<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> {
+    pub(crate) blockchain: Arc<B>,
     accounts_chunk_cache: Arc<AccountsChunkCache>,
     pub peer: Arc<Peer>,
 
-    inv_agent: Arc<InventoryAgent>,
+    inv_agent: Arc<InventoryAgent<B, MA>>,
 
     pub(crate) state: RwLock<ConsensusAgentState>,
 
     pub notifier: RwLock<Notifier<'static, ConsensusAgentEvent>>,
-    self_weak: MutableOnce<Weak<ConsensusAgent>>,
+    self_weak: MutableOnce<Weak<ConsensusAgent<B, MA>>>,
 
     sync_lock: Mutex<()>,
 
     timers: Timers<ConsensusAgentTimer>,
 }
 
-impl ConsensusAgent {
+impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> ConsensusAgent<B, MA> {
     const SYNC_ATTEMPTS_MAX: u32 = 25;
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
@@ -116,7 +117,7 @@ impl ConsensusAgent {
     /// Maximum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static>>, inv_mgr: Arc<RwLock<InventoryManager>>, accounts_chunk_cache: Arc<AccountsChunkCache>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<B>, mempool: Arc<Mempool<'static, B>>, inv_mgr: Arc<RwLock<InventoryManager<B, MA>>>, accounts_chunk_cache: Arc<AccountsChunkCache>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());
@@ -161,9 +162,14 @@ impl ConsensusAgent {
             |this, e| this.on_inventory_event(e)));
 
         let msg_notifier = &this.peer.channel.msg_notifier;
-        msg_notifier.get_chain_proof.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, _| this.on_get_chain_proof()));
+        // FIXME
+//        msg_notifier.get_chain_proof.write().register(weak_passthru_listener(
+//            Arc::downgrade(this),
+//            |this, _| this.on_get_chain_proof()));
+        // FIXME
+//        msg_notifier.get_block_proof.write().register(weak_passthru_listener(
+//            Arc::downgrade(this),
+//            |this, msg| this.on_get_block_proof(msg)));
         msg_notifier.get_transaction_receipts.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, msg| this.on_get_transaction_receipts(msg)));
@@ -173,15 +179,12 @@ impl ConsensusAgent {
         msg_notifier.get_accounts_proof.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, msg| this.on_get_accounts_proof(msg)));
-        msg_notifier.get_block_proof.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg| this.on_get_block_proof(msg)));
         msg_notifier.get_accounts_tree_chunk.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, msg| this.on_get_accounts_tree_chunk(msg)));
     }
 
-    pub fn relay_block(&self, block: &Block) -> bool {
+    pub fn relay_block(&self, block: &B::Block) -> bool {
         // Don't relay block if have not synced with the peer yet.
         if !self.state.read().synced {
             return false;
@@ -232,7 +235,7 @@ impl ConsensusAgent {
             let mut state = self.state.write();
             if state.num_blocks_extending == 0 {
                 state.failed_syncs += 1;
-                if state.failed_syncs >= ConsensusAgent::SYNC_ATTEMPTS_MAX {
+                if state.failed_syncs >= Self::SYNC_ATTEMPTS_MAX {
                     self.peer.channel.close(CloseType::BlockchainSyncFailed);
                     return;
                 }
@@ -254,7 +257,7 @@ impl ConsensusAgent {
             agent.timers.clear_delay(&ConsensusAgentTimer::Mempool);
             agent.inv_agent.mempool();
         }, Duration::from_millis(rand::thread_rng()
-            .gen_range(ConsensusAgent::MEMPOOL_DELAY_MIN, ConsensusAgent::MEMPOOL_DELAY_MAX)));
+            .gen_range(Self::MEMPOOL_DELAY_MIN, Self::MEMPOOL_DELAY_MAX)));
 
 
         self.inv_agent.bypass_mgr(false);
@@ -298,11 +301,11 @@ impl ConsensusAgent {
         // Request blocks from peer.
         self.inv_agent.get_blocks(
             locators,
-            ConsensusAgent::GET_BLOCKS_MAX_RESULTS,
-            ConsensusAgent::GET_BLOCKS_TIMEOUT);
+            Self::GET_BLOCKS_MAX_RESULTS,
+            Self::GET_BLOCKS_TIMEOUT);
     }
 
-    fn on_inventory_event(&self, event: &InventoryEvent) {
+    fn on_inventory_event(&self, event: &InventoryEvent<<B::Block as Block>::Error>) {
         match event {
             InventoryEvent::KnownBlockAnnounced(hash) => self.on_known_block_announced(hash),
             InventoryEvent::NoNewObjectsAnnounced => self.on_no_new_objects_announced(),
@@ -334,7 +337,7 @@ impl ConsensusAgent {
         }
     }
 
-    fn on_block_processed(&self, hash: &Blake2bHash, result: &Result<PushResult, PushError>) {
+    fn on_block_processed(&self, hash: &Blake2bHash, result: &Result<PushResult, PushError<<B::Block as Block>::Error>>) {
         match result {
             Ok(PushResult::Extended) | Ok(PushResult::Rebranched) => {
                 let mut state = self.state.write();

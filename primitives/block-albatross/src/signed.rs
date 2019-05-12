@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use beserial::{Serialize, Deserialize, uvar, WriteBytesExt, ToPrimitive};
+use beserial::{Serialize, Deserialize, WriteBytesExt};
 use nimiq_bls::bls12_381::{Signature, SecretKey, PublicKey, AggregateSignature, AggregatePublicKey};
 use nimiq_bls::SigHash;
 use hash::{Blake2bHasher, SerializeContent, Hasher};

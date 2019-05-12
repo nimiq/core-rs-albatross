@@ -29,6 +29,7 @@ beserial = { path = "../beserial", version = "0.1.0" }
 nimiq-hash = { path = "../hash", version = "0.1.0" }
 nimiq-macros = { path = "../macros", version = "0.1.0" }
 nimiq-block = { path = "../primitives/block", version = "0.1.0" }
+nimiq-block-base = { path = "../primitives/block-base", version = "0.1.0" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
 nimiq-mempool = { path = "../mempool", version = "0.1.0" }
 nimiq-collections = { path = "../collections", version = "0.1.0" }
@@ -38,3 +39,4 @@ nimiq-network = { path = "../network", version = "0.1.0" }
 nimiq-database = { path = "../database", version = "0.1.0", features = ["full-nimiq"] }
 nimiq-utils = { path = "../utils", version = "0.1.0", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
 nimiq-blockchain = { path = "../blockchain", version = "0.1.0", features = ["transaction-store"] }
+nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1.0" }

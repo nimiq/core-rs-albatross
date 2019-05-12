@@ -3,6 +3,7 @@ extern crate beserial_derive;
 #[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
+extern crate nimiq_block_base as block_base;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 #[macro_use]
@@ -47,3 +48,4 @@ pub enum BlockError {
     ReceiptsNotOrdered,
 }
 
+impl block_base::BlockError for BlockError {}

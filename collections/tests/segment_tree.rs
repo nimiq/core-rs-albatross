@@ -3,7 +3,7 @@ use nimiq_collections::segment_tree::Range;
 
 #[test]
 fn it_works() {
-    let mut tree = SegmentTree::<usize, usize>::new(&mut [
+    let tree = SegmentTree::<usize, usize>::new(&mut [
         (0, 1),
         (1, 3),
         (2, 4),

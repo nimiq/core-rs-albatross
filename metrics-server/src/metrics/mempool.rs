@@ -1,25 +1,26 @@
 use std::io;
 use std::sync::Arc;
 
+use beserial::Serialize;
+use blockchain_base::AbstractBlockchain;
 use mempool::{Mempool, SIZE_MAX};
 
 use crate::server;
 use crate::server::SerializationType;
-use beserial::Serialize;
 
-pub struct MempoolMetrics {
-    mempool: Arc<Mempool<'static>>,
+pub struct MempoolMetrics<B: AbstractBlockchain<'static> + 'static> {
+    mempool: Arc<Mempool<'static, B>>,
 }
 
-impl MempoolMetrics {
-    pub fn new(mempool: Arc<Mempool<'static>>) -> Self {
+impl<B: AbstractBlockchain<'static> + 'static> MempoolMetrics<B> {
+    pub fn new(mempool: Arc<Mempool<'static, B>>) -> Self {
         MempoolMetrics {
             mempool,
         }
     }
 }
 
-impl server::Metrics for MempoolMetrics {
+impl<B: AbstractBlockchain<'static> + 'static> server::Metrics for MempoolMetrics<B> {
     fn metrics(&self, serializer: &mut server::MetricsSerializer<SerializationType>) -> Result<(), io::Error> {
         let txs = self.mempool.get_transactions(SIZE_MAX, 0f64);
         let group = [0usize, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];

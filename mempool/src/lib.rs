@@ -1,9 +1,8 @@
 #[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
-extern crate nimiq_accounts as accounts;
-extern crate nimiq_block as block;
-extern crate nimiq_blockchain as blockchain;
+extern crate nimiq_block_base as block_base;
+extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
@@ -17,11 +16,10 @@ use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
-use account::AccountTransactionInteraction;
-use accounts::Accounts;
+use account::{Account, AccountTransactionInteraction};
 use beserial::Serialize;
-use block::Block;
-use blockchain::{Blockchain, BlockchainEvent};
+use block_base::Block;
+use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use transaction::{Transaction, TransactionFlags};
@@ -31,8 +29,8 @@ use crate::filter::{MempoolFilter, Rules};
 
 pub mod filter;
 
-pub struct Mempool<'env> {
-    blockchain: Arc<Blockchain<'env>>,
+pub struct Mempool<'env, B: AbstractBlockchain<'env> + 'env> {
+    blockchain: Arc<B>,
     pub notifier: RwLock<Notifier<'env, MempoolEvent>>,
     state: RwLock<MempoolState>,
     mut_lock: Mutex<()>,
@@ -69,8 +67,8 @@ impl Default for MempoolConfig {
     }
 }
 
-impl<'env> Mempool<'env> {
-    pub fn new(blockchain: Arc<Blockchain<'env>>, config: MempoolConfig) -> Arc<Self> {
+impl<'env, B: AbstractBlockchain<'env> + 'env> Mempool<'env, B> {
+    pub fn new(blockchain: Arc<B>, config: MempoolConfig) -> Arc<Self> {
         let arc = Arc::new(Self {
             blockchain: blockchain.clone(),
             notifier: RwLock::new(Notifier::new()),
@@ -85,7 +83,7 @@ impl<'env> Mempool<'env> {
         });
 
         let arc_self = arc.clone();
-        blockchain.notifier.write().register(move |event: &BlockchainEvent| arc_self.on_blockchain_event(event));
+        blockchain.register_listener(move |event: &BlockchainEvent<B::Block>| arc_self.on_blockchain_event(event));
         arc
     }
 
@@ -97,7 +95,7 @@ impl<'env> Mempool<'env> {
         let hash: Blake2bHash = transaction.hash();
 
         // Synchronize with `Blockchain::push`
-        let _push_lock = self.blockchain.push_lock.lock();
+        let _push_lock = self.blockchain.lock();
 
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
@@ -122,7 +120,7 @@ impl<'env> Mempool<'env> {
             };
 
             // Intrinsic transaction verification.
-            if transaction.verify_mut(self.blockchain.network_id).is_err() {
+            if transaction.verify_mut(self.blockchain.network_id()).is_err() {
                 return ReturnCode::Invalid;
             }
 
@@ -145,59 +143,49 @@ impl<'env> Mempool<'env> {
                 }
             }
 
-            let recipient_account;
-            let mut sender_account;
-            let block_height;
-            {
-                // Acquire blockchain read lock.
-                let blockchain_state = self.blockchain.state();
-                let accounts = blockchain_state.accounts();
-                let transaction_cache = blockchain_state.transaction_cache();
-                block_height = blockchain_state.main_chain().head.header.height + 1;
+            // Check if transaction is valid at the next block height.
+            let block_height = self.blockchain.head_height() + 1;
+            if !transaction.is_valid_at(block_height) {
+                return ReturnCode::Invalid;
+            }
 
-                // Check if transaction is valid at the next block height.
-                if !transaction.is_valid_at(block_height) {
-                    return ReturnCode::Invalid;
-                }
+            // Check if transaction has already been mined.
+            if self.blockchain.contains_tx_in_validity_window(&hash) {
+                return ReturnCode::Invalid;
+            }
 
-                // Check if transaction has already been mined.
-                if transaction_cache.contains(&hash) {
-                    return ReturnCode::Invalid;
-                }
+            // Retrieve recipient account and check account type.
+            // TODO Eliminate copy
+            let recipient_account = self.blockchain.get_account(&transaction.recipient);
+            let is_contract_creation = transaction.flags.contains(TransactionFlags::CONTRACT_CREATION);
+            let is_type_change = recipient_account.account_type() != transaction.recipient_type;
+            if is_contract_creation != is_type_change {
+                return ReturnCode::Invalid;
+            }
 
-                // Retrieve recipient account and check account type.
-                // TODO Eliminate copy
-                recipient_account = accounts.get(&transaction.recipient, None);
-                let is_contract_creation = transaction.flags.contains(TransactionFlags::CONTRACT_CREATION);
-                let is_type_change = recipient_account.account_type() != transaction.recipient_type;
-                if is_contract_creation != is_type_change {
-                    return ReturnCode::Invalid;
-                }
-
-                // Test incoming transaction.
-                match recipient_account.check_incoming_transaction(&transaction, block_height) {
-                    Err(_) => return ReturnCode::Invalid,
-                    Ok(_) => {
-                        // Check recipient account against filter rules.
-                        // FIXME This boldly assumes that the account balance after the incoming transaction is old_balance + transaction.value.
-                        let old_balance = recipient_account.balance();
-                        let new_balance = match old_balance.checked_add(transaction.value) {
-                            Some(balance) => balance,
-                            None => return ReturnCode::Invalid
-                        };
-                        if !state.filter.accepts_recipient_balance(&transaction, old_balance, new_balance) {
-                            self.state.write().filter.blacklist(hash);
-                            return ReturnCode::Filtered;
-                        }
+            // Test incoming transaction.
+            match recipient_account.check_incoming_transaction(&transaction, block_height) {
+                Err(_) => return ReturnCode::Invalid,
+                Ok(_) => {
+                    // Check recipient account against filter rules.
+                    // FIXME This boldly assumes that the account balance after the incoming transaction is old_balance + transaction.value.
+                    let old_balance = recipient_account.balance();
+                    let new_balance = match old_balance.checked_add(transaction.value) {
+                        Some(balance) => balance,
+                        None => return ReturnCode::Invalid
+                    };
+                    if !state.filter.accepts_recipient_balance(&transaction, old_balance, new_balance) {
+                        self.state.write().filter.blacklist(hash);
+                        return ReturnCode::Filtered;
                     }
                 }
+            }
 
-                // Retrieve sender account and check account type.
-                // TODO Eliminate copy
-                sender_account = accounts.get(&transaction.sender, None);
-                if sender_account.account_type() != transaction.sender_type {
-                    return ReturnCode::Invalid;
-                }
+            // Retrieve sender account and check account type.
+            // TODO Eliminate copy
+            let mut sender_account = self.blockchain.get_account(&transaction.sender);
+            if sender_account.account_type() != transaction.sender_type {
+                return ReturnCode::Invalid;
             }
 
             // Re-check all transactions for this sender in fee/byte order against the sender account state.
@@ -269,11 +257,11 @@ impl<'env> Mempool<'env> {
         {
             // Transaction is valid, add it to the mempool.
             let mut state = self.state.write();
-            Mempool::add_transaction(&mut state, hash.clone(), tx_arc.clone());
+            Self::add_transaction(&mut state, hash.clone(), tx_arc.clone());
 
             // Evict transactions that were invalidated by the new transaction.
             for tx in txs_to_remove.iter() {
-                Mempool::remove_transaction(&mut *state, tx);
+                Self::remove_transaction(&mut *state, tx);
             }
 
             // Rename variable.
@@ -282,7 +270,7 @@ impl<'env> Mempool<'env> {
             // Remove the lowest fee transaction if mempool max size is reached.
             if state.transactions_sorted_fee.len() > SIZE_MAX {
                 let tx = state.transactions_sorted_fee.iter().next().unwrap().clone();
-                Mempool::remove_transaction(&mut state, &tx);
+                Self::remove_transaction(&mut state, &tx);
                 removed_transactions.push(tx);
             }
         }
@@ -359,13 +347,14 @@ impl<'env> Mempool<'env> {
         txs
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent<B::Block>) {
         match event {
             BlockchainEvent::Extended(_) => self.evict_transactions(),
             BlockchainEvent::Rebranched(reverted_blocks, _) => {
                 self.restore_transactions(reverted_blocks);
                 self.evict_transactions();
             },
+            BlockchainEvent::Finalized => (),
         }
     }
 
@@ -379,16 +368,11 @@ impl<'env> Mempool<'env> {
         let mut txs_evicted = Vec::new();
         {
             let state = self.state.read();
-
-            // Acquire blockchain read lock.
-            let blockchain_state = self.blockchain.state();
-            let accounts = blockchain_state.accounts();
-            let transaction_cache = blockchain_state.transaction_cache();
-            let block_height = blockchain_state.main_chain().head.header.height + 1;
+            let block_height = self.blockchain.head_height() + 1;
 
             for (address, transactions) in state.transactions_by_sender.iter() {
                 // TODO Eliminate copy
-                let mut sender_account = accounts.get(&address, None);
+                let mut sender_account = self.blockchain.get_account(&address);
                 for tx in transactions.iter().rev() {
                     // Check if the transaction has expired.
                     if !tx.is_valid_at(block_height) {
@@ -397,14 +381,14 @@ impl<'env> Mempool<'env> {
                     }
 
                     // Check if the transaction has been mined.
-                    if transaction_cache.contains(&tx.hash()) {
+                    if self.blockchain.contains_tx_in_validity_window(&tx.hash()) {
                         txs_mined.push(tx.clone());
                         continue;
                     }
 
                     // Check if transaction is still valid for recipient.
                     // TODO Eliminate copy
-                    let recipient_account = accounts.get(&tx.recipient, None);
+                    let recipient_account = self.blockchain.get_account(&tx.recipient);
                     if recipient_account.check_incoming_transaction(&tx, block_height).is_err() {
                         txs_evicted.push(tx.clone());
                         continue;
@@ -422,10 +406,10 @@ impl<'env> Mempool<'env> {
             // Evict transactions.
             let mut state = self.state.write();
             for tx in txs_mined.iter() {
-                Mempool::remove_transaction(&mut state, tx);
+                Self::remove_transaction(&mut state, tx);
             }
             for tx in txs_evicted.iter() {
-                Mempool::remove_transaction(&mut state, tx);
+                Self::remove_transaction(&mut state, tx);
             }
         }
 
@@ -439,90 +423,90 @@ impl<'env> Mempool<'env> {
         }
     }
 
-    fn restore_transactions(&self, reverted_blocks: &[(Blake2bHash, Block)]) {
+    fn restore_transactions(&self, reverted_blocks: &[(Blake2bHash, B::Block)]) {
         // Only one mutating operation at a time.
         let _lock = self.mut_lock.lock();
 
         let mut removed_transactions = Vec::new();
         let mut restored_transactions = Vec::new();
+        let block_height = self.blockchain.head_height() + 1;
 
+        // Collect all transactions from reverted blocks that are still valid.
+        // Track them by sender and sort them by fee/byte.
+        let mut txs_by_sender = HashMap::new();
+        for (_, block) in reverted_blocks {
+            let transactions = block.transactions();
+            if transactions.is_none() {
+                continue;
+            }
+
+            for tx in transactions.unwrap().iter() {
+                if !tx.is_valid_at(block_height) {
+                    // This transaction has expired (or is not valid yet) on the new chain.
+                    // XXX The transaction is lost!
+                    continue;
+                }
+
+                if self.blockchain.contains_tx_in_validity_window(&tx.hash()) {
+                    // This transaction is also included in the new chain, ignore.
+                    continue;
+                }
+
+                // TODO Eliminate copy
+                let recipient_account = self.blockchain.get_account(&tx.recipient);
+                if recipient_account.check_incoming_transaction(&tx, block_height).is_err() {
+                    // This transaction cannot be accepted by the recipient anymore.
+                    // XXX The transaction is lost!
+                    continue;
+                }
+
+                let txs = txs_by_sender
+                    .entry(&tx.sender)
+                    .or_insert_with(BTreeSet::new);
+                txs.insert(tx);
+            }
+        }
+
+        // Merge the new transaction sets per sender with the existing ones.
         {
-            // Acquire blockchain read lock.
-            let blockchain_state = self.blockchain.state();
-            let accounts = blockchain_state.accounts();
-            let transaction_cache = blockchain_state.transaction_cache();
-            let block_height = blockchain_state.main_chain().head.header.height + 1;
+            let mut state = self.state.write();
 
-            // Collect all transactions from reverted blocks that are still valid.
-            // Track them by sender and sort them by fee/byte.
-            let mut txs_by_sender = HashMap::new();
-            for (_, block) in reverted_blocks {
-                for tx in block.body.as_ref().unwrap().transactions.iter() {
-                    if !tx.is_valid_at(block_height) {
-                        // This transaction has expired (or is not valid yet) on the new chain.
-                        // XXX The transaction is lost!
-                        continue;
+            for (sender, restored_txs) in txs_by_sender {
+                let empty_btree;
+                let existing_txs = match state.transactions_by_sender.get(&sender) {
+                    Some(txs) => txs,
+                    None => {
+                        empty_btree = BTreeSet::new();
+                        &empty_btree
                     }
+                };
 
-                    if transaction_cache.contains(&tx.hash()) {
-                        // This transaction is also included in the new chain, ignore.
-                        continue;
-                    }
-
-                    // TODO Eliminate copy
-                    let recipient_account = accounts.get(&tx.recipient, None);
-                    if recipient_account.check_incoming_transaction(&tx, block_height).is_err() {
-                        // This transaction cannot be accepted by the recipient anymore.
-                        // XXX The transaction is lost!
-                        continue;
-                    }
-
-                    let txs = txs_by_sender
-                        .entry(&tx.sender)
-                        .or_insert_with(BTreeSet::new);
-                    txs.insert(tx);
+                // TODO Eliminate copy.
+                let sender_account = self.blockchain.get_account(&sender);
+                let (txs_to_add, txs_to_remove) = Self::merge_transactions(sender_account, block_height, existing_txs, &restored_txs);
+                for tx in txs_to_add {
+                    let transaction = Arc::new(tx.clone());
+                    Self::add_transaction(&mut state, tx.hash(), transaction.clone());
+                    restored_transactions.push(transaction);
+                }
+                for tx in txs_to_remove {
+                    Self::remove_transaction(&mut state, &tx);
+                    removed_transactions.push(tx);
                 }
             }
 
-            // Merge the new transaction sets per sender with the existing ones.
-            {
-                let mut state = self.state.write();
-
-                for (sender, restored_txs) in txs_by_sender {
-                    let empty_btree;
-                    let existing_txs = match state.transactions_by_sender.get(&sender) {
-                        Some(txs) => txs,
-                        None => {
-                            empty_btree = BTreeSet::new();
-                            &empty_btree
-                        }
-                    };
-
-                    let (txs_to_add, txs_to_remove) = Mempool::merge_transactions(&accounts, sender, block_height, existing_txs, &restored_txs);
-                    for tx in txs_to_add {
-                        let transaction = Arc::new(tx.clone());
-                        Mempool::add_transaction(&mut state, tx.hash(), transaction.clone());
-                        restored_transactions.push(transaction);
-                    }
-                    for tx in txs_to_remove {
-                        Mempool::remove_transaction(&mut state, &tx);
-                        removed_transactions.push(tx);
-                    }
+            // Evict lowest fee transactions if the mempool has grown too large.
+            let size = state.transactions_sorted_fee.len();
+            if size > SIZE_MAX {
+                let mut txs_to_remove = Vec::with_capacity(size - SIZE_MAX);
+                let mut iter = state.transactions_sorted_fee.iter();
+                for _ in 0..size - SIZE_MAX {
+                    txs_to_remove.push(iter.next().unwrap().clone());
                 }
-
-                // Evict lowest fee transactions if the mempool has grown too large.
-                let size = state.transactions_sorted_fee.len();
-                if size > SIZE_MAX {
-                    let mut txs_to_remove = Vec::with_capacity(size - SIZE_MAX);
-                    let mut iter = state.transactions_sorted_fee.iter();
-                    for _ in 0..size - SIZE_MAX {
-                        txs_to_remove.push(iter.next().unwrap().clone());
-                    }
-                    for tx in txs_to_remove.iter() {
-                        Mempool::remove_transaction(&mut state, tx);
-                    }
-                    removed_transactions.extend(txs_to_remove);
+                for tx in txs_to_remove.iter() {
+                    Self::remove_transaction(&mut state, tx);
                 }
+                removed_transactions.extend(txs_to_remove);
             }
         }
 
@@ -574,12 +558,11 @@ impl<'env> Mempool<'env> {
         }
     }
 
-    fn merge_transactions<'a>(accounts: &Accounts, sender: &Address, block_height: u32, old_txs: &BTreeSet<Arc<Transaction>>, new_txs: &BTreeSet<&'a Transaction>) -> (Vec<&'a Transaction>, Vec<Arc<Transaction>>) {
+    fn merge_transactions<'a>(mut sender_account: Account, block_height: u32, old_txs: &BTreeSet<Arc<Transaction>>, new_txs: &BTreeSet<&'a Transaction>) -> (Vec<&'a Transaction>, Vec<Arc<Transaction>>) {
         let mut txs_to_add = Vec::new();
         let mut txs_to_remove = Vec::new();
 
         // TODO Eliminate copy
-        let mut sender_account = accounts.get(sender, None);
         let mut tx_count = 0;
 
         let mut iter_old = old_txs.iter();

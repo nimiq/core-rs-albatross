@@ -8,6 +8,9 @@ extern crate bitflags;
 #[macro_use]
 extern crate enum_display_derive;
 extern crate nimiq_block as block;
+extern crate nimiq_block_albatross as block_albatross;
+extern crate nimiq_block_base as block_base;
+extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 #[macro_use]
@@ -16,12 +19,10 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
-extern crate nimiq_bls as bls;
-extern crate nimiq_block_albatross as block_albatross;
 
+use std::fmt::Display;
 use std::io;
 use std::io::Read;
-use std::fmt::Display;
 
 use byteorder::{BigEndian, ByteOrder};
 use parking_lot::RwLock;
@@ -31,21 +32,21 @@ use rand::rngs::OsRng;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
-use hash::{Blake2bHash, Hash};
+use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, SignedPbftCommitMessage,
+                      SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange, SlashInherent};
+use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
 use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
 use network_primitives::subscription::Subscription;
+use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 use network_primitives::version;
 use transaction::{Transaction, TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
-use utils::observer::PassThroughNotifier;
-use block_albatross::{SignedViewChange, SlashInherent, SignedPbftPrepareMessage,
-                      SignedPbftCommitMessage, SignedPbftProposal};
-use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
+use utils::observer::{PassThroughListener, PassThroughNotifier};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
 #[repr(u64)]
@@ -90,13 +91,15 @@ pub enum MessageType {
     VerAck = 90,
 
     // Albatross
-    ValidatorQuery = 100,
-    ValidatorInfo = 101,
-    ViewChange = 102,
-    SlashInherent = 103,
-    PbftProposal = 104,
-    PbftPrepare = 105,
-    PbftCommit = 106,
+    BlockAlbatross = 100,
+    HeaderAlbatross = 101,
+    ViewChange = 105,
+    SlashInherent = 106,
+    ValidatorQuery = 110,
+    ValidatorInfo = 111,
+    PbftProposal = 120,
+    PbftPrepare = 121,
+    PbftCommit = 122,
 }
 
 #[derive(Clone, Debug)]
@@ -140,6 +143,8 @@ pub enum Message {
     VerAck(Box<VerAckMessage>),
 
     // Albatross
+    BlockAlbatross(Box<BlockAlbatross>),
+    HeaderAlbatross(Box<BlockHeaderAlbatross>),
     ValidatorQuery(Box<ValidatorQueryMessage>),
     ValidatorInfo(Vec<SignedValidatorInfo>),
     ViewChange(Box<SignedViewChange>),
@@ -185,6 +190,8 @@ impl Message {
             Message::Head(_) => MessageType::Head,
             Message::VerAck(_) => MessageType::VerAck,
             // Albatross
+            Message::BlockAlbatross(_) => MessageType::BlockAlbatross,
+            Message::HeaderAlbatross(_) => MessageType::HeaderAlbatross,
             Message::ValidatorQuery(_) => MessageType::ValidatorQuery,
             Message::ValidatorInfo(_) => MessageType::ValidatorInfo,
             Message::ViewChange(_) => MessageType::ViewChange,
@@ -288,6 +295,8 @@ impl Deserialize for Message {
             MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
             // Albatross
+            MessageType::BlockAlbatross => Message::BlockAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::HeaderAlbatross => Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::ValidatorQuery => Message::ValidatorQuery(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::ValidatorInfo => Message::ValidatorInfo(DeserializeWithLength::deserialize::<u8, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
             MessageType::ViewChange => Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?),
@@ -327,9 +336,9 @@ impl Serialize for Message {
             Message::GetData(inv_vector) => inv_vector.serialize::<u16, Vec<u8>>(&mut v)?,
             Message::GetHeader(inv_vector) => inv_vector.serialize::<u16, Vec<u8>>(&mut v)?,
             Message::NotFound(inv_vector) => inv_vector.serialize::<u16, Vec<u8>>(&mut v)?,
-            Message::Block(block_message) => block_message.serialize(&mut v)?,
-            Message::Header(header_message) => header_message.serialize(&mut v)?,
-            Message::Tx(tx_message) => tx_message.serialize(&mut v)?,
+            Message::Block(block) => block.serialize(&mut v)?,
+            Message::Header(header) => header.serialize(&mut v)?,
+            Message::Tx(tx) => tx.serialize(&mut v)?,
             Message::GetBlocks(get_blocks_message) => get_blocks_message.serialize(&mut v)?,
             Message::Mempool => 0,
             Message::Reject(reject_message) => reject_message.serialize(&mut v)?,
@@ -355,6 +364,8 @@ impl Serialize for Message {
             Message::Head(header) => header.serialize(&mut v)?,
             Message::VerAck(verack_message) => verack_message.serialize(&mut v)?,
             // Albatross
+            Message::BlockAlbatross(block) => block.serialize(&mut v)?,
+            Message::HeaderAlbatross(header) => header.serialize(&mut v)?,
             Message::ValidatorQuery(validator_query) => validator_query.serialize(&mut v)?,
             Message::ValidatorInfo(validator_infos) => validator_infos.serialize::<u8, Vec<u8>>(&mut v)?,
             Message::ViewChange(view_change_message) => view_change_message.serialize(&mut v)?,
@@ -383,9 +394,9 @@ impl Serialize for Message {
             Message::GetData(inv_vector) => inv_vector.serialized_size::<u16>(),
             Message::GetHeader(inv_vector) => inv_vector.serialized_size::<u16>(),
             Message::NotFound(inv_vector) => inv_vector.serialized_size::<u16>(),
-            Message::Block(block_message) => block_message.serialized_size(),
-            Message::Header(header_message) => header_message.serialized_size(),
-            Message::Tx(tx_message) => tx_message.serialized_size(),
+            Message::Block(block) => block.serialized_size(),
+            Message::Header(header) => header.serialized_size(),
+            Message::Tx(tx) => tx.serialized_size(),
             Message::GetBlocks(get_blocks_message) => get_blocks_message.serialized_size(),
             Message::Mempool => 0,
             Message::Reject(reject_message) => reject_message.serialized_size(),
@@ -411,6 +422,8 @@ impl Serialize for Message {
             Message::Head(header) => header.serialized_size(),
             Message::VerAck(verack_message) => verack_message.serialized_size(),
             // Albatross
+            Message::BlockAlbatross(block) => block.serialized_size(),
+            Message::HeaderAlbatross(header) => header.serialized_size(),
             Message::ValidatorQuery(validator_query) => validator_query.serialized_size(),
             Message::ValidatorInfo(validator_info) => validator_info.serialized_size::<u8>(),
             Message::ViewChange(view_change_message) => view_change_message.serialized_size(),
@@ -458,6 +471,8 @@ pub struct MessageNotifier {
     pub head: RwLock<PassThroughNotifier<'static, BlockHeader>>,
     // Albatross
     // TODO
+    pub block_albatross: RwLock<PassThroughNotifier<'static, BlockAlbatross>>,
+    pub header_albatross: RwLock<PassThroughNotifier<'static, BlockHeaderAlbatross>>,
     pub validator_info: RwLock<PassThroughNotifier<'static, Vec<SignedValidatorInfo>>>,
     pub view_change: RwLock<PassThroughNotifier<'static, SignedViewChange>>,
     pub pbft_proposal:  RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
@@ -502,6 +517,8 @@ impl MessageNotifier {
             head: RwLock::new(PassThroughNotifier::new()),
             // Albatross
             // TODO
+            block_albatross: RwLock::new(PassThroughNotifier::new()),
+            header_albatross: RwLock::new(PassThroughNotifier::new()),
             validator_info: RwLock::new(PassThroughNotifier::new()),
             view_change: RwLock::new(PassThroughNotifier::new()),
             pbft_proposal: RwLock::new(PassThroughNotifier::new()),
@@ -546,6 +563,8 @@ impl MessageNotifier {
             Message::Head(header) => self.head.read().notify(*header),
             // Albatross
             // TODO
+            Message::BlockAlbatross(block) => self.block_albatross.read().notify(*block),
+            Message::HeaderAlbatross(header) => self.header_albatross.read().notify(*header),
             Message::ValidatorInfo(validator_info) => self.validator_info.read().notify(validator_info),
             Message::ViewChange(view_change) => self.view_change.read().notify(*view_change),
             Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
@@ -553,6 +572,52 @@ impl MessageNotifier {
             Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
             _ => panic!("Notify not implemented for: {}", msg.ty()),
         }
+    }
+}
+
+
+pub trait MessageAdapter<B: block_base::Block> {
+    fn register_block_listener<T: PassThroughListener<B> + 'static>(notifier: &MessageNotifier, listener: T);
+    fn register_header_listener<T: PassThroughListener<B::Header> + 'static>(notifier: &MessageNotifier, listener: T);
+    fn new_block_message(block: B) -> Message;
+    fn new_header_message(header: B::Header) -> Message;
+}
+
+pub struct NimiqMessageAdapter {}
+impl MessageAdapter<Block> for NimiqMessageAdapter {
+    fn register_block_listener<T: PassThroughListener<Block> + 'static>(notifier: &MessageNotifier, listener: T) {
+        notifier.block.write().register(listener)
+    }
+
+    fn register_header_listener<T: PassThroughListener<BlockHeader> + 'static>(notifier: &MessageNotifier, listener: T) {
+        notifier.header.write().register(listener)
+    }
+
+    fn new_block_message(block: Block) -> Message {
+        Message::Block(Box::new(block))
+    }
+
+    fn new_header_message(header: BlockHeader) -> Message {
+        Message::Header(Box::new(header))
+    }
+}
+
+pub struct AlbatrossMessageAdapter {}
+impl MessageAdapter<BlockAlbatross> for AlbatrossMessageAdapter {
+    fn register_block_listener<T: PassThroughListener<BlockAlbatross> + 'static>(notifier: &MessageNotifier, listener: T) {
+        notifier.block_albatross.write().register(listener)
+    }
+
+    fn register_header_listener<T: PassThroughListener<BlockHeaderAlbatross> + 'static>(notifier: &MessageNotifier, listener: T) {
+        notifier.header_albatross.write().register(listener)
+    }
+
+    fn new_block_message(block: BlockAlbatross) -> Message {
+        Message::BlockAlbatross(Box::new(block))
+    }
+
+    fn new_header_message(header: BlockHeaderAlbatross) -> Message {
+        Message::HeaderAlbatross(Box::new(header))
     }
 }
 
@@ -656,12 +721,12 @@ impl InvVector {
         InvVector { ty, hash }
     }
 
-    pub fn from_block(block: &Block) -> Self {
-        Self::new(InvVectorType::Block, block.header.hash())
+    pub fn from_block_hash(hash: Blake2bHash) -> Self {
+        Self::new(InvVectorType::Block, hash)
     }
 
-    pub fn from_transaction(transaction: &Transaction) -> Self {
-        Self::new(InvVectorType::Transaction, transaction.hash())
+    pub fn from_tx_hash(hash: Blake2bHash) -> Self {
+        Self::new(InvVectorType::Transaction, hash)
     }
 }
 

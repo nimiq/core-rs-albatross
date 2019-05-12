@@ -1,15 +1,16 @@
 #[macro_use]
 extern crate beserial_derive;
+extern crate nimiq_account as account;
+extern crate nimiq_block_base as block_base;
+extern crate nimiq_bls as bls;
+extern crate nimiq_collections as collections;
+extern crate nimiq_hash as hash;
 #[macro_use]
 extern crate nimiq_hash_derive as hash_derive;
-extern crate nimiq_account as account;
-extern crate nimiq_bls as bls;
-extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
-extern crate nimiq_collections as collections;
 
 mod block;
 mod macro_block;
@@ -28,9 +29,9 @@ pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, UntrustedPbftPr
 
 use beserial::{Deserialize, Serialize};
 use bls::bls12_381::PublicKey;
-use crate::transaction::TransactionError;
 use keys::Address;
 
+use crate::transaction::TransactionError;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum BlockError {
@@ -39,6 +40,8 @@ pub enum BlockError {
     SizeExceeded,
     BodyHashMismatch,
     AccountsHashMismatch,
+    NoJustification,
+    NoViewChangeProof,
 
     DuplicateTransaction,
     InvalidTransaction(TransactionError),
@@ -49,6 +52,8 @@ pub enum BlockError {
     InvalidReceipt,
     ReceiptsNotOrdered,
 }
+
+impl block_base::BlockError for BlockError {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Slot {
