@@ -4,11 +4,12 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, Instant, SystemTime};
 
+use atomic::Ordering;
 use parking_lot::RwLock;
 use rand::{Rng, rngs::OsRng};
 
 use beserial::Serialize;
-use blockchain::Blockchain;
+use blockchain_base::AbstractBlockchain;
 use network_messages::*;
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::PeerId;
@@ -26,10 +27,9 @@ use crate::connection::close_type::CloseType;
 use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_channel::PeerChannel;
-use atomic::Ordering;
 
-pub struct NetworkAgent {
-    blockchain: Arc<Blockchain<'static>>,
+pub struct NetworkAgent<B: AbstractBlockchain<'static> + 'static> {
+    blockchain: Arc<B>,
     addresses: Arc<PeerAddressBook>,
     network_config: Arc<NetworkConfig>,
     channel: Arc<PeerChannel>,
@@ -51,7 +51,7 @@ pub struct NetworkAgent {
 
     challenge_nonce: ChallengeNonce,
 
-    self_weak: Weak<RwLock<NetworkAgent>>,
+    self_weak: Weak<RwLock<NetworkAgent<B>>>,
     pub notifier: Notifier<'static, NetworkAgentEvent>,
     
     timers: Timers<NetworkAgentTimer>,
@@ -74,7 +74,7 @@ pub enum NetworkAgentEvent {
     PingPong(Duration),
 }
 
-impl NetworkAgent {
+impl<B: AbstractBlockchain<'static> + 'static> NetworkAgent<B> {
     const VERSION_ATTEMPTS_MAX: usize = 10;
     const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(4); // 4 seconds
     pub const PING_TIMEOUT: Duration = Duration::from_secs(10); // 10 seconds
@@ -86,7 +86,7 @@ impl NetworkAgent {
     const MAX_ADDR_PER_REQUEST: u16 = 500;
     const NUM_ADDR_PER_REQUEST: u16 = 200;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, addresses: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, channel: Arc<PeerChannel>) -> Arc<RwLock<Self>> {
+    pub fn new(blockchain: Arc<B>, addresses: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, channel: Arc<PeerChannel>) -> Arc<RwLock<Self>> {
         let agent = Arc::new(RwLock::new(Self {
             blockchain,
             addresses,
@@ -163,7 +163,7 @@ impl NetworkAgent {
         // Kick off the handshake by telling the peer our version, network address & blockchain head hash.
         // Firefox sends the data-channel-open event too early, so sending the version message might fail.
         // Try again in this case.
-        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id);
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id());
         let msg = VersionMessage::new(
             self.network_config.peer_address(),
             self.blockchain.head_hash(),
@@ -256,7 +256,7 @@ impl NetworkAgent {
         }
 
         // Check if the peer is working on the same genesis block.
-        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id);
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id());
         if *network_info.genesis_hash() != msg.genesis_hash {
             self.channel.close(CloseType::DifferentGenesisBlock);
             return;
@@ -523,7 +523,7 @@ impl NetworkAgent {
 
         // Expect the peer to answer with a pong message if we haven't heard anything from it
         // within the last CONNECTIVITY_CHECK_INTERVAL. Drop the peer otherwise.
-        if self.channel.last_message_received.load(Ordering::Relaxed).elapsed() > NetworkAgent::CONNECTIVITY_CHECK_INTERVAL  {
+        if self.channel.last_message_received.load(Ordering::Relaxed).elapsed() > Self::CONNECTIVITY_CHECK_INTERVAL  {
             let weak = self.self_weak.clone();
             self.timers.set_delay(NetworkAgentTimer::Ping(nonce), move || {
                 let arc = upgrade_weak!(weak);

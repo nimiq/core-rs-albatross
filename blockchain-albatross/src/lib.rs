@@ -6,6 +6,7 @@ extern crate beserial_derive;
 extern crate log;
 
 extern crate nimiq_accounts as accounts;
+extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_bls as bls;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_hash as hash;

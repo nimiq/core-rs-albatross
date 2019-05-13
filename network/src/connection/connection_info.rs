@@ -1,7 +1,8 @@
-use std::{sync::Arc, time::{Duration, Instant}, fmt};
+use std::{fmt, sync::Arc, time::{Duration, Instant}};
 
 use parking_lot::RwLock;
 
+use blockchain_base::AbstractBlockchain;
 use network_primitives::address::peer_address::PeerAddress;
 
 use crate::connection::network_agent::NetworkAgent;
@@ -20,19 +21,19 @@ pub enum ConnectionState {
     Closed = 6
 }
 
-pub struct ConnectionInfo {
+pub struct ConnectionInfo<B: AbstractBlockchain<'static> + 'static> {
     peer_address: Option<Arc<PeerAddress>>,
     network_connection: Option<NetworkConnection>,
     peer: Option<Peer>,
     peer_channel: Option<Arc<PeerChannel>>,
     state: ConnectionState,
-    network_agent: Option<Arc<RwLock<NetworkAgent>>>,
+    network_agent: Option<Arc<RwLock<NetworkAgent<B>>>>,
     connection_handle: Option<Arc<ConnectionHandle>>,
     established_since: Option<Instant>,
     statistics: ConnectionStatistics,
 }
 
-impl ConnectionInfo {
+impl<B: AbstractBlockchain<'static> + 'static> ConnectionInfo<B> {
     pub fn new() -> Self {
         ConnectionInfo {
             peer_address: None,
@@ -71,7 +72,7 @@ impl ConnectionInfo {
     pub fn network_connection(&self) -> Option<&NetworkConnection> { self.network_connection.as_ref() }
     pub fn peer(&self) -> Option<&Peer> { self.peer.as_ref() }
     pub fn peer_channel(&self) -> Option<Arc<PeerChannel>> { self.peer_channel.clone() }
-    pub fn network_agent(&self) -> Option<&Arc<RwLock<NetworkAgent>>> { self.network_agent.as_ref() }
+    pub fn network_agent(&self) -> Option<&Arc<RwLock<NetworkAgent<B>>>> { self.network_agent.as_ref() }
     pub fn connection_handle(&self) -> Option<&Arc<ConnectionHandle>> { self.connection_handle.as_ref() }
     pub fn age_established(&self) -> Duration { self.established_since.expect("No peer has been set yet").elapsed() }
     pub fn statistics(&self) -> &ConnectionStatistics { &self.statistics }
@@ -87,7 +88,7 @@ impl ConnectionInfo {
         self.established_since = Some(Instant::now());
     }
     pub fn set_peer_channel(&mut self, peer_channel: Arc<PeerChannel>) { self.peer_channel = Some(peer_channel); }
-    pub fn set_network_agent(&mut self, network_agent: Arc<RwLock<NetworkAgent>>) { self.network_agent = Some(network_agent); }
+    pub fn set_network_agent(&mut self, network_agent: Arc<RwLock<NetworkAgent<B>>>) { self.network_agent = Some(network_agent); }
     pub fn set_connection_handle(&mut self, handle: Arc<ConnectionHandle>) { self.connection_handle = Some(handle); }
     pub fn drop_connection_handle(&mut self) { self.connection_handle = None; }
 
@@ -103,31 +104,31 @@ impl ConnectionInfo {
     }
 }
 
-impl Default for ConnectionInfo {
+impl<B: AbstractBlockchain<'static> + 'static> Default for ConnectionInfo<B> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PartialEq for ConnectionInfo {
-    fn eq(&self, other: &ConnectionInfo) -> bool {
+impl<B: AbstractBlockchain<'static> + 'static> PartialEq for ConnectionInfo<B> {
+    fn eq(&self, other: &ConnectionInfo<B>) -> bool {
         self.peer_address == other.peer_address
     }
 }
 
-impl Eq for ConnectionInfo {}
+impl<B: AbstractBlockchain<'static> + 'static> Eq for ConnectionInfo<B> {}
 
-pub struct ConnectionStatistics {
-    latencies: Vec<f64>,
-}
-
-impl fmt::Display for ConnectionInfo {
+impl<B: AbstractBlockchain<'static> + 'static> fmt::Display for ConnectionInfo<B> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{{ peer_address: {}, state: {:?} }}", match self.peer_address {
             Some(ref peer_address) => peer_address.to_string(),
             None => "None".to_string(),
         }, self.state)
     }
+}
+
+pub struct ConnectionStatistics {
+    latencies: Vec<f64>,
 }
 
 impl ConnectionStatistics {

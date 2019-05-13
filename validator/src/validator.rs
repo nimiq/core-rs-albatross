@@ -26,7 +26,7 @@ use block_albatross::{
     ViewChangeProof,
 };
 use blockchain_albatross::Blockchain;
-use blockchain_base::{BlockchainEvent, AbstractBlockchain};
+use blockchain_base::BlockchainEvent;
 use bls::bls12_381::{PublicKey, SecretKey};
 use consensus::{Consensus, ConsensusEvent};
 use database::Environment;
@@ -62,7 +62,7 @@ pub struct Validator {
     blockchain: Arc<Blockchain<'static>>,
     block_producer: BlockProducer<'static>,
     consensus: Arc<Consensus>,
-    validator_network: Arc<ValidatorNetwork>,
+    //validator_network: Arc<ValidatorNetwork>,
     validator_key: SecretKey,
 
     timers: Timers<ValidatorTimer>,

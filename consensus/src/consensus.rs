@@ -28,7 +28,7 @@ use crate::inventory::InventoryManager;
 pub struct Consensus {
     pub blockchain: Arc<Blockchain<'static>>,
     pub mempool: Arc<Mempool<'static, Blockchain<'static>>>,
-    pub network: Arc<Network>,
+    pub network: Arc<Network<Blockchain<'static>>>,
 
     inv_mgr: Arc<RwLock<InventoryManager<Blockchain<'static>, NimiqMessageAdapter>>>,
     timers: Timers<ConsensusTimer>,

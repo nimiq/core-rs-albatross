@@ -5,7 +5,6 @@ use futures::{Async, Future, Poll};
 
 use consensus::consensus::Consensus;
 use database::Environment;
-use network::network::Network;
 use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
 use network_primitives::address::NetAddress;
 use utils::key_store::KeyStore;
@@ -162,10 +161,6 @@ pub trait Client {
     fn initialized(&self) -> bool;
     fn connected(&self) -> bool;
     fn consensus(&self) -> Arc<Consensus>;
-
-    fn network(&self) -> Arc<Network> {
-        Arc::clone(&self.consensus().network)
-    }
 }
 
 
@@ -182,7 +177,7 @@ impl Future for ClientInitializeFuture {
     fn poll(&mut self) -> Poll<InitializedClient, ClientError> {
         // NOTE: This is practically Future::fuse, but this way the types are cleaner
         if !self.initialized {
-            self.network().initialize().map_err(ClientError::NetworkError)?;
+            self.consensus().network.initialize().map_err(ClientError::NetworkError)?;
             self.initialized = true;
             Ok(Async::Ready(InitializedClient {
                 consensus: Arc::clone(&self.consensus),
@@ -247,7 +242,7 @@ impl Future for ClientConnectFuture {
 
     fn poll(&mut self) -> Poll<ConnectedClient, ClientError> {
         if !self.connected {
-            self.network().connect().map_err(ClientError::NetworkError)?;
+            self.consensus.network.connect().map_err(ClientError::NetworkError)?;
             self.connected = true;
             Ok(Async::Ready(ConnectedClient { consensus: Arc::clone(&self.consensus) }))
         }

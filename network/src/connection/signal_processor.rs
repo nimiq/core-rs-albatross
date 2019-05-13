@@ -1,7 +1,8 @@
-use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use parking_lot::Mutex;
 
 use collections::UniqueLinkedList;
 use network_messages::{Message, SignalMessage, SignalMessageFlags};
@@ -11,7 +12,6 @@ use crate::address::peer_address_book::PeerAddressBook;
 use crate::network_config::NetworkConfig;
 use crate::peer_channel::PeerChannel;
 
-use super::super::Network;
 use super::close_type::CloseType;
 
 pub struct SignalProcessor {
@@ -21,6 +21,7 @@ pub struct SignalProcessor {
 }
 
 impl SignalProcessor {
+    const SIGNAL_TTL_INITIAL: u8 = 3;
     const SIGNAL_STORE_MAX_SIZE: usize = 1000;
 
     pub fn new(addresses: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>) -> Self {
@@ -33,7 +34,7 @@ impl SignalProcessor {
 
     pub fn on_signal(&self, channel: Arc<PeerChannel>, msg: SignalMessage) {
         // Discard signals with invalid TTL.
-        if msg.ttl > Network::SIGNAL_TTL_INITIAL {
+        if msg.ttl > Self::SIGNAL_TTL_INITIAL {
             channel.close(CloseType::InvalidSignalTtl);
             return;
         }
@@ -74,7 +75,7 @@ impl SignalProcessor {
                     sender_id: msg.recipient_id,
                     recipient_id: msg.sender_id,
                     nonce: msg.nonce,
-                    ttl: Network::SIGNAL_TTL_INITIAL,
+                    ttl: Self::SIGNAL_TTL_INITIAL,
                     flags: SignalMessageFlags::TTL_EXCEEDED,
                     payload: Vec::new(),
                     sender_public_key: None,
@@ -96,7 +97,7 @@ impl SignalProcessor {
                     sender_id: msg.recipient_id,
                     recipient_id: msg.sender_id,
                     nonce: msg.nonce,
-                    ttl: Network::SIGNAL_TTL_INITIAL,
+                    ttl: Self::SIGNAL_TTL_INITIAL,
                     flags: SignalMessageFlags::UNROUTABLE,
                     payload: Vec::new(),
                     sender_public_key: None,
@@ -118,7 +119,7 @@ impl SignalProcessor {
                     sender_id: msg.recipient_id,
                     recipient_id: msg.sender_id,
                     nonce: msg.nonce,
-                    ttl: Network::SIGNAL_TTL_INITIAL,
+                    ttl: Self::SIGNAL_TTL_INITIAL,
                     flags: SignalMessageFlags::UNROUTABLE,
                     payload: Vec::new(),
                     sender_public_key: None,

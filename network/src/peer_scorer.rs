@@ -3,6 +3,7 @@ use std::{sync::Arc, time::Duration};
 use rand::Rng;
 use rand::rngs::OsRng;
 
+use blockchain_base::AbstractBlockchain;
 use network_primitives::{
     address::peer_address::PeerAddress,
     protocol::Protocol,
@@ -28,14 +29,14 @@ use parking_lot::RwLockReadGuard;
 
 pub type Score = f64;
 
-pub struct PeerScorer {
+pub struct PeerScorer<B: AbstractBlockchain<'static> + 'static> {
     network_config: Arc<NetworkConfig>,
     addresses: Arc<PeerAddressBook>,
-    connections: Arc<ConnectionPool>,
+    connections: Arc<ConnectionPool<B>>,
     connection_scores: Vec<(ConnectionId, Score)>,
 }
 
-impl PeerScorer {
+impl<B: AbstractBlockchain<'static> + 'static> PeerScorer<B> {
     const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 1; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
     const PEER_COUNT_MIN_OUTBOUND: usize = 6; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
 
@@ -55,7 +56,7 @@ impl PeerScorer {
     const BEST_PROTOCOL_WS_DISTRIBUTION: f64 = 0.15; // 15%
 
 
-    pub fn new(network_config: Arc<NetworkConfig>, addresses: Arc<PeerAddressBook>, connections: Arc<ConnectionPool>) -> Self {
+    pub fn new(network_config: Arc<NetworkConfig>, addresses: Arc<PeerAddressBook>, connections: Arc<ConnectionPool<B>>) -> Self {
         PeerScorer {
             network_config,
             addresses,
@@ -74,7 +75,7 @@ impl PeerScorer {
         }
         candidates.sort_by(|a, b| { a.1.cmp(&b.1) });
         let mut randrng: OsRng = OsRng::new().unwrap();
-        let rand_ind = randrng.gen_range(0, usize::min(PeerScorer::PICK_SELECTION_SIZE, candidates.len()));
+        let rand_ind = randrng.gen_range(0, usize::min(Self::PICK_SELECTION_SIZE, candidates.len()));
         match candidates.get(rand_ind) {
             Some((peer_address, _)) => Some(Arc::clone(peer_address)),
             None => None
@@ -179,7 +180,7 @@ impl PeerScorer {
         let state = self.connections.state();
         let distribution: f64 = (state.peer_count_ws as f64 + state.peer_count_wss as f64) / state.peer_count() as f64;
         let peer_count_full_ws_outbound = state.get_peer_count_full_ws_outbound();
-        let connections: Vec<(ConnectionId, &ConnectionInfo)> = state.id_and_connection_iter();
+        let connections: Vec<(ConnectionId, &ConnectionInfo<B>)> = state.id_and_connection_iter();
 
         for connection in connections {
             if connection.1.state() == ConnectionState::Established
@@ -207,7 +208,7 @@ impl PeerScorer {
         }
     }
 
-    fn score_connection(connection_info: &ConnectionInfo, distribution: f64, peer_count_full_ws_outbound: usize) -> Score {
+    fn score_connection(connection_info: &ConnectionInfo<B>, distribution: f64, peer_count_full_ws_outbound: usize) -> Score {
         // Connection age
         let score_age = Self::score_connection_age(connection_info);
 
@@ -246,8 +247,8 @@ impl PeerScorer {
 
         // Connection speed, based on ping-pong latency median
         let median_latency = connection_info.statistics().latency_median();
-        let score_speed: f64 = if median_latency > 0.0 && median_latency < NetworkAgent::PING_TIMEOUT.as_secs() as f64 {
-            1.0 - median_latency / NetworkAgent::PING_TIMEOUT.as_secs() as f64
+        let score_speed: f64 = if median_latency > 0.0 && median_latency < NetworkAgent::<B>::PING_TIMEOUT.as_secs() as f64 {
+            1.0 - median_latency / NetworkAgent::<B>::PING_TIMEOUT.as_secs() as f64
         } else { 0.0 };
 
         0.15 * score_age + 0.25 * score_outbound + 0.2 * score_type + 0.2 * score_protocol + 0.2 * score_speed
@@ -257,16 +258,16 @@ impl PeerScorer {
         f64::max(f64::min(1. - (age as f64 - best_age as f64) / max_age as f64, 1.), 0.)
     }
 
-    fn score_connection_age(connection_info: &ConnectionInfo) -> Score {
+    fn score_connection_age(connection_info: &ConnectionInfo<B>) -> Score {
         let age = time::duration_as_millis(&connection_info.age_established());
         let services = connection_info.peer_address().expect("No peer address").services;
 
         if services.is_full_node() {
             (age as f64 / (2.0 * time::duration_as_millis(&Self::BEST_AGE_FULL) as f64) + 0.5) as Score
         } else if services.is_light_node() {
-            PeerScorer::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_LIGHT), time::duration_as_millis(&Self::MAX_AGE_LIGHT)) as Score
+            Self::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_LIGHT), time::duration_as_millis(&Self::MAX_AGE_LIGHT)) as Score
         } else {
-            PeerScorer::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_NANO), time::duration_as_millis(&Self::MAX_AGE_NANO)) as Score
+            Self::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_NANO), time::duration_as_millis(&Self::MAX_AGE_NANO)) as Score
         }
     }
 

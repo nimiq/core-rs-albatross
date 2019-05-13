@@ -1,11 +1,15 @@
+use std::cmp;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use atomic::Atomic;
 use atomic::Ordering;
 use parking_lot::RwLock;
+use parking_lot::RwLockReadGuard;
+use rand::Rng;
+use rand::rngs::OsRng;
 
-use blockchain::Blockchain;
+use blockchain_base::AbstractBlockchain;
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
 use utils::mutable_once::MutableOnce;
@@ -15,17 +19,13 @@ use utils::timers::Timers;
 use crate::address::peer_address_book::PeerAddressBook;
 use crate::connection::close_type::CloseType;
 use crate::connection::connection_info::ConnectionState;
+use crate::connection::connection_pool::ConnectionId;
 use crate::connection::connection_pool::ConnectionPool;
 use crate::connection::connection_pool::ConnectionPoolEvent;
+use crate::error::Error;
 use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_scorer::PeerScorer;
-use parking_lot::RwLockReadGuard;
-use std::cmp;
-use rand::Rng;
-use rand::rngs::OsRng;
-use crate::connection::connection_pool::ConnectionId;
-use crate::error::Error;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {
@@ -41,21 +41,21 @@ pub enum NetworkEvent {
     PeersChanged,
 }
 
-pub struct Network {
+pub struct Network<B: AbstractBlockchain<'static> + 'static> {
     pub network_config: Arc<NetworkConfig>,
     pub network_time: Arc<NetworkTime>,
     auto_connect: Atomic<bool>,
     backed_off: Atomic<bool>,
     backoff: Atomic<Duration>,
     pub addresses: Arc<PeerAddressBook>,
-    pub connections: Arc<ConnectionPool>,
-    scorer: Arc<RwLock<PeerScorer>>,
+    pub connections: Arc<ConnectionPool<B>>,
+    scorer: Arc<RwLock<PeerScorer<B>>>,
     timers: Timers<NetworkTimer>,
     pub notifier: RwLock<Notifier<'static, NetworkEvent>>,
-    self_weak: MutableOnce<Weak<Network>>,
+    self_weak: MutableOnce<Weak<Network<B>>>,
 }
 
-impl Network {
+impl<B: AbstractBlockchain<'static> + 'static> Network<B> {
     const PEER_COUNT_MAX: usize = 4000;
     const PEER_COUNT_RECYCLING_ACTIVE: usize = 1000;
     const RECYCLING_PERCENTAGE_MIN: f64 = 0.01;
@@ -70,9 +70,8 @@ impl Network {
     const ADDRESS_REQUEST_PEERS: usize = 2;
 
     pub const SIGNALING_ENABLED: bool = true;
-    pub const SIGNAL_TTL_INITIAL: u8 = 3;
 
-    pub fn new(blockchain: Arc<Blockchain<'static>>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Result<Arc<Self>, Error> {
+    pub fn new(blockchain: Arc<B>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Result<Arc<Self>, Error> {
         if !network_config.is_initialized() {
             return Err(Error::UninitializedPeerKey);
         }
@@ -151,7 +150,7 @@ impl Network {
         self.notifier.read().notify(NetworkEvent::PeerLeft(Arc::new(peer)));
     }
 
-    fn on_peers_changed(&self, this: Arc<Network>) {
+    fn on_peers_changed(&self, this: Arc<Network<B>>) {
         self.notifier.read().notify(NetworkEvent::PeersChanged);
         self.timers.reset_delay(NetworkTimer::PeersChanged, move || {
             this.check_peer_count();
@@ -168,7 +167,7 @@ impl Network {
         });
     }
 
-    fn on_connect_error(&self, this: Arc<Network>) {
+    fn on_connect_error(&self, this: Arc<Network<B>>) {
         // Only set new delay if it doesn't already exist.
         if !self.timers.delay_exists(&NetworkTimer::ConnectError) {
             self.timers.set_delay(NetworkTimer::ConnectError, move || {
@@ -256,7 +255,7 @@ impl Network {
         self.network_time.set_offset(time_offset);
     }
 
-    fn housekeeping(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
+    fn housekeeping(connections: Arc<ConnectionPool<B>>, scorer: Arc<RwLock<PeerScorer<B>>>) {
         scorer.write().score_connections();
 
         // Recycle.
@@ -278,7 +277,7 @@ impl Network {
         Self::refresh_addresses(connections, scorer);
     }
 
-    fn refresh_addresses(connections: Arc<ConnectionPool>, scorer: Arc<RwLock<PeerScorer>>) {
+    fn refresh_addresses(connections: Arc<ConnectionPool<B>>, scorer: Arc<RwLock<PeerScorer<B>>>) {
         let connection_scores = RwLockReadGuard::map(scorer.read(), |scorer| scorer.connection_scores());
         let mut randrng: OsRng = OsRng::new().unwrap();
         if !connection_scores.is_empty() {
@@ -345,7 +344,7 @@ impl Network {
         self.connections.set_allow_inbound_connections(allow_inbound_connections);
     }
 
-    pub fn scorer(&self) -> RwLockReadGuard<PeerScorer> {
+    pub fn scorer(&self) -> RwLockReadGuard<PeerScorer<B>> {
         self.scorer.read()
     }
 }

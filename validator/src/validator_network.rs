@@ -71,7 +71,7 @@ struct ValidatorNetworkState {
 }
 
 pub struct ValidatorNetwork {
-    network: Arc<Network>,
+    network: Arc<Network<Blockchain<'static>>>,
     blockchain: Arc<Blockchain<'static>>,
 
     state: RwLock<ValidatorNetworkState>,
@@ -81,7 +81,7 @@ pub struct ValidatorNetwork {
 }
 
 impl ValidatorNetwork {
-    pub fn new(network: Arc<Network>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
+    pub fn new(network: Arc<Network<Blockchain<'static>>>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
         let this = Arc::new(ValidatorNetwork {
             network,
             blockchain,

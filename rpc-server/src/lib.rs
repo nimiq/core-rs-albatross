@@ -32,7 +32,7 @@ use parking_lot::RwLock;
 use beserial::{Deserialize, Serialize};
 use block::{Block, BlockHeader, Difficulty};
 use block_production::BlockProducer;
-use blockchain::PushResult;
+use blockchain::{Blockchain, PushResult};
 use consensus::consensus::{Consensus, ConsensusEvent};
 use hash::{Argon2dHash, Blake2bHash, Blake2bHasher, Hash};
 use keys::Address;
@@ -584,7 +584,7 @@ impl JsonRpcHandler {
         Ok(self.transaction_to_obj(&transaction, Some(&block), Some(index as usize)))
     }
 
-    fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<&ConnectionInfo>, score: Option<Score>) -> JsonValue {
+    fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<&ConnectionInfo<Blockchain<'static>>>, score: Option<Score>) -> JsonValue {
         let state = self.consensus.network.connections.state();
         let connection_info = connection_info.or_else(|| {
             state.get_connection_by_peer_address(&peer_address_info.peer_address)
