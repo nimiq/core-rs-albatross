@@ -150,8 +150,8 @@ impl MicroExtrinsics {
         return Ok(());
     }
 
-    pub fn get_metadata_size(num_slash_inherents: usize, extra_data_size: usize) -> usize {
-        return /*slash_inherents size*/ 2 + num_slash_inherents * ForkProof::SIZE
+    pub fn get_metadata_size(num_fork_proofs: usize, extra_data_size: usize) -> usize {
+        return /*fork_proofs size*/ 2 + num_fork_proofs * ForkProof::SIZE
             + /*extra_data size*/ 1
             + extra_data_size
             + /*transactions size*/ 2

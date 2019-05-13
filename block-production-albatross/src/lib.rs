@@ -29,11 +29,11 @@ impl<'env> BlockProducer<'env> {
         BlockProducer { blockchain, mempool, validator_key }
     }
 
-    pub fn next_micro_block(&self, slash_inherents: Vec<ForkProof>, view_number: u32, timestamp: u64, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
+    pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, view_number: u32, timestamp: u64, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
         // TODO: Lock blockchain/mempool while constructing the block.
         // let _lock = self.blockchain.push_lock.lock();
 
-        let extrinsics = self.next_micro_extrinsics(slash_inherents, extra_data);
+        let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data);
         let header = self.next_micro_header(view_number, timestamp, &extrinsics);
         let signature = self.validator_key.sign(&header);
 
@@ -53,7 +53,7 @@ impl<'env> BlockProducer<'env> {
             - MicroExtrinsics::get_metadata_size(fork_proofs.len(), extra_data.len());
         let mut transactions = self.mempool.get_transactions_for_block(max_size);
 
-        let inherents = self.blockchain.slashes_to_inherents(&fork_proofs);
+        let inherents = self.blockchain.fork_proofs_to_inherents(&fork_proofs);
 
         let mut receipts = self.blockchain.state().accounts()
             .collect_receipts(&transactions, &inherents, self.blockchain.height() + 1)
@@ -88,7 +88,7 @@ impl<'env> BlockProducer<'env> {
         let parent_hash = self.blockchain.head_hash();
         let extrinsics_root = extrinsics.hash();
 
-        let inherents = self.blockchain.slashes_to_inherents(&extrinsics.fork_proofs);
+        let inherents = self.blockchain.fork_proofs_to_inherents(&extrinsics.fork_proofs);
         // Rewards are distributed with delay.
         let state_root = self.blockchain.state().accounts()
             .hash_with(&extrinsics.transactions, &inherents, block_number)

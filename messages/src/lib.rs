@@ -34,8 +34,8 @@ use rand::rngs::OsRng;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
-use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, SignedPbftCommitMessage,
-                      SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange, ForkProof};
+use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof,
+                      SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange};
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};

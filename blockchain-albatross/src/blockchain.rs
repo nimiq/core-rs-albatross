@@ -682,7 +682,7 @@ impl<'env> Blockchain<'env> {
         self.state.read()
     }
 
-    pub fn slashes_to_inherents(&self, slash_inherents: &Vec<ForkProof>) -> Vec<Inherent> { unimplemented!() }
+    pub fn fork_proofs_to_inherents(&self, fork_proofs: &Vec<ForkProof>) -> Vec<Inherent> { unimplemented!() }
 }
 
 impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
