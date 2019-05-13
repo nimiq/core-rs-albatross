@@ -9,7 +9,7 @@ extern crate nimiq_bls as bls;
 use std::sync::Arc;
 
 use beserial::Serialize;
-use block::{Block, MicroBlock, MacroBlock, MicroExtrinsics, MicroHeader, ViewChangeProof};
+use block::{Block, MicroBlock, MacroBlock, MacroHeader, MicroExtrinsics, MicroHeader, ViewChangeProof};
 use block::ForkProof;
 use blockchain::blockchain::Blockchain;
 use hash::Hash;
@@ -27,6 +27,18 @@ pub struct BlockProducer<'env> {
 impl<'env> BlockProducer<'env> {
     pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>, validator_key: KeyPair) -> Self {
         BlockProducer { blockchain, mempool, validator_key }
+    }
+
+    pub fn next_macro_block_proposal(&self, view_number: u32, timestamp: u64) -> MacroBlock {
+        // TODO: Lock blockchain/mempool while constructing the block.
+        // let _lock = self.blockchain.push_lock.lock();
+
+        let header = self.next_macro_header(view_number, timestamp);
+
+        MacroBlock {
+            header,
+            justification: None
+        }
     }
 
     pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, view_number: u32, timestamp: u64, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
@@ -78,6 +90,36 @@ impl<'env> BlockProducer<'env> {
             extra_data,
             transactions,
             receipts,
+        }
+    }
+
+    fn next_macro_header(&self, view_number: u32, timestamp: u64) -> MacroHeader {
+        let block_number = self.blockchain.height() + 1;
+        let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
+
+        let parent_hash = self.blockchain.head_hash();
+        let parent_macro_hash = self.blockchain.macro_head_hash();
+
+        let slot_allocation = self.blockchain.get_next_validator_list();
+
+        let inherents = self.blockchain.finalized_last_epoch();
+        // Rewards are distributed with delay.
+        let state_root = self.blockchain.state().accounts()
+            .hash_with(&vec![], &inherents, block_number)
+            .expect("Failed to compute accounts hash during block production");
+
+        let seed = self.validator_key.sign(self.blockchain.head().seed());
+
+        MacroHeader {
+            version: Block::VERSION,
+            slot_allocation,
+            block_number,
+            view_number,
+            parent_macro_hash,
+            seed,
+            parent_hash,
+            state_root,
+            timestamp,
         }
     }
 

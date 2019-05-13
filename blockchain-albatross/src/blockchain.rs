@@ -683,6 +683,8 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn fork_proofs_to_inherents(&self, fork_proofs: &Vec<ForkProof>) -> Vec<Inherent> { unimplemented!() }
+
+    pub fn finalized_last_epoch(&self) -> Vec<Inherent> { unimplemented!() }
 }
 
 impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
