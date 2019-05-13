@@ -24,8 +24,7 @@ pub mod blockchain;
 pub mod super_block_counts;
 pub mod transaction_cache;
 pub mod nipopow;
-#[cfg(feature = "metrics")]
-pub mod chain_metrics;
+
 #[cfg(feature = "transaction-store")]
 pub mod transaction_store;
 

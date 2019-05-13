@@ -34,6 +34,10 @@ use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::transaction_cache::TransactionCache;
 
+#[cfg(feature = "metrics")]
+use blockchain_base::chain_metrics::BlockchainMetrics;
+
+
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
 pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
@@ -46,6 +50,9 @@ pub struct Blockchain<'env> {
     pub(crate) chain_store: ChainStore<'env>,
     pub(crate) state: RwLock<BlockchainState<'env>>,
     pub push_lock: Mutex<()>, // TODO: Not very nice to have this public
+
+    #[cfg(feature = "metrics")]
+    metrics: BlockchainMetrics,
 }
 
 pub struct BlockchainState<'env> {
@@ -123,6 +130,9 @@ impl<'env> Blockchain<'env> {
                 last_macro_block: unimplemented!()
             }),
             push_lock: Mutex::new(()),
+
+            #[cfg(feature = "metrics")]
+            metrics: BlockchainMetrics::default()
         })
     }
 
@@ -164,6 +174,9 @@ impl<'env> Blockchain<'env> {
                 last_macro_block: genesis_macro_block.clone()
             }),
             push_lock: Mutex::new(()),
+
+            #[cfg(feature = "metrics")]
+            metrics: BlockchainMetrics::default()
         })
     }
 
@@ -679,6 +692,9 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
         unimplemented!()
     }
+
+    #[cfg(feature = "metrics")]
+    fn metrics(&self) -> &BlockchainMetrics { unimplemented!() }
 
     fn network_id(&self) -> NetworkId {
         unimplemented!()

@@ -1,11 +1,13 @@
 #[macro_use]
 extern crate log;
 extern crate nimiq_blockchain as blockchain;
+extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network as network;
 extern crate nimiq_block as block;
+extern crate nimiq_block_albatross as block_albatross;
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -16,7 +18,7 @@ use hyper::Server;
 use consensus::{Consensus, ConsensusProtocol, NimiqConsensusProtocol};
 
 use crate::error::Error;
-use crate::metrics::chain::ChainMetrics;
+use crate::metrics::chain::*; // FIXME
 use crate::metrics::mempool::MempoolMetrics;
 use crate::metrics::network::NetworkMetrics;
 
@@ -57,12 +59,15 @@ pub mod server;
 pub mod metrics;
 pub mod error;
 
-pub fn metrics_server(consensus: Arc<Consensus<NimiqConsensusProtocol>>, ip: IpAddr, port: u16, password: Option<String>) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
+pub fn metrics_server<P, CM>(consensus: Arc<Consensus<P>>, ip: IpAddr, port: u16, password: Option<String>) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error>
+    where P: ConsensusProtocol + 'static,
+          CM: AbstractChainMetrics<P> + server::Metrics + 'static
+{
     Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
         .serve(move || {
             server::MetricsServer::new(
                 vec![
-                    Arc::new(ChainMetrics::new(consensus.blockchain.clone())),
+                    Arc::new(CM::new(consensus.blockchain.clone())),
                     Arc::new(MempoolMetrics::new(consensus.mempool.clone())),
                     Arc::new(NetworkMetrics::new(consensus.network.clone()))
                 ],

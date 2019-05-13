@@ -24,7 +24,9 @@ log = "0.4"
 base64 = "0.10"
 failure = "0.1"
 nimiq-blockchain = { path = "../blockchain", version = "0.1.0", features = ["metrics"] }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1.0" }
+nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1.0", features = ["metrics"] }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1.0", features = ["metrics"] }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1.0" }
 nimiq-consensus = { path = "../consensus", version = "0.1.0" }
 nimiq-network = { path = "../network", version = "0.1.0", features = ["metrics"] }
 nimiq-mempool = { path = "../mempool", version = "0.1.0" }

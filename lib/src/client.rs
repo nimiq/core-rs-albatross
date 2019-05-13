@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use futures::{Async, Future, Poll};
 
-use consensus::{Consensus, ConsensusProtocol};
+use consensus::{Consensus, ConsensusProtocol, AlbatrossConsensusProtocol, NimiqConsensusProtocol};
 use database::Environment;
 use mempool::MempoolConfig;
 use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
@@ -99,6 +99,14 @@ impl ClientBuilder {
             consensus: consensus.clone(),
             initialized: false
         })
+    }
+
+    pub fn build_albatross_client(self) -> Result<ClientInitializeFuture<AlbatrossConsensusProtocol>, ClientError> {
+        self.build_client()
+    }
+
+    pub fn build_powchain_client(self) -> Result<ClientInitializeFuture<NimiqConsensusProtocol>, ClientError> {
+        self.build_client()
     }
 
     pub fn build_consensus<P: ConsensusProtocol + 'static>(self) -> Result<Arc<Consensus<P>>, ClientError> {

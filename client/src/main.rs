@@ -232,7 +232,8 @@ fn run() -> Result<(), Error> {
     client_builder.with_seeds(seeds);
 
     // Setup client future to initialize and connect
-    let client = client_builder.build_client()?;
+    //let client = client_builder.build_albatross_client()?;
+    let client = client_builder.build_powchain_client()?;
     let consensus = client.consensus();
 
     info!("Peer address: {} - public key: {}", consensus.network.network_config.peer_address(), consensus.network.network_config.public_key().to_hex());
@@ -264,12 +265,13 @@ fn run() -> Result<(), Error> {
                 warn!("'allowip' for RPC server is currently not implemented!");
             }
             info!("Starting RPC server listening on port {}", port);
-            other_futures.push(rpc_server(Arc::clone(&consensus), bind, port, JsonRpcConfig {
+            /*other_futures.push(rpc_server(Arc::clone(&consensus), bind, port, JsonRpcConfig {
                 credentials,
                 methods: HashSet::from_iter(rpc_settings.methods),
                 allowip: (), // TODO
                 corsdomain: rpc_settings.corsdomain
-            })?);
+            })?);*/
+            unimplemented!()
         }
     }
     // If the RPC server is enabled, but the client is not compiled with it, inform the user
@@ -286,7 +288,8 @@ fn run() -> Result<(), Error> {
                 .into_ip_address().unwrap();
             let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);
             info!("Starting metrics server listening on port {}", port);
-            other_futures.push(metrics_server(Arc::clone(&consensus), bind, port, metrics_settings.password)?);
+            //other_futures.push(metrics_server(Arc::clone(&consensus), bind, port, metrics_settings.password)?);
+            unimplemented!()
         }
     }
     // If the metrics server is enabled, but the client is not compiled with it, inform the user

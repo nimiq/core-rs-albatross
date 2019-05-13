@@ -8,6 +8,9 @@ extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
 
+#[cfg(feature = "metrics")]
+pub mod chain_metrics;
+
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -34,6 +37,10 @@ pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
 
     // XXX This signature is most likely too restrictive to accommodate all blockchain types.
     fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError>;
+
+
+    #[cfg(feature = "metrics")]
+    fn metrics(&self) -> &chain_metrics::BlockchainMetrics;
 
 
     /// Returns the network ID

@@ -39,5 +39,5 @@ atomic = "0.4"
 
 [features]
 default = ["transaction-store"]
-metrics = []
+metrics = ["nimiq-blockchain-base/metrics"]
 transaction-store = []

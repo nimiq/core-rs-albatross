@@ -24,12 +24,15 @@ use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
-#[cfg(feature = "metrics")]
-use crate::chain_metrics::BlockchainMetrics;
 use crate::chain_store::ChainStore;
 use crate::transaction_cache::TransactionCache;
+
+#[cfg(feature = "metrics")]
+use blockchain_base::chain_metrics::BlockchainMetrics;
+
 #[cfg(feature = "transaction-store")]
 use crate::transaction_store::TransactionStore;
+
 
 pub mod transaction_proofs;
 
@@ -724,6 +727,11 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
 
     fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
         Blockchain::new(env, network_id, network_time)
+    }
+
+    #[cfg(feature = "metrics")]
+    fn metrics(&self) -> &BlockchainMetrics {
+        &self.metrics
     }
 
     fn network_id(&self) -> NetworkId {
