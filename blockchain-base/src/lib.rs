@@ -1,5 +1,6 @@
 extern crate nimiq_account as account;
 extern crate nimiq_block_base as block_base;
+extern crate nimiq_database as database;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
@@ -10,15 +11,18 @@ extern crate nimiq_utils as utils;
 use std::collections::HashSet;
 use std::fmt::Debug;
 
+use parking_lot::MutexGuard;
+
 use account::{Account, AccountError};
 use block_base::Block;
+use database::{ReadTransaction, Transaction};
 use hash::Blake2bHash;
 use keys::Address;
 use primitives::networks::NetworkId;
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
+use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle};
-use parking_lot::MutexGuard;
 
 pub trait AbstractBlockchain<'l>: Sized + Send + Sync {
     type Block: Block;
@@ -80,6 +84,13 @@ pub trait AbstractBlockchain<'l>: Sized + Send + Sync {
     fn get_account(&self, address: &Address) -> Account;
 
     fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool;
+
+
+    /* Required by AccountsChunkCache */
+    // TODO Why do we need this? Remove if possible.
+    fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash>;
+
+    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk>;
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]

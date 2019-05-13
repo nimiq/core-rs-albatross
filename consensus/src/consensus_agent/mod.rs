@@ -85,7 +85,7 @@ enum ConsensusAgentTimer {
 
 pub struct ConsensusAgent<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> {
     pub(crate) blockchain: Arc<B>,
-    accounts_chunk_cache: Arc<AccountsChunkCache>,
+    accounts_chunk_cache: Arc<AccountsChunkCache<B>>,
     pub peer: Arc<Peer>,
 
     inv_agent: Arc<InventoryAgent<B, MA>>,
@@ -117,7 +117,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
     /// Maximum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
 
-    pub fn new(blockchain: Arc<B>, mempool: Arc<Mempool<'static, B>>, inv_mgr: Arc<RwLock<InventoryManager<B, MA>>>, accounts_chunk_cache: Arc<AccountsChunkCache>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<B>, mempool: Arc<Mempool<'static, B>>, inv_mgr: Arc<RwLock<InventoryManager<B, MA>>>, accounts_chunk_cache: Arc<AccountsChunkCache<B>>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());

@@ -14,7 +14,7 @@ use futures::task::Task;
 use parking_lot::RwLock;
 
 use beserial::Serialize;
-use blockchain::{Blockchain, BlockchainEvent};
+use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use database::Environment;
 use database::ReadTransaction;
 use hash::Blake2bHash;
@@ -22,8 +22,8 @@ use utils::mutable_once::MutableOnce;
 
 pub type SerializedChunk = Vec<u8>;
 
-pub struct AccountsChunkCache {
-    blockchain: Arc<Blockchain<'static>>,
+pub struct AccountsChunkCache<B: AbstractBlockchain<'static> + 'static> {
+    blockchain: Arc<B>,
     env: &'static Environment,
     computing_enabled: AtomicBool,
     chunks_by_prefix_by_block: RwLock<HashMap<Blake2bHash, HashMap<String, SerializedChunk>>>,
@@ -32,12 +32,12 @@ pub struct AccountsChunkCache {
     weak_self: MutableOnce<Weak<Self>>
 }
 
-impl AccountsChunkCache {
+impl<B: AbstractBlockchain<'static> + 'static> AccountsChunkCache<B> {
 
     const MAX_BLOCKS_BACKLOG: usize = 10;
     const CHUNK_SIZE_MAX: usize = 5000;
 
-    pub fn new(env: &'static Environment, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
+    pub fn new(env: &'static Environment, blockchain: Arc<B>) -> Arc<Self> {
         let cache = AccountsChunkCache {
             blockchain,
             env,
@@ -51,13 +51,13 @@ impl AccountsChunkCache {
         unsafe { cache_arc.weak_self.replace(Arc::downgrade(&cache_arc)) };
 
         let cache_arc2 = Arc::clone(&cache_arc);
-        cache_arc.blockchain.notifier.write().register(move |event: &BlockchainEvent| cache_arc2.on_blockchain_event(event));
+        cache_arc.blockchain.register_listener(move |event: &BlockchainEvent<B::Block>| cache_arc2.on_blockchain_event(event));
 
         cache_arc
     }
 
     /// Request a chunk from the cache.
-    pub fn get_chunk(&self, hash: &Blake2bHash, prefix: &str) -> GetChunkFuture {
+    pub fn get_chunk(&self, hash: &Blake2bHash, prefix: &str) -> GetChunkFuture<B> {
         // Start computing of chunks on the first get_chunk request.
         // Swap should ensure that this is only triggered *once* and that no race condition can occur.
         if !self.computing_enabled.swap(true, Ordering::AcqRel) {
@@ -67,7 +67,7 @@ impl AccountsChunkCache {
     }
 
     /// Trigger computation of chunks asynchronously after blockchain events.
-    fn on_blockchain_event(&self, event: &BlockchainEvent) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent<B::Block>) {
         if !self.computing_enabled.load(Ordering::Acquire) {
             // Only pre-compute chunks after a chunk was requested for the first time
             return;
@@ -108,7 +108,7 @@ impl AccountsChunkCache {
             let chunk_start = Instant::now();
             this.chunks_by_prefix_by_block.write().insert(hash.clone(), HashMap::new());
             let mut prefix = "".to_string();
-            while let Some(chunk) = this.blockchain.state().accounts().get_chunk(&prefix[..], AccountsChunkCache::CHUNK_SIZE_MAX, Some(&txn)) {
+            while let Some(chunk) = this.blockchain.get_accounts_chunk(&prefix[..], Self::CHUNK_SIZE_MAX, Some(&txn)) {
                 if let Some(chunks_by_prefix) = this.chunks_by_prefix_by_block.write().get_mut(&hash) {
                     let last_terminal_string_opt = chunk.last_terminal_string();
                     let chunk_len = chunk.len();
@@ -135,7 +135,7 @@ impl AccountsChunkCache {
             this.block_history_order.write().push_back(hash.clone());
 
             // Remove old chunks after some time.
-            if this.block_history_order.read().len() > AccountsChunkCache::MAX_BLOCKS_BACKLOG {
+            if this.block_history_order.read().len() > Self::MAX_BLOCKS_BACKLOG {
                 // Take the oldest block to remove.
                 if let Some(block_hash) = this.block_history_order.write().pop_front() {
                     // First clean up the chunks.
@@ -163,20 +163,20 @@ impl AccountsChunkCache {
 }
 
 /// Future given to the requester in order to retrieve accounts tree chunk.
-pub struct GetChunkFuture {
+pub struct GetChunkFuture<B: AbstractBlockchain<'static> + 'static> {
     hash: Blake2bHash,
     prefix: String,
-    chunk_cache: Arc<AccountsChunkCache>,
+    chunk_cache: Arc<AccountsChunkCache<B>>,
     running: bool
 }
 
-impl GetChunkFuture {
-    pub fn new(hash: Blake2bHash, prefix: String, chunk_cache: Arc<AccountsChunkCache>) -> Self {
+impl<B: AbstractBlockchain<'static> + 'static> GetChunkFuture<B> {
+    pub fn new(hash: Blake2bHash, prefix: String, chunk_cache: Arc<AccountsChunkCache<B>>) -> Self {
         GetChunkFuture { hash, prefix, chunk_cache, running: false }
     }
 }
 
-impl Future for GetChunkFuture {
+impl<B: AbstractBlockchain<'static> + 'static> Future for GetChunkFuture<B> {
     type Item = Option<SerializedChunk>;
     type Error = ();
 

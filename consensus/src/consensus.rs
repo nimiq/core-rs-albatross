@@ -32,7 +32,7 @@ pub struct Consensus {
 
     inv_mgr: Arc<RwLock<InventoryManager<Blockchain<'static>, NimiqMessageAdapter>>>,
     timers: Timers<ConsensusTimer>,
-    accounts_chunk_cache: Arc<AccountsChunkCache>,
+    accounts_chunk_cache: Arc<AccountsChunkCache<Blockchain<'static>>>,
 
     state: RwLock<ConsensusState>,
 

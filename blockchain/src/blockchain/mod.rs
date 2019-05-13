@@ -9,7 +9,7 @@ use accounts::Accounts;
 use block::{Block, BlockError, Difficulty, Target, TargetCompact};
 use block::proof::ChainProof;
 use blockchain_base::{AbstractBlockchain, Direction};
-use database::{Environment, ReadTransaction, WriteTransaction};
+use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use fixed_unsigned::RoundHalfUp;
 use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
 use hash::{Blake2bHash, Hash};
@@ -20,6 +20,7 @@ use primitives::networks::NetworkId;
 use primitives::policy;
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
+use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::blockchain::error::BlockchainError;
@@ -791,5 +792,13 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
 
     fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool {
         self.state.read().transaction_cache.contains(tx_hash)
+    }
+
+    fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash> {
+        self.head_hash_from_store(txn)
+    }
+
+    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk> {
+        self.state.read().accounts.get_chunk(prefix, size, txn_option)
     }
 }
