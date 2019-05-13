@@ -12,6 +12,7 @@ use account::{AccountError, Inherent, InherentType};
 use account::Account;
 use accounts::Accounts;
 use block::{Block, BlockError, BlockHeader, BlockType, MacroBlock, MicroBlock, ValidatorSlots};
+use block::ForkProof;
 use block::ViewChange;
 use blockchain_base::AbstractBlockchain;
 use blockchain_base::Direction;
@@ -235,7 +236,7 @@ impl<'env> Blockchain<'env> {
 
             // Validate slash inherents
             for fork_proof in &micro_block.extrinsics.as_ref().unwrap().fork_proofs {
-                match self.get_block_producer_at(fork_proof.header1.block_number(), fork_proof.header1.view_number()) {
+                match self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number) {
                     None => {
                         warn!("Rejecting block - Bad fork proof: Unknown block owner");
                         return Err(PushError::InvalidSuccessor)
@@ -584,8 +585,8 @@ impl<'env> Blockchain<'env> {
 
     pub fn create_fork_proofs(&self, micro_block: &MicroBlock) -> Result<Vec<Inherent>, PushError> {
         let mut fork_proofs = Vec::new();
-        for slash_inherent in &micro_block.extrinsics.as_ref().unwrap().fork_proofs {
-            let producer_opt = self.get_block_producer_at(slash_inherent.header1.block_number(), slash_inherent.header1.view_number());
+        for fork_proof in &micro_block.extrinsics.as_ref().unwrap().fork_proofs {
+            let producer_opt = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number);
             if producer_opt.is_none() {
                 return Err(PushError::InvalidSuccessor);
             }
@@ -680,6 +681,8 @@ impl<'env> Blockchain<'env> {
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
         self.state.read()
     }
+
+    pub fn slashes_to_inherents(&self, slash_inherents: &Vec<ForkProof>) -> Vec<Inherent> { unimplemented!() }
 }
 
 impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {

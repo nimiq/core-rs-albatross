@@ -56,6 +56,8 @@ pub struct MicroExtrinsics {
 }
 
 impl MicroBlock {
+    pub const MAX_SIZE: usize = 100_000; // 100 kb
+
     pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
         if let Some(ref extrinsics) = self.extrinsics {
             extrinsics.verify(self.header.block_number, network_id)?;
@@ -75,6 +77,11 @@ impl MicroBlock {
     pub fn serialize_without_signature(&self) -> Vec<u8> {
         unimplemented!()
     }
+}
+
+impl MicroHeader {
+    pub const SIZE: usize = /*version*/ 2 + /*block_number*/ 4 + /*view_number*/ 4
+        + /*hashes*/ 3 * 32 + /*seed*/ 48 + /*timestamp*/ 8;
 }
 
 impl MicroExtrinsics {
@@ -141,6 +148,14 @@ impl MicroExtrinsics {
         }
 
         return Ok(());
+    }
+
+    pub fn get_metadata_size(num_slash_inherents: usize, extra_data_size: usize) -> usize {
+        return /*slash_inherents size*/ 2 + num_slash_inherents * ForkProof::SIZE
+            + /*extra_data size*/ 1
+            + extra_data_size
+            + /*transactions size*/ 2
+            + /*receipts size*/ 2;
     }
 }
 

@@ -19,6 +19,8 @@ members = [
     "primitives/transaction",
     "blockchain",
     "blockchain-albatross",
+    "block-production",
+    "block-production-albatross",
     "accounts",
     "accounts/tree-primitives",
     "mempool",

@@ -28,6 +28,8 @@ pub enum Block {
 }
 
 impl Block {
+    pub const VERSION: u16 = 1;
+
     pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
         match self {
             Block::Macro(ref block) => block.verify(),

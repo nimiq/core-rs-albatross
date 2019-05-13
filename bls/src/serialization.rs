@@ -91,6 +91,12 @@ impl Deserialize for Signature {
     }
 }
 
+impl SerializeContent for Signature {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+}
+
+impl Hash for Signature { }
+
 impl Serialize for AggregatePublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let bytes = self.to_bytes();
