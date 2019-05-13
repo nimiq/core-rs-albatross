@@ -9,35 +9,37 @@ extern crate nimiq_bls as bls;
 use std::sync::Arc;
 
 use beserial::Serialize;
-use block::{Block, MicroBlock, MacroBlock, MacroHeader, MicroExtrinsics, MicroHeader, ViewChangeProof};
+use block::{Block, MicroBlock, PbftProposal, MacroHeader, MicroExtrinsics, MacroExtrinsics, MicroHeader, ViewChangeProof};
 use block::ForkProof;
 use blockchain::blockchain::Blockchain;
 use hash::Hash;
 use keys::Address;
 use mempool::Mempool;
-use bls::bls12_381::KeyPair;
+use bls::bls12_381::SecretKey;
 use block::MicroJustification;
 
 pub struct BlockProducer<'env> {
     blockchain: Arc<Blockchain<'env>>,
     mempool: Arc<Mempool<'env, Blockchain<'env>>>,
-    validator_key: KeyPair,
+    validator_key: SecretKey,
 }
 
 impl<'env> BlockProducer<'env> {
-    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>, validator_key: KeyPair) -> Self {
+    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>, validator_key: SecretKey) -> Self {
         BlockProducer { blockchain, mempool, validator_key }
     }
 
-    pub fn next_macro_block_proposal(&self, view_number: u32, timestamp: u64) -> MacroBlock {
+    pub fn next_macro_block_proposal(&self, view_number: u32, timestamp: u64, slashing_amount: u64, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
         // TODO: Lock blockchain/mempool while constructing the block.
         // let _lock = self.blockchain.push_lock.lock();
 
-        let header = self.next_macro_header(view_number, timestamp);
+        let extrinsics = self.next_macro_extrinsics(slashing_amount);
+        let header = self.next_macro_header(view_number, timestamp, &extrinsics);
 
-        MacroBlock {
+        PbftProposal {
             header,
-            justification: None
+            view_number,
+            view_change: view_change_proof,
         }
     }
 
@@ -56,6 +58,13 @@ impl<'env> BlockProducer<'env> {
                 signature,
                 view_change_proof: view_change_proof.map(|p| p.into_untrusted()),
             },
+        }
+    }
+
+    fn next_macro_extrinsics(&self, slashing_amount: u64) -> MacroExtrinsics {
+        MacroExtrinsics {
+            slot_allocation: self.blockchain.get_next_validator_list(),
+            slashing_amount,
         }
     }
 
@@ -93,14 +102,15 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    fn next_macro_header(&self, view_number: u32, timestamp: u64) -> MacroHeader {
+    pub fn next_macro_header(&self, view_number: u32, timestamp: u64, extrinsics: &MacroExtrinsics) -> MacroHeader {
         let block_number = self.blockchain.height() + 1;
         let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
 
         let parent_hash = self.blockchain.head_hash();
         let parent_macro_hash = self.blockchain.macro_head_hash();
+        let extrinsics_root = extrinsics.hash();
 
-        let slot_allocation = self.blockchain.get_next_validator_list();
+        let validators = self.blockchain.get_next_validator_set();
 
         let inherents = self.blockchain.finalized_last_epoch();
         // Rewards are distributed with delay.
@@ -112,13 +122,14 @@ impl<'env> BlockProducer<'env> {
 
         MacroHeader {
             version: Block::VERSION,
-            slot_allocation,
+            validators,
             block_number,
             view_number,
             parent_macro_hash,
             seed,
             parent_hash,
             state_root,
+            extrinsics_root,
             timestamp,
         }
     }

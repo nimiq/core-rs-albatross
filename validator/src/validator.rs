@@ -3,28 +3,28 @@ use std::time::Duration;
 
 use parking_lot::RwLock;
 
+use account::Receipt;
 use block_albatross::{
     Block,
     BlockType,
+    ForkProof,
     MacroBlock,
     MacroHeader,
     MicroBlock,
+    MicroExtrinsics,
     MicroHeader,
     MicroJustification,
-    MicroExtrinsics,
     PbftCommitMessage,
-    PbftProposal,
     PbftPrepareMessage,
+    PbftProposal,
     SignedPbftCommitMessage,
     SignedPbftPrepareMessage,
     SignedPbftProposal,
     SignedViewChange,
-    ForkProof,
     ValidatorSlots,
     ViewChange,
     ViewChangeProof,
 };
-use account::Receipt;
 use blockchain_albatross::Blockchain;
 use blockchain_base::{BlockchainEvent, AbstractBlockchain};
 use bls::bls12_381::{PublicKey, SecretKey};
@@ -39,8 +39,10 @@ use utils::key_store::{Error as KeyStoreError, KeyStore};
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
 
-use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
 use crate::error::Error;
+use crate::slash::ForkProofPool;
+use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
+use nimiq_block_production_albatross::BlockProducer;
 
 #[derive(Debug)]
 pub enum ViewInfo {
@@ -58,6 +60,7 @@ pub enum ValidatorStatus {
 
 pub struct Validator {
     blockchain: Arc<Blockchain<'static>>,
+    block_producer: BlockProducer<'static>,
     consensus: Arc<Consensus>,
     validator_network: Arc<ValidatorNetwork>,
     validator_key: SecretKey,
@@ -78,46 +81,52 @@ pub struct ValidatorState {
     current_view_number: u32,
     pk_idx: Option<u16>,
     status: ValidatorStatus,
+    fork_proof_pool: ForkProofPool,
 }
 
 impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
     pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {
-        let network_time = Arc::new(NetworkTime::new());
-        let blockchain = Arc::new(Blockchain::new(env, network_id, network_time.clone())?);
-        let consensus = Consensus::new(env, network_id, network_config, mempool_config)?;
-        let validator_network = ValidatorNetwork::new(Arc::clone(&consensus.network), /*Arc::clone(&consensus.blockchain)*/ unimplemented!());
-
-        // FIXME: May be improve KeyStore the use the same file for all keys?
-        let key_store = KeyStore::new("validator_key.db".to_string());
-        let validator_key = match key_store.load_key() {
-            Err(KeyStoreError::IoError(_)) => {
-                let secret_key = SecretKey::generate(&mut rand::thread_rng());
-                key_store.save_key(&secret_key)?;
-                Ok(secret_key)
-            },
-            res => res,
-        }?;
-
-        let this = Arc::new(Validator {
-            blockchain,
-            consensus,
-            validator_network,
-
-            validator_key,
-            timers: Timers::new(),
-
-            state: RwLock::new(ValidatorState {
-                current_view_number: 0,
-                pk_idx: None,
-                status: ValidatorStatus::None,
-            }),
-
-            self_weak: MutableOnce::new(Weak::new()),
-        });
-        Validator::init_listeners(&this);
-        Ok(this)
+        unimplemented!()
+//        let network_time = Arc::new(NetworkTime::new());
+//        let blockchain = Arc::new(Blockchain::new(env, network_id, network_time.clone())?);
+//        let consensus = Consensus::new(env, network_id, network_config, mempool_config)?;
+//        let validator_network = ValidatorNetwork::new(Arc::clone(&consensus.network), /*Arc::clone(&consensus.blockchain)*/ unimplemented!());
+//
+//        // FIXME: May be improve KeyStore the use the same file for all keys?
+//        let key_store = KeyStore::new("validator_key.db".to_string());
+//        let validator_key = match key_store.load_key() {
+//            Err(KeyStoreError::IoError(_)) => {
+//                let secret_key = SecretKey::generate(&mut rand::thread_rng());
+//                key_store.save_key(&secret_key)?;
+//                Ok(secret_key)
+//            },
+//            res => res,
+//        }?;
+//
+//        let block_producer = BlockProducer::new(blockchain.clone(), consensus.mempool.clone(), validator_key);
+//
+//        let this = Arc::new(Validator {
+//            blockchain,
+//            block_producer,
+//            consensus,
+//            validator_network,
+//
+//            validator_key,
+//            timers: Timers::new(),
+//
+//            state: RwLock::new(ValidatorState {
+//                current_view_number: 0,
+//                pk_idx: None,
+//                status: ValidatorStatus::None,
+//                fork_proof_pool: ForkProofPool::new(),
+//            }),
+//
+//            self_weak: MutableOnce::new(Weak::new()),
+//        });
+//        Validator::init_listeners(&this);
+//        Ok(this)
     }
 
     pub fn init_listeners(this: &Arc<Validator>) {
@@ -226,15 +235,22 @@ impl Validator {
     pub fn on_blockchain_extended(&self, hash: &Blake2bHash) {
 
         let block = self.blockchain.get_block(hash, false, false).unwrap_or_else(|| panic!("We got the block hash ({}) from an event from the blockchain itself", &hash));
-        let view_number = block.view_number();
 
         let mut state = self.state.write();
-        state.current_view_number = view_number;
+        state.current_view_number = 0;
+        state.fork_proof_pool.apply_block(&block);
     }
 
     // Sets the state according to the rebranch
     pub fn on_blockchain_rebranched(&self, old_chain: Vec<(Blake2bHash, Block)>, new_chain: Vec<(Blake2bHash, Block)>) {
-        unimplemented!();
+        let mut state = self.state.write();
+        for (hash, block) in old_chain.iter() {
+            state.fork_proof_pool.revert_block(block);
+        }
+        for (hash, block) in new_chain.iter() {
+            state.fork_proof_pool.apply_block(&block);
+        }
+        unimplemented!()
     }
 
     fn on_validator_network_event(&self, event: ValidatorNetworkEvent) {
@@ -262,7 +278,7 @@ impl Validator {
     }
 
     fn on_fork_proof(&self, fork_proof: ForkProof) {
-        // TODO: Handle fork proofs.
+        self.state.write().fork_proof_pool.insert(fork_proof);
     }
 
     pub fn on_slot_change(&self, view_info: ViewInfo) {
@@ -374,41 +390,11 @@ impl Validator {
     }
 
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {
-        // FIXME
-        let version = 1u16;
-
-        let validators = self.produce_validator_list();
-        let block_number = self.blockchain.height() + 1;
         let view_number = self.state.read().current_view_number;
-        // FIXME: use real function name from the blockchain
-        let parent_macro_hash = self.blockchain.macro_head_hash();
-
-        // FIXME: what should be the real seed?
-        let seed = self.validator_key.sign(&parent_macro_hash);
-        let parent_hash = self.blockchain.head_hash();
-        let state_root = self.get_state_root();
-        let extrinsics_root = Blake2bHash::default(); // FIXME
-
-        // FIXME: should we instead use the system time?
         let timestamp = self.consensus.network.network_time.now();
 
-        let pbft_proposal = PbftProposal {
-            header: MacroHeader {
-                version,
-                validators,
-                block_number,
-                view_number,
-                parent_macro_hash,
-                seed,
-                parent_hash,
-                state_root,
-                timestamp,
-                extrinsics_root,
-            },
-
-            view_number,
-            view_change,
-        };
+        // TODO: Slashing amount.
+        let pbft_proposal = self.block_producer.next_macro_block_proposal(view_number, timestamp, 0, view_change);
 
         let pk_idx = self.state.read().pk_idx.expect("Checked that we are an active validator before entering this function");
 
@@ -418,86 +404,18 @@ impl Validator {
     }
 
     fn produce_micro_block(&self, view_change_proof: Option<ViewChangeProof>) {
-        // FIXME: Define for albatross and move to the correct place (probably in the albatross block code)
-        const MAX_BLOCK_SIZE: usize = 100_000;
+        let max_size = MicroBlock::MAX_SIZE
+            - MicroHeader::SIZE
+            - MicroExtrinsics::get_metadata_size(0, 0);
 
-        // FIXME
-        let version = 1u16;
-
-        let block_number = self.blockchain.height() + 1;
-        let view_number = self.state.read().current_view_number;
-
-        let parent_hash = self.blockchain.head_hash();
-        let extrinsics_root = self.get_extrinsics_root();
-        let state_root = self.get_state_root();
-
-        // FIXME: what should be the real seed?
-        let seed = self.validator_key.sign(&parent_hash);
-        // FIXME: should we instead use the system time?
+        let state = self.state.read();
+        let fork_proofs = state.fork_proof_pool.get_fork_proofs_for_block(max_size);
+        let view_number = state.current_view_number;
         let timestamp = self.consensus.network.network_time.now();
 
-        let header = MicroHeader {
-            version,
-
-            block_number,
-            view_number,
-
-            parent_hash,
-            extrinsics_root,
-            state_root,
-
-            seed,
-            timestamp,
-        };
-
-        // FIXME: What should we sign here?
-        let signature = self.validator_key.sign_hash(self.blockchain.head_hash());
-
-        let justification = MicroJustification {
-            signature,
-            view_change_proof: view_change_proof.map(|p| p.into_untrusted()),
-        };
-
-        let fork_proofs = self.get_slash_inherents();
-        let extra_data = Vec::new();
-        let transactions = self.consensus.mempool.get_transactions_for_block(MAX_BLOCK_SIZE);
-        let receipts = self.get_receipts();
-
-        let extrinsics = Some(MicroExtrinsics {
-            fork_proofs,
-
-            extra_data,
-            transactions,
-            receipts,
-        });
-
-        let block = MicroBlock {
-            header,
-            justification,
-            extrinsics,
-        };
+        let block = self.block_producer.next_micro_block(fork_proofs, view_number, timestamp, vec![], view_change_proof);
 
         self.blockchain.push(Block::Micro(block));
-    }
-
-    fn produce_validator_list(&self,) -> Vec<ValidatorSlots> {
-        unimplemented!();
-    }
-
-    fn get_state_root(&self) -> Blake2bHash {
-        unimplemented!();
-    }
-
-    fn get_extrinsics_root(&self) -> Blake2bHash {
-        unimplemented!();
-    }
-
-    fn get_slash_inherents(&self) -> Vec<ForkProof> {
-        unimplemented!();
-    }
-
-    fn get_receipts(&self) -> Vec<Receipt> {
-        unimplemented!();
     }
 
     fn are_we_potential_validator(&self) -> bool {

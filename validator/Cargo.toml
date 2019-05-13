@@ -28,6 +28,7 @@ nimiq-messages = { path = "../messages" }
 nimiq-hash = { path = "../hash" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
+nimiq-block-production-albatross = { path = "../block-production-albatross" }
 nimiq-blockchain-base = { path = "../blockchain-base" }
 
 failure = "0.1"

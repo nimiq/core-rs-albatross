@@ -22,3 +22,4 @@ pub mod validator;
 pub mod validator_network;
 pub mod validator_agent;
 pub mod error;
+pub mod slash;

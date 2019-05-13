@@ -78,6 +78,12 @@ impl SerializeContent for MacroHeader {
 
 impl Hash for MacroHeader { }
 
+impl SerializeContent for MacroExtrinsics {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+}
+
+impl Hash for MacroExtrinsics { }
+
 impl fmt::Display for MacroBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "[#{}, view {}, type Macro]",

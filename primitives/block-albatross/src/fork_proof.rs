@@ -1,9 +1,10 @@
 use beserial::{Deserialize, Serialize};
-use nimiq_bls::bls12_381::{Signature, PublicKey};
+use hash::{Blake2bHash, Hash, HashOutput};
+use nimiq_bls::bls12_381::{PublicKey, Signature};
+
 use crate::MicroHeader;
 
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ForkProof {
     pub header1: MicroHeader,
     pub header2: MicroHeader,
@@ -28,5 +29,37 @@ impl ForkProof {
     pub fn verify(&self, public_key: &PublicKey) -> bool {
         public_key.verify(&self.header1, &self.justification1)
             && public_key.verify(&self.header2, &self.justification2)
+    }
+}
+
+impl PartialEq for ForkProof {
+    fn eq(&self, other: &ForkProof) -> bool {
+        // Equality is invariant to ordering.
+        if self.header1 == other.header1 {
+            return self.header2 == other.header2
+                && self.justification1 == other.justification1
+                && self.justification2 == other.justification2;
+        }
+
+        if self.header1 == other.header2 {
+            return self.header2 == other.header1
+                && self.justification1 == other.justification2
+                && self.justification2 == other.justification1;
+        }
+
+        false
+    }
+}
+
+impl Eq for ForkProof {}
+
+impl std::hash::Hash for ForkProof {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // We need to sort the hashes, so that it is invariant to the internal ordering.
+        let mut hashes: Vec<Blake2bHash> = vec![self.header1.hash(), self.header2.hash()];
+        hashes.sort();
+
+        std::hash::Hash::hash(hashes[0].as_bytes(), state);
+        std::hash::Hash::hash(hashes[1].as_bytes(), state);
     }
 }
