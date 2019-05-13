@@ -189,6 +189,11 @@ impl StakingContract {
         }
     }
 
+    pub fn get_balance(&self, staker_address: &Address) -> Coin {
+        self.inactive_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO) +
+            self.active_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO)
+    }
+
     /// Reverts a stake transaction.
     fn revert_stake(&mut self, staker_address: &Address, value: Coin, receipt: Option<ActiveStakeReceipt>) -> Result<(), AccountError> {
         self.balance = Account::balance_sub(self.balance, value)?;

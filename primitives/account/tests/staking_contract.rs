@@ -34,6 +34,8 @@ fn it_can_de_serialize_a_staking_contract() {
     let bytes_2: Vec<u8> = hex::decode(CONTRACT_2).unwrap();
     let contract_2: StakingContract = Deserialize::deserialize(&mut &bytes_2[..]).unwrap();
     assert_eq!(contract_2.balance, 600_000_000.try_into().unwrap());
+    assert_eq!(contract_2.get_balance(&Address::from([2u8; 20])), Coin::from_u64_unchecked(450_000_000u64));
+    assert_eq!(contract_2.get_balance(&Address::from([0x5eu8; 20])), Coin::from_u64_unchecked(150_000_000u64));
     assert_eq!(contract_2.active_stake_by_address.len(), 2);
     assert_eq!(contract_2.active_stake_sorted.len(), 2);
     assert_eq!(contract_2.inactive_stake_by_address.len(), 0);
@@ -109,6 +111,7 @@ fn it_can_apply_staking_transaction() {
     assert_eq!(contract.check_incoming_transaction(&tx_1, 2), Ok(()));
     assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
     assert_eq!(contract.active_stake_by_address.len(), 1);
+    assert_eq!(contract.get_balance(&Address::from([2u8; 20])), Coin::from_u64_unchecked(150_000_000u64));
     assert_eq!(contract.balance, 150_000_000.try_into().unwrap());
 
     // Same stake again
@@ -117,6 +120,7 @@ fn it_can_apply_staking_transaction() {
     assert_eq!(contract.check_incoming_transaction(&tx_2, 3), Ok(()));
     let receipt_2 = contract.commit_incoming_transaction(&tx_2, 3).unwrap().unwrap();
     assert_eq!(contract.active_stake_by_address.len(), 1);
+    assert_eq!(contract.get_balance(&Address::from([2u8; 20])), Coin::from_u64_unchecked(300_000_000u64));
     assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
 
     // Stake again, changing validator key
@@ -131,6 +135,7 @@ fn it_can_apply_staking_transaction() {
     assert_eq!(contract.check_incoming_transaction(&tx_3, 4), Ok(()));
     let receipt_3 = contract.commit_incoming_transaction(&tx_3, 4).unwrap().unwrap();
     assert_eq!(contract.active_stake_by_address.len(), 1);
+    assert_eq!(contract.get_balance(&Address::from([2u8; 20])), Coin::from_u64_unchecked(450_000_000u64));
     assert_eq!(contract.balance, 450_000_000.try_into().unwrap());
 
     // Stake on new account with reward address
@@ -142,6 +147,8 @@ fn it_can_apply_staking_transaction() {
     assert_eq!(contract.check_incoming_transaction(&tx_4, 5), Ok(()));
     assert_eq!(contract.commit_incoming_transaction(&tx_4, 5), Ok(None));
     assert_eq!(contract.active_stake_by_address.len(), 2);
+    assert_eq!(contract.get_balance(&Address::from([2u8; 20])), Coin::from_u64_unchecked(450_000_000u64));
+    assert_eq!(contract.get_balance(&Address::from([94u8; 20])), Coin::from_u64_unchecked(150_000_000u64));
     assert_eq!(contract.balance, 600_000_000.try_into().unwrap());
 
     // Revert everything
@@ -203,7 +210,7 @@ fn it_can_apply_retiring_transaction() {
     // Retire first half of stake
     let mut tx_1 = make_outgoing_transaction();
     tx_1.recipient = tx_1.sender.clone();
-    tx_1.proof = SignatureProof::from(key_pair.public, key_pair.sign(&tx_1.serialize_content())).serialize_to_vec();
+    tx_1.proof = SignatureProof::from(key_pair.public.clone(), key_pair.sign(&tx_1.serialize_content())).serialize_to_vec();
     assert_eq!(contract.check_outgoing_transaction(&tx_1, 2), Ok(()));
     assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2), Ok(None));
     assert_eq!(contract.check_incoming_transaction(&tx_1, 2), Ok(()));
@@ -212,6 +219,7 @@ fn it_can_apply_retiring_transaction() {
     assert_eq!(contract.active_stake_by_address.len(), 1);
     assert_eq!(contract.active_stake_sorted.len(), 1);
     assert_eq!(contract.inactive_stake_by_address.len(), 1);
+    assert_eq!(contract.get_balance(&Address::from(&key_pair.public)), 299_999_766.try_into().unwrap());
     assert_eq!(contract.balance, 299_999_766.try_into().unwrap());
 
     // Try to retire too much stake
@@ -243,6 +251,7 @@ fn it_can_apply_retiring_transaction() {
     assert_eq!(contract.active_stake_by_address.len(), 0);
     assert_eq!(contract.active_stake_sorted.len(), 0);
     assert_eq!(contract.inactive_stake_by_address.len(), 1);
+    assert_eq!(contract.get_balance(&Address::from(&key_pair.public)), 299_999_298.try_into().unwrap());
     assert_eq!(contract.balance, 299_999_298.try_into().unwrap());
 
     // Try to retire nonexistent funds
@@ -261,6 +270,7 @@ fn it_can_apply_retiring_transaction() {
     assert_eq!(contract.active_stake_sorted.len(), 1);
     assert_eq!(contract.inactive_stake_by_address.len(), 0);
     assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
+    assert_eq!(contract.get_balance(&Address::from(&key_pair.public)), 300_000_000.try_into().unwrap());
 }
 
 #[test]
@@ -297,11 +307,16 @@ fn it_can_apply_unstaking_transaction() {
         tx
     };
 
+    let assert_balance = |contract: &StakingContract, value: u64| {
+        assert_eq!(contract.get_balance(&Address::from(&key_pair.public)), value.try_into().unwrap());
+        assert_eq!(contract.balance, Coin::from_u64_unchecked(value));
+    };
+
     // Block 2: Retire first half of stake
     let tx_1 = make_retire(150_000_000 - 234);
     assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2), Ok(None));
     assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
-    assert_eq!(contract.balance, 299_999_766.try_into().unwrap());
+    assert_balance(&contract, 299_999_766);
 
     // Try to unstake too much
     let tx_2 = make_unstake(999_999_999);
@@ -316,13 +331,13 @@ fn it_can_apply_unstaking_transaction() {
     let tx_3 = make_unstake(75_000_000 - 234);
     assert_eq!(contract.check_outgoing_transaction(&tx_3, 40003), Ok(()));
     assert_eq!(contract.commit_outgoing_transaction(&tx_3, 40003), Ok(None));
-    assert_eq!(contract.balance, 225_000_000.try_into().unwrap());
+    assert_balance(&contract, 225_000_000);
 
     // Block 40004: Unstake another quarter
     let tx_4 = tx_3.clone();
     assert_eq!(contract.check_outgoing_transaction(&tx_4, 40004), Ok(()));
     let receipt_4 = contract.commit_outgoing_transaction(&tx_4, 40004).unwrap().unwrap();
-    assert_eq!(contract.balance, 150_000_234.try_into().unwrap());
+    assert_balance(&contract, 150_000_234);
 
     // Revert block 40004
     assert_eq!(contract.revert_outgoing_transaction(&tx_4, 40004, Some(&receipt_4)), Ok(()));
@@ -366,7 +381,7 @@ fn it_can_apply_unstaking_transaction() {
     assert_eq!(contract.active_stake_by_address.len(), 1);
     assert_eq!(contract.active_stake_sorted.len(), 1);
     assert_eq!(contract.inactive_stake_by_address.len(), 0);
-    assert_eq!(contract.balance, 300_000_000.try_into().unwrap());
+    assert_balance(&contract, 300_000_000);
 }
 
 fn bls_key_pair() -> BlsKeyPair {
@@ -427,11 +442,16 @@ fn it_can_apply_slash_inherent() {
         data: Vec::new(),
     };
 
+    let assert_balance = |contract: &StakingContract, value: u64| {
+        assert_eq!(contract.get_balance(&Address::from(&key_pair.public)), value.try_into().unwrap());
+        assert_eq!(contract.balance, Coin::from_u64_unchecked(value));
+    };
+
     // Slash part of active stake
     let slash_1 = make_slash(150_000_000);
     assert_eq!(contract.check_inherent(&slash_1), Ok(()));
     assert_eq!(contract.commit_inherent(&slash_1), Ok(None));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(150_000_000u64));
+    assert_balance(&contract, 150_000_000);
 
     // Slash too much (active)
     let mut tmp_contract = contract.clone();
@@ -443,7 +463,7 @@ fn it_can_apply_slash_inherent() {
     let slash_2 = slash_1.clone();
     assert_eq!(contract.check_inherent(&slash_2), Ok(()));
     let receipt_2 = contract.commit_inherent(&slash_2).unwrap().unwrap();
-    assert_eq!(contract.balance, Coin::ZERO);
+    assert_balance(&contract, 0);
     // Also check serialized form
     assert_eq!(hex::encode(&receipt_2), "01a8086fc5b40e74d396f0cf4373196fe0c2fe8fcbef2c8a628c5c1df83226f6780b9662488462dd198ea284734a61f67c0fee126ed2fc2714d0165a7ff66c67bc9daaea6b3544711163089b2dbc7caa05037a63f8a2a63eb96fcba0bfbc449052010303030303030303030303030303030303030303000000000000000000");
 
@@ -454,9 +474,9 @@ fn it_can_apply_slash_inherent() {
 
     // Revert to nothing slashed
     assert_eq!(contract.revert_inherent(&slash_2, Some(&receipt_2)), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(150_000_000u64));
+    assert_balance(&contract, 150_000_000);
     assert_eq!(contract.revert_inherent(&slash_1, None), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+    assert_balance(&contract, 300_000_000);
 
     // Retire stake (make inactive)
     let mut retire = Transaction::new_basic(
@@ -474,7 +494,7 @@ fn it_can_apply_slash_inherent() {
     retire.recipient_type = AccountType::Staking;
     assert_eq!(contract.commit_outgoing_transaction(&retire, 2), Ok(None));
     assert_eq!(contract.commit_incoming_transaction(&retire, 2), Ok(None));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+    assert_balance(&contract, 300_000_000);
 
     // Slash too much (inactive + active)
     let mut tmp_contract = contract.clone();
@@ -485,13 +505,13 @@ fn it_can_apply_slash_inherent() {
     let slash_3 = make_slash(200_000_000u64);
     assert_eq!(contract.check_inherent(&slash_3), Ok(()));
     let receipt_3 = contract.commit_inherent(&slash_3).unwrap().unwrap();
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(100_000_000u64));
+    assert_balance(&contract, 100_000_000);
 
     // Slash part of inactive stake
     let slash_4 = make_slash(50_000_000u64);
     assert_eq!(contract.check_inherent(&slash_4), Ok(()));
     assert_eq!(contract.commit_inherent(&slash_4), Ok(None));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(50_000_000u64));
+    assert_balance(&contract, 50_000_000);
     
     // Slash too much (active)
     let mut tmp_contract = contract.clone();
@@ -502,28 +522,28 @@ fn it_can_apply_slash_inherent() {
     let slash_5 = make_slash(50_000_000u64);
     assert_eq!(contract.check_inherent(&slash_5), Ok(()));
     let receipt_5 = contract.commit_inherent(&slash_5).unwrap().unwrap();
-    assert_eq!(contract.balance, Coin::ZERO);
+    assert_balance(&contract, 0);
 
     // Revert to mixed state
     assert_eq!(contract.revert_inherent(&slash_5, Some(&receipt_5)), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(50_000_000u64));
+    assert_balance(&contract, 50_000_000);
     assert_eq!(contract.revert_inherent(&slash_4, None), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(100_000_000u64));
+    assert_balance(&contract, 100_000_000);
     assert_eq!(contract.revert_inherent(&slash_3, Some(&receipt_3)), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+    assert_balance(&contract, 300_000_000);
 
     // Slash entire mixed stake (inactive + active)
     let slash_6 = make_slash(300_000_000u64);
     assert_eq!(contract.check_inherent(&slash_6), Ok(()));
     let receipt_6 = contract.commit_inherent(&slash_6).unwrap().unwrap();
-    assert_eq!(contract.balance, Coin::ZERO);
+    assert_balance(&contract, 0);
 
     // Revert everything
     assert_eq!(contract.revert_inherent(&slash_6, Some(&receipt_6)), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+    assert_balance(&contract, 300_000_000);
     assert_eq!(contract.revert_incoming_transaction(&retire, 2, None), Ok(()));
     assert_eq!(contract.revert_outgoing_transaction(&retire, 2, None), Ok(()));
-    assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000u64));
+    assert_balance(&contract, 300_000_000);
 }
 
 #[test]
