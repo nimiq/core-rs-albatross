@@ -11,7 +11,7 @@ use std::collections::btree_map::BTreeMap;
 use block_albatross::{
     ViewChange, SignedViewChange, ViewChangeProof,
     SignedPbftPrepareMessage, SignedPbftCommitMessage, PbftProof,
-    SignedPbftProposal, PbftProposal
+    SignedPbftProposal, PbftProposal, ForkProof
 };
 use blockchain_albatross::blockchain::Blockchain;
 use bls::bls12_381::PublicKey;
@@ -30,6 +30,9 @@ pub enum ValidatorNetworkError {
 }
 
 pub enum ValidatorNetworkEvent {
+    /// When a fork proof was given
+    ForkProof(ForkProof),
+
     /// When a valid view change was completed
     ViewChangeComplete(ViewChange),
 
@@ -123,6 +126,9 @@ impl ValidatorNetwork {
                     ValidatorAgentEvent::ValidatorInfo(info) => {
                         this.on_validator_info(info);
                     },
+                    ValidatorAgentEvent::ForkProof(fork_proof) => {
+                        this.on_fork_proof(fork_proof);
+                    }
                     ValidatorAgentEvent::ViewChange { view_change, public_key, slots } => {
                         this.commit_view_change(view_change, &public_key, slots)
                             .unwrap_or_else(|e| warn!("Failed to commit view change: {}", e));
@@ -189,6 +195,15 @@ impl ValidatorNetwork {
         else {
             debug!("ValidatorInfo for unknown peer: {:?}", info);
         }
+    }
+
+    fn on_fork_proof(&self, fork_proof: ForkProof) {
+        self.notifier.read().notify(ValidatorNetworkEvent::ForkProof(fork_proof.clone()));
+        self.broadcast_fork_proof(fork_proof);
+    }
+
+    fn broadcast_fork_proof(&self, fork_proof: ForkProof) {
+        self.broadcast_active(Message::ForkProof(Box::new(fork_proof)));
     }
 
     /// Called when we reach finality - i.e. when a macro block was produced

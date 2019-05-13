@@ -3,7 +3,7 @@ use std::fmt;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use block_base;
-use hash::{Blake2bHash, Hash};
+use hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_bls::bls12_381::Signature;
 use primitives::networks::NetworkId;
 use transaction::Transaction;
@@ -161,7 +161,7 @@ impl fmt::Display for Block {
 }
 
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, SerializeContent)]
 pub enum BlockHeader {
     Micro(MicroHeader),
     Macro(MacroHeader),
@@ -182,6 +182,13 @@ impl BlockHeader {
         }
     }
 
+    pub fn view_number(&self) -> u32 {
+        match self {
+            BlockHeader::Macro(ref header) => header.view_number,
+            BlockHeader::Micro(ref header) => header.view_number
+        }
+    }
+
     pub fn hash(&self) -> Blake2bHash {
         match self {
             BlockHeader::Macro(ref header) => header.hash(),
@@ -189,6 +196,8 @@ impl BlockHeader {
         }
     }
 }
+
+impl Hash for BlockHeader {}
 
 impl block_base::BlockHeader for BlockHeader {
     fn hash(&self) -> Blake2bHash {

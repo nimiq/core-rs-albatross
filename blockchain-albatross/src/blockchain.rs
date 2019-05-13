@@ -118,7 +118,7 @@ impl<'env> Blockchain<'env> {
 
     pub fn is_in_current_epoch(&self, block_number: u32) -> bool { unimplemented!() }
 
-    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, Slot)> { unimplemented!() }
+    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, &Slot)> { unimplemented!() }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
         self.state.read()

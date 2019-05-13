@@ -4,7 +4,7 @@ use std::io;
 use account::Receipt;
 use beserial::{Deserialize, Serialize};
 use crate::BlockError;
-use crate::slash::SlashInherent;
+use crate::fork_proof::ForkProof;
 use crate::view_change::{ViewChange, ViewChangeProof};
 use hash::{Hash, Blake2bHash, SerializeContent};
 use primitives::networks::NetworkId;
@@ -45,7 +45,7 @@ pub struct MicroJustification {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroExtrinsics {
     #[beserial(len_type(u16))]
-    pub slash_inherents: Vec<SlashInherent>,
+    pub fork_proofs: Vec<ForkProof>,
 
     #[beserial(len_type(u8))]
     pub extra_data: Vec<u8>,

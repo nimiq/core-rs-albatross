@@ -7,6 +7,8 @@ extern crate beserial_derive;
 extern crate bitflags;
 #[macro_use]
 extern crate enum_display_derive;
+#[macro_use]
+extern crate log;
 extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
@@ -33,7 +35,7 @@ use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, Seri
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
 use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, SignedPbftCommitMessage,
-                      SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange, SlashInherent};
+                      SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange, ForkProof};
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
@@ -94,7 +96,7 @@ pub enum MessageType {
     BlockAlbatross = 100,
     HeaderAlbatross = 101,
     ViewChange = 105,
-    SlashInherent = 106,
+    ForkProof = 106,
     ValidatorQuery = 110,
     ValidatorInfo = 111,
     PbftProposal = 120,
@@ -147,8 +149,8 @@ pub enum Message {
     HeaderAlbatross(Box<BlockHeaderAlbatross>),
     ValidatorQuery(Box<ValidatorQueryMessage>),
     ValidatorInfo(Vec<SignedValidatorInfo>),
+    ForkProof(Box<ForkProof>),
     ViewChange(Box<SignedViewChange>),
-    SlashInherent(Box<SlashInherent>),
     PbftProposal(Box<SignedPbftProposal>),
     PbftPrepare(Box<SignedPbftPrepareMessage>),
     PbftCommit(Box<SignedPbftCommitMessage>),
@@ -193,9 +195,9 @@ impl Message {
             Message::BlockAlbatross(_) => MessageType::BlockAlbatross,
             Message::HeaderAlbatross(_) => MessageType::HeaderAlbatross,
             Message::ValidatorQuery(_) => MessageType::ValidatorQuery,
-            Message::ValidatorInfo(_) => MessageType::ValidatorInfo,
             Message::ViewChange(_) => MessageType::ViewChange,
-            Message::SlashInherent(_) => MessageType::SlashInherent,
+            Message::ValidatorInfo(_) => MessageType::ValidatorInfo,
+            Message::ForkProof(_) => MessageType::ForkProof,
             Message::PbftProposal(_) => MessageType::PbftProposal,
             Message::PbftPrepare(_) => MessageType::PbftPrepare,
             Message::PbftCommit(_) => MessageType::PbftCommit,
@@ -299,8 +301,8 @@ impl Deserialize for Message {
             MessageType::HeaderAlbatross => Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::ValidatorQuery => Message::ValidatorQuery(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::ValidatorInfo => Message::ValidatorInfo(DeserializeWithLength::deserialize::<u8, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
+            MessageType::ForkProof => Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::ViewChange => Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::SlashInherent => Message::SlashInherent(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftProposal => Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftPrepare => Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftCommit => Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
@@ -367,9 +369,9 @@ impl Serialize for Message {
             Message::BlockAlbatross(block) => block.serialize(&mut v)?,
             Message::HeaderAlbatross(header) => header.serialize(&mut v)?,
             Message::ValidatorQuery(validator_query) => validator_query.serialize(&mut v)?,
-            Message::ValidatorInfo(validator_infos) => validator_infos.serialize::<u8, Vec<u8>>(&mut v)?,
             Message::ViewChange(view_change_message) => view_change_message.serialize(&mut v)?,
-            Message::SlashInherent(slash_message) => slash_message.serialize(&mut v)?,
+            Message::ValidatorInfo(validator_infos) => validator_infos.serialize::<u8, Vec<u8>>(&mut v)?,
+            Message::ForkProof(fork_proof) => fork_proof.serialize(&mut v)?,
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
             Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
@@ -426,8 +428,8 @@ impl Serialize for Message {
             Message::HeaderAlbatross(header) => header.serialized_size(),
             Message::ValidatorQuery(validator_query) => validator_query.serialized_size(),
             Message::ValidatorInfo(validator_info) => validator_info.serialized_size::<u8>(),
+            Message::ForkProof(fork_proof) => fork_proof.serialized_size(),
             Message::ViewChange(view_change_message) => view_change_message.serialized_size(),
-            Message::SlashInherent(slash_message) => slash_message.serialized_size(),
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialized_size(),
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialized_size(),
             Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
@@ -470,10 +472,10 @@ pub struct MessageNotifier {
     pub get_head: RwLock<PassThroughNotifier<'static, ()>>,
     pub head: RwLock<PassThroughNotifier<'static, BlockHeader>>,
     // Albatross
-    // TODO
     pub block_albatross: RwLock<PassThroughNotifier<'static, BlockAlbatross>>,
     pub header_albatross: RwLock<PassThroughNotifier<'static, BlockHeaderAlbatross>>,
     pub validator_info: RwLock<PassThroughNotifier<'static, Vec<SignedValidatorInfo>>>,
+    pub fork_proof: RwLock<PassThroughNotifier<'static, ForkProof>>,
     pub view_change: RwLock<PassThroughNotifier<'static, SignedViewChange>>,
     pub pbft_proposal:  RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
     pub pbft_prepare: RwLock<PassThroughNotifier<'static, SignedPbftPrepareMessage>>,
@@ -516,10 +518,10 @@ impl MessageNotifier {
             get_head: RwLock::new(PassThroughNotifier::new()),
             head: RwLock::new(PassThroughNotifier::new()),
             // Albatross
-            // TODO
             block_albatross: RwLock::new(PassThroughNotifier::new()),
             header_albatross: RwLock::new(PassThroughNotifier::new()),
             validator_info: RwLock::new(PassThroughNotifier::new()),
+            fork_proof: RwLock::new(PassThroughNotifier::new()),
             view_change: RwLock::new(PassThroughNotifier::new()),
             pbft_proposal: RwLock::new(PassThroughNotifier::new()),
             pbft_prepare: RwLock::new(PassThroughNotifier::new()),
@@ -562,15 +564,17 @@ impl MessageNotifier {
             Message::GetHead => self.get_head.read().notify(()),
             Message::Head(header) => self.head.read().notify(*header),
             // Albatross
-            // TODO
             Message::BlockAlbatross(block) => self.block_albatross.read().notify(*block),
             Message::HeaderAlbatross(header) => self.header_albatross.read().notify(*header),
             Message::ValidatorInfo(validator_info) => self.validator_info.read().notify(validator_info),
             Message::ViewChange(view_change) => self.view_change.read().notify(*view_change),
+            Message::ForkProof(fork_proof) => self.fork_proof.read().notify(*fork_proof),
             Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
             Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
             Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
-            _ => panic!("Notify not implemented for: {}", msg.ty()),
+
+            // catch unimplemented
+            _ => info!("Received message for unimplemented type: {}", msg.ty())
         }
     }
 }

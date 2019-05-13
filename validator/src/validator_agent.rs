@@ -5,13 +5,14 @@ use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      SignedPbftProposal, ViewChange, Block, MacroBlock};
+                      SignedPbftProposal, ViewChange, Block, MacroBlock, ForkProof};
 use primitives::policy::TWO_THIRD_VALIDATORS;
 use blockchain_albatross::blockchain::Blockchain;
 
 
 pub enum ValidatorAgentEvent {
     ValidatorInfo(SignedValidatorInfo),
+    ForkProof(ForkProof),
     ViewChange { view_change: SignedViewChange, public_key: PublicKey, slots: u16 },
     PbftProposal(SignedPbftProposal),
     PbftPrepare { prepare: SignedPbftPrepareMessage, public_key: PublicKey, slots: u16 },
@@ -45,6 +46,10 @@ impl ValidatorAgent {
             .register(weak_passthru_listener(Arc::downgrade(this), |this, signed_infos: Vec<SignedValidatorInfo>| {
                 this.read().on_validator_infos(signed_infos);
             }));
+        this.read().peer.channel.msg_notifier.fork_proof.write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, fork_proof| {
+                this.read().on_fork_proof_message(fork_proof);
+            }));
         this.read().peer.channel.msg_notifier.view_change.write()
             .register(weak_passthru_listener( Arc::downgrade(this), |this, signed_view_change| {
                 this.read().on_view_change_message(signed_view_change);
@@ -63,6 +68,7 @@ impl ValidatorAgent {
             }));
     }
 
+    /// When a list of validator infos is received, verify the signatures and notify
     fn on_validator_infos(&self, signed_infos: Vec<SignedValidatorInfo>) {
         debug!("[VALIDATOR-INFO] contains {} validator infos", signed_infos.len());
         for signed_info in signed_infos {
@@ -74,6 +80,31 @@ impl ValidatorAgent {
                 continue;
             }
             self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(signed_info));
+        }
+    }
+
+    /// When a fork proof message is received
+    fn on_fork_proof_message(&self, fork_proof: ForkProof) {
+        debug!("[FORK-PROOF] Fork proof:");
+
+        if let Some((block_number, view_number)) = fork_proof.pre_verify() {
+            debug!("[FORK-PROOF] Header 1: {:?}", fork_proof.header1);
+            debug!("[FORK_PROOF] Header 2: {:?}", fork_proof.header2);
+
+            if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number) {
+                if fork_proof.verify(&slot.public_key) {
+                    self.notifier.read().notify(ValidatorAgentEvent::ForkProof(fork_proof))
+                }
+                else {
+                    debug!("[FORK-PROOF] Invalid signature in fork proof");
+                }
+            }
+            else {
+                debug!("[FORK-PROOF] Unknown block producer: block_number={}, view_number={}", block_number, view_number);
+            }
+        }
+        else {
+            debug!("[FORK-PROOF] pre-verify failed:");
         }
     }
 
