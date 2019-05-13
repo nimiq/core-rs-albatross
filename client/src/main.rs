@@ -271,7 +271,8 @@ fn run() -> Result<(), Error> {
                 allowip: (), // TODO
                 corsdomain: rpc_settings.corsdomain
             })?);*/
-            unimplemented!()
+            //unimplemented!();
+            warn!("No RPC server right now");
         }
     }
     // If the RPC server is enabled, but the client is not compiled with it, inform the user
@@ -289,7 +290,8 @@ fn run() -> Result<(), Error> {
             let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);
             info!("Starting metrics server listening on port {}", port);
             //other_futures.push(metrics_server(Arc::clone(&consensus), bind, port, metrics_settings.password)?);
-            unimplemented!()
+            //unimplemented!();
+            warn!("No RPC server right now");
         }
     }
     // If the metrics server is enabled, but the client is not compiled with it, inform the user
