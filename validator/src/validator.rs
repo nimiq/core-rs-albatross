@@ -28,7 +28,7 @@ use block_albatross::{
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
 use bls::bls12_381::{PublicKey, SecretKey};
-use consensus::{Consensus, ConsensusEvent};
+use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use database::Environment;
 use hash::{Blake2bHash, SerializeContent};
 use mempool::MempoolConfig;
@@ -38,6 +38,8 @@ use network_primitives::time::NetworkTime;
 use utils::key_store::{Error as KeyStoreError, KeyStore};
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
+// use utils::observer::Notifier;
+// use utils::timers::Timers;
 
 use crate::error::Error;
 use crate::slash::ForkProofPool;
@@ -61,8 +63,8 @@ pub enum ValidatorStatus {
 pub struct Validator {
     blockchain: Arc<Blockchain<'static>>,
     block_producer: BlockProducer<'static>,
-    consensus: Arc<Consensus>,
-    //validator_network: Arc<ValidatorNetwork>,
+    consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
+    validator_network: Arc<ValidatorNetwork>,
     validator_key: SecretKey,
 
     timers: Timers<ValidatorTimer>,
@@ -145,7 +147,7 @@ impl Validator {
 
         // Set up event handlers for blockchain events
         let weak = Arc::downgrade(this);
-        this.blockchain.register_listener(move |e: &BlockchainEvent<Block>| {
+        this.blockchain.notifier.write().register(move |e: &BlockchainEvent<Block>| {
             let this = upgrade_weak!(weak);
             this.on_blockchain_event(e);
         });

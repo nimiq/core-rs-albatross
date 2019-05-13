@@ -8,16 +8,14 @@ use failure::Fail;
 use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use parking_lot::MutexGuard;
 
-use account::{AccountError, Inherent, InherentType};
-use account::Account;
+use account::{Account, AccountError, Inherent, InherentType};
 use accounts::Accounts;
 use block::{Block, BlockError, BlockHeader, BlockType, MacroBlock, MicroBlock, ValidatorSlots};
 use block::ForkProof;
 use block::ViewChange;
-use blockchain_base::AbstractBlockchain;
-use blockchain_base::Direction;
+use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 use bls::bls12_381::{PublicKey, Signature};
-use database::{Environment, ReadTransaction, WriteTransaction};
+use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use fixed_unsigned::RoundHalfUp;
 use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
 use hash::{Blake2bHash, Hash};
@@ -29,6 +27,7 @@ use primitives::policy;
 use primitives::slot::Slot;
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
+use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
@@ -65,19 +64,6 @@ impl<'env> BlockchainState<'env> {
     pub fn transaction_cache(&self) -> &TransactionCache {
         &self.transaction_cache
     }
-}
-
-
-#[derive(Debug, Fail, Clone, PartialEq, Eq)]
-pub enum BlockchainError {
-    #[fail(display = "Invalid genesis block stored. Are you on the right network?")]
-    InvalidGenesisBlock,
-    #[fail(display = "Failed to load the main chain. Reset your consensus database.")]
-    FailedLoadingMainChain,
-    #[fail(display = "Inconsistent chain/accounts state. Reset your consensus database.")]
-    InconsistentState,
-    #[fail(display = "No network for: {:?}", _0)]
-    NoNetwork(NetworkId),
 }
 
 impl<'env> Blockchain<'env> {
@@ -690,6 +676,10 @@ impl<'env> Blockchain<'env> {
 impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     type Block = Block;
 
+    fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+        unimplemented!()
+    }
+
     fn network_id(&self) -> NetworkId {
         unimplemented!()
     }
@@ -755,6 +745,14 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     }
 
     fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool {
+        unimplemented!()
+    }
+
+    fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash> {
+        unimplemented!()
+    }
+
+    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk> {
         unimplemented!()
     }
 }

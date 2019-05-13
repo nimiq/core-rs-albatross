@@ -1,6 +1,6 @@
 use failure::Fail;
 
-use blockchain_albatross::blockchain::BlockchainError as AlbatrossBlockchainError;
+use blockchain_base::BlockchainError;
 use consensus::Error as ConsensusError;
 use utils::key_store::Error as KeyStoreError;
 
@@ -8,7 +8,7 @@ use utils::key_store::Error as KeyStoreError;
 #[derive(Fail, Debug)]
 pub enum Error {
     #[fail(display = "{}", _0)]
-    AlbatrossBlockchainError(#[cause] AlbatrossBlockchainError),
+    BlockchainError(#[cause] BlockchainError),
     #[fail(display = "{}", _0)]
     ConsensusError(#[cause] ConsensusError),
     #[fail(display = "{}", _0)]
@@ -27,9 +27,8 @@ impl From<KeyStoreError> for Error {
     }
 }
 
-
-impl From<AlbatrossBlockchainError> for Error {
-    fn from(e: AlbatrossBlockchainError) -> Self {
-        Error::AlbatrossBlockchainError(e)
+impl From<BlockchainError> for Error {
+    fn from(e: BlockchainError) -> Self {
+        Error::BlockchainError(e)
     }
 }

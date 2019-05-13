@@ -10,23 +10,31 @@ extern crate nimiq_utils as utils;
 
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::sync::Arc;
 
+use failure::Fail;
 use parking_lot::MutexGuard;
 
 use account::{Account, AccountError};
 use block_base::Block;
 use database::{ReadTransaction, Transaction};
+use database::Environment;
 use hash::Blake2bHash;
 use keys::Address;
+use nimiq_network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle};
 
-pub trait AbstractBlockchain<'l>: Sized + Send + Sync {
+pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
     type Block: Block;
     //type VerifyResult;
+
+    // XXX This signature is most likely too restrictive to accommodate all blockchain types.
+    fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError>;
+
 
     /// Returns the network ID
     fn network_id(&self) -> NetworkId;
@@ -77,7 +85,7 @@ pub trait AbstractBlockchain<'l>: Sized + Send + Sync {
 
     /* Required by Mempool */
 
-    fn register_listener<T: Listener<BlockchainEvent<Self::Block>> + 'l>(&self, listener: T) -> ListenerHandle;
+    fn register_listener<T: Listener<BlockchainEvent<Self::Block>> + 'env>(&self, listener: T) -> ListenerHandle;
 
     fn lock(&self) -> MutexGuard<()>;
 
@@ -98,6 +106,18 @@ pub enum BlockchainEvent<BL: Block> {
     Extended(Blake2bHash),
     Rebranched(Vec<(Blake2bHash, BL)>, Vec<(Blake2bHash, BL)>),
     Finalized,
+}
+
+#[derive(Debug, Fail, Clone, PartialEq, Eq)]
+pub enum BlockchainError {
+    #[fail(display = "Invalid genesis block stored. Are you on the right network?")]
+    InvalidGenesisBlock,
+    #[fail(display = "Failed to load the main chain. Reset your consensus database.")]
+    FailedLoadingMainChain,
+    #[fail(display = "Inconsistent chain/accounts state. Reset your consensus database.")]
+    InconsistentState,
+    #[fail(display = "No network for: {:?}", _0)]
+    NoNetwork(NetworkId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

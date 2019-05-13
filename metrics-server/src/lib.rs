@@ -13,7 +13,7 @@ use std::sync::Arc;
 use futures::{future::Future};
 use hyper::Server;
 
-use consensus::consensus::Consensus;
+use consensus::{Consensus, ConsensusProtocol, NimiqConsensusProtocol};
 
 use crate::error::Error;
 use crate::metrics::chain::ChainMetrics;
@@ -57,7 +57,7 @@ pub mod server;
 pub mod metrics;
 pub mod error;
 
-pub fn metrics_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16, password: Option<String>) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
+pub fn metrics_server(consensus: Arc<Consensus<NimiqConsensusProtocol>>, ip: IpAddr, port: u16, password: Option<String>) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
     Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
         .serve(move || {
             server::MetricsServer::new(

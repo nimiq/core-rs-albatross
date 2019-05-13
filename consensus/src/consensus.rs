@@ -7,11 +7,10 @@ use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-use blockchain::{Blockchain, BlockchainEvent};
+use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use database::Environment;
 use mempool::{Mempool, MempoolEvent, MempoolConfig};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
-use network_messages::NimiqMessageAdapter;
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
 use transaction::Transaction;
@@ -20,23 +19,23 @@ use utils::observer::Notifier;
 use utils::timers::Timers;
 
 use crate::accounts_chunk_cache::AccountsChunkCache;
-use crate::consensus_agent::ConsensusAgent;
-use crate::consensus_agent::ConsensusAgentEvent;
+use crate::consensus_agent::{ConsensusAgent, ConsensusAgentEvent};
 use crate::error::Error;
 use crate::inventory::InventoryManager;
+use crate::protocol::ConsensusProtocol;
 
-pub struct Consensus {
-    pub blockchain: Arc<Blockchain<'static>>,
-    pub mempool: Arc<Mempool<'static, Blockchain<'static>>>,
-    pub network: Arc<Network<Blockchain<'static>>>,
+pub struct Consensus<P: ConsensusProtocol + 'static> {
+    pub blockchain: Arc<P::Blockchain>,
+    pub mempool: Arc<Mempool<'static, P::Blockchain>>,
+    pub network: Arc<Network<P::Blockchain>>,
 
-    inv_mgr: Arc<RwLock<InventoryManager<Blockchain<'static>, NimiqMessageAdapter>>>,
+    inv_mgr: Arc<RwLock<InventoryManager<P::Blockchain, P::MessageAdapter>>>,
     timers: Timers<ConsensusTimer>,
-    accounts_chunk_cache: Arc<AccountsChunkCache<Blockchain<'static>>>,
+    accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>,
 
-    state: RwLock<ConsensusState>,
+    state: RwLock<ConsensusState<P>>,
 
-    self_weak: MutableOnce<Weak<Consensus>>,
+    self_weak: MutableOnce<Weak<Consensus<P>>>,
     pub notifier: RwLock<Notifier<'static, ConsensusEvent>>,
 }
 
@@ -54,21 +53,21 @@ enum ConsensusTimer {
     Sync,
 }
 
-struct ConsensusState {
+struct ConsensusState<P: ConsensusProtocol + 'static> {
     established: bool,
-    agents: HashMap<Arc<Peer>, Arc<ConsensusAgent<Blockchain<'static>, NimiqMessageAdapter>>>,
+    agents: HashMap<Arc<Peer>, Arc<ConsensusAgent<P::Blockchain, P::MessageAdapter>>>,
 
     sync_peer: Option<Arc<Peer>>,
 }
 
 
-impl Consensus {
+impl<P: ConsensusProtocol + 'static> Consensus<P> {
     const MIN_FULL_NODES: usize = 1;
     const SYNC_THROTTLE: Duration = Duration::from_millis(1500);
 
     pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {
         let network_time = Arc::new(NetworkTime::new());
-        let blockchain = Arc::new(Blockchain::new(env, network_id, network_time.clone())?);
+        let blockchain = Arc::new(<P::Blockchain as AbstractBlockchain<'static>>::new(env, network_id, Arc::clone(&network_time))?);
         let mempool = Mempool::new(blockchain.clone(), mempool_config);
         let network = Network::new(blockchain.clone(), network_config, network_time, network_id)?;
         let accounts_chunk_cache = AccountsChunkCache::new(env, Arc::clone(&blockchain));
@@ -96,7 +95,7 @@ impl Consensus {
         Ok(this)
     }
 
-    fn init_listeners(this: &Arc<Consensus>) {
+    pub fn init_listeners(this: &Arc<Consensus<P>>) {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
         let weak = Arc::downgrade(this);
@@ -124,7 +123,7 @@ impl Consensus {
 
         // Notify peers when our blockchain head changes.
         let weak = Arc::downgrade(this);
-        this.blockchain.notifier.write().register(move |e: &BlockchainEvent| {
+        this.blockchain.register_listener(move |e: &BlockchainEvent<<P::Blockchain as AbstractBlockchain<'static>>::Block>| {
             let this = upgrade_weak!(weak);
             this.on_blockchain_event(e);
         });
@@ -197,27 +196,27 @@ impl Consensus {
         self.sync_blockchain();
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent<<P::Blockchain as AbstractBlockchain<'static>>::Block>) {
         let state = self.state.read();
 
         // Don't relay blocks if we are not synced yet.
         if !state.established {
-            let height = self.blockchain.height();
+            let height = self.blockchain.head_height();
             if height % 100 == 0 {
                 info!("Now at block #{}", height);
             }
             return;
         } else {
-            info!("Now at block #{}", self.blockchain.height());
+            info!("Now at block #{}", self.blockchain.head_height());
         }
 
-        let blocks;
+        let blocks: Vec<&<P::Blockchain as AbstractBlockchain<'static>>::Block>;
         let block;
         match event {
             BlockchainEvent::Extended(_) => {
                 // This implicitly takes the lock on the blockchain state.
-                block = self.blockchain.head();
-                blocks = vec![block.deref()];
+                block = self.blockchain.head_block();
+                blocks = vec![&block];
             },
             BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
                 blocks = adopted_blocks.iter().map(|(_, block)| block).collect();
@@ -262,7 +261,7 @@ impl Consensus {
         }
 
         let mut num_synced_full_nodes: usize = 0;
-        let candidates: Vec<&Arc<ConsensusAgent<Blockchain<'static>, NimiqMessageAdapter>>> = state.agents.values()
+        let candidates: Vec<&Arc<ConsensusAgent<P::Blockchain, P::MessageAdapter>>> = state.agents.values()
             .filter(|&agent| {
                 let synced = agent.synced();
                 if synced && agent.peer.peer_address().services.is_full_node() {
@@ -301,7 +300,7 @@ impl Consensus {
             if num_synced_full_nodes >= Self::MIN_FULL_NODES {
                 if !state.established {
                     info!("Synced with all connected peers ({}), consensus established", state.agents.len());
-                    info!("Blockchain at block #{} [{}]", self.blockchain.height(), self.blockchain.head_hash());
+                    info!("Blockchain at block #{} [{}]", self.blockchain.head_height(), self.blockchain.head_hash());
 
                     state.established = true;
                     drop(state);

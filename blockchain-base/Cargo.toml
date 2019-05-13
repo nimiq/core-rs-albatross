@@ -18,6 +18,7 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
+failure = "0.1"
 parking_lot = "0.7"
 beserial = { path = "../beserial", version = "0.1.0" }
 nimiq-account = { path = "../primitives/account", version = "0.1.0" }
@@ -25,6 +26,7 @@ nimiq-block-base = { path = "../primitives/block-base", version = "0.1.0" }
 nimiq-database = { path = "../database", version = "0.1.0" }
 nimiq-hash = { path = "../hash", version = "0.1.0" }
 nimiq-keys = { path = "../keys", version = "0.1.0" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0" }
 nimiq-primitives = { path = "../primitives", version = "0.1.0" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1.0" }

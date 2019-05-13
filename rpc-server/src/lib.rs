@@ -33,7 +33,7 @@ use beserial::{Deserialize, Serialize};
 use block::{Block, BlockHeader, Difficulty};
 use block_production::BlockProducer;
 use blockchain::{Blockchain, PushResult};
-use consensus::consensus::{Consensus, ConsensusEvent};
+use consensus::{Consensus, ConsensusEvent, NimiqConsensusProtocol};
 use hash::{Argon2dHash, Blake2bHash, Blake2bHasher, Hash};
 use keys::Address;
 use mempool::ReturnCode;
@@ -88,13 +88,13 @@ pub(crate) struct JsonRpcServerState {
 
 pub(crate) struct JsonRpcHandler {
     state: Arc<RwLock<JsonRpcServerState>>,
-    consensus: Arc<Consensus>,
+    consensus: Arc<Consensus<NimiqConsensusProtocol>>,
     starting_block: u32,
     config: Arc<JsonRpcConfig>
 }
 
 impl JsonRpcHandler {
-    pub(crate) fn new(consensus: Arc<Consensus>, state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self {
+    pub(crate) fn new(consensus: Arc<Consensus<NimiqConsensusProtocol>>, state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self {
         JsonRpcHandler {
             state,
             consensus: consensus.clone(),
@@ -699,7 +699,7 @@ impl jsonrpc::Handler for JsonRpcHandler {
 }
 
 
-pub fn rpc_server(consensus: Arc<Consensus>, ip: IpAddr, port: u16, config: JsonRpcConfig) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
+pub fn rpc_server(consensus: Arc<Consensus<NimiqConsensusProtocol>>, ip: IpAddr, port: u16, config: JsonRpcConfig) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error> {
     let state = Arc::new(RwLock::new(JsonRpcServerState {
         consensus_state: "syncing",
     }));

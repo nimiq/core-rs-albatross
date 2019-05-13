@@ -1,7 +1,7 @@
 use failure::Fail;
 
 use network::error::Error as NetworkError;
-use blockchain::BlockchainError;
+use blockchain_base::BlockchainError;
 
 #[derive(Fail, Debug)]
 pub enum Error {

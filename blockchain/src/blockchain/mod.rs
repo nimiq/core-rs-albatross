@@ -8,7 +8,7 @@ use account::Account;
 use accounts::Accounts;
 use block::{Block, BlockError, Difficulty, Target, TargetCompact};
 use block::proof::ChainProof;
-use blockchain_base::{AbstractBlockchain, Direction};
+use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use fixed_unsigned::RoundHalfUp;
 use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
@@ -23,7 +23,6 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle, Notifier};
 
-use crate::blockchain::error::BlockchainError;
 use crate::chain_info::ChainInfo;
 #[cfg(feature = "metrics")]
 use crate::chain_metrics::BlockchainMetrics;
@@ -33,7 +32,6 @@ use crate::transaction_cache::TransactionCache;
 use crate::transaction_store::TransactionStore;
 
 pub mod transaction_proofs;
-pub mod error;
 
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
@@ -723,6 +721,10 @@ impl<'env> Blockchain<'env> {
 
 impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     type Block = Block;
+
+    fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+        Blockchain::new(env, network_id, network_time)
+    }
 
     fn network_id(&self) -> NetworkId {
         self.network_id

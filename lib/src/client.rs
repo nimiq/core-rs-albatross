@@ -1,20 +1,18 @@
-use std::sync::Arc;
 use std::env;
+use std::sync::Arc;
 
 use futures::{Async, Future, Poll};
 
-use consensus::consensus::Consensus;
+use consensus::{Consensus, ConsensusProtocol};
 use database::Environment;
+use mempool::MempoolConfig;
 use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
 use network_primitives::address::NetAddress;
-use utils::key_store::KeyStore;
-use primitives::networks::NetworkId;
 use network_primitives::protocol::Protocol;
-use mempool::MempoolConfig;
+use primitives::networks::NetworkId;
+use utils::key_store::KeyStore;
 
 use crate::error::ClientError;
-
-
 
 lazy_static! {
     pub static ref DEFAULT_USER_AGENT: String = format!("core-rs/{} (native; {} {})", env!("CARGO_PKG_VERSION"), env::consts::OS, env::consts::ARCH);
@@ -95,7 +93,7 @@ impl ClientBuilder {
         self
     }
 
-    pub fn build_client(self) -> Result<ClientInitializeFuture, ClientError> {
+    pub fn build_client<P: ConsensusProtocol + 'static>(self) -> Result<ClientInitializeFuture<P>, ClientError> {
         let consensus = self.build_consensus()?;
         Ok(ClientInitializeFuture {
             consensus: consensus.clone(),
@@ -103,7 +101,7 @@ impl ClientBuilder {
         })
     }
 
-    pub fn build_consensus(self) -> Result<Arc<Consensus>, ClientError> {
+    pub fn build_consensus<P: ConsensusProtocol + 'static>(self) -> Result<Arc<Consensus<P>>, ClientError> {
         // deconstruct builder
         let Self {
             environment,
@@ -157,24 +155,24 @@ impl ClientBuilder {
 
 /// A trait representing a Client that may be uninitialized, initialized or connected
 /// NOTE: The futures and imtermediate states implement this
-pub trait Client {
+pub trait Client<P: ConsensusProtocol + 'static> {
     fn initialized(&self) -> bool;
     fn connected(&self) -> bool;
-    fn consensus(&self) -> Arc<Consensus>;
+    fn consensus(&self) -> Arc<Consensus<P>>;
 }
 
 
 /// Future that eventually returns a InitializedClient
-pub struct ClientInitializeFuture {
-    consensus: Arc<Consensus>,
+pub struct ClientInitializeFuture<P: ConsensusProtocol + 'static> {
+    consensus: Arc<Consensus<P>>,
     initialized: bool
 }
 
-impl Future for ClientInitializeFuture {
-    type Item = InitializedClient;
+impl<P: ConsensusProtocol + 'static> Future for ClientInitializeFuture<P> {
+    type Item = InitializedClient<P>;
     type Error = ClientError;
 
-    fn poll(&mut self) -> Poll<InitializedClient, ClientError> {
+    fn poll(&mut self) -> Poll<InitializedClient<P>, ClientError> {
         // NOTE: This is practically Future::fuse, but this way the types are cleaner
         if !self.initialized {
             self.consensus().network.initialize().map_err(ClientError::NetworkError)?;
@@ -189,7 +187,7 @@ impl Future for ClientInitializeFuture {
     }
 }
 
-impl Client for ClientInitializeFuture {
+impl<P: ConsensusProtocol + 'static> Client<P> for ClientInitializeFuture<P> {
     fn initialized(&self) -> bool {
         self.initialized
     }
@@ -198,24 +196,24 @@ impl Client for ClientInitializeFuture {
         false
     }
 
-    fn consensus(&self) -> Arc<Consensus> {
+    fn consensus(&self) -> Arc<Consensus<P>> {
         Arc::clone(&self.consensus)
     }
 }
 
 
 /// The initialized client
-pub struct InitializedClient {
-    consensus: Arc<Consensus>,
+pub struct InitializedClient<P: ConsensusProtocol + 'static> {
+    consensus: Arc<Consensus<P>>,
 }
 
-impl InitializedClient {
-    pub fn connect(&self) -> ClientConnectFuture {
+impl<P: ConsensusProtocol + 'static> InitializedClient<P> {
+    pub fn connect(&self) -> ClientConnectFuture<P> {
         ClientConnectFuture { consensus: Arc::clone(&self.consensus), connected: false }
     }
 }
 
-impl Client for InitializedClient {
+impl<P: ConsensusProtocol + 'static> Client<P> for InitializedClient<P> {
     fn initialized(&self) -> bool {
         true
     }
@@ -224,23 +222,23 @@ impl Client for InitializedClient {
         false
     }
 
-    fn consensus(&self) -> Arc<Consensus> {
+    fn consensus(&self) -> Arc<Consensus<P>> {
         Arc::clone(&self.consensus)
     }
 }
 
 
 /// Future that eventually returns a ConnectedClient
-pub struct ClientConnectFuture {
-    consensus: Arc<Consensus>,
+pub struct ClientConnectFuture<P: ConsensusProtocol + 'static> {
+    consensus: Arc<Consensus<P>>,
     connected: bool
 }
 
-impl Future for ClientConnectFuture {
-    type Item = ConnectedClient;
+impl<P: ConsensusProtocol + 'static> Future for ClientConnectFuture<P> {
+    type Item = ConnectedClient<P>;
     type Error = ClientError;
 
-    fn poll(&mut self) -> Poll<ConnectedClient, ClientError> {
+    fn poll(&mut self) -> Poll<ConnectedClient<P>, ClientError> {
         if !self.connected {
             self.consensus.network.connect().map_err(ClientError::NetworkError)?;
             self.connected = true;
@@ -252,7 +250,7 @@ impl Future for ClientConnectFuture {
     }
 }
 
-impl Client for ClientConnectFuture {
+impl<P: ConsensusProtocol + 'static> Client<P> for ClientConnectFuture<P> {
     fn initialized(&self) -> bool {
         true
     }
@@ -261,24 +259,24 @@ impl Client for ClientConnectFuture {
         self.connected
     }
 
-    fn consensus(&self) -> Arc<Consensus> {
+    fn consensus(&self) -> Arc<Consensus<P>> {
         Arc::clone(&self.consensus)
     }
 }
 
 
 /// The connected client
-pub struct ConnectedClient {
-    consensus: Arc<Consensus>
+pub struct ConnectedClient<P: ConsensusProtocol + 'static> {
+    consensus: Arc<Consensus<P>>
 }
 
-impl ConnectedClient {
-    pub fn consensus(&self) -> Arc<Consensus> {
+impl<P: ConsensusProtocol + 'static> ConnectedClient<P> {
+    pub fn consensus(&self) -> Arc<Consensus<P>> {
         Arc::clone(&self.consensus)
     }
 }
 
-impl Client for ConnectedClient {
+impl<P: ConsensusProtocol + 'static> Client<P> for ConnectedClient<P> {
     fn initialized(&self) -> bool {
         true
     }
@@ -287,7 +285,7 @@ impl Client for ConnectedClient {
         true
     }
 
-    fn consensus(&self) -> Arc<Consensus> {
+    fn consensus(&self) -> Arc<Consensus<P>> {
         Arc::clone(&self.consensus)
     }
 }
