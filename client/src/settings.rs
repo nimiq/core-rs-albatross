@@ -147,11 +147,14 @@ impl FromStr for NodeType {
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub(crate) enum Network {
     Main,
     Test,
     Dev,
+
+    TestAlbatross,
+    DevAlbatross,
 }
 
 impl Default for Network {
@@ -168,6 +171,10 @@ impl FromStr for Network {
             "main" => Network::Main,
             "test" => Network::Test,
             "dev" => Network::Dev,
+
+            "test-albatross" => Network::TestAlbatross,
+            "dev-albatross" => Network::DevAlbatross,
+
             _ => Err(())?
         })
     }

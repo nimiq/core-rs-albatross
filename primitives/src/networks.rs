@@ -11,4 +11,15 @@ pub enum NetworkId {
     Main = 42,
 
     TestAlbatross = 5,
+    DevAlbatross = 6,
+}
+
+
+impl NetworkId {
+    pub fn is_albatross(&self) -> bool {
+        match self {
+            NetworkId::TestAlbatross | NetworkId::DevAlbatross => true,
+            _ => false,
+        }
+    }
 }

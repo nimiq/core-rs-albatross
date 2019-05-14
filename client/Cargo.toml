@@ -47,10 +47,12 @@ nimiq-mempool = { path = "../mempool", version = "0.1.0" }
 nimiq-lib = { path = "../lib", version = "0.1.0" }
 nimiq-keys = { path = "../keys", version = "0.1.0" }
 nimiq-utils = { path = "../utils", version = "0.1.0" }
+nimiq-consensus = { path = "../consensus", version = "0.1.0" }
 
 [features]
 default = ["all"]
-all = ["rpc-server", "metrics-server", "deadlock-detection", "human-panic"]
+#all = ["rpc-server", "metrics-server", "deadlock-detection", "human-panic"]
+all = ["deadlock-detection"]
 rpc-server = ["nimiq-rpc-server"]
 metrics-server = ["nimiq-metrics-server"]
 deadlock-detection = ["parking_lot"]

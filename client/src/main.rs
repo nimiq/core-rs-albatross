@@ -22,6 +22,7 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_rpc_server as rpc_server;
 extern crate nimiq_keys as keys;
 extern crate nimiq_utils as utils;
+extern crate nimiq_consensus as consensus;
 
 mod deadlock;
 mod logging;
@@ -37,6 +38,7 @@ use std::sync::Arc;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::env;
+use std::path::PathBuf;
 
 use failure::{Error, Fail};
 use fern::log_file;
@@ -44,7 +46,7 @@ use futures::{Future, future};
 use log::Level;
 
 use database::lmdb::{LmdbEnvironment, open};
-use lib::client::{Client, ClientBuilder};
+use lib::client::{Client, ClientBuilder, ClientInitializeFuture};
 use mempool::MempoolConfig;
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
@@ -55,6 +57,7 @@ use utils::key_store::KeyStore;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::{rpc_server, Credentials, JsonRpcConfig};
+use consensus::{ConsensusProtocol, AlbatrossConsensusProtocol, NimiqConsensusProtocol};
 
 use crate::cmdline::Options;
 use crate::logging::{DEFAULT_LEVEL, NimiqDispatch};
@@ -63,7 +66,6 @@ use crate::settings as s;
 use crate::settings::Settings;
 use crate::static_env::ENV;
 use crate::serialization::SeedError;
-use std::path::PathBuf;
 use crate::files::LazyFileLocations;
 
 
@@ -113,127 +115,9 @@ fn find_config_file(cmdline: &Options, files: &mut LazyFileLocations) -> Result<
     Ok(files.config()?)
 }
 
-fn run() -> Result<(), Error> {
-    // parse command line arguments
-    let cmdline = Options::parse()?;
+fn run_node<P: ConsensusProtocol + 'static>(client_builder: ClientBuilder, settings: Settings) -> Result<(), Error> {
+    let client: ClientInitializeFuture<P> = client_builder.build_client()?;
 
-    // default file locations
-    let mut files = LazyFileLocations::new();
-
-    // load config file
-    let config_file = find_config_file(&cmdline, &mut files)?;
-    if !config_file.exists() {
-        eprintln!("Can't find config file at: {}", config_file.display());
-        eprintln!("If you haven't configured the Nimiq client yet, do this by copying the client.example.toml to client.toml in the path above and editing it appropriately.");
-        Err(ConfigError::MissingConfigFile)?;
-    }
-    let settings = Settings::from_file(&config_file)?;
-
-    // Setup logging.
-    let mut dispatch = fern::Dispatch::new()
-        .pretty_logging(settings.log.timestamps)
-        .level(DEFAULT_LEVEL)
-        .level_for_nimiq(cmdline.log_level.as_ref()
-            .map(|level| level.parse()).transpose()?
-            .or(settings.log.level)
-            .unwrap_or(DEFAULT_LEVEL));
-    for (module, level) in settings.log.tags.iter().chain(cmdline.log_tags.iter()) {
-        dispatch = dispatch.level_for(module.clone(), level.clone());
-    }
-    if let Some(ref filename) = settings.log.file {
-        dispatch = dispatch.chain(log_file(filename)?);
-    }
-    else {
-        dispatch = dispatch.chain(io::stderr());
-    }
-    dispatch.apply()?;
-    #[cfg(not(feature = "human-panic"))]
-    log_panics::init();
-
-    info!("Loaded config file from: {}", config_file.display());
-    debug!("Command-line options: {:#?}", cmdline);
-    debug!("Settings: {:#?}", settings);
-
-    // we only allow full nodes right now
-    if settings.consensus.node_type != s::NodeType::Full {
-        error!("Only full consensus is implemented right now.");
-        unimplemented!();
-    }
-
-    // get network ID
-    let network_id = NetworkId::from(cmdline.network.unwrap_or(settings.consensus.network));
-
-    // Start database and obtain a 'static reference to it.
-    let default_database_settings = s::DatabaseSettings::default();
-    let env = LmdbEnvironment::new(&settings.database.path
-        .unwrap_or_else(|| files.database(network_id).expect("Failed to find database").to_str().unwrap().to_string()),
-                                   settings.database.size.unwrap_or_else(|| default_database_settings.size.unwrap()),
-                                   settings.database.max_dbs.unwrap_or_else(|| default_database_settings.max_dbs.unwrap()),
-                                   open::Flags::empty())?;
-    // Initialize the static environment variable
-    ENV.initialize(env);
-
-    // open peer key store
-    let peer_key_store = KeyStore::new(settings.peer_key_file.unwrap_or_else(|| files.peer_key().expect("Failed to find peer key file").to_str().unwrap().into()));
-
-    // Start building the client with network ID and environment
-    let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), ENV.get(), peer_key_store);
-
-    // Map network ID from command-line or config to actual network ID
-    client_builder.with_network_id(network_id);
-
-    // add hostname and port to builder
-    if let Some(hostname) = cmdline.hostname.or(settings.network.host) {
-        client_builder.with_hostname(&hostname);
-    }
-    else if settings.network.protocol == s::Protocol::Ws || settings.network.protocol == s::Protocol::Wss {
-        Err(ConfigError::NoHostname)?
-    }
-    if let Some(port) = cmdline.port.or(settings.network.port) {
-        client_builder.with_port(port);
-    }
-
-    // add reverse proxy settings to builder
-    if let Some(r) = settings.reverse_proxy {
-        client_builder.with_reverse_proxy(
-            r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
-            r.address,
-            r.header,
-            r.with_tls_termination
-        );
-    }
-
-    // Add mempool settings to filter
-    if let Some(mempool_settings) = settings.mempool {
-        client_builder.with_mempool_config(MempoolConfig::from(mempool_settings));
-    }
-
-    // Add TLS configuration, if present
-    // NOTE: Currently we only need to set TLS settings for Wss
-    if settings.network.protocol == s::Protocol::Wss {
-        if let Some(tls_settings) = settings.network.tls {
-            client_builder.with_tls_identity(&tls_settings.identity_file, &tls_settings.identity_password);
-        }
-        else {
-            Err(ConfigError::NoTlsIdentityFile)?
-        }
-    }
-
-    // Parse additional seed nodes and add them
-    let seeds = settings.network.seed_nodes.iter()
-        .map(|s| s::Seed::try_from(s.clone()))
-        .collect::<Result<Vec<Seed>, SeedError>>()?;
-    if seeds.iter().any(|s| match s {
-        Seed::Peer(uri) => uri.public_key().is_none(),
-        _ => false
-    }) {
-        Err(ConfigError::MissingPublicKey)?;
-    }
-    client_builder.with_seeds(seeds);
-
-    // Setup client future to initialize and connect
-    //let client = client_builder.build_albatross_client()?;
-    let client = client_builder.build_powchain_client()?;
     let consensus = client.consensus();
 
     info!("Peer address: {} - public key: {}", consensus.network.network_config.peer_address(), consensus.network.network_config.public_key().to_hex());
@@ -309,6 +193,143 @@ fn run() -> Result<(), Error> {
             .and_then( move |_| future::join_all(other_futures)) // Run other futures (e.g. RPC server)
             .map(|_| info!("Other futures finished"))
     );
+
+    Ok(())
+}
+
+fn run() -> Result<(), Error> {
+    // parse command line arguments
+    let cmdline = Options::parse()?;
+
+    // default file locations
+    let mut files = LazyFileLocations::new();
+
+    // load config file
+    let config_file = find_config_file(&cmdline, &mut files)?;
+    if !config_file.exists() {
+        eprintln!("Can't find config file at: {}", config_file.display());
+        eprintln!("If you haven't configured the Nimiq client yet, do this by copying the client.example.toml to client.toml in the path above and editing it appropriately.");
+        Err(ConfigError::MissingConfigFile)?;
+    }
+    let settings = Settings::from_file(&config_file)?;
+
+    // Setup logging.
+    let mut dispatch = fern::Dispatch::new()
+        .pretty_logging(settings.log.timestamps)
+        .level(DEFAULT_LEVEL)
+        .level_for_nimiq(cmdline.log_level.as_ref()
+            .map(|level| level.parse()).transpose()?
+            .or(settings.log.level)
+            .unwrap_or(DEFAULT_LEVEL));
+    for (module, level) in settings.log.tags.iter().chain(cmdline.log_tags.iter()) {
+        dispatch = dispatch.level_for(module.clone(), level.clone());
+    }
+    if let Some(ref filename) = settings.log.file {
+        dispatch = dispatch.chain(log_file(filename)?);
+    }
+    else {
+        dispatch = dispatch.chain(io::stderr());
+    }
+    dispatch.apply()?;
+    #[cfg(not(feature = "human-panic"))]
+    log_panics::init();
+
+    info!("Loaded config file from: {}", config_file.display());
+    debug!("Command-line options: {:#?}", cmdline);
+    debug!("Settings: {:#?}", settings);
+
+    // we only allow full nodes right now
+    if settings.consensus.node_type != s::NodeType::Full {
+        error!("Only full consensus is implemented right now.");
+        unimplemented!();
+    }
+
+    // get network ID
+    let network_id = NetworkId::from(cmdline.network.unwrap_or(settings.consensus.network));
+
+    // Start database and obtain a 'static reference to it.
+    let default_database_settings = s::DatabaseSettings::default();
+    let env = LmdbEnvironment::new(&settings.database.path.clone()
+        .unwrap_or_else(|| files.database(network_id).expect("Failed to find database").to_str().unwrap().to_string()),
+                                   settings.database.size.unwrap_or_else(|| default_database_settings.size.unwrap()),
+                                   settings.database.max_dbs.unwrap_or_else(|| default_database_settings.max_dbs.unwrap()),
+                                   open::Flags::empty())?;
+    // Initialize the static environment variable
+    ENV.initialize(env);
+
+    // open peer key store
+    let peer_key_store = KeyStore::new(settings.peer_key_file.clone()
+        .unwrap_or_else(|| files.peer_key()
+            .expect("Failed to find peer key file")
+            .to_str().unwrap().into()));
+
+    // Start building the client with network ID and environment
+    let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), ENV.get(), peer_key_store);
+
+    // Map network ID from command-line or config to actual network ID
+    client_builder.with_network_id(network_id);
+
+    // add hostname and port to builder
+    if let Some(hostname) = cmdline.hostname.or_else(|| settings.network.host.clone()) {
+        client_builder.with_hostname(&hostname);
+    }
+    else if settings.network.protocol == s::Protocol::Ws || settings.network.protocol == s::Protocol::Wss {
+        Err(ConfigError::NoHostname)?
+    }
+    if let Some(port) = cmdline.port.or(settings.network.port) {
+        client_builder.with_port(port);
+    }
+
+    // add reverse proxy settings to builder
+    if let Some(ref r) = settings.reverse_proxy {
+        client_builder.with_reverse_proxy(
+            r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
+            r.address,
+            r.header.clone(),
+            r.with_tls_termination
+        );
+    }
+
+    // Add mempool settings to filter
+    if let Some(mempool_settings) = settings.mempool.clone() {
+        client_builder.with_mempool_config(MempoolConfig::from(mempool_settings.clone()));
+    }
+
+    // Add TLS configuration, if present
+    // NOTE: Currently we only need to set TLS settings for Wss
+    if settings.network.protocol == s::Protocol::Wss {
+        if let Some(tls_settings) = settings.network.tls.clone() {
+            client_builder.with_tls_identity(&tls_settings.identity_file, &tls_settings.identity_password);
+        }
+        else {
+            Err(ConfigError::NoTlsIdentityFile)?
+        }
+    }
+
+    // Parse additional seed nodes and add them
+    let seeds = settings.network.seed_nodes.iter()
+        .map(|s| s::Seed::try_from(s.clone()))
+        .collect::<Result<Vec<Seed>, SeedError>>()?;
+    if seeds.iter().any(|s| match s {
+        Seed::Peer(uri) => uri.public_key().is_none(),
+        _ => false
+    }) {
+        Err(ConfigError::MissingPublicKey)?;
+    }
+    client_builder.with_seeds(seeds);
+
+
+    // Setup client future to initialize and connect
+    if network_id.is_albatross() {
+        warn!("!!!!");
+        warn!("!!!! Albatross node running");
+        warn!("!!!!");
+
+        run_node::<AlbatrossConsensusProtocol>(client_builder, settings)?;
+    }
+    else {
+        run_node::<NimiqConsensusProtocol>(client_builder, settings)?;
+    }
 
     Ok(())
 }

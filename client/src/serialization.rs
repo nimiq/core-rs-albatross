@@ -40,6 +40,9 @@ impl From<s::Network> for NetworkId {
             s::Network::Main => NetworkId::Main,
             s::Network::Test => NetworkId::Test,
             s::Network::Dev => NetworkId::Dev,
+
+            s::Network::TestAlbatross => NetworkId::TestAlbatross,
+            s::Network::DevAlbatross => NetworkId::DevAlbatross,
         }
     }
 }
