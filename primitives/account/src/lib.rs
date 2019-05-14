@@ -29,7 +29,7 @@ use crate::inherent::{AccountInherentInteraction};
 pub use self::basic_account::BasicAccount;
 pub use self::htlc_contract::HashedTimeLockedContract;
 pub use self::inherent::{Inherent, InherentType};
-pub use self::staking_contract::{StakingContract, STAKING_CONTRACT_ADDRESS};
+pub use self::staking_contract::{StakingContract};
 pub use self::vesting_contract::VestingContract;
 
 pub mod inherent;

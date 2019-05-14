@@ -21,7 +21,7 @@ use block_albatross::{Block, MacroBlock, MacroHeader, ValidatorSlot, MacroExtrin
 use beserial::{Serialize, SerializingError};
 use primitives::coin::Coin;
 use primitives::slot::Slot;
-use account::{Account, BasicAccount, StakingContract, AccountError, STAKING_CONTRACT_ADDRESS, AccountsList};
+use account::{Account, BasicAccount, StakingContract, AccountError, AccountsList};
 use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
 use database::WriteTransaction;
 use accounts::Accounts;
@@ -31,6 +31,8 @@ use accounts::Accounts;
 pub enum GenesisBuilderError {
     #[fail(display = "No signing key to generate genesis seed.")]
     NoSigningKey,
+    #[fail(display = "No validator registry address.")]
+    NoValidatorRegistryAddress,
     #[fail(display = "Invalid timestamp: {}", _0)]
     InvalidTimestamp(DateTime<Utc>),
     #[fail(display = "Serialization failed")]
@@ -84,6 +86,7 @@ pub struct GenesisBuilder {
     timestamp: Option<DateTime<Utc>>,
     stakes: Vec<config::GenesisStake>,
     accounts: Vec<config::GenesisAccount>,
+    validator_registry: Option<Address>,
 }
 
 impl GenesisBuilder {
@@ -99,6 +102,11 @@ impl GenesisBuilder {
 
     pub fn with_timestamp(&mut self, timestamp: DateTime<Utc>) -> &mut Self {
         self.timestamp = Some(timestamp);
+        self
+    }
+
+    pub fn with_validator_registry_address(&mut self, address: Address) -> &mut Self {
+        self.validator_registry = Some(address);
         self
     }
 
@@ -193,7 +201,7 @@ impl GenesisBuilder {
 
         // accounts
         let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
-        genesis_accounts.push((Address::clone(&STAKING_CONTRACT_ADDRESS), Account::Staking(self.generate_staking_contract()?)));
+        genesis_accounts.push((Address::clone(self.validator_registry.as_ref().ok_or(GenesisBuilderError::NoValidatorRegistryAddress)?), Account::Staking(self.generate_staking_contract()?)));
         for account in &self.accounts {
             genesis_accounts.push((account.address.clone(), Account::Basic(BasicAccount { balance: account.balance })));
         }

@@ -31,11 +31,11 @@ impl<'env> BlockProducer<'env> {
         BlockProducer { blockchain, mempool, validator_key }
     }
 
-    pub fn next_macro_block_proposal(&self, timestamp: u64, slashing_amount: u64, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
+    pub fn next_macro_block_proposal(&self, timestamp: u64, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
         // TODO: Lock blockchain/mempool while constructing the block.
         // let _lock = self.blockchain.push_lock.lock();
 
-        let extrinsics = self.next_macro_extrinsics(slashing_amount);
+        let extrinsics = self.next_macro_extrinsics();
         let header = self.next_macro_header(timestamp, &extrinsics);
 
         PbftProposal {
@@ -62,10 +62,10 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    fn next_macro_extrinsics(&self, slashing_amount: u64) -> MacroExtrinsics {
+    pub fn next_macro_extrinsics(&self) -> MacroExtrinsics {
         MacroExtrinsics {
             slot_allocation: self.blockchain.get_next_validator_list(),
-            slashing_amount: Coin::try_from(slashing_amount).unwrap()
+            slashing_amount: Coin::try_from(0).unwrap() // TODO: From new data structure
         }
     }
 

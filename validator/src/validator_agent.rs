@@ -151,13 +151,14 @@ impl ValidatorAgent {
             });
             if let Err(_) = self.blockchain.push_verify_dry(&block) {
                 debug!("[PBFT-PROPOSAL] Invalid macro block header");
+                return;
             }
 
             // check the signature of the proposal
             // XXX We ignore the `pk_idx` field in the `SignedMessage`
             if !proposal.verify(&public_key) {
                 debug!("[PBFT-PROPOSAL] Invalid signature");
-                return
+                return;
             }
 
             // check the view change proof
@@ -165,7 +166,7 @@ impl ValidatorAgent {
                 let view_change = ViewChange { block_number, new_view_number: view_number };
                 if !view_change_proof.verify(&view_change, TWO_THIRD_VALIDATORS) {
                     debug!("[PBFT-PROPOSAL] Invalid view change proof: {:?}", view_change_proof);
-                    return
+                    return;
                 }
             }
 

@@ -247,6 +247,8 @@ impl<'env> Blockchain<'env> {
             }
         }
 
+        // TODO: Macro block (proposal) checking. Also generate and validate MacroExtrinsics if None.
+
         return Ok(());
     }
 

@@ -23,16 +23,6 @@ use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
 use crate::inherent::{AccountInherentInteraction, Inherent, InherentType};
 
 
-lazy_static! {
-    /// Random address for staking contract
-    /// `NQ30 EDDQ 9C99 S6P5 KFEH SSUQ 968M RN5V 7MGA`
-    pub static ref STAKING_CONTRACT_ADDRESS: Address = {
-        Address::from_str("735b84b129d1ae59bdd1d6b9849915cd8bd3d60a")
-            .expect("Invalid staking contract address")
-    };
-}
-
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActiveStake {
     staker_address: Address,

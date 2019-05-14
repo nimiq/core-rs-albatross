@@ -21,6 +21,7 @@ struct GenesisData {
     block: &'static [u8],
     hash: Blake2bHash,
     accounts: &'static [u8],
+    validator_registry: Option<Address>,
 }
 
 #[derive(Clone, Debug)]
@@ -72,6 +73,11 @@ impl NetworkInfo {
         let accounts: AccountsList = Deserialize::deserialize_from_vec(&self.genesis.accounts.to_vec())
             .expect("Failed to deserialize genesis accounts.");
         accounts.0
+    }
+
+    #[inline]
+    pub fn validator_registry_address(&self) -> Option<&Address> {
+        self.genesis.validator_registry.as_ref()
     }
 
     pub fn from_network_id(network_id: NetworkId) -> &'static Self {

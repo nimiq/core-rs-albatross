@@ -42,6 +42,7 @@ nimiq-macros = { path = "../macros" }
 [build-dependencies]
 nimiq-build-tools = { path = "../build-tools" }
 nimiq-hash = { path = "../hash" }
+nimiq-keys = { path = "../keys" }
 human-panic = { version = "1.0" }
 log = "0.4"
 simple_logger = "1.0"
