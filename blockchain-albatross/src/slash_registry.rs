@@ -13,11 +13,11 @@ use collections::bitset::BitSet;
 use database::{Database, Environment, ReadTransaction, WriteTransaction, FromDatabaseValue, IntoDatabaseValue, AsDatabaseBytes};
 use hash::{Blake2bHasher, Hasher};
 use primitives::policy;
-use crate::Blockchain;
+use crate::chain_store::ChainStore;
 
 pub struct SlashRegistry<'env> {
     env: &'env Environment,
-    blockchain: &'env Blockchain<'env>,
+    chain_store: &'env ChainStore<'env>,
     bounds: TrackedRange,
     diff_heights: BTreeMap<u32, BlockDescriptor>,
     slash_registry_db: Database<'env>,
@@ -50,7 +50,7 @@ impl<'env> SlashRegistry<'env> {
     const SLASH_REGISTRY_DB_NAME: &'static str = "SlashRegistry";
     const BOUNDS_KEY: &'static str = "bounds";
 
-    pub fn new(env: &'env Environment, blockchain: &'env Blockchain<'env>) -> Self {
+    pub fn new(env: &'env Environment, chain_store: &'env ChainStore<'env>) -> Self {
         let slash_registry_db = env.open_database(SlashRegistry::SLASH_REGISTRY_DB_NAME.to_string());
 
         let txn = ReadTransaction::new(env);
@@ -67,7 +67,7 @@ impl<'env> SlashRegistry<'env> {
 
         Self {
             env,
-            blockchain,
+            chain_store,
             bounds,
             diff_heights,
             slash_registry_db
@@ -87,7 +87,7 @@ impl<'env> SlashRegistry<'env> {
         let fork_proofs = &block.extrinsics.as_ref().unwrap().fork_proofs;
         for fork_proof in fork_proofs {
             let block_number = fork_proof.header1.block_number;
-            let prev_block = self.blockchain.chain_store.get_block_at(block_number - 1).unwrap();
+            let prev_block = self.chain_store.get_block_at(block_number - 1).unwrap();
             let slot_owner = self.next_slot_owner(block_number - 1, prev_block.view_number(), prev_block.seed(), validators);
 
             let slash_epoch = fork_proof.header1.block_number;
