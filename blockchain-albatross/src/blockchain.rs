@@ -52,7 +52,8 @@ pub struct BlockchainState<'env> {
     transaction_cache: TransactionCache,
     pub(crate) main_chain: ChainInfo,
     head_hash: Blake2bHash,
-    last_macro_block: MacroBlock
+    last_macro_block: MacroBlock,
+    view_number: u32,
 }
 
 impl<'env> BlockchainState<'env> {
@@ -88,6 +89,7 @@ impl<'env> Blockchain<'env> {
         let main_chain = chain_store
             .get_chain_info(&head_hash, true, None)
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
+        let view_number = main_chain.head.view_number();
 
         // Check that chain/accounts state is consistent.
         let accounts = Accounts::new(env);
@@ -115,7 +117,8 @@ impl<'env> Blockchain<'env> {
                 transaction_cache,
                 main_chain,
                 head_hash,
-                last_macro_block: unimplemented!()
+                last_macro_block: unimplemented!(),
+                view_number,
             }),
             push_lock: Mutex::new(()),
 
@@ -159,7 +162,8 @@ impl<'env> Blockchain<'env> {
                 transaction_cache,
                 main_chain,
                 head_hash,
-                last_macro_block: genesis_macro_block.clone()
+                last_macro_block: genesis_macro_block.clone(),
+                view_number: 0,
             }),
             push_lock: Mutex::new(()),
 
@@ -169,8 +173,6 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn macro_head_hash(&self) -> Blake2bHash { unimplemented!(); }
-
-    pub fn push_known_view_change(&self, block_number: u32, view_number: u32) { unimplemented!() }
 
     /// Verification required for macro block proposals and micro blocks
     pub fn push_verify_dry(&self, block: &Block) -> Result<(), PushError> {
@@ -330,8 +332,9 @@ impl<'env> Blockchain<'env> {
         // Acquire write lock.
         let mut state = RwLockUpgradableReadGuard::upgrade(state);
         state.transaction_cache.push_block(&chain_info.head);
-        state.main_chain = chain_info;
         state.head_hash = block_hash;
+        state.view_number = chain_info.head.view_number();
+        state.main_chain = chain_info;
         txn.commit();
 
         // Give up lock before notifying.
@@ -483,6 +486,7 @@ impl<'env> Blockchain<'env> {
 
         state.main_chain = fork_chain[0].1.clone();
         state.head_hash = fork_chain[0].0.clone();
+        state.view_number = fork_chain[0].1.head.view_number();
 
         // Give up lock before notifying.
         drop(state);
@@ -500,6 +504,19 @@ impl<'env> Blockchain<'env> {
 
         Ok(PushResult::Rebranched)
     }
+
+    pub fn push_known_view_change(&self, block_number: u32, view_number: u32) {
+        if let Some(chain_info) = self.chain_store.get_chain_info_at(block_number, false, None) {
+            if view_number != chain_info.head.block_number() {
+
+                // Revert chain up to block_number
+                self.rebranch(chain_info.head.hash(), chain_info);
+
+                self.state.write().view_number = view_number;
+            }
+        }
+    }
+
 
     fn commit_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
         match block {
@@ -586,7 +603,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn view_number(&self) -> u32 {
-        unimplemented!()
+        self.state.read().view_number
     }
 
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {
