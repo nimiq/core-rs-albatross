@@ -38,6 +38,8 @@ fn generate_albatross(name: &str, out_dir: &PathBuf, src_dir: &PathBuf) {
     let directory = out_dir.join(name);
     fs::create_dir_all(&directory).unwrap();
 
+    info!("genesis source file: {}", src_dir.join(format!("{}.toml", name)).display());
+
     let genesis_hash = GenesisBuilder::default()
         .with_config_file(src_dir.join(format!("{}.toml", name))).unwrap()
         .write_to_files(&directory).unwrap();
@@ -46,7 +48,7 @@ fn generate_albatross(name: &str, out_dir: &PathBuf, src_dir: &PathBuf) {
 
 
 fn main() {
-    setup_panic!();
+    //setup_panic!();
     simple_logger::init_with_level(Level::Debug)
         .unwrap_or_else(|e| eprintln!("Failed to initialize logging: {}", e));
 
@@ -59,5 +61,5 @@ fn main() {
     generate_powchain("main-powchain", &out_dir, PowChainGenesis::main());
     generate_powchain("test-powchain", &out_dir, PowChainGenesis::test());
     generate_powchain("dev-powchain", &out_dir, PowChainGenesis::dev());
-    generate_albatross("test-albatross", &out_dir, &src_dir);
+    generate_albatross("dev-albatross", &out_dir, &src_dir);
 }
