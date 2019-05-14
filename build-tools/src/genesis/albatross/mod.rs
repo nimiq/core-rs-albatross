@@ -6,8 +6,9 @@ use keys::Address;
 use bls::bls12_381::{
     PublicKey as BlsPublicKey,
     SecretKey as BlsSecretKey,
+    Signature as BlsSignature,
 };
-use block_albatross::{Block, MacroBlock, MacroHeader};
+use block_albatross::{Block, MacroBlock, MacroHeader, ValidatorSlot, MacroExtrinsics};
 use std::path::Path;
 use beserial::{Serialize, SerializingError};
 use std::fs::{OpenOptions, read_to_string};
@@ -15,8 +16,10 @@ use std::io::Error as IoError;
 use toml::de::Error as TomlError;
 use failure::Fail;
 use primitives::coin::Coin;
+use primitives::slot::Slot;
 use account::{Account, BasicAccount, StakingContract, AccountError, STAKING_CONTRACT_ADDRESS, AccountsList};
 use std::convert::TryFrom;
+use std::collections::btree_map::BTreeMap;
 
 
 #[derive(Debug, Fail)]
@@ -121,50 +124,93 @@ impl GenesisBuilder {
         Ok(self)
     }
 
-    pub fn generate_header(&self) -> Result<MacroHeader, GenesisBuilderError> {
+    fn select_validators(&self, pre_genesis_hash: &BlsSignature) -> Result<(Vec<Slot>, Vec<ValidatorSlot>), GenesisBuilderError> {
+        let (_, slot_allocation) = self.generate_staking_contract()?
+            .build_validator_set(&pre_genesis_hash, 512, 512);
+
+        let validator_slots = { // construct validator slot list with slot counts
+            // count slots per public key
+            let mut slot_counts: BTreeMap<&BlsPublicKey, u16> = BTreeMap::new();
+            for validator in slot_allocation.iter() {
+                slot_counts.entry(&validator.public_key)
+                    .and_modify(|x| *x += 1) // if has value, increment
+                    .or_insert(1); // if no value, insert 1
+            }
+
+            // map to Vec of ValidatorSlot
+            let mut validator_slots: Vec<ValidatorSlot> = Vec::new();
+            for (public_key, slots) in slot_counts {
+                validator_slots.push(ValidatorSlot {
+                    public_key: public_key.clone(),
+                    slots
+                });
+            }
+
+            validator_slots
+        };
+
+        Ok((slot_allocation, validator_slots))
+    }
+
+    pub fn generate(&self) -> Result<(Block, Blake2bHash, Vec<(Address, Account)>), GenesisBuilderError> {
         let timestamp = self.timestamp.unwrap_or_else(Utc::now);
+
+        // generate seeds
         let signing_key = self.signing_key.as_ref().ok_or(GenesisBuilderError::NoSigningKey)?;
+        // random message used as seed for VRF that generates pre-genesis seed
         let seed_message = self.seed_message.clone()
             .unwrap_or("love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".to_string());
-        let seed_hash = Blake2bHasher::new().digest(seed_message.as_bytes());
+        // pre-genesis seed (used for slot selection)
+        let pre_genesis_seed = signing_key
+            .sign_hash(Blake2bHasher::new().digest(seed_message.as_bytes()));
+        // seed of genesis block = VRF(seed_0)
+        let seed = signing_key.sign(&pre_genesis_seed);
 
-        Ok(MacroHeader {
+        // generate slot allocation from staking contract
+        let (slot_allocation, validators) = self.select_validators(&pre_genesis_seed)?;
+
+        // extrinsics
+        let extrinsics = MacroExtrinsics {
+            slot_allocation,
+            slashing_amount: 0
+        };
+
+        // state
+
+
+        // the header
+        let header = MacroHeader {
             version: 1,
-            validators: vec![], // TODO
+            validators,
             block_number: 1,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),
-            seed: signing_key.sign_hash(seed_hash),
+            seed,
             parent_hash: [0u8; 32].into(),
             state_root: [0u8; 32].into(), // TODO
-            extrinsics_root: [0u8; 32].into(), // TODO
+            extrinsics_root: extrinsics.hash::<Blake2bHash>(),
             timestamp: u64::try_from(timestamp.timestamp_millis())
                 .map_err(|_| GenesisBuilderError::InvalidTimestamp(timestamp))?,
-        })
-    }
+        };
 
-    pub fn generate_genesis_hash(&self) -> Result<Blake2bHash, GenesisBuilderError> {
-        Ok(self.generate_header()?.hash::<Blake2bHash>())
-    }
+        // genesis hash
+        let genesis_hash = header.hash::<Blake2bHash>();
 
-    pub fn generate_block(&self) -> Result<Block, GenesisBuilderError> {
-        Ok(Block::Macro(MacroBlock {
-            header: self.generate_header()?,
-            justification: None,
-            extrinsics: None // TODO
-        }))
-    }
-
-    pub fn generate_accounts(&self) -> Result<Vec<(Address, Account)>, GenesisBuilderError> {
+        // accounts
         let mut accounts: Vec<(Address, Account)> = Vec::new();
         accounts.push((Address::clone(&STAKING_CONTRACT_ADDRESS), Account::Staking(self.generate_staking_contract()?)));
         for account in &self.accounts {
             accounts.push((account.address.clone(), Account::Basic(BasicAccount { balance: account.balance })));
         }
-        Ok(accounts)
+
+        Ok((Block::Macro(MacroBlock {
+            header,
+           justification: None,
+           extrinsics: Some(extrinsics),
+        }), genesis_hash, accounts))
     }
 
-    pub fn generate_staking_contract(&self) -> Result<StakingContract, GenesisBuilderError> {
+    fn generate_staking_contract(&self) -> Result<StakingContract, GenesisBuilderError> {
         let mut contract = StakingContract::default();
 
         for stake in self.stakes.iter() {
@@ -174,17 +220,24 @@ impl GenesisBuilder {
         Ok(contract)
     }
 
-    pub fn write_to_files<P: AsRef<Path>>(&self, directory: P) -> Result<(), GenesisBuilderError> {
+    pub fn write_to_files<P: AsRef<Path>>(&self, directory: P) -> Result<Blake2bHash, GenesisBuilderError> {
+        let (genesis_block, genesis_hash, accounts) = self.generate()?;
+
+        debug!("Genesis block: {}", &genesis_hash);
+        debug!("{:#?}", &genesis_block);
+        debug!("Accounts:");
+        debug!("{:#?}", &accounts);
+
         let block_path = directory.as_ref().join("block.dat");
         info!("Writing block to {}", block_path.display());
         let mut file = OpenOptions::new().create(true).write(true).open(&block_path)?;
-        self.generate_block()?.serialize(&mut file)?;
+        genesis_block.serialize(&mut file)?;
 
         let accounts_path = directory.as_ref().join("accounts.dat");
         info!("Writing accounts to {}", accounts_path.display());
         let mut file = OpenOptions::new().create(true).write(true).open(&accounts_path)?;
-        AccountsList(self.generate_accounts()?).serialize(&mut file)?;
+        AccountsList(accounts).serialize(&mut file)?;
 
-        Ok(())
+        Ok(genesis_hash)
     }
 }
