@@ -254,7 +254,7 @@ impl ValidatorNetwork {
                 // if we already know the proposal, ignore it
                 false
             }
-            else if proposal.message.view_number <= current_proposal.view_number {
+            else if proposal.message.header.view_number <= current_proposal.header.view_number {
                 // if it has a lower view number than the current one, ignore it
                 debug!("Ignoring new macro block proposal with lower view change: {:#?}", proposal.message);
                 false

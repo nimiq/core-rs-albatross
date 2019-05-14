@@ -13,7 +13,6 @@ use crate::ValidatorSlots;
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
 pub struct PbftProposal {
     pub header: MacroHeader,
-    pub view_number: u32,
     pub view_change: Option<ViewChangeProof>,
 }
 pub type SignedPbftProposal = signed::SignedMessage<PbftProposal>;

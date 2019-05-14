@@ -182,6 +182,8 @@ impl<'env> Blockchain<'env> {
 
     pub fn macro_head_hash(&self) -> Blake2bHash { unimplemented!(); }
 
+    pub fn push_known_view_change(&self, block_number: u32, view_number: u32) { unimplemented!() }
+
     /// Verification required for macro block proposals and micro blocks
     pub fn push_verify_dry(&self, block: &Block) -> Result<(), PushError> {
         // Check (sort of) intrinsic block invariants.
@@ -227,7 +229,7 @@ impl<'env> Blockchain<'env> {
             }
 
             // Check if the block was produced (and signed) by the intended producer
-            let intended_slot_owner = self.get_next_block_producer(block.view_number()).1.public_key;
+            let intended_slot_owner = self.get_block_producer_at(block.block_number(), block.view_number()).map(|s| s.1.public_key.clone()).unwrap();
             if !intended_slot_owner.verify(&micro_block.serialize_without_signature(), &micro_block.justification.signature) {
                 warn!("Rejecting block - not a valid successor");
                 return Err(PushError::InvalidSuccessor);
@@ -634,6 +636,10 @@ impl<'env> Blockchain<'env> {
         self.state.read().main_chain.head.block_number()
     }
 
+    pub fn view_number(&self) -> u32 {
+        unimplemented!()
+    }
+
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| &s.main_chain.head)
@@ -644,7 +650,7 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| &s.last_macro_block)
     }
 
-    pub fn get_next_block_producer(&self, view_number: u32) -> (u16, Slot) {
+    pub fn get_next_block_producer(&self) -> (u16, Slot) {
         unimplemented!();
     }
 

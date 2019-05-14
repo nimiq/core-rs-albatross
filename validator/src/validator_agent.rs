@@ -136,7 +136,7 @@ impl ValidatorAgent {
         debug!("[PBFT-PROPOSAL] Macro block proposal: {:#?}", proposal.message);
 
         let block_number = proposal.message.header.block_number;
-        let view_number = proposal.message.view_number;
+        let view_number = proposal.message.header.view_number;
 
         if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number) {
             let public_key = &slot.public_key;

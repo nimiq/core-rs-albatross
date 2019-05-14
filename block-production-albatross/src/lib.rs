@@ -29,26 +29,25 @@ impl<'env> BlockProducer<'env> {
         BlockProducer { blockchain, mempool, validator_key }
     }
 
-    pub fn next_macro_block_proposal(&self, view_number: u32, timestamp: u64, slashing_amount: u64, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
+    pub fn next_macro_block_proposal(&self, timestamp: u64, slashing_amount: u64, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
         // TODO: Lock blockchain/mempool while constructing the block.
         // let _lock = self.blockchain.push_lock.lock();
 
         let extrinsics = self.next_macro_extrinsics(slashing_amount);
-        let header = self.next_macro_header(view_number, timestamp, &extrinsics);
+        let header = self.next_macro_header(timestamp, &extrinsics);
 
         PbftProposal {
             header,
-            view_number,
             view_change: view_change_proof,
         }
     }
 
-    pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, view_number: u32, timestamp: u64, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
+    pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, timestamp: u64, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
         // TODO: Lock blockchain/mempool while constructing the block.
         // let _lock = self.blockchain.push_lock.lock();
 
         let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data);
-        let header = self.next_micro_header(view_number, timestamp, &extrinsics);
+        let header = self.next_micro_header(timestamp, &extrinsics);
         let signature = self.validator_key.sign(&header);
 
         MicroBlock {
@@ -102,8 +101,9 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    pub fn next_macro_header(&self, view_number: u32, timestamp: u64, extrinsics: &MacroExtrinsics) -> MacroHeader {
+    pub fn next_macro_header(&self, timestamp: u64, extrinsics: &MacroExtrinsics) -> MacroHeader {
         let block_number = self.blockchain.height() + 1;
+        let view_number = self.blockchain.view_number();
         let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
 
         let parent_hash = self.blockchain.head_hash();
@@ -134,8 +134,9 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    fn next_micro_header(&self, view_number: u32, timestamp: u64, extrinsics: &MicroExtrinsics) -> MicroHeader {
+    fn next_micro_header(&self, timestamp: u64, extrinsics: &MicroExtrinsics) -> MicroHeader {
         let block_number = self.blockchain.height() + 1;
+        let view_number = self.blockchain.view_number();
         let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
 
         let parent_hash = self.blockchain.head_hash();

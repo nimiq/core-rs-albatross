@@ -38,8 +38,6 @@ use network_primitives::time::NetworkTime;
 use utils::key_store::{Error as KeyStoreError, KeyStore};
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
-// use utils::observer::Notifier;
-// use utils::timers::Timers;
 
 use crate::error::Error;
 use crate::slash::ForkProofPool;
@@ -47,8 +45,8 @@ use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
 use nimiq_block_production_albatross::BlockProducer;
 
 #[derive(Debug)]
-pub enum ViewInfo {
-    ViewNumber(u32),
+pub enum SlotChange {
+    MicroBlock,
     ViewChange(ViewChange),
 }
 
@@ -80,7 +78,6 @@ enum ValidatorTimer {
 }
 
 pub struct ValidatorState {
-    current_view_number: u32,
     pk_idx: Option<u16>,
     status: ValidatorStatus,
     fork_proof_pool: ForkProofPool,
@@ -89,46 +86,41 @@ pub struct ValidatorState {
 impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
-    pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {
-        unimplemented!()
-//        let network_time = Arc::new(NetworkTime::new());
-//        let blockchain = Arc::new(Blockchain::new(env, network_id, network_time.clone())?);
-//        let consensus = Consensus::new(env, network_id, network_config, mempool_config)?;
-//        let validator_network = ValidatorNetwork::new(Arc::clone(&consensus.network), /*Arc::clone(&consensus.blockchain)*/ unimplemented!());
-//
-//        // FIXME: May be improve KeyStore the use the same file for all keys?
-//        let key_store = KeyStore::new("validator_key.db".to_string());
-//        let validator_key = match key_store.load_key() {
-//            Err(KeyStoreError::IoError(_)) => {
-//                let secret_key = SecretKey::generate(&mut rand::thread_rng());
-//                key_store.save_key(&secret_key)?;
-//                Ok(secret_key)
-//            },
-//            res => res,
-//        }?;
-//
-//        let block_producer = BlockProducer::new(blockchain.clone(), consensus.mempool.clone(), validator_key);
-//
-//        let this = Arc::new(Validator {
-//            blockchain,
-//            block_producer,
-//            consensus,
-//            validator_network,
-//
-//            validator_key,
-//            timers: Timers::new(),
-//
-//            state: RwLock::new(ValidatorState {
-//                current_view_number: 0,
-//                pk_idx: None,
-//                status: ValidatorStatus::None,
-//                fork_proof_pool: ForkProofPool::new(),
-//            }),
-//
-//            self_weak: MutableOnce::new(Weak::new()),
-//        });
-//        Validator::init_listeners(&this);
-//        Ok(this)
+    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) -> Result<Arc<Self>, Error> {
+        let validator_network = ValidatorNetwork::new(consensus.network.clone(), consensus.blockchain.clone());
+
+        // FIXME: May be improve KeyStore the use the same file for all keys?
+        let key_store = KeyStore::new("validator_key.db".to_string());
+        let validator_key = match key_store.load_key() {
+            Err(KeyStoreError::IoError(_)) => {
+                let secret_key = SecretKey::generate(&mut rand::thread_rng());
+                key_store.save_key(&secret_key)?;
+                Ok(secret_key)
+            },
+            res => res,
+        }?;
+
+        let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.clone());
+
+        let this = Arc::new(Validator {
+            blockchain: consensus.blockchain.clone(),
+            block_producer,
+            consensus,
+            validator_network,
+
+            validator_key,
+            timers: Timers::new(),
+
+            state: RwLock::new(ValidatorState {
+                pk_idx: None,
+                status: ValidatorStatus::None,
+                fork_proof_pool: ForkProofPool::new(),
+            }),
+
+            self_weak: MutableOnce::new(Weak::new()),
+        });
+        Validator::init_listeners(&this);
+        Ok(this)
     }
 
     pub fn init_listeners(this: &Arc<Validator>) {
@@ -171,59 +163,59 @@ impl Validator {
     pub fn on_consensus_established(&self) {
         let mut state = self.state.write();
 
-        // FIXME: Should we reset our state here?
+        // TODO: Sync fork proof pool?
 
-        // FIXME: use the real validator registry here
-        if self.are_we_potential_validator() {
+        // FIXME: use the real validator registry here.
+        if self.is_potential_validator() {
             state.status = ValidatorStatus::Potential;
         } else {
-            // FIXME Set up everything to keep checking if we are with every validator registry change event
+            // FIXME Set up everything to keep checking if we are with every validator registry change event.
             state.status = ValidatorStatus::Synced;
         }
     }
 
     pub fn on_consensus_lost(&self) {
-        // FIXME: Should we reset our state here?
         let mut state = self.state.write();
         state.status = ValidatorStatus::None;
+    }
+
+    fn reset_view_change_interval(&self) {
+        let weak = self.self_weak.clone();
+        self.timers.reset_interval(ValidatorTimer::ViewChange, move || {
+            let this = upgrade_weak!(weak);
+            this.start_view_change();
+        }, Self::BLOCK_TIMEOUT);
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
         let state = self.state.read();
         let status = &state.status;
 
-        // Blockchain events are only intersting to validators (potential or active)
+        // Blockchain events are only intersting to validators (potential or active).
         if *status == ValidatorStatus::None || *status == ValidatorStatus::Synced {
             return;
         }
 
-        // Reset the view change timeout because we received a valid block
-        let weak = self.self_weak.clone();
-        self.timers.reset_interval(ValidatorTimer::ViewChange, move || {
-            let this = upgrade_weak!(weak);
-            this.start_view_change();
-        }, Self::BLOCK_TIMEOUT);
+        // Reset the view change timeout because we received a valid block.
+        self.reset_view_change_interval();
 
-        // Handle each block type (which is directly related to each event type)
+        // Handle each block type (which is directly related to each event type).
         match event {
             BlockchainEvent::Finalized => self.on_blockchain_finalized(), // i.e. a macro block was accepted
             BlockchainEvent::Extended(hash) => self.on_blockchain_extended(hash), // i.e. a micro block was accepted
             BlockchainEvent::Rebranched(old_chain, new_chain) =>
-                self.on_blockchain_rebranched(old_chain.to_vec(), new_chain.to_vec()), // FIXME: why .to_vec()?
+                self.on_blockchain_rebranched(old_chain, new_chain),
         }
 
-        // If we're an active validator, we need to check if we're the next block producer
+        // If we're an active validator, we need to check if we're the next block producer.
         if *status == ValidatorStatus::Active {
-            self.on_slot_change(ViewInfo::ViewNumber(state.current_view_number));
+            self.on_slot_change(SlotChange::MicroBlock);
         }
     }
 
     // Resets the state and checks if we are on the new validator list
     pub fn on_blockchain_finalized(&self) {
         let mut state = self.state.write();
-
-        // FIXME: Are we sure about this? Should we set it to the view number of the received macro block?
-        state.current_view_number = 0;
 
         state.pk_idx = self.get_pk_idx(&self.validator_key);
 
@@ -235,16 +227,14 @@ impl Validator {
 
     // Sets the state according to the information on the block
     pub fn on_blockchain_extended(&self, hash: &Blake2bHash) {
-
         let block = self.blockchain.get_block(hash, false, false).unwrap_or_else(|| panic!("We got the block hash ({}) from an event from the blockchain itself", &hash));
 
         let mut state = self.state.write();
-        state.current_view_number = 0;
         state.fork_proof_pool.apply_block(&block);
     }
 
     // Sets the state according to the rebranch
-    pub fn on_blockchain_rebranched(&self, old_chain: Vec<(Blake2bHash, Block)>, new_chain: Vec<(Blake2bHash, Block)>) {
+    pub fn on_blockchain_rebranched(&self, old_chain: &Vec<(Blake2bHash, Block)>, new_chain: &Vec<(Blake2bHash, Block)>) {
         let mut state = self.state.write();
         for (hash, block) in old_chain.iter() {
             state.fork_proof_pool.revert_block(block);
@@ -252,7 +242,6 @@ impl Validator {
         for (hash, block) in new_chain.iter() {
             state.fork_proof_pool.apply_block(&block);
         }
-        unimplemented!()
     }
 
     fn on_validator_network_event(&self, event: ValidatorNetworkEvent) {
@@ -265,12 +254,7 @@ impl Validator {
 
         match event {
             ValidatorNetworkEvent::ViewChangeComplete(view_change) => {
-                // Ignore this event if the block number doesn't match our blockchain height
-                // FIXME: Check the current view change updating logic as it may be overwritten by lower numbers
-                if self.blockchain.height() == view_change.block_number {
-                    state.current_view_number = view_change.new_view_number;
-                    self.on_slot_change(ViewInfo::ViewChange(view_change));
-                }
+                self.on_slot_change(SlotChange::ViewChange(view_change));
             },
             ValidatorNetworkEvent::PbftProposal(macro_block) => self.on_pbft_proposal(macro_block),
             ValidatorNetworkEvent::PbftPrepareComplete(hash) => self.on_pbft_prepare_complete(hash),
@@ -283,18 +267,24 @@ impl Validator {
         self.state.write().fork_proof_pool.insert(fork_proof);
     }
 
-    pub fn on_slot_change(&self, view_info: ViewInfo) {
-        let (view_number, view_change_proof) = match view_info {
-            ViewInfo::ViewNumber(view_number) => (view_number, None),
-            ViewInfo::ViewChange(view_change) => {
+    pub fn on_slot_change(&self, slot_change: SlotChange) {
+        let (view_number, view_change_proof) = match slot_change {
+            SlotChange::MicroBlock => (self.blockchain.view_number(), None),
+            SlotChange::ViewChange(view_change) => {
                 let view_change_proof = self.validator_network.get_view_change_proof(&view_change);
+
+                // Inform blockchain about the view change, so that it can keep track of it
+                // and remove blocks made invalid by the proof.
+                self.blockchain.push_known_view_change(view_change.block_number, view_change.new_view_number);
+                // Reset view change interval again.
+                self.reset_view_change_interval();
 
                 (view_change.new_view_number, view_change_proof)
             },
         };
 
         // Check if we are the next block producer and act accordingly
-        let (_, slot) = self.blockchain.get_next_block_producer(view_number);
+        let (_, slot) = self.blockchain.get_next_block_producer();
         let public_key = PublicKey::from_secret(&self.validator_key);
 
         if slot.public_key == public_key {
@@ -359,29 +349,24 @@ impl Validator {
             return;
         }
 
-        // The number of the block that timed out
+        // The number of the block that timed out.
         let block_number = self.blockchain.height() + 1;
-        let new_view_number = state.current_view_number + 1;
+        let new_view_number = self.blockchain.view_number() + 1;
 
         let message = ViewChange { block_number, new_view_number };
         let pk_idx = state.pk_idx.expect("Checked above that we are an active validator");
         let view_change_message = SignedViewChange::from_message(message, &self.validator_key, pk_idx);
 
-        // FIXME
-        let slots = 1u16;
+        let validator = self.blockchain.get_current_validator_by_idx(pk_idx).expect("Checked above that we are an active validator");
         let public_key = &PublicKey::from_secret(&self.validator_key);
 
-        // Broadcast our view change number message to the other validators
-        self.validator_network.commit_view_change(view_change_message, public_key, slots);
-
-        // increment current_view_number
-        state.current_view_number = new_view_number;
+        // Broadcast our view change number message to the other validators.
+        self.validator_network.commit_view_change(view_change_message, public_key, validator.slots);
      }
 
     fn get_pk_idx(&self, secret_key: &SecretKey) -> Option<u16> {
-        // FIXME: Check this logic
         let public_key = PublicKey::from_secret(secret_key);
-        let validator_list = self.blockchain.get_next_validator_list();
+        let validator_list = self.blockchain.get_next_validator_set();
 
         for (i, validator) in validator_list.iter().enumerate() {
             if validator.public_key == public_key {
@@ -392,11 +377,10 @@ impl Validator {
     }
 
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {
-        let view_number = self.state.read().current_view_number;
         let timestamp = self.consensus.network.network_time.now();
 
         // TODO: Slashing amount.
-        let pbft_proposal = self.block_producer.next_macro_block_proposal(view_number, timestamp, 0, view_change);
+        let pbft_proposal = self.block_producer.next_macro_block_proposal(timestamp, 0, view_change);
 
         let pk_idx = self.state.read().pk_idx.expect("Checked that we are an active validator before entering this function");
 
@@ -412,15 +396,16 @@ impl Validator {
 
         let state = self.state.read();
         let fork_proofs = state.fork_proof_pool.get_fork_proofs_for_block(max_size);
-        let view_number = state.current_view_number;
         let timestamp = self.consensus.network.network_time.now();
 
-        let block = self.block_producer.next_micro_block(fork_proofs, view_number, timestamp, vec![], view_change_proof);
+        let block = self.block_producer.next_micro_block(fork_proofs, timestamp, vec![], view_change_proof);
 
         self.blockchain.push(Block::Micro(block));
     }
 
-    fn are_we_potential_validator(&self) -> bool {
-        unimplemented!();
+    fn is_potential_validator(&self) -> bool {
+        // TODO: Use StakingContract to determine if we are a potential validator.
+        //self.blockchain.state().accounts().get()
+        false
     }
 }
