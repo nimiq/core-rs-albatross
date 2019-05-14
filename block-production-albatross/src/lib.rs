@@ -5,8 +5,10 @@ extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_bls as bls;
+extern crate nimiq_primitives as primitives;
 
 use std::sync::Arc;
+use std::convert::TryFrom;
 
 use beserial::Serialize;
 use block::{Block, MicroBlock, PbftProposal, MacroHeader, MicroExtrinsics, MacroExtrinsics, MicroHeader, ViewChangeProof};
@@ -17,6 +19,7 @@ use keys::Address;
 use mempool::Mempool;
 use bls::bls12_381::SecretKey;
 use block::MicroJustification;
+use primitives::coin::Coin;
 
 pub struct BlockProducer<'env> {
     blockchain: Arc<Blockchain<'env>>,
@@ -63,7 +66,7 @@ impl<'env> BlockProducer<'env> {
     fn next_macro_extrinsics(&self, slashing_amount: u64) -> MacroExtrinsics {
         MacroExtrinsics {
             slot_allocation: self.blockchain.get_next_validator_list(),
-            slashing_amount,
+            slashing_amount: Coin::try_from(slashing_amount).unwrap()
         }
     }
 

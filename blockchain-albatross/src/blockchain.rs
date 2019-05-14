@@ -147,7 +147,7 @@ impl<'env> Blockchain<'env> {
         // Initialize accounts.
         let accounts = Accounts::new(env);
         let mut txn = WriteTransaction::new(env);
-        accounts.init(&mut txn, network_id);
+        accounts.init(&mut txn, network_info.genesis_accounts());
 
         // Commit genesis block to accounts.
         // XXX Don't distribute any reward for the genesis block, so there is nothing to commit.

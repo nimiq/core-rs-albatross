@@ -28,4 +28,3 @@ nimiq-block = { path = "../primitives/block", version = "0.1.0" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
 nimiq-database = { path = "../database", features = ["full-nimiq"], version = "0.1.0" }
 nimiq-tree-primitives = { path = "./tree-primitives", version = "0.1.0" }
-nimiq-network-primitives = { path = "../network-primitives", features = ["networks"], version = "0.1.0" }

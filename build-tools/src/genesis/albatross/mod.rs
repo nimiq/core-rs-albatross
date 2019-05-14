@@ -1,6 +1,15 @@
 mod config;
 
+use std::convert::TryFrom;
+use std::collections::btree_map::BTreeMap;
+use std::path::Path;
+use std::fs::{OpenOptions, read_to_string};
+use std::io::Error as IoError;
+
 use chrono::{DateTime, Utc};
+use toml::de::Error as TomlError;
+use failure::Fail;
+
 use hash::{Blake2bHasher, Hasher, Blake2bHash, Hash};
 use keys::Address;
 use bls::bls12_381::{
@@ -9,17 +18,13 @@ use bls::bls12_381::{
     Signature as BlsSignature,
 };
 use block_albatross::{Block, MacroBlock, MacroHeader, ValidatorSlot, MacroExtrinsics};
-use std::path::Path;
 use beserial::{Serialize, SerializingError};
-use std::fs::{OpenOptions, read_to_string};
-use std::io::Error as IoError;
-use toml::de::Error as TomlError;
-use failure::Fail;
 use primitives::coin::Coin;
 use primitives::slot::Slot;
 use account::{Account, BasicAccount, StakingContract, AccountError, STAKING_CONTRACT_ADDRESS, AccountsList};
-use std::convert::TryFrom;
-use std::collections::btree_map::BTreeMap;
+use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
+use database::WriteTransaction;
+use accounts::Accounts;
 
 
 #[derive(Debug, Fail)]
@@ -36,6 +41,8 @@ pub enum GenesisBuilderError {
     TomlError(#[cause] TomlError),
     #[fail(display = "Failed to stake")]
     StakingError(#[cause] AccountError),
+    #[fail(display = "Database error")]
+    DatabaseError(#[cause] VolatileDatabaseError),
 }
 
 impl From<SerializingError> for GenesisBuilderError {
@@ -61,6 +68,13 @@ impl From<AccountError> for GenesisBuilderError {
         GenesisBuilderError::StakingError(e)
     }
 }
+
+impl From<VolatileDatabaseError> for GenesisBuilderError {
+    fn from(e: VolatileDatabaseError) -> Self {
+        GenesisBuilderError::DatabaseError(e)
+    }
+}
+
 
 
 #[derive(Default)]
@@ -172,11 +186,28 @@ impl GenesisBuilder {
         // extrinsics
         let extrinsics = MacroExtrinsics {
             slot_allocation,
-            slashing_amount: 0
+            slashing_amount: Coin::ZERO
         };
+        let extrinsics_root = extrinsics.hash::<Blake2bHash>();
+        debug!("Extrinsics root: {}", &extrinsics_root);
 
-        // state
+        // accounts
+        let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
+        genesis_accounts.push((Address::clone(&STAKING_CONTRACT_ADDRESS), Account::Staking(self.generate_staking_contract()?)));
+        for account in &self.accounts {
+            genesis_accounts.push((account.address.clone(), Account::Basic(BasicAccount { balance: account.balance })));
+        }
 
+        // state root
+        let state_root = {
+            let db = VolatileEnvironment::new(10)?;
+            let accounts = Accounts::new(&db);
+            let mut txn = WriteTransaction::new(&db);
+            // XXX need to clone, since init needs the actual data
+            accounts.init(&mut txn, genesis_accounts.clone());
+            accounts.hash(Some(&mut txn))
+        };
+        debug!("State root: {}", &state_root);
 
         // the header
         let header = MacroHeader {
@@ -187,8 +218,8 @@ impl GenesisBuilder {
             parent_macro_hash: [0u8; 32].into(),
             seed,
             parent_hash: [0u8; 32].into(),
-            state_root: [0u8; 32].into(), // TODO
-            extrinsics_root: extrinsics.hash::<Blake2bHash>(),
+            state_root,
+            extrinsics_root,
             timestamp: u64::try_from(timestamp.timestamp_millis())
                 .map_err(|_| GenesisBuilderError::InvalidTimestamp(timestamp))?,
         };
@@ -196,18 +227,11 @@ impl GenesisBuilder {
         // genesis hash
         let genesis_hash = header.hash::<Blake2bHash>();
 
-        // accounts
-        let mut accounts: Vec<(Address, Account)> = Vec::new();
-        accounts.push((Address::clone(&STAKING_CONTRACT_ADDRESS), Account::Staking(self.generate_staking_contract()?)));
-        for account in &self.accounts {
-            accounts.push((account.address.clone(), Account::Basic(BasicAccount { balance: account.balance })));
-        }
-
         Ok((Block::Macro(MacroBlock {
             header,
            justification: None,
            extrinsics: Some(extrinsics),
-        }), genesis_hash, accounts))
+        }), genesis_hash, genesis_accounts))
     }
 
     fn generate_staking_contract(&self) -> Result<StakingContract, GenesisBuilderError> {

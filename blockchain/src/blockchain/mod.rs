@@ -149,7 +149,7 @@ impl<'env> Blockchain<'env> {
         // Initialize accounts.
         let accounts = Accounts::new(env);
         let mut txn = WriteTransaction::new(env);
-        accounts.init(&mut txn, network_id);
+        accounts.init(&mut txn, network_info.genesis_accounts());
 
         // Commit genesis block to accounts.
         let genesis_header = &genesis_block.header;

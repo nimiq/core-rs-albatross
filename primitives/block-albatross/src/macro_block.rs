@@ -10,6 +10,7 @@ use crate::BlockError;
 use crate::pbft::UntrustedPbftProof;
 use crate::signed;
 use primitives::slot::Slot;
+use primitives::coin::Coin;
 use crate::view_change::ViewChangeProof;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -42,7 +43,7 @@ pub struct MacroHeader {
 pub struct MacroExtrinsics {
     #[beserial(len_type(u16))]
     pub slot_allocation: Vec<Slot>,
-    pub slashing_amount: u64
+    pub slashing_amount: Coin
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

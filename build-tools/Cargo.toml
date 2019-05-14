@@ -16,6 +16,8 @@ nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }
 nimiq-account = { path = "../primitives/account" }
+nimiq-accounts = { path = "../accounts" }
+nimiq-database = { path = "../database", features = ["account"] }
 beserial = { path = "../beserial" }
 lazy_static = "1.3"
 rand = "0.6"
