@@ -17,9 +17,12 @@ extern crate nimiq_hash as hash;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
+extern crate nimiq_block_production_albatross as block_production_albatross;
 
 pub mod validator;
 pub mod validator_network;
 pub mod validator_agent;
 pub mod error;
 pub mod slash;
+#[cfg(feature = "mock")]
+pub mod mock;

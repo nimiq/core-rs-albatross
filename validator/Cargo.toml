@@ -30,11 +30,13 @@ nimiq-primitives = { path = "../primitives" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
 nimiq-block-production-albatross = { path = "../block-production-albatross" }
 nimiq-blockchain-base = { path = "../blockchain-base" }
-
+hex = { version = "0.3", optional = true }
 failure = "0.1"
 log = "0.4"
 parking_lot = "0.7"
 rand = "0.6"
 
 [features]
+default = ["mock"] # for now enable by default
 metrics = []
+mock = ["hex"]

@@ -2,16 +2,23 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bls::bls12_381::{SecretKey, PublicKey, Signature};
-use blockchain_albatross::Blockchain;
-use block_albatross::{Block, MacroBlock, MicroBlock, BlockType, MacroExtrinsics, MicroExtrinsics};
+use bls::Encoding;
+use utils::timers::Timers;
 use block_production_albatross::BlockProducer;
+use blockchain_albatross::Blockchain;
+use mempool::Mempool;
+use block_albatross::{
+    BlockType, Block,
+    MacroBlock, MacroHeader, MacroExtrinsics,
+    MicroBlock, MicroHeader, MicroExtrinsics
+};
 
 
 const SECRET_KEY: &'static str = "8049c38d5b20373723dd5fec59a489d65d7ce695be53b1823c4e989cf3458538";
 
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum MockTimers {
+enum MockTimers {
     ProduceBlock
 }
 
@@ -21,9 +28,9 @@ pub struct MockValidator<'env> {
 }
 
 
-impl<'env> MockValidator {
-    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>, validator_key: SecretKey) -> Self {
-        let validator_key = SecretKey::from_slice(hex::decode(SECRET_KEY).unwrap()).unwrap();
+impl<'env> MockValidator<'env> {
+    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>) -> Self {
+        let validator_key = SecretKey::from_slice(&hex::decode(SECRET_KEY).unwrap()).unwrap();
         Self {
             block_producer: Arc::new(BlockProducer::new(blockchain, mempool, validator_key)),
             timers: Timers::new(),
@@ -31,9 +38,14 @@ impl<'env> MockValidator {
     }
 
     pub fn start(&self) {
+        info!("Starting mock validator");
+
         let block_producer = Arc::clone(&self.block_producer);
 
-        timers.set_interval(MockTimers::ProduceBlock, move || {
+        self.timers.set_interval(MockTimers::ProduceBlock, move || {
+            info!("Producing block");
+
+            /*
             // get next producer
             let (next_producer_idx, next_producer_slot) = block_producer.blockchain.get_next_block_producer();
             // check that we are the producer
@@ -44,7 +56,7 @@ impl<'env> MockValidator {
 
             // get timestamp
             let timestamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
+                .duration_since(UNIX_EPOCH).unwrap()
                 .as_millis() as u64;
 
             match block_type {
@@ -58,8 +70,7 @@ impl<'env> MockValidator {
 
                 }
             }
-
-
+            */
         }, Duration::new(5, 0));
     }
 }

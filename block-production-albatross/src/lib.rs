@@ -21,9 +21,9 @@ use block::MicroJustification;
 use primitives::coin::Coin;
 
 pub struct BlockProducer<'env> {
-    blockchain: Arc<Blockchain<'env>>,
-    mempool: Arc<Mempool<'env, Blockchain<'env>>>,
-    validator_key: SecretKey,
+    pub blockchain: Arc<Blockchain<'env>>,
+    pub mempool: Arc<Mempool<'env, Blockchain<'env>>>,
+    pub validator_key: SecretKey,
 }
 
 impl<'env> BlockProducer<'env> {

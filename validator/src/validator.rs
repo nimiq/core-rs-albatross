@@ -35,7 +35,7 @@ use mempool::MempoolConfig;
 use network::NetworkConfig;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
-use nimiq_block_production_albatross::BlockProducer;
+use block_production_albatross::BlockProducer;
 use utils::key_store::{Error as KeyStoreError, KeyStore};
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
