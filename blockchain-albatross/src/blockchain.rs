@@ -7,7 +7,7 @@ use parking_lot::MutexGuard;
 
 use account::{Account, Inherent, InherentType};
 use accounts::Accounts;
-use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock, ValidatorSlot};
+use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock};
 use block::ForkProof;
 use block::ViewChange;
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
@@ -18,7 +18,7 @@ use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use primitives::slot::Slot;
+use primitives::validators::{Slot, Validator, Validators};
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
@@ -214,7 +214,7 @@ impl<'env> Blockchain<'env> {
                     None => return Err(PushError::InvalidSuccessor),
                     Some(ref view_change_proof) => {
                         let view_change = ViewChange { block_number: block.block_number(), new_view_number: block.view_number()};
-                        let idx_to_key_closure = |idx: u16| -> ValidatorSlot { self.get_current_validator_by_idx(idx).unwrap() };
+                        let idx_to_key_closure = |idx: u16| -> Validator { self.get_current_validator_by_idx(idx).unwrap() };
                         if !view_change_proof.into_trusted(idx_to_key_closure).verify(&view_change, policy::TWO_THIRD_VALIDATORS) {
                             return Err(PushError::InvalidSuccessor)
                         }
@@ -270,7 +270,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidSuccessor)
                     },
                     Some(ref justification) => {
-                        let idx_to_key_closure = |idx: u16| -> ValidatorSlot { self.get_current_validator_by_idx(idx).unwrap() };
+                        let idx_to_key_closure = |idx: u16| -> Validator { self.get_current_validator_by_idx(idx).unwrap() };
                         if !justification.into_trusted(idx_to_key_closure).verify(macro_block.hash(), policy::TWO_THIRD_VALIDATORS) {
                             warn!("Rejecting block - macro block not sufficiently signed");
                             return Err(PushError::InvalidSuccessor)
@@ -590,7 +590,7 @@ impl<'env> Blockchain<'env> {
 
             fork_proofs.push(Inherent {
                 ty: InherentType::Slash,
-                target: producer_opt.unwrap().1.slashing_address.clone(),
+                target: producer_opt.unwrap().1.staker_address.clone(),
                 value: self.last_macro_block().extrinsics.as_ref().unwrap().slashing_amount.try_into().unwrap(),
                 data: vec![]
             });
@@ -654,7 +654,7 @@ impl<'env> Blockchain<'env> {
         unimplemented!()
     }
 
-    pub fn get_next_validator_set(&self) -> Vec<ValidatorSlot> {
+    pub fn get_next_validator_set(&self) -> Validators {
         unimplemented!()
     }
 
@@ -670,7 +670,7 @@ impl<'env> Blockchain<'env> {
         }
     }
 
-    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<ValidatorSlot> { unimplemented!() }
+    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<Validator> { unimplemented!() }
 
     // Checks if a block number is within the range of the current epoch
     pub fn is_in_current_epoch(&self, block_number: u32) -> bool {

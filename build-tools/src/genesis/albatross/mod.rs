@@ -17,10 +17,10 @@ use bls::bls12_381::{
     SecretKey as BlsSecretKey,
     Signature as BlsSignature,
 };
-use block_albatross::{Block, MacroBlock, MacroHeader, ValidatorSlot, MacroExtrinsics};
+use block_albatross::{Block, MacroBlock, MacroHeader, MacroExtrinsics};
 use beserial::{Serialize, SerializingError};
 use primitives::coin::Coin;
-use primitives::slot::Slot;
+use primitives::validators::{Slot, Validator, Validators};
 use account::{Account, BasicAccount, StakingContract, AccountError, AccountsList};
 use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
 use database::WriteTransaction;
@@ -146,11 +146,11 @@ impl GenesisBuilder {
         Ok(self)
     }
 
-    fn select_validators(&self, pre_genesis_hash: &BlsSignature) -> Result<(Vec<Slot>, Vec<ValidatorSlot>), GenesisBuilderError> {
+    fn select_validators(&self, pre_genesis_hash: &BlsSignature) -> Result<(Vec<Slot>, Validators), GenesisBuilderError> {
         let (_, slot_allocation) = self.generate_staking_contract()?
             .select_validators(&pre_genesis_hash, 512, 16384);
 
-        let validator_slots = { // construct validator slot list with slot counts
+        let validators = { // construct validator slot list with slot counts
             // count slots per public key
             let mut slot_counts: BTreeMap<&BlsPublicKey, u16> = BTreeMap::new();
             for validator in slot_allocation.iter() {
@@ -159,19 +159,19 @@ impl GenesisBuilder {
                     .or_insert(1); // if no value, insert 1
             }
 
-            // map to Vec of ValidatorSlot
-            let mut validator_slots: Vec<ValidatorSlot> = Vec::new();
+            // map to Validators
+            let mut validators: Validators = Vec::new();
             for (public_key, slots) in slot_counts {
-                validator_slots.push(ValidatorSlot {
+                validators.push(Validator {
                     public_key: public_key.clone(),
                     slots
                 });
             }
 
-            validator_slots
+            validators
         };
 
-        Ok((slot_allocation, validator_slots))
+        Ok((slot_allocation, validators))
     }
 
     pub fn generate(&self) -> Result<(Block, Blake2bHash, Vec<(Address, Account)>), GenesisBuilderError> {

@@ -36,9 +36,9 @@ nimiq-keys = { path = "../keys", optional = true }
 lazy_static = "1.2"
 
 [features]
-all = ["coin", "account", "policy", "networks", "slot"]
+all = ["coin", "account", "policy", "networks", "validators"]
 coin = ["hex", "failure"]
 account = ["hex", "nimiq-macros", "failure", "enum-display-derive"]
 policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static", "fixed-unsigned"]
 networks = []
-slot = ["nimiq-bls", "nimiq-keys"]
+validators = ["nimiq-bls", "nimiq-keys"]

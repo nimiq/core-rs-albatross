@@ -16,5 +16,5 @@ pub mod account;
 pub mod policy;
 #[cfg(feature = "networks")]
 pub mod networks;
-#[cfg(feature = "slot")]
-pub mod slot;
+#[cfg(feature = "validators")]
+pub mod validators;

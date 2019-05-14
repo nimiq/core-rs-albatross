@@ -6,7 +6,7 @@ use nimiq_bls::bls12_381::{Signature, SecretKey, PublicKey, AggregateSignature, 
 use nimiq_bls::SigHash;
 use hash::{Blake2bHasher, SerializeContent, Hasher};
 use collections::bitset::BitSet;
-use crate::ValidatorSlot;
+use primitives::validators::Validator;
 
 // TODO: Move this to primitives?
 
@@ -182,7 +182,7 @@ pub struct UntrustedAggregateProof<M: Message> {
 
 impl<M: Message> UntrustedAggregateProof<M> {
     pub fn into_trusted<F>(&self, f: F) -> AggregateProof<M>
-        where F: Fn(u16) -> ValidatorSlot
+        where F: Fn(u16) -> Validator
     {
         // aggregate signatures and count votes
         let mut public_key = AggregatePublicKey::new();

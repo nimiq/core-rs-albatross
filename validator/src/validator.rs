@@ -21,7 +21,6 @@ use block_albatross::{
     SignedPbftPrepareMessage,
     SignedPbftProposal,
     SignedViewChange,
-    ValidatorSlot,
     ViewChange,
     ViewChangeProof,
 };

@@ -5,7 +5,7 @@ use beserial::{Deserialize, Serialize};
 use bls::bls12_381::{PublicKey, Signature};
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::coin::Coin;
-use primitives::slot::Slot;
+use primitives::validators::{Slot, Validators};
 
 use crate::BlockError;
 use crate::pbft::UntrustedPbftProof;
@@ -24,7 +24,7 @@ pub struct MacroHeader {
     pub version: u16,
 
     #[beserial(len_type(u16))]
-    pub validators: Vec<ValidatorSlot>,
+    pub validators: Validators,
 
     pub block_number: u32,
     pub view_number: u32,
@@ -43,12 +43,6 @@ pub struct MacroExtrinsics {
     #[beserial(len_type(u16))]
     pub slot_allocation: Vec<Slot>,
     pub slashing_amount: Coin
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ValidatorSlot {
-    pub public_key: PublicKey,
-    pub slots: u16
 }
 
 impl signed::Message for MacroHeader {

@@ -14,7 +14,7 @@ use hash::{Blake2bHasher, Hasher};
 use primitives::{
     policy,
     coin::Coin,
-    slot::Slot,
+    validators::Slot,
 };
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::StakingTransactionData;
@@ -419,7 +419,7 @@ impl StakingContract {
             validators.push(Slot {
                 reward_address,
                 public_key:         active_stake.validator_key.clone(),
-                slashing_address:   active_stake.staker_address.clone(),
+                staker_address:   active_stake.staker_address.clone(),
             });
         }
 
