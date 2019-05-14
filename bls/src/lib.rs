@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate nimiq_hash as hash;
+extern crate hex;
 
 use ff::Field;
 use group::{CurveAffine, CurveProjective};
@@ -36,7 +37,7 @@ pub trait Encoding: Sized {
     fn from_slice(bytes: &[u8]) -> Result<Self, Self::Error>;
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Signature<E: Engine> {
     pub(crate) s: E::G1,
 }
@@ -48,7 +49,7 @@ impl<E: Engine> PartialEq for Signature<E> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct SecretKey<E: Engine> {
     pub(crate) x: E::Fr,
 }
@@ -80,7 +81,7 @@ impl<E: Engine> SecretKey<E> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct PublicKey<E: Engine> {
     pub(crate) p_pub: E::G2,
 }
@@ -116,7 +117,7 @@ impl<E: Engine> PublicKey<E> {
 }
 
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Keypair<E: Engine> {
     pub secret: SecretKey<E>,
     pub public: PublicKey<E>,
@@ -146,7 +147,7 @@ impl<E: Engine> Keypair<E> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct AggregatePublicKey<E: Engine>(pub(crate) PublicKey<E>);
 
 impl<E: Engine> AggregatePublicKey<E> {
@@ -194,7 +195,7 @@ impl<E: Engine> PartialEq for AggregatePublicKey<E> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct AggregateSignature<E: Engine>(pub(crate) Signature<E>);
 
 impl<E: Engine> AggregateSignature<E> {

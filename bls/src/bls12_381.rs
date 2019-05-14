@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::fmt;
 
 use byteorder::{BigEndian, ByteOrder};
 use ff::{PrimeField, PrimeFieldDecodingError};
@@ -123,6 +124,13 @@ impl Encoding for PublicKey {
     }
 }
 
+
+impl fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&::hex::encode(&self.to_bytes()[..]))
+    }
+}
+
 impl Encoding for SecretKey {
     type Error = PrimeFieldDecodingError;
     type ByteArray = [u8; 32];
@@ -157,6 +165,12 @@ impl Encoding for SecretKey {
     }
 }
 
+impl fmt::Debug for SecretKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&::hex::encode(&self.to_bytes()[..]))
+    }
+}
+
 impl Encoding for Signature {
     type Error = GroupDecodingError;
     type ByteArray = [u8; 48];
@@ -184,6 +198,12 @@ impl Encoding for Signature {
         Ok(Signature {
             s: point.into_affine()?.into_projective(),
         })
+    }
+}
+
+impl fmt::Debug for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&::hex::encode(&self.to_bytes()[..]))
     }
 }
 
@@ -217,6 +237,12 @@ impl Encoding for AggregateSignature {
     }
 }
 
+impl fmt::Debug for AggregateSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&::hex::encode(&self.to_bytes()[..]))
+    }
+}
+
 impl Encoding for AggregatePublicKey {
     type Error = GroupDecodingError;
     type ByteArray = [u8; 96];
@@ -244,5 +270,11 @@ impl Encoding for AggregatePublicKey {
         Ok(GenericAggregatePublicKey(PublicKey {
             p_pub: point.into_affine()?.into_projective(),
         }))
+    }
+}
+
+impl fmt::Debug for AggregatePublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&::hex::encode(&self.to_bytes()[..]))
     }
 }
