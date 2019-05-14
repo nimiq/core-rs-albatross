@@ -60,23 +60,6 @@ impl Ord for ActiveStake {
     }
 }
 
-pub struct ActiveValidator {
-    pub validator_key: BlsPublicKey,
-    pub staking_address: Address,
-    pub reward_address_opt: Option<Address>,
-}
-
-impl ActiveValidator {
-    #[inline]
-    pub fn reward_address(&self) -> &Address {
-        if let Some(ref addr) = self.reward_address_opt {
-            addr
-        } else {
-            &self.staking_address
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct InactiveStake {
     balance: Coin,
@@ -420,11 +403,9 @@ impl StakingContract {
             let index = num % u64::from(lookup.range());
             let staking_address = lookup.find(index).unwrap();
             let active_stake = &self.active_stake_by_address[&staking_address];
-            // If a reward address is not explicitly defined, it means it's the same as the staking address
-            let reward_address = active_stake.reward_address.clone().unwrap_or_else(|| active_stake.staker_address.clone());
             validators.push(Slot {
-                reward_address,
                 public_key:         active_stake.validator_key.clone(),
+                reward_address_opt: active_stake.reward_address.clone(),
                 staker_address:   active_stake.staker_address.clone(),
             });
         }

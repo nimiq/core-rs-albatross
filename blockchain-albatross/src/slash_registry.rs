@@ -5,7 +5,6 @@ use std::io::Write;
 use std::ops::Bound::{Included, Excluded};
 use failure::Fail;
 
-use account::staking_contract::ActiveValidator;
 use beserial::{Deserialize, Serialize};
 use block::{Block, MicroBlock};
 use bls::bls12_381::Signature as BlsSignature;
@@ -13,6 +12,7 @@ use collections::bitset::BitSet;
 use database::{Database, Environment, ReadTransaction, WriteTransaction, FromDatabaseValue, IntoDatabaseValue, AsDatabaseBytes};
 use hash::{Blake2bHasher, Hasher};
 use primitives::policy;
+use primitives::validators::Slot;
 use crate::chain_store::ChainStore;
 
 pub struct SlashRegistry<'env> {
@@ -75,7 +75,7 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    pub fn commit_block(&mut self, block: &Block, seed: &BlsSignature, validators: &Vec<ActiveValidator>) -> Result<(), SlashPushError> {
+    pub fn commit_block(&mut self, block: &Block, seed: &BlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
         if let Block::Micro(ref block) = block {
             self.commit_micro_block(block, seed, validators)
         } else {
@@ -83,7 +83,7 @@ impl<'env> SlashRegistry<'env> {
         }
     }
 
-    pub fn commit_micro_block(&mut self, block: &MicroBlock, seed: &BlsSignature, validators: &Vec<ActiveValidator>) -> Result<(), SlashPushError> {
+    pub fn commit_micro_block(&mut self, block: &MicroBlock, seed: &BlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
         if !policy::successive_micro_blocks(self.bounds.1, block.header.block_number) {
             return Err(SlashPushError::UnexpectedBlock);
         }
@@ -180,7 +180,7 @@ impl<'env> SlashRegistry<'env> {
     }
 
     // Slot owner lookup for slash inherents
-    pub fn next_slot_owner<'a>(&self, block_number: u32, view_number: u32, seed: &BlsSignature, validators: &'a Vec<ActiveValidator>) -> (u32, &'a ActiveValidator) {
+    pub fn next_slot_owner<'a>(&self, block_number: u32, view_number: u32, seed: &BlsSignature, validators: &'a Vec<Slot>) -> (u32, &'a Slot) {
         let honest_validators = self.next_slots(block_number, validators);
 
         // Hash seed and index
@@ -199,9 +199,9 @@ impl<'env> SlashRegistry<'env> {
         (index as u32, &honest_validators[index as usize])
     }
 
-    fn without_slashes<'a>(validators: &'a Vec<ActiveValidator>, slashes: Option<&BitSet>) -> Vec<&'a ActiveValidator> {
+    fn without_slashes<'a>(validators: &'a Vec<Slot>, slashes: Option<&BitSet>) -> Vec<&'a Slot> {
         let mut idx = 0usize;
-        let mut vec = Vec::<&ActiveValidator>::with_capacity(validators.len());
+        let mut vec = Vec::<&Slot>::with_capacity(validators.len());
 
         // Iterate over slashed slots bit set
         if let Some(slashes) = slashes {
@@ -229,7 +229,7 @@ impl<'env> SlashRegistry<'env> {
         lookup_range.next_back().as_ref().map(|entry| &entry.1.epoch_state)
     }
 
-    pub fn reward_eligible<'a>(&self, epoch_number: u32, validators: &'a Vec<ActiveValidator>) -> Option<Vec<&'a ActiveValidator>> {
+    pub fn reward_eligible<'a>(&self, epoch_number: u32, validators: &'a Vec<Slot>) -> Option<Vec<&'a Slot>> {
         let mut lookup_range = self.diff_heights.range((
             Excluded(policy::first_block_of(epoch_number)),
             Excluded(policy::first_block_of(epoch_number + 2)),
@@ -239,7 +239,7 @@ impl<'env> SlashRegistry<'env> {
         Some(Self::without_slashes(validators, slashes))
     }
 
-    fn next_slots<'a>(&self, block_number: u32, validators: &'a Vec<ActiveValidator>) -> Vec<&'a ActiveValidator> {
+    fn next_slots<'a>(&self, block_number: u32, validators: &'a Vec<Slot>) -> Vec<&'a Slot> {
         // Get last change of slots (diff.block_number <= block_number)
         let epoch_start = policy::first_block_of(policy::epoch_at(block_number));
         let mut lookup_range = self.diff_heights.range((Included(epoch_start), Included(block_number)));
