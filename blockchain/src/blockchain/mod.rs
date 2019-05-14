@@ -738,10 +738,8 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
         self.network_id
     }
 
-    fn head_block(&self) -> Self::Block {
-        // FIXME Do we really want to clone here?
-        // Or do we want to return a MappedRwLockedReadGuard from the AbstractBlockchain trait?
-        self.state.read().main_chain.head.clone()
+    fn head_block(&self) -> MappedRwLockReadGuard<Self::Block> {
+        self.head()
     }
 
     fn head_hash(&self) -> Blake2bHash {

@@ -8,14 +8,12 @@ extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
 
-#[cfg(feature = "metrics")]
-pub mod chain_metrics;
-
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 
 use failure::Fail;
+use parking_lot::MappedRwLockReadGuard;
 use parking_lot::MutexGuard;
 
 use account::{Account, AccountError};
@@ -30,6 +28,9 @@ use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle};
+
+#[cfg(feature = "metrics")]
+pub mod chain_metrics;
 
 pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
     type Block: Block;
@@ -48,7 +49,7 @@ pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
 
 
     /// Returns the current head block
-    fn head_block(&self) -> Self::Block;
+    fn head_block(&self) -> MappedRwLockReadGuard<Self::Block>;
 
     /// Returns the current head hash of the active chain
     fn head_hash(&self) -> Blake2bHash;

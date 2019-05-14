@@ -91,8 +91,8 @@ fn main() {
     deadlock::deadlock_detection();
 
     // setup a human-readable panic message
-    #[cfg(feature = "human-panic")]
-    setup_panic!();
+    //#[cfg(feature = "human-panic")]
+    //setup_panic!();
 
     if let Err(e) = run() {
         force_log_error_cause_chain(e.as_fail(), Level::Error);
@@ -317,7 +317,6 @@ fn run() -> Result<(), Error> {
         Err(ConfigError::MissingPublicKey)?;
     }
     client_builder.with_seeds(seeds);
-
 
     // Setup client future to initialize and connect
     if network_id.is_albatross() {

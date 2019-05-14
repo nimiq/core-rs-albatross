@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::fmt;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
@@ -11,14 +10,12 @@ use transaction::Transaction;
 use crate::BlockError;
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
-use crate::signed::AggregateProof;
-use crate::view_change::ViewChangeProof;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum BlockType {
-    Macro,
-    Micro,
+    Macro = 1,
+    Micro = 2,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -118,7 +115,7 @@ impl Block {
     pub fn ty(&self) -> BlockType {
         match self {
             Block::Macro(_) => BlockType::Macro,
-            Block::Micro(_) => BlockType::Micro
+            Block::Micro(_) => BlockType::Micro,
         }
     }
 }
@@ -128,8 +125,8 @@ impl Serialize for Block {
         let mut size = 0;
         size += self.ty().serialize(writer)?;
         size += match self {
+            Block::Macro(block) => block.serialize(writer)?,
             Block::Micro(block) => block.serialize(writer)?,
-            Block::Macro(block) => block.serialize(writer)?
         };
         Ok(size)
     }
@@ -138,8 +135,8 @@ impl Serialize for Block {
         let mut size = 0;
         size += self.ty().serialized_size();
         size += match self {
+            Block::Macro(block) => block.serialized_size(),
             Block::Micro(block) => block.serialized_size(),
-            Block::Macro(block) => block.serialized_size()
         };
         size
     }
@@ -150,7 +147,7 @@ impl Deserialize for Block {
         let ty: BlockType = Deserialize::deserialize(reader)?;
         let block = match ty {
             BlockType::Macro => Block::Macro(Deserialize::deserialize(reader)?),
-            BlockType::Micro => Block::Macro(Deserialize::deserialize(reader)?)
+            BlockType::Micro => Block::Micro(Deserialize::deserialize(reader)?),
         };
         Ok(block)
     }
@@ -172,22 +169,22 @@ pub enum BlockHeader {
 impl BlockHeader {
     pub fn ty(&self) -> BlockType {
         match self {
+            BlockHeader::Macro(_) => BlockType::Macro,
             BlockHeader::Micro(_) => BlockType::Micro,
-            BlockHeader::Macro(_) => BlockType::Macro
         }
     }
 
     pub fn block_number(&self) -> u32 {
         match self {
-            BlockHeader::Micro(ref header) => header.block_number,
             BlockHeader::Macro(ref header) => header.block_number,
+            BlockHeader::Micro(ref header) => header.block_number,
         }
     }
 
     pub fn view_number(&self) -> u32 {
         match self {
             BlockHeader::Macro(ref header) => header.view_number,
-            BlockHeader::Micro(ref header) => header.view_number
+            BlockHeader::Micro(ref header) => header.view_number,
         }
     }
 
@@ -216,8 +213,8 @@ impl Serialize for BlockHeader {
         let mut size = 0;
         size += self.ty().serialize(writer)?;
         size += match self {
+            BlockHeader::Macro(header) => header.serialize(writer)?,
             BlockHeader::Micro(header) => header.serialize(writer)?,
-            BlockHeader::Macro(header) => header.serialize(writer)?
         };
         Ok(size)
     }
@@ -226,8 +223,8 @@ impl Serialize for BlockHeader {
         let mut size = 0;
         size += self.ty().serialized_size();
         size += match self {
+            BlockHeader::Macro(header) => header.serialized_size(),
             BlockHeader::Micro(header) => header.serialized_size(),
-            BlockHeader::Macro(header) => header.serialized_size()
         };
         size
     }
@@ -238,7 +235,7 @@ impl Deserialize for BlockHeader {
         let ty: BlockType = Deserialize::deserialize(reader)?;
         let header = match ty {
             BlockType::Macro => BlockHeader::Macro(Deserialize::deserialize(reader)?),
-            BlockType::Micro => BlockHeader::Macro(Deserialize::deserialize(reader)?)
+            BlockType::Micro => BlockHeader::Micro(Deserialize::deserialize(reader)?),
         };
         Ok(header)
     }
@@ -268,3 +265,4 @@ impl block_base::Block for Block {
         self.transactions_mut()
     }
 }
+

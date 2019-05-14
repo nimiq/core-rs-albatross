@@ -10,7 +10,7 @@ use parking_lot::MutexGuard;
 
 use account::{Account, AccountError, Inherent, InherentType};
 use accounts::Accounts;
-use block::{Block, BlockError, BlockHeader, BlockType, MacroBlock, MicroBlock, ValidatorSlots};
+use block::{Block, BlockError, BlockHeader, BlockType, MacroBlock, MicroBlock, ValidatorSlot};
 use block::ForkProof;
 use block::ViewChange;
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
@@ -150,7 +150,7 @@ impl<'env> Blockchain<'env> {
         accounts.init(&mut txn, network_id);
 
         // Commit genesis block to accounts.
-        // TODO
+        // XXX Don't distribute any reward for the genesis block, so there is nothing to commit.
 
         // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
@@ -220,7 +220,7 @@ impl<'env> Blockchain<'env> {
                     None => return Err(PushError::InvalidSuccessor),
                     Some(ref view_change_proof) => {
                         let view_change = ViewChange { block_number: block.block_number(), new_view_number: block.view_number()};
-                        let idx_to_key_closure = |idx: u16| -> ValidatorSlots { self.get_current_validator_by_idx(idx).unwrap() };
+                        let idx_to_key_closure = |idx: u16| -> ValidatorSlot { self.get_current_validator_by_idx(idx).unwrap() };
                         if !view_change_proof.into_trusted(idx_to_key_closure).verify(&view_change, policy::TWO_THIRD_VALIDATORS) {
                             return Err(PushError::InvalidSuccessor)
                         }
@@ -274,7 +274,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidSuccessor)
                     },
                     Some(ref justification) => {
-                        let idx_to_key_closure = |idx: u16| -> ValidatorSlots { self.get_current_validator_by_idx(idx).unwrap() };
+                        let idx_to_key_closure = |idx: u16| -> ValidatorSlot { self.get_current_validator_by_idx(idx).unwrap() };
                         if !justification.into_trusted(idx_to_key_closure).verify(macro_block.hash(), policy::TWO_THIRD_VALIDATORS) {
                             warn!("Rejecting block - macro block not sufficiently signed");
                             return Err(PushError::InvalidSuccessor)
@@ -658,7 +658,7 @@ impl<'env> Blockchain<'env> {
         unimplemented!()
     }
 
-    pub fn get_next_validator_set(&self) -> Vec<ValidatorSlots> {
+    pub fn get_next_validator_set(&self) -> Vec<ValidatorSlot> {
         unimplemented!()
     }
 
@@ -674,7 +674,7 @@ impl<'env> Blockchain<'env> {
         }
     }
 
-    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<ValidatorSlots> { unimplemented!() }
+    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<ValidatorSlot> { unimplemented!() }
 
     // Checks if a block number is within the range of the current epoch
     pub fn is_in_current_epoch(&self, block_number: u32) -> bool {
@@ -696,34 +696,36 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     type Block = Block;
 
     fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
-        unimplemented!()
+        Blockchain::new(env, network_id, network_time)
     }
 
     #[cfg(feature = "metrics")]
-    fn metrics(&self) -> &BlockchainMetrics { unimplemented!() }
-
-    fn network_id(&self) -> NetworkId {
-        unimplemented!()
+    fn metrics(&self) -> &BlockchainMetrics {
+        &self.metrics
     }
 
-    fn head_block(&self) -> Self::Block {
-        unimplemented!()
+    fn network_id(&self) -> NetworkId {
+        self.network_id
+    }
+
+    fn head_block(&self) -> MappedRwLockReadGuard<Self::Block> {
+        self.head()
     }
 
     fn head_hash(&self) -> Blake2bHash {
-        unimplemented!()
+        self.head_hash()
     }
 
     fn head_height(&self) -> u32 {
-        unimplemented!()
+        self.height()
     }
 
     fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Self::Block> {
-        unimplemented!()
+        self.get_block(hash, false, include_body)
     }
 
     fn get_block_at(&self, height: u32, include_body: bool) -> Option<Self::Block> {
-        unimplemented!()
+        self.get_block_at(height, include_body)
     }
 
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
@@ -731,15 +733,15 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     }
 
     fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Self::Block> {
-        unimplemented!()
+        self.get_blocks(start_block_hash, count, include_body, direction)
     }
 
     fn push(&self, block: Self::Block) -> Result<PushResult, PushError> {
-        unimplemented!()
+        self.push(block)
     }
 
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
-        unimplemented!()
+        self.contains(hash, include_forks)
     }
 
     fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof> {
@@ -755,19 +757,19 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     }
 
     fn register_listener<T: Listener<BlockchainEvent> + 'env>(&self, listener: T) -> ListenerHandle {
-        unimplemented!()
+        self.notifier.write().register(listener)
     }
 
     fn lock(&self) -> MutexGuard<()> {
-        unimplemented!()
+        self.push_lock.lock()
     }
 
     fn get_account(&self, address: &Address) -> Account {
-        unimplemented!()
+        self.state.read().accounts.get(address, None)
     }
 
     fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool {
-        unimplemented!()
+        self.state.read().transaction_cache.contains(tx_hash)
     }
 
     fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash> {
@@ -775,6 +777,6 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     }
 
     fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk> {
-        unimplemented!()
+        self.state.read().accounts.get_chunk(prefix, size, txn_option)
     }
 }

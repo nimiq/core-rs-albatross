@@ -174,7 +174,6 @@ impl FromStr for Network {
 
             "test-albatross" => Network::TestAlbatross,
             "dev-albatross" => Network::DevAlbatross,
-
             _ => Err(())?
         })
     }

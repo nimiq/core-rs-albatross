@@ -24,7 +24,7 @@ pub struct MacroHeader {
     pub version: u16,
 
     #[beserial(len_type(u16))]
-    pub validators: Vec<ValidatorSlots>,
+    pub validators: Vec<ValidatorSlot>,
 
     pub block_number: u32,
     pub view_number: u32,
@@ -46,7 +46,7 @@ pub struct MacroExtrinsics {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ValidatorSlots {
+pub struct ValidatorSlot {
     pub public_key: PublicKey,
     pub slots: u16
 }
@@ -82,6 +82,7 @@ impl SerializeContent for MacroExtrinsics {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
+// TODO Do we need merkle here?
 impl Hash for MacroExtrinsics { }
 
 impl fmt::Display for MacroBlock {
