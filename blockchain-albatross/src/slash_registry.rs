@@ -7,7 +7,7 @@ use failure::Fail;
 
 use account::staking_contract::ActiveValidator;
 use beserial::{Deserialize, Serialize};
-use block::MicroBlock;
+use block::{Block, MicroBlock};
 use bls::bls12_381::Signature as BlsSignature;
 use collections::bitset::BitSet;
 use database::{Database, Environment, ReadTransaction, WriteTransaction, FromDatabaseValue, IntoDatabaseValue, AsDatabaseBytes};
@@ -71,6 +71,15 @@ impl<'env> SlashRegistry<'env> {
             bounds,
             diff_heights,
             slash_registry_db
+        }
+    }
+
+    #[inline]
+    pub fn commit_block(&mut self, block: &Block, seed: &BlsSignature, validators: &Vec<ActiveValidator>) -> Result<(), SlashPushError> {
+        if let Block::Micro(ref block) = block {
+            self.commit_micro_block(block, seed, validators)
+        } else {
+            Ok(())
         }
     }
 
@@ -144,6 +153,15 @@ impl<'env> SlashRegistry<'env> {
         txn.commit();
 
         Ok(())
+    }
+
+    #[inline]
+    pub fn revert_block(&mut self, block: &Block) -> Result<(), SlashPushError> {
+        if let Block::Micro(ref block) = block {
+            self.revert_micro_block(block)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn revert_micro_block(&mut self, block: &MicroBlock) -> Result<(), SlashPushError> {
