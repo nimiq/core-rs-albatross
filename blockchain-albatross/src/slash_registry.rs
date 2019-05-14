@@ -2,22 +2,25 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::io;
 use std::io::Write;
-use std::ops::Bound::{Included, Excluded};
+use std::ops::Bound::{Excluded, Included};
+use std::sync::Arc;
+
 use failure::Fail;
 
 use beserial::{Deserialize, Serialize};
 use block::{Block, MicroBlock};
 use bls::bls12_381::Signature as BlsSignature;
 use collections::bitset::BitSet;
-use database::{Database, Environment, ReadTransaction, WriteTransaction, FromDatabaseValue, IntoDatabaseValue, AsDatabaseBytes};
+use database::{AsDatabaseBytes, Database, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHasher, Hasher};
 use primitives::policy;
 use primitives::validators::Slot;
+
 use crate::chain_store::ChainStore;
 
 pub struct SlashRegistry<'env> {
     env: &'env Environment,
-    chain_store: &'env ChainStore<'env>,
+    chain_store: Arc<ChainStore<'env>>,
     bounds: TrackedRange,
     diff_heights: BTreeMap<u32, BlockDescriptor>,
     slash_registry_db: Database<'env>,
@@ -50,7 +53,7 @@ impl<'env> SlashRegistry<'env> {
     const SLASH_REGISTRY_DB_NAME: &'static str = "SlashRegistry";
     const BOUNDS_KEY: &'static str = "bounds";
 
-    pub fn new(env: &'env Environment, chain_store: &'env ChainStore<'env>) -> Self {
+    pub fn new(env: &'env Environment, chain_store: Arc<ChainStore<'env>>) -> Self {
         let slash_registry_db = env.open_database(SlashRegistry::SLASH_REGISTRY_DB_NAME.to_string());
 
         let txn = ReadTransaction::new(env);
@@ -75,11 +78,10 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    pub fn commit_block(&mut self, block: &Block, seed: &BlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
-        if let Block::Micro(ref block) = block {
-            self.commit_micro_block(block, seed, validators)
-        } else {
-            Ok(())
+    pub  fn commit_block(&mut self, block: &Block, seed: &BlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
+        match block {
+            Block::Macro(_) => Ok(()),
+            Block::Micro(ref micro_block) => self.commit_micro_block(micro_block, seed, validators),
         }
     }
 

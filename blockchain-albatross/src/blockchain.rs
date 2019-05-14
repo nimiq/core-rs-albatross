@@ -40,8 +40,7 @@ pub struct Blockchain<'env> {
     pub network_id: NetworkId,
     network_time: Arc<NetworkTime>,
     pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
-    pub(crate) chain_store: ChainStore<'env>,
-    pub(crate) slash_registry: SlashRegistry<'env>,
+    pub(crate) chain_store: Arc<ChainStore<'env>>,
     pub(crate) state: RwLock<BlockchainState<'env>>,
     pub push_lock: Mutex<()>, // TODO: Not very nice to have this public
 
@@ -52,10 +51,13 @@ pub struct Blockchain<'env> {
 pub struct BlockchainState<'env> {
     accounts: Accounts<'env>,
     transaction_cache: TransactionCache,
+    pub(crate) slash_registry: SlashRegistry<'env>,
+
     pub(crate) main_chain: ChainInfo,
     head_hash: Blake2bHash,
-    last_macro_block: MacroBlock,
-    view_number: u32,
+
+    macro_head: MacroBlock,
+    macro_head_hash: Blake2bHash,
 }
 
 impl<'env> BlockchainState<'env> {
@@ -69,21 +71,18 @@ impl<'env> BlockchainState<'env> {
 }
 
 impl<'env> Blockchain<'env> {
-
     pub fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
-        let chain_store = ChainStore::new(env);
-        let slash_registry = SlashRegistry::new(env, unimplemented!());
+        let chain_store = Arc::new(ChainStore::new(env));
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, slash_registry, head_hash)?,
-            None => Blockchain::init(env, network_time, network_id, chain_store, slash_registry)?
+            Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash)?,
+            None => Blockchain::init(env, network_time, network_id, chain_store)?
         })
     }
 
-    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, slash_registry: SlashRegistry<'env>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
+    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: Arc<ChainStore<'env>>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
-
         if !genesis_info.map(|i| i.on_main_chain).unwrap_or(false) {
             return Err(BlockchainError::InvalidGenesisBlock)
         }
@@ -92,13 +91,23 @@ impl<'env> Blockchain<'env> {
         let main_chain = chain_store
             .get_chain_info(&head_hash, true, None)
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
-        let view_number = main_chain.head.view_number();
 
         // Check that chain/accounts state is consistent.
         let accounts = Accounts::new(env);
         if main_chain.head.state_root() != &accounts.hash(None) {
             return Err(BlockchainError::InconsistentState);
         }
+
+        // Load macro chain from store.
+        let macro_head_hash = chain_store.get_macro_head(None)
+            .ok_or(BlockchainError::FailedLoadingMainChain)?;
+        let macro_chain_info = chain_store
+            .get_chain_info(&macro_head_hash, true, None)
+            .ok_or(BlockchainError::FailedLoadingMainChain)?;
+        let macro_head = match macro_chain_info.head {
+            Block::Macro(macro_head) => macro_head,
+            Block::Micro(_) => return Err(BlockchainError::InconsistentState),
+        };
 
         // Initialize TransactionCache.
         let mut transaction_cache = TransactionCache::new();
@@ -109,20 +118,23 @@ impl<'env> Blockchain<'env> {
         transaction_cache.push_block(&main_chain.head);
         assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.block_number()));
 
+        // Initialize SlashRegistry.
+        let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
+
         Ok(Blockchain {
             env,
             network_id,
             network_time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
-            slash_registry,
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,
+                slash_registry,
                 main_chain,
                 head_hash,
-                last_macro_block: unimplemented!(),
-                view_number,
+                macro_head,
+                macro_head_hash,
             }),
             push_lock: Mutex::new(()),
 
@@ -131,15 +143,13 @@ impl<'env> Blockchain<'env> {
         })
     }
 
-    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, slash_registry: SlashRegistry<'env>) -> Result<Self, BlockchainError> {
+    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: Arc<ChainStore<'env>>) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
         let genesis_macro_block = (match genesis_block { Block::Macro(ref macro_block) => Some(macro_block), _ => None }).unwrap();
         let main_chain = ChainInfo::initial(genesis_block.clone());
         let head_hash = network_info.genesis_hash().clone();
-
-        // TODO Initialize SlashRegistry
 
         // Initialize accounts.
         let accounts = Accounts::new(env);
@@ -151,11 +161,15 @@ impl<'env> Blockchain<'env> {
 
         // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
+        chain_store.set_macro_head(&mut txn, &head_hash);
         chain_store.set_head(&mut txn, &head_hash);
         txn.commit();
 
         // Initialize empty TransactionCache.
         let transaction_cache = TransactionCache::new();
+
+        // Initialize SlashRegistry.
+        let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
 
         Ok(Blockchain {
             env,
@@ -163,14 +177,14 @@ impl<'env> Blockchain<'env> {
             network_time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
-            slash_registry,
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,
+                slash_registry,
                 main_chain,
-                head_hash,
-                last_macro_block: genesis_macro_block.clone(),
-                view_number: 0,
+                head_hash: head_hash.clone(),
+                macro_head: genesis_macro_block.clone(),
+                macro_head_hash: head_hash,
             }),
             push_lock: Mutex::new(()),
 
@@ -178,8 +192,6 @@ impl<'env> Blockchain<'env> {
             metrics: BlockchainMetrics::default()
         })
     }
-
-    pub fn macro_head_hash(&self) -> Blake2bHash { unimplemented!(); }
 
     /// Verification required for macro block proposals and micro blocks
     pub fn push_verify_dry(&self, block: &Block) -> Result<(), PushError> {
@@ -291,11 +303,11 @@ impl<'env> Blockchain<'env> {
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
         let chain_info = prev_info.next(block);
 
-        if chain_info.head.parent_hash() == &self.state.read().main_chain.head.hash() {
+        if *chain_info.head.parent_hash() == self.head_hash() {
             return self.extend(chain_info.head.hash(), chain_info, prev_info);
         }
 
-        if chain_info.head.view_number() > self.state.read().main_chain.head.view_number() {
+        if chain_info.head.view_number() > self.view_number() {
             return self.rebranch(chain_info.head.hash(), chain_info);
         }
 
@@ -336,17 +348,25 @@ impl<'env> Blockchain<'env> {
         self.chain_store.put_chain_info(&mut txn, &chain_info.head.parent_hash(), &prev_info, false);
         self.chain_store.set_head(&mut txn, &block_hash);
 
-        // Acquire write lock.
+        // Acquire write lock & commit changes.
         let mut state = RwLockUpgradableReadGuard::upgrade(state);
         state.transaction_cache.push_block(&chain_info.head);
-        state.head_hash = block_hash;
-        state.view_number = chain_info.head.view_number();
+        // TODO SlashRegistry
+
+        if let Block::Macro(ref macro_block) = chain_info.head {
+            state.macro_head = macro_block.clone();
+            state.macro_head_hash = block_hash.clone();
+            self.chain_store.set_macro_head(&mut txn, &block_hash);
+        }
+
         state.main_chain = chain_info;
+        state.head_hash = block_hash.clone();
         txn.commit();
 
         // Give up lock before notifying.
-        let event = BlockchainEvent::Extended(state.head_hash.clone());
         drop(state);
+
+        let event = BlockchainEvent::Extended(block_hash);
         self.notifier.read().notify(event);
 
         Ok(PushResult::Extended)
@@ -493,7 +513,6 @@ impl<'env> Blockchain<'env> {
 
         state.main_chain = fork_chain[0].1.clone();
         state.head_hash = fork_chain[0].0.clone();
-        state.view_number = fork_chain[0].1.head.view_number();
 
         // Give up lock before notifying.
         drop(state);
@@ -519,11 +538,10 @@ impl<'env> Blockchain<'env> {
                 // Revert chain up to block_number
                 self.rebranch(chain_info.head.hash(), chain_info);
 
-                self.state.write().view_number = view_number;
+                //self.state.write().view_number = view_number;
             }
         }
     }
-
 
     fn commit_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
         match block {
@@ -601,16 +619,12 @@ impl<'env> Blockchain<'env> {
         self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
-    pub fn head_hash(&self) -> Blake2bHash {
-        self.state.read().head_hash.clone()
-    }
-
     pub fn height(&self) -> u32 {
         self.state.read().main_chain.head.block_number()
     }
 
     pub fn view_number(&self) -> u32 {
-        self.state.read().view_number
+        self.state.read().main_chain.head.view_number()
     }
 
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {
@@ -618,9 +632,17 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| &s.main_chain.head)
     }
 
-    pub fn last_macro_block(&self) -> MappedRwLockReadGuard<MacroBlock> {
+    pub fn head_hash(&self) -> Blake2bHash {
+        self.state.read().head_hash.clone()
+    }
+
+    pub fn macro_head(&self) -> MappedRwLockReadGuard<MacroBlock> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.last_macro_block)
+        RwLockReadGuard::map(guard, |s| &s.macro_head)
+    }
+
+    pub fn macro_head_hash(&self) -> Blake2bHash {
+        self.state.read().macro_head_hash.clone()
     }
 
     pub fn get_next_block_producer(&self) -> (u16, Slot) {
@@ -651,7 +673,9 @@ impl<'env> Blockchain<'env> {
 
     // Checks if a block number is within the range of the current epoch
     pub fn is_in_current_epoch(&self, block_number: u32) -> bool {
-        return block_number >= self.state.read().last_macro_block.header.block_number && block_number < self.state.read().last_macro_block.header.block_number + policy::EPOCH_LENGTH;
+        let state = self.state.read();
+        let macro_block_number = state.macro_head.header.block_number;
+        return block_number >= macro_block_number && block_number < macro_block_number + policy::EPOCH_LENGTH;
     }
 
     pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, &Slot)> { unimplemented!() }
@@ -677,7 +701,7 @@ impl<'env> Blockchain<'env> {
         Inherent {
             ty: InherentType::Slash,
             target: producer.1.staker_address.clone(),
-            value: self.last_macro_block().extrinsics.as_ref().unwrap().slashing_amount.try_into().unwrap(),
+            value: self.macro_head().extrinsics.as_ref().unwrap().slashing_amount.try_into().unwrap(),
             data: vec![]
         }
     }
