@@ -75,7 +75,7 @@ impl<'env> BlockProducer<'env> {
             - MicroExtrinsics::get_metadata_size(fork_proofs.len(), extra_data.len());
         let mut transactions = self.mempool.get_transactions_for_block(max_size);
 
-        let inherents = self.blockchain.fork_proofs_to_inherents(&fork_proofs);
+        let inherents = self.blockchain.create_slash_inherents(&fork_proofs, /* TODO */ None);
 
         let mut receipts = self.blockchain.state().accounts()
             .collect_receipts(&transactions, &inherents, self.blockchain.height() + 1)
@@ -144,7 +144,7 @@ impl<'env> BlockProducer<'env> {
         let parent_hash = self.blockchain.head_hash();
         let extrinsics_root = extrinsics.hash();
 
-        let inherents = self.blockchain.fork_proofs_to_inherents(&extrinsics.fork_proofs);
+        let inherents = self.blockchain.create_slash_inherents(&extrinsics.fork_proofs, /* TODO */ None);
         // Rewards are distributed with delay.
         let state_root = self.blockchain.state().accounts()
             .hash_with(&extrinsics.transactions, &inherents, block_number)

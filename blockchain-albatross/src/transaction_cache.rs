@@ -1,7 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 
 use hash::{Blake2bHash, Hash};
-use block::MicroBlock;
+use block::Block;
 use primitives::policy;
 
 #[derive(Debug, Clone)]
@@ -11,15 +11,15 @@ struct BlockDescriptor {
     transaction_hashes: Vec<Blake2bHash>
 }
 
-impl<'a> From<&'a MicroBlock> for BlockDescriptor {
-    fn from(block: &'a MicroBlock) -> Self {
-        let transactions = &block.extrinsics.as_ref().unwrap().transactions;
-        let hashes = transactions.iter().map(Hash::hash).collect();
+impl<'a> From<&'a Block> for BlockDescriptor {
+    fn from(block: &'a Block) -> Self {
+        let transactions = block.transactions();
+        let hashes = transactions.map(|txs| txs.iter().map(Hash::hash).collect()).unwrap_or_else(|| vec![]);
 
         BlockDescriptor {
-            hash: block.header.hash(),
-            prev_hash: block.header.parent_hash.clone(),
-            transaction_hashes: hashes
+            hash: block.hash(),
+            prev_hash: block.parent_hash().clone(),
+            transaction_hashes: hashes,
         }
     }
 }
@@ -42,17 +42,23 @@ impl TransactionCache {
         self.transaction_hashes.contains(&transaction_hash)
     }
 
-    pub fn contains_any(&self, block: &MicroBlock) -> bool {
-        for transaction in block.extrinsics.as_ref().unwrap().transactions.iter() {
+    pub fn contains_any(&self, block: &Block) -> bool {
+        let transactions = block.transactions();
+        if transactions.is_none() {
+            return false;
+        }
+
+        for transaction in transactions.unwrap().iter() {
             if self.contains(&transaction.hash()) {
                 return true;
             }
         }
+
         false
     }
 
-    pub fn push_block(&mut self, block: &MicroBlock) {
-        assert!(self.block_order.is_empty() || block.header.parent_hash == self.block_order.back().as_ref().unwrap().hash);
+    pub fn push_block(&mut self, block: &Block) {
+        assert!(self.block_order.is_empty() || *block.parent_hash() == self.block_order.back().as_ref().unwrap().hash);
 
         let descriptor = BlockDescriptor::from(block);
         for hash in &descriptor.transaction_hashes {
@@ -66,18 +72,18 @@ impl TransactionCache {
         }
     }
 
-    pub fn revert_block(&mut self, block: &MicroBlock) {
+    pub fn revert_block(&mut self, block: &Block) {
         let descriptor = self.block_order.pop_back();
         if let Some(descriptor) = descriptor {
-            assert_eq!(descriptor.hash, block.header.hash());
+            assert_eq!(descriptor.hash, block.hash());
             for hash in &descriptor.transaction_hashes {
                 self.transaction_hashes.remove(hash);
             }
         }
     }
 
-    pub fn prepend_block(&mut self, block: &MicroBlock) {
-        assert!(self.block_order.is_empty() || block.header.hash::<Blake2bHash>() == self.block_order.front().as_ref().unwrap().prev_hash);
+    pub fn prepend_block(&mut self, block: &Block) {
+        assert!(self.block_order.is_empty() || block.hash() == self.block_order.front().as_ref().unwrap().prev_hash);
         assert!(self.missing_blocks() > 0);
 
         let descriptor = BlockDescriptor::from(block);

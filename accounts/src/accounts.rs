@@ -6,7 +6,6 @@ use database::{Environment, ReadTransaction, WriteTransaction};
 use database as db;
 use hash::Blake2bHash;
 use keys::Address;
-use primitives::networks::NetworkId;
 use transaction::{Transaction, TransactionFlags};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;

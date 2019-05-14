@@ -10,7 +10,6 @@ use primitives::validators::{Slot, Validators};
 use crate::BlockError;
 use crate::pbft::UntrustedPbftProof;
 use crate::signed;
-use crate::view_change::ViewChangeProof;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {

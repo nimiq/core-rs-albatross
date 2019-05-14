@@ -2,14 +2,12 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
-use parking_lot::MutexGuard;
+use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 
 use account::{Account, Inherent, InherentType};
 use accounts::Accounts;
 use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock};
-use block::ForkProof;
-use block::ViewChange;
+use block::{ForkProof, ViewChange};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
@@ -101,13 +99,9 @@ impl<'env> Blockchain<'env> {
         let mut transaction_cache = TransactionCache::new();
         let blocks = chain_store.get_blocks_backward(&head_hash, transaction_cache.missing_blocks() - 1, true, None);
         for block in blocks.iter().rev() {
-            if let Block::Micro(ref micro_block) = block {
-                transaction_cache.push_block(micro_block);
-            }
+            transaction_cache.push_block(block);
         }
-        if let Block::Micro(ref micro_block) = main_chain.head {
-            transaction_cache.push_block(&micro_block);
-        }
+        transaction_cache.push_block(&main_chain.head);
         assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.block_number()));
 
         Ok(Blockchain {
@@ -307,25 +301,23 @@ impl<'env> Blockchain<'env> {
 
     fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(self.env);
+        let state = self.state.upgradable_read();
 
-        if let Block::Micro(ref micro_block) = chain_info.head {
-            let state = self.state.read();
+        // Check transactions against TransactionCache to prevent replay.
+        // XXX This is technically unnecessary for macro blocks, but it doesn't hurt either.
+        if state.transaction_cache.contains_any(&chain_info.head) {
+            warn!("Rejecting block - transaction already included");
+            txn.abort();
+            return Err(PushError::DuplicateTransaction);
+        }
 
-            // Check transactions against TransactionCache to prevent replay.
-            if state.transaction_cache.contains_any(&micro_block) {
-                warn!("Rejecting block - transaction already included");
-                txn.abort();
-                return Err(PushError::DuplicateTransaction);
-            }
-
-            // Commit block to AccountsTree.
-            if let Err(e) = self.commit_accounts(&state.accounts, &mut txn, &chain_info.head) {
-                warn!("Rejecting block - commit failed: {:?}", e);
-                txn.abort();
-                #[cfg(feature = "metrics")]
-                    self.metrics.note_invalid_block();
-                return Err(e);
-            }
+        // Commit block to AccountsTree.
+        if let Err(e) = self.commit_accounts(&state.accounts, &mut txn, &chain_info.head) {
+            warn!("Rejecting block - commit failed: {:?}", e);
+            txn.abort();
+            #[cfg(feature = "metrics")]
+                self.metrics.note_invalid_block();
+            return Err(e);
         }
 
         chain_info.on_main_chain = true;
@@ -335,21 +327,16 @@ impl<'env> Blockchain<'env> {
         self.chain_store.put_chain_info(&mut txn, &chain_info.head.parent_hash(), &prev_info, false);
         self.chain_store.set_head(&mut txn, &block_hash);
 
-        if let Block::Micro(ref micro_block) = chain_info.head {
-            // Acquire write lock.
-            let mut state = self.state.write();
-            state.transaction_cache.push_block(&micro_block);
-            state.main_chain = chain_info;
-            state.head_hash = block_hash;
-            txn.commit();
-        }
+        // Acquire write lock.
+        let mut state = RwLockUpgradableReadGuard::upgrade(state);
+        state.transaction_cache.push_block(&chain_info.head);
+        state.main_chain = chain_info;
+        state.head_hash = block_hash;
+        txn.commit();
 
-        // Give up write lock before notifying.
-        let event;
-        {
-            let state = self.state.read();
-            event = BlockchainEvent::Extended(state.head_hash.clone());
-        }
+        // Give up lock before notifying.
+        let event = BlockchainEvent::Extended(state.head_hash.clone());
+        drop(state);
         self.notifier.read().notify(event);
 
         Ok(PushResult::Extended)
@@ -386,127 +373,120 @@ impl<'env> Blockchain<'env> {
 
         let mut write_txn = WriteTransaction::new(self.env);
         let mut cache_txn;
-        {
-            let state = self.state.read();
 
-            cache_txn = state.transaction_cache.clone();
-            // XXX Get rid of the .clone() here.
-            current = (state.head_hash.clone(), state.main_chain.clone());
+        let state = self.state.upgradable_read();
+        cache_txn = state.transaction_cache.clone();
+        // XXX Get rid of the .clone() here.
+        current = (state.head_hash.clone(), state.main_chain.clone());
 
-            while current.0 != ancestor.0 {
-                match current.1.head {
-                    Block::Macro(_) => unreachable!(),
-                    Block::Micro(ref micro_block) => {
-                        self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
+        while current.0 != ancestor.0 {
+            match current.1.head {
+                Block::Macro(_) => unreachable!(),
+                Block::Micro(ref micro_block) => {
+                    self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
 
-                        cache_txn.revert_block(micro_block);
+                    cache_txn.revert_block(&current.1.head);
 
-                        let prev_hash = micro_block.header.parent_hash.clone();
-                        let prev_info = self.chain_store
-                            .get_chain_info(&prev_hash, true, Some(&read_txn))
-                            .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
+                    let prev_hash = micro_block.header.parent_hash.clone();
+                    let prev_info = self.chain_store
+                        .get_chain_info(&prev_hash, true, Some(&read_txn))
+                        .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
 
-                        assert_eq!(prev_info.head.state_root(), &state.accounts.hash(Some(&write_txn)),
-                                   "Failed to revert main chain while rebranching - inconsistent state");
+                    assert_eq!(prev_info.head.state_root(), &state.accounts.hash(Some(&write_txn)),
+                               "Failed to revert main chain while rebranching - inconsistent state");
 
-                        revert_chain.push(current);
-                        current = (prev_hash, prev_info);
-                    }
+                    revert_chain.push(current);
+                    current = (prev_hash, prev_info);
                 }
             }
+        }
 
-            // Fetch missing blocks for TransactionCache.
-            assert!(cache_txn.is_empty() || cache_txn.head_hash() == ancestor.0);
-            let start_hash = if cache_txn.is_empty() {
-                ancestor.1.main_chain_successor.unwrap()
-            } else {
-                cache_txn.tail_hash()
-            };
-            let blocks = self.chain_store.get_blocks_backward(&start_hash, cache_txn.missing_blocks(), true, Some(&read_txn));
-            for block in blocks.iter() {
-                match block {
-                    Block::Macro(_) => unreachable!(),
-                    Block::Micro(ref micro_block) => cache_txn.prepend_block(micro_block)
-                }
-            }
-            assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.block_number()));
+        // Fetch missing blocks for TransactionCache.
+        assert!(cache_txn.is_empty() || cache_txn.head_hash() == ancestor.0);
+        let start_hash = if cache_txn.is_empty() {
+            ancestor.1.main_chain_successor.unwrap()
+        } else {
+            cache_txn.tail_hash()
+        };
+        let blocks = self.chain_store.get_blocks_backward(&start_hash, cache_txn.missing_blocks(), true, Some(&read_txn));
+        for block in blocks.iter() {
+            cache_txn.prepend_block(block)
+        }
+        assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.block_number()));
 
-            // Check each fork block against TransactionCache & commit to AccountsTree.
-            let mut fork_iter = fork_chain.iter().rev();
-            while let Some(fork_block) = fork_iter.next() {
-                match fork_block.1.head {
-                    Block::Macro(_) => unreachable!(),
-                    Block::Micro(ref micro_block) => {
+        // Check each fork block against TransactionCache & commit to AccountsTree.
+        let mut fork_iter = fork_chain.iter().rev();
+        while let Some(fork_block) = fork_iter.next() {
+            match fork_block.1.head {
+                Block::Macro(_) => unreachable!(),
+                Block::Micro(ref micro_block) => {
+                    let result = if !cache_txn.contains_any(&fork_block.1.head) {
+                        self.commit_accounts(&state.accounts, &mut write_txn, &fork_block.1.head)
+                    } else {
+                        Err(PushError::DuplicateTransaction)
+                    };
 
-                        let result = if !cache_txn.contains_any(micro_block) {
-                            self.commit_accounts(&state.accounts, &mut write_txn, &fork_block.1.head)
-                        } else {
-                            Err(PushError::DuplicateTransaction)
-                        };
+                    if let Err(e) = result {
+                        warn!("Failed to apply fork block while rebranching - {:?}", e);
+                        write_txn.abort();
 
-                        if let Err(e) = result {
-                            warn!("Failed to apply fork block while rebranching - {:?}", e);
-                            write_txn.abort();
-
-                            // Delete invalid fork blocks from store.
-                            let mut write_txn = WriteTransaction::new(self.env);
-                            for block in vec![fork_block].into_iter().chain(fork_iter) {
-                                self.chain_store.remove_chain_info(&mut write_txn, &block.0, micro_block.header.block_number)
-                            }
-                            write_txn.commit();
-
-                            return Err(PushError::InvalidFork);
+                        // Delete invalid fork blocks from store.
+                        let mut write_txn = WriteTransaction::new(self.env);
+                        for block in vec![fork_block].into_iter().chain(fork_iter) {
+                            self.chain_store.remove_chain_info(&mut write_txn, &block.0, micro_block.header.block_number)
                         }
+                        write_txn.commit();
 
-                        cache_txn.push_block(micro_block);
+                        return Err(PushError::InvalidFork);
                     }
+
+                    cache_txn.push_block(&fork_block.1.head);
                 }
             }
         }
 
         // Fork looks good.
+        // Acquire write lock.
+        let mut state = RwLockUpgradableReadGuard::upgrade(state);
 
-        {
-            // Acquire write lock.
-            let mut state = self.state.write();
-
-            // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
-            for reverted_block in revert_chain.iter_mut() {
-                reverted_block.1.on_main_chain = false;
-                reverted_block.1.main_chain_successor = None;
-                self.chain_store.put_chain_info(&mut write_txn, &reverted_block.0, &reverted_block.1, false);
-            }
-
-            // Update the mainChainSuccessor of the common ancestor block.
-            ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
-            self.chain_store.put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
-
-            // Set onMainChain flag / mainChainSuccessor on the fork.
-            for i in (0..fork_chain.len()).rev() {
-                let main_chain_successor = if i > 0 {
-                    Some(fork_chain[i - 1].0.clone())
-                } else {
-                    None
-                };
-
-                let fork_block = &mut fork_chain[i];
-                fork_block.1.on_main_chain = true;
-                fork_block.1.main_chain_successor = main_chain_successor;
-
-                // Include the body of the new block (at position 0).
-                self.chain_store.put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
-            }
-
-            // Commit transaction & update head.
-            self.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
-            write_txn.commit();
-            state.transaction_cache = cache_txn;
-
-            state.main_chain = fork_chain[0].1.clone();
-            state.head_hash = fork_chain[0].0.clone();
+        // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
+        for reverted_block in revert_chain.iter_mut() {
+            reverted_block.1.on_main_chain = false;
+            reverted_block.1.main_chain_successor = None;
+            self.chain_store.put_chain_info(&mut write_txn, &reverted_block.0, &reverted_block.1, false);
         }
 
-        // Give up write lock before notifying.
+        // Update the mainChainSuccessor of the common ancestor block.
+        ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
+        self.chain_store.put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
+
+        // Set onMainChain flag / mainChainSuccessor on the fork.
+        for i in (0..fork_chain.len()).rev() {
+            let main_chain_successor = if i > 0 {
+                Some(fork_chain[i - 1].0.clone())
+            } else {
+                None
+            };
+
+            let fork_block = &mut fork_chain[i];
+            fork_block.1.on_main_chain = true;
+            fork_block.1.main_chain_successor = main_chain_successor;
+
+            // Include the body of the new block (at position 0).
+            self.chain_store.put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
+        }
+
+        // Commit transaction & update head.
+        self.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
+        write_txn.commit();
+        state.transaction_cache = cache_txn;
+
+        state.main_chain = fork_chain[0].1.clone();
+        state.head_hash = fork_chain[0].0.clone();
+
+        // Give up lock before notifying.
+        drop(state);
+
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
         for (hash, chain_info) in revert_chain.into_iter().rev() {
             reverted_blocks.push((hash, chain_info.head));
@@ -522,10 +502,9 @@ impl<'env> Blockchain<'env> {
     }
 
     fn commit_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
-
         match block {
             Block::Macro(ref macro_block) => {
-                // TODO commit transaction fees, commit slash distribution
+                // TODO Distribute reward for last epoch
 
                 // Commit block to AccountsTree.
                 let receipts = accounts.commit(txn, &vec![], &vec![], macro_block.header.block_number);
@@ -535,14 +514,10 @@ impl<'env> Blockchain<'env> {
             },
             Block::Micro(ref micro_block) => {
                 let extrinsics = micro_block.extrinsics.as_ref().unwrap();
-
-                let fork_proofs = match self.create_fork_proofs(&micro_block) {
-                    Err(e) => return Err(e),
-                    Ok(fork_proofs) => fork_proofs
-                };
+                let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, micro_block.view_change());
 
                 // Commit block to AccountsTree.
-                let receipts = accounts.commit(txn, &extrinsics.transactions, &fork_proofs, micro_block.header.block_number);
+                let receipts = accounts.commit(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number);
                 if let Err(e) = receipts {
                     return Err(PushError::AccountsError(e));
                 }
@@ -563,39 +538,17 @@ impl<'env> Blockchain<'env> {
     }
 
     fn revert_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, micro_block: &MicroBlock) -> Result<(), PushError> {
-        let extrinsics = micro_block.extrinsics.as_ref().unwrap();
-
         assert_eq!(micro_block.header.state_root, accounts.hash(Some(&txn)),
                    "Failed to revert - inconsistent state");
 
-        let fork_proofs = match self.create_fork_proofs(&micro_block) {
-            Err(e) => return Err(e),
-            Ok(fork_proofs) => fork_proofs
-        };
+        let extrinsics = micro_block.extrinsics.as_ref().unwrap();
+        let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, micro_block.view_change());
 
-        if let Err(e) = accounts.revert(txn, &extrinsics.transactions, &fork_proofs, micro_block.header.block_number, &extrinsics.receipts) {
+        if let Err(e) = accounts.revert(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number, &extrinsics.receipts) {
             panic!("Failed to revert - {}", e);
         }
 
         Ok(())
-    }
-
-    pub fn create_fork_proofs(&self, micro_block: &MicroBlock) -> Result<Vec<Inherent>, PushError> {
-        let mut fork_proofs = Vec::new();
-        for fork_proof in &micro_block.extrinsics.as_ref().unwrap().fork_proofs {
-            let producer_opt = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number);
-            if producer_opt.is_none() {
-                return Err(PushError::InvalidSuccessor);
-            }
-
-            fork_proofs.push(Inherent {
-                ty: InherentType::Slash,
-                target: producer_opt.unwrap().1.staker_address.clone(),
-                value: self.last_macro_block().extrinsics.as_ref().unwrap().slashing_amount.try_into().unwrap(),
-                data: vec![]
-            });
-        }
-        Ok(fork_proofs)
     }
 
     pub fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
@@ -683,7 +636,31 @@ impl<'env> Blockchain<'env> {
         self.state.read()
     }
 
-    pub fn fork_proofs_to_inherents(&self, fork_proofs: &Vec<ForkProof>) -> Vec<Inherent> { unimplemented!() }
+    pub fn create_slash_inherents(&self, fork_proofs: &Vec<ForkProof>, view_change: Option<ViewChange>) -> Vec<Inherent> {
+        let mut inherents = vec![];
+        for fork_proof in fork_proofs {
+            inherents.push(self.inherent_from_fork_proof(fork_proof));
+        }
+        if let Some(ref view_change) = view_change {
+            inherents.push(self.inherent_from_view_change(view_change));
+        }
+        inherents
+    }
+
+    /// Expects a *verified* proof!
+    pub fn inherent_from_fork_proof(&self, fork_proof: &ForkProof) -> Inherent {
+        let producer = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number).expect("");
+        Inherent {
+            ty: InherentType::Slash,
+            target: producer.1.staker_address.clone(),
+            value: self.last_macro_block().extrinsics.as_ref().unwrap().slashing_amount.try_into().unwrap(),
+            data: vec![]
+        }
+    }
+
+    pub fn inherent_from_view_change(&self, view_change_proof: &ViewChange) -> Inherent {
+        unimplemented!()
+    }
 
     pub fn finalized_last_epoch(&self) -> Vec<Inherent> { unimplemented!() }
 }

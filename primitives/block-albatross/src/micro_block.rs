@@ -77,6 +77,17 @@ impl MicroBlock {
     pub fn serialize_without_signature(&self) -> Vec<u8> {
         unimplemented!()
     }
+
+    pub fn view_change(&self) -> Option<ViewChange> {
+        if self.justification.view_change_proof.is_some() {
+            Some(ViewChange {
+                block_number: self.header.block_number,
+                new_view_number: self.header.view_number,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 impl MicroHeader {

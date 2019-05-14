@@ -59,7 +59,7 @@ impl<M: Message> SignedMessage<M> {
 // XXX The contents of ViewChangeMessage and PbftMessage (and any other message that is signed by
 // a validator) must be distinguishable!
 // Therefore all signed messages should be prefixed with a standarized type. We should keep those
-// prefixed at one place to not accidently create collisions.
+// prefixed at one place to not accidentally create collisions.
 
 /// prefix to sign view change messages
 pub const PREFIX_VIEW_CHANGE: u8 = 0x01;
