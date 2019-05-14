@@ -1,8 +1,9 @@
 extern crate nimiq_bls as bls;
 
-use bls::bls12_381::{SecretKey, PublicKey};
-use bls::Encoding;
 use rand::rngs::OsRng;
+
+use beserial::Serialize;
+use bls::bls12_381::{PublicKey, SecretKey};
 
 fn main() {
     let mut csprng = OsRng::new().expect("OS RNG not available");
@@ -11,10 +12,10 @@ fn main() {
 
     println!("# Public Key:");
     println!();
-    let x: &[u8] = &public_key.to_bytes(); // need to apply a little bit of force to make it a slice
+    let x: Vec<u8> = public_key.serialize_to_vec(); // need to apply a little bit of force to make it a slice
     println!("{}", hex::encode(x));
     println!();
     println!("# Secret Key:");
     println!();
-    println!("{}", hex::encode(&secret_key.to_bytes()));
+    println!("{}", hex::encode(secret_key.serialize_to_vec()));
 }

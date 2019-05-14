@@ -50,7 +50,7 @@ impl<'env> BlockProducer<'env> {
 
         let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data);
         let header = self.next_micro_header(timestamp, &extrinsics);
-        let signature = self.validator_key.sign(&header);
+        let signature = self.validator_key.sign(&header).compress();
 
         MicroBlock {
             header,
@@ -120,7 +120,7 @@ impl<'env> BlockProducer<'env> {
             .hash_with(&vec![], &inherents, block_number)
             .expect("Failed to compute accounts hash during block production");
 
-        let seed = self.validator_key.sign(self.blockchain.head().seed());
+        let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();
 
         MacroHeader {
             version: Block::VERSION,
@@ -150,7 +150,7 @@ impl<'env> BlockProducer<'env> {
             .hash_with(&extrinsics.transactions, &inherents, block_number)
             .expect("Failed to compute accounts hash during block production");
 
-        let seed = self.validator_key.sign(self.blockchain.head().seed());
+        let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();
 
         MicroHeader {
             version: Block::VERSION,

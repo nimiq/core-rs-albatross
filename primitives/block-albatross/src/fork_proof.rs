@@ -1,6 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHash, Hash};
-use nimiq_bls::bls12_381::{PublicKey, Signature};
+use nimiq_bls::bls12_381::{PublicKey, CompressedSignature};
 
 use crate::MicroHeader;
 
@@ -8,8 +8,8 @@ use crate::MicroHeader;
 pub struct ForkProof {
     pub header1: MicroHeader,
     pub header2: MicroHeader,
-    pub justification1: Signature,
-    pub justification2: Signature,
+    pub justification1: CompressedSignature,
+    pub justification2: CompressedSignature,
 }
 
 impl ForkProof {
@@ -27,8 +27,18 @@ impl ForkProof {
     }
 
     pub fn verify(&self, public_key: &PublicKey) -> bool {
-        public_key.verify(&self.header1, &self.justification1)
-            && public_key.verify(&self.header2, &self.justification2)
+        let justification1 = match self.justification1.uncompress() {
+            Ok(j) => j,
+            Err(_) => return false,
+        };
+
+        let justification2 = match self.justification2.uncompress() {
+            Ok(j) => j,
+            Err(_) => return false,
+        };
+
+        public_key.verify(&self.header1, &justification1)
+            && public_key.verify(&self.header2, &justification2)
     }
 }
 

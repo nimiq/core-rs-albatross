@@ -14,6 +14,7 @@ use hash::{Blake2bHasher, Hasher, Blake2bHash, Hash};
 use keys::Address;
 use bls::bls12_381::{
     PublicKey as BlsPublicKey,
+    CompressedPublicKey as CompressedBlsPublicKey,
     SecretKey as BlsSecretKey,
     Signature as BlsSignature,
 };
@@ -148,13 +149,13 @@ impl GenesisBuilder {
 
     fn select_validators(&self, pre_genesis_hash: &BlsSignature) -> Result<(Vec<Slot>, Validators), GenesisBuilderError> {
         let (_, slot_allocation) = self.generate_staking_contract()?
-            .select_validators(&pre_genesis_hash, 512, 16384);
+            .select_validators(&pre_genesis_hash.compress(), 512, 16384);
 
         let validators = { // construct validator slot list with slot counts
             // count slots per public key
-            let mut slot_counts: BTreeMap<&BlsPublicKey, u16> = BTreeMap::new();
+            let mut slot_counts: BTreeMap<&CompressedBlsPublicKey, u16> = BTreeMap::new();
             for validator in slot_allocation.iter() {
-                slot_counts.entry(&validator.public_key)
+                slot_counts.entry(validator.public_key.compressed())
                     .and_modify(|x| *x += 1) // if has value, increment
                     .or_insert(1); // if no value, insert 1
             }
@@ -163,7 +164,7 @@ impl GenesisBuilder {
             let mut validators: Validators = Vec::new();
             for (public_key, slots) in slot_counts {
                 validators.push(Validator {
-                    public_key: public_key.clone(),
+                    public_key: public_key.clone().into(),
                     slots
                 });
             }
@@ -224,7 +225,7 @@ impl GenesisBuilder {
             block_number: 1,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),
-            seed,
+            seed: seed.compress(),
             parent_hash: [0u8; 32].into(),
             state_root,
             extrinsics_root,
@@ -246,7 +247,7 @@ impl GenesisBuilder {
         let mut contract = StakingContract::default();
 
         for stake in self.stakes.iter() {
-            contract.stake(&stake.staker_address, stake.balance, stake.validator_key.clone(), stake.reward_address.clone())?;
+            contract.stake(&stake.staker_address, stake.balance, stake.validator_key.compress(), stake.reward_address.clone())?;
         }
 
         Ok(contract)

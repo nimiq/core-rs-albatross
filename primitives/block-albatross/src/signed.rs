@@ -181,7 +181,7 @@ pub struct UntrustedAggregateProof<M: Message> {
 }
 
 impl<M: Message> UntrustedAggregateProof<M> {
-    pub fn into_trusted<F>(&self, f: F) -> AggregateProof<M>
+    pub fn into_trusted<F>(&self, f: F) -> Option<AggregateProof<M>>
         where F: Fn(u16) -> Validator
     {
         // aggregate signatures and count votes
@@ -189,15 +189,15 @@ impl<M: Message> UntrustedAggregateProof<M> {
         let mut slots = 0;
         for pk_idx in self.signers.iter() {
             let pk_n = f(pk_idx as u16);
-            public_key.aggregate(&pk_n.public_key);
+            public_key.aggregate(pk_n.public_key.uncompress().as_ref()?);
             slots += pk_n.slots;
         }
-        AggregateProof {
+        Some(AggregateProof {
             signers: self.signers.clone(),
             slots,
             public_key,
             signature: self.signature.clone(),
             _message: PhantomData,
-        }
+        })
     }
 }

@@ -1,5 +1,5 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize};
-use bls::bls12_381::{PublicKey as BlsPublicKey, Signature as BlsSignature};
+use bls::bls12_381::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
 use keys::Address;
 use primitives::account::AccountType;
 use primitives::coin::Coin;
@@ -73,7 +73,9 @@ impl StakingTransactionData {
     /// public keys `pk_B + (pk_A - pk_B) = pk_B`.
     /// Alternatives would be to replace the proof of knowledge by a zero-knowledge proof.
     pub fn verify(&self) -> Result<(), TransactionError> {
-        if !self.validator_key.verify(&self.validator_key, &self.proof_of_knowledge) {
+        if !self.validator_key.uncompress().map_err(|_| TransactionError::InvalidData)?
+            .verify(&self.validator_key,
+                    &self.proof_of_knowledge.uncompress().map_err(|_| TransactionError::InvalidData)?) {
             return Err(TransactionError::InvalidData)
         }
         Ok(())

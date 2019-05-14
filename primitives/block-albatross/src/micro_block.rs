@@ -8,7 +8,7 @@ use crate::fork_proof::ForkProof;
 use crate::view_change::ViewChange;
 use hash::{Hash, Blake2bHash, SerializeContent};
 use primitives::networks::NetworkId;
-use nimiq_bls::bls12_381::Signature;
+use nimiq_bls::bls12_381::CompressedSignature;
 use std::cmp::Ordering;
 use transaction::Transaction;
 use crate::signed;
@@ -32,13 +32,13 @@ pub struct MicroHeader {
     pub extrinsics_root: Blake2bHash,
     pub state_root: Blake2bHash,
 
-    pub seed: Signature,
+    pub seed: CompressedSignature,
     pub timestamp: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroJustification {
-    pub signature: Signature,
+    pub signature: CompressedSignature,
     pub view_change_proof: Option<signed::UntrustedAggregateProof<ViewChange>>,
 }
 

@@ -109,12 +109,12 @@ pub struct UntrustedPbftProof {
 }
 
 impl UntrustedPbftProof {
-    pub fn into_trusted<F>(&self, f: F) -> PbftProof
+    pub fn into_trusted<F>(&self, f: F) -> Option<PbftProof>
         where F: Fn(u16) -> Validator + Clone
     {
-        PbftProof {
-            prepare: self.prepare.into_trusted(f.clone()),
-            commit: self.commit.into_trusted(f)
-        }
+        Some(PbftProof {
+            prepare: self.prepare.into_trusted(f.clone())?,
+            commit: self.commit.into_trusted(f)?
+        })
     }
 }

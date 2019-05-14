@@ -47,6 +47,8 @@ pub enum BlockError {
     DuplicateReceipt,
     InvalidReceipt,
     ReceiptsNotOrdered,
+
+    InvalidJustification,
 }
 
 impl block_base::BlockError for BlockError {}

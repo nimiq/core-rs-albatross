@@ -1,15 +1,13 @@
-extern crate nimiq_bls as bls;
-extern crate nimiq_keys as keys;
 use crate::policy::ACTIVE_VALIDATORS;
 
 use beserial::{Deserialize, Serialize};
 
-use keys::Address;
-use bls::bls12_381::PublicKey;
+use nimiq_keys::Address;
+use nimiq_bls::bls12_381::lazy::LazyPublicKey;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Slot {
-    pub public_key: PublicKey,
+    pub public_key: LazyPublicKey,
     pub reward_address_opt: Option<Address>,
     pub staker_address: Address,
 }
@@ -29,7 +27,7 @@ pub type Slots = [Slot; ACTIVE_VALIDATORS as usize];
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Validator {
-    pub public_key: PublicKey,
+    pub public_key: LazyPublicKey,
     pub slots: u16
 }
 

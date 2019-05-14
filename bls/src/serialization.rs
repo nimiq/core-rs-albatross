@@ -1,20 +1,86 @@
 use std::io;
 
+use ff::{PrimeField, PrimeFieldRepr};
+use group::EncodedPoint;
+use pairing::bls12_381::{Fr, FrRepr, G1Compressed, G2Compressed};
+
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
 
 use crate::bls12_381::*;
-use crate::Encoding;
 
-impl Serialize for PublicKey {
+use super::{
+    AggregatePublicKey as GenericAggregatePublicKey,
+    AggregateSignature as GenericAggregateSignature,
+};
+
+impl Serialize for CompressedPublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let bytes = self.to_bytes();
-        writer.write(&bytes)?;
-        Ok(PublicKey::SIZE)
+        writer.write(self.p_pub.as_ref())?;
+        Ok(CompressedPublicKey::SIZE)
     }
 
     fn serialized_size(&self) -> usize {
-        PublicKey::SIZE
+        CompressedPublicKey::SIZE
+    }
+}
+
+impl SerializeContent for CompressedPublicKey {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+}
+
+impl Hash for CompressedPublicKey { }
+
+impl Deserialize for CompressedPublicKey {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let mut bytes = [0u8; CompressedPublicKey::SIZE];
+        reader.read_exact(&mut bytes)?;
+
+        let mut point = G2Compressed::empty();
+        point.as_mut().copy_from_slice(&bytes);
+        Ok(CompressedPublicKey {
+            p_pub: point,
+        })
+    }
+}
+
+impl Serialize for CompressedSignature {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        writer.write(self.s.as_ref())?;
+        Ok(CompressedSignature::SIZE)
+    }
+
+    fn serialized_size(&self) -> usize {
+        CompressedSignature::SIZE
+    }
+}
+
+impl SerializeContent for CompressedSignature {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+}
+
+impl Hash for CompressedSignature { }
+
+impl Deserialize for CompressedSignature {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let mut bytes = [0u8; CompressedSignature::SIZE];
+        reader.read_exact(&mut bytes)?;
+
+        let mut point = G1Compressed::empty();
+        point.as_mut().copy_from_slice(&bytes);
+        Ok(CompressedSignature {
+            s: point,
+        })
+    }
+}
+
+impl Serialize for PublicKey {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        self.compress().serialize(writer)
+    }
+
+    fn serialized_size(&self) -> usize {
+        CompressedPublicKey::SIZE
     }
 }
 
@@ -26,35 +92,55 @@ impl Hash for PublicKey { }
 
 impl Deserialize for PublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut bytes = [0u8; PublicKey::SIZE];
-        reader.read_exact(&mut bytes)?;
-        Ok(PublicKey::from_slice(&bytes).map_err(|_| SerializingError::InvalidValue)?)
+        let public_key: CompressedPublicKey = Deserialize::deserialize(reader)?;
+        public_key.uncompress().map_err(|_| SerializingError::InvalidValue)
+    }
+}
+
+impl Serialize for Signature {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        self.compress().serialize(writer)
+    }
+
+    fn serialized_size(&self) -> usize {
+        CompressedPublicKey::SIZE
+    }
+}
+
+impl SerializeContent for Signature {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+}
+
+impl Hash for Signature { }
+
+impl Deserialize for Signature {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let signature: CompressedSignature = Deserialize::deserialize(reader)?;
+        signature.uncompress().map_err(|_| SerializingError::InvalidValue)
     }
 }
 
 impl Serialize for PublicKeyAffine {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        // TODO: Not really nice.
-        PublicKey::from(self.clone()).serialize(writer)
+        self.into_projective().serialize(writer)
     }
 
     fn serialized_size(&self) -> usize {
-        PublicKey::SIZE
+        CompressedPublicKey::SIZE
     }
 }
 
 impl Deserialize for PublicKeyAffine {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut bytes = [0u8; PublicKey::SIZE];
-        reader.read_exact(&mut bytes)?;
-        Ok(PublicKey::from_slice(&bytes).map_err(|_| SerializingError::InvalidValue)?.into())
+        let public_key: PublicKey = Deserialize::deserialize(reader)?;
+        Ok(public_key.into_affine())
     }
 }
 
 impl Serialize for SecretKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let bytes = self.to_bytes();
-        writer.write(&bytes)?;
+        let repr = self.x.into_repr();
+        repr.write_be(writer)?;
         Ok(SecretKey::SIZE)
     }
 
@@ -65,74 +151,60 @@ impl Serialize for SecretKey {
 
 impl Deserialize for SecretKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut bytes = [0u8; SecretKey::SIZE];
-        reader.read_exact(&mut bytes)?;
-        Ok(SecretKey::from_slice(&bytes).map_err(|_| SerializingError::InvalidValue)?)
+        let mut element = FrRepr::default();
+        element.read_be(reader)?;
+
+        Ok(SecretKey {
+            x: Fr::from_repr(element).map_err(|_| SerializingError::InvalidValue)?,
+        })
     }
 }
-
-impl Serialize for Signature {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let bytes = self.to_bytes();
-        writer.write(&bytes)?;
-        Ok(Signature::SIZE)
-    }
-
-    fn serialized_size(&self) -> usize {
-        Signature::SIZE
-    }
-}
-
-impl Deserialize for Signature {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut bytes = [0u8; Signature::SIZE];
-        reader.read_exact(&mut bytes)?;
-        Ok(Signature::from_slice(&bytes).map_err(|_| SerializingError::InvalidValue)?)
-    }
-}
-
-impl SerializeContent for Signature {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
-}
-
-impl Hash for Signature { }
 
 impl Serialize for AggregatePublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let bytes = self.to_bytes();
-        writer.write(&bytes)?;
-        Ok(AggregatePublicKey::SIZE)
+        self.0.serialize(writer)
     }
 
     fn serialized_size(&self) -> usize {
-        AggregatePublicKey::SIZE
+        self.0.serialized_size()
     }
 }
 
 impl Deserialize for AggregatePublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut bytes = [0u8; AggregatePublicKey::SIZE];
-        reader.read_exact(&mut bytes)?;
-        Ok(AggregatePublicKey::from_slice(&bytes).map_err(|_| SerializingError::InvalidValue)?)
+        Ok(GenericAggregatePublicKey(Deserialize::deserialize(reader)?))
     }
 }
 
 impl Serialize for AggregateSignature {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let bytes = self.to_bytes();
-        writer.write(&bytes)?;
-        Ok(AggregateSignature::SIZE)
+        self.0.serialize(writer)
     }
 
     fn serialized_size(&self) -> usize {
-        AggregateSignature::SIZE
+        self.0.serialized_size()
     }
 }
 
 impl Deserialize for AggregateSignature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut bytes = [0u8; AggregateSignature::SIZE];
-        reader.read_exact(&mut bytes)?;
-        Ok(AggregateSignature::from_slice(&bytes).map_err(|_| SerializingError::InvalidValue)?)
+        Ok(GenericAggregateSignature(Deserialize::deserialize(reader)?))
+    }
+}
+
+impl Serialize for KeyPair {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        self.secret.serialize(writer)
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.secret.serialized_size()
+    }
+}
+
+impl Deserialize for KeyPair {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let secret: SecretKey = Deserialize::deserialize(reader)?;
+        Ok(KeyPair::from(secret))
     }
 }

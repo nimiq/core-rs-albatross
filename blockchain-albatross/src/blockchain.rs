@@ -230,7 +230,9 @@ impl<'env> Blockchain<'env> {
                     Some(ref view_change_proof) => {
                         let view_change = ViewChange { block_number: block.block_number(), new_view_number: block.view_number()};
                         let idx_to_key_closure = |idx: u16| -> Validator { self.get_current_validator_by_idx(idx).unwrap() };
-                        if !view_change_proof.into_trusted(idx_to_key_closure).verify(&view_change, policy::TWO_THIRD_VALIDATORS) {
+                        // Public keys are checked when staking, so this should never fail.
+                        let trusted = view_change_proof.into_trusted(idx_to_key_closure).expect("Invalid public key");
+                        if !trusted.verify(&view_change, policy::TWO_THIRD_VALIDATORS) {
                             return Err(PushError::InvalidSuccessor)
                         }
                     }
@@ -238,8 +240,10 @@ impl<'env> Blockchain<'env> {
             }
 
             // Check if the block was produced (and signed) by the intended producer
-            let intended_slot_owner = self.get_block_producer_at(block.block_number(), block.view_number()).map(|s| s.1.public_key.clone()).unwrap();
-            if !intended_slot_owner.verify(&micro_block.serialize_without_signature(), &micro_block.justification.signature) {
+            // Public keys are checked when staking, so this should never fail.
+            let intended_slot_owner = self.get_block_producer_at(block.block_number(), block.view_number()).map(|s| s.1.public_key.uncompress_unchecked()).unwrap();
+            let justification = micro_block.justification.signature.uncompress().map_err(|_| PushError::InvalidBlock(BlockError::InvalidJustification))?;
+            if !intended_slot_owner.verify(&micro_block.serialize_without_signature(), &justification) {
                 warn!("Rejecting block - not a valid successor");
                 return Err(PushError::InvalidSuccessor);
             }
@@ -252,8 +256,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidSuccessor)
                     },
                     Some((idx, slot)) => {
-                        if !slot.public_key.verify(&fork_proof.header1, &fork_proof.justification1) ||
-                                !slot.public_key.verify(&fork_proof.header2, &fork_proof.justification2) {
+                        if !fork_proof.verify(&slot.public_key.uncompress_unchecked()) {
                             warn!("Rejecting block - Bad fork proof: invalid owner signature");
                             return Err(PushError::InvalidSuccessor)
                         }
@@ -286,7 +289,9 @@ impl<'env> Blockchain<'env> {
                     },
                     Some(ref justification) => {
                         let idx_to_key_closure = |idx: u16| -> Validator { self.get_current_validator_by_idx(idx).unwrap() };
-                        if !justification.into_trusted(idx_to_key_closure).verify(macro_block.hash(), policy::TWO_THIRD_VALIDATORS) {
+                        // Public keys are checked when staking, so this should never fail.
+                        let trusted = justification.into_trusted(idx_to_key_closure).expect("Invalid public key");
+                        if !trusted.verify(macro_block.hash(), policy::TWO_THIRD_VALIDATORS) {
                             warn!("Rejecting block - macro block not sufficiently signed");
                             return Err(PushError::InvalidSuccessor)
                         }

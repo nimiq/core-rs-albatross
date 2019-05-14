@@ -3,7 +3,7 @@ use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
-use bls::bls12_381::PublicKey;
+use bls::bls12_381::{CompressedPublicKey, PublicKey};
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
                       SignedPbftProposal, ViewChange, Block, MacroBlock, ForkProof};
 use primitives::policy::TWO_THIRD_VALIDATORS;
@@ -74,12 +74,14 @@ impl ValidatorAgent {
         for signed_info in signed_infos {
             // TODO: first check if we already know this validator. If so, we don't need to check
             // the signature of this info.
-            let signature_okay = signed_info.verify(&signed_info.message.public_key);
-            debug!("[VALIDATOR-INFO] {:#?}, signature_okay={}", signed_info.message, signature_okay);
-            if !signature_okay {
-                continue;
+            if let Ok(public_key) = signed_info.message.public_key.uncompress() {
+                let signature_okay = signed_info.verify(&public_key);
+                debug!("[VALIDATOR-INFO] {:#?}, signature_okay={}", signed_info.message, signature_okay);
+                if !signature_okay {
+                    continue;
+                }
+                self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(signed_info));
             }
-            self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(signed_info));
         }
     }
 
@@ -92,7 +94,7 @@ impl ValidatorAgent {
             debug!("[FORK_PROOF] Header 2: {:?}", fork_proof.header2);
 
             if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number) {
-                if fork_proof.verify(&slot.public_key) {
+                if fork_proof.verify(&slot.public_key.uncompress_unchecked()) {
                     self.notifier.read().notify(ValidatorAgentEvent::ForkProof(fork_proof))
                 }
                 else {
@@ -115,10 +117,10 @@ impl ValidatorAgent {
             debug!("[VIEW-CHANGE] View change for old epoch: block_number={}", view_change.message.block_number);
         }
         else if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(view_change.pk_idx) {
-            if view_change.verify(&validator_slots.public_key) {
+            if view_change.verify(&validator_slots.public_key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::ViewChange {
                     view_change,
-                    public_key: validator_slots.public_key,
+                    public_key: validator_slots.public_key.uncompress_unchecked().clone(),
                     slots: validator_slots.slots
                 });
             }
@@ -139,7 +141,7 @@ impl ValidatorAgent {
         let view_number = proposal.message.header.view_number;
 
         if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number) {
-            let public_key = &slot.public_key;
+            let public_key = &slot.public_key.uncompress_unchecked();
 
             // check the validity of the block
             // TODO: In order to do this without cloning we need the method:
@@ -182,10 +184,10 @@ impl ValidatorAgent {
     fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
         debug!("[PBFT-PREPARE] Received prepare from {}: {:#?}", self.peer.peer_address(), prepare.message);
         if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(prepare.pk_idx) {
-            if prepare.verify(&validator_slots.public_key) {
+            if prepare.verify(&validator_slots.public_key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
                     prepare,
-                    public_key: validator_slots.public_key,
+                    public_key: validator_slots.public_key.uncompress_unchecked().clone(),
                     slots: validator_slots.slots
                 });
             }
@@ -202,10 +204,10 @@ impl ValidatorAgent {
     fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
         debug!("[PBFT-COMMIT] Received commit from {}: {:#?}", self.peer.peer_address(), commit.message);
         if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(commit.pk_idx) {
-            if commit.verify(&validator_slots.public_key) {
+            if commit.verify(&validator_slots.public_key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
                     commit,
-                    public_key: validator_slots.public_key,
+                    public_key: validator_slots.public_key.uncompress_unchecked().clone(),
                     slots: validator_slots.slots
                 });
             }
@@ -218,7 +220,7 @@ impl ValidatorAgent {
         }
     }
 
-    pub fn get_public_key(&self) -> Option<&PublicKey> {
+    pub fn get_public_key(&self) -> Option<&CompressedPublicKey> {
         self.validator_info.as_ref().map(|info| &info.message.public_key)
     }
 

@@ -1,18 +1,17 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use bls::bls12_381::{SecretKey, PublicKey, Signature};
-use bls::Encoding;
-use utils::timers::Timers;
+use beserial::Deserialize;
+use block_albatross::{
+    Block, BlockType,
+    MacroBlock, MacroExtrinsics, MacroHeader,
+    MicroBlock, MicroExtrinsics, MicroHeader
+};
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
+use bls::bls12_381::{KeyPair, PublicKey, SecretKey, Signature};
 use mempool::Mempool;
-use block_albatross::{
-    BlockType, Block,
-    MacroBlock, MacroHeader, MacroExtrinsics,
-    MicroBlock, MicroHeader, MicroExtrinsics
-};
-
+use utils::timers::Timers;
 
 const SECRET_KEY: &'static str = "8049c38d5b20373723dd5fec59a489d65d7ce695be53b1823c4e989cf3458538";
 
@@ -30,7 +29,7 @@ pub struct MockValidator<'env> {
 
 impl<'env> MockValidator<'env> {
     pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>) -> Self {
-        let validator_key = SecretKey::from_slice(&hex::decode(SECRET_KEY).unwrap()).unwrap();
+        let validator_key = SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap();
         Self {
             block_producer: Arc::new(BlockProducer::new(blockchain, mempool, validator_key)),
             timers: Timers::new(),

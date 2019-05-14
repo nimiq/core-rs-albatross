@@ -21,6 +21,7 @@ members = [
     "primitives/transaction",
     "blockchain",
     "blockchain-albatross",
+    "blockchain-base",
     "block-production",
     "block-production-albatross",
     "accounts",

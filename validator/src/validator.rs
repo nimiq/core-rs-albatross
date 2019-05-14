@@ -27,7 +27,7 @@ use block_albatross::{
 };
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
-use bls::bls12_381::{PublicKey, SecretKey};
+use bls::bls12_381::{KeyPair, PublicKey, SecretKey};
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use database::Environment;
 use hash::{Blake2bHash, Hash, SerializeContent};
@@ -63,7 +63,7 @@ pub struct Validator {
     block_producer: BlockProducer<'static>,
     consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
     validator_network: Arc<ValidatorNetwork>,
-    validator_key: SecretKey,
+    validator_key: KeyPair,
 
     timers: Timers<ValidatorTimer>,
 
@@ -94,14 +94,14 @@ impl Validator {
         let key_store = KeyStore::new("validator_key.db".to_string());
         let validator_key = match key_store.load_key() {
             Err(KeyStoreError::IoError(_)) => {
-                let secret_key = SecretKey::generate(&mut rand::thread_rng());
-                key_store.save_key(&secret_key)?;
-                Ok(secret_key)
+                let key_pair = KeyPair::generate(&mut rand::thread_rng());
+                key_store.save_key(&key_pair)?;
+                Ok(key_pair)
             },
             res => res,
         }?;
 
-        let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.clone());
+        let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.secret.clone());
 
         let this = Arc::new(Validator {
             blockchain: consensus.blockchain.clone(),
@@ -218,7 +218,7 @@ impl Validator {
     pub fn on_blockchain_finalized(&self) {
         let mut state = self.state.write();
 
-        match self.get_pk_idx_and_slots(&self.validator_key) {
+        match self.get_pk_idx_and_slots() {
             Some((pk_idx, slots)) => {
                 state.pk_idx = Some(pk_idx);
                 state.slots = Some(slots);
@@ -294,9 +294,9 @@ impl Validator {
 
         // Check if we are the next block producer and act accordingly
         let (_, slot) = self.blockchain.get_next_block_producer();
-        let public_key = PublicKey::from_secret(&self.validator_key);
+        let public_key = self.validator_key.public.compress();
 
-        if slot.public_key == public_key {
+        if slot.public_key.compressed() == &public_key {
             match self.blockchain.get_next_block_type(None) {
                 BlockType::Macro => { self.produce_macro_block(view_change_proof) },
                 BlockType::Micro => { self.produce_micro_block(view_change_proof) },
@@ -313,16 +313,15 @@ impl Validator {
         }
 
         let slots = state.slots.expect("Checked above that we are an active validator");
-        let public_key = &PublicKey::from_secret(&self.validator_key);
 
         // Note: we don't verify this hash as the network validator already did.
         let block_hash = self.validator_network.get_pbft_proposal_hash().expect("We got the event from the network itself").clone();
         let message = PbftPrepareMessage { block_hash };
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
 
-        let prepare_message = SignedPbftPrepareMessage::from_message(message, &self.validator_key, pk_idx);
+        let prepare_message = SignedPbftPrepareMessage::from_message(message, &self.validator_key.secret, pk_idx);
 
-        match self.validator_network.commit_pbft_prepare(prepare_message, public_key, slots) {
+        match self.validator_network.commit_pbft_prepare(prepare_message, &self.validator_key.public, slots) {
             _ => () // FIXME: error handling
         }
     }
@@ -336,15 +335,14 @@ impl Validator {
         }
 
         let slots = state.slots.expect("Checked above that we are an active validator");
-        let public_key = &PublicKey::from_secret(&self.validator_key);
 
         // Note: we don't verify this hash as the network validator already did
         let message = PbftCommitMessage { block_hash: hash };
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
 
-        let commit_message = SignedPbftCommitMessage::from_message(message, &self.validator_key, pk_idx);
+        let commit_message = SignedPbftCommitMessage::from_message(message, &self.validator_key.secret, pk_idx);
 
-        match self.validator_network.commit_pbft_commit(commit_message, public_key , slots) {
+        match self.validator_network.commit_pbft_commit(commit_message, &self.validator_key.public , slots) {
             _ => (), // FIXME: error handling
         }
     }
@@ -378,21 +376,19 @@ impl Validator {
         let message = ViewChange { block_number, new_view_number };
         let pk_idx = state.pk_idx.expect("Checked above that we are an active validator");
         let slots = state.slots.expect("Checked above that we are an active validator");
-        let view_change_message = SignedViewChange::from_message(message, &self.validator_key, pk_idx);
-
-        let public_key = &PublicKey::from_secret(&self.validator_key);
+        let view_change_message = SignedViewChange::from_message(message, &self.validator_key.secret, pk_idx);
 
         // Broadcast our view change number message to the other validators.
-        match self.validator_network.commit_view_change(view_change_message, public_key, slots) {
+        match self.validator_network.commit_view_change(view_change_message, &self.validator_key.public, slots) {
             _ => (), // FIXME: error handling
         }
      }
 
-    fn get_pk_idx_and_slots(&self, secret_key: &SecretKey) -> Option<(u16, u16)> {
-        let public_key = PublicKey::from_secret(secret_key);
+    fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {
+        let compressed = self.validator_key.public.compress();
         let validator_list = self.blockchain.get_next_validator_set();
         validator_list.iter().enumerate()
-            .find(|(i, validator)| validator.public_key == public_key)
+            .find(|(i, validator)| validator.public_key.compressed() == &compressed)
             .map(|(i, validator)| (i as u16, validator.slots))
     }
 
@@ -403,7 +399,7 @@ impl Validator {
 
         let pk_idx = self.state.read().pk_idx.expect("Checked that we are an active validator before entering this function");
 
-        let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key, pk_idx);
+        let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
 
         match self.validator_network.commit_pbft_proposal(signed_proposal) {
             _ => (), // FIXME: error handling
@@ -429,7 +425,7 @@ impl Validator {
         let validator_registry = NetworkInfo::from_network_id(self.blockchain.network_id).validator_registry_address().expect("Albatross consensus always has the address set.");
         let contract = self.blockchain.state().accounts().get(validator_registry, None);
         if let Account::Staking(contract) = contract {
-            let public_key = PublicKey::from_secret(&self.validator_key);
+            let public_key = self.validator_key.public.compress();
 
             // FIXME: Inefficient linear scan.
             contract.active_stake_sorted.iter().any(|stake| stake.validator_key() == &public_key)

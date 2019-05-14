@@ -25,18 +25,6 @@ pub(crate) fn hash_to_g1<E: Engine>(h: SigHash) -> E::G1 {
     ChaChaRng::from_seed(h.into()).gen04()
 }
 
-
-pub trait Encoding: Sized {
-    type Error;
-    type ByteArray;
-    const SIZE: usize;
-
-    fn to_bytes(&self) -> Self::ByteArray;
-    fn from_bytes(bytes: Self::ByteArray) -> Result<Self, Self::Error>;
-
-    fn from_slice(bytes: &[u8]) -> Result<Self, Self::Error>;
-}
-
 #[derive(Clone, Copy)]
 pub struct Signature<E: Engine> {
     pub(crate) s: E::G1,
@@ -116,18 +104,20 @@ impl<E: Engine> PublicKey<E> {
     }
 }
 
-
 #[derive(Clone, PartialEq, Eq)]
-pub struct Keypair<E: Engine> {
+pub struct KeyPair<E: Engine> {
     pub secret: SecretKey<E>,
     pub public: PublicKey<E>,
 }
 
-impl<E: Engine> Keypair<E> {
+impl<E: Engine> KeyPair<E> {
     pub fn generate<R: Rng>(csprng: &mut R) -> Self {
         let secret = SecretKey::generate(csprng);
-        let public = PublicKey::from_secret(&secret);
-        Keypair { secret, public }
+        KeyPair::from(secret)
+    }
+
+    pub fn from_secret(secret: &SecretKey<E>) -> Self {
+        KeyPair::from(secret.clone())
     }
 
     pub fn sign<M: Hash>(&self, msg: &M) -> Signature<E> {
@@ -144,6 +134,16 @@ impl<E: Engine> Keypair<E> {
 
     pub fn verify_hash<H>(&self, hash: SigHash, signature: &Signature<E>) -> bool {
         self.public.verify_hash(hash, signature)
+    }
+}
+
+impl<E: Engine> From<SecretKey<E>> for KeyPair<E> {
+    fn from(secret: SecretKey<E>) -> Self {
+        let public = PublicKey::from_secret(&secret);
+        KeyPair {
+            secret,
+            public,
+        }
     }
 }
 

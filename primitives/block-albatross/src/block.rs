@@ -3,7 +3,7 @@ use std::fmt;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use block_base;
 use hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_bls::bls12_381::Signature;
+use nimiq_bls::bls12_381::CompressedSignature;
 use primitives::networks::NetworkId;
 use transaction::Transaction;
 
@@ -69,7 +69,7 @@ impl Block {
         }
     }
 
-    pub fn seed(&self) -> &Signature {
+    pub fn seed(&self) -> &CompressedSignature {
         match self {
             Block::Macro(ref block) => &block.header.seed,
             Block::Micro(ref block) => &block.header.seed,

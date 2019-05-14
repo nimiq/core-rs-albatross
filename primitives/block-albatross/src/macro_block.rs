@@ -2,7 +2,7 @@ use std::fmt;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
-use bls::bls12_381::{PublicKey, Signature};
+use bls::bls12_381::{CompressedPublicKey, CompressedSignature};
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::coin::Coin;
 use primitives::validators::{Slot, Validators};
@@ -29,7 +29,7 @@ pub struct MacroHeader {
     pub view_number: u32,
     pub parent_macro_hash: Blake2bHash,
 
-    pub seed: Signature,
+    pub seed: CompressedSignature,
     pub parent_hash: Blake2bHash,
     pub state_root: Blake2bHash,
     pub extrinsics_root: Blake2bHash,

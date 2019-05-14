@@ -1,25 +1,27 @@
-use std::sync::{Arc, Weak};
-use network::{Network, Peer, NetworkEvent};
-use std::collections::HashMap;
-use parking_lot::RwLock;
-use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
-use network_primitives::validator_info::{ValidatorId, SignedValidatorInfo};
-use network_primitives::address::PeerId;
-use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
-use messages::Message;
 use std::collections::btree_map::BTreeMap;
+use std::collections::HashMap;
+use std::sync::{Arc, Weak};
+
+use failure::Fail;
+use parking_lot::RwLock;
+
 use block_albatross::{
-    ViewChange, SignedViewChange, ViewChangeProof,
-    SignedPbftPrepareMessage, SignedPbftCommitMessage, PbftProof,
-    SignedPbftProposal, PbftProposal, ForkProof
+    ForkProof, PbftProof, PbftProposal,
+    SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
+    SignedViewChange, ViewChange, ViewChangeProof
 };
 use blockchain_albatross::Blockchain;
-use bls::bls12_381::PublicKey;
+use bls::bls12_381::{CompressedPublicKey, PublicKey};
 use hash::{Blake2bHash, Hash};
+use messages::Message;
+use network::{Network, NetworkEvent, Peer};
+use network_primitives::address::PeerId;
+use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 use primitives::policy::TWO_THIRD_VALIDATORS;
-use failure::Fail;
 use utils::mutable_once::MutableOnce;
+use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
 
+use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
 
 #[derive(Clone, Debug, Fail)]
 pub enum ValidatorNetworkError {
@@ -230,7 +232,7 @@ impl ValidatorNetwork {
             .or_insert_with(|| ViewChangeProof::new());
 
         // Aggregate signature - if it wasn't included yet, relay it
-        if proof.add_signature(&public_key, slots, &view_change) {
+        if proof.add_signature(public_key, slots, &view_change) {
             // if we have enough signatures, notify listeners
             if proof.verify(&view_change.message, TWO_THIRD_VALIDATORS) {
                 self.notifier.read()
@@ -301,7 +303,7 @@ impl ValidatorNetwork {
             }
 
             // aggregate prepare signature - if new, relay
-            if proof.add_prepare_signature(&public_key, slots, &prepare) {
+            if proof.add_prepare_signature(public_key, slots, &prepare) {
                 let prepare_complete = proof.prepare.verify(&prepare.message, TWO_THIRD_VALIDATORS);
                 let commit_complete = proof.verify(prepare.message.block_hash.clone(), TWO_THIRD_VALIDATORS);
 
@@ -344,7 +346,7 @@ impl ValidatorNetwork {
             }
 
             // aggregate commit signature - if new, relay
-            if proof.add_commit_signature(&public_key, slots, &commit) {
+            if proof.add_commit_signature(public_key, slots, &commit) {
                 let commit_complete = proof.verify(commit.message.block_hash.clone(), TWO_THIRD_VALIDATORS);
 
                 // drop lock before notifying

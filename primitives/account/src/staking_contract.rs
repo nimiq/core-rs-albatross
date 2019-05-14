@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::str::FromStr;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use bls::bls12_381::PublicKey as BlsPublicKey;
-use bls::bls12_381::Signature as BlsSignature;
+use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
+use bls::bls12_381::CompressedSignature as BlsSignature;
 use collections::SegmentTree;
 use keys::Address;
 use hash::{Blake2bHasher, Hasher};
@@ -404,7 +404,7 @@ impl StakingContract {
             let staking_address = lookup.find(index).unwrap();
             let active_stake = &self.active_stake_by_address[&staking_address];
             validators.push(Slot {
-                public_key:         active_stake.validator_key.clone(),
+                public_key:       active_stake.validator_key.clone().into(),
                 reward_address_opt: active_stake.reward_address.clone(),
                 staker_address:   active_stake.staker_address.clone(),
             });

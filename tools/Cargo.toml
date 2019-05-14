@@ -17,6 +17,7 @@ nimiq-bls = { path = "../bls" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-build-tools = { path = "../build-tools" }
+beserial = { path = "../beserial" }
 log = "0.4"
 simple_logger = "1.0"
 hex = "0.3"

@@ -9,7 +9,7 @@ use failure::Fail;
 
 use beserial::{Deserialize, Serialize};
 use block::{Block, MicroBlock};
-use bls::bls12_381::Signature as BlsSignature;
+use bls::bls12_381::CompressedSignature as CompressedBlsSignature;
 use collections::bitset::BitSet;
 use database::{AsDatabaseBytes, Database, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHasher, Hasher};
@@ -78,14 +78,14 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    pub  fn commit_block(&mut self, block: &Block, seed: &BlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
+    pub  fn commit_block(&mut self, block: &Block, seed: &CompressedBlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(_) => Ok(()),
             Block::Micro(ref micro_block) => self.commit_micro_block(micro_block, seed, validators),
         }
     }
 
-    pub fn commit_micro_block(&mut self, block: &MicroBlock, seed: &BlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
+    pub fn commit_micro_block(&mut self, block: &MicroBlock, seed: &CompressedBlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
         if !policy::successive_micro_blocks(self.bounds.1, block.header.block_number) {
             return Err(SlashPushError::UnexpectedBlock);
         }
@@ -182,7 +182,7 @@ impl<'env> SlashRegistry<'env> {
     }
 
     // Slot owner lookup for slash inherents
-    pub fn next_slot_owner<'a>(&self, block_number: u32, view_number: u32, seed: &BlsSignature, validators: &'a Vec<Slot>) -> (u32, &'a Slot) {
+    pub fn next_slot_owner<'a>(&self, block_number: u32, view_number: u32, seed: &CompressedBlsSignature, validators: &'a Vec<Slot>) -> (u32, &'a Slot) {
         let honest_validators = self.next_slots(block_number, validators);
 
         // Hash seed and index

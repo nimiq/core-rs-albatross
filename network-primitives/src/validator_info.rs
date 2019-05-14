@@ -1,6 +1,6 @@
 use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
 use crate::address::peer_address::PeerAddress;
-use bls::bls12_381::PublicKey;
+use bls::bls12_381::CompressedPublicKey;
 use beserial::{Serialize, Deserialize};
 use hex::FromHex;
 use hash::SerializeContent;
@@ -16,7 +16,7 @@ pub struct ValidatorInfo {
     pub validator_id: ValidatorId,
 
     /// The validator's public key (BLS12-381)
-    pub public_key: PublicKey,
+    pub public_key: CompressedPublicKey,
 
     /// The validator's peer address
     pub peer_address: PeerAddress,
