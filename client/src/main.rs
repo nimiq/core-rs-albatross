@@ -23,6 +23,8 @@ extern crate nimiq_rpc_server as rpc_server;
 extern crate nimiq_keys as keys;
 extern crate nimiq_utils as utils;
 extern crate nimiq_consensus as consensus;
+extern crate nimiq_bls as bls;
+
 
 mod deadlock;
 mod logging;
@@ -31,6 +33,7 @@ mod cmdline;
 mod static_env;
 mod serialization;
 mod files;
+
 
 use std::io;
 use std::str::FromStr;
@@ -67,7 +70,10 @@ use crate::settings::Settings;
 use crate::static_env::ENV;
 use crate::serialization::SeedError;
 use crate::files::LazyFileLocations;
-
+use lib::block_producer::{BlockProducer, DummyBlockProducer};
+use lib::block_producer::albatross::{ValidatorConfig, AlbatrossBlockProducer};
+use bls::bls12_381::{SecretKey, PublicKey, KeyPair};
+use beserial::Deserialize;
 
 
 #[derive(Debug, Fail)]
@@ -115,8 +121,11 @@ fn find_config_file(cmdline: &Options, files: &mut LazyFileLocations) -> Result<
     Ok(files.config()?)
 }
 
-fn run_node<P: ConsensusProtocol + 'static>(client_builder: ClientBuilder, settings: Settings) -> Result<(), Error> {
-    let client: ClientInitializeFuture<P> = client_builder.build_client()?;
+fn run_node<P, BP>(client_builder: ClientBuilder, settings: Settings, block_producer_config: BP::Config) -> Result<(), Error>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
+    let client: ClientInitializeFuture<P, BP> = client_builder.build_client::<P, BP>(block_producer_config)?;
 
     let consensus = client.consensus();
 
@@ -324,10 +333,17 @@ fn run() -> Result<(), Error> {
         warn!("!!!! Albatross node running");
         warn!("!!!!");
 
-        run_node::<AlbatrossConsensusProtocol>(client_builder, settings)?;
+        let secret_key = SecretKey::deserialize_from_vec(&hex::decode("49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f")
+            .expect("Invalid hex encdoing"))
+            .expect("Invalid secret key");
+        let validator_config = ValidatorConfig {
+            validator_key: KeyPair::from(secret_key)
+        };
+
+        run_node::<AlbatrossConsensusProtocol, AlbatrossBlockProducer>(client_builder, settings, validator_config)?;
     }
     else {
-        run_node::<NimiqConsensusProtocol>(client_builder, settings)?;
+        run_node::<NimiqConsensusProtocol, DummyBlockProducer>(client_builder, settings, ())?;
     }
 
     Ok(())

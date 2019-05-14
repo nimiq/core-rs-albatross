@@ -26,7 +26,8 @@ pub enum ClientError {
     UnexpectedPort,
     #[fail(display = "TLS identity file is missing")]
     MissingIdentityFile,
-
+    #[fail(display = "Block producer error")]
+    BlockProducerError,
 }
 
 impl From<NetworkError> for ClientError {

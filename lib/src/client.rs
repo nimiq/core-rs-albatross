@@ -13,6 +13,8 @@ use primitives::networks::NetworkId;
 use utils::key_store::KeyStore;
 
 use crate::error::ClientError;
+use crate::block_producer::{BlockProducer, DummyBlockProducer};
+use crate::block_producer::albatross::AlbatrossBlockProducer;
 
 lazy_static! {
     pub static ref DEFAULT_USER_AGENT: String = format!("core-rs/{} (native; {} {})", env!("CARGO_PKG_VERSION"), env::consts::OS, env::consts::ARCH);
@@ -93,20 +95,29 @@ impl ClientBuilder {
         self
     }
 
-    pub fn build_client<P: ConsensusProtocol + 'static>(self) -> Result<ClientInitializeFuture<P>, ClientError> {
+    pub fn build_client<P, BP>(self, block_producer_config: BP::Config) -> Result<ClientInitializeFuture<P, BP>, ClientError>
+        where P: ConsensusProtocol + 'static,
+              BP: BlockProducer<P> + 'static
+    {
         let consensus = self.build_consensus()?;
+
         Ok(ClientInitializeFuture {
-            consensus: consensus.clone(),
+            consensus,
+            block_producer_config,
             initialized: false
         })
     }
 
-    pub fn build_albatross_client(self) -> Result<ClientInitializeFuture<AlbatrossConsensusProtocol>, ClientError> {
-        self.build_client()
+    pub fn build_albatross_client<BP>(self, block_producer_config: BP::Config) -> Result<ClientInitializeFuture<AlbatrossConsensusProtocol, BP>, ClientError>
+        where BP: BlockProducer<AlbatrossConsensusProtocol> + 'static
+    {
+        self.build_client(block_producer_config)
     }
 
-    pub fn build_powchain_client(self) -> Result<ClientInitializeFuture<NimiqConsensusProtocol>, ClientError> {
-        self.build_client()
+    pub fn build_powchain_client<BP>(self, block_producer_config: BP::Config) -> Result<ClientInitializeFuture<NimiqConsensusProtocol, BP>, ClientError>
+        where BP: BlockProducer<NimiqConsensusProtocol> + 'static
+    {
+        self.build_client(block_producer_config)
     }
 
     pub fn build_consensus<P: ConsensusProtocol + 'static>(self) -> Result<Arc<Consensus<P>>, ClientError> {
@@ -163,7 +174,9 @@ impl ClientBuilder {
 
 /// A trait representing a Client that may be uninitialized, initialized or connected
 /// NOTE: The futures and imtermediate states implement this
-pub trait Client<P: ConsensusProtocol + 'static> {
+pub trait Client<P>
+    where P: ConsensusProtocol + 'static
+{
     fn initialized(&self) -> bool;
     fn connected(&self) -> bool;
     fn consensus(&self) -> Arc<Consensus<P>>;
@@ -171,22 +184,36 @@ pub trait Client<P: ConsensusProtocol + 'static> {
 
 
 /// Future that eventually returns a InitializedClient
-pub struct ClientInitializeFuture<P: ConsensusProtocol + 'static> {
+pub struct ClientInitializeFuture<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
     consensus: Arc<Consensus<P>>,
+    block_producer_config: BP::Config,
     initialized: bool
 }
 
-impl<P: ConsensusProtocol + 'static> Future for ClientInitializeFuture<P> {
-    type Item = InitializedClient<P>;
+impl<P, BP> Future for ClientInitializeFuture<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
+    type Item = InitializedClient<P, BP>;
     type Error = ClientError;
 
-    fn poll(&mut self) -> Poll<InitializedClient<P>, ClientError> {
+    fn poll(&mut self) -> Poll<InitializedClient<P, BP>, ClientError> {
         // NOTE: This is practically Future::fuse, but this way the types are cleaner
         if !self.initialized {
-            self.consensus().network.initialize().map_err(ClientError::NetworkError)?;
+            // initialize network
+            self.consensus.network.initialize().map_err(ClientError::NetworkError)?;
+
+            // initialize block producer
+            // TODO: avoid clone
+            let block_producer = BP::new(self.block_producer_config.clone(), Arc::clone(&self.consensus))?;
+
             self.initialized = true;
             Ok(Async::Ready(InitializedClient {
                 consensus: Arc::clone(&self.consensus),
+                block_producer: Arc::new(block_producer),
             }))
         }
         else {
@@ -195,7 +222,10 @@ impl<P: ConsensusProtocol + 'static> Future for ClientInitializeFuture<P> {
     }
 }
 
-impl<P: ConsensusProtocol + 'static> Client<P> for ClientInitializeFuture<P> {
+impl<P, BP> Client<P> for ClientInitializeFuture<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
     fn initialized(&self) -> bool {
         self.initialized
     }
@@ -211,17 +241,35 @@ impl<P: ConsensusProtocol + 'static> Client<P> for ClientInitializeFuture<P> {
 
 
 /// The initialized client
-pub struct InitializedClient<P: ConsensusProtocol + 'static> {
+pub struct InitializedClient<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
     consensus: Arc<Consensus<P>>,
+    block_producer: Arc<BP>,
 }
 
-impl<P: ConsensusProtocol + 'static> InitializedClient<P> {
-    pub fn connect(&self) -> ClientConnectFuture<P> {
-        ClientConnectFuture { consensus: Arc::clone(&self.consensus), connected: false }
+impl<P, BP> InitializedClient<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
+    pub fn connect(&self) -> ClientConnectFuture<P, BP> {
+        ClientConnectFuture {
+            consensus: Arc::clone(&self.consensus),
+            block_producer: Arc::clone(&self.block_producer),
+            connected: false
+        }
+    }
+
+    fn block_producer(&self) -> Arc<BP> {
+        Arc::clone(&self.block_producer)
     }
 }
 
-impl<P: ConsensusProtocol + 'static> Client<P> for InitializedClient<P> {
+impl<P, BP> Client<P> for InitializedClient<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
     fn initialized(&self) -> bool {
         true
     }
@@ -237,20 +285,30 @@ impl<P: ConsensusProtocol + 'static> Client<P> for InitializedClient<P> {
 
 
 /// Future that eventually returns a ConnectedClient
-pub struct ClientConnectFuture<P: ConsensusProtocol + 'static> {
+pub struct ClientConnectFuture<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
     consensus: Arc<Consensus<P>>,
+    block_producer: Arc<BP>,
     connected: bool
 }
 
-impl<P: ConsensusProtocol + 'static> Future for ClientConnectFuture<P> {
-    type Item = ConnectedClient<P>;
+impl<P, BP> Future for ClientConnectFuture<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
+    type Item = ConnectedClient<P, BP>;
     type Error = ClientError;
 
-    fn poll(&mut self) -> Poll<ConnectedClient<P>, ClientError> {
+    fn poll(&mut self) -> Poll<ConnectedClient<P, BP>, ClientError> {
         if !self.connected {
             self.consensus.network.connect().map_err(ClientError::NetworkError)?;
             self.connected = true;
-            Ok(Async::Ready(ConnectedClient { consensus: Arc::clone(&self.consensus) }))
+            Ok(Async::Ready(ConnectedClient {
+                consensus: Arc::clone(&self.consensus),
+                block_producer: Arc::clone(&self.block_producer),
+            }))
         }
         else {
             Ok(Async::NotReady)
@@ -258,7 +316,10 @@ impl<P: ConsensusProtocol + 'static> Future for ClientConnectFuture<P> {
     }
 }
 
-impl<P: ConsensusProtocol + 'static> Client<P> for ClientConnectFuture<P> {
+impl<P, BP> Client<P> for ClientConnectFuture<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
     fn initialized(&self) -> bool {
         true
     }
@@ -274,17 +335,27 @@ impl<P: ConsensusProtocol + 'static> Client<P> for ClientConnectFuture<P> {
 
 
 /// The connected client
-pub struct ConnectedClient<P: ConsensusProtocol + 'static> {
-    consensus: Arc<Consensus<P>>
+pub struct ConnectedClient<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
+    consensus: Arc<Consensus<P>>,
+    block_producer: Arc<BP>,
 }
 
-impl<P: ConsensusProtocol + 'static> ConnectedClient<P> {
-    pub fn consensus(&self) -> Arc<Consensus<P>> {
-        Arc::clone(&self.consensus)
+impl<P, BP> ConnectedClient<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
+    fn block_producer(&self) -> Arc<BP> {
+        Arc::clone(&self.block_producer)
     }
 }
 
-impl<P: ConsensusProtocol + 'static> Client<P> for ConnectedClient<P> {
+impl<P, BP> Client<P> for ConnectedClient<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
     fn initialized(&self) -> bool {
         true
     }

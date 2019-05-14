@@ -21,6 +21,7 @@ maintenance = { status = "experimental" }
 futures = "0.1"
 failure = "0.1"
 lazy_static = "1.2"
+log ="0.4"
 nimiq-network = { path = "../network", version = "0.1.0" }
 nimiq-consensus = { path = "../consensus", version = "0.1.0" }
 nimiq-database = { path = "../database", version = "0.1.0" }
@@ -28,3 +29,9 @@ nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", 
 nimiq-primitives = { path = "../primitives", version = "0.1.0", features = ["networks"] }
 nimiq-mempool = { path = "../mempool", version = "0.1.0" }
 nimiq-utils = { path = "../utils", version = "0.1.0" }
+nimiq-validator = { path = "../validator", version = "0.1.0", optional = true }
+nimiq-bls = { path = "../bls", version = "0.1.0", optional = true }
+
+[features]
+default = ["validator"]
+validator = ["nimiq-validator", "nimiq-bls"]

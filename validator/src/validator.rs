@@ -87,21 +87,12 @@ pub struct ValidatorState {
 impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
-    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) -> Result<Arc<Self>, Error> {
+    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
         let validator_network = ValidatorNetwork::new(consensus.network.clone(), consensus.blockchain.clone());
 
-        // FIXME: May be improve KeyStore the use the same file for all keys?
-        let key_store = KeyStore::new("validator_key.db".to_string());
-        let validator_key = match key_store.load_key() {
-            Err(KeyStoreError::IoError(_)) => {
-                let key_pair = KeyPair::generate(&mut rand::thread_rng());
-                key_store.save_key(&key_pair)?;
-                Ok(key_pair)
-            },
-            res => res,
-        }?;
-
         let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.secret.clone());
+
+        debug!("Initializing validator");
 
         let this = Arc::new(Validator {
             blockchain: consensus.blockchain.clone(),
@@ -127,6 +118,8 @@ impl Validator {
 
     pub fn init_listeners(this: &Arc<Validator>) {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
+
+        debug!("Initializing listeners");
 
         // Setup event handlers for blockchain events
         let weak = Arc::downgrade(this);

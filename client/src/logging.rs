@@ -9,10 +9,19 @@ use log::{Level, LevelFilter};
 
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(0);
 
-const NIMIQ_MODULES: [&str; 22] = [
+const NIMIQ_MODULES: [&str; 32] = [
     "nimiq_accounts",
     "beserial",
+    "bls",
     "nimiq_blockchain",
+    "nimiq_blockchain_albatross",
+    "nimiq_block_production",
+    "nimiq_block_production_albatross",
+    "nimiq_block",
+    "nimiq_block_albatross",
+    "nimiq_block_base",
+    "nimiq_account",
+    "nimiq_transaction",
     "nimiq_client",
     "nimiq_collections",
     "nimiq_consensus",
@@ -32,6 +41,7 @@ const NIMIQ_MODULES: [&str; 22] = [
     "nimiq_primitives",
     "nimiq_rpc_server",
     "nimiq_utils",
+    "nimiq_validator",
 ];
 pub const DEFAULT_LEVEL: LevelFilter = LevelFilter::Warn;
 

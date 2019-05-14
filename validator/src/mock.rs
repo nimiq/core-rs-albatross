@@ -12,6 +12,7 @@ use blockchain_albatross::Blockchain;
 use bls::bls12_381::{KeyPair, PublicKey, SecretKey, Signature};
 use mempool::Mempool;
 use utils::timers::Timers;
+use consensus::{Consensus, AlbatrossConsensusProtocol};
 
 const SECRET_KEY: &'static str = "8049c38d5b20373723dd5fec59a489d65d7ce695be53b1823c4e989cf3458538";
 
@@ -21,19 +22,19 @@ enum MockTimers {
     ProduceBlock
 }
 
-pub struct MockValidator<'env> {
-    block_producer: Arc<BlockProducer<'env>>,
+pub struct MockValidator {
+    block_producer: Arc<BlockProducer<'static>>,
     timers:  Timers<MockTimers>,
 }
 
 
-impl<'env> MockValidator<'env> {
-    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>) -> Self {
+impl MockValidator {
+    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) -> Arc<Self> {
         let validator_key = SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap();
-        Self {
-            block_producer: Arc::new(BlockProducer::new(blockchain, mempool, validator_key)),
+        Arc::new(Self {
+            block_producer: Arc::new(BlockProducer::new(Arc::clone(&consensus.blockchain), Arc::clone(&consensus.mempool), validator_key)),
             timers: Timers::new(),
-        }
+        })
     }
 
     pub fn start(&self) {
