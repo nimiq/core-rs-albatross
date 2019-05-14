@@ -15,7 +15,6 @@ use block::{Block, MicroBlock, PbftProposal, MacroHeader, MicroExtrinsics, Macro
 use block::ForkProof;
 use blockchain::blockchain::Blockchain;
 use hash::Hash;
-use keys::Address;
 use mempool::Mempool;
 use bls::bls12_381::SecretKey;
 use block::MicroJustification;

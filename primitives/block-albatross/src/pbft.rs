@@ -5,7 +5,6 @@ use super::signed;
 use bls::bls12_381::PublicKey;
 use super::MacroHeader;
 use crate::ViewChangeProof;
-use crate::signed::UntrustedAggregateProof;
 use crate::ValidatorSlot;
 
 

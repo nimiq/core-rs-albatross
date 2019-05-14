@@ -27,10 +27,6 @@ pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof};
 pub use fork_proof::ForkProof;
 pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProof, UntrustedPbftProof, SignedPbftPrepareMessage, SignedPbftCommitMessage, SignedPbftProposal, PbftProposal};
 
-use beserial::{Deserialize, Serialize};
-use bls::bls12_381::PublicKey;
-use keys::Address;
-
 use crate::transaction::TransactionError;
 
 #[derive(Clone, PartialEq, Eq, Debug)]

@@ -154,6 +154,11 @@ pub struct StakingContract {
 }
 
 impl StakingContract {
+    pub fn get_balance(&self, staker_address: &Address) -> Coin {
+        self.active_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO)
+            + self.inactive_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO)
+    }
+
     /// Adds funds to stake of `address`.
     /// XXX This is public to fill the genesis staking contract
     pub fn stake(&mut self, staker_address: &Address, value: Coin, validator_key: BlsPublicKey, reward_address: Option<Address>) -> Result<Option<ActiveStakeReceipt>, AccountError> {
@@ -187,11 +192,6 @@ impl StakingContract {
 
             Ok(None)
         }
-    }
-
-    pub fn get_balance(&self, staker_address: &Address) -> Coin {
-        self.inactive_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO) +
-            self.active_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO)
     }
 
     /// Reverts a stake transaction.
@@ -382,26 +382,23 @@ impl StakingContract {
         Ok(())
     }
 
-    /// Retrieves the size-bounded list of active validators.
-    // FIXME naming
-    pub fn build_validator_set(&self, seed: &BlsSignature, max_considered: usize, max_picked: u32) -> (Coin, Vec<Slot>) {
+    pub fn select_validators(&self, seed: &BlsSignature, num_slots: u16, max_considered: usize) -> (Coin, Vec<Slot>) {
         let mut potential_validators = Vec::new();
         let mut min_stake = Coin::ZERO;
         let mut total_stake = Coin::ZERO;
 
-        let n_considered = min(self.active_stake_by_address.len(), max_considered);
-        let n_picked = min(n_considered, max_picked as usize);
+        let max_considered = min(self.active_stake_by_address.len(), max_considered);
 
         // Build potential validator set and find minimum stake.
         // Iterate from highest balance to lowest.
         for validator in self.active_stake_sorted.iter() {
-            if validator.balance <= min_stake
-                || potential_validators.len() == n_considered {
+            // This implicitly ensures that no more than max_considered validators end up in the potential_validators list.
+            if validator.balance <= min_stake {
                 break;
             }
 
             total_stake += validator.balance;
-            min_stake = Coin::from_u64_unchecked(u64::from(total_stake) / n_considered as u64);
+            min_stake = Coin::from_u64_unchecked(u64::from(total_stake) / max_considered as u64);
             potential_validators.push(Arc::clone(validator));
         }
 
@@ -411,12 +408,12 @@ impl StakingContract {
         let lookup = SegmentTree::new(&mut weights);
 
         // Build active validator set: Use the VRF to pick validators
-        let mut validators = Vec::<Slot>::with_capacity(n_picked as usize);
-        for i in 0..n_picked {
+        let mut validators = Vec::<Slot>::with_capacity(num_slots as usize);
+        for i in 0..num_slots {
             // Hash seed and index
             let mut hash_state = Blake2bHasher::new();
-            seed.serialize(&mut hash_state);
-            hash_state.write(&i.to_be_bytes());
+            seed.serialize(&mut hash_state).expect("Failed to hash seed");
+            hash_state.write(&i.to_be_bytes()).expect("Failed to hash index");
             let hash = hash_state.finish();
 
             // Get number from first 8 bytes
@@ -575,14 +572,7 @@ impl AccountInherentInteraction for StakingContract {
                 }
 
                 // Inherent slashes more than staked by address
-                let mut combined_funds = Coin::ZERO;
-                if let Some(ref active_stake) = self.active_stake_by_address.get(&inherent.target) {
-                    combined_funds = Account::balance_add(combined_funds, active_stake.balance)?;
-                }
-                if let Some(ref inactive_stake) = self.inactive_stake_by_address.get(&inherent.target) {
-                    combined_funds = Account::balance_add(combined_funds, inactive_stake.balance)?;
-                }
-                if inherent.value > combined_funds {
+                if inherent.value > self.get_balance(&inherent.target) {
                     return Err(AccountError::InvalidForTarget)
                 }
 
@@ -697,7 +687,6 @@ impl AccountInherentInteraction for StakingContract {
             if self.active_stake_by_address.get(&inherent.target).is_some() {
                 return Err(AccountError::InvalidForTarget);
             }
-            let active_receipt = receipt.active.as_ref().unwrap();
 
             let active_stake = Arc::new(ActiveStake {
                 staker_address: inherent.target.clone(),

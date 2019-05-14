@@ -4,13 +4,12 @@ use std::io;
 use beserial::{Deserialize, Serialize};
 use bls::bls12_381::{PublicKey, Signature};
 use hash::{Blake2bHash, Hash, SerializeContent};
-use primitives::policy::TWO_THIRD_VALIDATORS;
+use primitives::coin::Coin;
+use primitives::slot::Slot;
 
 use crate::BlockError;
 use crate::pbft::UntrustedPbftProof;
 use crate::signed;
-use primitives::slot::Slot;
-use primitives::coin::Coin;
 use crate::view_change::ViewChangeProof;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

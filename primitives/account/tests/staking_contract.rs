@@ -1,12 +1,11 @@
 use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
-use std::sync::Arc;
 use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_bls::bls12_381::KeyPair as BlsKeyPair;
-use nimiq_keys::{Address, KeyPair, PublicKey, PrivateKey};
+use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, StakingContract};
@@ -577,7 +576,7 @@ fn it_can_build_a_validator_set() {
     contract.commit_incoming_transaction(&stake(12,      0xFF), 2).unwrap();
 
     // Test potential validator selection by stake
-    let (_, validator_list) = contract.build_validator_set(&seed, 1, 1);
+    let (_, validator_list) = contract.select_validators(&seed, 1, 1);
     assert_eq!(validator_list.len(), 1);
     assert_eq!(validator_list[0].slashing_address.as_bytes()[0], 0x00);
 
@@ -588,7 +587,7 @@ fn it_can_build_a_validator_set() {
     contract.commit_incoming_transaction(&stake(100_000_000, 0x04), 2).unwrap();
 
     // Test potential validator selection by secondary index
-    let (min_required_stake, validator_list) = contract.build_validator_set(&seed, 1, 1);
+    let (min_required_stake, validator_list) = contract.select_validators(&seed, 1, 1);
     assert_eq!(min_required_stake, Coin::from_u64_unchecked(100_000_000));
     assert_eq!(validator_list.len(), 1);
     assert_eq!(validator_list[0].slashing_address.as_bytes()[0], 0x03);

@@ -1,8 +1,6 @@
 #![feature(type_alias_enum_variants)]
 
 #[macro_use]
-extern crate beserial_derive;
-#[macro_use]
 extern crate log;
 
 extern crate nimiq_account as account;

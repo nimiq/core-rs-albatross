@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use hash::{Blake2bHash, Hash, HashOutput};
+use hash::{Blake2bHash, Hash};
 use nimiq_bls::bls12_381::{PublicKey, Signature};
 
 use crate::MicroHeader;

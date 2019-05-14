@@ -1,24 +1,18 @@
-use std::cmp;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use failure::Fail;
 use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use parking_lot::MutexGuard;
 
-use account::{Account, AccountError, Inherent, InherentType};
+use account::{Account, Inherent, InherentType};
 use accounts::Accounts;
-use block::{Block, BlockError, BlockHeader, BlockType, MacroBlock, MicroBlock, ValidatorSlot};
+use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock, ValidatorSlot};
 use block::ForkProof;
 use block::ViewChange;
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
-use bls::bls12_381::{PublicKey, Signature};
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
-use fixed_unsigned::RoundHalfUp;
-use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
-use hash::{Blake2bHash, Hash};
+use hash::Blake2bHash;
 use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
@@ -401,7 +395,7 @@ impl<'env> Blockchain<'env> {
                 match current.1.head {
                     Block::Macro(_) => unreachable!(),
                     Block::Micro(ref micro_block) => {
-                        self.revert_accounts(&state.accounts, &mut write_txn, &micro_block);
+                        self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
 
                         cache_txn.revert_block(micro_block);
 

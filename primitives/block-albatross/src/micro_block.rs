@@ -5,7 +5,7 @@ use account::Receipt;
 use beserial::{Deserialize, Serialize};
 use crate::BlockError;
 use crate::fork_proof::ForkProof;
-use crate::view_change::{ViewChange, ViewChangeProof};
+use crate::view_change::ViewChange;
 use hash::{Hash, Blake2bHash, SerializeContent};
 use primitives::networks::NetworkId;
 use nimiq_bls::bls12_381::Signature;
@@ -68,7 +68,7 @@ impl MicroBlock {
         }
 
         if let Some(view_change_proof) = &self.justification.view_change_proof {
-            // check view change proof
+            // TODO check view change proof
         }
 
         Ok(())
