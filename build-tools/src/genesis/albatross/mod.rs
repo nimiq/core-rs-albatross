@@ -148,7 +148,7 @@ impl GenesisBuilder {
 
     fn select_validators(&self, pre_genesis_hash: &BlsSignature) -> Result<(Vec<Slot>, Vec<ValidatorSlot>), GenesisBuilderError> {
         let (_, slot_allocation) = self.generate_staking_contract()?
-            .build_validator_set(&pre_genesis_hash, 512, 512);
+            .select_validators(&pre_genesis_hash, 512, 16384);
 
         let validator_slots = { // construct validator slot list with slot counts
             // count slots per public key
