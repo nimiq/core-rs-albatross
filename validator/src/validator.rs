@@ -231,6 +231,8 @@ impl Validator {
                 state.status = if self.is_potential_validator() { ValidatorStatus::Potential } else { ValidatorStatus::Synced };
             },
         }
+
+        self.validator_network.on_finality();
     }
 
     // Sets the state according to the information on the block

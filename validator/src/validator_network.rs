@@ -210,7 +210,7 @@ impl ValidatorNetwork {
     /// TODO: register in consensus for macro blocks
     /// TODO: Remove validators with keys that don't have stake anymore?
     /// TODO: Compute set of validator agents that are now active.
-    fn on_finality(&self) {
+    pub fn on_finality(&self) {
         debug!("Clearing view change and pBFT proof");
 
         let mut state = self.state.write();
