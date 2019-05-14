@@ -63,10 +63,7 @@ impl<'env> BlockProducer<'env> {
     }
 
     pub fn next_macro_extrinsics(&self) -> MacroExtrinsics {
-        MacroExtrinsics {
-            slot_allocation: self.blockchain.get_next_validator_list(),
-            slashing_amount: Coin::try_from(0).unwrap() // TODO: From new data structure
-        }
+        self.blockchain.get_next_validator_list().into()
     }
 
     fn next_micro_extrinsics(&self, fork_proofs: Vec<ForkProof>, extra_data: Vec<u8>) -> MicroExtrinsics {
@@ -112,7 +109,7 @@ impl<'env> BlockProducer<'env> {
         let parent_macro_hash = self.blockchain.macro_head_hash();
         let extrinsics_root = extrinsics.hash();
 
-        let validators = self.blockchain.get_next_validator_set();
+        let validators = self.blockchain.get_next_validator_set().into();
 
         let inherents = self.blockchain.finalized_last_epoch();
         // Rewards are distributed with delay.

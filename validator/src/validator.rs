@@ -384,7 +384,7 @@ impl Validator {
         let validator_list = self.blockchain.get_next_validator_set();
         validator_list.iter().enumerate()
             .find(|(i, validator)| validator.public_key.compressed() == &compressed)
-            .map(|(i, validator)| (i as u16, validator.slots))
+            .map(|(i, validator)| (i as u16, validator.num_slots))
     }
 
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {

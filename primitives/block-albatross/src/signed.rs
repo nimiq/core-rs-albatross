@@ -190,7 +190,7 @@ impl<M: Message> UntrustedAggregateProof<M> {
         for pk_idx in self.signers.iter() {
             let pk_n = f(pk_idx as u16);
             public_key.aggregate(pk_n.public_key.uncompress().as_ref()?);
-            slots += pk_n.slots;
+            slots += pk_n.num_slots;
         }
         Some(AggregateProof {
             signers: self.signers.clone(),

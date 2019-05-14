@@ -121,7 +121,7 @@ impl ValidatorAgent {
                 self.notifier.read().notify(ValidatorAgentEvent::ViewChange {
                     view_change,
                     public_key: validator_slots.public_key.uncompress_unchecked().clone(),
-                    slots: validator_slots.slots
+                    slots: validator_slots.num_slots
                 });
             }
             else {
@@ -188,7 +188,7 @@ impl ValidatorAgent {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
                     prepare,
                     public_key: validator_slots.public_key.uncompress_unchecked().clone(),
-                    slots: validator_slots.slots
+                    slots: validator_slots.num_slots
                 });
             }
             else {
@@ -208,7 +208,7 @@ impl ValidatorAgent {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
                     commit,
                     public_key: validator_slots.public_key.uncompress_unchecked().clone(),
-                    slots: validator_slots.slots
+                    slots: validator_slots.num_slots
                 });
             }
             else {

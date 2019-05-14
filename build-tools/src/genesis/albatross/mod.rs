@@ -21,7 +21,7 @@ use bls::bls12_381::{
 use block_albatross::{Block, MacroBlock, MacroHeader, MacroExtrinsics};
 use beserial::{Serialize, SerializingError};
 use primitives::coin::Coin;
-use primitives::validators::{Slot, Validator, Validators};
+use primitives::validators::{Slots, Validator, Validators};
 use account::{Account, BasicAccount, StakingContract, AccountError, AccountsList};
 use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
 use database::WriteTransaction;
@@ -147,8 +147,8 @@ impl GenesisBuilder {
         Ok(self)
     }
 
-    fn select_validators(&self, pre_genesis_hash: &BlsSignature) -> Result<(Vec<Slot>, Validators), GenesisBuilderError> {
-        let (_, slot_allocation) = self.generate_staking_contract()?
+    fn select_validators(&self, pre_genesis_hash: &BlsSignature) -> Result<(Slots, Validators), GenesisBuilderError> {
+        let slot_allocation = self.generate_staking_contract()?
             .select_validators(&pre_genesis_hash.compress(), 512, 16384);
 
         let validators = { // construct validator slot list with slot counts
@@ -162,10 +162,10 @@ impl GenesisBuilder {
 
             // map to Validators
             let mut validators: Validators = Vec::new();
-            for (public_key, slots) in slot_counts {
+            for (public_key, num_slots) in slot_counts {
                 validators.push(Validator {
                     public_key: public_key.clone().into(),
-                    slots
+                    num_slots
                 });
             }
 
@@ -193,10 +193,7 @@ impl GenesisBuilder {
         let (slot_allocation, validators) = self.select_validators(&pre_genesis_seed)?;
 
         // extrinsics
-        let extrinsics = MacroExtrinsics {
-            slot_allocation,
-            slashing_amount: Coin::ZERO
-        };
+        let extrinsics: MacroExtrinsics = slot_allocation.into();
         let extrinsics_root = extrinsics.hash::<Blake2bHash>();
         debug!("Extrinsics root: {}", &extrinsics_root);
 
@@ -221,7 +218,7 @@ impl GenesisBuilder {
         // the header
         let header = MacroHeader {
             version: 1,
-            validators,
+            validators: validators.into(),
             block_number: 1,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),

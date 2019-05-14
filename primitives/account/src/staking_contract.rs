@@ -14,7 +14,7 @@ use hash::{Blake2bHasher, Hasher};
 use primitives::{
     policy,
     coin::Coin,
-    validators::Slot,
+    validators::{Slot, Slots},
 };
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::StakingTransactionData;
@@ -361,7 +361,7 @@ impl StakingContract {
         Ok(())
     }
 
-    pub fn select_validators(&self, seed: &BlsSignature, num_slots: u16, max_considered: usize) -> (Coin, Vec<Slot>) {
+    pub fn select_validators(&self, seed: &BlsSignature, num_slots: u16, max_considered: usize) -> Slots {
         let mut potential_validators = Vec::new();
         let mut min_stake = Coin::ZERO;
         let mut total_stake = Coin::ZERO;
@@ -413,7 +413,7 @@ impl StakingContract {
         // Sorting by public key allows us to later compress this in the MacroHeader by removing duplicates
         validators.sort_unstable_by(|a, b| b.public_key.cmp(&a.public_key));
 
-        (min_stake, validators)
+        Slots::new(validators, min_stake)
     }
 
     fn get_signer(transaction: &Transaction) -> Result<Address, AccountError> {

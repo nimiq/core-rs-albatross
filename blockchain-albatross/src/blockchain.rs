@@ -16,7 +16,7 @@ use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use primitives::validators::{Slot, Validator, Validators};
+use primitives::validators::{Slot, Slots, Validator, Validators};
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
@@ -654,7 +654,7 @@ impl<'env> Blockchain<'env> {
         unimplemented!();
     }
 
-    pub fn get_next_validator_list(&self) -> Vec<Slot> {
+    pub fn get_next_validator_list(&self) -> Slots {
         unimplemented!()
     }
 
@@ -706,7 +706,7 @@ impl<'env> Blockchain<'env> {
         Inherent {
             ty: InherentType::Slash,
             target: producer.1.staker_address.clone(),
-            value: self.macro_head().extrinsics.as_ref().unwrap().slashing_amount.try_into().unwrap(),
+            value: self.macro_head().extrinsics.as_ref().unwrap().slash_fine.try_into().unwrap(),
             data: vec![]
         }
     }
