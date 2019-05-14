@@ -24,6 +24,7 @@ use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
+use crate::slash_registry::SlashRegistry;
 use crate::transaction_cache::TransactionCache;
 
 #[cfg(feature = "metrics")]
@@ -40,6 +41,7 @@ pub struct Blockchain<'env> {
     network_time: Arc<NetworkTime>,
     pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
     pub(crate) chain_store: ChainStore<'env>,
+    pub(crate) slash_registry: SlashRegistry<'env>,
     pub(crate) state: RwLock<BlockchainState<'env>>,
     pub push_lock: Mutex<()>, // TODO: Not very nice to have this public
 
@@ -70,13 +72,14 @@ impl<'env> Blockchain<'env> {
 
     pub fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
         let chain_store = ChainStore::new(env);
+        let slash_registry = SlashRegistry::new(env, unimplemented!());
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash)?,
-            None => Blockchain::init(env, network_time, network_id, chain_store)?
+            Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, slash_registry, head_hash)?,
+            None => Blockchain::init(env, network_time, network_id, chain_store, slash_registry)?
         })
     }
 
-    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
+    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, slash_registry: SlashRegistry<'env>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
@@ -112,6 +115,7 @@ impl<'env> Blockchain<'env> {
             network_time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
+            slash_registry,
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,
@@ -127,13 +131,15 @@ impl<'env> Blockchain<'env> {
         })
     }
 
-    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Result<Self, BlockchainError> {
+    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, slash_registry: SlashRegistry<'env>) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
         let genesis_macro_block = (match genesis_block { Block::Macro(ref macro_block) => Some(macro_block), _ => None }).unwrap();
         let main_chain = ChainInfo::initial(genesis_block.clone());
         let head_hash = network_info.genesis_hash().clone();
+
+        // TODO Initialize SlashRegistry
 
         // Initialize accounts.
         let accounts = Accounts::new(env);
@@ -157,6 +163,7 @@ impl<'env> Blockchain<'env> {
             network_time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
+            slash_registry,
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,

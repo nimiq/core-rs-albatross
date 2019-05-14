@@ -42,6 +42,11 @@ const EMISSION_TAIL_REWARD: u64 = 4000;
 /// Emission speed.
 const EMISSION_SPEED: u64 = 4_194_304;
 
+/// Number of micro blocks to wait for unstaking after next macro block.
+pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.
+
+pub const BLOCKS_PER_EPOCH: u32 = 128;
+
 lazy_static! {
     static ref SUPPLY_CACHE: RwLock<Vec<u64>> = RwLock::new(vec![INITIAL_SUPPLY]);
 }
@@ -127,6 +132,26 @@ pub fn next_macro_block(block_height: u32) -> u32 {
 }
 
 
+pub fn epoch_at(block_height: u32) -> u32 {
+    (BLOCKS_PER_EPOCH + block_height - 1) / BLOCKS_PER_EPOCH
+}
+
+pub fn epoch_index_at(block_height: u32) -> u32 {
+    (BLOCKS_PER_EPOCH + block_height - 1) % BLOCKS_PER_EPOCH
+}
+
+pub fn is_macro_at(block_height: u32) -> bool {
+    epoch_index_at(block_height) == 0
+}
+
+pub fn successive_micro_blocks(a: u32, b: u32) -> bool {
+    a + 1 == b || (a + 2 == b && epoch_index_at(b) == 1)
+}
+
+pub fn first_block_of(epoch: u32) -> u32 {
+    unimplemented!()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +181,21 @@ mod tests {
         assert_eq!(supply_after(5000), 254201675369298);
         assert_eq!(supply_after(52888983), 2099999999996000);
         assert_eq!(supply_after(52888984), 2100000000000000);
+    }
+
+    #[test]
+    fn it_correctly_computes_epoch() {
+        assert_eq!(epoch_at(0), 0);
+        assert_eq!(epoch_at(1), 1);
+        assert_eq!(epoch_at(128), 1);
+        assert_eq!(epoch_at(129), 2);
+    }
+
+    #[test]
+    fn it_correctly_computes_epoch_index() {
+        assert_eq!(epoch_index_at(1), 0);
+        assert_eq!(epoch_index_at(2), 1);
+        assert_eq!(epoch_index_at(128), 127);
+        assert_eq!(epoch_index_at(129), 0);
     }
 }

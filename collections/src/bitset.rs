@@ -129,35 +129,11 @@ impl BitSet {
             values.into_iter()
         })
     }
-}
 
-/*struct BitSetIter<'a> {
-    value: usize,
-    block: Option<u64>,
-    block_iter: Iter<u64>,
-}
-
-impl Iterator for BitSetIter {
-    type Item = usize;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let block = if Some(block) = self.block {
-            block
-        }
-        else {
-            if Some(next_block) = self.block_iter.next() {
-                self.block = Some(next_block);
-                next_block
-            }
-            else {
-                return None
-            }
-        };
-
-
+    pub fn iter_bits<'a>(&'a self) -> impl Iterator<Item=bool> + 'a {
+        self.store.iter().flat_map(|store| Bits64Iter::new(*store))
     }
-}*/
-
+}
 
 impl Default for BitSet {
     fn default() -> Self {
@@ -228,9 +204,6 @@ impl Serialize for BitSet {
         for x in self.store.iter() {
             size += x.serialize(writer)?
         }
-        size += uvar::from_usize(self.count)
-            .ok_or(SerializingError::Overflow)?
-            .serialize(writer)?;
         Ok(size)
     }
 
@@ -238,7 +211,6 @@ impl Serialize for BitSet {
         let mut size = 0;
         size += uvar::from_usize(self.store.len()).unwrap().serialized_size();
         size += self.store.len() * 0u64.serialized_size();
-        size += uvar::from_usize(self.count).unwrap().serialized_size();
         size
     }
 }
@@ -248,13 +220,13 @@ impl Deserialize for BitSet {
         let n: uvar = Deserialize::deserialize(reader)?;
         let n = n.to_usize().ok_or(SerializingError::Overflow)?;
 
+        let mut count = 0usize;
         let mut store: Vec<u64> = Vec::new();
         for _ in 0..n {
-            store.push(Deserialize::deserialize(reader)?);
+            let x: u64 = Deserialize::deserialize(reader)?;
+            count += x.count_ones() as usize;
+            store.push(x);
         }
-
-        let count: uvar = Deserialize::deserialize(reader)?;
-        let count = count.to_usize().ok_or(SerializingError::Overflow)?;
 
         Ok(BitSet {
             store,
@@ -283,5 +255,30 @@ impl fmt::Debug for BitSet {
         write!(f, "BitSet")?;
         fmt::Display::fmt(self, f)?;
         Ok(())
+    }
+}
+
+struct Bits64Iter {
+    store: u64,
+    idx: usize,
+}
+
+impl Bits64Iter {
+    fn new(store: u64) -> Self {
+        Self { store, idx: 0 }
+    }
+}
+
+impl Iterator for Bits64Iter {
+    type Item = bool;
+
+    fn next(&mut self) -> Option<bool> {
+        if self.idx <= 63 {
+            let state = self.store & (1u64 << self.idx) != 0;
+            self.idx += 1;
+            Some(state)
+        } else {
+            None
+        }
     }
 }
