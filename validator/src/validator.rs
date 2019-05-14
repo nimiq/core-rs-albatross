@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use parking_lot::RwLock;
 
+use account::Account;
 use account::Receipt;
 use block_albatross::{
     Block,
@@ -32,7 +33,7 @@ use database::Environment;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use mempool::MempoolConfig;
 use network::NetworkConfig;
-use network_primitives::networks::NetworkId;
+use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
 use nimiq_block_production_albatross::BlockProducer;
 use utils::key_store::{Error as KeyStoreError, KeyStore};
@@ -166,7 +167,6 @@ impl Validator {
 
         // TODO: Sync fork proof pool?
 
-        // FIXME: use the real validator registry here.
         if self.is_potential_validator() {
             state.status = ValidatorStatus::Potential;
         } else {
@@ -399,7 +399,6 @@ impl Validator {
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {
         let timestamp = self.consensus.network.network_time.now();
 
-        // TODO: Slashing amount.
         let pbft_proposal = self.block_producer.next_macro_block_proposal(timestamp, view_change);
 
         let pk_idx = self.state.read().pk_idx.expect("Checked that we are an active validator before entering this function");
@@ -427,8 +426,15 @@ impl Validator {
     }
 
     fn is_potential_validator(&self) -> bool {
-        // TODO: Use StakingContract to determine if we are a potential validator.
-        //self.blockchain.state().accounts().get()
-        false
+        let validator_registry = NetworkInfo::from_network_id(self.blockchain.network_id).validator_registry_address().expect("Albatross consensus always has the address set.");
+        let contract = self.blockchain.state().accounts().get(validator_registry, None);
+        if let Account::Staking(contract) = contract {
+            let public_key = PublicKey::from_secret(&self.validator_key);
+
+            // FIXME: Inefficient linear scan.
+            contract.active_stake_sorted.iter().any(|stake| stake.validator_key() == &public_key)
+        } else {
+            panic!("Validator registry has a wrong account type.");
+        }
     }
 }

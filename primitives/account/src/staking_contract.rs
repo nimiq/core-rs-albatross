@@ -31,6 +31,12 @@ pub struct ActiveStake {
     reward_address: Option<Address>,
 }
 
+impl ActiveStake {
+    pub fn validator_key(&self) -> &BlsPublicKey {
+        &self.validator_key
+    }
+}
+
 impl PartialEq for ActiveStake {
     fn eq(&self, other: &ActiveStake) -> bool {
         self.balance == other.balance
