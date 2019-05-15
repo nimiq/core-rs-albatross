@@ -785,9 +785,9 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| s.current_slots.as_ref().unwrap())
     }
 
-    pub fn last_slots(&self) -> MappedRwLockReadGuard<Slots> {
+    pub fn last_slots(&self) -> MappedRwLockReadGuard<Option<Slots>> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.last_slots.as_ref().unwrap())
+        RwLockReadGuard::map(guard, |s| &s.last_slots)
     }
 
     pub fn current_validators(&self) -> MappedRwLockReadGuard<Validators> {
@@ -795,9 +795,9 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| s.current_validators.as_ref().unwrap())
     }
 
-    pub fn last_validators(&self) -> MappedRwLockReadGuard<Validators> {
+    pub fn last_validators(&self) -> MappedRwLockReadGuard<Option<Validators>> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.last_validators.as_ref().unwrap())
+        RwLockReadGuard::map(guard, |s| &s.last_validators)
     }
 
     pub fn finalize_last_epoch(&self) -> Vec<Inherent> {

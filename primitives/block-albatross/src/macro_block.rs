@@ -73,7 +73,6 @@ impl TryInto<Slots> for MacroBlock {
 
         let mut public_key = compressed_public_keys.public_keys.remove(0);
 
-        debug!("comrpessed_address = {:?}", compressed_addresses);
         let mut addresses = compressed_addresses.addresses.remove(0);
         let mut reward_address_opt = if addresses.reward_address == addresses.staker_address { None } else { Some(addresses.reward_address) };
         let mut staker_address = addresses.staker_address;
