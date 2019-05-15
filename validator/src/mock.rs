@@ -112,6 +112,6 @@ impl MockValidator {
             let result = block_producer.blockchain.push(block);
             info!("Push result: {:?}", result);
 
-        }, Duration::from_millis(100));
+        }, Duration::from_millis(1000));
     }
 }
