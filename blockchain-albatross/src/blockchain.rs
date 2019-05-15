@@ -344,11 +344,15 @@ impl<'env> Blockchain<'env> {
         // update cached validators
         if let Block::Macro(ref macro_block) = block {
             let mut guard = self.state.write();
+
             let slots = guard.current_slots.take().unwrap();
             let validators = guard.current_validators.take().unwrap();
             guard.last_slots.replace(slots);
             guard.last_validators.replace(validators);
 
+            let (slot, validators) = Self::slots_and_validators_from_block(&macro_block);
+            guard.current_slots.replace(slot);
+            guard.current_validators.replace(validators);
         }
 
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
@@ -812,7 +816,7 @@ impl<'env> Blockchain<'env> {
             return vec![];
         }
 
-        let block = self.get_block_at(policy::first_block_of(epoch), true);
+        let block = self.get_block_at(policy::macro_block_of(epoch), true);
         let macro_block;
         if let Some(Block::Macro(block)) = block {
             macro_block = block;
