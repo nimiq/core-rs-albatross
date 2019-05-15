@@ -328,6 +328,11 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
+        if let Err(e) = self.state.write().slash_registry.commit_block(&chain_info.head, self.head().seed(), &self.macro_head().extrinsics.as_ref().unwrap().clone().into()) {
+            warn!("Rejecting block - slash commit failed: {:?}", e);
+            return Err(PushError::InvalidSuccessor);
+        }
+
         // Commit block to AccountsTree.
         if let Err(e) = self.commit_accounts(&state.accounts, &mut txn, &chain_info.head) {
             warn!("Rejecting block - commit failed: {:?}", e);
@@ -347,7 +352,6 @@ impl<'env> Blockchain<'env> {
         // Acquire write lock & commit changes.
         let mut state = RwLockUpgradableReadGuard::upgrade(state);
         state.transaction_cache.push_block(&chain_info.head);
-        // TODO SlashRegistry
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             state.macro_head = macro_block.clone();
@@ -399,9 +403,11 @@ impl<'env> Blockchain<'env> {
 
         let mut write_txn = WriteTransaction::new(self.env);
         let mut cache_txn;
+        let mut slash_registry;
 
         let state = self.state.upgradable_read();
         cache_txn = state.transaction_cache.clone();
+        slash_registry = state.slash_registry.clone();
         // XXX Get rid of the .clone() here.
         current = (state.head_hash.clone(), state.main_chain.clone());
 
@@ -412,6 +418,7 @@ impl<'env> Blockchain<'env> {
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
 
                     cache_txn.revert_block(&current.1.head);
+                    slash_registry.revert_block(&current.1.head);
 
                     let prev_hash = micro_block.header.parent_hash.clone();
                     let prev_info = self.chain_store
@@ -440,7 +447,7 @@ impl<'env> Blockchain<'env> {
         }
         assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.block_number()));
 
-        // Check each fork block against TransactionCache & commit to AccountsTree.
+        // Check each fork block against TransactionCache & commit to AccountsTree and SlashRegistry.
         let mut fork_iter = fork_chain.iter().rev();
         while let Some(fork_block) = fork_iter.next() {
             match fork_block.1.head {
@@ -464,6 +471,11 @@ impl<'env> Blockchain<'env> {
                         write_txn.commit();
 
                         return Err(PushError::InvalidFork);
+                    }
+
+                    if let Err(e) = self.state.write().slash_registry.commit_block(&chain_info.head, self.head().seed(), &self.macro_head().extrinsics.as_ref().unwrap().slot_allocation.into()) {
+                        warn!("Rejecting block - slash commit failed: {:?}", e);
+                        return Err(PushError::InvalidSuccessor);
                     }
 
                     cache_txn.push_block(&fork_block.1.head);
@@ -641,16 +653,39 @@ impl<'env> Blockchain<'env> {
         self.state.read().macro_head_hash.clone()
     }
 
-    pub fn get_next_block_producer(&self) -> (u16, Slot) {
-        unimplemented!();
+    pub fn get_next_block_producer(&self) -> (u32, Slot) {
+        let macro_head = &self.macro_head();
+        let validators = &macro_head.extrinsics.into();
+        let (idx, slot) = self.state.read().slash_registry.next_slot_owner(self.height(), self.view_number(), self.head().seed(), validators);
+        (idx, slot.clone())
     }
 
     pub fn get_next_validator_list(&self) -> Slots {
-        unimplemented!()
+        let staking_account = self.state.read().accounts().get(unimplemented!(), None);
+        if let Account::Staking(ref staking_contract) = staking_account {
+            return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::ACTIVE_VALIDATORS, policy::MIN_STAKE as usize);
+        }
+        unreachable!()
     }
 
     pub fn get_next_validator_set(&self) -> Validators {
-        unimplemented!()
+        let mut validators = Vec::new();
+
+        let mut last_validator = None;
+        let mut slot_no = 0;
+        let (_, slots) = self.get_next_validator_list();
+        for ref slot in slots {
+            if last_validator.is_some() {
+                if last_validator.unwrap().public_key == slot.public_key {
+                    slot_no += 1;
+                } else {
+                    validators.push(Validator { public_key: last_validator, slots: slot_no });
+                    slot_no = 1;
+                    last_validator = Some(slot.public_key);
+                }
+            }
+        }
+        return validators;
     }
 
     pub fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {

@@ -14,7 +14,7 @@ use collections::bitset::BitSet;
 use database::{AsDatabaseBytes, Database, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHasher, Hasher};
 use primitives::policy;
-use primitives::validators::Slot;
+use primitives::validators::{Slot, Slots};
 
 use crate::chain_store::ChainStore;
 
@@ -78,7 +78,7 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    pub  fn commit_block(&mut self, block: &Block, seed: &CompressedBlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
+    pub  fn commit_block(&mut self, block: &Block, seed: &CompressedBlsSignature, validators: &Slots) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(_) => Ok(()),
             Block::Micro(ref micro_block) => self.commit_micro_block(micro_block, seed, validators),

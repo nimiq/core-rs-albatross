@@ -169,6 +169,12 @@ impl From<Slots> for CompressedPublicKeys {
     }
 }
 
+impl From<MacroExtrinsics> for Slots {
+    fn from(_: MacroExtrinsics) -> Self {
+        unimplemented!()
+    }
+}
+
 // CHECKME: Check for performance
 impl From<Validators> for CompressedPublicKeys {
     fn from(validators: Validators) -> Self {
