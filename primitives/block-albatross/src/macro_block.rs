@@ -15,6 +15,7 @@ use crate::BlockError;
 use crate::pbft::PbftProof;
 use crate::signed;
 
+#[derive(Debug)]
 pub enum TryIntoError {
     MissingExtrinsics,
     InvalidLength,

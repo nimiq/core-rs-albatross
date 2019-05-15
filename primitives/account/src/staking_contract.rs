@@ -134,8 +134,15 @@ pub struct StakingContract {
 
 impl StakingContract {
     pub fn get_balance(&self, staker_address: &Address) -> Coin {
+        self.get_active_balance(staker_address) + self.get_inactive_balance(staker_address)
+    }
+
+    pub fn get_active_balance(&self, staker_address: &Address) -> Coin {
         self.active_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO)
-            + self.inactive_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO)
+    }
+
+    pub fn get_inactive_balance(&self, staker_address: &Address) -> Coin {
+        self.inactive_stake_by_address.get(staker_address).map(|stake| stake.balance).unwrap_or(Coin::ZERO)
     }
 
     /// Adds funds to stake of `address`.

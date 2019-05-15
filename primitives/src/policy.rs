@@ -117,8 +117,8 @@ pub const ACTIVE_VALIDATORS: u16 = 512;
 // (2 * n + 3) / 3 = ceil(2f + 1) where n = 3f + 1
 pub const TWO_THIRD_VALIDATORS: u16 = (2 * ACTIVE_VALIDATORS + 3) / 3;
 
-/// Number of micro blocks between two macro blocks
-pub const EPOCH_LENGTH: u32 = 21600;
+// Length of epoch including macro block
+pub const EPOCH_LENGTH: u32 = 128;
 
 /// Number of micro blocks to wait before unstaking after next macro block.
 pub const UNSTAKE_DELAY: u32 = 100; // TODO: Set.
@@ -137,27 +137,32 @@ pub fn macro_block_before(block_height: u32) -> u32 {
 }
 
 pub fn epoch_at(block_height: u32) -> u32 {
-    (BLOCKS_PER_EPOCH + block_height - 1) / BLOCKS_PER_EPOCH
+    (block_height + BLOCKS_PER_EPOCH - 1) / BLOCKS_PER_EPOCH
 }
 
 pub fn epoch_index_at(block_height: u32) -> u32 {
-    (BLOCKS_PER_EPOCH + block_height - 1) % BLOCKS_PER_EPOCH
+    (block_height + BLOCKS_PER_EPOCH - 1) % BLOCKS_PER_EPOCH
 }
 
 pub fn is_macro_block_at(block_height: u32) -> bool {
-    epoch_index_at(block_height) == 0
+    epoch_index_at(block_height) == BLOCKS_PER_EPOCH - 1
 }
 
+#[inline]
 pub fn is_micro_block_at(block_height: u32) -> bool {
-    epoch_index_at(block_height) != 0
+    !is_macro_block_at(block_height)
 }
 
 pub fn successive_micro_blocks(a: u32, b: u32) -> bool {
-    a + 1 == b || (a + 2 == b && epoch_index_at(b) == 1)
+    a + 1 == b || (a + 2 == b && is_macro_block_at(a + 1))
 }
 
 pub fn first_block_of(epoch: u32) -> u32 {
-    unimplemented!()
+    epoch * BLOCKS_PER_EPOCH - BLOCKS_PER_EPOCH + 1
+}
+
+pub fn macro_block_of(epoch: u32) -> u32 {
+    epoch * BLOCKS_PER_EPOCH
 }
 
 #[cfg(test)]
@@ -205,5 +210,14 @@ mod tests {
         assert_eq!(epoch_index_at(2), 1);
         assert_eq!(epoch_index_at(128), 127);
         assert_eq!(epoch_index_at(129), 0);
+    }
+
+    #[test]
+    fn it_correctly_computes_macro_block_position() {
+        assert_eq!(is_macro_block_at(0), true);
+        assert_eq!(is_macro_block_at(1), false);
+        assert_eq!(is_macro_block_at(2), false);
+        assert_eq!(is_macro_block_at(128), false);
+        assert_eq!(is_macro_block_at(129), true);
     }
 }

@@ -112,6 +112,38 @@ impl Block {
         }
     }
 
+    pub fn unwrap_macro_ref(&self) -> &MacroBlock {
+        if let Block::Macro(ref block) = self {
+            block
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn unwrap_micro_ref(&self) -> &MicroBlock {
+        if let Block::Micro(ref block) = self {
+            block
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn unwrap_macro(self) -> MacroBlock {
+        if let Block::Macro(block) = self {
+            block
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn unwrap_micro(self) -> MicroBlock {
+        if let Block::Micro(block) = self {
+            block
+        } else {
+            unreachable!()
+        }
+    }
+
     pub fn ty(&self) -> BlockType {
         match self {
             Block::Macro(_) => BlockType::Macro,

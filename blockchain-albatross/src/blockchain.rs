@@ -342,7 +342,7 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
-        if let Err(e) = self.state.write().slash_registry.commit_block(&mut txn, &chain_info.head, self.head().seed(), &self.last_slots()) {
+        if let Err(e) = self.state.write().slash_registry.commit_block(&mut txn, &chain_info.head) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }
@@ -486,7 +486,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidFork);
                     }
 
-                    if let Err(e) = self.state.write().slash_registry.commit_block(&mut write_txn, &fork_block.1.head, self.head().seed(), self.last_slots()) {
+                    if let Err(e) = self.state.write().slash_registry.commit_block(&mut write_txn, &fork_block.1.head) {
                         warn!("Rejecting block - slash commit failed: {:?}", e);
                         return Err(PushError::InvalidSuccessor);
                     }
@@ -668,9 +668,9 @@ impl<'env> Blockchain<'env> {
 
     pub fn get_next_block_producer(&self) -> (u32, Slot) {
         // FIXME
-        let validators = self.current_slots().iter().cloned().collect();
-        let (idx, slot) = self.state.read().slash_registry.next_slot_owner(
-            self.height(), self.view_number(), self.head().seed(), /* FIXME */ &validators);
+        let validators: Vec<Slot> = self.current_slots().iter().cloned().collect();
+        let (idx, slot) = self.state.read().slash_registry.slot_owner(
+            self.height(), self.view_number());
         (idx, slot.clone())
     }
 
@@ -779,7 +779,7 @@ impl<'env> Blockchain<'env> {
         // Find slots that are eligible for rewards.
         // TODO: Get slots from macro block.
         // TODO: Proper error handling.
-        let reward_eligible = state.slash_registry.reward_eligible(epoch, unimplemented!()).unwrap();
+        let reward_eligible = state.slash_registry.reward_eligible(epoch);
 
         // TODO: Get actual reward.
         let reward_pot: Coin = Coin::default();
@@ -788,12 +788,12 @@ impl<'env> Blockchain<'env> {
         let initial_reward = reward_pot / num_eligible;
         let mut remainder = reward_pot % num_eligible;
 
-        for (i, &slot) in reward_eligible.iter().enumerate() {
+        for (i, slot) in reward_eligible.iter().enumerate() {
             let mut reward = initial_reward;
 
             let inherent = Inherent {
                 ty: InherentType::Reward,
-                target: slot.reward_address_opt.unwrap_or(slot.staker_address),
+                target: slot.reward_address_opt.clone().unwrap_or(slot.staker_address.clone()),
                 value: reward,
                 data: vec![],
             };

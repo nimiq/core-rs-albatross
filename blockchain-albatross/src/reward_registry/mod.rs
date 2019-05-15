@@ -1,23 +1,28 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::convert::TryInto;
 use std::io;
 use std::io::Write;
-use std::ops::Bound::{Excluded, Included};
+use std::ops::Bound::{Unbounded, Included, Excluded};
 use std::sync::Arc;
 
 use failure::Fail;
 
+use account::StakingContract;
 use beserial::{Deserialize, Serialize};
-use block::{Block, MicroBlock};
+use block::{Block, MicroBlock, MacroBlock};
 use bls::bls12_381::CompressedSignature as CompressedBlsSignature;
 use collections::bitset::BitSet;
 use database::{AsDatabaseBytes, Database, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
 use hash::{Blake2bHasher, Hasher};
+use primitives::coin::Coin;
 use primitives::policy;
 use primitives::validators::{Slot, Slots};
 
 use crate::chain_store::ChainStore;
 
+// TODO Remove bounds
+// TODO Remove diff_heights
 mod reward_pot;
 
 pub struct SlashRegistry<'env> {
@@ -51,6 +56,8 @@ struct BlockDescriptor {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct TrackedRange(u32, u32);
 
+// TODO Pass in active validator set + seed through parameters
+//      or always load from chain store?
 impl<'env> SlashRegistry<'env> {
     const SLASH_REGISTRY_DB_NAME: &'static str = "SlashRegistry";
     const BOUNDS_KEY: &'static str = "bounds";
@@ -79,15 +86,19 @@ impl<'env> SlashRegistry<'env> {
         }
     }
 
+    /// Register slashes of block
+    ///  * `block` - Block to commit
+    ///  * `seed`- Seed of previous block
+    ///  * `staking_contract` - Contract used to check minimum stakes
     #[inline]
-    pub  fn commit_block(&mut self, txn: &mut WriteTransaction, block: &Block, seed: &CompressedBlsSignature, validators: &Slots) -> Result<(), SlashPushError> {
+    pub fn commit_block(&mut self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(_) => Ok(()),
-            Block::Micro(ref micro_block) => self.commit_micro_block(micro_block, seed, unimplemented!()),
+            Block::Micro(ref micro_block) => self.commit_micro_block(txn, micro_block),
         }
     }
 
-    pub fn commit_micro_block(&mut self, block: &MicroBlock, seed: &CompressedBlsSignature, validators: &Vec<Slot>) -> Result<(), SlashPushError> {
+    pub fn commit_micro_block(&mut self, txn: &mut WriteTransaction, block: &MicroBlock) -> Result<(), SlashPushError> {
         if !policy::successive_micro_blocks(self.bounds.1, block.header.block_number) {
             return Err(SlashPushError::UnexpectedBlock);
         }
@@ -100,8 +111,9 @@ impl<'env> SlashRegistry<'env> {
         let fork_proofs = &block.extrinsics.as_ref().unwrap().fork_proofs;
         for fork_proof in fork_proofs {
             let block_number = fork_proof.header1.block_number;
+            let view_number = fork_proof.header1.view_number;
             let prev_block = self.chain_store.get_block_at(block_number - 1).unwrap();
-            let slot_owner = self.next_slot_owner(block_number - 1, prev_block.view_number(), prev_block.seed(), validators);
+            let slot_owner = self.slot_owner(block_number, view_number);
 
             let slash_epoch = fork_proof.header1.block_number;
             if block_epoch == slash_epoch {
@@ -121,12 +133,27 @@ impl<'env> SlashRegistry<'env> {
 
         // Lookup slash state
         let mut lookup_range = self.diff_heights.range((
-            Excluded(policy::first_block_of(policy::epoch_at(block.header.block_number))),
+            Included(policy::first_block_of(policy::epoch_at(block.header.block_number))),
             Excluded(block.header.block_number),
         ));
         let last_change = lookup_range.next_back();
-        let mut prev_epoch_state = last_change.map(|entry| entry.1.prev_epoch_state.clone()).unwrap_or(BitSet::new());
-        let mut epoch_state = last_change.map(|entry| entry.1.epoch_state.clone()).unwrap_or(BitSet::new());
+
+        let mut prev_epoch_state: BitSet;
+        let mut epoch_state: BitSet;
+
+        if let Some(ref change) = last_change {
+            prev_epoch_state = change.1.prev_epoch_state.clone();
+            epoch_state = change.1.epoch_state.clone();
+        } else {
+            // Lookup state from previous epüoch
+            let mut prev_lookup_range = self.diff_heights.range((
+                Included(policy::first_block_of(block_epoch - 1)),
+                Excluded(policy::first_block_of(block_epoch)),
+            ));
+            let prev_last_change = prev_lookup_range.next_back();
+            prev_epoch_state = prev_last_change.map(|entry| entry.1.epoch_state.clone()).unwrap_or(BitSet::new());
+            epoch_state = BitSet::new();
+        }
 
         // Detect duplicate slashes
         if (&prev_epoch_state & &prev_epoch_diff).len() != 0
@@ -136,7 +163,7 @@ impl<'env> SlashRegistry<'env> {
 
         // Mark from view changes, ignoring duplicates
         for view in 0..block.header.view_number {
-            let slot_owner = self.next_slot_owner(block.header.block_number, view, seed, validators);
+            let slot_owner = self.slot_owner(block.header.block_number, view);
             epoch_diff.insert(slot_owner.0 as usize);
         }
 
@@ -147,50 +174,88 @@ impl<'env> SlashRegistry<'env> {
         // Push block descriptor and remember slash hashes
         let descriptor = BlockDescriptor { epoch_state, prev_epoch_state };
 
-        let mut txn = WriteTransaction::new(self.env);
-        txn.put(&self.slash_registry_db, &block.header.block_number, &descriptor);
+        // Commit and remove old entries
         self.bounds.1 = block.header.block_number;
-
-        // TODO Pop old blocks
-
+        self.gc(txn);
+        txn.put(&self.slash_registry_db, &block.header.block_number, &descriptor);
+        self.diff_heights.insert(block.header.block_number, descriptor);
         txn.put(&self.slash_registry_db, Self::BOUNDS_KEY, &self.bounds);
-        txn.commit();
 
         Ok(())
+    }
+
+    fn safe_subtract(a: Coin, b: Coin) -> Coin {
+        if a < b {
+            Coin::ZERO
+        } else {
+            a - b
+        }
+    }
+
+    fn gc(&mut self, txn: &mut WriteTransaction) {
+        let current_epoch = policy::epoch_at(self.bounds.1);
+        let cutoff = if current_epoch > 2 {
+            policy::first_block_of(current_epoch - 2)
+        } else {
+            0u32
+        };
+        loop {
+            let mut height = 0u32;
+            {
+                let mut lookup_range = self.diff_heights.range((
+                    Unbounded,
+                    Excluded(cutoff),
+                ));
+                let to_remove = lookup_range.next();
+                if to_remove.is_none() {
+                    break;
+                }
+                height = *to_remove.unwrap().0;
+            }
+            self.diff_heights.remove(&height);
+            txn.remove(&self.slash_registry_db, &height);
+        }
+        self.bounds.0 = cutoff;
+        txn.put(&self.slash_registry_db, Self::BOUNDS_KEY, &self.bounds);
     }
 
     #[inline]
     pub fn revert_block(&mut self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
         if let Block::Micro(ref block) = block {
-            self.revert_micro_block(block)
+            self.revert_micro_block(txn, block)
         } else {
             Ok(())
         }
     }
 
-    pub fn revert_micro_block(&mut self, block: &MicroBlock) -> Result<(), SlashPushError> {
+    pub fn revert_micro_block(&mut self, txn: &mut WriteTransaction, block: &MicroBlock) -> Result<(), SlashPushError> {
         if block.header.block_number != self.bounds.1 {
             return Err(SlashPushError::UnexpectedBlock);
         }
 
         self.diff_heights.remove(&block.header.block_number);
-        let mut txn = WriteTransaction::new(self.env);
         txn.remove(&self.slash_registry_db, &block.header.block_number);
         self.bounds.1 -= 1;
         txn.put(&self.slash_registry_db, Self::BOUNDS_KEY, &self.bounds);
-        txn.commit();
 
         Ok(())
     }
 
-    // Slot owner lookup for slash inherents
-    pub fn next_slot_owner<'a>(&self, block_number: u32, view_number: u32, seed: &CompressedBlsSignature, validators: &'a Vec<Slot>) -> (u32, &'a Slot) {
-        let honest_validators = self.next_slots(block_number, validators);
+    // Get slot owner at block and view number
+    pub fn slot_owner(&self, block_number: u32, view_number: u32) -> (u32, Slot) {
+        let epoch_number = policy::epoch_at(block_number);
+
+        // Get context
+        let macro_block = self.chain_store.get_block_at(policy::macro_block_of(epoch_number - 1)).unwrap().unwrap_macro();
+        let prev_block = self.chain_store.get_block_at(block_number - 1).unwrap();
+
+        // Get slots of epoch
+        let slots: Slots = macro_block.try_into().unwrap();
+        let honest_validators = self.enabled_slots(block_number, &slots);
 
         // Hash seed and index
         let mut hash_state = Blake2bHasher::new();
-        seed.serialize(&mut hash_state);
-        hash_state.write(&block_number.to_be_bytes());
+        prev_block.seed().serialize(&mut hash_state);
         hash_state.write(&view_number.to_be_bytes());
         let hash = hash_state.finish();
 
@@ -200,26 +265,26 @@ impl<'env> SlashRegistry<'env> {
         let num = u64::from_be_bytes(num_bytes);
 
         let index = num % honest_validators.len() as u64;
-        (index as u32, &honest_validators[index as usize])
+        (index as u32, honest_validators[index as usize].clone())
     }
 
-    fn without_slashes<'a>(validators: &'a Vec<Slot>, slashes: Option<&BitSet>) -> Vec<&'a Slot> {
+    fn without_slashes<'a>(slots: &'a Slots, slashes: Option<&BitSet>) -> Vec<&'a Slot> {
         let mut idx = 0usize;
-        let mut vec = Vec::<&Slot>::with_capacity(validators.len());
+        let mut vec = Vec::<&Slot>::with_capacity(slots.len());
 
         // Iterate over slashed slots bit set
         if let Some(slashes) = slashes {
             for slashed in slashes.iter_bits() {
                 if !slashed {
-                    vec.push(&validators[idx])
+                    vec.push(&slots.get(idx))
                 }
                 idx += 1;
             }
         }
 
         // Copy rest if BitSet smaller than list of validators
-        for validator in &validators[idx..] {
-            vec.push(validator);
+        for i in idx..slots.len() {
+            vec.push(slots.get(i));
         }
 
         vec
@@ -227,29 +292,38 @@ impl<'env> SlashRegistry<'env> {
 
     pub fn slash_bitset(&self, epoch_number: u32) -> Option<&BitSet> {
         let mut lookup_range = self.diff_heights.range((
-            Excluded(policy::first_block_of(epoch_number)),
+            Included(policy::first_block_of(epoch_number)),
             Excluded(policy::first_block_of(epoch_number + 1)),
         ));
-        lookup_range.next_back().as_ref().map(|entry| &entry.1.epoch_state)
+        let last_change = lookup_range.next_back();
+        if let Some(ref entry) = last_change {
+            Some(&entry.1.epoch_state)
+        } else {
+            let prev_lookup_range = self.diff_heights.range((
+                Included(policy::first_block_of(epoch_number + 1)),
+                Excluded(policy::first_block_of(epoch_number + 2)),
+            ));
+            lookup_range.next_back().as_ref().map(|entry| &entry.1.prev_epoch_state)
+        }
     }
 
-    pub fn reward_eligible<'a>(&self, epoch_number: u32, validators: &'a Vec<Slot>) -> Option<Vec<&'a Slot>> {
-        let mut lookup_range = self.diff_heights.range((
-            Excluded(policy::first_block_of(epoch_number)),
-            Excluded(policy::first_block_of(epoch_number + 2)),
-        ));
-
-        let slashes = lookup_range.next_back().as_ref().map(|entry| &entry.1.prev_epoch_state);
-        Some(Self::without_slashes(validators, slashes))
+    // Reward eligible slots at epoch (can change in next epoch)
+    pub fn reward_eligible(&self, epoch_number: u32) -> Vec<Slot> {
+        let macro_block_stored = self.chain_store.get_block_at(policy::macro_block_of(epoch_number - 1)).unwrap();
+        let macro_block = macro_block_stored.unwrap_macro();
+        let slots: Slots = macro_block.try_into().unwrap();
+        let slash_bitset = self.slash_bitset(epoch_number);
+        Self::without_slashes(&slots, slash_bitset).iter().map(|slot| (*slot).clone()).collect()
     }
 
-    fn next_slots<'a>(&self, block_number: u32, validators: &'a Vec<Slot>) -> Vec<&'a Slot> {
+    // Get enabled slots up to block number
+    fn enabled_slots<'a>(&self, block_number: u32, slots: &'a Slots) -> Vec<&'a Slot> {
         // Get last change of slots (diff.block_number <= block_number)
         let epoch_start = policy::first_block_of(policy::epoch_at(block_number));
-        let mut lookup_range = self.diff_heights.range((Included(epoch_start), Included(block_number)));
+        let mut lookup_range = self.diff_heights.range((Included(epoch_start), Excluded(block_number)));
         let slashes = lookup_range.next_back().as_ref().map(|entry| &entry.1.epoch_state);
 
-        Self::without_slashes(validators, slashes)
+        Self::without_slashes(slots, slashes)
     }
 }
 
