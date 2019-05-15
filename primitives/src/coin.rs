@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
 use std::io;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Sub, SubAssign, Div, Rem};
 use std::str::FromStr;
 
 use failure::Fail;
@@ -75,6 +75,24 @@ impl SubAssign<Coin> for Coin {
     #[inline]
     fn sub_assign(&mut self, rhs: Coin) {
         self.0 -= rhs.0;
+    }
+}
+
+impl Div<u64> for Coin {
+    type Output = Coin;
+
+    #[inline]
+    fn div(self, rhs: u64) -> Self {
+        Coin(self.0 / rhs)
+    }
+}
+
+impl Rem<u64> for Coin {
+    type Output = Coin;
+
+    #[inline]
+    fn rem(self, rhs: u64) -> Self {
+        Coin(self.0 % rhs)
     }
 }
 

@@ -5,15 +5,19 @@ use std::sync::Arc;
 use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 
 use account::{Account, Inherent, InherentType};
+use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
 use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock};
 use block::{ForkProof, ViewChange};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
+#[cfg(feature = "metrics")]
+use blockchain_base::chain_metrics::BlockchainMetrics;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::Blake2bHash;
 use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
+use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use primitives::validators::{Slot, Slots, Validator, Validators};
@@ -26,10 +30,6 @@ use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::slash_registry::SlashRegistry;
 use crate::transaction_cache::TransactionCache;
-
-#[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
-
 
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
@@ -705,10 +705,74 @@ impl<'env> Blockchain<'env> {
         unimplemented!()
     }
 
-    pub fn finalized_last_epoch(&self) -> Vec<Inherent> { unimplemented!() }
-
     pub fn current_validators(&self) -> &Validators {
         unimplemented!()
+    }
+
+    pub fn finalize_last_epoch(&self) -> Vec<Inherent> {
+        let _guard = self.lock();
+
+        let mut inherents = Vec::new();
+
+        let state = self.state.read();
+        let epoch = policy::epoch_at(state.main_chain.head.block_number()) - 1;
+        let block = self.get_block_at(policy::first_block_of(epoch), true);
+
+        let macro_block;
+        if let Some(Block::Macro(block)) = block {
+            macro_block = block;
+        } else {
+            // TODO: Proper error handling.
+            panic!("Macro block to finalize is missing");
+        }
+
+        // Find slots that are eligible for rewards.
+        // TODO: Get slots from macro block.
+        // TODO: Proper error handling.
+        let reward_eligible = state.slash_registry.reward_eligible(epoch, unimplemented!()).unwrap();
+
+        // TODO: Get actual reward.
+        let reward_pot: Coin = Coin::default();
+        let num_eligible = reward_eligible.len() as u64;
+
+        let initial_reward = reward_pot / num_eligible;
+        let mut remainder = reward_pot % num_eligible;
+
+        for (i, &slot) in reward_eligible.iter().enumerate() {
+            let mut reward = initial_reward;
+
+            let inherent = Inherent {
+                ty: InherentType::Reward,
+                target: slot.reward_address_opt.unwrap_or(slot.staker_address),
+                value: reward,
+                data: vec![],
+            };
+
+            // Test whether account will accept inherent.
+            let account = state.accounts.get(&inherent.target, None);
+            if account.check_inherent(&inherent).is_err() {
+                remainder += reward;
+            } else {
+                inherents.push(inherent);
+            }
+        }
+
+        let accepting_slots = inherents.len() as u64;
+        let reward = remainder / accepting_slots;
+        let remainder = u64::from(remainder % accepting_slots);
+
+        // TODO: Ensure slots are ordered by stake! Required for remainder.
+        for (i, inherent) in inherents.iter_mut().enumerate() {
+            let mut additional_reward = reward;
+            // Distribute remaining reward across the largest stakers.
+            if (i as u64) < remainder {
+                additional_reward += Coin::from_u64_unchecked(1);
+            }
+
+            inherent.value += additional_reward;
+        }
+
+        inherents
     }
 }
 

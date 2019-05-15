@@ -111,7 +111,7 @@ impl<'env> BlockProducer<'env> {
 
         let validators = self.blockchain.get_next_validator_set().into();
 
-        let inherents = self.blockchain.finalized_last_epoch();
+        let inherents = self.blockchain.finalize_last_epoch();
         // Rewards are distributed with delay.
         let state_root = self.blockchain.state().accounts()
             .hash_with(&vec![], &inherents, block_number)
