@@ -129,9 +129,22 @@ impl<'env> Blockchain<'env> {
         let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
 
         // current slots and validators
-        // current slots and validators
         let (current_slots, current_validators) = Self::slots_and_validators_from_block(&macro_head);
-        let (last_slots, last_validators) = unimplemented!(); // TODO
+
+        // get last slots and validators
+        let prev_block = chain_store.get_block(&macro_head.header.parent_macro_hash, true, None);
+        let (last_slots, last_validators) = match prev_block {
+            Some(Block::Macro(prev_macro_block)) => {
+                let (last_slots, last_validators) = Self::slots_and_validators_from_block(&prev_macro_block);
+                (Some(last_slots), Some(last_validators))
+            },
+            None => {
+                (None, None)
+            }
+            _ => {
+                return Err(BlockchainError::InconsistentState);
+            }
+        };
 
         Ok(Blockchain {
             env,
@@ -149,8 +162,8 @@ impl<'env> Blockchain<'env> {
                 macro_head_hash,
                 current_slots: Some(current_slots),
                 current_validators: Some(current_validators),
-                last_slots: Some(last_slots),
-                last_validators: Some(last_validators),
+                last_slots: last_slots,
+                last_validators: last_validators,
             }),
             push_lock: Mutex::new(()),
 
