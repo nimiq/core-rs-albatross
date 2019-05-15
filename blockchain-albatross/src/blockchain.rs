@@ -59,6 +59,8 @@ pub struct BlockchainState<'env> {
 
     macro_head: MacroBlock,
     macro_head_hash: Blake2bHash,
+
+    validators: Vec<Validator>,
 }
 
 impl<'env> BlockchainState<'env> {
@@ -123,6 +125,9 @@ impl<'env> Blockchain<'env> {
         // Initialize SlashRegistry.
         let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
 
+        // TODO: Avoid clone, if conversion only needs a reference?
+        let validators = macro_head.header.validators.clone().into();
+
         Ok(Blockchain {
             env,
             network_id,
@@ -137,6 +142,7 @@ impl<'env> Blockchain<'env> {
                 head_hash,
                 macro_head,
                 macro_head_hash,
+                validators,
             }),
             push_lock: Mutex::new(()),
 
@@ -187,6 +193,8 @@ impl<'env> Blockchain<'env> {
                 head_hash: head_hash.clone(),
                 macro_head: genesis_macro_block.clone(),
                 macro_head_hash: head_hash,
+                // TODO: Avoid clone, if conversion only needs a reference?
+                validators: genesis_macro_block.header.validators.clone().into(),
             }),
             push_lock: Mutex::new(()),
 
@@ -231,7 +239,7 @@ impl<'env> Blockchain<'env> {
                     None => return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof)),
                     Some(ref view_change_proof) => view_change_proof.verify(
                         &micro_block.view_change().unwrap(),
-                        self.current_validators(),
+                        &self.current_validators(),
                         policy::TWO_THIRD_VALIDATORS)
                         .map_err(|_| BlockError::InvalidJustification)?,
                 }
@@ -289,12 +297,17 @@ impl<'env> Blockchain<'env> {
                     },
                     Some(ref justification) => justification.verify(
                         macro_block.hash(),
-                        self.current_validators(),
+                        &self.current_validators(),
                         policy::TWO_THIRD_VALIDATORS)
                         .map_err(|_| BlockError::InvalidJustification)?,
                 }
             },
             Block::Micro(ref micro_block) => self.push_verify_dry(&block)?,
+        }
+
+        // update cached validators
+        if let Block::Macro(ref macro_block) = block {
+            self.state.write().validators = macro_block.header.validators.clone().into();
         }
 
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
@@ -688,7 +701,9 @@ impl<'env> Blockchain<'env> {
         }
     }
 
-    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<Validator> { unimplemented!() }
+    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<Validator> {
+        self.current_validators().get(validator_idx as usize).map(Validator::clone)
+    }
 
     // Checks if a block number is within the range of the current epoch
     pub fn is_in_current_epoch(&self, block_number: u32) -> bool {
@@ -737,8 +752,9 @@ impl<'env> Blockchain<'env> {
         unimplemented!()
     }
 
-    pub fn current_validators(&self) -> &Validators {
-        unimplemented!()
+    pub fn current_validators(&self) -> MappedRwLockReadGuard<Validators> {
+        let guard = self.state.read();
+        RwLockReadGuard::map(guard, |s| &s.validators)
     }
 
     pub fn last_validators(&self) -> &Validators {
