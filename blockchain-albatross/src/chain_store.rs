@@ -19,7 +19,6 @@ impl<'env> ChainStore<'env> {
     const HEIGHT_IDX_NAME: &'static str = "HeightIdx";
 
     const HEAD_KEY: &'static str = "head";
-    const MACRO_HEAD_KEY: &'static str = "macro_head";
 
     pub fn new(env: &'env Environment) -> Self {
         let chain_db = env.open_database(Self::CHAIN_DB_NAME.to_string());
@@ -38,17 +37,6 @@ impl<'env> ChainStore<'env> {
 
     pub fn set_head(&self, txn: &mut WriteTransaction, hash: &Blake2bHash) {
         txn.put(&self.chain_db, ChainStore::HEAD_KEY, hash);
-    }
-
-    pub fn get_macro_head(&self, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
-        match txn_option {
-            Some(txn) => txn.get(&self.chain_db, ChainStore::MACRO_HEAD_KEY),
-            None => ReadTransaction::new(self.env).get(&self.chain_db, ChainStore::MACRO_HEAD_KEY)
-        }
-    }
-
-    pub fn set_macro_head(&self, txn: &mut WriteTransaction, hash: &Blake2bHash) {
-        txn.put(&self.chain_db, ChainStore::MACRO_HEAD_KEY, hash);
     }
 
     pub fn get_chain_info(&self, hash: &Blake2bHash, include_body: bool, txn_option: Option<&Transaction>) -> Option<ChainInfo> {

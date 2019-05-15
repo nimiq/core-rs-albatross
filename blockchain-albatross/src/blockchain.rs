@@ -106,16 +106,14 @@ impl<'env> Blockchain<'env> {
         }
 
         // Load macro chain from store.
-        // TODO We can use the height index to retrieve the macro head.
-        let macro_head_hash = chain_store.get_macro_head(None)
-            .ok_or(BlockchainError::FailedLoadingMainChain)?;
         let macro_chain_info = chain_store
-            .get_chain_info(&macro_head_hash, true, None)
+            .get_chain_info_at(policy::macro_block_before(main_chain.head.block_number()), true, None)
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
         let macro_head = match macro_chain_info.head {
             Block::Macro(macro_head) => macro_head,
             Block::Micro(_) => return Err(BlockchainError::InconsistentState),
         };
+        let macro_head_hash = macro_head.hash();
 
         // Initialize TransactionCache.
         let mut transaction_cache = TransactionCache::new();
@@ -187,7 +185,6 @@ impl<'env> Blockchain<'env> {
 
         // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
-        chain_store.set_macro_head(&mut txn, &head_hash);
         chain_store.set_head(&mut txn, &head_hash);
         txn.commit();
 
@@ -419,7 +416,6 @@ impl<'env> Blockchain<'env> {
         if let Block::Macro(ref macro_block) = chain_info.head {
             state.macro_head = macro_block.clone();
             state.macro_head_hash = block_hash.clone();
-            self.chain_store.set_macro_head(&mut txn, &block_hash);
         }
 
         state.main_chain = chain_info;
