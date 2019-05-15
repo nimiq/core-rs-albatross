@@ -202,12 +202,6 @@ impl From<Validators> for CompressedPublicKeys {
     }
 }
 
-impl From<CompressedPublicKeys> for Validators {
-    fn from(_: CompressedPublicKeys) -> Self {
-        unimplemented!()
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CompressedAddresses {
     #[beserial(len_type(u16))]

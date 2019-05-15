@@ -60,7 +60,10 @@ pub struct BlockchainState<'env> {
     macro_head: MacroBlock,
     macro_head_hash: Blake2bHash,
 
-    validators: Vec<Validator>,
+    current_validators: Option<Validators>,
+    last_validators: Option<Validators>,
+    current_slots: Option<Slots>,
+    last_slots: Option<Slots>,
 }
 
 impl<'env> BlockchainState<'env> {
@@ -125,8 +128,10 @@ impl<'env> Blockchain<'env> {
         // Initialize SlashRegistry.
         let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
 
-        // TODO: Avoid clone, if conversion only needs a reference?
-        let validators = macro_head.header.validators.clone().into();
+        // current slots and validators
+        // current slots and validators
+        let (current_slots, current_validators) = Self::slots_and_validators_from_block(&macro_head);
+        let (last_slots, last_validators) = unimplemented!(); // TODO
 
         Ok(Blockchain {
             env,
@@ -142,7 +147,10 @@ impl<'env> Blockchain<'env> {
                 head_hash,
                 macro_head,
                 macro_head_hash,
-                validators,
+                current_slots: Some(current_slots),
+                current_validators: Some(current_validators),
+                last_slots: Some(last_slots),
+                last_validators: Some(last_validators),
             }),
             push_lock: Mutex::new(()),
 
@@ -179,6 +187,9 @@ impl<'env> Blockchain<'env> {
         // Initialize SlashRegistry.
         let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
 
+        // current slots and validators
+        let (current_slots, current_validators) = Self::slots_and_validators_from_block(&genesis_macro_block);
+
         Ok(Blockchain {
             env,
             network_id,
@@ -193,14 +204,23 @@ impl<'env> Blockchain<'env> {
                 head_hash: head_hash.clone(),
                 macro_head: genesis_macro_block.clone(),
                 macro_head_hash: head_hash,
-                // TODO: Avoid clone, if conversion only needs a reference?
-                validators: genesis_macro_block.header.validators.clone().into(),
+                current_slots: Some(current_slots),
+                current_validators: Some(current_validators),
+                last_slots: None,
+                last_validators: None,
             }),
             push_lock: Mutex::new(()),
 
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default()
         })
+    }
+
+    // TODO: Replace by proper conversion traits
+    fn slots_and_validators_from_block(block: &MacroBlock) -> (Slots, Validators) {
+        let slots: Slots = block.clone().try_into().unwrap();
+        let validators: Validators = slots.clone().into();
+        (slots, validators)
     }
 
     /// Verification required for macro block proposals and micro blocks
@@ -307,7 +327,12 @@ impl<'env> Blockchain<'env> {
 
         // update cached validators
         if let Block::Macro(ref macro_block) = block {
-            self.state.write().validators = macro_block.header.validators.clone().into();
+            let mut guard = self.state.write();
+            let slots = guard.current_slots.take().unwrap();
+            let validators = guard.current_validators.take().unwrap();
+            guard.last_slots.replace(slots);
+            guard.last_validators.replace(validators);
+
         }
 
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
@@ -742,21 +767,24 @@ impl<'env> Blockchain<'env> {
         unimplemented!()
     }
 
-    pub fn current_slots(&self) -> &Slots {
-        unimplemented!()
+    pub fn current_slots(&self) -> MappedRwLockReadGuard<Slots> {
+        let guard = self.state.read();
+        RwLockReadGuard::map(guard, |s| s.current_slots.as_ref().unwrap())
     }
 
-    pub fn last_slots(&self) -> &Slots {
-        unimplemented!()
+    pub fn last_slots(&self) -> MappedRwLockReadGuard<Slots> {
+        let guard = self.state.read();
+        RwLockReadGuard::map(guard, |s| s.last_slots.as_ref().unwrap())
     }
 
     pub fn current_validators(&self) -> MappedRwLockReadGuard<Validators> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.validators)
+        RwLockReadGuard::map(guard, |s| s.current_validators.as_ref().unwrap())
     }
 
-    pub fn last_validators(&self) -> &Validators {
-        unimplemented!()
+    pub fn last_validators(&self) -> MappedRwLockReadGuard<Validators> {
+        let guard = self.state.read();
+        RwLockReadGuard::map(guard, |s| s.last_validators.as_ref().unwrap())
     }
 
     pub fn finalize_last_epoch(&self) -> Vec<Inherent> {
