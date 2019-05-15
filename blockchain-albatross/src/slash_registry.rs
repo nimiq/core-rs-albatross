@@ -78,7 +78,7 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    pub  fn commit_block(&mut self, block: &Block, seed: &CompressedBlsSignature, validators: &Slots) -> Result<(), SlashPushError> {
+    pub  fn commit_block(&mut self, txn: &mut WriteTransaction, block: &Block, seed: &CompressedBlsSignature, validators: &Slots) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(_) => Ok(()),
             Block::Micro(ref micro_block) => self.commit_micro_block(micro_block, seed, unimplemented!()),
@@ -158,7 +158,7 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    pub fn revert_block(&mut self, block: &Block) -> Result<(), SlashPushError> {
+    pub fn revert_block(&mut self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
         if let Block::Micro(ref block) = block {
             self.revert_micro_block(block)
         } else {

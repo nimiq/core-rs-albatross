@@ -342,7 +342,7 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
-        if let Err(e) = self.state.write().slash_registry.commit_block(&chain_info.head, self.head().seed(), &self.macro_head().extrinsics.as_ref().unwrap().clone().into()) {
+        if let Err(e) = self.state.write().slash_registry.commit_block(&mut txn, &chain_info.head, self.head().seed(), &self.last_slots()) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }
@@ -429,8 +429,7 @@ impl<'env> Blockchain<'env> {
                 Block::Micro(ref micro_block) => {
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
 
-                    // TODO Needs db transaction
-                    //state.slash_registry.revert_block(&current.1.head);
+                    self.state.write().slash_registry.revert_block(&mut write_txn, &current.1.head);
 
                     cache_txn.revert_block(&current.1.head);
 
@@ -487,8 +486,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidFork);
                     }
 
-                    if let Err(e) = self.state.write().slash_registry.commit_block(
-                        &fork_block.1.head, self.head().seed(), self.last_slots()) {
+                    if let Err(e) = self.state.write().slash_registry.commit_block(&mut write_txn, &fork_block.1.head, self.head().seed(), self.last_slots()) {
                         warn!("Rejecting block - slash commit failed: {:?}", e);
                         return Err(PushError::InvalidSuccessor);
                     }
