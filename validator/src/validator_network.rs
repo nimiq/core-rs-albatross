@@ -76,6 +76,8 @@ pub struct ValidatorNetwork {
     network: Arc<Network<Blockchain<'static>>>,
     blockchain: Arc<Blockchain<'static>>,
 
+    info: SignedValidatorInfo,
+
     state: RwLock<ValidatorNetworkState>,
 
     self_weak: MutableOnce<Weak<ValidatorNetwork>>,
@@ -83,10 +85,12 @@ pub struct ValidatorNetwork {
 }
 
 impl ValidatorNetwork {
-    pub fn new(network: Arc<Network<Blockchain<'static>>>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
+    pub fn new(network: Arc<Network<Blockchain<'static>>>, blockchain: Arc<Blockchain<'static>>, info: SignedValidatorInfo) -> Arc<Self> {
+        debug!("Initializing validator network: {:?}", info.message);
         let this = Arc::new(ValidatorNetwork {
             network,
             blockchain,
+            info,
             state: RwLock::new(ValidatorNetworkState {
                 agents: HashMap::new(),
                 validators: HashMap::new(),
@@ -151,10 +155,11 @@ impl ValidatorNetwork {
             }));
 
             // send known validator infos to peer
-            let infos = self.state.read().validators.iter()
+            let mut infos = self.state.read().validators.iter()
                 .filter_map(|(_, validator)| {
                     validator.read().validator_info.clone()
                 }).collect::<Vec<SignedValidatorInfo>>();
+            infos.push(self.info.clone());
             peer.channel.send_or_close(Message::ValidatorInfo(infos));
         }
     }

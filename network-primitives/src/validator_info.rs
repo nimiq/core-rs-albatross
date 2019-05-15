@@ -3,11 +3,20 @@ use crate::address::peer_address::PeerAddress;
 use bls::bls12_381::CompressedPublicKey;
 use beserial::{Serialize, Deserialize};
 use hex::FromHex;
-use hash::SerializeContent;
+use hash::{SerializeContent, Hash, Blake2bHash, HashOutput};
 
 
 create_typed_array!(ValidatorId, u8, 16);
 add_hex_io_fns_typed_arr!(ValidatorId, ValidatorId::SIZE);
+
+impl ValidatorId {
+    pub fn from_public_key(public_key: &CompressedPublicKey) -> Self {
+        let mut id: [u8; 16] = [0; 16];
+        id.copy_from_slice(public_key.hash::<Blake2bHash>().as_bytes());
+        ValidatorId(id)
+    }
+}
+
 
 /// Information regarding an (maybe active) validator
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent)]

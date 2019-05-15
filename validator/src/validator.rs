@@ -36,6 +36,7 @@ use mempool::MempoolConfig;
 use network::NetworkConfig;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
+use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId, ValidatorInfo};
 use block_production_albatross::BlockProducer;
 use utils::key_store::{Error as KeyStoreError, KeyStore};
 use utils::mutable_once::MutableOnce;
@@ -89,7 +90,13 @@ impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
     pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
-        let validator_network = ValidatorNetwork::new(consensus.network.clone(), consensus.blockchain.clone());
+        let compressed_public_key = validator_key.public.compress();
+        let info = ValidatorInfo {
+            validator_id: ValidatorId::from_public_key(&compressed_public_key),
+            public_key: compressed_public_key,
+            peer_address: consensus.network.network_config.peer_address().clone()
+        };
+        let validator_network = ValidatorNetwork::new(consensus.network.clone(), consensus.blockchain.clone(), SignedValidatorInfo::from_message(info, &validator_key.secret, 0));
 
         let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.clone());
 
