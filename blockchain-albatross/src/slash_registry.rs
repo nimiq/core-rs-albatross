@@ -81,7 +81,7 @@ impl<'env> SlashRegistry<'env> {
     pub  fn commit_block(&mut self, block: &Block, seed: &CompressedBlsSignature, validators: &Slots) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(_) => Ok(()),
-            Block::Micro(ref micro_block) => self.commit_micro_block(micro_block, seed, validators),
+            Block::Micro(ref micro_block) => self.commit_micro_block(micro_block, seed, unimplemented!()),
         }
     }
 

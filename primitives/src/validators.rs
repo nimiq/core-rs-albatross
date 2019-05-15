@@ -84,3 +84,9 @@ pub struct Validator {
 }
 
 pub type Validators = Vec<Validator>;
+
+impl From<Slots> for Validators {
+    fn from(slots: Slots) -> Self {
+        unimplemented!()
+    }
+}

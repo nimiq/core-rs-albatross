@@ -100,6 +100,7 @@ impl<'env> Blockchain<'env> {
         }
 
         // Load macro chain from store.
+        // TODO We can use the height index to retrieve the macro head.
         let macro_head_hash = chain_store.get_macro_head(None)
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
         let macro_chain_info = chain_store
@@ -403,11 +404,9 @@ impl<'env> Blockchain<'env> {
 
         let mut write_txn = WriteTransaction::new(self.env);
         let mut cache_txn;
-        let mut slash_registry;
 
         let state = self.state.upgradable_read();
         cache_txn = state.transaction_cache.clone();
-        slash_registry = state.slash_registry.clone();
         // XXX Get rid of the .clone() here.
         current = (state.head_hash.clone(), state.main_chain.clone());
 
@@ -417,8 +416,10 @@ impl<'env> Blockchain<'env> {
                 Block::Micro(ref micro_block) => {
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
 
+                    // TODO Needs db transaction
+                    //state.slash_registry.revert_block(&current.1.head);
+
                     cache_txn.revert_block(&current.1.head);
-                    slash_registry.revert_block(&current.1.head);
 
                     let prev_hash = micro_block.header.parent_hash.clone();
                     let prev_info = self.chain_store
@@ -473,7 +474,8 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidFork);
                     }
 
-                    if let Err(e) = self.state.write().slash_registry.commit_block(&chain_info.head, self.head().seed(), &self.macro_head().extrinsics.as_ref().unwrap().slot_allocation.into()) {
+                    if let Err(e) = self.state.write().slash_registry.commit_block(
+                        &fork_block.1.head, self.head().seed(), self.last_slots()) {
                         warn!("Rejecting block - slash commit failed: {:?}", e);
                         return Err(PushError::InvalidSuccessor);
                     }
@@ -654,38 +656,24 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn get_next_block_producer(&self) -> (u32, Slot) {
-        let macro_head = &self.macro_head();
-        let validators = &macro_head.extrinsics.into();
-        let (idx, slot) = self.state.read().slash_registry.next_slot_owner(self.height(), self.view_number(), self.head().seed(), validators);
+        // FIXME
+        let validators = self.current_slots().iter().cloned().collect();
+        let (idx, slot) = self.state.read().slash_registry.next_slot_owner(
+            self.height(), self.view_number(), self.head().seed(), /* FIXME */ &validators);
         (idx, slot.clone())
     }
 
-    pub fn get_next_validator_list(&self) -> Slots {
-        let staking_account = self.state.read().accounts().get(unimplemented!(), None);
+    pub fn next_slots(&self) -> Slots {
+        let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
+        let staking_account = self.state.read().accounts().get(validator_registry, None);
         if let Account::Staking(ref staking_contract) = staking_account {
             return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::ACTIVE_VALIDATORS, policy::MIN_STAKE as usize);
         }
         unreachable!()
     }
 
-    pub fn get_next_validator_set(&self) -> Validators {
-        let mut validators = Vec::new();
-
-        let mut last_validator = None;
-        let mut slot_no = 0;
-        let (_, slots) = self.get_next_validator_list();
-        for ref slot in slots {
-            if last_validator.is_some() {
-                if last_validator.unwrap().public_key == slot.public_key {
-                    slot_no += 1;
-                } else {
-                    validators.push(Validator { public_key: last_validator, slots: slot_no });
-                    slot_no = 1;
-                    last_validator = Some(slot.public_key);
-                }
-            }
-        }
-        return validators;
+    pub fn next_validators(&self) -> Validators {
+        self.next_slots().into()
     }
 
     pub fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {
@@ -741,7 +729,19 @@ impl<'env> Blockchain<'env> {
         unimplemented!()
     }
 
+    pub fn current_slots(&self) -> &Slots {
+        unimplemented!()
+    }
+
+    pub fn last_slots(&self) -> &Slots {
+        unimplemented!()
+    }
+
     pub fn current_validators(&self) -> &Validators {
+        unimplemented!()
+    }
+
+    pub fn last_validators(&self) -> &Validators {
         unimplemented!()
     }
 

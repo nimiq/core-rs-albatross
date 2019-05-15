@@ -127,10 +127,14 @@ pub const UNSTAKE_DELAY: u32 = 100; // TODO: Set.
 pub const MIN_STAKE: u64 = 100_000_000;
 
 /// Returns the height of the next macro block after given `block_height`
-pub fn next_macro_block(block_height: u32) -> u32 {
+pub fn macro_block_after(block_height: u32) -> u32 {
     (block_height / EPOCH_LENGTH + 1) * EPOCH_LENGTH
 }
 
+/// Returns the height of the preceding macro block before given `block_height`
+pub fn macro_block_before(block_height: u32) -> u32 {
+    (block_height / EPOCH_LENGTH - 1) * EPOCH_LENGTH
+}
 
 pub fn epoch_at(block_height: u32) -> u32 {
     (BLOCKS_PER_EPOCH + block_height - 1) / BLOCKS_PER_EPOCH
@@ -140,8 +144,12 @@ pub fn epoch_index_at(block_height: u32) -> u32 {
     (BLOCKS_PER_EPOCH + block_height - 1) % BLOCKS_PER_EPOCH
 }
 
-pub fn is_macro_at(block_height: u32) -> bool {
+pub fn is_macro_block_at(block_height: u32) -> bool {
     epoch_index_at(block_height) == 0
+}
+
+pub fn is_micro_block_at(block_height: u32) -> bool {
+    epoch_index_at(block_height) != 0
 }
 
 pub fn successive_micro_blocks(a: u32, b: u32) -> bool {

@@ -385,7 +385,7 @@ impl Validator {
 
     fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {
         let compressed = self.validator_key.public.compress();
-        let validator_list = self.blockchain.get_next_validator_set();
+        let validator_list = self.blockchain.next_validators();
         validator_list.iter().enumerate()
             .find(|(i, validator)| validator.public_key.compressed() == &compressed)
             .map(|(i, validator)| (i as u16, validator.num_slots))
