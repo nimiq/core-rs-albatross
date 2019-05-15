@@ -120,7 +120,13 @@ impl PbftProof {
 
         self.prepare.verify(&prepare, validators, threshold)?;
         self.commit.verify(&commit, validators, threshold)?;
-        if ((&self.prepare.signers & &self.commit.signers).len() as u16) < threshold {
+
+        // sum up votes of signers that signed prepare and commit
+        let mut votes: u16 = (&self.prepare.signers & &self.commit.signers).iter().map(|s| {
+            validators.get(s).map(|v| v.num_slots).unwrap_or(0)
+        }).sum();
+
+        if votes < threshold {
             return Err(AggregateProofError::InsufficientSigners)
         }
         Ok(())
