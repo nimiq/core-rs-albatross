@@ -806,8 +806,13 @@ impl<'env> Blockchain<'env> {
 
         let state = self.state.read();
         let epoch = policy::epoch_at(state.main_chain.head.block_number()) - 1;
-        let block = self.get_block_at(policy::first_block_of(epoch), true);
 
+        // Special case for first epoch: Epoch 0 is finalized by definition.
+        if epoch == 0 {
+            return vec![];
+        }
+
+        let block = self.get_block_at(policy::first_block_of(epoch), true);
         let macro_block;
         if let Some(Block::Macro(block)) = block {
             macro_block = block;
