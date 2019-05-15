@@ -28,7 +28,7 @@ enum MockTimers {
 
 pub struct MockValidator {
     block_producer: Arc<BlockProducer<'static>>,
-    timers:  Timers<MockTimers>,
+    timers: Timers<MockTimers>,
 }
 
 
@@ -106,6 +106,6 @@ impl MockValidator {
                     Block::Macro(macro_block)
                 }
             };
-        }, Duration::new(5, 0));
+        }, Duration::from_secs(1));
     }
 }

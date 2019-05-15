@@ -261,7 +261,7 @@ impl<P, BP> InitializedClient<P, BP>
         }
     }
 
-    fn block_producer(&self) -> Arc<BP> {
+    pub fn block_producer(&self) -> Arc<BP> {
         Arc::clone(&self.block_producer)
     }
 }
@@ -347,7 +347,7 @@ impl<P, BP> ConnectedClient<P, BP>
     where P: ConsensusProtocol + 'static,
           BP: BlockProducer<P> + 'static
 {
-    fn block_producer(&self) -> Arc<BP> {
+    pub fn block_producer(&self) -> Arc<BP> {
         Arc::clone(&self.block_producer)
     }
 }
@@ -366,5 +366,26 @@ impl<P, BP> Client<P> for ConnectedClient<P, BP>
 
     fn consensus(&self) -> Arc<Consensus<P>> {
         Arc::clone(&self.consensus)
+    }
+}
+
+
+
+/// TODO: Refactor!
+///
+///     Too many futures! We need a client future, that never returns, to hold the consensus
+///     and other stuff (e.g. block producer)
+///
+///
+
+impl<P, BP> Future for ConnectedClient<P, BP>
+    where P: ConsensusProtocol + 'static,
+          BP: BlockProducer<P> + 'static
+{
+    type Item = ();
+    type Error = ClientError;
+
+    fn poll(&mut self) -> Poll<(), ClientError> {
+        Ok(Async::NotReady)
     }
 }

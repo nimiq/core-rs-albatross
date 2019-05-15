@@ -197,12 +197,19 @@ fn run_node<P, BP>(client_builder: ClientBuilder, settings: Settings, block_prod
 
     // Run client and other futures
     tokio::run(
-        client.and_then(|c| c.connect()) // Run Nimiq client
-            .map(|_| info!("Client initialized")) // Map Result to None
+        client
+            .and_then(|c| c.connect()) // Run Nimiq client
+            .and_then(|c| c)
             .map_err(|e| error!("Client initialization failed: {}", e))
-            .and_then( move |_| future::join_all(other_futures)) // Run other futures (e.g. RPC server)
-            .map(|_| info!("Other futures finished"))
+
+            //.and_then(|x| future::empty::<(), ()>())
+
+            //.map(|_| info!("Client initialized")) // Map Result to None
+
+            //.and_then( move |_| future::join_all(other_futures)) // Run other futures (e.g. RPC server)
+            //.map(|_| info!("Other futures finished"))
     );
+    error!("Tokio exited");
 
     Ok(())
 }
