@@ -90,7 +90,7 @@ impl Validator {
     pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
         let validator_network = ValidatorNetwork::new(consensus.network.clone(), consensus.blockchain.clone());
 
-        let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.secret.clone());
+        let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.clone());
 
         debug!("Initializing validator");
 
@@ -356,6 +356,8 @@ impl Validator {
 
     fn start_view_change(&self) {
         let mut state = self.state.write();
+
+        info!("Starting view change");
 
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {

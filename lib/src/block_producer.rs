@@ -63,7 +63,7 @@ pub mod albatross {
 
 
 #[cfg(feature = "mock-validator")]
-pub mod albatross {
+pub mod mock {
     use std::sync::Arc;
 
     use consensus::{AlbatrossConsensusProtocol, Consensus};
@@ -82,15 +82,11 @@ pub mod albatross {
         type Config = ();
 
         fn new(config: Self::Config, consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) -> Result<Self, ClientError> {
+            let validator = MockValidator::new(consensus);
+            validator.start();
             Ok(Self {
-                validator: MockValidator::new(consensus)
+                validator,
             })
-        }
-    }
-
-    impl From<ValidatorError> for ClientError {
-        fn from(e: ValidatorError) -> Self {
-            ClientError::BlockProducerError
         }
     }
 }

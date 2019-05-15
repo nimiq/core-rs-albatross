@@ -72,6 +72,7 @@ use crate::serialization::SeedError;
 use crate::files::LazyFileLocations;
 use lib::block_producer::{BlockProducer, DummyBlockProducer};
 use lib::block_producer::albatross::{ValidatorConfig, AlbatrossBlockProducer};
+use lib::block_producer::mock::MockBlockProducer;
 use bls::bls12_381::{SecretKey, PublicKey, KeyPair};
 use beserial::Deserialize;
 
@@ -340,7 +341,8 @@ fn run() -> Result<(), Error> {
             validator_key: KeyPair::from(secret_key)
         };
 
-        run_node::<AlbatrossConsensusProtocol, AlbatrossBlockProducer>(client_builder, settings, validator_config)?;
+        //run_node::<AlbatrossConsensusProtocol, AlbatrossBlockProducer>(client_builder, settings, validator_config)?;
+        run_node::<AlbatrossConsensusProtocol, MockBlockProducer>(client_builder, settings, ())?;
     }
     else {
         run_node::<NimiqConsensusProtocol, DummyBlockProducer>(client_builder, settings, ())?;
