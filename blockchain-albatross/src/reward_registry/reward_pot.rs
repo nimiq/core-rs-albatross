@@ -1,8 +1,8 @@
 use block::{Block, MacroBlock, MicroBlock};
 use database::{AsDatabaseBytes, Database, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
+use primitives::coin::Coin;
 use primitives::policy;
 use primitives::validators::Slots;
-use primitives::coin::Coin;
 
 pub struct RewardPot<'env> {
     env: &'env Environment,
