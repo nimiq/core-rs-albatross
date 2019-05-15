@@ -18,6 +18,8 @@ use primitives::validators::{Slot, Slots};
 
 use crate::chain_store::ChainStore;
 
+mod reward_pot;
+
 pub struct SlashRegistry<'env> {
     env: &'env Environment,
     chain_store: Arc<ChainStore<'env>>,

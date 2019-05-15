@@ -66,6 +66,13 @@ impl FromDatabaseValue for u32 {
     }
 }
 
+impl FromDatabaseValue for u64 {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+        let lmdb_result: Result<&lmdb_zero::Unaligned<u64>, String> = lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
+        Ok(lmdb_result.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.get())
+    }
+}
+
 // Conflicting implementation:
 //impl<T> FromDatabaseValue for T
 //    where T: lmdb_zero::traits::FromLmdbBytes + ?Sized {

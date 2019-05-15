@@ -23,7 +23,7 @@ extern crate nimiq_utils as utils;
 pub mod blockchain;
 mod chain_info;
 mod chain_store;
-pub mod slash_registry;
+pub mod reward_registry;
 mod transaction_cache;
 
 pub use blockchain::Blockchain;

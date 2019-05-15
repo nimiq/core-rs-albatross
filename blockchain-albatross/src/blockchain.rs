@@ -29,7 +29,7 @@ use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
-use crate::slash_registry::SlashRegistry;
+use crate::reward_registry::SlashRegistry;
 use crate::transaction_cache::TransactionCache;
 
 pub type PushResult = blockchain_base::PushResult;
