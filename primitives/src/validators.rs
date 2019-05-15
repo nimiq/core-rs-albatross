@@ -85,8 +85,30 @@ pub struct Validator {
 
 pub type Validators = Vec<Validator>;
 
+// CHECKME: Improve performace?
 impl From<Slots> for Validators {
     fn from(slots: Slots) -> Self {
-        unimplemented!()
+        let mut validators = Vec::new();
+
+        let mut public_key = slots.get(0).public_key.clone();
+        let mut i = 0;
+
+        while i < slots.len() {
+            let mut num_slots = 0;
+
+            while public_key == slots.get(i).public_key {
+                num_slots += 1;
+                i += 1;
+            }
+
+            validators.push(Validator{
+                public_key,
+                num_slots
+            });
+
+            public_key = slots.get(i).public_key.clone();
+        }
+
+        validators
     }
 }
