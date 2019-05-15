@@ -73,6 +73,7 @@ impl TryInto<Slots> for MacroBlock {
 
         let mut public_key = compressed_public_keys.public_keys.remove(0);
 
+        debug!("comrpessed_address = {:?}", compressed_addresses);
         let mut addresses = compressed_addresses.addresses.remove(0);
         let mut reward_address_opt = if addresses.reward_address == addresses.staker_address { None } else { Some(addresses.reward_address) };
         let mut staker_address = addresses.staker_address;
@@ -113,15 +114,20 @@ impl From<Slots> for MacroExtrinsics {
         let mut addresses = Vec::with_capacity(size);
         let mut slot_allocation = BitSet::with_capacity(size);
 
-        let first_slot = slots.remove(0);
+        let first_slot = slots.get(0).clone();
 
         let mut current_reward_address = first_slot.reward_address().clone();
         let mut current_staker_address = first_slot.staker_address;
+        addresses.push(SlotAddresses {
+            staker_address: current_staker_address.clone(),
+            reward_address: current_reward_address.clone(),
+        });
+
         let slash_fine = slots.slash_fine().clone();
 
-        for (i, slot) in slots.into_iter().enumerate() {
+        for (i, slot) in slots.into_iter().enumerate().skip(1) {
             if slot.staker_address == current_staker_address && *slot.reward_address() == current_reward_address {
-                slot_allocation.insert(i+1);
+                slot_allocation.insert(i);
             } else {
                 current_reward_address = slot.reward_address().clone();
                 current_staker_address = slot.staker_address.clone();
@@ -155,11 +161,11 @@ impl From<Slots> for CompressedPublicKeys {
         let mut public_keys = Vec::with_capacity(size);
         let mut slot_allocation = BitSet::with_capacity(size);
 
-        let mut current_public_key = slots.remove(0).public_key;
+        let mut current_public_key = slots.get(0).public_key.clone();
 
-        for (i, slot) in slots.into_iter().enumerate() {
+        for (i, slot) in slots.into_iter().enumerate().skip(1) {
             if slot.public_key == current_public_key {
-                slot_allocation.insert(i+1);
+                slot_allocation.insert(i);
             } else {
                 current_public_key = slot.public_key.clone();
                 public_keys.push(slot.public_key);

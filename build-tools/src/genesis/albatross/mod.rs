@@ -147,8 +147,8 @@ impl GenesisBuilder {
         Ok(self)
     }
 
-    fn select_validators(&self, pre_genesis_hash: &BlsSignature) -> Result<(Slots, Validators), GenesisBuilderError> {
-        let slot_allocation = self.generate_staking_contract()?
+    fn select_validators(&self, pre_genesis_hash: &BlsSignature, staking_contract: &StakingContract) -> Result<(Slots, Validators), GenesisBuilderError> {
+        let slot_allocation = staking_contract
             .select_validators(&pre_genesis_hash.compress(), 512, 16384);
 
         let validators = { // construct validator slot list with slot counts
@@ -189,8 +189,11 @@ impl GenesisBuilder {
         // seed of genesis block = VRF(seed_0)
         let seed = signing_key.sign(&pre_genesis_seed);
 
+        // generate staking contract
+        let staking_contract = self.generate_staking_contract()?;
+
         // generate slot allocation from staking contract
-        let (slot_allocation, validators) = self.select_validators(&pre_genesis_seed)?;
+        let (slot_allocation, validators) = self.select_validators(&pre_genesis_seed, &staking_contract)?;
 
         // extrinsics
         let extrinsics: MacroExtrinsics = slot_allocation.into();
@@ -199,7 +202,7 @@ impl GenesisBuilder {
 
         // accounts
         let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
-        genesis_accounts.push((Address::clone(self.validator_registry.as_ref().ok_or(GenesisBuilderError::NoValidatorRegistryAddress)?), Account::Staking(self.generate_staking_contract()?)));
+        genesis_accounts.push((Address::clone(self.validator_registry.as_ref().ok_or(GenesisBuilderError::NoValidatorRegistryAddress)?), Account::Staking(staking_contract)));
         for account in &self.accounts {
             genesis_accounts.push((account.address.clone(), Account::Basic(BasicAccount { balance: account.balance })));
         }

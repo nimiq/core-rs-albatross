@@ -59,9 +59,9 @@ impl Slots {
         &self.slots[index]
     }
 
-    pub fn remove(&mut self, index: usize) -> Slot {
+    /*pub fn remove(&mut self, index: usize) -> Slot {
         self.slots.remove(index)
-    }
+    }*/
 
     pub fn iter(&self) -> std::slice::Iter<Slot> {
         self.slots.iter()
@@ -96,7 +96,7 @@ impl From<Slots> for Validators {
         while i < slots.len() {
             let mut num_slots = 0;
 
-            while public_key == slots.get(i).public_key {
+            while i < slots.len() && public_key == slots.get(i).public_key {
                 num_slots += 1;
                 i += 1;
             }
@@ -106,6 +106,9 @@ impl From<Slots> for Validators {
                 num_slots
             });
 
+            if i >= slots.len() {
+                break;
+            }
             public_key = slots.get(i).public_key.clone();
         }
 

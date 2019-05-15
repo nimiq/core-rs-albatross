@@ -119,7 +119,7 @@ impl BitSet {
                 let mut x = block;
                 while x > 0 {
                     if x & 1 != 0 {
-                        values.push(j * 64 + i)
+                        values.push(i * 64 + j);
                     }
                     // XXX we can skip multiple trailing zeros by using u64::trailing_zeros
                     x >>= 1;
