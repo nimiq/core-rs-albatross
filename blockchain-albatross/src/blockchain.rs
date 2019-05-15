@@ -708,7 +708,7 @@ impl<'env> Blockchain<'env> {
         // FIXME
         let validators: Vec<Slot> = self.current_slots().iter().cloned().collect();
         let (idx, slot) = self.state.read().slash_registry.slot_owner(
-            self.height(), self.view_number());
+            self.height() + 1, self.view_number());
         (idx, slot.clone())
     }
 

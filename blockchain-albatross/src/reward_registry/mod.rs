@@ -246,8 +246,13 @@ impl<'env> SlashRegistry<'env> {
         let epoch_number = policy::epoch_at(block_number);
 
         // Get context
-        let macro_block = self.chain_store.get_block_at(policy::macro_block_of(epoch_number - 1)).unwrap().unwrap_macro();
-        let prev_block = self.chain_store.get_block_at(block_number - 1).unwrap();
+        let macro_block = self.chain_store
+            .get_block_at(policy::macro_block_of(epoch_number - 1))
+            .expect("Failed to determine slot owner - preceding macro block not found")
+            .unwrap_macro();
+        let prev_block = self.chain_store
+            .get_block_at(block_number - 1)
+            .expect("Failed to determine slot owner - preceding block not found");
 
         // Get slots of epoch
         let slots: Slots = macro_block.try_into().unwrap();

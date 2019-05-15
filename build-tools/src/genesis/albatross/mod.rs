@@ -222,7 +222,7 @@ impl GenesisBuilder {
         let header = MacroHeader {
             version: 1,
             validators: validators.into(),
-            block_number: 1,
+            block_number: 0,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),
             seed: seed.compress(),
