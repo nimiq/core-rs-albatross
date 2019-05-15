@@ -14,7 +14,7 @@ use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
-use hash::Blake2bHash;
+use hash::{Blake2bHash, SerializeContent};
 use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
@@ -279,9 +279,15 @@ impl<'env> Blockchain<'env> {
 
             // Check if the block was produced (and signed) by the intended producer
             // Public keys are checked when staking, so this should never fail.
-            let intended_slot_owner = self.get_block_producer_at(block.block_number(), block.view_number()).map(|s| s.1.public_key.uncompress_unchecked()).unwrap();
+            let intended_slot_owner = if let Some((_, slot)) = self
+                .get_block_producer_at(block.block_number(), block.view_number()) {
+                slot.public_key.uncompress_unchecked().clone()
+            } else {
+                return Err(PushError::InvalidSuccessor);
+            };
+
             let justification = micro_block.justification.signature.uncompress().map_err(|_| PushError::InvalidBlock(BlockError::InvalidJustification))?;
-            if !intended_slot_owner.verify(&micro_block.serialize_without_signature(), &justification) {
+            if !intended_slot_owner.verify(&micro_block.header, &justification) {
                 warn!("Rejecting block - not a valid successor");
                 return Err(PushError::InvalidSuccessor);
             }
@@ -697,12 +703,10 @@ impl<'env> Blockchain<'env> {
         self.state.read().macro_head_hash.clone()
     }
 
-    pub fn get_next_block_producer(&self) -> (u32, Slot) {
-        // FIXME
-        let validators: Vec<Slot> = self.current_slots().iter().cloned().collect();
-        let (idx, slot) = self.state.read().slash_registry.slot_owner(
-            self.height() + 1, self.view_number());
-        (idx, slot.clone())
+    pub fn get_next_block_producer(&self, view_number: u32) -> (u16, Slot) {
+        let block_number =self.height() + 1;
+        self.get_block_producer_at(block_number, view_number)
+            .expect("Can't get block producer for next block")
     }
 
     pub fn next_slots(&self) -> Slots {
@@ -711,7 +715,7 @@ impl<'env> Blockchain<'env> {
         if let Account::Staking(ref staking_contract) = staking_account {
             return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::ACTIVE_VALIDATORS, policy::MIN_STAKE as usize);
         }
-        unreachable!()
+        panic!("Account at validator registry address is not the stacking contract!");
     }
 
     pub fn next_validators(&self) -> Validators {
@@ -741,7 +745,9 @@ impl<'env> Blockchain<'env> {
         return block_number >= macro_block_number && block_number < macro_block_number + policy::EPOCH_LENGTH;
     }
 
-    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, &Slot)> { unimplemented!() }
+    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, Slot)> {
+        self.state.read().slash_registry.slot_owner(block_number, view_number)
+    }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
         self.state.read()

@@ -120,6 +120,7 @@ impl<'env> SlashRegistry<'env> {
             let block_number = fork_proof.header1.block_number;
             let view_number = fork_proof.header1.view_number;
             let slot_owner = self.slot_owner(block_number, view_number);
+            let slot_owner = self.slot_owner(block_number, view_number).unwrap();
 
             let slash_epoch = policy::epoch_at(block_number);
             if block_epoch == slash_epoch {
@@ -176,7 +177,7 @@ impl<'env> SlashRegistry<'env> {
 
         // Mark from view changes, ignoring duplicates.
         for view in 0..block.header.view_number {
-            let slot_owner = self.slot_owner(block.header.block_number, view);
+            let slot_owner = self.slot_owner(block.header.block_number, view).unwrap();
             epoch_diff.insert(slot_owner.0 as usize);
         }
 
@@ -239,13 +240,12 @@ impl<'env> SlashRegistry<'env> {
     }
 
     // Get slot owner at block and view number
-    pub fn slot_owner(&self, block_number: u32, view_number: u32) -> (u32, Slot) {
+    pub fn slot_owner(&self, block_number: u32, view_number: u32) -> Option<(u16, Slot)> {
         let epoch_number = policy::epoch_at(block_number);
 
         // Get context
         let macro_block = self.chain_store
-            .get_block_at(policy::macro_block_of(epoch_number - 1))
-            .expect("Failed to determine slot owner - preceding macro block not found")
+            .get_block_at(policy::macro_block_of(epoch_number - 1))?
             .unwrap_macro();
         let prev_block = self.chain_store
             .get_block_at(block_number - 1)
@@ -266,8 +266,9 @@ impl<'env> SlashRegistry<'env> {
         num_bytes.copy_from_slice(&hash.as_bytes()[..8]);
         let num = u64::from_be_bytes(num_bytes);
 
+        // XXX This is not uniform!
         let index = num % honest_validators.len() as u64;
-        (index as u32, honest_validators[index as usize].clone())
+        Some((index as u16, honest_validators[index as usize].clone()))
     }
 
     fn without_slashes(slots: &Slots, slashes: Option<BitSet>) -> Vec<&Slot> {

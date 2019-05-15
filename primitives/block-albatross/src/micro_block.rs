@@ -2,7 +2,7 @@ use std::fmt;
 use std::io;
 
 use account::Receipt;
-use beserial::{Deserialize, Serialize};
+use beserial::{Deserialize, Serialize, SerializingError};
 use crate::BlockError;
 use crate::fork_proof::ForkProof;
 use crate::view_change::ViewChange;
@@ -20,7 +20,7 @@ pub struct MicroBlock {
     pub extrinsics: Option<MicroExtrinsics>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroHeader {
     pub version: u16,
 
@@ -42,7 +42,7 @@ pub struct MicroJustification {
     pub view_change_proof: Option<signed::AggregateProof<ViewChange>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroExtrinsics {
     #[beserial(len_type(u16))]
     pub fork_proofs: Vec<ForkProof>,
@@ -68,10 +68,6 @@ impl MicroBlock {
         }
 
         Ok(())
-    }
-
-    pub fn serialize_without_signature(&self) -> Vec<u8> {
-        unimplemented!()
     }
 
     pub fn view_change(&self) -> Option<ViewChange> {
@@ -166,20 +162,12 @@ impl MicroExtrinsics {
     }
 }
 
-impl SerializeContent for MicroHeader {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
-}
-
 impl Hash for MicroHeader { }
 
 impl fmt::Display for MicroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "[#{} view {}, type Micro]", self.block_number, self.view_number)
     }
-}
-
-impl SerializeContent for MicroExtrinsics {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
 impl Hash for MicroExtrinsics { }

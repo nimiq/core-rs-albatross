@@ -48,10 +48,8 @@ impl MockValidator {
         let block_producer = Arc::clone(&self.block_producer);
 
         self.timers.set_interval(MockTimers::ProduceBlock, move || {
-            info!("Producing block");
-
             // get next producer
-            let (next_producer_idx, next_producer_slot) = block_producer.blockchain.get_next_block_producer();
+            let (next_producer_idx, next_producer_slot) = block_producer.blockchain.get_next_block_producer(0);
             // check that we are the producer
             let validator_idx = next_producer_idx; // our own validator index
 
@@ -63,14 +61,18 @@ impl MockValidator {
                 .duration_since(UNIX_EPOCH).unwrap()
                 .as_millis() as u64;
 
+            let block_height = block_producer.blockchain.height();
+
             let block = match block_type {
                 BlockType::Micro => {
+                    info!("Producing micro block: {}", block_height + 1);
                     let micro_block = block_producer.next_micro_block(vec![], timestamp, b"Pura Vida!".to_vec(), None);
-
                     Block::Micro(micro_block)
                 },
 
                 BlockType::Macro => {
+                    info!("Producing macro block: {}", block_height + 1);
+
                     let extrinsics = block_producer.blockchain
                         .macro_head().extrinsics.clone().unwrap();
                     let header = block_producer.next_macro_header(timestamp, &extrinsics);
@@ -106,6 +108,8 @@ impl MockValidator {
                     Block::Macro(macro_block)
                 }
             };
-        }, Duration::from_secs(1));
+
+            block_producer.blockchain.push(block);
+        }, Duration::from_millis(100));
     }
 }

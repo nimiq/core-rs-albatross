@@ -83,7 +83,7 @@ impl PublicKeyAffine {
         PublicKey::from_secret(secret).into()
     }
 
-    pub fn verify<M: Hash>(&self, msg: M, signature: &Signature) -> bool {
+    pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
         self.verify_g1(hash_to_g1::<Bls12>(msg.hash()), signature)
     }
 
