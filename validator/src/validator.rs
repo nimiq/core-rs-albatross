@@ -281,9 +281,8 @@ impl Validator {
         let (view_number, view_change_proof) = match slot_change {
             SlotChange::MicroBlock => (self.blockchain.view_number(), None),
             SlotChange::ViewChange(view_change, view_change_proof) => {
-                // Inform blockchain about the view change, so that it can keep track of it
-                // and remove blocks made invalid by the proof.
-                self.blockchain.push_known_view_change(view_change.block_number, view_change.new_view_number);
+                // FIXME Track this view change and increment own view_change number.
+                //self.blockchain.push_known_view_change(view_change.block_number, view_change.new_view_number);
                 // Reset view change interval again.
                 self.reset_view_change_interval();
 

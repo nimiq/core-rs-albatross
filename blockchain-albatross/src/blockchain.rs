@@ -31,6 +31,7 @@ use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::reward_registry::SlashRegistry;
 use crate::transaction_cache::TransactionCache;
+use std::cmp::Ordering;
 
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
@@ -123,27 +124,23 @@ impl<'env> Blockchain<'env> {
             transaction_cache.push_block(block);
         }
         transaction_cache.push_block(&main_chain.head);
-        assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.block_number()));
+        assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.block_number() + 1));
 
         // Initialize SlashRegistry.
         let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
 
-        // current slots and validators
+        // Current slots and validators
         let (current_slots, current_validators) = Self::slots_and_validators_from_block(&macro_head);
 
-        // get last slots and validators
+        // Get last slots and validators
         let prev_block = chain_store.get_block(&macro_head.header.parent_macro_hash, true, None);
         let (last_slots, last_validators) = match prev_block {
             Some(Block::Macro(prev_macro_block)) => {
                 let (last_slots, last_validators) = Self::slots_and_validators_from_block(&prev_macro_block);
                 (Some(last_slots), Some(last_validators))
             },
-            None => {
-                (None, None)
-            }
-            _ => {
-                return Err(BlockchainError::InconsistentState);
-            }
+            None => (Some(Slots::new(vec![], Coin::ZERO)), Some(Validators::new())),
+            _ => return Err(BlockchainError::InconsistentState),
         };
 
         Ok(Blockchain {
@@ -162,8 +159,8 @@ impl<'env> Blockchain<'env> {
                 macro_head_hash,
                 current_slots: Some(current_slots),
                 current_validators: Some(current_validators),
-                last_slots: last_slots,
-                last_validators: last_validators,
+                last_slots,
+                last_validators,
             }),
             push_lock: Mutex::new(()),
 
@@ -355,7 +352,11 @@ impl<'env> Blockchain<'env> {
             return self.extend(chain_info.head.hash(), chain_info, prev_info);
         }
 
-        if chain_info.head.view_number() > self.view_number() {
+        let is_better_chain = Ordering::Equal
+            .then_with(|| chain_info.head.view_number().cmp(&self.view_number()))
+            .then_with(|| chain_info.head.block_number().cmp(&self.block_number()))
+            .eq(&Ordering::Greater);
+        if is_better_chain {
             return self.rebranch(chain_info.head.hash(), chain_info);
         }
 
@@ -467,7 +468,7 @@ impl<'env> Blockchain<'env> {
                 Block::Micro(ref micro_block) => {
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
 
-                    self.state.write().slash_registry.revert_block(&mut write_txn, &current.1.head);
+                    state.slash_registry.revert_block(&mut write_txn, &current.1.head);
 
                     cache_txn.revert_block(&current.1.head);
 
@@ -524,7 +525,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidFork);
                     }
 
-                    if let Err(e) = self.state.write().slash_registry.commit_block(&mut write_txn, &fork_block.1.head) {
+                    if let Err(e) = state.slash_registry.commit_block(&mut write_txn, &fork_block.1.head) {
                         warn!("Rejecting block - slash commit failed: {:?}", e);
                         return Err(PushError::InvalidSuccessor);
                     }
@@ -588,18 +589,6 @@ impl<'env> Blockchain<'env> {
         self.notifier.read().notify(event);
 
         Ok(PushResult::Rebranched)
-    }
-
-    pub fn push_known_view_change(&self, block_number: u32, view_number: u32) {
-        if let Some(chain_info) = self.chain_store.get_chain_info_at(block_number, false, None) {
-            if view_number != chain_info.head.block_number() {
-
-                // Revert chain up to block_number
-                self.rebranch(chain_info.head.hash(), chain_info);
-
-                //self.state.write().view_number = view_number;
-            }
-        }
     }
 
     fn commit_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
@@ -679,6 +668,10 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn height(&self) -> u32 {
+        self.block_number()
+    }
+
+    pub fn block_number(&self) -> u32 {
         self.state.read().main_chain.head.block_number()
     }
 
@@ -785,9 +778,9 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| s.current_slots.as_ref().unwrap())
     }
 
-    pub fn last_slots(&self) -> MappedRwLockReadGuard<Option<Slots>> {
+    pub fn last_slots(&self) -> MappedRwLockReadGuard<Slots> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.last_slots)
+        RwLockReadGuard::map(guard, |s| s.last_slots.as_ref().unwrap())
     }
 
     pub fn current_validators(&self) -> MappedRwLockReadGuard<Validators> {
@@ -795,9 +788,9 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| s.current_validators.as_ref().unwrap())
     }
 
-    pub fn last_validators(&self) -> MappedRwLockReadGuard<Option<Validators>> {
+    pub fn last_validators(&self) -> MappedRwLockReadGuard<Validators> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.last_validators)
+        RwLockReadGuard::map(guard, |s| s.last_validators.as_ref().unwrap())
     }
 
     pub fn finalize_last_epoch(&self) -> Vec<Inherent> {
@@ -892,7 +885,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     }
 
     fn head_height(&self) -> u32 {
-        self.height()
+        self.block_number()
     }
 
     fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Self::Block> {
