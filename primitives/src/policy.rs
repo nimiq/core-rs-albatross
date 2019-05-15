@@ -133,7 +133,7 @@ pub fn macro_block_after(block_height: u32) -> u32 {
 
 /// Returns the height of the preceding macro block before given `block_height`
 pub fn macro_block_before(block_height: u32) -> u32 {
-    (block_height / EPOCH_LENGTH - 1) * EPOCH_LENGTH
+    (block_height - 1) / EPOCH_LENGTH * EPOCH_LENGTH
 }
 
 pub fn epoch_at(block_height: u32) -> u32 {
@@ -217,7 +217,24 @@ mod tests {
         assert_eq!(is_macro_block_at(0), true);
         assert_eq!(is_macro_block_at(1), false);
         assert_eq!(is_macro_block_at(2), false);
-        assert_eq!(is_macro_block_at(128), false);
-        assert_eq!(is_macro_block_at(129), true);
+        assert_eq!(is_macro_block_at(127), false);
+        assert_eq!(is_macro_block_at(128), true);
+        assert_eq!(is_macro_block_at(129), false);
+    }
+
+    #[test]
+    fn it_correctly_computes_macro_numbers() {
+        assert_eq!(macro_block_after(0), 128);
+        assert_eq!(macro_block_after(1), 128);
+        assert_eq!(macro_block_after(127), 128);
+        assert_eq!(macro_block_after(128), 256);
+        assert_eq!(macro_block_after(129), 256);
+
+        assert_eq!(macro_block_before(1), 0);
+        assert_eq!(macro_block_before(2), 0);
+        assert_eq!(macro_block_before(127), 0);
+        assert_eq!(macro_block_before(128), 0);
+        assert_eq!(macro_block_before(129), 128);
+        assert_eq!(macro_block_before(130), 128);
     }
 }
