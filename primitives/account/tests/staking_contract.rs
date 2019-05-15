@@ -67,10 +67,10 @@ fn it_can_verify_staking_transaction() {
     let bls_pair = BlsKeyPair::generate(&mut thread_rng());
     let mut tx = make_incoming_transaction();
 
-    let proof_of_knowledge = bls_pair.sign(&bls_pair.public);
+    let proof_of_knowledge = bls_pair.sign(&bls_pair.public).compress();
 
     let mut data = StakingTransactionData {
-        validator_key: bls_pair.public.clone(),
+        validator_key: bls_pair.public.compress(),
         reward_address: Some(Address::from([3u8; 20])),
         proof_of_knowledge,
     };
@@ -86,7 +86,7 @@ fn it_can_verify_staking_transaction() {
     // Invalid proof of knowledge
     let other_pair = BlsKeyPair::generate(&mut thread_rng());
     let invalid_pok = other_pair.sign(&bls_pair.public);
-    data.proof_of_knowledge = invalid_pok;
+    data.proof_of_knowledge = invalid_pok.compress();
     tx.data = data.serialize_to_vec();
     assert_eq!(AccountType::verify_incoming_transaction(&tx), Err(TransactionError::InvalidData));
 }
@@ -97,9 +97,9 @@ fn it_can_apply_staking_transaction() {
 
     // Default transaction data
     let bls_pair = BlsKeyPair::generate(&mut thread_rng());
-    let proof_of_knowledge = bls_pair.sign(&bls_pair.public);
+    let proof_of_knowledge = bls_pair.sign(&bls_pair.public).compress();
     let stake_data = StakingTransactionData {
-        validator_key: bls_pair.public.clone(),
+        validator_key: bls_pair.public.compress(),
         reward_address: None,
         proof_of_knowledge,
     };
@@ -127,9 +127,9 @@ fn it_can_apply_staking_transaction() {
     let bls_other = BlsKeyPair::generate(&mut thread_rng());
     let pok_other = bls_other.sign(&bls_other.public);
     tx_3.data = StakingTransactionData {
-        validator_key: bls_other.public.clone(),
+        validator_key: bls_other.public.compress(),
         reward_address: None,
-        proof_of_knowledge: pok_other,
+        proof_of_knowledge: pok_other.compress(),
     }.serialize_to_vec();
     assert_eq!(contract.check_incoming_transaction(&tx_3, 4), Ok(()));
     let receipt_3 = contract.commit_incoming_transaction(&tx_3, 4).unwrap().unwrap();
@@ -384,13 +384,8 @@ fn it_can_apply_unstaking_transaction() {
 }
 
 fn bls_key_pair() -> BlsKeyPair {
-    const BLS_PUBKEY: &str = "a8086fc5b40e74d396f0cf4373196fe0c2fe8fcbef2c8a628c5c1df83226f6780b9662488462dd198ea284734a61f67c0fee126ed2fc2714d0165a7ff66c67bc9daaea6b3544711163089b2dbc7caa05037a63f8a2a63eb96fcba0bfbc449052";
-    const BLS_PRIVKEY: &str = "9059dc56d44e503e22f6eb1bd59a8ddf776d0ccbeb7f7dae65f976f175699b41";
-
-    BlsKeyPair {
-        secret: Deserialize::deserialize(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
-        public: Deserialize::deserialize(&mut &hex::decode(BLS_PUBKEY).unwrap()[..]).unwrap(),
-    }
+    const BLS_PRIVKEY: &str = "30a891c851e27600fefa7b0a84eac9caa645c98f2790e715fa09e49cb34fd73c";
+    BlsKeyPair::from_secret(&Deserialize::deserialize(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap())
 }
 
 fn ed25519_key_pair() -> KeyPair {
@@ -464,7 +459,7 @@ fn it_can_apply_slash_inherent() {
     let receipt_2 = contract.commit_inherent(&slash_2).unwrap().unwrap();
     assert_balance(&contract, 0);
     // Also check serialized form
-    assert_eq!(hex::encode(&receipt_2), "01a8086fc5b40e74d396f0cf4373196fe0c2fe8fcbef2c8a628c5c1df83226f6780b9662488462dd198ea284734a61f67c0fee126ed2fc2714d0165a7ff66c67bc9daaea6b3544711163089b2dbc7caa05037a63f8a2a63eb96fcba0bfbc449052010303030303030303030303030303030303030303000000000000000000");
+    assert_eq!(hex::encode(&receipt_2), "019254a8938b8bdaada2173bcb1243e31b287ec72aa2655aff9ba3625b33145d2bfe49cb1d2df9444d77523abf2892114b0d6865e32b82ca1f572693002f4a713a4466c780bd2ecac9a405c4872ede13571e36ec41449ba0f3d03b37b269276cab010303030303030303030303030303030303030303000000000000000000");
 
     // Slash on empty contract
     let mut tmp_contract = contract.clone();
@@ -558,9 +553,9 @@ fn it_can_build_a_validator_set() {
         address_buf[0] = (order & 0xFF) as u8;
         tx.sender = Address::from(address_buf);
         tx.data = StakingTransactionData {
-            validator_key: bls_pair.public.clone(),
+            validator_key: bls_pair.public.compress(),
             reward_address: None,
-            proof_of_knowledge: bls_pair.sign(&bls_pair.public),
+            proof_of_knowledge: bls_pair.sign(&bls_pair.public).compress(),
         }.serialize_to_vec();
         tx
     };
@@ -576,9 +571,9 @@ fn it_can_build_a_validator_set() {
     contract.commit_incoming_transaction(&stake(12,      0xFF), 2).unwrap();
 
     // Test potential validator selection by stake
-    let (_, validator_list) = contract.select_validators(&seed, 1, 1);
-    assert_eq!(validator_list.len(), 1);
-    assert_eq!(validator_list[0].staker_address.as_bytes()[0], 0x00);
+    let slots = contract.select_validators(&seed.compress(), 1, 1);
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots.get(0).staker_address.as_bytes()[0], 0x00);
 
     // Fill contract with same stakes
     let mut contract = make_empty_contract();
@@ -587,10 +582,10 @@ fn it_can_build_a_validator_set() {
     contract.commit_incoming_transaction(&stake(100_000_000, 0x04), 2).unwrap();
 
     // Test potential validator selection by secondary index
-    let (min_required_stake, validator_list) = contract.select_validators(&seed, 1, 1);
-    assert_eq!(min_required_stake, Coin::from_u64_unchecked(100_000_000));
-    assert_eq!(validator_list.len(), 1);
-    assert_eq!(validator_list[0].staker_address.as_bytes()[0], 0x03);
+    let slots = contract.select_validators(&seed.compress(), 1, 1);
+    assert_eq!(slots.slash_fine(), Coin::from_u64_unchecked(100_000_000));
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots.get(0).staker_address.as_bytes()[0], 0x03);
 
     // TODO More tests
 }
@@ -613,9 +608,9 @@ fn make_sample_contract(key_pair: &KeyPair, bls_pair: &BlsKeyPair) -> StakingCon
     let proof_of_knowledge = bls_pair.sign_hash(Deserialize::deserialize_from_vec(&[0x41u8; 32].to_vec()).unwrap());
 
     let data = StakingTransactionData {
-        validator_key: bls_pair.public.clone(),
+        validator_key: bls_pair.public.compress(),
         reward_address: Some(Address::from([3u8; 20])),
-        proof_of_knowledge,
+        proof_of_knowledge: proof_of_knowledge.compress(),
     };
     tx.data = data.serialize_to_vec();
 

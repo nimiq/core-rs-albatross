@@ -116,7 +116,7 @@ impl ValidatorAgent {
         if !self.blockchain.is_in_current_epoch(view_change.message.block_number) {
             debug!("[VIEW-CHANGE] View change for old epoch: block_number={}", view_change.message.block_number);
         }
-        else if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(view_change.pk_idx) {
+        else if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(view_change.signer_idx) {
             if view_change.verify(&validator_slots.public_key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::ViewChange {
                     view_change,
@@ -129,7 +129,7 @@ impl ValidatorAgent {
             }
         }
         else {
-            debug!("[VIEW-CHANGE] Invalid validator index: {}", view_change.pk_idx);
+            debug!("[VIEW-CHANGE] Invalid validator index: {}", view_change.signer_idx);
         }
     }
 
@@ -166,7 +166,7 @@ impl ValidatorAgent {
             // check the view change proof
             if let Some(view_change_proof) = &proposal.message.view_change {
                 let view_change = ViewChange { block_number, new_view_number: view_number };
-                if !view_change_proof.verify(&view_change, TWO_THIRD_VALIDATORS) {
+                if view_change_proof.verify(&view_change, self.blockchain.current_validators(), TWO_THIRD_VALIDATORS).is_err() {
                     debug!("[PBFT-PROPOSAL] Invalid view change proof: {:?}", view_change_proof);
                     return;
                 }
@@ -183,7 +183,7 @@ impl ValidatorAgent {
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
         debug!("[PBFT-PREPARE] Received prepare from {}: {:#?}", self.peer.peer_address(), prepare.message);
-        if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(prepare.pk_idx) {
+        if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(prepare.signer_idx) {
             if prepare.verify(&validator_slots.public_key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
                     prepare,
@@ -196,14 +196,14 @@ impl ValidatorAgent {
             }
         }
         else {
-            debug!("[PBFT-PREPARE] Invalid validator index: {}", prepare.pk_idx);
+            debug!("[PBFT-PREPARE] Invalid validator index: {}", prepare.signer_idx);
         }
     }
 
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
         debug!("[PBFT-COMMIT] Received commit from {}: {:#?}", self.peer.peer_address(), commit.message);
-        if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(commit.pk_idx) {
+        if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(commit.signer_idx) {
             if commit.verify(&validator_slots.public_key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
                     commit,
@@ -216,7 +216,7 @@ impl ValidatorAgent {
             }
         }
         else {
-            warn!("[PBFT-COMMIT] Invalid validator index: {}", commit.pk_idx);
+            warn!("[PBFT-COMMIT] Invalid validator index: {}", commit.signer_idx);
         }
     }
 

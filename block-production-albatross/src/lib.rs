@@ -57,7 +57,7 @@ impl<'env> BlockProducer<'env> {
             extrinsics: Some(extrinsics),
             justification: MicroJustification {
                 signature,
-                view_change_proof: view_change_proof.map(|p| p.into_untrusted()),
+                view_change_proof,
             },
         }
     }

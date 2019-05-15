@@ -39,7 +39,7 @@ pub struct MicroHeader {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroJustification {
     pub signature: CompressedSignature,
-    pub view_change_proof: Option<signed::UntrustedAggregateProof<ViewChange>>,
+    pub view_change_proof: Option<signed::AggregateProof<ViewChange>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -61,14 +61,10 @@ impl MicroBlock {
     pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
         if let Some(ref extrinsics) = self.extrinsics {
             extrinsics.verify(self.header.block_number, network_id)?;
-        }
 
-        if self.header.view_number >= 1 && self.justification.view_change_proof.is_none() {
-            return Err(BlockError::NoViewChangeProof);
-        }
-
-        if let Some(view_change_proof) = &self.justification.view_change_proof {
-            // TODO check view change proof
+            if self.header.extrinsics_root != extrinsics.hash() {
+                return Err(BlockError::BodyHashMismatch);
+            }
         }
 
         Ok(())

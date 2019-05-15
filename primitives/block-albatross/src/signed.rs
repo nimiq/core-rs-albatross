@@ -6,7 +6,7 @@ use nimiq_bls::bls12_381::{Signature, SecretKey, PublicKey, AggregateSignature, 
 use nimiq_bls::SigHash;
 use hash::{Blake2bHasher, SerializeContent, Hasher};
 use collections::bitset::BitSet;
-use primitives::validators::Validator;
+use primitives::validators::{Validator, Validators};
 
 // TODO: Move this to primitives?
 
@@ -32,7 +32,7 @@ pub struct SignedMessage<M: Message> {
 
     // index of public key of signer
     // XXX they need to be indexable, because we will include a bitmap of all signers in the block
-    pub pk_idx: u16,
+    pub signer_idx: u16,
 
     // signature over message
     signature: Signature
@@ -45,11 +45,11 @@ impl<M: Message> SignedMessage<M> {
     }
 
     /// Create SignedMessage from message.
-    pub fn from_message(message: M, secret_key: &SecretKey, pk_idx: u16) -> Self {
+    pub fn from_message(message: M, secret_key: &SecretKey, signer_idx: u16) -> Self {
         let signature = message.sign(secret_key);
         Self {
             message,
-            pk_idx,
+            signer_idx,
             signature,
         }
     }
@@ -95,15 +95,89 @@ pub enum AggregateError {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AggregateProof<M> {
+pub struct AggregateProofBuilder<M> {
     /// Indices of validators that signed this proof
     pub signers: BitSet,
 
-    /// The cumulative amount of slots that signed this proof
-    pub slots: u16,
-
     /// The aggregate public key of the signers
     pub public_key: AggregatePublicKey,
+
+    /// The aggregate signature
+    pub signature: AggregateSignature,
+
+    /// The cumulative number of slots of the signers
+    pub num_slots: u16,
+
+    #[beserial(skip)]
+    _message: PhantomData<M>
+}
+
+impl<M: Message> AggregateProofBuilder<M> {
+    pub fn new() -> Self {
+        Self {
+            signers: BitSet::with_capacity(0), // TODO: Fix this by the size of the active validator set
+            public_key: AggregatePublicKey::new(),
+            signature: AggregateSignature::new(),
+            num_slots: 0,
+            _message: PhantomData,
+        }
+    }
+
+    pub fn contains(&self, signed: &SignedMessage<M>) -> bool {
+        self.signers.contains(signed.signer_idx as usize)
+    }
+
+    /// Adds a signed message to an aggregate proof
+    /// NOTE: This method assumes the signature of the message was already checked
+    pub fn add_signature(&mut self, public_key: &PublicKey, num_slots: u16, signed: &SignedMessage<M>) -> bool {
+        debug_assert!(signed.verify(public_key));
+        let signer_idx = signed.signer_idx as usize;
+        if self.signers.contains(signer_idx) {
+            return false;
+        }
+        self.signers.insert(signer_idx);
+        self.public_key.aggregate(public_key);
+        self.signature.aggregate(&signed.signature);
+        self.num_slots += num_slots;
+        true
+    }
+
+    pub fn merge(&mut self, proof: &AggregateProof<M>) -> Result<Self, AggregateError> {
+        unimplemented!()
+    }
+
+    pub fn verify(&self, message: &M, threshold: u16) -> Result<(), AggregateProofError> {
+        if self.num_slots < threshold {
+            return Err(AggregateProofError::InsufficientSigners);
+        }
+
+        if !self.public_key.verify_hash(message.hash_with_prefix(), &self.signature) {
+            return Err(AggregateProofError::InvalidSignature);
+        }
+
+        Ok(())
+    }
+
+    pub fn clear(&mut self) {
+        self.signers.clear();
+        self.public_key = AggregatePublicKey::new();
+        self.signature = AggregateSignature::new();
+        self.num_slots = 0;
+    }
+
+    pub fn build(self) -> AggregateProof<M> {
+        AggregateProof {
+            signers: self.signers,
+            signature: self.signature,
+            _message: PhantomData
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AggregateProof<M: Message> {
+    /// Indices of validators that signed this proof
+    pub signers: BitSet,
 
     /// The aggregate signature
     pub signature: AggregateSignature,
@@ -113,91 +187,35 @@ pub struct AggregateProof<M> {
 }
 
 impl<M: Message> AggregateProof<M> {
-    pub fn new() -> Self {
-        Self {
-            signers: BitSet::with_capacity(0), // TODO: Fix this by the size of the active validator set
-            slots: 0,
-            public_key: AggregatePublicKey::new(),
-            signature: AggregateSignature::new(),
-            _message: PhantomData,
-        }
-    }
-
-    pub fn contains(&self, signed: &SignedMessage<M>) -> bool {
-        self.signers.contains(signed.pk_idx as usize)
-    }
-
-    /// Adds a signed message to an aggregate proof
-    /// NOTE: This method assumes the signature of the message was already checked
-    pub fn add_signature(&mut self, public_key: &PublicKey, slots: u16, signed: &SignedMessage<M>) -> bool {
-        debug_assert!(signed.verify(public_key));
-        let pk_idx = signed.pk_idx as usize;
-        if !self.signers.contains(pk_idx) {
-            self.signers.insert(pk_idx);
-            self.slots += slots;
-            self.public_key.aggregate(public_key);
-            self.signature.aggregate(&signed.signature);
-            true
-        }
-        else { false }
-    }
-
-    pub fn merge(&mut self, proof: &AggregateProof<M>) -> Result<(), AggregateError> {
-        unimplemented!()
-    }
-
-    // Verify message against aggregate signature and check if a threshold was reached
-    pub fn verify(&self, message: &M, threshold: u16) -> bool {
-        self.slots >= threshold
-            && self.public_key.verify_hash(message.hash_with_prefix(), &self.signature)
-    }
-
-    pub fn clear(&mut self) {
-        self.signers.clear();
-        self.slots = 0;
-        self.public_key = AggregatePublicKey::new();
-        self.signature = AggregateSignature::new();
-    }
-
-    pub fn into_untrusted(self) -> UntrustedAggregateProof<M> {
-        UntrustedAggregateProof {
-            signers: self.signers,
-            signature: self.signature,
-            _message: PhantomData
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct UntrustedAggregateProof<M: Message> {
-    /// Indices of validators that signed this proof
-    pub signers: BitSet,
-
-    /// The aggregate signature
-    pub signature: AggregateSignature,
-
-    #[beserial(skip)]
-    _message: PhantomData<M>
-}
-
-impl<M: Message> UntrustedAggregateProof<M> {
-    pub fn into_trusted<F>(&self, f: F) -> Option<AggregateProof<M>>
-        where F: Fn(u16) -> Validator
-    {
-        // aggregate signatures and count votes
+    /// Verify message against aggregate signature and check the required number of signatures.
+    /// Expects valid validator public keys.
+    pub fn verify(&self, message: &M, validators: &Validators, threshold: u16) -> Result<(), AggregateProofError> {
+        // Aggregate signatures and count votes
         let mut public_key = AggregatePublicKey::new();
-        let mut slots = 0;
-        for pk_idx in self.signers.iter() {
-            let pk_n = f(pk_idx as u16);
-            public_key.aggregate(pk_n.public_key.uncompress().as_ref()?);
-            slots += pk_n.num_slots;
+        let mut num_slots = 0;
+        for signer_idx in self.signers.iter() {
+            let validator: &Validator = validators
+                .get(signer_idx)
+                .ok_or(AggregateProofError::InvalidSignerIndex)?;
+            public_key.aggregate(&validator.public_key.uncompress_unchecked());
+            num_slots += validator.num_slots;
         }
-        Some(AggregateProof {
-            signers: self.signers.clone(),
-            slots,
-            public_key,
-            signature: self.signature.clone(),
-            _message: PhantomData,
-        })
+
+        if num_slots < threshold {
+            return Err(AggregateProofError::InsufficientSigners);
+        }
+
+        if !public_key.verify_hash(message.hash_with_prefix(), &self.signature) {
+            return Err(AggregateProofError::InvalidSignature);
+        }
+
+        Ok(())
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AggregateProofError {
+    InvalidSignerIndex,
+    InvalidSignature,
+    InsufficientSigners,
 }

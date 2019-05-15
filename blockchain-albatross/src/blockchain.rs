@@ -226,17 +226,15 @@ impl<'env> Blockchain<'env> {
             // Check if a view change occurred - if so, validate the proof
             if prev_info.head.view_number() != block.view_number() {
                 match micro_block.justification.view_change_proof {
-                    None => return Err(PushError::InvalidSuccessor),
-                    Some(ref view_change_proof) => {
-                        let view_change = ViewChange { block_number: block.block_number(), new_view_number: block.view_number()};
-                        let idx_to_key_closure = |idx: u16| -> Validator { self.get_current_validator_by_idx(idx).unwrap() };
-                        // Public keys are checked when staking, so this should never fail.
-                        let trusted = view_change_proof.into_trusted(idx_to_key_closure).expect("Invalid public key");
-                        if !trusted.verify(&view_change, policy::TWO_THIRD_VALIDATORS) {
-                            return Err(PushError::InvalidSuccessor)
-                        }
-                    }
+                    None => return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof)),
+                    Some(ref view_change_proof) => view_change_proof.verify(
+                        &micro_block.view_change().unwrap(),
+                        self.current_validators(),
+                        policy::TWO_THIRD_VALIDATORS)
+                        .map_err(|_| BlockError::InvalidJustification)?,
                 }
+            } else if micro_block.justification.view_change_proof.is_some() {
+                return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
             }
 
             // Check if the block was produced (and signed) by the intended producer
@@ -285,24 +283,16 @@ impl<'env> Blockchain<'env> {
                 match macro_block.justification {
                     None => {
                         warn!("Rejecting block - macro block without justification");
-                        return Err(PushError::InvalidSuccessor)
+                        return Err(PushError::InvalidBlock(BlockError::NoJustification))
                     },
-                    Some(ref justification) => {
-                        let idx_to_key_closure = |idx: u16| -> Validator { self.get_current_validator_by_idx(idx).unwrap() };
-                        // Public keys are checked when staking, so this should never fail.
-                        let trusted = justification.into_trusted(idx_to_key_closure).expect("Invalid public key");
-                        if !trusted.verify(macro_block.hash(), policy::TWO_THIRD_VALIDATORS) {
-                            warn!("Rejecting block - macro block not sufficiently signed");
-                            return Err(PushError::InvalidSuccessor)
-                        }
-                    }
+                    Some(ref justification) => justification.verify(
+                        macro_block.hash(),
+                        self.current_validators(),
+                        policy::TWO_THIRD_VALIDATORS)
+                        .map_err(|_| BlockError::InvalidJustification)?,
                 }
             },
-            Block::Micro(ref micro_block) => {
-                if let Err(push_result) = self.push_verify_dry(&block) {
-                    return Err(push_result);
-                }
-            }
+            Block::Micro(ref micro_block) => self.push_verify_dry(&block)?,
         }
 
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
@@ -716,6 +706,10 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn finalized_last_epoch(&self) -> Vec<Inherent> { unimplemented!() }
+
+    pub fn current_validators(&self) -> &Validators {
+        unimplemented!()
+    }
 }
 
 impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {

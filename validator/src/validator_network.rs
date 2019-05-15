@@ -6,9 +6,9 @@ use failure::Fail;
 use parking_lot::RwLock;
 
 use block_albatross::{
-    ForkProof, PbftProof, PbftProposal,
+    ForkProof, PbftProof, PbftProofBuilder, PbftProposal,
     SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
-    SignedViewChange, ViewChange, ViewChangeProof
+    SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder
 };
 use blockchain_albatross::Blockchain;
 use bls::bls12_381::{CompressedPublicKey, PublicKey};
@@ -36,17 +36,17 @@ pub enum ValidatorNetworkEvent {
     ForkProof(ForkProof),
 
     /// When a valid view change was completed
-    ViewChangeComplete(ViewChange),
+    ViewChangeComplete(ViewChange, ViewChangeProof),
 
     /// When a valid macro block is proposed by the correct pBFT-leader. This can happen multiple
     /// times during an epoch - i.e. when a proposal with a higher view number is received.
-    PbftProposal(PbftProposal),
+    PbftProposal(Blake2bHash, PbftProposal),
 
     /// When enough prepare signatures are collected for a proposed macro block
-    PbftPrepareComplete(Blake2bHash),
+    PbftPrepareComplete(Blake2bHash, PbftProposal),
 
     /// When enough commit signatures from signers that also signed prepare messages are collected
-    PbftCommitComplete(Blake2bHash),
+    PbftCommitComplete(Blake2bHash, PbftProposal, PbftProof),
 }
 
 struct ValidatorNetworkState {
@@ -63,13 +63,13 @@ struct ValidatorNetworkState {
 
     /// maps (view-change-number, block-number) to the proof that is being aggregated
     /// clear after macro block
-    view_changes: BTreeMap<ViewChange, ViewChangeProof>,
+    view_changes: BTreeMap<ViewChange, ViewChangeProofBuilder>,
 
     /// The current proposed macro header and pbft proof.
     ///
     /// This exists between proposal and macro block finalized. The header hash is stored for
     /// efficiency reasons.
-    pbft_proof: Option<(PbftProposal, Blake2bHash, PbftProof)>,
+    pbft_proof: Option<(PbftProposal, Blake2bHash, PbftProofBuilder)>,
 }
 
 pub struct ValidatorNetwork {
@@ -229,14 +229,14 @@ impl ValidatorNetwork {
         // get the proof with the specific block number and view change number
         // if it doesn't exist, create a new one.
         let proof = state.view_changes.entry(view_change.message.clone())
-            .or_insert_with(|| ViewChangeProof::new());
+            .or_insert_with(|| ViewChangeProofBuilder::new());
 
         // Aggregate signature - if it wasn't included yet, relay it
         if proof.add_signature(public_key, slots, &view_change) {
             // if we have enough signatures, notify listeners
-            if proof.verify(&view_change.message, TWO_THIRD_VALIDATORS) {
+            if proof.verify(&view_change.message, TWO_THIRD_VALIDATORS).is_ok() {
                 self.notifier.read()
-                    .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.message.clone()))
+                    .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.message.clone(), proof.clone().build()))
             }
 
             // broadcast new view change signature
@@ -276,13 +276,13 @@ impl ValidatorNetwork {
         if commit {
             // remember proposal
             let block_hash = proposal.message.header.hash::<Blake2bHash>();
-            state.pbft_proof = Some((proposal.message.clone(), block_hash, PbftProof::new()));
+            state.pbft_proof = Some((proposal.message.clone(), block_hash.clone(), PbftProofBuilder::new()));
 
             // drop lock
             drop(state);
 
             // notify Jeff, a.k.a notify `Validator`
-            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(proposal.message.clone()));
+            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash, proposal.message.clone()));
 
             // relay proposal
             self.broadcast_active(Message::PbftProposal(Box::new(proposal)));
@@ -295,7 +295,7 @@ impl ValidatorNetwork {
     pub fn commit_pbft_prepare(&self, prepare: SignedPbftPrepareMessage, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
         let mut state = self.state.write();
 
-        if let Some((_, block_hash, proof)) = &mut state.pbft_proof {
+        if let Some((proposal, block_hash, proof)) = &mut state.pbft_proof {
             // check if this prepare is for our current proposed block
             if prepare.message.block_hash != *block_hash {
                 debug!("Prepare for unknown block: {}", prepare.message.block_hash);
@@ -304,23 +304,27 @@ impl ValidatorNetwork {
 
             // aggregate prepare signature - if new, relay
             if proof.add_prepare_signature(public_key, slots, &prepare) {
-                let prepare_complete = proof.prepare.verify(&prepare.message, TWO_THIRD_VALIDATORS);
-                let commit_complete = proof.verify(prepare.message.block_hash.clone(), TWO_THIRD_VALIDATORS);
+                let prepare_complete = proof.prepare.verify(&prepare.message, TWO_THIRD_VALIDATORS).is_ok();
+                let commit_complete = proof.verify(prepare.message.block_hash.clone(), TWO_THIRD_VALIDATORS).is_ok();
 
-                // drop lock before notifying and broadacasting
+                // XXX Can we get rid of the eager cloning here?
+                let proposal = proposal.clone();
+                let proof = proof.clone().build();
+
+                // drop lock before notifying and broadcasting
                 drop(state);
 
                 // notify if we reach threshold on prepare to begin commit
                 if prepare_complete {
                     self.notifier.read()
-                        .notify(ValidatorNetworkEvent::PbftPrepareComplete(prepare.message.block_hash.clone().clone()))
+                        .notify(ValidatorNetworkEvent::PbftPrepareComplete(prepare.message.block_hash.clone(), proposal.clone()))
                 }
 
                 // NOTE: It might happen that we receive the prepare message after the commit. So we have
                 //       to verify here too.
                 if commit_complete {
                     self.notifier.read()
-                        .notify(ValidatorNetworkEvent::PbftCommitComplete(prepare.message.block_hash.clone()))
+                        .notify(ValidatorNetworkEvent::PbftCommitComplete(prepare.message.block_hash.clone(), proposal, proof))
                 }
 
                 // broadcast new pbft prepare signature
@@ -338,7 +342,7 @@ impl ValidatorNetwork {
     pub fn commit_pbft_commit(&self, commit: SignedPbftCommitMessage, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
         let mut state = self.state.write();
 
-        if let Some((_, block_hash, proof)) = &mut state.pbft_proof {
+        if let Some((proposal, block_hash, proof)) = &mut state.pbft_proof {
             // check if this prepare is for our current proposed block
             if commit.message.block_hash != *block_hash {
                 debug!("Prepare for unknown block: {}", block_hash);
@@ -347,18 +351,22 @@ impl ValidatorNetwork {
 
             // aggregate commit signature - if new, relay
             if proof.add_commit_signature(public_key, slots, &commit) {
-                let commit_complete = proof.verify(commit.message.block_hash.clone(), TWO_THIRD_VALIDATORS);
+                let commit_complete = proof.verify(commit.message.block_hash.clone(), TWO_THIRD_VALIDATORS).is_ok();
+
+                // XXX Can we get rid of the eager cloning here?
+                let proposal = proposal.clone();
+                let proof = proof.clone().build();
 
                 // drop lock before notifying
                 drop(state);
 
                 if commit_complete {
                     self.notifier.read()
-                        .notify(ValidatorNetworkEvent::PbftCommitComplete(commit.message.block_hash.clone()))
+                        .notify(ValidatorNetworkEvent::PbftCommitComplete(commit.message.block_hash.clone(), proposal, proof));
                 }
 
                 // broadcast new pbft commit signature
-                self.broadcast_active(Message::PbftCommit(Box::new(commit)))
+                self.broadcast_active(Message::PbftCommit(Box::new(commit)));
             }
             Ok(())
         }
@@ -385,29 +393,5 @@ impl ValidatorNetwork {
     /// Broadcast our own validator info
     pub fn broadcast_info(&self, info: SignedValidatorInfo) {
         self.broadcast_all(Message::ValidatorInfo(vec![info]));
-    }
-
-    pub fn get_view_change_proof(&self, view_change: &ViewChange) -> Option<ViewChangeProof> {
-        self.state.read().view_changes
-            .get(view_change)
-            .map(|p| p.clone())
-    }
-
-    pub fn get_pbft_proposal(&self) -> Option<PbftProposal> {
-        self.state.read().pbft_proof
-            .as_ref()
-            .map(|(proposal, _, _)| proposal.clone())
-    }
-
-    pub fn get_pbft_proposal_hash(&self) -> Option<Blake2bHash> {
-        self.state.read().pbft_proof
-            .as_ref()
-            .map(|(_, hash, _)| hash.clone())
-    }
-
-    pub fn get_pbft_proof(&self) -> Option<PbftProof> {
-        self.state.read().pbft_proof
-            .as_ref()
-            .map(|(_, _, proof)| proof.clone())
     }
 }

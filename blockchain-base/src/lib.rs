@@ -147,6 +147,12 @@ pub enum PushError<BE: Debug + Clone + PartialEq + Eq> {
     InvalidFork,
 }
 
+impl<BE: Debug + Clone + PartialEq + Eq>  From<BE> for PushError<BE> {
+    fn from(e: BE) -> Self {
+        PushError::InvalidBlock(e)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Direction {
     Forward,

@@ -43,8 +43,8 @@ impl Slots {
         }
     }
 
-    pub fn slash_fine(&self) -> &Coin {
-        &self.slash_fine
+    pub fn slash_fine(&self) -> Coin {
+        self.slash_fine
     }
 
     pub fn enough_votes(&self, num_votes: u16) -> bool {

@@ -15,3 +15,4 @@ impl signed::Message for ViewChange {
 
 pub type SignedViewChange = signed::SignedMessage<ViewChange>;
 pub type ViewChangeProof = signed::AggregateProof<ViewChange>;
+pub type ViewChangeProofBuilder = signed::AggregateProofBuilder<ViewChange>;

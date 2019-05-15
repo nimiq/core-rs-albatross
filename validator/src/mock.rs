@@ -13,7 +13,7 @@ use bls::bls12_381::{KeyPair, PublicKey, SecretKey, Signature};
 use mempool::Mempool;
 use utils::timers::Timers;
 use consensus::{Consensus, AlbatrossConsensusProtocol};
-use block_albatross::{PbftProof, PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage};
+use block_albatross::{PbftProofBuilder, PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage};
 use hash::{Hash, Blake2bHash};
 use block_albatross::signed::Message;
 
@@ -87,7 +87,7 @@ impl MockValidator {
                         0);
 
                     // create proof
-                    let mut pbft_proof = PbftProof::new();
+                    let mut pbft_proof = PbftProofBuilder::new();
                     pbft_proof.add_prepare_signature(
                         &block_producer.validator_key.public,
                         512,
@@ -99,7 +99,7 @@ impl MockValidator {
 
                     let macro_block = MacroBlock {
                         header,
-                        justification: Some(pbft_proof.into_untrusted()),
+                        justification: Some(pbft_proof.build()),
                         extrinsics: Some(extrinsics)
                     };
 

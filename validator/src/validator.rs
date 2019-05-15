@@ -18,6 +18,7 @@ use block_albatross::{
     PbftCommitMessage,
     PbftPrepareMessage,
     PbftProposal,
+    PbftProof,
     SignedPbftCommitMessage,
     SignedPbftPrepareMessage,
     SignedPbftProposal,
@@ -47,7 +48,7 @@ use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
 #[derive(Debug)]
 pub enum SlotChange {
     MicroBlock,
-    ViewChange(ViewChange),
+    ViewChange(ViewChange, ViewChangeProof),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -255,12 +256,12 @@ impl Validator {
         }
 
         match event {
-            ValidatorNetworkEvent::ViewChangeComplete(view_change) => {
-                self.on_slot_change(SlotChange::ViewChange(view_change));
+            ValidatorNetworkEvent::ViewChangeComplete(view_change, view_change_proof) => {
+                self.on_slot_change(SlotChange::ViewChange(view_change, view_change_proof));
             },
-            ValidatorNetworkEvent::PbftProposal(macro_block) => self.on_pbft_proposal(macro_block),
-            ValidatorNetworkEvent::PbftPrepareComplete(hash) => self.on_pbft_prepare_complete(hash),
-            ValidatorNetworkEvent::PbftCommitComplete(hash) => self.on_pbft_commit_complete(hash),
+            ValidatorNetworkEvent::PbftProposal(hash, proposal) => self.on_pbft_proposal(hash, proposal),
+            ValidatorNetworkEvent::PbftPrepareComplete(hash, _) => self.on_pbft_prepare_complete(hash),
+            ValidatorNetworkEvent::PbftCommitComplete(hash, proposal, proof) => self.on_pbft_commit_complete(hash, proposal, proof),
             ValidatorNetworkEvent::ForkProof(proof) => self.on_fork_proof(proof),
         }
     }
@@ -272,16 +273,14 @@ impl Validator {
     pub fn on_slot_change(&self, slot_change: SlotChange) {
         let (view_number, view_change_proof) = match slot_change {
             SlotChange::MicroBlock => (self.blockchain.view_number(), None),
-            SlotChange::ViewChange(view_change) => {
-                let view_change_proof = self.validator_network.get_view_change_proof(&view_change);
-
+            SlotChange::ViewChange(view_change, view_change_proof) => {
                 // Inform blockchain about the view change, so that it can keep track of it
                 // and remove blocks made invalid by the proof.
                 self.blockchain.push_known_view_change(view_change.block_number, view_change.new_view_number);
                 // Reset view change interval again.
                 self.reset_view_change_interval();
 
-                (view_change.new_view_number, view_change_proof)
+                (view_change.new_view_number, Some(view_change_proof))
             },
         };
 
@@ -297,7 +296,7 @@ impl Validator {
         }
     }
 
-    pub fn on_pbft_proposal(&self, block_proposal: PbftProposal) {
+    pub fn on_pbft_proposal(&self, hash: Blake2bHash, _proposal: PbftProposal) {
         let mut state = self.state.read();
 
         // View change messages should only be sent by active validators.
@@ -308,8 +307,7 @@ impl Validator {
         let slots = state.slots.expect("Checked above that we are an active validator");
 
         // Note: we don't verify this hash as the network validator already did.
-        let block_hash = self.validator_network.get_pbft_proposal_hash().expect("We got the event from the network itself").clone();
-        let message = PbftPrepareMessage { block_hash };
+        let message = PbftPrepareMessage { block_hash: hash };
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
 
         let prepare_message = SignedPbftPrepareMessage::from_message(message, &self.validator_key.secret, pk_idx);
@@ -340,12 +338,11 @@ impl Validator {
         }
     }
 
-    pub fn on_pbft_commit_complete(&self, hash: Blake2bHash) {
-        let proposal = self.validator_network.get_pbft_proposal().unwrap_or_else(|| panic!("We got the proposal hash ({}) from an event from the network itself", &hash));
+    pub fn on_pbft_commit_complete(&self, hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
         let header = proposal.header.clone();
 
         // Note: we're not verifying the justification as the validator network already did that
-        let justification = self.validator_network.get_pbft_proof().map(|p| p.into_untrusted());
+        let justification = Some(proof);
 
         let extrinsics = self.block_producer.next_macro_extrinsics();
         let block = Block::Macro(MacroBlock { header, justification, extrinsics: Some(extrinsics) });

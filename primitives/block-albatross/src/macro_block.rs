@@ -11,13 +11,13 @@ use primitives::validators::{Slots, Validators};
 use collections::bitset::BitSet;
 
 use crate::BlockError;
-use crate::pbft::UntrustedPbftProof;
+use crate::pbft::PbftProof;
 use crate::signed;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
     pub header: MacroHeader,
-    pub justification: Option<UntrustedPbftProof>,
+    pub justification: Option<PbftProof>,
     pub extrinsics: Option<MacroExtrinsics>
 }
 

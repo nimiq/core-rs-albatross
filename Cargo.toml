@@ -18,6 +18,7 @@ members = [
     "primitives/account",
     "primitives/block",
     "primitives/block-albatross",
+    "primitives/block-base",
     "primitives/transaction",
     "blockchain",
     "blockchain-albatross",
