@@ -1,5 +1,6 @@
 use std::fmt;
 use std::io;
+use std::convert::TryInto;
 
 use keys::Address;
 use beserial::{Deserialize, Serialize};
@@ -7,12 +8,17 @@ use bls::bls12_381::{CompressedPublicKey, CompressedSignature};
 use bls::bls12_381::lazy::LazyPublicKey;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::coin::Coin;
-use primitives::validators::{Slots, Validators};
+use primitives::validators::{Slot, Slots, Validators};
 use collections::bitset::BitSet;
 
 use crate::BlockError;
 use crate::pbft::PbftProof;
 use crate::signed;
+
+pub enum TryIntoError {
+    MissingExtrinsics,
+    InvalidLength,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
@@ -43,6 +49,60 @@ pub struct MacroHeader {
 pub struct MacroExtrinsics {
     pub slot_allocation: CompressedAddresses,
     pub slash_fine: Coin,
+}
+
+impl TryInto<Slots> for MacroBlock {
+    type Error = TryIntoError;
+
+    fn try_into(self) -> Result<Slots, Self::Error> {
+        if self.extrinsics.is_none() {
+            return Err(TryIntoError::MissingExtrinsics);
+        }
+
+        let mut compressed_public_keys = self.header.validators;
+        let extrinsics = self.extrinsics.expect("Just checked it above");
+        let mut compressed_addresses = extrinsics.slot_allocation;
+        let size = compressed_public_keys.slot_allocation.len();
+
+        // A well-formed block will always have the same length for both BitSets and be greater than 0
+        if size == 0 || size != compressed_addresses.slot_allocation.len() { return Err(TryIntoError::InvalidLength) };
+
+        // Create the final vector we will be returning
+        let mut slots = Vec::with_capacity(size);
+
+        let mut public_key = compressed_public_keys.public_keys.remove(0);
+
+        let mut addresses = compressed_addresses.addresses.remove(0);
+        let mut reward_address_opt = if addresses.reward_address == addresses.staker_address { None } else { Some(addresses.reward_address) };
+        let mut staker_address = addresses.staker_address;
+
+        slots.push(Slot {
+            public_key: public_key.clone(),
+            reward_address_opt: reward_address_opt.clone(),
+            staker_address: staker_address.clone(),
+        });
+
+        for i in 1..size {
+            if !compressed_public_keys.slot_allocation.contains(i) {
+                public_key = compressed_public_keys.public_keys.remove(0);
+            }
+
+            if !compressed_addresses.slot_allocation.contains(i) {
+                addresses = compressed_addresses.addresses.remove(0);
+                reward_address_opt = if addresses.reward_address == addresses.staker_address { None } else { Some(addresses.reward_address) };
+                staker_address = addresses.staker_address;
+            }
+
+            slots.push(Slot {
+                public_key: public_key.clone(),
+                reward_address_opt: reward_address_opt.clone(),
+                staker_address: staker_address.clone(),
+            });
+        }
+
+        let slash_fine = extrinsics.slash_fine;
+        Ok(Slots::new(slots, slash_fine))
+    }
 }
 
 // CHECKME: Check for performance
