@@ -18,6 +18,7 @@ is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs"
 maintenance = { status = "experimental" }
 
 [dependencies]
+log = "0.4"
 num-bigint = { version = "0.2", optional = true }
 num-traits = { version = "0.2", optional = true }
 parking_lot = { version = "0.7", optional = true }

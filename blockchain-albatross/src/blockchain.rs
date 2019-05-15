@@ -387,7 +387,7 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
-        if let Err(e) = self.state.write().slash_registry.commit_block(&mut txn, &chain_info.head) {
+        if let Err(e) = state.slash_registry.commit_block(&mut txn, &chain_info.head) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }

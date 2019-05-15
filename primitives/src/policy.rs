@@ -131,9 +131,12 @@ pub fn macro_block_after(block_height: u32) -> u32 {
     (block_height / EPOCH_LENGTH + 1) * EPOCH_LENGTH
 }
 
-/// Returns the height of the preceding macro block before given `block_height`
-pub fn macro_block_before(block_height: u32) -> u32 {
-    (block_height - 1) / EPOCH_LENGTH * EPOCH_LENGTH
+/// Returns the height of the preceding macro block before given `block_number`
+pub fn macro_block_before(block_number: u32) -> u32 {
+    if block_number == 0 {
+        panic!("Called first_block_of for epoch 0");
+    }
+    (block_number - 1) / EPOCH_LENGTH * EPOCH_LENGTH
 }
 
 pub fn epoch_at(block_height: u32) -> u32 {
@@ -158,6 +161,9 @@ pub fn successive_micro_blocks(a: u32, b: u32) -> bool {
 }
 
 pub fn first_block_of(epoch: u32) -> u32 {
+    if epoch == 0 {
+        panic!("Called first_block_of for epoch 0");
+    }
     epoch * BLOCKS_PER_EPOCH - BLOCKS_PER_EPOCH + 1
 }
 
