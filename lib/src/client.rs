@@ -371,13 +371,9 @@ impl<P, BP> Client<P> for ConnectedClient<P, BP>
 
 
 
-/// TODO: Refactor!
-///
-///     Too many futures! We need a client future, that never returns, to hold the consensus
-///     and other stuff (e.g. block producer)
-///
-///
-
+// TODO: Refactor!
+// Too many futures! We need a client future, that never returns, to hold the consensus
+// and other stuff (e.g. block producer)
 impl<P, BP> Future for ConnectedClient<P, BP>
     where P: ConsensusProtocol + 'static,
           BP: BlockProducer<P> + 'static
