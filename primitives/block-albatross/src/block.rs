@@ -194,6 +194,13 @@ impl BlockHeader {
             BlockHeader::Micro(ref header) => header.hash(),
         }
     }
+
+    pub fn parent_hash(&self) -> &Blake2bHash {
+        match self {
+            BlockHeader::Macro(ref header) => &header.parent_hash,
+            BlockHeader::Micro(ref header) => &header.parent_hash
+        }
+    }
 }
 
 impl Hash for BlockHeader {}

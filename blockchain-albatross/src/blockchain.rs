@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::sync::Arc;
+use std::cmp;
 
 use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 
@@ -813,7 +814,54 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     }
 
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
-        unimplemented!()
+        let mut locators: Vec<Blake2bHash> = Vec::with_capacity(max_count);
+        let mut hash = self.head_hash();
+
+        // push top ten hashes
+        locators.push(hash.clone());
+        for _ in 0..cmp::min(10, self.height()) {
+            let block = self.chain_store.get_block(&hash, false, None);
+            match block {
+                Some(block) => {
+                    hash = block.header().parent_hash().clone();
+                    locators.push(hash.clone());
+                },
+                None => break,
+            }
+        }
+
+        let mut step = 2;
+        let mut height = self.height().saturating_sub(10 + step);
+        let mut opt_block = self.chain_store.get_block_at(height);
+        while let Some(block) = opt_block {
+            locators.push(block.header().hash());
+
+            // Respect max count.
+            if locators.len() >= max_count {
+                break;
+            }
+
+            step *= 2;
+            height = match height.checked_sub(step) {
+                Some(0) => break, // 0 or underflow means we need to end the loop
+                Some(v) => v,
+                None => break,
+            };
+
+            opt_block = self.chain_store.get_block_at(height);
+        }
+
+        // Push the genesis block hash.
+        let genesis_hash = NetworkInfo::from_network_id(self.network_id).genesis_hash();
+        if locators.is_empty() || locators.last().unwrap() != genesis_hash {
+            // Respect max count, make space for genesis hash if necessary
+            if locators.len() >= max_count {
+                locators.pop();
+            }
+            locators.push(genesis_hash.clone());
+        }
+        
+        locators
     }
 
     fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Self::Block> {
