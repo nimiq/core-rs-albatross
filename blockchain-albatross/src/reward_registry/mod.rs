@@ -66,6 +66,28 @@ impl<'env> SlashRegistry<'env> {
         }
     }
 
+    #[inline]
+    pub fn current_reward_pot(&self) -> Coin {
+        self.reward_pot.current_reward_pot()
+    }
+
+    #[inline]
+    pub fn previous_reward_pot(&self) -> Coin {
+        self.reward_pot.previous_reward_pot()
+    }
+
+    #[inline]
+    fn get_slots_at(&self, block_number: u32) -> Slots {
+        // TODO: Make this more efficient.
+        let macro_block = self.chain_store
+            .get_block_at(policy::macro_block_before(block_number))
+            .expect("Failed to determine slots - preceding macro block not found")
+            .unwrap_macro();
+
+        // Get slots of epoch
+        macro_block.try_into().unwrap()
+    }
+
     /// Register slashes of block
     ///  * `block` - Block to commit
     ///  * `seed`- Seed of previous block
@@ -73,9 +95,17 @@ impl<'env> SlashRegistry<'env> {
     #[inline]
     pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
         match block {
-            // TODO: Run GC on macro block
-            Block::Macro(_) => Ok(()),
-            Block::Micro(ref micro_block) => self.commit_micro_block(txn, micro_block),
+            Block::Macro(ref macro_block) => {
+                self.reward_pot.commit_macro_block(macro_block, txn);
+                self.gc(txn, policy::epoch_at(macro_block.header.block_number));
+                Ok(())
+            },
+            Block::Micro(ref micro_block) => {
+                let slots = self.get_slots_at(micro_block.header.block_number);
+
+                self.reward_pot.commit_micro_block(micro_block, &slots, txn);
+                self.commit_micro_block(txn, micro_block)
+            },
         }
     }
 
@@ -194,6 +224,9 @@ impl<'env> SlashRegistry<'env> {
     #[inline]
     pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
         if let Block::Micro(ref block) = block {
+            let slots = self.get_slots_at(block.header.block_number);
+
+            self.reward_pot.revert_micro_block(block, &slots, txn);
             self.revert_micro_block(txn, block)
         } else {
             unreachable!()
