@@ -156,6 +156,7 @@ impl ValidatorNetwork {
 
             // send known validator infos to peer
             let mut infos = self.state.read().validators.iter()
+                .take(64) // only send 64
                 .filter_map(|(_, validator)| {
                     validator.read().validator_info.clone()
                 }).collect::<Vec<SignedValidatorInfo>>();
