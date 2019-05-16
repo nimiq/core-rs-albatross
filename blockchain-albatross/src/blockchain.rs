@@ -756,7 +756,8 @@ impl<'env> Blockchain<'env> {
 
     /// Expects a *verified* proof!
     pub fn inherent_from_fork_proof(&self, fork_proof: &ForkProof) -> Inherent {
-        let producer = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number).expect("");
+        let producer = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number)
+            .expect("Failed to create inherent from fork proof - could not get block producer");
         Inherent {
             ty: InherentType::Slash,
             target: producer.1.staker_address.clone(),
@@ -766,7 +767,14 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn inherent_from_view_change(&self, view_change_proof: &ViewChange) -> Inherent {
-        unimplemented!()
+        let producer = self.get_block_producer_at(view_change_proof.block_number, view_change_proof.new_view_number - 1)
+            .expect("Failed to create inherent from view change - could not get block producer");
+        Inherent {
+            ty: InherentType::Slash,
+            target: producer.1.staker_address.clone(),
+            value: self.macro_head().extrinsics.as_ref().unwrap().slash_fine.try_into().unwrap(),
+            data: vec![]
+        }
     }
 
     pub fn current_slots(&self) -> MappedRwLockReadGuard<Slots> {
