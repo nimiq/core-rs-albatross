@@ -373,7 +373,7 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
-        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head) {
+        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching")) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }
@@ -474,7 +474,7 @@ impl<'env> Blockchain<'env> {
                 Block::Micro(ref micro_block) => {
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
 
-                    state.reward_registry.revert_block(&mut write_txn, &current.1.head);
+                    state.reward_registry.revert_block(&mut write_txn, &current.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"));
 
                     cache_txn.revert_block(&current.1.head);
 
@@ -512,7 +512,7 @@ impl<'env> Blockchain<'env> {
                 Block::Macro(_) => unreachable!(),
                 Block::Micro(ref micro_block) => {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
-                        state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head)
+                        state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"))
                             .map_err(|_| PushError::InvalidBlock(BlockError::InvalidSlash))
                             .and_then(|_| self.commit_accounts(&state.accounts, &mut write_txn, &fork_block.1.head))
 
@@ -738,12 +738,40 @@ impl<'env> Blockchain<'env> {
     // Checks if a block number is within the range of the current epoch
     pub fn is_in_current_epoch(&self, block_number: u32) -> bool {
         let state = self.state.read();
+        self.is_in_current_epoch_locked(block_number, &state)
+    }
+
+    fn is_in_current_epoch_locked(&self, block_number: u32, state: &RwLockReadGuard<BlockchainState>) -> bool {
         let macro_block_number = state.macro_head.header.block_number;
-        return block_number >= macro_block_number && block_number < macro_block_number + policy::EPOCH_LENGTH;
+        block_number >= macro_block_number && block_number < macro_block_number + policy::EPOCH_LENGTH
+    }
+
+    fn is_in_previous_epoch_locked(&self, block_number: u32, state: &RwLockReadGuard<BlockchainState>) -> bool {
+        let macro_block_number = state.macro_head.header.block_number;
+        macro_block_number > policy::EPOCH_LENGTH && block_number >= macro_block_number - policy::EPOCH_LENGTH && block_number < macro_block_number
     }
 
     pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, Slot)> {
-        self.state.read().reward_registry.slot_owner(block_number, view_number)
+        let state = self.state.read();
+
+        let slots_owned;
+        let slots;
+        if self.is_in_current_epoch_locked(block_number, &state) {
+            slots = state.current_slots.as_ref().expect("Missing current epoch's slots");
+        } else if self.is_in_previous_epoch_locked(block_number, &state) {
+            slots = state.last_slots.as_ref().expect("Missing previous epoch's slots");
+        } else {
+            let macro_block = self.chain_store
+                .get_block_at(policy::macro_block_before(block_number), None)
+                .expect("Failed to determine slots - preceding macro block not found")
+                .unwrap_macro();
+
+            // Get slots of epoch
+            slots_owned = macro_block.try_into().unwrap();
+            slots = &slots_owned;
+        }
+
+        self.state.read().reward_registry.slot_owner(block_number, view_number, slots)
     }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
@@ -834,18 +862,17 @@ impl<'env> Blockchain<'env> {
         }
 
         let block = self.get_block_at(policy::macro_block_of(epoch), true);
-        let macro_block;
-        if let Some(Block::Macro(block)) = block {
-            macro_block = block;
+        let macro_block= if let Some(Block::Macro(block)) = block {
+            block
         } else {
             // TODO: Proper error handling.
             panic!("Macro block to finalize is missing");
-        }
+        };
 
         // Find slots that are eligible for rewards.
-        // TODO: Get slots from macro block.
         // TODO: Proper error handling.
-        let reward_eligible = state.reward_registry.reward_eligible(epoch);
+        let slots = state.last_slots.clone().expect("Slots for last epoch are missing");
+        let reward_eligible = state.reward_registry.reward_eligible(epoch, slots);
 
         let reward_pot: Coin = state.reward_registry.previous_reward_pot();
         let num_eligible = reward_eligible.len() as u64;
@@ -872,11 +899,11 @@ impl<'env> Blockchain<'env> {
             }
         }
 
+        // Distribute over accepting slots.
         let accepting_slots = inherents.len() as u64;
         let reward = remainder / accepting_slots;
         let remainder = u64::from(remainder % accepting_slots);
 
-        // TODO: Ensure slots are ordered by stake! Required for remainder.
         for (i, inherent) in inherents.iter_mut().enumerate() {
             let mut additional_reward = reward;
             // Distribute remaining reward across the largest stakers.

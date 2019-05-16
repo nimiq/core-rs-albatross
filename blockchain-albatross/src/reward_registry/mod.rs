@@ -77,24 +77,12 @@ impl<'env> SlashRegistry<'env> {
         self.reward_pot.previous_reward_pot()
     }
 
-    #[inline]
-    fn get_slots_at(&self, block_number: u32, txn_option: Option<&Transaction>) -> Slots {
-        // TODO: Make this more efficient.
-        let macro_block = self.chain_store
-            .get_block_at(policy::macro_block_before(block_number), txn_option)
-            .expect("Failed to determine slots - preceding macro block not found")
-            .unwrap_macro();
-
-        // Get slots of epoch
-        macro_block.try_into().unwrap()
-    }
-
     /// Register slashes of block
     ///  * `block` - Block to commit
     ///  * `seed`- Seed of previous block
     ///  * `staking_contract` - Contract used to check minimum stakes
     #[inline]
-    pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
+    pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block, slots: &Slots) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(ref macro_block) => {
                 self.reward_pot.commit_macro_block(macro_block, txn);
@@ -102,15 +90,13 @@ impl<'env> SlashRegistry<'env> {
                 Ok(())
             },
             Block::Micro(ref micro_block) => {
-                let slots = self.get_slots_at(micro_block.header.block_number, Some(txn));
-
-                self.reward_pot.commit_micro_block(micro_block, &slots, txn);
-                self.commit_micro_block(txn, micro_block)
+                self.reward_pot.commit_micro_block(micro_block, slots, txn);
+                self.commit_micro_block(txn, micro_block, slots)
             },
         }
     }
 
-    pub fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock) -> Result<(), SlashPushError> {
+    pub fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock, slots: &Slots) -> Result<(), SlashPushError> {
         let block_epoch = policy::epoch_at(block.header.block_number);
         let mut epoch_diff = BitSet::new();
         let mut prev_epoch_diff = BitSet::new();
@@ -120,8 +106,7 @@ impl<'env> SlashRegistry<'env> {
         for fork_proof in fork_proofs {
             let block_number = fork_proof.header1.block_number;
             let view_number = fork_proof.header1.view_number;
-            let slot_owner = self.slot_owner(block_number, view_number);
-            let slot_owner = self.slot_owner(block_number, view_number).unwrap();
+            let slot_owner = self.slot_owner(block_number, view_number, slots).expect("Could not determine block producer in the current epoch");
 
             let slash_epoch = policy::epoch_at(block_number);
             if block_epoch == slash_epoch {
@@ -178,7 +163,7 @@ impl<'env> SlashRegistry<'env> {
 
         // Mark from view changes, ignoring duplicates.
         for view in 0..block.header.view_number {
-            let slot_owner = self.slot_owner(block.header.block_number, view).unwrap();
+            let slot_owner = self.slot_owner(block.header.block_number, view, slots).expect("Could not determine block producer in the current epoch");
             epoch_diff.insert(slot_owner.0 as usize);
         }
 
@@ -225,10 +210,8 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
+    pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block, slots: &Slots) -> Result<(), SlashPushError> {
         if let Block::Micro(ref block) = block {
-            let slots = self.get_slots_at(block.header.block_number, Some(txn));
-
             self.reward_pot.revert_micro_block(block, &slots, txn);
             self.revert_micro_block(txn, block)
         } else {
@@ -242,20 +225,16 @@ impl<'env> SlashRegistry<'env> {
     }
 
     // Get slot owner at block and view number
-    pub fn slot_owner(&self, block_number: u32, view_number: u32) -> Option<(u16, Slot)> {
+    pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots) -> Option<(u16, Slot)> {
         let epoch_number = policy::epoch_at(block_number);
 
         // Get context
-        let macro_block = self.chain_store
-            .get_block_at(policy::macro_block_of(epoch_number - 1), None)?
-            .unwrap_macro();
         let prev_block = self.chain_store
             .get_block_at(block_number - 1, None)
             .expect("Failed to determine slot owner - preceding block not found");
 
         // Get slots of epoch
-        let slots: Slots = macro_block.try_into().unwrap();
-        let honest_validators = self.enabled_slots(block_number, &slots);
+        let honest_validators = self.enabled_slots(block_number, slots);
 
         // Hash seed and index
         let mut hash_state = Blake2bHasher::new();
@@ -316,10 +295,7 @@ impl<'env> SlashRegistry<'env> {
     }
 
     // Reward eligible slots at epoch (can change in next epoch)
-    pub fn reward_eligible(&self, epoch_number: u32) -> Vec<Slot> {
-        let macro_block_stored = self.chain_store.get_block_at(policy::macro_block_of(epoch_number - 1), None).unwrap();
-        let macro_block = macro_block_stored.unwrap_macro();
-        let slots: Slots = macro_block.try_into().unwrap();
+    pub fn reward_eligible(&self, epoch_number: u32, slots: Slots) -> Vec<Slot> {
         let slash_bitset = self.slash_bitset(epoch_number);
         Self::without_slashes(&slots, slash_bitset).iter().map(|slot| (*slot).clone()).collect()
     }
