@@ -16,7 +16,8 @@ use super::{
 
 impl Serialize for CompressedPublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        writer.write(self.p_pub.as_ref())?;
+        assert_eq!(self.p_pub.as_ref().len(), CompressedPublicKey::SIZE);
+        writer.write_all(self.p_pub.as_ref())?;
         Ok(CompressedPublicKey::SIZE)
     }
 
@@ -46,7 +47,8 @@ impl Deserialize for CompressedPublicKey {
 
 impl Serialize for CompressedSignature {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        writer.write(self.s.as_ref())?;
+        assert_eq!(self.s.as_ref().len(), CompressedSignature::SIZE);
+        writer.write_all(self.s.as_ref())?;
         Ok(CompressedSignature::SIZE)
     }
 
@@ -103,7 +105,7 @@ impl Serialize for Signature {
     }
 
     fn serialized_size(&self) -> usize {
-        CompressedPublicKey::SIZE
+        CompressedSignature::SIZE
     }
 }
 
