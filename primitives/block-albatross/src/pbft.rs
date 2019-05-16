@@ -85,12 +85,12 @@ impl PbftProofBuilder {
         Ok(())
     }
 
-    pub fn add_prepare_signature(&mut self, public_key: &PublicKey, slots: u16, prepare: &SignedPbftPrepareMessage) -> bool {
-        self.prepare.add_signature(public_key, slots, prepare)
+    pub fn add_prepare_signature(&mut self, public_key: &PublicKey, num_slots: u16, prepare: &SignedPbftPrepareMessage) -> bool {
+        self.prepare.add_signature(public_key, num_slots, prepare)
     }
 
-    pub fn add_commit_signature(&mut self, public_key: &PublicKey, slots: u16, commit: &SignedPbftCommitMessage) -> bool {
-        self.commit.add_signature(public_key, slots, commit)
+    pub fn add_commit_signature(&mut self, public_key: &PublicKey, num_slots: u16, commit: &SignedPbftCommitMessage) -> bool {
+        self.commit.add_signature(public_key, num_slots, commit)
     }
 
     pub fn clear(&mut self) {

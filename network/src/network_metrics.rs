@@ -54,7 +54,42 @@ pub struct MessageMetrics {
 
 impl MessageMetrics {
     // New message types need to be added here to occur in the metrics!
-    const MESSAGE_TYPES: [MessageType; 32] = [MessageType::Version, MessageType::Inv, MessageType::GetData, MessageType::GetHeader, MessageType::NotFound, MessageType::GetBlocks, MessageType::Block, MessageType::Header, MessageType::Tx, MessageType::Mempool, MessageType::Reject, MessageType::Subscribe, MessageType::Addr, MessageType::GetAddr, MessageType::Ping, MessageType::Pong, MessageType::Signal, MessageType::GetChainProof, MessageType::ChainProof, MessageType::GetAccountsProof, MessageType::AccountsProof, MessageType::GetAccountsTreeChunk, MessageType::AccountsTreeChunk, MessageType::GetTransactionsProof, MessageType::TransactionsProof, MessageType::GetTransactionReceipts, MessageType::TransactionReceipts, MessageType::GetBlockProof, MessageType::BlockProof, MessageType::GetHead, MessageType::Head, MessageType::VerAck];
+    const MESSAGE_TYPES: [MessageType; 34] = [
+        MessageType::Version,
+        MessageType::Inv,
+        MessageType::GetData,
+        MessageType::GetHeader,
+        MessageType::NotFound,
+        MessageType::GetBlocks,
+        MessageType::Block,
+        MessageType::BlockAlbatross,
+        MessageType::Header,
+        MessageType::HeaderAlbatross,
+        MessageType::Tx,
+        MessageType::Mempool,
+        MessageType::Reject,
+        MessageType::Subscribe,
+        MessageType::Addr,
+        MessageType::GetAddr,
+        MessageType::Ping,
+        MessageType::Pong,
+        MessageType::Signal,
+        MessageType::GetChainProof,
+        MessageType::ChainProof,
+        MessageType::GetAccountsProof,
+        MessageType::AccountsProof,
+        MessageType::GetAccountsTreeChunk,
+        MessageType::AccountsTreeChunk,
+        MessageType::GetTransactionsProof,
+        MessageType::TransactionsProof,
+        MessageType::GetTransactionReceipts,
+        MessageType::TransactionReceipts,
+        MessageType::GetBlockProof,
+        MessageType::BlockProof,
+        MessageType::GetHead,
+        MessageType::Head,
+        MessageType::VerAck
+    ];
 
     pub fn new() -> Self {
         let mut metrics = MessageMetrics {

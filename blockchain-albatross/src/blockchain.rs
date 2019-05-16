@@ -133,11 +133,8 @@ impl<'env> Blockchain<'env> {
         // Get last slots and validators
         let prev_block = chain_store.get_block(&macro_head.header.parent_macro_hash, true, None);
         let (last_slots, last_validators) = match prev_block {
-            Some(Block::Macro(prev_macro_block)) => {
-                let (last_slots, last_validators) = Self::slots_and_validators_from_block(&prev_macro_block);
-                (Some(last_slots), Some(last_validators))
-            },
-            None => (Some(Slots::new(vec![], Coin::ZERO)), Some(Validators::new())),
+            Some(Block::Macro(prev_macro_block)) => Self::slots_and_validators_from_block(&prev_macro_block),
+            None => (Slots::new(vec![], Coin::ZERO), Validators::new()),
             _ => return Err(BlockchainError::InconsistentState),
         };
 
@@ -157,8 +154,8 @@ impl<'env> Blockchain<'env> {
                 macro_head_hash,
                 current_slots: Some(current_slots),
                 current_validators: Some(current_validators),
-                last_slots,
-                last_validators,
+                last_slots: Some(last_slots),
+                last_validators: Some(last_validators),
             }),
             push_lock: Mutex::new(()),
 
@@ -196,6 +193,7 @@ impl<'env> Blockchain<'env> {
 
         // current slots and validators
         let (current_slots, current_validators) = Self::slots_and_validators_from_block(&genesis_macro_block);
+        let (last_slots, last_validators) = (Slots::new(vec![], Coin::ZERO), Validators::new());
 
         Ok(Blockchain {
             env,
@@ -211,10 +209,10 @@ impl<'env> Blockchain<'env> {
                 head_hash: head_hash.clone(),
                 macro_head: genesis_macro_block.clone(),
                 macro_head_hash: head_hash,
-                current_slots: Some(current_slots),
-                current_validators: Some(current_validators),
-                last_slots: None,
-                last_validators: None,
+                current_slots: Some(current_slots.clone()),
+                current_validators: Some(current_validators.clone()),
+                last_slots: Some(last_slots),
+                last_validators: Some(last_validators),
             }),
             push_lock: Mutex::new(()),
 
