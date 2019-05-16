@@ -2,7 +2,7 @@ use std::fmt;
 use std::io;
 
 use account::Receipt;
-use beserial::{Deserialize, Serialize, SerializingError};
+use beserial::{Deserialize, Serialize};
 use crate::BlockError;
 use crate::fork_proof::ForkProof;
 use crate::view_change::ViewChange;

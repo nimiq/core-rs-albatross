@@ -581,13 +581,12 @@ impl AccountInherentInteraction for StakingContract {
             self.active_stake_sorted.remove(&active_stake);
             if to_pay < active_stake.balance {
                 // Slash active stake partially
-                self.active_stake_sorted.remove(&active_stake);
                 let mut new_active_stake = active_stake.clone();
                 Arc::make_mut(&mut new_active_stake).balance =
                     Account::balance_sub(new_active_stake.balance, to_pay)?;
 
                 self.active_stake_sorted.insert(new_active_stake.clone());
-                self.active_stake_by_address.insert(inherent.target.clone(), new_active_stake);
+                self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
 
                 return Ok(None);
             } else {
@@ -648,7 +647,7 @@ impl AccountInherentInteraction for StakingContract {
                     Account::balance_add(new_active_stake.balance, inherent.value)?;
 
                 self.active_stake_sorted.insert(new_active_stake.clone());
-                self.active_stake_by_address.insert(inherent.target.clone(), new_active_stake);
+                self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
                 self.balance = Account::balance_add(self.balance, inherent.value)?;
 
                 return Ok(());

@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
+use std::io;
 
 use beserial::{Deserialize, Serialize};
-use hash::{Blake2bHash, Hash};
+use hash::{Blake2bHash, Hash, SerializeContent};
 use nimiq_bls::bls12_381::{CompressedSignature, PublicKey};
 use primitives::policy;
 
@@ -85,10 +86,17 @@ impl PartialOrd for ForkProof {
 
 impl Ord for ForkProof {
     fn cmp(&self, other: &Self) -> Ordering {
-//        self.hash().cmp(&other.hash())
-        unimplemented!()
+        self.hash::<Blake2bHash>().cmp(&other.hash::<Blake2bHash>())
     }
 }
+
+impl SerializeContent for ForkProof {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
+}
+
+impl Hash for ForkProof { }
 
 impl std::hash::Hash for ForkProof {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
