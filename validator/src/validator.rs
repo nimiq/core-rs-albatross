@@ -46,13 +46,13 @@ use crate::error::Error;
 use crate::slash::ForkProofPool;
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
 
-#[derive(Debug)]
-pub enum SlotChange {
-    MicroBlock,
+#[derive(Clone, Debug)]
+pub enum SlotChange  {
+    NextBlock,
     ViewChange(ViewChange, ViewChangeProof),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ValidatorStatus {
     None,
     Synced, // Already reached consensus with peers but we're not still a validator
@@ -77,6 +77,7 @@ pub struct Validator {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum ValidatorTimer {
     ViewChange,
+    NextBlock,
 }
 
 pub struct ValidatorState {
@@ -162,8 +163,15 @@ impl Validator {
         let weak = Arc::downgrade(this);
         this.timers.set_interval(ValidatorTimer::ViewChange, move || {
             let this = upgrade_weak!(weak);
-            this.start_view_change();
+            this.on_block_timeout();
         }, Self::BLOCK_TIMEOUT);
+
+        // trigger initial block production (if it's our turn)
+        this.on_slot_change(SlotChange::NextBlock);
+    }
+
+    fn on_block_timeout(&self) {
+        self.start_view_change();
     }
 
     pub fn on_consensus_established(&self) {
@@ -188,18 +196,20 @@ impl Validator {
         let weak = self.self_weak.clone();
         self.timers.reset_interval(ValidatorTimer::ViewChange, move || {
             let this = upgrade_weak!(weak);
-            this.start_view_change();
+            this.on_block_timeout();
         }, Self::BLOCK_TIMEOUT);
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
-        let state = self.state.read();
-        let status = &state.status;
+        let status = {
+            let state = self.state.read();
+            state.status
+        };
 
         trace!("Blockchain event: {:?}", event);
 
         // Blockchain events are only intersting to validators (potential or active).
-        if *status == ValidatorStatus::None || *status == ValidatorStatus::Synced {
+        if status == ValidatorStatus::None || status == ValidatorStatus::Synced {
             return;
         }
 
@@ -215,8 +225,8 @@ impl Validator {
         }
 
         // If we're an active validator, we need to check if we're the next block producer.
-        if *status == ValidatorStatus::Active {
-            self.on_slot_change(SlotChange::MicroBlock);
+        if status == ValidatorStatus::Active {
+            self.on_slot_change(SlotChange::NextBlock);
         }
     }
 
@@ -293,10 +303,8 @@ impl Validator {
 
     pub fn on_slot_change(&self, slot_change: SlotChange) {
         let (view_number, view_change_proof) = match slot_change {
-            SlotChange::MicroBlock => (self.blockchain.view_number(), None),
+            SlotChange::NextBlock => (self.blockchain.view_number(), None),
             SlotChange::ViewChange(view_change, view_change_proof) => {
-                // FIXME Track this view change and increment own view_change number.
-
                 // Reset view change interval again.
                 self.reset_view_change_interval();
                 self.state.write().view_number += 1;
@@ -310,10 +318,16 @@ impl Validator {
         let public_key = self.validator_key.public.compress();
 
         if slot.public_key.compressed() == &public_key {
-            match self.blockchain.get_next_block_type(None) {
-                BlockType::Macro => { self.produce_macro_block(view_change_proof) },
-                BlockType::Micro => { self.produce_micro_block(view_change_proof) },
-            }
+            let weak = self.self_weak.clone();
+
+            self.timers.reset_delay(ValidatorTimer::NextBlock, move || {
+                let this = upgrade_weak!(weak);
+
+                match this.blockchain.get_next_block_type(None) {
+                    BlockType::Macro => { this.produce_macro_block(view_change_proof) },
+                    BlockType::Micro => { this.produce_micro_block(view_change_proof) },
+                }
+            }, Duration::from_millis(100));
         }
     }
 
@@ -333,6 +347,7 @@ impl Validator {
 
         let prepare_message = SignedPbftPrepareMessage::from_message(message, &self.validator_key.secret, pk_idx);
 
+        drop(state);
         match self.validator_network.commit_pbft_prepare(prepare_message, &self.validator_key.public, slots) {
             _ => () // FIXME: error handling
         }
@@ -354,6 +369,7 @@ impl Validator {
 
         let commit_message = SignedPbftCommitMessage::from_message(message, &self.validator_key.secret, pk_idx);
 
+        drop(state);
         match self.validator_network.commit_pbft_commit(commit_message, &self.validator_key.public , slots) {
             _ => (), // FIXME: error handling
         }
@@ -407,14 +423,17 @@ impl Validator {
     }
 
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {
+        let state = self.state.read();
+
         let timestamp = self.consensus.network.network_time.now();
 
-        let pbft_proposal = self.block_producer.next_macro_block_proposal(timestamp, view_change);
+        let pbft_proposal = self.block_producer.next_macro_block_proposal(timestamp, state.view_number, view_change);
 
-        let pk_idx = self.state.read().pk_idx.expect("Checked that we are an active validator before entering this function");
+        let pk_idx = state.pk_idx.expect("Checked that we are an active validator before entering this function");
 
         let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
 
+        drop(state);
         match self.validator_network.commit_pbft_proposal(signed_proposal) {
             _ => (), // FIXME: error handling
         }
@@ -437,8 +456,8 @@ impl Validator {
         drop(state);
 
         // Automatically relays block.
-        trace!("Push result: {:?}", self.blockchain.push(Block::Micro(block)));
-
+        let r = self.blockchain.push(Block::Micro(block));
+        trace!("Push result: {:?}", r);
     }
 
     fn is_potential_validator(&self) -> bool {

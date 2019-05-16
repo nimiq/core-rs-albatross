@@ -75,7 +75,7 @@ impl MockValidator {
 
                     let extrinsics = block_producer.blockchain
                         .macro_head().extrinsics.clone().unwrap();
-                    let header = block_producer.next_macro_header(timestamp, &extrinsics);
+                    let header = block_producer.next_macro_header(timestamp, 0, &extrinsics);
                     let block_hash = header.hash::<Blake2bHash>();
 
                     // create signed prepare and commit

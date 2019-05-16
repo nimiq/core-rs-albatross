@@ -31,12 +31,12 @@ impl<'env> BlockProducer<'env> {
         BlockProducer { blockchain, mempool, validator_key }
     }
 
-    pub fn next_macro_block_proposal(&self, timestamp: u64, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
+    pub fn next_macro_block_proposal(&self, timestamp: u64, view_number: u32, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
         // TODO: Lock blockchain/mempool while constructing the block.
         // let _lock = self.blockchain.push_lock.lock();
 
         let extrinsics = self.next_macro_extrinsics();
-        let header = self.next_macro_header(timestamp, &extrinsics);
+        let header = self.next_macro_header(timestamp, view_number, &extrinsics);
 
         PbftProposal {
             header,
@@ -101,9 +101,8 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    pub fn next_macro_header(&self, timestamp: u64, extrinsics: &MacroExtrinsics) -> MacroHeader {
+    pub fn next_macro_header(&self, timestamp: u64, view_number: u32, extrinsics: &MacroExtrinsics) -> MacroHeader {
         let block_number = self.blockchain.height() + 1;
-        let view_number = self.blockchain.view_number();
         let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
 
         let parent_hash = self.blockchain.head_hash();
