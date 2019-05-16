@@ -10,8 +10,7 @@ use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
 use beserial::Serialize;
-use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock};
-use block::{ForkProof, ViewChange};
+use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock, ForkProof, ViewChange, ViewChanges};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -472,16 +471,16 @@ impl<'env> Blockchain<'env> {
             match current.1.head {
                 Block::Macro(_) => unreachable!(),
                 Block::Micro(ref micro_block) => {
-                    self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
-
-                    state.reward_registry.revert_block(&mut write_txn, &current.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"));
-
-                    cache_txn.revert_block(&current.1.head);
-
                     let prev_hash = micro_block.header.parent_hash.clone();
                     let prev_info = self.chain_store
                         .get_chain_info(&prev_hash, true, Some(&read_txn))
                         .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
+
+                    self.revert_accounts(&state.accounts, &mut write_txn, &micro_block, prev_info.head.view_number())?;
+
+                    state.reward_registry.revert_block(&mut write_txn, &current.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"));
+
+                    cache_txn.revert_block(&current.1.head);
 
                     assert_eq!(prev_info.head.state_root(), &state.accounts.hash(Some(&write_txn)),
                                "Failed to revert main chain while rebranching - inconsistent state");
@@ -607,7 +606,8 @@ impl<'env> Blockchain<'env> {
             },
             Block::Micro(ref micro_block) => {
                 let extrinsics = micro_block.extrinsics.as_ref().unwrap();
-                let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, micro_block.view_change());
+                let view_changes = ViewChanges::new(micro_block.header.block_number, self.view_number(), micro_block.header.view_number);
+                let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, view_changes);
 
                 // Commit block to AccountsTree.
                 let receipts = accounts.commit(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number);
@@ -616,6 +616,8 @@ impl<'env> Blockchain<'env> {
                 }
 
                 // Verify receipts.
+                trace!("extrinsics.receipts = {:?}", &extrinsics.receipts);
+                trace!("receipts = {:?}", receipts.as_ref().unwrap());
                 if extrinsics.receipts != receipts.unwrap() {
                     return Err(PushError::InvalidBlock(BlockError::InvalidReceipt));
                 }
@@ -630,12 +632,13 @@ impl<'env> Blockchain<'env> {
         Ok(())
     }
 
-    fn revert_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, micro_block: &MicroBlock) -> Result<(), PushError> {
+    fn revert_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, micro_block: &MicroBlock, prev_view_number: u32) -> Result<(), PushError> {
         assert_eq!(micro_block.header.state_root, accounts.hash(Some(&txn)),
                    "Failed to revert - inconsistent state");
 
         let extrinsics = micro_block.extrinsics.as_ref().unwrap();
-        let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, micro_block.view_change());
+        let view_changes = ViewChanges::new(micro_block.header.block_number, prev_view_number, micro_block.header.view_number);
+        let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, view_changes);
 
         if let Err(e) = accounts.revert(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number, &extrinsics.receipts) {
             panic!("Failed to revert - {}", e);
@@ -778,13 +781,13 @@ impl<'env> Blockchain<'env> {
         self.state.read()
     }
 
-    pub fn create_slash_inherents(&self, fork_proofs: &Vec<ForkProof>, view_change: Option<ViewChange>) -> Vec<Inherent> {
+    pub fn create_slash_inherents(&self, fork_proofs: &Vec<ForkProof>, view_changes: Option<ViewChanges>) -> Vec<Inherent> {
         let mut inherents = vec![];
         for fork_proof in fork_proofs {
             inherents.push(self.inherent_from_fork_proof(fork_proof));
         }
-        if let Some(ref view_change) = view_change {
-            inherents.push(self.inherent_from_view_change(view_change));
+        if let Some(view_changes) = view_changes {
+            inherents.append(&mut self.inherents_from_view_changes(&view_changes));
         }
         inherents
     }
@@ -803,16 +806,19 @@ impl<'env> Blockchain<'env> {
     }
 
     /// Expects a *verified* proof!
-    pub fn inherent_from_view_change(&self, view_change_proof: &ViewChange) -> Inherent {
-        let producer = self.get_block_producer_at(view_change_proof.block_number, view_change_proof.new_view_number - 1)
-            .expect("Failed to create inherent from view change - could not get block producer");
+    pub fn inherents_from_view_changes(&self, view_changes: &ViewChanges) -> Vec<Inherent> {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
-        Inherent {
-            ty: InherentType::Slash,
-            target: validator_registry.clone(),
-            value: self.slash_fine_at(view_change_proof.block_number),
-            data: producer.1.staker_address.serialize_to_vec(),
-        }
+
+        (view_changes.first_view_number .. view_changes.last_view_number).map(|view_number| {
+            let producer = self.get_block_producer_at(view_changes.block_number, view_number)
+                .expect("Failed to create inherent from fork proof - could not get block producer");
+            Inherent {
+                ty: InherentType::Slash,
+                target: validator_registry.clone(),
+                value: self.slash_fine_at(view_changes.block_number),
+                data: producer.1.staker_address.serialize_to_vec(),
+            }
+        }).collect::<Vec<Inherent>>()
     }
 
     fn slash_fine_at(&self, block_number: u32) -> Coin {

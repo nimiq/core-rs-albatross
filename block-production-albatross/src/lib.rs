@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::convert::TryFrom;
 
 use beserial::Serialize;
-use block::{Block, MicroBlock, PbftProposal, MacroHeader, MicroExtrinsics, MacroExtrinsics, MicroHeader, ViewChangeProof};
+use block::{Block, MicroBlock, PbftProposal, MacroHeader, MicroExtrinsics, MacroExtrinsics, MicroHeader, ViewChangeProof, ViewChange, ViewChanges};
 use block::ForkProof;
 use blockchain::blockchain::Blockchain;
 use hash::Hash;
@@ -48,7 +48,7 @@ impl<'env> BlockProducer<'env> {
         // TODO: Lock blockchain/mempool while constructing the block.
         // let _lock = self.blockchain.push_lock.lock();
 
-        let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data);
+        let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data, view_number);
         let header = self.next_micro_header(timestamp, view_number, &extrinsics);
         let signature = self.validator_key.sign(&header).compress();
 
@@ -66,13 +66,14 @@ impl<'env> BlockProducer<'env> {
         self.blockchain.next_slots().into()
     }
 
-    fn next_micro_extrinsics(&self, fork_proofs: Vec<ForkProof>, extra_data: Vec<u8>) -> MicroExtrinsics {
+    fn next_micro_extrinsics(&self, fork_proofs: Vec<ForkProof>, extra_data: Vec<u8>, view_number: u32) -> MicroExtrinsics {
         let max_size = MicroBlock::MAX_SIZE
             - MicroHeader::SIZE
             - MicroExtrinsics::get_metadata_size(fork_proofs.len(), extra_data.len());
         let mut transactions = self.mempool.get_transactions_for_block(max_size);
 
-        let inherents = self.blockchain.create_slash_inherents(&fork_proofs, /* TODO */ None);
+        let view_changes = ViewChanges::new(self.blockchain.block_number() + 1, self.blockchain.view_number(), view_number);
+        let inherents = self.blockchain.create_slash_inherents(&fork_proofs, view_changes);
 
         let mut receipts = self.blockchain.state().accounts()
             .collect_receipts(&transactions, &inherents, self.blockchain.height() + 1)
