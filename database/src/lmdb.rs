@@ -1,14 +1,17 @@
-use super::*;
-use lmdb_zero::traits::LmdbResultExt;
-use std::fs;
-use fs2;
-use rand::{thread_rng, Rng};
 use std::cmp;
-use lmdb_zero;
-use parking_lot;
 use std::fmt;
+use std::fs;
 
+use fs2;
+use lmdb_zero;
 pub use lmdb_zero::open;
+use lmdb_zero::traits::LmdbResultExt;
+use parking_lot;
+use rand::{Rng, thread_rng};
+
+use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait, RawReadCursor};
+
+use super::*;
 
 #[derive(Debug)]
 pub struct LmdbEnvironment {
@@ -172,7 +175,9 @@ impl<'env> LmdbReadTransaction<'env> {
     pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbCursor<'txn, 'db> {
         let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
         LmdbCursor {
-            cursor,
+            raw: RawLmdbCursor {
+                cursor,
+            },
             txn: &self.txn,
         }
     }
@@ -240,7 +245,19 @@ impl<'env> LmdbWriteTransaction<'env> {
     pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbCursor<'txn, 'db> {
         let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
         LmdbCursor {
-            cursor,
+            raw: RawLmdbCursor {
+                cursor,
+            },
+            txn: &self.txn,
+        }
+    }
+
+    pub(in super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbWriteCursor<'txn, 'db> {
+        let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
+        LmdbWriteCursor {
+            raw: RawLmdbCursor {
+                cursor,
+            },
             txn: &self.txn,
         }
     }
@@ -252,127 +269,132 @@ impl<'env> fmt::Debug for LmdbWriteTransaction<'env> {
     }
 }
 
-pub struct LmdbCursor<'txn, 'db> {
+pub struct RawLmdbCursor<'txn, 'db> {
     cursor: lmdb_zero::Cursor<'txn, 'db>,
-    txn: &'txn lmdb_zero::ConstTransaction<'txn>,
 }
 
-impl<'txn, 'db> LmdbCursor<'txn, 'db> {
-    pub(in super) fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
+    fn first<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.first(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn first_duplicate<V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(V)> where V: FromDatabaseValue {
         let result: Option<&[u8]> = self.cursor.first_dup(&access).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
-    pub(in super) fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn last<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.last(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn last_duplicate<V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(V)> where V: FromDatabaseValue {
         let result: Option<&[u8]> = self.cursor.last_dup(&access).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
-    pub(in super) fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
+    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value = AsDatabaseBytes::as_database_bytes(value);
         let result = self.cursor.seek_kv(key.as_ref(), value.as_ref());
         result.is_ok()
     }
 
-    pub(in super) fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
+    fn seek_key_nearest_value<K, V>(&mut self, access: &lmdb_zero::ConstAccessor, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
         let key = AsDatabaseBytes::as_database_bytes(key);
         let value = AsDatabaseBytes::as_database_bytes(value);
-        let access = self.txn.access();
         let result: Option<&[u8]> = self.cursor.seek_k_nearest_v(&access, key.as_ref(), value.as_ref()).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
-    pub(in super) fn get_current<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn get_current<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.get_current(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn next<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn next<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.next(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn next_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn next_duplicate<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.next_dup(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn next_no_duplicate<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.next_nodup(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn prev<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn prev<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.prev(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn prev_duplicate<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.prev_dup(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        let access = self.txn.access();
+    fn prev_no_duplicate<K, V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         let result: Option<(&[u8], &[u8])> = self.cursor.prev_nodup(&access).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn seek_key<K, V>(&mut self, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
+    fn seek_key<K, V>(&mut self, access: &lmdb_zero::ConstAccessor, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         let key = AsDatabaseBytes::as_database_bytes(key);
-        let access = self.txn.access();
         let result: Option<&[u8]> = self.cursor.seek_k(&access, key.as_ref()).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
-    pub(in super) fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+    fn seek_key_both<K, V>(&mut self, access: &lmdb_zero::ConstAccessor, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
         let key = AsDatabaseBytes::as_database_bytes(key);
-        let access = self.txn.access();
         let result: Option<(&[u8], &[u8])> = self.cursor.seek_k_both(&access, key.as_ref()).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+    fn seek_range_key<K, V>(&mut self, access: &lmdb_zero::ConstAccessor, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
         let key = AsDatabaseBytes::as_database_bytes(key);
-        let access = self.txn.access();
         let result: Option<(&[u8], &[u8])> = self.cursor.seek_range_k(&access, key.as_ref()).to_opt().unwrap();
         let (key, value) = result?;
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    pub(in super) fn count_duplicates(&mut self) -> usize {
+    fn count_duplicates(&mut self) -> usize {
         self.cursor.count().unwrap()
+    }
+}
+
+pub struct LmdbCursor<'txn, 'db> {
+    raw: RawLmdbCursor<'txn, 'db>,
+    txn: &'txn lmdb_zero::ConstTransaction<'txn>,
+}
+
+impl_read_cursor_from_raw!(LmdbCursor<'txn, 'db>, raw, txn);
+
+pub struct LmdbWriteCursor<'txn, 'db> {
+    raw: RawLmdbCursor<'txn, 'db>,
+    txn: &'txn lmdb_zero::WriteTransaction<'txn>,
+}
+
+impl_read_cursor_from_raw!(LmdbWriteCursor<'txn, 'db>, raw, txn);
+
+impl<'txn, 'db> WriteCursorTrait for LmdbWriteCursor<'txn, 'db> {
+    fn remove(&mut self) {
+        let mut access = self.txn.access();
+        self.raw.cursor.del(&mut access, lmdb_zero::del::Flags::empty()).unwrap();
     }
 }
 

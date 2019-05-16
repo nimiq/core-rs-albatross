@@ -14,6 +14,7 @@ use block::{Block, MacroBlock, MicroBlock};
 use bls::bls12_381::CompressedSignature as CompressedBlsSignature;
 use collections::bitset::BitSet;
 use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
+use database::cursor::ReadCursor;
 use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
 use primitives::policy;

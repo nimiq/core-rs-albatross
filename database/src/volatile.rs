@@ -1,9 +1,13 @@
-use super::*;
-use super::lmdb::*;
-use tempdir::TempDir;
-use std::io;
 use std::error::Error;
 use std::fmt;
+use std::io;
+
+use tempdir::TempDir;
+
+use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait};
+
+use super::*;
+use super::lmdb::*;
 
 #[derive(Debug)]
 pub struct VolatileEnvironment {
@@ -132,77 +136,159 @@ impl<'env> VolatileWriteTransaction<'env> {
     pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> VolatileCursor<'txn, 'db> {
         VolatileCursor(self.0.cursor(db))
     }
+
+    pub(in super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> VolatileWriteCursor<'txn, 'db> {
+        VolatileWriteCursor(self.0.write_cursor(db))
+    }
 }
 
 pub struct VolatileCursor<'txn, 'db>(LmdbCursor<'txn, 'db>);
 
-impl<'txn, 'db> VolatileCursor<'txn, 'db> {
-    pub(in super) fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+impl<'txn, 'db> ReadCursor for VolatileCursor<'txn, 'db> {
+    fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.first()
     }
 
-    pub(in super) fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
         self.0.first_duplicate()
     }
 
-    pub(in super) fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+    fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.last()
     }
 
-    pub(in super) fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
         self.0.last_duplicate()
     }
 
-    pub(in super) fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
+    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
         self.0.seek_key_value(key, value)
     }
 
-    pub(in super) fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
+    fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
         self.0.seek_key_nearest_value(key, value)
     }
 
-    pub(in super) fn get_current<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+    fn get_current<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.get_current()
     }
 
-    pub(in super) fn next<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+    fn next<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.next()
     }
 
-    pub(in super) fn next_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+    fn next_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.next_duplicate()
     }
 
-    pub(in super) fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+    fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.next_no_duplicate()
     }
 
-    pub(in super) fn prev<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+    fn prev<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.prev()
     }
 
-    pub(in super) fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+    fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.prev_duplicate()
     }
 
-    pub(in super) fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+    fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
         self.0.prev_no_duplicate()
     }
 
-    pub(in super) fn seek_key<K, V>(&mut self, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
+    fn seek_key<K, V>(&mut self, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         self.0.seek_key(key)
     }
 
-    pub(in super) fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+    fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
         self.0.seek_key_both(key)
     }
 
-    pub(in super) fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+    fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
         self.0.seek_range_key(key)
     }
 
-    pub(in super) fn count_duplicates(&mut self) -> usize {
+    fn count_duplicates(&mut self) -> usize {
         self.0.count_duplicates()
+    }
+}
+
+pub struct VolatileWriteCursor<'txn, 'db>(LmdbWriteCursor<'txn, 'db>);
+
+impl<'txn, 'db> ReadCursor for VolatileWriteCursor<'txn, 'db> {
+    fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.first()
+    }
+
+    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+        self.0.first_duplicate()
+    }
+
+    fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.last()
+    }
+
+    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+        self.0.last_duplicate()
+    }
+
+    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
+        self.0.seek_key_value(key, value)
+    }
+
+    fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
+        self.0.seek_key_nearest_value(key, value)
+    }
+
+    fn get_current<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.get_current()
+    }
+
+    fn next<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.next()
+    }
+
+    fn next_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.next_duplicate()
+    }
+
+    fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.next_no_duplicate()
+    }
+
+    fn prev<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.prev()
+    }
+
+    fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.prev_duplicate()
+    }
+
+    fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        self.0.prev_no_duplicate()
+    }
+
+    fn seek_key<K, V>(&mut self, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
+        self.0.seek_key(key)
+    }
+
+    fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+        self.0.seek_key_both(key)
+    }
+
+    fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+        self.0.seek_range_key(key)
+    }
+
+    fn count_duplicates(&mut self) -> usize {
+        self.0.count_duplicates()
+    }
+}
+
+impl<'txn, 'db> WriteCursorTrait for VolatileWriteCursor<'txn, 'db> {
+    fn remove(&mut self) {
+        self.0.remove()
     }
 }
 

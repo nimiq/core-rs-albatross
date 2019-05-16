@@ -1,7 +1,8 @@
-use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
-use hash::Blake2bHash;
 use block::Block;
 use blockchain_base::Direction;
+use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
+use database::cursor::ReadCursor;
+use hash::Blake2bHash;
 
 use crate::chain_info::ChainInfo;
 

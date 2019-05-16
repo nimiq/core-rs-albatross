@@ -9,8 +9,11 @@ use std::ops::Deref;
 
 use lmdb_zero;
 
+use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait};
 pub use crate::traits::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
+#[macro_use]
+pub mod cursor;
 pub mod lmdb;
 pub mod volatile;
 pub mod traits;
@@ -209,6 +212,14 @@ impl<'env> WriteTransaction<'env> {
     pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> Cursor<'txn, 'db> {
         self.0.cursor(db)
     }
+
+    pub fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> WriteCursor<'txn, 'db> {
+        match self.0 {
+            Transaction::VolatileWrite(ref txn) => { WriteCursor::VolatileCursor(txn.write_cursor(db)) }
+            Transaction::PersistentWrite(ref txn) => { WriteCursor::PersistentCursor(txn.write_cursor(db)) }
+            _ => unreachable!()
+        }
+    }
 }
 
 impl<'env> Deref for WriteTransaction<'env> {
@@ -224,105 +235,186 @@ pub enum Cursor<'txn, 'db> {
     PersistentCursor(lmdb::LmdbCursor<'txn, 'db>),
 }
 
+pub enum WriteCursor<'txn, 'db> {
+    VolatileCursor(volatile::VolatileWriteCursor<'txn, 'db>),
+    PersistentCursor(lmdb::LmdbWriteCursor<'txn, 'db>),
+}
+
 macro_rules! gen_cursor_match {
-    ($self: ident, $f: ident) => {
+    ($self: ident, $f: ident, $t: ident) => {
         match $self {
-            Cursor::PersistentCursor(ref mut cursor) => {
+            $t::PersistentCursor(ref mut cursor) => {
                 cursor.$f()
             },
-            Cursor::VolatileCursor(ref mut cursor) => {
+            $t::VolatileCursor(ref mut cursor) => {
                 cursor.$f()
             },
         }
     };
-    ($self: ident, $f: ident, $k: expr) => {
+    ($self: ident, $f: ident, $k: expr, $t: ident) => {
         match $self {
-            Cursor::PersistentCursor(ref mut cursor) => {
+            $t::PersistentCursor(ref mut cursor) => {
                 cursor.$f($k)
             },
-            Cursor::VolatileCursor(ref mut cursor) => {
+            $t::VolatileCursor(ref mut cursor) => {
                 cursor.$f($k)
             },
         }
     };
-    ($self: ident, $f: ident, $k: expr, $v: expr) => {
+    ($self: ident, $f: ident, $k: expr, $v: expr, $t: ident) => {
         match $self {
-            Cursor::PersistentCursor(ref mut cursor) => {
+            $t::PersistentCursor(ref mut cursor) => {
                 cursor.$f($k, $v)
             },
-            Cursor::VolatileCursor(ref mut cursor) => {
+            $t::VolatileCursor(ref mut cursor) => {
                 cursor.$f($k, $v)
             },
         }
     };
 }
 
-impl<'txn, 'db> Cursor<'txn, 'db> {
-    pub fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, first)
+impl<'txn, 'db> ReadCursor for Cursor<'txn, 'db> {
+    fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, first, Cursor)
     }
 
-    pub fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
-        gen_cursor_match!(self, first_duplicate)
+    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+        gen_cursor_match!(self, first_duplicate, Cursor)
     }
 
-    pub fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, last)
+    fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, last, Cursor)
     }
 
-    pub fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
-        gen_cursor_match!(self, last_duplicate)
+    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+        gen_cursor_match!(self, last_duplicate, Cursor)
     }
 
-    pub fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
-        gen_cursor_match!(self, seek_key_value, key, value)
+    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
+        gen_cursor_match!(self, seek_key_value, key, value, Cursor)
     }
 
-    pub fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
-        gen_cursor_match!(self, seek_key_nearest_value, key, value)
+    fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
+        gen_cursor_match!(self, seek_key_nearest_value, key, value, Cursor)
     }
 
-    pub fn get_current<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, get_current)
+    fn get_current<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, get_current, Cursor)
     }
 
-    pub fn next<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, next)
+    fn next<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, next, Cursor)
     }
 
-    pub fn next_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, next_duplicate)
+    fn next_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, next_duplicate, Cursor)
     }
 
-    pub fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, next_no_duplicate)
+    fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, next_no_duplicate, Cursor)
     }
 
-    pub fn prev<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, prev)
+    fn prev<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, prev, Cursor)
     }
 
-    pub fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, prev_duplicate)
+    fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, prev_duplicate, Cursor)
     }
 
-    pub fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, prev_no_duplicate)
+    fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, prev_no_duplicate, Cursor)
     }
 
-    pub fn seek_key<K, V>(&mut self, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
-        gen_cursor_match!(self, seek_key, key)
+    fn seek_key<K, V>(&mut self, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
+        gen_cursor_match!(self, seek_key, key, Cursor)
     }
 
-    pub fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, seek_key_both, key)
+    fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, seek_key_both, key, Cursor)
     }
 
-    pub fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
-        gen_cursor_match!(self, seek_range_key, key)
+    fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, seek_range_key, key, Cursor)
     }
 
-    pub fn count_duplicates(&mut self) -> usize {
-        gen_cursor_match!(self, count_duplicates)
+    fn count_duplicates(&mut self) -> usize {
+        gen_cursor_match!(self, count_duplicates, Cursor)
+    }
+}
+
+impl<'txn, 'db> ReadCursor for WriteCursor<'txn, 'db> {
+    fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, first, WriteCursor)
+    }
+
+    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+        gen_cursor_match!(self, first_duplicate, WriteCursor)
+    }
+
+    fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, last, WriteCursor)
+    }
+
+    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+        gen_cursor_match!(self, last_duplicate, WriteCursor)
+    }
+
+    fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized {
+        gen_cursor_match!(self, seek_key_value, key, value, WriteCursor)
+    }
+
+    fn seek_key_nearest_value<K, V>(&mut self, key: &K, value: &V) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + FromDatabaseValue {
+        gen_cursor_match!(self, seek_key_nearest_value, key, value, WriteCursor)
+    }
+
+    fn get_current<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, get_current, WriteCursor)
+    }
+
+    fn next<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, next, WriteCursor)
+    }
+
+    fn next_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, next_duplicate, WriteCursor)
+    }
+
+    fn next_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, next_no_duplicate, WriteCursor)
+    }
+
+    fn prev<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, prev, WriteCursor)
+    }
+
+    fn prev_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, prev_duplicate, WriteCursor)
+    }
+
+    fn prev_no_duplicate<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, prev_no_duplicate, WriteCursor)
+    }
+
+    fn seek_key<K, V>(&mut self, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
+        gen_cursor_match!(self, seek_key, key, WriteCursor)
+    }
+
+    fn seek_key_both<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, seek_key_both, key, WriteCursor)
+    }
+
+    fn seek_range_key<K, V>(&mut self, key: &K) -> Option<(K, V)> where K: AsDatabaseBytes + FromDatabaseValue, V: FromDatabaseValue {
+        gen_cursor_match!(self, seek_range_key, key, WriteCursor)
+    }
+
+    fn count_duplicates(&mut self) -> usize {
+        gen_cursor_match!(self, count_duplicates, WriteCursor)
+    }
+}
+
+impl<'txn, 'db> WriteCursorTrait for WriteCursor<'txn, 'db> {
+    fn remove(&mut self) {
+        gen_cursor_match!(self, remove, WriteCursor)
     }
 }

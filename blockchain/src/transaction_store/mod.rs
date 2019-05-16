@@ -1,13 +1,14 @@
-use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction, FromDatabaseValue, IntoDatabaseValue};
-use hash::Blake2bHash;
-use block::Block;
-use transaction::Transaction as NimiqTransaction;
-
-use beserial::{Serialize, Deserialize};
-use std::os::raw::c_uint;
 use std::io;
-use keys::Address;
+use std::os::raw::c_uint;
+
+use beserial::{Deserialize, Serialize};
+use block::Block;
+use database::{Database, DatabaseFlags, Environment, FromDatabaseValue, IntoDatabaseValue, ReadTransaction, Transaction, WriteTransaction};
+use database::cursor::ReadCursor;
+use hash::Blake2bHash;
 use hash::Hash;
+use keys::Address;
+use transaction::Transaction as NimiqTransaction;
 
 pub mod blockchain;
 
@@ -222,8 +223,9 @@ impl<'env> TransactionStore<'env> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use database::volatile::VolatileEnvironment;
+
+    use super::*;
 
     #[test]
     fn it_can_store_the_head_id() {
