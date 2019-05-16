@@ -72,16 +72,20 @@ impl PbftProofBuilder {
     }
 
     /// Verify that we have enough valid commit signatures that also signed the prepare
-    pub fn verify(&self, block_hash: Blake2bHash, threshold: u16) -> Result<(), AggregateProofError> {
+    /// TODO: Duplicate code (in PbftProof)
+    pub fn verify(&self, block_hash: Blake2bHash, validators: &Validators, threshold: u16) -> Result<(), AggregateProofError> {
         // XXX if we manually hash the message prefix and the block hash, we don't need to clone
         let prepare = PbftPrepareMessage { block_hash: block_hash.clone() };
         let commit = PbftCommitMessage { block_hash };
 
         self.prepare.verify(&prepare, threshold)?;
         self.commit.verify(&commit, threshold)?;
-        if ((&self.prepare.signers & &self.commit.signers).len() as u16) < threshold {
-            return Err(AggregateProofError::InsufficientSigners)
-        }
+
+        // sum up votes of signers that signed prepare and commit
+        let votes: u16 = (&self.prepare.signers & &self.commit.signers).iter().map(|s| {
+            validators.get(s).map(|v| v.num_slots).unwrap_or(0)
+        }).sum();
+
         Ok(())
     }
 

@@ -333,7 +333,7 @@ impl Validator {
 
     pub fn on_pbft_proposal(&self, hash: Blake2bHash, _proposal: PbftProposal) {
         let mut state = self.state.read();
-
+        trace!("Received proposal: {}", hash);
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
             return;
@@ -344,7 +344,7 @@ impl Validator {
         // Note: we don't verify this hash as the network validator already did.
         let message = PbftPrepareMessage { block_hash: hash };
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
-
+        trace!("Signing prepare message: pk_idx={}", pk_idx);
         let prepare_message = SignedPbftPrepareMessage::from_message(message, &self.validator_key.secret, pk_idx);
 
         drop(state);
@@ -355,7 +355,7 @@ impl Validator {
 
     pub fn on_pbft_prepare_complete(&self, hash: Blake2bHash) {
         let mut state = self.state.read();
-
+        trace!("Complete prepare for: {}", hash);
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
             return;
@@ -366,7 +366,7 @@ impl Validator {
         // Note: we don't verify this hash as the network validator already did
         let message = PbftCommitMessage { block_hash: hash };
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
-
+        trace!("Singing commit message: pk_idx={}", pk_idx);
         let commit_message = SignedPbftCommitMessage::from_message(message, &self.validator_key.secret, pk_idx);
 
         drop(state);

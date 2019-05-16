@@ -21,6 +21,7 @@ maintenance = { status = "experimental" }
 beserial = { path = "../beserial", version = "0.1.0" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1.0" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1.0" }
+nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1.0" }
 nimiq-hash = { path = "../hash", version = "0.1.0" }
 nimiq-keys = { path = "../keys", version = "0.1.0" }
 nimiq-bls = { path = "../bls", version = "0.1.0" }

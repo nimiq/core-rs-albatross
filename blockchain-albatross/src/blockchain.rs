@@ -378,7 +378,7 @@ impl<'env> Blockchain<'env> {
         }
 
         // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(&state.accounts, &mut txn, &chain_info.head) {
+        if let Err(e) = self.commit_accounts(&state, &mut txn, &chain_info.head) {
             warn!("Rejecting block - commit failed: {:?}", e);
             txn.abort();
             #[cfg(feature = "metrics")]
@@ -513,7 +513,7 @@ impl<'env> Blockchain<'env> {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
                         state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"))
                             .map_err(|_| PushError::InvalidBlock(BlockError::InvalidSlash))
-                            .and_then(|_| self.commit_accounts(&state.accounts, &mut write_txn, &fork_block.1.head))
+                            .and_then(|_| self.commit_accounts(&state, &mut write_txn, &fork_block.1.head))
 
                     } else {
                         Err(PushError::DuplicateTransaction)
@@ -593,13 +593,15 @@ impl<'env> Blockchain<'env> {
         Ok(PushResult::Rebranched)
     }
 
-    fn commit_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
+    fn commit_accounts(&self, state: &BlockchainState, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
+        let accounts = &state.accounts;
+
         match block {
             Block::Macro(ref macro_block) => {
-                // TODO Distribute reward for last epoch
+                let inherents = self.finalize_last_epoch(state);
 
                 // Commit block to AccountsTree.
-                let receipts = accounts.commit(txn, &vec![], &vec![], macro_block.header.block_number);
+                let receipts = accounts.commit(txn, &vec![], &inherents, macro_block.header.block_number);
                 if let Err(e) = receipts {
                     return Err(PushError::AccountsError(e));
                 }
@@ -852,12 +854,9 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| s.last_validators.as_ref().unwrap())
     }
 
-    pub fn finalize_last_epoch(&self) -> Vec<Inherent> {
-        let _guard = self.lock();
-
+    pub fn finalize_last_epoch(&self, state: &BlockchainState) -> Vec<Inherent> {
         let mut inherents = Vec::new();
 
-        let state = self.state.read();
         let epoch = policy::epoch_at(state.main_chain.head.block_number()) - 1;
 
         // Special case for first epoch: Epoch 0 is finalized by definition.

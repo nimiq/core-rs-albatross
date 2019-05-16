@@ -318,7 +318,9 @@ impl ValidatorNetwork {
             // aggregate prepare signature - if new, relay
             if proof.add_prepare_signature(public_key, slots, &prepare) {
                 let prepare_complete = proof.prepare.verify(&prepare.message, TWO_THIRD_VALIDATORS).is_ok();
-                let commit_complete = proof.verify(prepare.message.block_hash.clone(), TWO_THIRD_VALIDATORS).is_ok();
+                let commit_complete = proof.verify(prepare.message.block_hash.clone(), &self.blockchain.current_validators(), TWO_THIRD_VALIDATORS).is_ok();
+
+                trace!("Committing pBFT prepare: prepare_complete={}, commit_complete={}", prepare_complete, commit_complete);
 
                 // XXX Can we get rid of the eager cloning here?
                 let proposal = proposal.clone();
@@ -364,7 +366,9 @@ impl ValidatorNetwork {
 
             // aggregate commit signature - if new, relay
             if proof.add_commit_signature(public_key, slots, &commit) {
-                let commit_complete = proof.verify(commit.message.block_hash.clone(), TWO_THIRD_VALIDATORS).is_ok();
+                let commit_complete = proof.verify(commit.message.block_hash.clone(), &self.blockchain.current_validators(), TWO_THIRD_VALIDATORS).is_ok();
+
+                trace!("Committing pBFT commit: commit_complete={}", commit_complete);
 
                 // XXX Can we get rid of the eager cloning here?
                 let proposal = proposal.clone();

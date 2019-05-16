@@ -6,6 +6,7 @@ extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_bls as bls;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_blockchain_base as blockchain_base;
 
 use std::sync::Arc;
 use std::convert::TryFrom;
@@ -19,6 +20,8 @@ use mempool::Mempool;
 use bls::bls12_381::{SecretKey, KeyPair};
 use block::MicroJustification;
 use primitives::coin::Coin;
+use blockchain_base::AbstractBlockchain;
+
 
 pub struct BlockProducer<'env> {
     pub blockchain: Arc<Blockchain<'env>>,
@@ -32,8 +35,8 @@ impl<'env> BlockProducer<'env> {
     }
 
     pub fn next_macro_block_proposal(&self, timestamp: u64, view_number: u32, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
-        // TODO: Lock blockchain/mempool while constructing the block.
-        // let _lock = self.blockchain.push_lock.lock();
+        //  Lock blockchain/mempool while constructing the block.
+        let _lock = self.blockchain.lock();
 
         let extrinsics = self.next_macro_extrinsics();
         let header = self.next_macro_header(timestamp, view_number, &extrinsics);
@@ -45,8 +48,8 @@ impl<'env> BlockProducer<'env> {
     }
 
     pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, timestamp: u64, view_number: u32, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
-        // TODO: Lock blockchain/mempool while constructing the block.
-        // let _lock = self.blockchain.push_lock.lock();
+        // Lock blockchain/mempool while constructing the block.
+        let _lock = self.blockchain.lock();
 
         let view_changes = ViewChanges::new(self.blockchain.block_number() + 1, self.blockchain.view_number(), view_number);
         let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data, &view_changes);
@@ -111,7 +114,7 @@ impl<'env> BlockProducer<'env> {
 
         let validators = self.blockchain.next_validators().into();
 
-        let inherents = self.blockchain.finalize_last_epoch();
+        let inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
         // Rewards are distributed with delay.
         let state_root = self.blockchain.state().accounts()
             .hash_with(&vec![], &inherents, block_number)
