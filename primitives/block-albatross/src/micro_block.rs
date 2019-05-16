@@ -44,11 +44,10 @@ pub struct MicroJustification {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroExtrinsics {
-    #[beserial(len_type(u16))]
-    pub fork_proofs: Vec<ForkProof>,
-
     #[beserial(len_type(u8))]
     pub extra_data: Vec<u8>,
+    #[beserial(len_type(u16))]
+    pub fork_proofs: Vec<ForkProof>,
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
     #[beserial(len_type(u16))]
@@ -89,6 +88,30 @@ impl MicroHeader {
 
 impl MicroExtrinsics {
     pub fn verify(&self, block_height: u32, network_id: NetworkId) -> Result<(), BlockError> {
+        // Verify fork proofs.
+        let mut previous_proof: Option<&ForkProof> = None;
+        for proof in &self.fork_proofs {
+            // Ensure proofs are ordered and unique.
+            if let Some(previous) = previous_proof {
+                match previous.cmp(proof) {
+                    Ordering::Equal => {
+                        return Err(BlockError::DuplicateForkProof);
+                    }
+                    Ordering::Greater => {
+                        return Err(BlockError::ForkProofsNotOrdered);
+                    }
+                    _ => (),
+                }
+            }
+            previous_proof = Some(proof);
+
+            // Check that the proof is within the reporting window.
+            if !proof.is_valid_at(block_height) {
+                return Err(BlockError::InvalidForkProof);
+            }
+        }
+
+        // Verify transactions.
         let mut previous_tx: Option<&Transaction> = None;
         for tx in &self.transactions {
             // Ensure transactions are ordered and unique.
@@ -116,6 +139,7 @@ impl MicroExtrinsics {
             }
         }
 
+        // Verify receipts.
         let mut previous_receipt: Option<&Receipt> = None;
         for receipt in &self.receipts {
             // Ensure pruned accounts are ordered and unique.
@@ -154,7 +178,8 @@ impl MicroExtrinsics {
     }
 
     pub fn get_metadata_size(num_fork_proofs: usize, extra_data_size: usize) -> usize {
-        return /*fork_proofs size*/ 2 + num_fork_proofs * ForkProof::SIZE
+        return /*fork_proofs size*/ 2
+            + num_fork_proofs * ForkProof::SIZE
             + /*extra_data size*/ 1
             + extra_data_size
             + /*transactions size*/ 2

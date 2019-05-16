@@ -540,8 +540,8 @@ impl AccountInherentInteraction for StakingContract {
     fn check_inherent(&self, inherent: &Inherent) -> Result<(), AccountError> {
         match inherent.ty {
             InherentType::Slash => {
-                // Inherent has extra data
-                if inherent.data.len() > 0 {
+                // Invalid data length
+                if inherent.data.len() != Address::SIZE {
                     return Err(AccountError::InvalidInherent);
                 }
 
@@ -556,7 +556,8 @@ impl AccountInherentInteraction for StakingContract {
                 }
 
                 // Inherent slashes more than staked by address
-                if inherent.value > self.get_balance(&inherent.target) {
+                let staker_address = Deserialize::deserialize(&mut &inherent.data[..])?;
+                if inherent.value > self.get_balance(&staker_address) {
                     return Err(AccountError::InvalidForTarget)
                 }
 
@@ -574,8 +575,9 @@ impl AccountInherentInteraction for StakingContract {
         let mut active_slashed = false;
 
         let mut to_pay = inherent.value;
+        let staker_address = Deserialize::deserialize(&mut &inherent.data[..])?;
 
-        if let Some(active_stake) = self.active_stake_by_address.remove(&inherent.target) {
+        if let Some(active_stake) = self.active_stake_by_address.remove(&staker_address) {
             self.active_stake_sorted.remove(&active_stake);
             if to_pay < active_stake.balance {
                 // Slash active stake partially
@@ -603,7 +605,7 @@ impl AccountInherentInteraction for StakingContract {
             }
         }
 
-        if let Some(inactive_stake) = self.inactive_stake_by_address.get_mut(&inherent.target) {
+        if let Some(inactive_stake) = self.inactive_stake_by_address.get_mut(&staker_address) {
             if active_slashed {
                 receipt.split = to_pay;
             }
@@ -622,7 +624,7 @@ impl AccountInherentInteraction for StakingContract {
                 receipt.inactive = Some(InactiveStakeReceipt {
                     retire_time: inactive_stake.retire_time,
                 });
-                self.inactive_stake_by_address.remove(&inherent.target);
+                self.inactive_stake_by_address.remove(&staker_address);
                 Ok(Some(receipt.serialize_to_vec()))
             } else {
                 return Err(AccountError::InvalidForTarget);
@@ -633,10 +635,12 @@ impl AccountInherentInteraction for StakingContract {
     }
 
     fn revert_inherent(&mut self, inherent: &Inherent, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        let staker_address = Deserialize::deserialize(&mut &inherent.data[..])?;
+
         if receipt.is_none() {
             // No receipt: Either inactive or active stake was partially slashed
 
-            if let Some(active_stake) = self.active_stake_by_address.remove(&inherent.target) {
+            if let Some(active_stake) = self.active_stake_by_address.remove(&staker_address) {
                 // Revert partial slash of active stake
                 self.active_stake_sorted.remove(&active_stake);
                 let mut new_active_stake = active_stake.clone();
@@ -650,7 +654,7 @@ impl AccountInherentInteraction for StakingContract {
                 return Ok(());
             }
 
-            if let Some(inactive_stake) = self.inactive_stake_by_address.get_mut(&inherent.target) {
+            if let Some(inactive_stake) = self.inactive_stake_by_address.get_mut(&staker_address) {
                 // Revert partial slash of inactive stake
                 inactive_stake.balance = Account::balance_add(inactive_stake.balance, inherent.value)?;
                 self.balance = Account::balance_add(self.balance, inherent.value)?;
@@ -668,19 +672,19 @@ impl AccountInherentInteraction for StakingContract {
         if let Some(ref active_receipt) = receipt.active {
             // Add back entire active stake
             let active_value = Account::balance_sub(inherent.value, receipt.split)?;
-            if self.active_stake_by_address.get(&inherent.target).is_some() {
+            if self.active_stake_by_address.get(&staker_address).is_some() {
                 return Err(AccountError::InvalidForTarget);
             }
 
             let active_stake = Arc::new(ActiveStake {
-                staker_address: inherent.target.clone(),
+                staker_address: staker_address.clone(),
                 balance: active_value,
                 validator_key: active_receipt.validator_key.clone(),
                 reward_address: active_receipt.reward_address.clone(),
             });
 
             self.active_stake_sorted.insert(Arc::clone(&active_stake));
-            self.active_stake_by_address.insert(inherent.target.clone(), active_stake);
+            self.active_stake_by_address.insert(staker_address.clone(), active_stake);
 
             // Nothing split, done reverting
             if receipt.split == Coin::ZERO {
@@ -696,7 +700,7 @@ impl AccountInherentInteraction for StakingContract {
 
         if let Some(ref inactive_receipt) = receipt.inactive {
             // Add back entire inactive stake
-            let previous = self.inactive_stake_by_address.insert(inherent.target.clone(), InactiveStake {
+            let previous = self.inactive_stake_by_address.insert(staker_address.clone(), InactiveStake {
                 balance: inactive_balance,
                 retire_time: inactive_receipt.retire_time,
             });
@@ -705,7 +709,7 @@ impl AccountInherentInteraction for StakingContract {
             }
         } else {
             // Add partial inactive stake
-            let inactive_stake = self.inactive_stake_by_address.get_mut(&inherent.target);
+            let inactive_stake = self.inactive_stake_by_address.get_mut(&staker_address);
             if inactive_stake.is_none() {
                 return Err(AccountError::InvalidForTarget);
             }

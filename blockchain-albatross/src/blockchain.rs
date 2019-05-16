@@ -296,7 +296,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidSuccessor)
                     },
                     Some((idx, slot)) => {
-                        if !fork_proof.verify(&slot.public_key.uncompress_unchecked()) {
+                        if !fork_proof.verify(&slot.public_key.uncompress_unchecked()).is_ok() {
                             warn!("Rejecting block - Bad fork proof: invalid owner signature");
                             return Err(PushError::InvalidSuccessor)
                         }

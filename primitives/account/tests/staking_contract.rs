@@ -414,7 +414,7 @@ fn it_can_verify_inherent() {
     assert_eq!(contract.check_inherent(&inherent_2), Err(AccountError::InvalidInherent));
     assert_eq!(contract.commit_inherent(&inherent_2), Err(AccountError::InvalidInherent));
 
-    // Slash inherent with extra data
+    // Slash inherent with invalid data
     let mut inherent_3 = inherent_2.clone();
     inherent_3.value = Coin::from_u64_unchecked(38u64);
     inherent_3.data = Vec::from(&[42u8][..]);
@@ -431,9 +431,9 @@ fn it_can_apply_slash_inherent() {
 
     let make_slash = |value: u64| Inherent {
         ty: InherentType::Slash,
-        target: address.clone(),
+        target: Address::default(),
         value: Coin::from_u64_unchecked(value),
-        data: Vec::new(),
+        data: address.serialize_to_vec(),
     };
 
     let assert_balance = |contract: &StakingContract, value: u64| {

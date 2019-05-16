@@ -41,10 +41,14 @@ pub enum BlockError {
     NoJustification,
     NoViewChangeProof,
 
-    DuplicateTransaction,
+    InvalidForkProof,
+    DuplicateForkProof,
+    ForkProofsNotOrdered,
+
     InvalidTransaction(TransactionError),
-    ExpiredTransaction,
+    DuplicateTransaction,
     TransactionsNotOrdered,
+    ExpiredTransaction,
 
     DuplicateReceipt,
     InvalidReceipt,

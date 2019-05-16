@@ -89,25 +89,29 @@ impl ValidatorAgent {
     fn on_fork_proof_message(&self, fork_proof: ForkProof) {
         debug!("[FORK-PROOF] Fork proof:");
 
-        if let Some((block_number, view_number)) = fork_proof.pre_verify() {
-            debug!("[FORK-PROOF] Header 1: {:?}", fork_proof.header1);
-            debug!("[FORK_PROOF] Header 2: {:?}", fork_proof.header2);
+        if !fork_proof.is_valid_at(self.blockchain.block_number() + 1) {
+            debug!("[FORK-PROOF] Not valid");
+            return;
+        }
 
-            if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number) {
-                if fork_proof.verify(&slot.public_key.uncompress_unchecked()) {
-                    self.notifier.read().notify(ValidatorAgentEvent::ForkProof(fork_proof))
-                }
-                else {
-                    debug!("[FORK-PROOF] Invalid signature in fork proof");
-                }
-            }
-            else {
-                debug!("[FORK-PROOF] Unknown block producer: block_number={}, view_number={}", block_number, view_number);
-            }
+        debug!("[FORK-PROOF] Header 1: {:?}", fork_proof.header1);
+        debug!("[FORK_PROOF] Header 2: {:?}", fork_proof.header2);
+        let block_number = fork_proof.block_number();
+        let view_number = fork_proof.view_number();
+
+        let producer = self.blockchain.get_block_producer_at(block_number, view_number);
+        if producer.is_none() {
+            debug!("[FORK-PROOF] Unknown block producer: block_number={}, view_number={}", block_number, view_number);
+            return;
         }
-        else {
-            debug!("[FORK-PROOF] pre-verify failed:");
+
+        let slot = producer.unwrap().1;
+        if let Err(e) = fork_proof.verify(&slot.public_key.uncompress_unchecked()) {
+            debug!("[FORK-PROOF] Invalid signature in fork proof: {:?}", e);
+            return;
         }
+
+        self.notifier.read().notify(ValidatorAgentEvent::ForkProof(fork_proof));
     }
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
