@@ -1,13 +1,15 @@
+use std::cmp;
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::sync::Arc;
-use std::cmp;
 
 use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 
 use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
+use beserial::Serialize;
 use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock};
 use block::{ForkProof, ViewChange};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
@@ -31,7 +33,6 @@ use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::reward_registry::SlashRegistry;
 use crate::transaction_cache::TransactionCache;
-use std::cmp::Ordering;
 
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
@@ -764,22 +765,38 @@ impl<'env> Blockchain<'env> {
     pub fn inherent_from_fork_proof(&self, fork_proof: &ForkProof) -> Inherent {
         let producer = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number)
             .expect("Failed to create inherent from fork proof - could not get block producer");
+        let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         Inherent {
             ty: InherentType::Slash,
-            target: producer.1.staker_address.clone(),
-            value: self.macro_head().extrinsics.as_ref().unwrap().slash_fine.try_into().unwrap(),
-            data: vec![]
+            target: validator_registry.clone(),
+            value: self.slash_fine_at(fork_proof.header1.block_number),
+            data: producer.1.staker_address.serialize_to_vec(),
         }
     }
 
+    /// Expects a *verified* proof!
     pub fn inherent_from_view_change(&self, view_change_proof: &ViewChange) -> Inherent {
         let producer = self.get_block_producer_at(view_change_proof.block_number, view_change_proof.new_view_number - 1)
             .expect("Failed to create inherent from view change - could not get block producer");
+        let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         Inherent {
             ty: InherentType::Slash,
-            target: producer.1.staker_address.clone(),
-            value: self.macro_head().extrinsics.as_ref().unwrap().slash_fine.try_into().unwrap(),
-            data: vec![]
+            target: validator_registry.clone(),
+            value: self.slash_fine_at(view_change_proof.block_number),
+            data: producer.1.staker_address.serialize_to_vec(),
+        }
+    }
+
+    fn slash_fine_at(&self, block_number: u32) -> Coin {
+        let current_epoch = policy::epoch_at(self.block_number());
+        let fork_epoch = policy::epoch_at(block_number);
+        if fork_epoch == current_epoch {
+            self.current_slots().slash_fine()
+        } else if fork_epoch + 1 == current_epoch {
+            self.last_slots().slash_fine()
+        } else {
+            // TODO Error handling
+            panic!("Tried to retrieve slash fine outside of reporting window");
         }
     }
 
