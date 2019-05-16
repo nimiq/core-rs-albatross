@@ -411,6 +411,8 @@ impl<'env> Blockchain<'env> {
             state.current_validators.replace(validators);
         }
 
+        let block_type = chain_info.head.ty();
+
         state.main_chain = chain_info;
         state.head_hash = block_hash.clone();
         txn.commit();
@@ -420,6 +422,10 @@ impl<'env> Blockchain<'env> {
 
         let event = BlockchainEvent::Extended(block_hash);
         self.notifier.read().notify(event);
+
+        if block_type == BlockType::Macro {
+            self.notifier.read().notify(BlockchainEvent::Finalized);
+        }
 
         Ok(PushResult::Extended)
     }

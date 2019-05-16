@@ -209,7 +209,7 @@ impl Validator {
         // Handle each block type (which is directly related to each event type).
         match event {
             BlockchainEvent::Finalized => self.on_blockchain_finalized(), // i.e. a macro block was accepted
-            BlockchainEvent::Extended(hash) => self.on_blockchain_extended(hash), // i.e. a micro block was accepted
+            BlockchainEvent::Extended(hash) => self.on_blockchain_extended(hash),
             BlockchainEvent::Rebranched(old_chain, new_chain) =>
                 self.on_blockchain_rebranched(old_chain, new_chain),
         }

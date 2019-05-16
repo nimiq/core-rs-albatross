@@ -153,31 +153,21 @@ pub struct CompressedPublicKeys {
     slot_allocation: BitSet,
 }
 
-// CHECKME: Check for performance
 impl From<Slots> for CompressedPublicKeys {
-    fn from(mut slots: Slots) -> Self {
+    fn from(slots: Slots) -> Self {
         let size = slots.len();
         let mut public_keys = Vec::with_capacity(size);
         let mut slot_allocation = BitSet::with_capacity(size);
 
-        let mut current_public_key = slots.get(0).public_key.clone();
-
-        for (i, slot) in slots.into_iter().enumerate().skip(1) {
-            if slot.public_key == current_public_key {
+        for i in 1..slots.len() {
+            if slots.get(i - 1).public_key == slots.get(i).public_key {
                 slot_allocation.insert(i);
             } else {
-                current_public_key = slot.public_key.clone();
-                public_keys.push(slot.public_key);
+                public_keys.push(slots.get(i).public_key.clone());
             }
         }
 
         Self { public_keys, slot_allocation }
-    }
-}
-
-impl From<MacroExtrinsics> for Slots {
-    fn from(_: MacroExtrinsics) -> Self {
-        unimplemented!()
     }
 }
 
@@ -230,10 +220,6 @@ impl MacroBlock {
             return Err(BlockError::NoJustification);
         }
         Ok(())
-    }
-
-    pub fn is_finalized(&self) -> bool {
-        self.justification.is_some()
     }
 
     pub fn hash(&self) -> Blake2bHash {

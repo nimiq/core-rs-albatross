@@ -1,4 +1,4 @@
-/*use std::collections::btree_set::BTreeSet;
+use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use rand::thread_rng;
@@ -642,4 +642,3 @@ fn make_outgoing_transaction() -> Transaction {
     tx.sender_type = AccountType::Staking;
     tx
 }
-*/
