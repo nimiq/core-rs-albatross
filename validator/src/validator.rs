@@ -84,6 +84,7 @@ pub struct ValidatorState {
     slots: Option<u16>,
     status: ValidatorStatus,
     fork_proof_pool: ForkProofPool,
+    view_number: u32,
 }
 
 impl Validator {
@@ -114,13 +115,15 @@ impl Validator {
             state: RwLock::new(ValidatorState {
                 pk_idx: None,
                 slots: None,
-                status: ValidatorStatus::None,
+                status: ValidatorStatus::Active,
                 fork_proof_pool: ForkProofPool::new(),
+                view_number: 0,
             }),
 
             self_weak: MutableOnce::new(Weak::new()),
         });
         Validator::init_listeners(&this);
+        this.init_validator();
         Ok(this)
     }
 
@@ -193,6 +196,8 @@ impl Validator {
         let state = self.state.read();
         let status = &state.status;
 
+        trace!("Blockchain event: {:?}", event);
+
         // Blockchain events are only intersting to validators (potential or active).
         if *status == ValidatorStatus::None || *status == ValidatorStatus::Synced {
             return;
@@ -215,9 +220,11 @@ impl Validator {
         }
     }
 
-    // Resets the state and checks if we are on the new validator list
-    pub fn on_blockchain_finalized(&self) {
+    // TODO better name?
+    fn init_validator(&self) {
         let mut state = self.state.write();
+
+        state.view_number = 0;
 
         match self.get_pk_idx_and_slots() {
             Some((pk_idx, slots)) => {
@@ -231,7 +238,11 @@ impl Validator {
                 state.status = if self.is_potential_validator() { ValidatorStatus::Potential } else { ValidatorStatus::Synced };
             },
         }
+    }
 
+    // Resets the state and checks if we are on the new validator list
+    pub fn on_blockchain_finalized(&self) {
+        self.init_validator();
         self.validator_network.on_finality();
     }
 
@@ -255,15 +266,18 @@ impl Validator {
     }
 
     fn on_validator_network_event(&self, event: ValidatorNetworkEvent) {
-        let mut state = self.state.write();
+        {
+            let mut state = self.state.write();
 
-        // Validator network events are only intersting to active validators
-        if state.status != ValidatorStatus::Active {
-            return;
+            // Validator network events are only intersting to active validators
+            if state.status != ValidatorStatus::Active {
+                return;
+            }
         }
 
         match event {
             ValidatorNetworkEvent::ViewChangeComplete(view_change, view_change_proof) => {
+                debug!("View change complete: {:?}", view_change);
                 self.on_slot_change(SlotChange::ViewChange(view_change, view_change_proof));
             },
             ValidatorNetworkEvent::PbftProposal(hash, proposal) => self.on_pbft_proposal(hash, proposal),
@@ -282,9 +296,10 @@ impl Validator {
             SlotChange::MicroBlock => (self.blockchain.view_number(), None),
             SlotChange::ViewChange(view_change, view_change_proof) => {
                 // FIXME Track this view change and increment own view_change number.
-                //self.blockchain.push_known_view_change(view_change.block_number, view_change.new_view_number);
+
                 // Reset view change interval again.
                 self.reset_view_change_interval();
+                self.state.write().view_number += 1;
 
                 (view_change.new_view_number, Some(view_change_proof))
             },
@@ -360,12 +375,12 @@ impl Validator {
     fn start_view_change(&self) {
         let mut state = self.state.write();
 
-        info!("Starting view change");
-
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
             return;
         }
+
+        info!("Starting view change");
 
         // The number of the block that timed out.
         let block_number = self.blockchain.height() + 1;
@@ -375,6 +390,8 @@ impl Validator {
         let pk_idx = state.pk_idx.expect("Checked above that we are an active validator");
         let slots = state.slots.expect("Checked above that we are an active validator");
         let view_change_message = SignedViewChange::from_message(message, &self.validator_key.secret, pk_idx);
+
+        drop(state);
 
         // Broadcast our view change number message to the other validators.
         match self.validator_network.commit_view_change(view_change_message, &self.validator_key.public, slots) {
@@ -412,11 +429,15 @@ impl Validator {
         let state = self.state.read();
         let fork_proofs = state.fork_proof_pool.get_fork_proofs_for_block(max_size);
         let timestamp = self.consensus.network.network_time.now();
+        let view_number = state.view_number;
 
-        let block = self.block_producer.next_micro_block(fork_proofs, timestamp, vec![], view_change_proof);
+        let block = self.block_producer.next_micro_block(fork_proofs, timestamp, view_number, vec![], view_change_proof);
+        info!("Produced block: {}", block.header.hash::<Blake2bHash>());
+        trace!("{:#?}", block);
 
         // Automatically relays block.
-        self.blockchain.push(Block::Micro(block));
+        trace!("Push result: {:?}", self.blockchain.push(Block::Micro(block)));
+
     }
 
     fn is_potential_validator(&self) -> bool {

@@ -66,7 +66,7 @@ impl MockValidator {
             let block = match block_type {
                 BlockType::Micro => {
                     info!("Producing micro block: {}", block_height + 1);
-                    let micro_block = block_producer.next_micro_block(vec![], timestamp, b"Pura Vida!".to_vec(), None);
+                    let micro_block = block_producer.next_micro_block(vec![], timestamp, 0, b"Pura Vida!".to_vec(), None);
                     Block::Micro(micro_block)
                 },
 

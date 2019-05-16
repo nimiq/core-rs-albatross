@@ -86,7 +86,6 @@ pub struct ValidatorNetwork {
 
 impl ValidatorNetwork {
     pub fn new(network: Arc<Network<Blockchain<'static>>>, blockchain: Arc<Blockchain<'static>>, info: SignedValidatorInfo) -> Arc<Self> {
-        debug!("Initializing validator network: {:?}", info.message);
         let this = Arc::new(ValidatorNetwork {
             network,
             blockchain,
@@ -232,6 +231,8 @@ impl ValidatorNetwork {
     pub fn commit_view_change(&self, view_change: SignedViewChange, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
         let mut state = self.state.write();
 
+        trace!("Commit view change: {:?}", view_change);
+
         // get the proof with the specific block number and view change number
         // if it doesn't exist, create a new one.
         let proof = state.view_changes.entry(view_change.message.clone())
@@ -239,14 +240,20 @@ impl ValidatorNetwork {
 
         // Aggregate signature - if it wasn't included yet, relay it
         if proof.add_signature(public_key, slots, &view_change) {
+            let proof_complete = proof.verify(&view_change.message, TWO_THIRD_VALIDATORS).is_ok();
+            trace!("Added signature to view change proof: votes={}, complete={}", proof.num_slots, proof_complete);
+
             // if we have enough signatures, notify listeners
-            if proof.verify(&view_change.message, TWO_THIRD_VALIDATORS).is_ok() {
+            if proof_complete {
+                let proof = proof.clone().build();
+
+                drop(state); // drop before notify and broadcast
+
                 self.notifier.read()
-                    .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.message.clone(), proof.clone().build()))
+                    .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.message.clone(), proof))
             }
 
             // broadcast new view change signature
-            drop(state); // drop before broadcast
             self.broadcast_active(Message::ViewChange(Box::new(view_change.clone())));
         }
 

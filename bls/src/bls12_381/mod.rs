@@ -122,7 +122,7 @@ impl From<PublicKeyAffine> for PublicKey {
 
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str(&::hex::encode(self.compress().as_ref()))
+        write!(f, "CompressedSignature({})", &::hex::encode(self.compress().as_ref()))
     }
 }
 
@@ -140,9 +140,15 @@ impl PublicKey {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct CompressedPublicKey {
     pub(crate) p_pub: G2Compressed,
+}
+
+impl fmt::Debug for CompressedPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "CompressedSignature({})", &::hex::encode(self.p_pub.as_ref()))
+    }
 }
 
 impl PartialEq for CompressedPublicKey {
@@ -183,7 +189,7 @@ impl CompressedPublicKey {
 
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str(&::hex::encode(self.compress().as_ref()))
+        write!(f, "CompressedSignature({})", &::hex::encode(self.compress().as_ref()))
     }
 }
 
@@ -195,9 +201,15 @@ impl Signature {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct CompressedSignature {
     pub(crate) s: G1Compressed,
+}
+
+impl fmt::Debug for CompressedSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "CompressedSignature({})", &::hex::encode(self.s.as_ref()))
+    }
 }
 
 impl PartialEq for CompressedSignature {

@@ -122,7 +122,7 @@ impl PbftProof {
         self.commit.verify(&commit, validators, threshold)?;
 
         // sum up votes of signers that signed prepare and commit
-        let mut votes: u16 = (&self.prepare.signers & &self.commit.signers).iter().map(|s| {
+        let votes: u16 = (&self.prepare.signers & &self.commit.signers).iter().map(|s| {
             validators.get(s).map(|v| v.num_slots).unwrap_or(0)
         }).sum();
 

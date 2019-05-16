@@ -44,12 +44,12 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, timestamp: u64, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
+    pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, timestamp: u64, view_number: u32, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
         // TODO: Lock blockchain/mempool while constructing the block.
         // let _lock = self.blockchain.push_lock.lock();
 
         let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data);
-        let header = self.next_micro_header(timestamp, &extrinsics);
+        let header = self.next_micro_header(timestamp, view_number, &extrinsics);
         let signature = self.validator_key.sign(&header).compress();
 
         MicroBlock {
@@ -133,9 +133,8 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    fn next_micro_header(&self, timestamp: u64, extrinsics: &MicroExtrinsics) -> MicroHeader {
+    fn next_micro_header(&self, timestamp: u64, view_number: u32, extrinsics: &MicroExtrinsics) -> MicroHeader {
         let block_number = self.blockchain.height() + 1;
-        let view_number = self.blockchain.view_number();
         let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
 
         let parent_hash = self.blockchain.head_hash();
