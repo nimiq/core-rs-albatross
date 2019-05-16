@@ -156,20 +156,21 @@ impl MicroExtrinsics {
             }
             previous_receipt = Some(receipt);
 
-            // Check that the account is actually supposed to be pruned.
             match receipt {
                 Receipt::PrunedAccount(acc) => {
+                    // Check that the account is actually supposed to be pruned.
                     if !acc.account.is_to_be_pruned() {
                         return Err(BlockError::InvalidReceipt);
                     }
                 },
-                Receipt::Transaction {..} => {
-                    // TODO
-                    unimplemented!()
+                Receipt::Transaction { index, .. } => {
+                    // Check receipt index.
+                    if *index >= self.transactions.len() as u16 {
+                        return Err(BlockError::InvalidReceipt);
+                    }
                 },
-                Receipt::Inherent {..} => {
-                    // TODO
-                    unimplemented!()
+                Receipt::Inherent { .. } => {
+                    // We can't check the index here as we don't know the inherents.
                 }
             }
         }
