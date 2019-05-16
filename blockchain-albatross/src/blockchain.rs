@@ -607,7 +607,7 @@ impl<'env> Blockchain<'env> {
             Block::Micro(ref micro_block) => {
                 let extrinsics = micro_block.extrinsics.as_ref().unwrap();
                 let view_changes = ViewChanges::new(micro_block.header.block_number, self.view_number(), micro_block.header.view_number);
-                let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, view_changes);
+                let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes);
 
                 // Commit block to AccountsTree.
                 let receipts = accounts.commit(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number);
@@ -616,8 +616,6 @@ impl<'env> Blockchain<'env> {
                 }
 
                 // Verify receipts.
-                trace!("extrinsics.receipts = {:?}", &extrinsics.receipts);
-                trace!("receipts = {:?}", receipts.as_ref().unwrap());
                 if extrinsics.receipts != receipts.unwrap() {
                     return Err(PushError::InvalidBlock(BlockError::InvalidReceipt));
                 }
@@ -638,7 +636,7 @@ impl<'env> Blockchain<'env> {
 
         let extrinsics = micro_block.extrinsics.as_ref().unwrap();
         let view_changes = ViewChanges::new(micro_block.header.block_number, prev_view_number, micro_block.header.view_number);
-        let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, view_changes);
+        let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes);
 
         if let Err(e) = accounts.revert(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number, &extrinsics.receipts) {
             panic!("Failed to revert - {}", e);
@@ -781,13 +779,13 @@ impl<'env> Blockchain<'env> {
         self.state.read()
     }
 
-    pub fn create_slash_inherents(&self, fork_proofs: &Vec<ForkProof>, view_changes: Option<ViewChanges>) -> Vec<Inherent> {
+    pub fn create_slash_inherents(&self, fork_proofs: &Vec<ForkProof>, view_changes: &Option<ViewChanges>) -> Vec<Inherent> {
         let mut inherents = vec![];
         for fork_proof in fork_proofs {
             inherents.push(self.inherent_from_fork_proof(fork_proof));
         }
         if let Some(view_changes) = view_changes {
-            inherents.append(&mut self.inherents_from_view_changes(&view_changes));
+            inherents.append(&mut self.inherents_from_view_changes(view_changes));
         }
         inherents
     }

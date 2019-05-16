@@ -434,6 +434,8 @@ impl Validator {
         info!("Produced block: {}", block.header.hash::<Blake2bHash>());
         trace!("{:#?}", block);
 
+        drop(state);
+
         // Automatically relays block.
         trace!("Push result: {:?}", self.blockchain.push(Block::Micro(block)));
 
