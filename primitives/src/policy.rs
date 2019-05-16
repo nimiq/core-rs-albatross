@@ -127,28 +127,38 @@ pub const UNSTAKE_DELAY: u32 = 100; // TODO: Set.
 pub const MIN_STAKE: u64 = 100_000_000;
 
 /// Returns the height of the next macro block after given `block_height`
-pub fn macro_block_after(block_height: u32) -> u32 {
-    (block_height / EPOCH_LENGTH + 1) * EPOCH_LENGTH
+#[inline]
+pub fn macro_block_after(block_number: u32) -> u32 {
+    (block_number / EPOCH_LENGTH + 1) * EPOCH_LENGTH
 }
 
 /// Returns the height of the preceding macro block before given `block_number`
+#[inline]
 pub fn macro_block_before(block_number: u32) -> u32 {
     if block_number == 0 {
-        panic!("Called first_block_of for epoch 0");
+        panic!("Called macro_block_before with block_number 0");
     }
     (block_number - 1) / EPOCH_LENGTH * EPOCH_LENGTH
 }
 
-pub fn epoch_at(block_height: u32) -> u32 {
-    (block_height + BLOCKS_PER_EPOCH - 1) / BLOCKS_PER_EPOCH
+#[inline]
+pub fn epoch_at(block_number: u32) -> u32 {
+    (block_number + BLOCKS_PER_EPOCH - 1) / BLOCKS_PER_EPOCH
 }
 
-pub fn epoch_index_at(block_height: u32) -> u32 {
-    (block_height + BLOCKS_PER_EPOCH - 1) % BLOCKS_PER_EPOCH
+#[inline]
+pub fn epoch_index_at(block_number: u32) -> u32 {
+    (block_number + BLOCKS_PER_EPOCH - 1) % BLOCKS_PER_EPOCH
 }
 
-pub fn is_macro_block_at(block_height: u32) -> bool {
-    epoch_index_at(block_height) == BLOCKS_PER_EPOCH - 1
+#[inline]
+pub fn is_macro_block_at(block_number: u32) -> bool {
+    epoch_index_at(block_number) == BLOCKS_PER_EPOCH - 1
+}
+
+#[inline]
+pub fn last_macro_block(block_number: u32) -> u32 {
+    block_number / EPOCH_LENGTH * EPOCH_LENGTH
 }
 
 #[inline]

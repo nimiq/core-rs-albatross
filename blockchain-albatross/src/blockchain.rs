@@ -108,7 +108,7 @@ impl<'env> Blockchain<'env> {
 
         // Load macro chain from store.
         let macro_chain_info = chain_store
-            .get_chain_info_at(policy::macro_block_before(main_chain.head.block_number()), true, None)
+            .get_chain_info_at(policy::last_macro_block(main_chain.head.block_number()), true, None)
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
         let macro_head = match macro_chain_info.head {
             Block::Macro(macro_head) => macro_head,
