@@ -51,6 +51,7 @@ pub enum BlockError {
     ReceiptsNotOrdered,
 
     InvalidJustification,
+    InvalidSlash,
 }
 
 impl block_base::BlockError for BlockError {}

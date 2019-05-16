@@ -13,7 +13,7 @@ use beserial::{Deserialize, Serialize};
 use block::{Block, MacroBlock, MicroBlock};
 use bls::bls12_381::CompressedSignature as CompressedBlsSignature;
 use collections::bitset::BitSet;
-use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
+use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue, ReadTransaction, Transaction, WriteTransaction};
 use database::cursor::{ReadCursor, WriteCursor};
 use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
@@ -78,10 +78,10 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    fn get_slots_at(&self, block_number: u32) -> Slots {
+    fn get_slots_at(&self, block_number: u32, txn_option: Option<&Transaction>) -> Slots {
         // TODO: Make this more efficient.
         let macro_block = self.chain_store
-            .get_block_at(policy::macro_block_before(block_number))
+            .get_block_at(policy::macro_block_before(block_number), txn_option)
             .expect("Failed to determine slots - preceding macro block not found")
             .unwrap_macro();
 
@@ -102,7 +102,7 @@ impl<'env> SlashRegistry<'env> {
                 Ok(())
             },
             Block::Micro(ref micro_block) => {
-                let slots = self.get_slots_at(micro_block.header.block_number);
+                let slots = self.get_slots_at(micro_block.header.block_number, Some(txn));
 
                 self.reward_pot.commit_micro_block(micro_block, &slots, txn);
                 self.commit_micro_block(txn, micro_block)
@@ -227,7 +227,7 @@ impl<'env> SlashRegistry<'env> {
     #[inline]
     pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
         if let Block::Micro(ref block) = block {
-            let slots = self.get_slots_at(block.header.block_number);
+            let slots = self.get_slots_at(block.header.block_number, Some(txn));
 
             self.reward_pot.revert_micro_block(block, &slots, txn);
             self.revert_micro_block(txn, block)
@@ -247,10 +247,10 @@ impl<'env> SlashRegistry<'env> {
 
         // Get context
         let macro_block = self.chain_store
-            .get_block_at(policy::macro_block_of(epoch_number - 1))?
+            .get_block_at(policy::macro_block_of(epoch_number - 1), None)?
             .unwrap_macro();
         let prev_block = self.chain_store
-            .get_block_at(block_number - 1)
+            .get_block_at(block_number - 1, None)
             .expect("Failed to determine slot owner - preceding block not found");
 
         // Get slots of epoch
@@ -317,7 +317,7 @@ impl<'env> SlashRegistry<'env> {
 
     // Reward eligible slots at epoch (can change in next epoch)
     pub fn reward_eligible(&self, epoch_number: u32) -> Vec<Slot> {
-        let macro_block_stored = self.chain_store.get_block_at(policy::macro_block_of(epoch_number - 1)).unwrap();
+        let macro_block_stored = self.chain_store.get_block_at(policy::macro_block_of(epoch_number - 1), None).unwrap();
         let macro_block = macro_block_stored.unwrap_macro();
         let slots: Slots = macro_block.try_into().unwrap();
         let slash_bitset = self.slash_bitset(epoch_number);

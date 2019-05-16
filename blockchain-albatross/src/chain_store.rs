@@ -147,8 +147,8 @@ impl<'env> ChainStore<'env> {
         }
     }
 
-    pub fn get_block_at(&self, block_height: u32) -> Option<Block> {
-        self.get_chain_info_at(block_height, true, None)
+    pub fn get_block_at(&self, block_height: u32, txn_option: Option<&Transaction>) -> Option<Block> {
+        self.get_chain_info_at(block_height, true, txn_option)
             .map(|chain_info| chain_info.head)
     }
 

@@ -336,20 +336,6 @@ impl<'env> Blockchain<'env> {
             Block::Micro(ref micro_block) => self.push_verify_dry(&block)?,
         }
 
-        // update cached validators
-        if let Block::Macro(ref macro_block) = block {
-            let mut guard = self.state.write();
-
-            let slots = guard.current_slots.take().unwrap();
-            let validators = guard.current_validators.take().unwrap();
-            guard.last_slots.replace(slots);
-            guard.last_validators.replace(validators);
-
-            let (slot, validators) = Self::slots_and_validators_from_block(&macro_block);
-            guard.current_slots.replace(slot);
-            guard.current_validators.replace(validators);
-        }
-
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
         let chain_info = prev_info.next(block);
 
@@ -414,6 +400,15 @@ impl<'env> Blockchain<'env> {
         if let Block::Macro(ref macro_block) = chain_info.head {
             state.macro_head = macro_block.clone();
             state.macro_head_hash = block_hash.clone();
+
+            let slots = state.current_slots.take().unwrap();
+            let validators = state.current_validators.take().unwrap();
+            state.last_slots.replace(slots);
+            state.last_validators.replace(validators);
+
+            let (slot, validators) = Self::slots_and_validators_from_block(&macro_block);
+            state.current_slots.replace(slot);
+            state.current_validators.replace(validators);
         }
 
         state.main_chain = chain_info;
@@ -501,7 +496,7 @@ impl<'env> Blockchain<'env> {
         for block in blocks.iter() {
             cache_txn.prepend_block(block)
         }
-        assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.block_number()));
+        assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.block_number() + 1));
 
         // Check each fork block against TransactionCache & commit to AccountsTree and SlashRegistry.
         let mut fork_iter = fork_chain.iter().rev();
@@ -510,7 +505,10 @@ impl<'env> Blockchain<'env> {
                 Block::Macro(_) => unreachable!(),
                 Block::Micro(ref micro_block) => {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
-                        self.commit_accounts(&state.accounts, &mut write_txn, &fork_block.1.head)
+                        state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head)
+                            .map_err(|_| PushError::InvalidBlock(BlockError::InvalidSlash))
+                            .and_then(|_| self.commit_accounts(&state.accounts, &mut write_txn, &fork_block.1.head))
+
                     } else {
                         Err(PushError::DuplicateTransaction)
                     };
@@ -527,11 +525,6 @@ impl<'env> Blockchain<'env> {
                         write_txn.commit();
 
                         return Err(PushError::InvalidFork);
-                    }
-
-                    if let Err(e) = state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head) {
-                        warn!("Rejecting block - slash commit failed: {:?}", e);
-                        return Err(PushError::InvalidSuccessor);
                     }
 
                     cache_txn.push_block(&fork_block.1.head);
@@ -572,11 +565,10 @@ impl<'env> Blockchain<'env> {
 
         // Commit transaction & update head.
         self.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
-        write_txn.commit();
         state.transaction_cache = cache_txn;
-
         state.main_chain = fork_chain[0].1.clone();
         state.head_hash = fork_chain[0].0.clone();
+        write_txn.commit();
 
         // Give up lock before notifying.
         drop(state);
@@ -923,7 +915,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
 
         let mut step = 2;
         let mut height = self.height().saturating_sub(10 + step);
-        let mut opt_block = self.chain_store.get_block_at(height);
+        let mut opt_block = self.chain_store.get_block_at(height, None);
         while let Some(block) = opt_block {
             locators.push(block.header().hash());
 
@@ -939,7 +931,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
                 None => break,
             };
 
-            opt_block = self.chain_store.get_block_at(height);
+            opt_block = self.chain_store.get_block_at(height, None);
         }
 
         // Push the genesis block hash.
