@@ -53,7 +53,7 @@ pub struct Blockchain<'env> {
 pub struct BlockchainState<'env> {
     accounts: Accounts<'env>,
     transaction_cache: TransactionCache,
-    pub(crate) slash_registry: SlashRegistry<'env>,
+    pub(crate) reward_registry: SlashRegistry<'env>,
 
     pub(crate) main_chain: ChainInfo,
     head_hash: Blake2bHash,
@@ -147,7 +147,7 @@ impl<'env> Blockchain<'env> {
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,
-                slash_registry,
+                reward_registry: slash_registry,
                 main_chain,
                 head_hash,
                 macro_head,
@@ -204,7 +204,7 @@ impl<'env> Blockchain<'env> {
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,
-                slash_registry,
+                reward_registry: slash_registry,
                 main_chain,
                 head_hash: head_hash.clone(),
                 macro_head: genesis_macro_block.clone(),
@@ -386,7 +386,7 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
-        if let Err(e) = state.slash_registry.commit_block(&mut txn, &chain_info.head) {
+        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }
@@ -472,7 +472,7 @@ impl<'env> Blockchain<'env> {
                 Block::Micro(ref micro_block) => {
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block)?;
 
-                    state.slash_registry.revert_block(&mut write_txn, &current.1.head);
+                    state.reward_registry.revert_block(&mut write_txn, &current.1.head);
 
                     cache_txn.revert_block(&current.1.head);
 
@@ -529,7 +529,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidFork);
                     }
 
-                    if let Err(e) = state.slash_registry.commit_block(&mut write_txn, &fork_block.1.head) {
+                    if let Err(e) = state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head) {
                         warn!("Rejecting block - slash commit failed: {:?}", e);
                         return Err(PushError::InvalidSuccessor);
                     }
@@ -744,7 +744,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, Slot)> {
-        self.state.read().slash_registry.slot_owner(block_number, view_number)
+        self.state.read().reward_registry.slot_owner(block_number, view_number)
     }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
@@ -822,10 +822,9 @@ impl<'env> Blockchain<'env> {
         // Find slots that are eligible for rewards.
         // TODO: Get slots from macro block.
         // TODO: Proper error handling.
-        let reward_eligible = state.slash_registry.reward_eligible(epoch);
+        let reward_eligible = state.reward_registry.reward_eligible(epoch);
 
-        // TODO: Get actual reward.
-        let reward_pot: Coin = Coin::default();
+        let reward_pot: Coin = state.reward_registry.previous_reward_pot();
         let num_eligible = reward_eligible.len() as u64;
 
         let initial_reward = reward_pot / num_eligible;

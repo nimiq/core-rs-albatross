@@ -14,7 +14,7 @@ use block::{Block, MacroBlock, MicroBlock};
 use bls::bls12_381::CompressedSignature as CompressedBlsSignature;
 use collections::bitset::BitSet;
 use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
-use database::cursor::ReadCursor;
+use database::cursor::{ReadCursor, WriteCursor};
 use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
 use primitives::policy;
@@ -210,17 +210,18 @@ impl<'env> SlashRegistry<'env> {
             0u32
         };
 
-//        let mut cursor = txn.cursor(&self.slash_registry_db);
-//        let mut pos = cursor.first();
+        let mut cursor = txn.write_cursor(&self.slash_registry_db);
+        let mut pos: Option<(u32, BlockDescriptor)> = cursor.first();
 
-        // TODO: Implementation requires changes in LMDB interface.
-//        while let Some(block_number, _) = pos {
-//            if block_number < cutoff {
-//                cursor.
-//            }
-//
-//            pos = cursor.next();
-//        }
+        while let Some((block_number, _)) = pos {
+            if block_number < cutoff {
+                cursor.remove();
+            } else {
+                return;
+            }
+
+            pos = cursor.next();
+        }
     }
 
     #[inline]
