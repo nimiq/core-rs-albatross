@@ -108,7 +108,7 @@ impl TryInto<Slots> for MacroBlock {
 
 // CHECKME: Check for performance
 impl From<Slots> for MacroExtrinsics {
-    fn from(mut slots: Slots) -> Self {
+    fn from(slots: Slots) -> Self {
         let size = slots.len();
         let mut addresses = Vec::with_capacity(size);
         let mut slot_allocation = BitSet::with_capacity(size);

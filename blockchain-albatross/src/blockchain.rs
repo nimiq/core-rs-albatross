@@ -788,11 +788,11 @@ impl<'env> Blockchain<'env> {
     }
 
     fn slash_fine_at(&self, block_number: u32) -> Coin {
-        let current_epoch = policy::epoch_at(self.block_number());
-        let fork_epoch = policy::epoch_at(block_number);
-        if fork_epoch == current_epoch {
+        let current_epoch = policy::epoch_at(self.block_number() + 1);
+        let slash_epoch = policy::epoch_at(block_number);
+        if slash_epoch == current_epoch {
             self.current_slots().slash_fine()
-        } else if fork_epoch + 1 == current_epoch {
+        } else if slash_epoch + 1 == current_epoch {
             self.last_slots().slash_fine()
         } else {
             // TODO Error handling

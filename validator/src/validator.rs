@@ -384,9 +384,8 @@ impl Validator {
 
         // The number of the block that timed out.
         let block_number = self.blockchain.height() + 1;
-        let new_view_number = self.blockchain.view_number() + 1;
 
-        let message = ViewChange { block_number, new_view_number };
+        let message = ViewChange { block_number, new_view_number: state.view_number + 1 };
         let pk_idx = state.pk_idx.expect("Checked above that we are an active validator");
         let slots = state.slots.expect("Checked above that we are an active validator");
         let view_change_message = SignedViewChange::from_message(message, &self.validator_key.secret, pk_idx);
