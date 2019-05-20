@@ -33,6 +33,8 @@ pub(crate) struct Settings {
     pub mempool: Option<MempoolSettings>,
     #[serde(default)]
     pub peer_key_file: Option<String>,
+    #[serde(default)]
+    pub validator: ValidatorSettings,
 }
 
 impl Settings {
@@ -296,4 +298,41 @@ pub(crate) struct MempoolFilterSettings {
     #[serde(deserialize_with = "deserialize_coin")]
     #[serde(default)]
     pub sender_balance: Coin,
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ValidatorSettings {
+    #[serde(rename = "type")]
+    #[serde(default)]
+    pub ty: ValidatorType,
+    pub secret_key_file: Option<String>,
+    pub block_delay: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum ValidatorType {
+    None,
+    Mock,
+    Validator,
+}
+
+impl FromStr for ValidatorType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
+            "none" => ValidatorType::None,
+            "mock" => ValidatorType::Mock,
+            "validator" => ValidatorType::Validator,
+            _ => Err(())?
+        })
+    }
+}
+
+impl Default for ValidatorType {
+    fn default() -> Self {
+        ValidatorType::None
+    }
 }

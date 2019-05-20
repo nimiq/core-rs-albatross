@@ -5,7 +5,7 @@ use log::LevelFilter;
 use clap::{Arg, App, Values};
 use failure::Fail;
 
-use crate::settings::{Network, NodeType};
+use crate::settings::{Network, NodeType, ValidatorType};
 
 
 #[derive(Debug, Fail)]
@@ -18,6 +18,8 @@ pub(crate) enum ParseError {
     Network,
     #[fail(display = "Failed to parse log tag.")]
     LogTag,
+    #[fail(display = "Failed to parse validator type.")]
+    ValidatorType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +31,8 @@ pub(crate) struct Options {
     pub log_tags: HashMap<String, LevelFilter>,
     pub passive: bool,
     pub consensus_type: Option<NodeType>,
-    pub network: Option<Network>
+    pub network: Option<Network>,
+    pub validator_type: Option<ValidatorType>,
 }
 
 
@@ -84,6 +87,11 @@ impl Options {
                 .value_name("NAME")
                 .help("Configure the network to connect to, one of main (default), test or dev.")
                 .possible_values(&["main", "test", "dev"]))
+            .arg(Arg::with_name("validator")
+                .long("validator")
+                .value_name("TYPE")
+                .help("Set which validator type to run.")
+                .possible_values(&["NONE", "MOCK", "VALIDATOR"]))
     }
 
     /// Parses a command line option from a string into `T` and returns `error`, when parsing fails.
@@ -129,6 +137,7 @@ impl Options {
             passive: matches.is_present("passive"),
             consensus_type: Self::parse_option::<NodeType>(matches.value_of("consensus_type"), ParseError::ConsensusType)?,
             network: Self::parse_option::<Network>(matches.value_of("network"), ParseError::Network)?,
+            validator_type: Self::parse_option(matches.value_of("validator"), ParseError::ValidatorType)?,
         })
     }
 }

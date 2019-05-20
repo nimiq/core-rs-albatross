@@ -47,6 +47,7 @@ use failure::{Error, Fail};
 use fern::log_file;
 use futures::{Future, future};
 use log::Level;
+use rand::rngs::OsRng;
 
 use database::lmdb::{LmdbEnvironment, open};
 use lib::client::{Client, ClientBuilder, ClientInitializeFuture};
@@ -57,6 +58,7 @@ use network_primitives::protocol::Protocol;
 use network_primitives::address::NetAddress;
 use network::network_config::Seed;
 use utils::key_store::KeyStore;
+use utils::key_store::Error as KeyStoreError;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::{rpc_server, Credentials, JsonRpcConfig};
@@ -341,15 +343,44 @@ fn run() -> Result<(), Error> {
         warn!("!!!! Albatross node running");
         warn!("!!!!");
 
-        let secret_key = SecretKey::deserialize_from_vec(&hex::decode("49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f")
-            .expect("Invalid hex encdoing"))
-            .expect("Invalid secret key");
-        let validator_config = ValidatorConfig {
-            validator_key: KeyPair::from(secret_key)
+        let validator_type = cmdline.validator_type.unwrap_or_else(|| settings.validator.ty.clone());
+        match validator_type {
+            s::ValidatorType::None => {
+                info!("No validator");
+                info!("Ignoring validator config");
+                run_node::<AlbatrossConsensusProtocol, DummyBlockProducer>(client_builder, settings, ())?;
+            },
+            s::ValidatorType::Mock => {
+                info!("Mock validator");
+                info!("Ignoring validator config");
+                run_node::<AlbatrossConsensusProtocol, MockBlockProducer>(client_builder, settings, ())?;
+            },
+            s::ValidatorType::Validator => {
+                let validator_key = {
+                    // Load validator key from key store, or create a new one, if key store doesn't exist
+                    let key_store_file = files.validator_key()?;
+                    let key_store = KeyStore::new(key_store_file.to_str().unwrap().to_string());
+                    if !key_store_file.exists() {
+                        info!("Generating validator key");
+                        let key_pair = KeyPair::generate(&mut OsRng::new()?);
+                        key_store.save_key(&key_pair);
+                        key_pair
+                    }
+                    else {
+                        key_store.load_key()?
+                    }
+                };
+
+                let validator_config = ValidatorConfig {
+                    validator_key,
+                    block_delay: settings.validator.block_delay.unwrap_or(1000),
+                };
+                run_node::<AlbatrossConsensusProtocol, AlbatrossBlockProducer>(client_builder, settings, validator_config)?;
+            },
         };
 
-        run_node::<AlbatrossConsensusProtocol, AlbatrossBlockProducer>(client_builder, settings, validator_config)?;
-        //run_node::<AlbatrossConsensusProtocol, MockBlockProducer>(client_builder, settings, ())?;
+
+
     }
     else {
         run_node::<NimiqConsensusProtocol, DummyBlockProducer>(client_builder, settings, ())?;

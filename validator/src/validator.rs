@@ -66,6 +66,7 @@ pub struct Validator {
     consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
     validator_network: Arc<ValidatorNetwork>,
     validator_key: KeyPair,
+    block_delay: u64,
 
     timers: Timers<ValidatorTimer>,
 
@@ -91,7 +92,7 @@ pub struct ValidatorState {
 impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
-    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
+    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair, block_delay: u64) -> Result<Arc<Self>, Error> {
         let compressed_public_key = validator_key.public.compress();
         let info = ValidatorInfo {
             validator_id: ValidatorId::from_public_key(&compressed_public_key),
@@ -109,6 +110,7 @@ impl Validator {
             block_producer,
             consensus,
             validator_network,
+            block_delay,
 
             validator_key,
             timers: Timers::new(),
@@ -327,7 +329,7 @@ impl Validator {
                     BlockType::Macro => { this.produce_macro_block(view_change_proof) },
                     BlockType::Micro => { this.produce_micro_block(view_change_proof) },
                 }
-            }, Duration::from_millis(100));
+            }, Duration::from_millis(self.block_delay));
         }
     }
 

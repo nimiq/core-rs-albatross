@@ -22,12 +22,14 @@ pub enum Error {
 pub struct FileLocations {
     config: PathBuf,
     peer_key: PathBuf,
+    validator_key: PathBuf,
     database_parent: PathBuf,
 }
 
 impl FileLocations {
     const CONFIG_FILE: &'static str = "client.toml";
     const PEER_KEY_FILE: &'static str = "peer_key.dat";
+    const VALIDATOR_KEY_FILE: &'static str = "validator_key.dat";
 
     const EXAMPLE_CONFIG: &'static str = include_str!("../client.example.toml");
 
@@ -71,6 +73,7 @@ impl FileLocations {
         Ok(FileLocations {
             config: nimiq_home.join(Self::CONFIG_FILE),
             peer_key: nimiq_home.join(Self::PEER_KEY_FILE),
+            validator_key: nimiq_home.join(Self::VALIDATOR_KEY_FILE),
             database_parent: nimiq_home
         })
     }
@@ -86,6 +89,7 @@ impl FileLocations {
         Ok(FileLocations {
             config: etc_nimiq.join(Self::CONFIG_FILE),
             peer_key: var_nimiq.join(Self::PEER_KEY_FILE),
+            validator_key: etc_nimiq.join(Self::VALIDATOR_KEY_FILE),
             database_parent: var_nimiq
         })
     }
@@ -98,6 +102,11 @@ impl FileLocations {
     /// Return default path for peer key file
     pub fn peer_key(&self) -> PathBuf {
         self.peer_key.clone()
+    }
+
+    /// Return default path for validator key file
+    pub fn validator_key(&self) -> PathBuf {
+        self.validator_key.clone()
     }
 
     /// Return default path for database, depending on network ID
@@ -136,6 +145,10 @@ impl LazyFileLocations {
 
     pub fn peer_key(&mut self) -> Result<PathBuf, Error> {
         Ok(self.lazy_load()?.peer_key())
+    }
+
+    pub fn validator_key(&mut self) -> Result<PathBuf, Error> {
+        Ok(self.lazy_load()?.validator_key())
     }
 
     pub fn database(&mut self, network: NetworkId) -> Result<PathBuf, Error> {
