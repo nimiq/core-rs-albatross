@@ -358,7 +358,9 @@ fn run() -> Result<(), Error> {
             s::ValidatorType::Validator => {
                 let validator_key = {
                     // Load validator key from key store, or create a new one, if key store doesn't exist
-                    let key_store_file = files.validator_key()?;
+                    let key_store_file = settings.validator.key_file.clone()
+                        .map(|s| Ok(PathBuf::from(s)))
+                        .unwrap_or_else(|| files.validator_key())?;
                     let key_store = KeyStore::new(key_store_file.to_str().unwrap().to_string());
                     if !key_store_file.exists() {
                         info!("Generating validator key");

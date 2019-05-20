@@ -306,7 +306,7 @@ pub(crate) struct ValidatorSettings {
     #[serde(rename = "type")]
     #[serde(default)]
     pub ty: ValidatorType,
-    pub secret_key_file: Option<String>,
+    pub key_file: Option<String>,
     pub block_delay: Option<u64>,
 }
 

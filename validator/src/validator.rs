@@ -177,16 +177,7 @@ impl Validator {
     }
 
     pub fn on_consensus_established(&self) {
-        let mut state = self.state.write();
-
-        // TODO: Sync fork proof pool?
-
-        if self.is_potential_validator() {
-            state.status = ValidatorStatus::Potential;
-        } else {
-            // FIXME Set up everything to keep checking if we are with every validator registry change event.
-            state.status = ValidatorStatus::Synced;
-        }
+        self.init_validator();
     }
 
     pub fn on_consensus_lost(&self) {
