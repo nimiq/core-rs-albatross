@@ -252,6 +252,9 @@ impl ValidatorNetwork {
                 self.notifier.read()
                     .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.message.clone(), proof))
             }
+            else {
+                drop(state);
+            }
 
             // broadcast new view change signature
             self.broadcast_active(Message::ViewChange(Box::new(view_change.clone())));
