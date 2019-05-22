@@ -2,6 +2,7 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 use itertools::{EitherOrBoth, Itertools};
 use beserial::{Serialize, Deserialize, uvar, SerializingError, ReadBytesExt, WriteBytesExt, FromPrimitive, ToPrimitive};
 use std::fmt;
+use std::iter::repeat;
 
 
 #[inline]
@@ -110,24 +111,19 @@ impl BitSet {
         self.count = count;
     }
 
+    /// Infinite iterator of excluded items
+    pub fn iter_excluded<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
+        self.iter_bits()
+            .chain(repeat(false))
+            .enumerate()
+            .filter_map(|(i, one)| if one { None } else { Some(i) })
+    }
+
+    /// Iterator of included items
     pub fn iter<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
-        let it = self.store.iter();
-        it.enumerate().flat_map(|(i, &block)| {
-            let mut values: Vec<usize> = Vec::with_capacity(64);
-            if block != 0 {
-                let mut j = 0;
-                let mut x = block;
-                while x > 0 {
-                    if x & 1 != 0 {
-                        values.push(i * 64 + j);
-                    }
-                    // XXX we can skip multiple trailing zeros by using u64::trailing_zeros
-                    x >>= 1;
-                    j += 1
-                }
-            }
-            values.into_iter()
-        })
+        self.iter_bits()
+            .enumerate()
+            .filter_map(|(i, one)| if one { Some(i) } else { None })
     }
 
     pub fn iter_bits<'a>(&'a self) -> impl Iterator<Item=bool> + 'a {
