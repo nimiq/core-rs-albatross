@@ -55,7 +55,7 @@ beserial = { path = "../beserial", version = "0.1.0" }
 [features]
 default = ["all"]
 #all = ["rpc-server", "metrics-server", "deadlock-detection", "human-panic"]
-all = ["rpc-server", "deadlock-detection"]
+all = ["rpc-server", "metrics-server", "deadlock-detection"]
 rpc-server = ["nimiq-rpc-server"]
 metrics-server = ["nimiq-metrics-server"]
 deadlock-detection = ["parking_lot"]

@@ -15,12 +15,12 @@ use std::sync::Arc;
 use futures::{future::Future};
 use hyper::Server;
 
-use consensus::{Consensus, ConsensusProtocol, NimiqConsensusProtocol};
+use consensus::{Consensus, ConsensusProtocol};
 
 use crate::error::Error;
-use crate::metrics::chain::*; // FIXME
 use crate::metrics::mempool::MempoolMetrics;
 use crate::metrics::network::NetworkMetrics;
+pub use crate::metrics::chain::{AbstractChainMetrics, NimiqChainMetrics, AlbatrossChainMetrics};
 
 macro_rules! attributes {
     // Empty attributes.

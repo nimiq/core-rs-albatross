@@ -4,7 +4,6 @@ use std::sync::Arc;
 use blockchain::Blockchain;
 use blockchain_base::AbstractBlockchain;
 use blockchain_albatross::Blockchain as AlbatrossBlockchain;
-use block_albatross::Block as AlbatrossBlock;
 use block::Difficulty;
 use consensus::{ConsensusProtocol, AlbatrossConsensusProtocol, NimiqConsensusProtocol};
 
@@ -31,7 +30,7 @@ pub trait AbstractChainMetrics<P: ConsensusProtocol + 'static> {
 
 
 
-struct NimiqChainMetrics {
+pub struct NimiqChainMetrics {
     blockchain: Arc<Blockchain<'static>>,
 }
 
@@ -61,7 +60,7 @@ impl Metrics for NimiqChainMetrics {
 
 
 
-struct AlbatrossChainMetrics {
+pub struct AlbatrossChainMetrics {
     blockchain: Arc<AlbatrossBlockchain<'static>>,
 }
 
