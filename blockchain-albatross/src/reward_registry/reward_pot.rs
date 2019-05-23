@@ -1,5 +1,5 @@
 use block::{Block, MacroBlock, MicroBlock};
-use database::{AsDatabaseBytes, Database, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
+use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use primitives::coin::Coin;
 use primitives::policy;
 use primitives::validators::Slots;

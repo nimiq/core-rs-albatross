@@ -1,19 +1,15 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
-use std::convert::TryInto;
 use std::io;
 use std::io::Write;
-use std::ops::Bound::{Excluded, Included, Unbounded};
+use std::iter::FromIterator;
 use std::sync::Arc;
 
 use failure::Fail;
 
-use account::StakingContract;
 use beserial::{Deserialize, Serialize};
-use block::{Block, MacroBlock, MicroBlock};
-use bls::bls12_381::CompressedSignature as CompressedBlsSignature;
+use block::{Block, MicroBlock};
 use collections::bitset::BitSet;
-use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue, ReadTransaction, Transaction, WriteTransaction};
+use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
 use database::cursor::{ReadCursor, WriteCursor};
 use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
@@ -24,6 +20,9 @@ use crate::chain_store::ChainStore;
 use crate::reward_registry::reward_pot::RewardPot;
 
 mod reward_pot;
+mod slashed_slots;
+
+pub use crate::reward_registry::slashed_slots::SlashedSlots;
 
 pub struct SlashRegistry<'env> {
     env: &'env Environment,
@@ -43,6 +42,14 @@ pub enum SlashPushError {
     InvalidEpochTarget,
     #[fail(display = "Got block with unexpected block number")]
     UnexpectedBlock,
+}
+
+#[derive(Debug, Fail)]
+pub enum EpochStateError {
+    #[fail(display = "Block precedes requested epoch")]
+    BlockPrecedesEpoch,
+    #[fail(display = "Requested epoch too old to be tracked at block number")]
+    HistoricEpoch,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -189,22 +196,20 @@ impl<'env> SlashRegistry<'env> {
     }
 
     fn gc(&self, txn: &mut WriteTransaction, current_epoch: u32) {
+        let mut cursor = txn.write_cursor(&self.slash_registry_db);
+        let mut pos: Option<(u32, BlockDescriptor)> = cursor.first();
+
         let cutoff = if current_epoch > 2 {
             policy::first_block_of(current_epoch - 1)
         } else {
             0u32
         };
 
-        let mut cursor = txn.write_cursor(&self.slash_registry_db);
-        let mut pos: Option<(u32, BlockDescriptor)> = cursor.first();
-
         while let Some((block_number, _)) = pos {
-            if block_number < cutoff {
-                cursor.remove();
-            } else {
+            if block_number >= cutoff {
                 return;
             }
-
+            cursor.remove();
             pos = cursor.next();
         }
     }
@@ -234,7 +239,8 @@ impl<'env> SlashRegistry<'env> {
             .expect("Failed to determine slot owner - preceding block not found");
 
         // Get slots of epoch
-        let honest_validators = self.enabled_slots(block_number, slots);
+        let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number).unwrap();
+        let honest_validators = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
 
         // Hash seed and index
         let mut hash_state = Blake2bHasher::new();
@@ -252,58 +258,26 @@ impl<'env> SlashRegistry<'env> {
         Some((index as u16, honest_validators[index as usize].clone()))
     }
 
-    fn without_slashes(slots: &Slots, slashes: Option<BitSet>) -> Vec<&Slot> {
-        let mut idx = 0usize;
-        let mut vec = Vec::<&Slot>::with_capacity(slots.len());
-
-        // Iterate over slashed slots bit set
-        if let Some(slashes) = slashes {
-            for slashed in slashes.iter_bits() {
-                if !slashed {
-                    vec.push(&slots.get(idx))
-                }
-                idx += 1;
-            }
-        }
-
-        // Copy rest if BitSet smaller than list of validators
-        for i in idx..slots.len() {
-            vec.push(slots.get(i));
-        }
-
-        vec
+    // Get latest known slash set of epoch
+    pub fn slashed_set(&self, epoch_number: u32) -> BitSet {
+        self.slashed_set_at(epoch_number, policy::first_block_of(epoch_number + 2)).unwrap()
     }
 
-    pub fn slash_bitset(&self, epoch_number: u32) -> Option<BitSet> {
-        let txn = ReadTransaction::new(self.env);
-
-        // Lookup slash state.
-        let mut cursor = txn.cursor(&self.slash_registry_db);
-        // Move cursor to first entry with a block number >= ours (or end of the database).
-        let _: Option<(u32, BlockDescriptor)> = cursor.seek_range_key(&policy::first_block_of(epoch_number + 2));
-        // Then move cursor back by one.
-        let last_change: Option<(u32, BlockDescriptor)> = cursor.prev();
-
-        if let Some((change_block_number, change)) = last_change {
-            if change_block_number >= policy::first_block_of(epoch_number + 1) {
-                return Some(change.prev_epoch_state);
-            } else if change_block_number >= policy::first_block_of(epoch_number) {
-                return Some(change.epoch_state);
-            }
-        }
-        None
-    }
-
-    // Reward eligible slots at epoch (can change in next epoch)
-    pub fn reward_eligible(&self, epoch_number: u32, slots: Slots) -> Vec<Slot> {
-        let slash_bitset = self.slash_bitset(epoch_number);
-        Self::without_slashes(&slots, slash_bitset).iter().map(|slot| (*slot).clone()).collect()
-    }
-
-    // Get enabled slots up to block number
-    fn enabled_slots<'a>(&self, block_number: u32, slots: &'a Slots) -> Vec<&'a Slot> {
-        // Get last change of slots (diff.block_number <= block_number)
+    // Get slash set of epoch at specific block number
+    // Returns slash set before applying block with that block_number (TODO Tests)
+    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32) -> Result<BitSet, EpochStateError> {
         let epoch_start = policy::first_block_of(policy::epoch_at(block_number));
+
+        // Epoch cannot have slashes if in the future
+        if block_number < epoch_start {
+            return Err(EpochStateError::BlockPrecedesEpoch);
+        }
+
+        // Epoch slashes are only tracked for two epochs
+        // First block of (epoch + 2) is fine because upper lookup bound is exclusive.
+        if block_number > policy::first_block_of(epoch_number + 2) {
+            return Err(EpochStateError::HistoricEpoch);
+        }
 
         let txn = ReadTransaction::new(self.env);
 
@@ -314,15 +288,15 @@ impl<'env> SlashRegistry<'env> {
         // Then move cursor back by one.
         let last_change: Option<(u32, BlockDescriptor)> = cursor.prev();
 
-        let slashes = if let Some((change_block_number, change)) = last_change {
+        if let Some((change_block_number, change)) = last_change {
             if change_block_number >= epoch_start {
-                Some(change.epoch_state)
+                Ok(change.epoch_state)
             } else {
-                None
+                Ok(BitSet::new())
             }
-        } else { None };
-
-        Self::without_slashes(slots, slashes)
+        } else {
+            Ok(BitSet::new())
+        }
     }
 }
 

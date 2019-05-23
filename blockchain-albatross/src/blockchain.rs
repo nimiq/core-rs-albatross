@@ -2,6 +2,7 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::convert::TryInto;
+use std::iter::FromIterator;
 use std::sync::Arc;
 
 use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
@@ -10,10 +11,11 @@ use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
 use beserial::Serialize;
-use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock, ForkProof, ViewChange, ViewChanges};
+use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock, ForkProof, ViewChanges};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
+use collections::bitset::BitSet;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::{Blake2bHash, SerializeContent};
 use keys::Address;
@@ -30,8 +32,9 @@ use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
-use crate::reward_registry::SlashRegistry;
+use crate::reward_registry::{SlashRegistry, SlashedSlots};
 use crate::transaction_cache::TransactionCache;
+use std::borrow::Cow;
 
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
@@ -844,6 +847,17 @@ impl<'env> Blockchain<'env> {
         RwLockReadGuard::map(guard, |s| s.last_slots.as_ref().unwrap())
     }
 
+    pub fn current_slashed_set(&self) -> BitSet {
+        let s = self.state.read();
+        s.reward_registry.slashed_set(policy::epoch_at(self.block_number()))
+    }
+
+    // Get slash set of epoch at specific block number
+    // Returns slash set before applying block with that block_number (TODO Tests)
+    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32) {
+
+    }
+
     pub fn current_validators(&self) -> MappedRwLockReadGuard<Validators> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| s.current_validators.as_ref().unwrap())
@@ -875,7 +889,8 @@ impl<'env> Blockchain<'env> {
         // Find slots that are eligible for rewards.
         // TODO: Proper error handling.
         let slots = state.last_slots.clone().expect("Slots for last epoch are missing");
-        let reward_eligible = state.reward_registry.reward_eligible(epoch, slots);
+        let slashed_set = state.reward_registry.slashed_set(epoch);
+        let reward_eligible = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
 
         let reward_pot: Coin = state.reward_registry.previous_reward_pot();
         let num_eligible = reward_eligible.len() as u64;
