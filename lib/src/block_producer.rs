@@ -69,7 +69,6 @@ pub mod mock {
 
     use consensus::{AlbatrossConsensusProtocol, Consensus};
     use validator::mock::MockValidator;
-    use bls::bls12_381::SecretKey;
 
     use super::BlockProducer;
     use crate::error::ClientError;

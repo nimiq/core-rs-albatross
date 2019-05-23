@@ -36,16 +36,12 @@ mod files;
 
 
 use std::io;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::env;
 use std::path::PathBuf;
 
 use failure::{Error, Fail};
 use fern::log_file;
-use futures::{Future, future};
+use futures::Future;
 use log::Level;
 use rand::rngs::OsRng;
 
@@ -55,10 +51,8 @@ use mempool::MempoolConfig;
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
 use network_primitives::protocol::Protocol;
-use network_primitives::address::NetAddress;
 use network::network_config::Seed;
 use utils::key_store::KeyStore;
-use utils::key_store::Error as KeyStoreError;
 use primitives::networks::NetworkId;
 #[cfg(feature = "rpc-server")]
 use rpc_server::{rpc_server, Credentials, JsonRpcConfig};
@@ -75,8 +69,7 @@ use crate::files::LazyFileLocations;
 use lib::block_producer::{BlockProducer, DummyBlockProducer};
 use lib::block_producer::albatross::{ValidatorConfig, AlbatrossBlockProducer};
 use lib::block_producer::mock::MockBlockProducer;
-use bls::bls12_381::{SecretKey, PublicKey, KeyPair};
-use beserial::Deserialize;
+use bls::bls12_381::KeyPair;
 
 
 #[derive(Debug, Fail)]
@@ -135,7 +128,7 @@ fn run_node<P, BP>(client_builder: ClientBuilder, settings: Settings, block_prod
     info!("Peer address: {} - public key: {}", consensus.network.network_config.peer_address(), consensus.network.network_config.public_key().to_hex());
 
     // Additional futures we want to run.
-    let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
+    //let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
 
     // start RPC server if enabled
     #[cfg(feature = "rpc-server")] {
@@ -365,7 +358,9 @@ fn run() -> Result<(), Error> {
                     if !key_store_file.exists() {
                         info!("Generating validator key");
                         let key_pair = KeyPair::generate(&mut OsRng::new()?);
-                        key_store.save_key(&key_pair);
+                        if let Err(ref err) = key_store.save_key(&key_pair) {
+                            warn!("Failed to save key: {}", err);
+                        }
                         key_pair
                     }
                     else {

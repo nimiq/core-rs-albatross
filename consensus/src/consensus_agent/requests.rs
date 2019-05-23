@@ -9,8 +9,8 @@ use hash::Blake2bHash;
 use network_messages::{
     Message,
     MessageAdapter,
-    GetBlockProofMessage,
-    BlockProofMessage,
+    //GetBlockProofMessage,
+    //BlockProofMessage,
     GetTransactionReceiptsMessage,
     GetTransactionsProofMessage,
     TransactionReceiptsMessage,
@@ -21,7 +21,6 @@ use network_messages::{
     AccountsTreeChunkMessage,
     AccountsTreeChunkData,
 };
-use network::connection::close_type::CloseType;
 
 use crate::consensus_agent::ConsensusAgent;
 

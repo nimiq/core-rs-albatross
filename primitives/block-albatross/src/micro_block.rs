@@ -1,5 +1,4 @@
 use std::fmt;
-use std::io;
 
 use account::Receipt;
 use beserial::{Deserialize, Serialize};

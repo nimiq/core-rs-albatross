@@ -1,6 +1,4 @@
 #[macro_use]
-extern crate log;
-#[macro_use]
 extern crate beserial_derive;
 extern crate nimiq_account as account;
 extern crate nimiq_block_base as block_base;
@@ -61,7 +59,7 @@ pub enum BlockError {
 impl block_base::BlockError for BlockError {}
 
 impl From<signed::AggregateProofError> for BlockError {
-    fn from(e: signed::AggregateProofError) -> Self {
+    fn from(_e: signed::AggregateProofError) -> Self {
         BlockError::InvalidJustification
     }
 }

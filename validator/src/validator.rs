@@ -4,17 +4,14 @@ use std::time::Duration;
 use parking_lot::RwLock;
 
 use account::Account;
-use account::Receipt;
 use block_albatross::{
     Block,
     BlockType,
     ForkProof,
     MacroBlock,
-    MacroHeader,
     MicroBlock,
     MicroExtrinsics,
     MicroHeader,
-    MicroJustification,
     PbftCommitMessage,
     PbftPrepareMessage,
     PbftProposal,
@@ -28,17 +25,12 @@ use block_albatross::{
 };
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
-use bls::bls12_381::{KeyPair, PublicKey, SecretKey};
+use bls::bls12_381::KeyPair;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
-use database::Environment;
-use hash::{Blake2bHash, Hash, SerializeContent};
-use mempool::MempoolConfig;
-use network::NetworkConfig;
+use hash::{Blake2bHash, Hash};
 use network_primitives::networks::NetworkInfo;
-use network_primitives::time::NetworkTime;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId, ValidatorInfo};
 use block_production_albatross::BlockProducer;
-use utils::key_store::{Error as KeyStoreError, KeyStore};
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
 
@@ -260,17 +252,17 @@ impl Validator {
     // Sets the state according to the rebranch
     pub fn on_blockchain_rebranched(&self, old_chain: &Vec<(Blake2bHash, Block)>, new_chain: &Vec<(Blake2bHash, Block)>) {
         let mut state = self.state.write();
-        for (hash, block) in old_chain.iter() {
+        for (_hash, block) in old_chain.iter() {
             state.fork_proof_pool.revert_block(block);
         }
-        for (hash, block) in new_chain.iter() {
+        for (_hash, block) in new_chain.iter() {
             state.fork_proof_pool.apply_block(&block);
         }
     }
 
     fn on_validator_network_event(&self, event: ValidatorNetworkEvent) {
         {
-            let mut state = self.state.write();
+            let state = self.state.write();
 
             // Validator network events are only intersting to active validators
             if state.status != ValidatorStatus::Active {
@@ -325,7 +317,7 @@ impl Validator {
     }
 
     pub fn on_pbft_proposal(&self, hash: Blake2bHash, _proposal: PbftProposal) {
-        let mut state = self.state.read();
+        let state = self.state.read();
         trace!("Received proposal: {}", hash);
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
@@ -347,7 +339,7 @@ impl Validator {
     }
 
     pub fn on_pbft_prepare_complete(&self, hash: Blake2bHash) {
-        let mut state = self.state.read();
+        let state = self.state.read();
         trace!("Complete prepare for: {}", hash);
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
@@ -382,7 +374,7 @@ impl Validator {
     }
 
     fn start_view_change(&self) {
-        let mut state = self.state.write();
+        let state = self.state.write();
 
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {

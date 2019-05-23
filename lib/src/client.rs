@@ -13,8 +13,7 @@ use primitives::networks::NetworkId;
 use utils::key_store::KeyStore;
 
 use crate::error::ClientError;
-use crate::block_producer::{BlockProducer, DummyBlockProducer};
-use crate::block_producer::albatross::AlbatrossBlockProducer;
+use crate::block_producer::BlockProducer;
 
 lazy_static! {
     pub static ref DEFAULT_USER_AGENT: String = format!("core-rs/{} (native; {} {})", env!("CARGO_PKG_VERSION"), env::consts::OS, env::consts::ARCH);

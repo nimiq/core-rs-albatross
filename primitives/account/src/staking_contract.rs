@@ -3,7 +3,6 @@ use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
-use std::str::FromStr;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use bls::bls12_381::CompressedPublicKey as BlsPublicKey;

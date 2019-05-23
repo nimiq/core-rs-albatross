@@ -3,7 +3,7 @@ use crate::address::peer_address::PeerAddress;
 use bls::bls12_381::CompressedPublicKey;
 use beserial::{Serialize, Deserialize};
 use hex::FromHex;
-use hash::{SerializeContent, Hash, Blake2bHash, HashOutput};
+use hash::{SerializeContent, Hash, Blake2bHash};
 
 
 create_typed_array!(ValidatorId, u8, 16);

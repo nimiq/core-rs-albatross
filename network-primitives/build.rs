@@ -1,6 +1,4 @@
 #[macro_use]
-extern crate human_panic;
-#[macro_use]
 extern crate log;
 
 use std::env;

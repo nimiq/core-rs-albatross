@@ -1,4 +1,4 @@
-use block::{Block, MacroBlock, MicroBlock};
+use block::{MacroBlock, MicroBlock};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use primitives::coin::Coin;
 use primitives::policy;
@@ -23,15 +23,7 @@ impl<'env> RewardPot<'env> {
         }
     }
 
-    #[inline]
-    pub fn commit_block(&self, block: &Block, slots: &Slots, txn: &mut WriteTransaction) {
-        match block {
-            Block::Macro(ref macro_block) => self.commit_macro_block(macro_block, txn),
-            Block::Micro(ref micro_block) => self.commit_micro_block(micro_block, slots, txn),
-        }
-    }
-
-    pub(super) fn commit_macro_block(&self, block: &MacroBlock, txn: &mut WriteTransaction) {
+    pub(super) fn commit_macro_block(&self, _block: &MacroBlock, txn: &mut WriteTransaction) {
         // TODO: Do we want to check that reward corresponds to the value in the MacroExtrinsics?
         let current_reward: u64 = txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY).unwrap_or(0);
         txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
@@ -45,16 +37,6 @@ impl<'env> RewardPot<'env> {
         // Add to current reward pot of epoch.
         reward += Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY).unwrap_or(0));
         txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &u64::from(reward));
-    }
-
-    #[inline]
-    pub fn revert_block(&self, block: &Block, slots: &Slots, txn: &mut WriteTransaction) {
-        if let Block::Micro(ref block) = block {
-            self.revert_micro_block(block, slots, txn)
-        } else {
-            // We should never revert macro blocks.
-            unreachable!()
-        }
     }
 
     pub(super) fn revert_micro_block(&self, block: &MicroBlock, slots: &Slots, txn: &mut WriteTransaction) {

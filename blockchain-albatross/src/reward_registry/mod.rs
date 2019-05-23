@@ -103,7 +103,7 @@ impl<'env> SlashRegistry<'env> {
         }
     }
 
-    pub fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock, slots: &Slots) -> Result<(), SlashPushError> {
+    fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock, slots: &Slots) -> Result<(), SlashPushError> {
         let block_epoch = policy::epoch_at(block.header.block_number);
         let mut epoch_diff = BitSet::new();
         let mut prev_epoch_diff = BitSet::new();
@@ -187,14 +187,6 @@ impl<'env> SlashRegistry<'env> {
         Ok(())
     }
 
-    fn safe_subtract(a: Coin, b: Coin) -> Coin {
-        if a < b {
-            Coin::ZERO
-        } else {
-            a - b
-        }
-    }
-
     fn gc(&self, txn: &mut WriteTransaction, current_epoch: u32) {
         let mut cursor = txn.write_cursor(&self.slash_registry_db);
         let mut pos: Option<(u32, BlockDescriptor)> = cursor.first();
@@ -224,15 +216,13 @@ impl<'env> SlashRegistry<'env> {
         }
     }
 
-    pub fn revert_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock) -> Result<(), SlashPushError> {
+    fn revert_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock) -> Result<(), SlashPushError> {
         txn.remove(&self.slash_registry_db, &block.header.block_number);
         Ok(())
     }
 
     // Get slot owner at block and view number
     pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots) -> Option<(u16, Slot)> {
-        let epoch_number = policy::epoch_at(block_number);
-
         // Get context
         let prev_block = self.chain_store
             .get_block_at(block_number - 1, None)
@@ -244,8 +234,8 @@ impl<'env> SlashRegistry<'env> {
 
         // Hash seed and index
         let mut hash_state = Blake2bHasher::new();
-        prev_block.seed().serialize(&mut hash_state);
-        hash_state.write(&view_number.to_be_bytes());
+        prev_block.seed().serialize(&mut hash_state).unwrap();
+        hash_state.write(&view_number.to_be_bytes()).unwrap();
         let hash = hash_state.finish();
 
         // Get number from first 8 bytes

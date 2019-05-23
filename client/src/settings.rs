@@ -12,8 +12,8 @@ use primitives::coin::Coin;
 use crate::serialization::*;
 
 pub const DEFAULT_REVERSE_PROXY_PORT: u16 = 8444;
-pub const DEFAULT_RPC_PORT: u16 = 8648;
-pub const DEFAULT_METRICS_PORT: u16 = 8649;
+//pub const DEFAULT_RPC_PORT: u16 = 8648;
+//pub const DEFAULT_METRICS_PORT: u16 = 8649;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]

@@ -4,7 +4,7 @@ use std::convert::TryInto;
 
 use keys::Address;
 use beserial::{Deserialize, Serialize};
-use bls::bls12_381::{CompressedPublicKey, CompressedSignature};
+use bls::bls12_381::CompressedSignature;
 use bls::bls12_381::lazy::LazyPublicKey;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::coin::Coin;

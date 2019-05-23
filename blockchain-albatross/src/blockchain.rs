@@ -17,7 +17,7 @@ use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 use blockchain_base::chain_metrics::BlockchainMetrics;
 use collections::bitset::BitSet;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
-use hash::{Blake2bHash, SerializeContent};
+use hash::Blake2bHash;
 use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
@@ -32,9 +32,8 @@ use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
-use crate::reward_registry::{SlashRegistry, SlashedSlots};
+use crate::reward_registry::{EpochStateError, SlashRegistry, SlashedSlots};
 use crate::transaction_cache::TransactionCache;
-use std::borrow::Cow;
 
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
@@ -43,7 +42,7 @@ pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
 pub struct Blockchain<'env> {
     pub(crate) env: &'env Environment,
     pub network_id: NetworkId,
-    network_time: Arc<NetworkTime>,
+    // TODO network_time: Arc<NetworkTime>,
     pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
     pub(crate) chain_store: Arc<ChainStore<'env>>,
     pub(crate) state: RwLock<BlockchainState<'env>>,
@@ -81,15 +80,15 @@ impl<'env> BlockchainState<'env> {
 }
 
 impl<'env> Blockchain<'env> {
-    pub fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+    pub fn new(env: &'env Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
         let chain_store = Arc::new(ChainStore::new(env));
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash)?,
-            None => Blockchain::init(env, network_time, network_id, chain_store)?
+            Some(head_hash) => Blockchain::load(env, network_id, chain_store, head_hash)?,
+            None => Blockchain::init(env, network_id, chain_store)?
         })
     }
 
-    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: Arc<ChainStore<'env>>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
+    fn load(env: &'env Environment, network_id: NetworkId, chain_store: Arc<ChainStore<'env>>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
@@ -144,7 +143,7 @@ impl<'env> Blockchain<'env> {
         Ok(Blockchain {
             env,
             network_id,
-            network_time,
+            //network_time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
             state: RwLock::new(BlockchainState {
@@ -167,7 +166,7 @@ impl<'env> Blockchain<'env> {
         })
     }
 
-    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: Arc<ChainStore<'env>>) -> Result<Self, BlockchainError> {
+    fn init(env: &'env Environment, network_id: NetworkId, chain_store: Arc<ChainStore<'env>>) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
@@ -201,7 +200,7 @@ impl<'env> Blockchain<'env> {
         Ok(Blockchain {
             env,
             network_id,
-            network_time,
+            //network_time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
             state: RwLock::new(BlockchainState {
@@ -297,7 +296,7 @@ impl<'env> Blockchain<'env> {
                         warn!("Rejecting block - Bad fork proof: Unknown block owner");
                         return Err(PushError::InvalidSuccessor)
                     },
-                    Some((idx, slot)) => {
+                    Some((_idx, slot)) => {
                         if !fork_proof.verify(&slot.public_key.uncompress_unchecked()).is_ok() {
                             warn!("Rejecting block - Bad fork proof: invalid owner signature");
                             return Err(PushError::InvalidSuccessor)
@@ -336,7 +335,7 @@ impl<'env> Blockchain<'env> {
                         .map_err(|_| BlockError::InvalidJustification)?,
                 }
             },
-            Block::Micro(ref micro_block) => self.push_verify_dry(&block)?,
+            Block::Micro(ref _micro_block) => self.push_verify_dry(&block)?,
         }
 
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
@@ -481,7 +480,8 @@ impl<'env> Blockchain<'env> {
 
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block, prev_info.head.view_number())?;
 
-                    state.reward_registry.revert_block(&mut write_txn, &current.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"));
+                    let slots = state.current_slots.as_ref().expect("Current slots missing while rebranching");
+                    state.reward_registry.revert_block(&mut write_txn, &current.1.head, slots).unwrap();
 
                     cache_txn.revert_block(&current.1.head);
 
@@ -854,8 +854,9 @@ impl<'env> Blockchain<'env> {
 
     // Get slash set of epoch at specific block number
     // Returns slash set before applying block with that block_number (TODO Tests)
-    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32) {
-
+    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32) -> Result<BitSet, EpochStateError> {
+        let s = self.state.read();
+        s.reward_registry.slashed_set_at(epoch_number, block_number)
     }
 
     pub fn current_validators(&self) -> MappedRwLockReadGuard<Validators> {
@@ -878,6 +879,7 @@ impl<'env> Blockchain<'env> {
             return vec![];
         }
 
+        /*
         let block = self.get_block_at(policy::macro_block_of(epoch), true);
         let macro_block= if let Some(Block::Macro(block)) = block {
             block
@@ -885,6 +887,7 @@ impl<'env> Blockchain<'env> {
             // TODO: Proper error handling.
             panic!("Macro block to finalize is missing");
         };
+        */
 
         // Find slots that are eligible for rewards.
         // TODO: Proper error handling.
@@ -898,8 +901,8 @@ impl<'env> Blockchain<'env> {
         let initial_reward = reward_pot / num_eligible;
         let mut remainder = reward_pot % num_eligible;
 
-        for (i, slot) in reward_eligible.iter().enumerate() {
-            let mut reward = initial_reward;
+        for slot in reward_eligible.iter() {
+            let reward = initial_reward;
 
             let inherent = Inherent {
                 ty: InherentType::Reward,
@@ -939,8 +942,8 @@ impl<'env> Blockchain<'env> {
 impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     type Block = Block;
 
-    fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
-        Blockchain::new(env, network_id, network_time)
+    fn new(env: &'env Environment, network_id: NetworkId, _network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+        Blockchain::new(env, network_id)
     }
 
     #[cfg(feature = "metrics")]
@@ -1035,14 +1038,17 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
         self.contains(hash, include_forks)
     }
 
+    #[allow(unused_variables)]
     fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof> {
         unimplemented!()
     }
 
+    #[allow(unused_variables)]
     fn get_transactions_proof(&self, block_hash: &Blake2bHash, addresses: &HashSet<Address>) -> Option<TransactionsProof> {
         unimplemented!()
     }
 
+    #[allow(unused_variables)]
     fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt> {
         unimplemented!()
     }
@@ -1063,6 +1069,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
         self.state.read().transaction_cache.contains(tx_hash)
     }
 
+    #[allow(unused_variables)]
     fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash> {
         unimplemented!()
     }

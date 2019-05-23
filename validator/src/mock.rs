@@ -2,20 +2,13 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use beserial::Deserialize;
-use block_albatross::{
-    Block, BlockType,
-    MacroBlock, MacroExtrinsics, MacroHeader,
-    MicroBlock, MicroExtrinsics, MicroHeader
-};
+use block_albatross::{Block, BlockType, MacroBlock};
 use block_production_albatross::BlockProducer;
-use blockchain_albatross::Blockchain;
-use bls::bls12_381::{KeyPair, PublicKey, SecretKey, Signature};
-use mempool::Mempool;
+use bls::bls12_381::{KeyPair, SecretKey};
 use utils::timers::Timers;
 use consensus::{Consensus, AlbatrossConsensusProtocol};
 use block_albatross::{PbftProofBuilder, PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage};
 use hash::{Hash, Blake2bHash};
-use block_albatross::signed::Message;
 
 
 const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";

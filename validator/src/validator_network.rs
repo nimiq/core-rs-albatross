@@ -11,7 +11,7 @@ use block_albatross::{
     SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder
 };
 use blockchain_albatross::Blockchain;
-use bls::bls12_381::{CompressedPublicKey, PublicKey};
+use bls::bls12_381::PublicKey;
 use hash::{Blake2bHash, Hash};
 use messages::Message;
 use network::{Network, NetworkEvent, Peer};

@@ -2,7 +2,6 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate log;
-#[macro_use]
 extern crate lazy_static;
 extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;

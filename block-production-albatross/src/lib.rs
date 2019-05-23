@@ -9,17 +9,15 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_blockchain_base as blockchain_base;
 
 use std::sync::Arc;
-use std::convert::TryFrom;
 
 use beserial::Serialize;
-use block::{Block, MicroBlock, PbftProposal, MacroHeader, MicroExtrinsics, MacroExtrinsics, MicroHeader, ViewChangeProof, ViewChange, ViewChanges};
+use block::{Block, MicroBlock, PbftProposal, MacroHeader, MicroExtrinsics, MacroExtrinsics, MicroHeader, ViewChangeProof, ViewChanges};
 use block::ForkProof;
 use blockchain::blockchain::Blockchain;
 use hash::Hash;
 use mempool::Mempool;
-use bls::bls12_381::{SecretKey, KeyPair};
+use bls::bls12_381::KeyPair;
 use block::MicroJustification;
-use primitives::coin::Coin;
 use blockchain_base::AbstractBlockchain;
 
 

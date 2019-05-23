@@ -142,6 +142,7 @@ impl<M: Message> AggregateProofBuilder<M> {
         true
     }
 
+    #[allow(unused_variables)]
     pub fn merge(&mut self, proof: &AggregateProof<M>) -> Result<Self, AggregateError> {
         unimplemented!()
     }
