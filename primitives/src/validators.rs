@@ -5,8 +5,8 @@ use crate::policy::TWO_THIRD_VALIDATORS;
 
 use beserial::{Deserialize, Serialize};
 
-use nimiq_keys::Address;
-use nimiq_bls::bls12_381::lazy::LazyPublicKey;
+use keys::Address;
+use bls::bls12_381::lazy::LazyPublicKey;
 
 use crate::coin::Coin;
 

@@ -43,8 +43,10 @@ impl std::fmt::Display for Never {
 }
 
 fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) -> Response<Body> where H: Handler {
+    let mut builder = Response::builder();
+    builder.header("Content-Type", "application/json");
     if str_o.is_err() {
-        return Response::builder()
+        return builder
             .status(StatusCode::BAD_REQUEST)
             .body(Body::from(json::stringify(object!{
                             "jsonrpc" => "2.0",
@@ -58,7 +60,7 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
     }
     let json_o = json::parse(str_o.unwrap());
     if json_o.is_err() {
-        return Response::builder()
+        return builder
             .status(StatusCode::BAD_REQUEST)
             .body(Body::from(json::stringify(object!{
                             "jsonrpc" => "2.0",
@@ -76,7 +78,7 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
         json = array![json];
     }
     if !json.is_array() {
-        return Response::builder()
+        return builder
             .status(StatusCode::BAD_REQUEST)
             .body(Body::from(json::stringify(object!{
                             "jsonrpc" => "2.0",
@@ -136,9 +138,9 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
     }
 
     if single {
-        Response::new(Body::from(results.pop().map(json::stringify).unwrap_or_else(String::new)))
+        builder.body(Body::from(results.pop().map(json::stringify).unwrap_or_else(String::new))).unwrap()
     } else {
-        Response::new(Body::from(json::stringify(JsonValue::Array(results))))
+        builder.body(Body::from(json::stringify(JsonValue::Array(results)))).unwrap()
     }
 }
 

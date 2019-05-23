@@ -36,12 +36,16 @@ mod files;
 
 
 use std::io;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 use std::env;
 use std::path::PathBuf;
 
 use failure::{Error, Fail};
 use fern::log_file;
-use futures::Future;
+use futures::{Future, future};
 use log::Level;
 use rand::rngs::OsRng;
 
@@ -51,6 +55,7 @@ use mempool::MempoolConfig;
 #[cfg(feature = "metrics-server")]
 use metrics_server::metrics_server;
 use network_primitives::protocol::Protocol;
+use network_primitives::address::NetAddress;
 use network::network_config::Seed;
 use utils::key_store::KeyStore;
 use primitives::networks::NetworkId;
@@ -70,6 +75,8 @@ use lib::block_producer::{BlockProducer, DummyBlockProducer};
 use lib::block_producer::albatross::{ValidatorConfig, AlbatrossBlockProducer};
 use lib::block_producer::mock::MockBlockProducer;
 use bls::bls12_381::KeyPair;
+use rpc_server::{AbstractRpcHandler, RpcHandler};
+use lib::error::ClientError;
 
 
 #[derive(Debug, Fail)]
@@ -117,9 +124,10 @@ fn find_config_file(cmdline: &Options, files: &mut LazyFileLocations) -> Result<
     Ok(files.config()?)
 }
 
-fn run_node<P, BP>(client_builder: ClientBuilder, settings: Settings, block_producer_config: BP::Config) -> Result<(), Error>
+fn run_node<P, BP, RH>(client_builder: ClientBuilder, settings: Settings, block_producer_config: BP::Config) -> Result<(), Error>
     where P: ConsensusProtocol + 'static,
-          BP: BlockProducer<P> + 'static
+          BP: BlockProducer<P> + 'static,
+          RH: AbstractRpcHandler<P> + 'static,
 {
     let client: ClientInitializeFuture<P, BP> = client_builder.build_client::<P, BP>(block_producer_config)?;
 
@@ -128,7 +136,7 @@ fn run_node<P, BP>(client_builder: ClientBuilder, settings: Settings, block_prod
     info!("Peer address: {} - public key: {}", consensus.network.network_config.peer_address(), consensus.network.network_config.public_key().to_hex());
 
     // Additional futures we want to run.
-    //let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
+    let mut other_futures: Vec<Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>> = Vec::new();
 
     // start RPC server if enabled
     #[cfg(feature = "rpc-server")] {
@@ -154,14 +162,12 @@ fn run_node<P, BP>(client_builder: ClientBuilder, settings: Settings, block_prod
                 warn!("'allowip' for RPC server is currently not implemented!");
             }
             info!("Starting RPC server listening on port {}", port);
-            /*other_futures.push(rpc_server(Arc::clone(&consensus), bind, port, JsonRpcConfig {
+            other_futures.push(rpc_server::<P, RH>(Arc::clone(&consensus), bind, port, JsonRpcConfig {
                 credentials,
                 methods: HashSet::from_iter(rpc_settings.methods),
                 allowip: (), // TODO
                 corsdomain: rpc_settings.corsdomain
-            })?);*/
-            //unimplemented!();
-            warn!("No RPC server right now");
+            })?);
         }
     }
     // If the RPC server is enabled, but the client is not compiled with it, inform the user
@@ -178,9 +184,7 @@ fn run_node<P, BP>(client_builder: ClientBuilder, settings: Settings, block_prod
                 .into_ip_address().unwrap();
             let port = metrics_settings.port.unwrap_or(s::DEFAULT_METRICS_PORT);
             info!("Starting metrics server listening on port {}", port);
-            //other_futures.push(metrics_server(Arc::clone(&consensus), bind, port, metrics_settings.password)?);
-            //unimplemented!();
-            warn!("No RPC server right now");
+            other_futures.push(metrics_server(Arc::clone(&consensus), bind, port, metrics_settings.password)?);
         }
     }
     // If the metrics server is enabled, but the client is not compiled with it, inform the user
@@ -194,14 +198,15 @@ fn run_node<P, BP>(client_builder: ClientBuilder, settings: Settings, block_prod
     tokio::run(
         client
             .and_then(|c| c.connect()) // Run Nimiq client
-            .and_then(|c| c)
+            // FIXME Placeholder error message
+            .and_then( move |c| future::join_all(other_futures).map_err(|_| ClientError::MissingHostname).and_then(|_| c)) // Run other futures (e.g. RPC server)
+
             .map_err(|e| error!("Client initialization failed: {}", e))
 
             //.and_then(|x| future::empty::<(), ()>())
 
             //.map(|_| info!("Client initialized")) // Map Result to None
 
-            //.and_then( move |_| future::join_all(other_futures)) // Run other futures (e.g. RPC server)
             //.map(|_| info!("Other futures finished"))
     );
     error!("Tokio exited");
@@ -341,12 +346,12 @@ fn run() -> Result<(), Error> {
             s::ValidatorType::None => {
                 info!("No validator");
                 info!("Ignoring validator config");
-                run_node::<AlbatrossConsensusProtocol, DummyBlockProducer>(client_builder, settings, ())?;
+                run_node::<AlbatrossConsensusProtocol, DummyBlockProducer, RpcHandler<AlbatrossConsensusProtocol>>(client_builder, settings, ())?;
             },
             s::ValidatorType::Mock => {
                 info!("Mock validator");
                 info!("Ignoring validator config");
-                run_node::<AlbatrossConsensusProtocol, MockBlockProducer>(client_builder, settings, ())?;
+                run_node::<AlbatrossConsensusProtocol, MockBlockProducer, RpcHandler<AlbatrossConsensusProtocol>>(client_builder, settings, ())?;
             },
             s::ValidatorType::Validator => {
                 let validator_key = {
@@ -372,15 +377,12 @@ fn run() -> Result<(), Error> {
                     validator_key,
                     block_delay: settings.validator.block_delay.unwrap_or(1000),
                 };
-                run_node::<AlbatrossConsensusProtocol, AlbatrossBlockProducer>(client_builder, settings, validator_config)?;
+                run_node::<AlbatrossConsensusProtocol, AlbatrossBlockProducer, RpcHandler<AlbatrossConsensusProtocol>>(client_builder, settings, validator_config)?;
             },
         };
-
-
-
     }
     else {
-        run_node::<NimiqConsensusProtocol, DummyBlockProducer>(client_builder, settings, ())?;
+        run_node::<NimiqConsensusProtocol, DummyBlockProducer, RpcHandler<NimiqConsensusProtocol>>(client_builder, settings, ())?;
     }
 
     Ok(())
