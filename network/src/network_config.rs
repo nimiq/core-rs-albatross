@@ -193,7 +193,8 @@ impl NetworkConfig {
             peer_id: self.peer_id.as_ref().expect("NetworkConfig is uninitialized").clone(),
         };
         if addr.protocol() == Protocol::Wss || addr.protocol() == Protocol::Ws {
-            assert!(addr.is_globally_reachable(false), "PeerAddress not globally reachable.");
+            // TODO Disabled for debugging
+            //assert!(addr.is_globally_reachable(false), "PeerAddress not globally reachable.");
         }
         addr.signature = Some(self.key_pair.as_ref().expect("NetworkConfig is uninitialized").sign(&addr.get_signature_data()[..]));
         addr
