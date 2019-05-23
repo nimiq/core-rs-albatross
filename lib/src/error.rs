@@ -28,6 +28,8 @@ pub enum ClientError {
     MissingIdentityFile,
     #[fail(display = "Block producer error")]
     BlockProducerError,
+    #[fail(display = "Client module failed")]
+    OtherFailed,
 }
 
 impl From<NetworkError> for ClientError {

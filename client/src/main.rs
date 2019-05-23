@@ -198,16 +198,10 @@ fn run_node<P, BP, RH>(client_builder: ClientBuilder, settings: Settings, block_
     tokio::run(
         client
             .and_then(|c| c.connect()) // Run Nimiq client
-            // FIXME Placeholder error message
-            .and_then( move |c| future::join_all(other_futures).map_err(|_| ClientError::MissingHostname).and_then(|_| c)) // Run other futures (e.g. RPC server)
-
+            .and_then( move |c| future::join_all(other_futures)
+                .map_err(|_| ClientError::OtherFailed)
+                .and_then(|_| c)) // Run other futures (e.g. RPC server)
             .map_err(|e| error!("Client initialization failed: {}", e))
-
-            //.and_then(|x| future::empty::<(), ()>())
-
-            //.map(|_| info!("Client initialized")) // Map Result to None
-
-            //.map(|_| info!("Other futures finished"))
     );
     error!("Tokio exited");
 
