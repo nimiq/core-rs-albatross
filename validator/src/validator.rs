@@ -110,7 +110,7 @@ impl Validator {
             state: RwLock::new(ValidatorState {
                 pk_idx: None,
                 slots: None,
-                status: ValidatorStatus::Active,
+                status: ValidatorStatus::None,
                 fork_proof_pool: ForkProofPool::new(),
                 view_number: 0,
             }),
@@ -169,10 +169,12 @@ impl Validator {
     }
 
     pub fn on_consensus_established(&self) {
+        trace!("Consensus established");
         self.init_validator();
     }
 
     pub fn on_consensus_lost(&self) {
+        trace!("Consensus lost");
         let mut state = self.state.write();
         state.status = ValidatorStatus::None;
     }
@@ -193,7 +195,7 @@ impl Validator {
 
         trace!("Blockchain event: {:?}", event);
 
-        // Blockchain events are only intersting to validators (potential or active).
+        // Blockchain events are only interesting to validators (potential or active).
         if status == ValidatorStatus::None || status == ValidatorStatus::Synced {
             return;
         }
@@ -215,7 +217,7 @@ impl Validator {
         }
     }
 
-    // TODO better name?
+    // TODO better name? This is called when a epoch begins
     fn init_validator(&self) {
         let mut state = self.state.write();
 
@@ -223,11 +225,16 @@ impl Validator {
 
         match self.get_pk_idx_and_slots() {
             Some((pk_idx, slots)) => {
+                trace!("Setting validator to active: pk_idx={}", pk_idx);
                 state.pk_idx = Some(pk_idx);
                 state.slots = Some(slots);
                 state.status = ValidatorStatus::Active;
+
+                // If we're an active validator, we need to check if we're the next block producer.
+                self.on_slot_change(SlotChange::NextBlock);
             },
             None => {
+                trace!("Setting validator to inactive");
                 state.pk_idx = None;
                 state.slots = None;
                 state.status = if self.is_potential_validator() { ValidatorStatus::Potential } else { ValidatorStatus::Synced };
@@ -301,6 +308,7 @@ impl Validator {
         // Check if we are the next block producer and act accordingly
         let (_, slot) = self.blockchain.get_next_block_producer(view_number);
         let public_key = self.validator_key.public.compress();
+        trace!("Next block producer: {:?}", public_key);
 
         if slot.public_key.compressed() == &public_key {
             let weak = self.self_weak.clone();

@@ -178,6 +178,8 @@ impl ValidatorNetwork {
     fn on_validator_info(&self, info: SignedValidatorInfo) {
         let mut state = self.state.write();
 
+        trace!("Validator info: {:?}", info.message);
+
         if let Some(agent) = state.agents.get(&info.message.peer_address.peer_id) {
             let agent = Arc::clone(&agent);
 
