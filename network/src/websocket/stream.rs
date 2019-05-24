@@ -321,10 +321,10 @@ impl Stream for NimiqMessageStream {
                     break
                 },
                 Err(e) => {
-                    if let WebSocketError::ConnectionClosed(ref frame) = e {
+                    if let WebSocketError::ConnectionClosed = e {
                         // If we haven't closed the connection, note as closed by peer.
                         if !self.state.is_closed() {
-                            self.state = WebSocketState::ClosedByPeer(frame.clone());
+                            self.state = WebSocketState::ClosedByPeer(None);
                         }
                     }
                     return Err(e.into())

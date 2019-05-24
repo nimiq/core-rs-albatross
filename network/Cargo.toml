@@ -29,7 +29,7 @@ rand = "0.6"
 reqwest = "0.9"
 tokio = "0.1"
 tokio-tls = "0.2"
-tokio-tungstenite = { git = "https://github.com/jeffesquivels/tokio-tungstenite.git", rev = "fe93abe2aac02645f3960659e30fcb68d02a8229" }
+tokio-tungstenite = "0.8"
 url = "1.7"
 beserial = { path = "../beserial", version = "0.1.0" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
@@ -43,10 +43,7 @@ nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", 
 nimiq-utils = { path = "../utils", version = "0.1.0", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
 
 [dependencies.tungstenite]
-# Uncomment when `tungstenite-rs` is released.
-# version = "0.7.0"
-git = "https://github.com/snapview/tungstenite-rs"
-rev = "8ed73fd28a34e9b6f5985f91cdc0d0bd89138156"
+version = "0.8"
 default-features = false
 
 [features]

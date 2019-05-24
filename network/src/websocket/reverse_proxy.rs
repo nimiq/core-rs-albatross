@@ -1,13 +1,13 @@
-use std::borrow::Cow;
 use std::str::from_utf8;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use tungstenite::error::{Error, Result};
-use tungstenite::handshake::server::{Callback, Request};
+use reqwest::StatusCode;
+use tungstenite::handshake::server::{Callback, ErrorResponse, Request};
 
 use network_primitives::address::NetAddress;
+
 use crate::network_config::ReverseProxyConfig;
 
 /// Struct that stores relevant data for setting up reverse proxy support.
@@ -60,19 +60,35 @@ impl ReverseProxyCallback {
 }
 
 impl<'a> Callback for &'a ReverseProxyCallback {
-    fn on_request(self, request: &Request) -> Result<Option<Vec<(String, String)>>> {
+    fn on_request(self, request: &Request) -> Result<Option<Vec<(String, String)>>, ErrorResponse> {
         if let Some(ref config) = self.reverse_proxy_config {
             if let Some(value) = request.headers.find_first(&config.header) {
-                let str_value = from_utf8(value).map_err(|_| Error::Utf8)?;
-                let str_value = str_value.split(',').next().ok_or(Error::Utf8)?; // Take first value from list.
+                let str_value = from_utf8(value).map_err(|_| ErrorResponse {
+                    error_code: StatusCode::INTERNAL_SERVER_ERROR,
+                    headers: None,
+                    body: None,
+                })?;
+                let str_value = str_value.split(',').next().ok_or(ErrorResponse {
+                    error_code: StatusCode::INTERNAL_SERVER_ERROR,
+                    headers: None,
+                    body: None,
+                })?; // Take first value from list.
                 let str_value = str_value.trim();
                 let net_address = NetAddress::from_str(str_value)
                     .map_err(|_|
-                        Error::Protocol(Cow::Borrowed("Expected header to contain the real IP from the connecting client: closing the connection"))
+                         ErrorResponse {
+                             error_code: StatusCode::INTERNAL_SERVER_ERROR,
+                             headers: None,
+                             body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
+                         }
                     )?;
                 self.remote_address.lock().replace(net_address);
             } else {
-                return Err(Error::Protocol(Cow::Borrowed("Expected header to contain the real IP from the connecting client: closing the connection")));
+                return Err(ErrorResponse {
+                        error_code: StatusCode::INTERNAL_SERVER_ERROR,
+                        headers: None,
+                        body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
+                    });
             }
         }
         Ok(None)
@@ -88,7 +104,7 @@ pub trait ToCallback<C: Callback> {
 pub struct ShareableReverseProxyCallback(Arc<ReverseProxyCallback>);
 
 impl Callback for ShareableReverseProxyCallback {
-    fn on_request(self, request: &Request) -> Result<Option<Vec<(String, String)>>> {
+    fn on_request(self, request: &Request) -> Result<Option<Vec<(String, String)>>, ErrorResponse> {
         self.0.as_ref().on_request(request)
     }
 }

@@ -66,7 +66,7 @@ impl PeerStream {
             match result {
                 Err(error) => {
                     match &error {
-                        Error::WebSocketError(WsError::ConnectionClosed(ref _frame)) => {
+                        Error::WebSocketError(WsError::ConnectionClosed) => {
                             error_closed_flag.set_closed(true);
                             let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
                             error_notifier.read().notify(PeerStreamEvent::Close(ty));
