@@ -1,18 +1,23 @@
+use std::convert::TryInto;
+use std::iter::FromIterator;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use json::{Array, JsonValue, Null};
 use parking_lot::RwLock;
 
-use block_albatross::{Block, MicroBlock};
+use block_albatross::{Block, MicroBlock, ForkProof};
+use block_albatross::signed::{AggregateProof, Message};
+use blockchain_albatross::reward_registry::SlashedSlots;
 use consensus::{Consensus, AlbatrossConsensusProtocol};
 use hash::{Blake2bHash, Hash};
 use primitives::policy;
+use primitives::validators::Slots;
 
 use crate::error::AuthenticationError;
 use crate::jsonrpc;
 use crate::{AbstractRpcHandler, JsonRpcConfig, JsonRpcServerState};
-use crate::common::RpcHandler;
+use crate::common::{RpcHandler, TransactionContext};
 
 impl AbstractRpcHandler<AlbatrossConsensusProtocol> for RpcHandler<AlbatrossConsensusProtocol> {
     fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self {
@@ -59,6 +64,8 @@ impl jsonrpc::Handler for RpcHandler<AlbatrossConsensusProtocol> {
             "getBlockTransactionCountByNumber" => Some(RpcHandler::<AlbatrossConsensusProtocol>::get_block_transaction_count_by_number),
             "getBlockByHash" => Some(RpcHandler::<AlbatrossConsensusProtocol>::get_block_by_hash),
             "getBlockByNumber" => Some(RpcHandler::<AlbatrossConsensusProtocol>::get_block_by_number),
+            "currentSlots" => Some(RpcHandler::<AlbatrossConsensusProtocol>::current_slots),
+            "lastSlots" => Some(RpcHandler::<AlbatrossConsensusProtocol>::last_slots),
 
             _ => None
         }
@@ -98,6 +105,22 @@ impl RpcHandler<AlbatrossConsensusProtocol> {
 
     fn get_block_by_number(&self, params: Array) -> Result<JsonValue, JsonValue> {
         Ok(self.block_to_obj(&self.block_by_number(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
+    }
+
+    fn current_slots(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+        let slots = self.consensus.blockchain.current_slots();
+        let slashed_set = self.consensus.blockchain.current_slashed_set();
+
+        let slashed_slots = SlashedSlots::new(&slots, &slashed_set);
+        Ok(Self::slashed_slots_to_obj(&slashed_slots))
+    }
+
+    fn last_slots(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+        let slots = self.consensus.blockchain.last_slots();
+        let slashed_set = self.consensus.blockchain.last_slashed_set();
+
+        let slashed_slots = SlashedSlots::new(&slots, &slashed_set);
+        Ok(Self::slashed_slots_to_obj(&slashed_slots))
     }
 
     // Transaction
@@ -158,9 +181,12 @@ impl RpcHandler<AlbatrossConsensusProtocol> {
     }
 
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
+        let hash = block.hash().to_hex();
+        let slots = self.consensus.blockchain.current_slots();
         match block {
             Block::Macro(ref block) => object! {
                 "type" => "macro",
+                "hash" => hash.clone(),
                 "blockNumber" => block.header.block_number,
                 "viewNumber" => block.header.view_number,
                 "parentMacroHash" => block.header.parent_macro_hash.to_hex(),
@@ -169,11 +195,16 @@ impl RpcHandler<AlbatrossConsensusProtocol> {
                 "stateRoot" => block.header.state_root.to_hex(),
                 "extrinsicsRoot" => block.header.extrinsics_root.to_hex(),
                 "timestamp" => block.header.timestamp,
-                // TODO Extrinsics
-                // TODO Justification
+                "slots" => block.clone().try_into().as_ref().map(Self::slots_to_obj).unwrap_or(Null),
+                "slashFine" => block.extrinsics.as_ref().map(|body| JsonValue::from(u64::from(body.slash_fine))).unwrap_or(Null),
+                "pbft" => block.justification.as_ref().map(|pbft| object! {
+                    "prepare" => Self::aggregate_proof_to_obj(&pbft.prepare, slots.len()),
+                    "commit" => Self::aggregate_proof_to_obj(&pbft.commit, slots.len()),
+                }).unwrap_or(Null),
             },
             Block::Micro(ref block) => object! {
                 "type" => "micro",
+                "hash" => hash.clone(),
                 "blockNumber" => block.header.block_number,
                 "viewNumber" => block.header.view_number,
                 "parentHash" => block.header.parent_hash.to_hex(),
@@ -182,14 +213,19 @@ impl RpcHandler<AlbatrossConsensusProtocol> {
                 "seed" => hex::encode(&block.header.seed),
                 "timestamp" => block.header.timestamp,
                 "extraData" => block.extrinsics.as_ref().map(|body| hex::encode(&body.extra_data).into()).unwrap_or(Null),
-                // TODO Fork proofs
+                "forkProofs" => block.extrinsics.as_ref().map(|body| JsonValue::Array(body.fork_proofs.iter().map(Self::fork_proof_to_obj).collect())).unwrap_or(Null),
                 "transactions" => JsonValue::Array(block.extrinsics.as_ref().map(|body| if include_transactions {
-                    body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(block.header.block_number), Some(i))).collect()
+                    body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(&TransactionContext {
+                        block_hash: &hash,
+                        block_number: block.header.block_number,
+                        index: i as u16,
+                        timestamp: block.header.timestamp,
+                    }))).collect()
                 } else {
                     body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
                 }).unwrap_or_else(Vec::new)),
-                // TODO Receipts
-                // TODO Justification
+                "signature" => hex::encode(&block.justification.signature),
+                "viewChangeProof" => block.justification.view_change_proof.as_ref().map(|p| Self::aggregate_proof_to_obj(p, slots.len())).unwrap_or(Null),
             }
         }
     }
@@ -200,8 +236,63 @@ impl RpcHandler<AlbatrossConsensusProtocol> {
             .and_then(|b| b.transactions.get(index as usize))
             .ok_or_else(|| object!{"message" => "Block doesn't contain transaction."})?;
 
-        Ok(self.transaction_to_obj(&transaction, Some(block.header.block_number), Some(index as usize)))
+        Ok(self.transaction_to_obj(&transaction, Some(&TransactionContext {
+            block_hash: &block.header.hash::<Blake2bHash>().to_hex(),
+            block_number: block.header.block_number,
+            index,
+            timestamp: block.header.timestamp,
+        })))
     }
 
-}
+    fn slots_to_obj(slots: &Slots) -> JsonValue {
+        JsonValue::Array(Vec::from_iter(slots.iter()
+            .enumerate()
+            .map(|(i, slot)| {
+                object! {
+                    "index" => i,
+                    "public_key" => hex::encode(&slot.public_key),
+                    "staker_address" => slot.staker_address.to_hex(),
+                    "reward_address" => slot.reward_address().to_hex(),
+                }
+            })
+        ))
+    }
 
+    fn slashed_slots_to_obj(slashed_slots: &SlashedSlots) -> JsonValue {
+        JsonValue::Array(Vec::from_iter(slashed_slots.slot_states()
+            .enumerate()
+            .map(|(i, (slot, enabled))| {
+                object! {
+                    "index" => i,
+                    "public_key" => hex::encode(&slot.public_key),
+                    "staker_address" => slot.staker_address.to_hex(),
+                    "reward_address" => slot.reward_address().to_hex(),
+                    "slashed" => !enabled,
+                }
+            })
+        ))
+    }
+
+    fn fork_proof_to_obj(fork_proof: &ForkProof) -> JsonValue {
+        object! {
+            "block_number" => fork_proof.header1.block_number,
+            "view_number" => fork_proof.header1.view_number,
+            "parent_hash" => fork_proof.header1.parent_hash.to_hex(),
+            "hashes" => vec![
+                fork_proof.header1.hash::<Blake2bHash>().to_hex(),
+                fork_proof.header2.hash::<Blake2bHash>().to_hex(),
+            ]
+        }
+    }
+
+    // TODO Return individual signers?
+    fn aggregate_proof_to_obj<M>(proof: &AggregateProof<M>, n_signers: usize) -> JsonValue
+        where M: Message
+    {
+        object! {
+            "signatures" => proof.signers.len(),
+            "participants" => n_signers,
+            "signerIndices" => JsonValue::Array(Vec::from_iter(proof.signers.iter().map(|e| e.into()))),
+        }
+    }
+}

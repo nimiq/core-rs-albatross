@@ -852,6 +852,11 @@ impl<'env> Blockchain<'env> {
         s.reward_registry.slashed_set(policy::epoch_at(self.block_number()))
     }
 
+    pub fn last_slashed_set(&self) -> BitSet {
+        let s = self.state.read();
+        s.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1)
+    }
+
     // Get slash set of epoch at specific block number
     // Returns slash set before applying block with that block_number (TODO Tests)
     pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32) -> Result<BitSet, EpochStateError> {

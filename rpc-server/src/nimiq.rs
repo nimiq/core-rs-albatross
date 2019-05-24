@@ -20,7 +20,7 @@ use utils::time::systemtime_to_timestamp;
 use crate::error::AuthenticationError;
 use crate::{jsonrpc, rpc_not_implemented};
 use crate::{AbstractRpcHandler, JsonRpcConfig, JsonRpcServerState};
-use crate::common::RpcHandler;
+use crate::common::{RpcHandler, TransactionContext};
 
 impl AbstractRpcHandler<NimiqConsensusProtocol> for RpcHandler<NimiqConsensusProtocol> {
     fn new(consensus: Arc<Consensus<NimiqConsensusProtocol>>, state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self {
@@ -107,7 +107,7 @@ impl RpcHandler<NimiqConsensusProtocol> {
                 (live_transaction, true, confirmations == 0)
             }
             else {
-                (self.transaction_to_obj(&transaction, None, None),
+                (self.transaction_to_obj(&transaction, None),
                  transaction.verify(self.consensus.blockchain.network_id).is_ok(), false)
             };
 
@@ -241,7 +241,7 @@ impl RpcHandler<NimiqConsensusProtocol> {
             "hash" => header.body_hash.to_hex(),
             "minerAddr" => body.miner.to_hex(),
             "extraData" => hex::encode(body.extra_data),
-            "transactions" => JsonValue::Array(body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, None, Some(i))).collect()),
+            "transactions" => JsonValue::Array(body.transactions.iter().map(|tx| self.transaction_to_obj(tx, None)).collect()),
             "merkleHashes" => JsonValue::Array(merkle_path.hashes().iter().map(|hash| JsonValue::String(hash.to_hex())).skip(1).collect()),
             "prunedAccounts" => JsonValue::Array(body.receipts.iter().map(|acc| JsonValue::String(hex::encode(acc.serialize_to_vec()))).collect()),
         };
@@ -304,9 +304,10 @@ impl RpcHandler<NimiqConsensusProtocol> {
     }
 
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
+        let hash = block.header.hash::<Blake2bHash>().to_hex();
         object!{
             "number" => block.header.height,
-            "hash" => block.header.hash::<Blake2bHash>().to_hex(),
+            "hash" => hash.clone(),
             "pow" => block.header.hash::<Argon2dHash>().to_hex(),
             "parentHash" => block.header.prev_hash.to_hex(),
             "nonce" => block.header.nonce,
@@ -319,7 +320,12 @@ impl RpcHandler<NimiqConsensusProtocol> {
             "size" => block.serialized_size(),
             "timestamp" => block.header.timestamp,
             "transactions" => JsonValue::Array(block.body.as_ref().map(|body| if include_transactions {
-                body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(block.header.height), Some(i))).collect()
+                body.transactions.iter().enumerate().map(|(i, tx)| self.transaction_to_obj(tx, Some(&TransactionContext {
+                    block_hash: &hash,
+                    block_number: block.header.height,
+                    index: i as u16,
+                    timestamp: block.header.timestamp as u64,
+                }))).collect()
             } else {
                 body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
             }).unwrap_or_else(Vec::new)),
@@ -346,7 +352,12 @@ impl RpcHandler<NimiqConsensusProtocol> {
             .and_then(|b| b.transactions.get(index as usize))
             .ok_or_else(|| object!{"message" => "Block doesn't contain transaction."})?;
 
-        Ok(self.transaction_to_obj(&transaction, Some(block.header.height), Some(index as usize)))
+        Ok(self.transaction_to_obj(&transaction, Some(&TransactionContext {
+            block_hash: &block.header.hash::<Blake2bHash>().to_hex(),
+            block_number: block.header.height,
+            index,
+            timestamp: block.header.timestamp as u64,
+        })))
     }
 
     fn transaction_receipt_to_obj(&self, receipt: &TransactionReceipt, index: Option<u16>, block: Option<&Block>) -> JsonValue {

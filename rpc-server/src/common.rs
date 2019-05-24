@@ -135,7 +135,7 @@ impl<P: ConsensusProtocol + 'static> RpcHandler<P> {
         Ok(JsonValue::Array(self.consensus.mempool.get_transactions(usize::max_value(), 0f64)
             .iter()
             .map(|tx| if include_transactions {
-                self.transaction_to_obj(tx, None, None)
+                self.transaction_to_obj(tx, None)
             } else {
                 tx.hash::<Blake2bHash>().to_hex().into()
             })
@@ -203,18 +203,14 @@ impl<P: ConsensusProtocol + 'static> RpcHandler<P> {
         }
     }
 
-    // TODO pub(crate) fn transaction_to_obj<B: BaseBlockHeader>(&self, transaction: &Transaction, block: Option<&B>, i: Option<usize>) -> JsonValue {
-    pub(crate) fn transaction_to_obj(&self, transaction: &Transaction, block_number: Option<u32>, block_idx: Option<usize>) -> JsonValue {
-        //let header = block.as_ref().map(|b| &b.header);
+    pub(crate) fn transaction_to_obj(&self, transaction: &Transaction, context: Option<&TransactionContext>) -> JsonValue {
         object!{
             "hash" => transaction.hash::<Blake2bHash>().to_hex(),
-            // TODO "blockHash" => header.map(|h| h.hash().to_hex().into()).unwrap_or(Null),
-            // "blockNumber" => header.map(|h| h.height().into()).unwrap_or(Null),
-            "blockNumber" => block_number.map(|n| n.into()).unwrap_or(Null),
-            // TODO "timestamp" => header.map(|h| h.timestamp.into()).unwrap_or(Null),
-            // "confirmations" => header.map(|b| (self.consensus.blockchain.head_height() - b.height()).into()).unwrap_or(Null),
-            "confirmations" => block_number.map(|n| (self.consensus.blockchain.head_height() - n).into()).unwrap_or(Null),
-            "transactionIndex" => block_idx.map(|i| i.into()).unwrap_or(Null),
+            "blockHash" => context.map(|c| c.block_hash.into()).unwrap_or(Null),
+            "blockNumber" => context.map(|c| c.block_number.into()).unwrap_or(Null),
+            "timestamp" => context.map(|c| c.timestamp.into()).unwrap_or(Null),
+            "confirmations" => context.map(|c| (self.consensus.blockchain.head_height() - c.block_number).into()).unwrap_or(Null),
+            "transactionIndex" => context.map(|c| c.index.into()).unwrap_or(Null),
             "from" => transaction.sender.to_hex(),
             "fromAddress" => transaction.sender.to_user_friendly_address(),
             "to" => transaction.recipient.to_hex(),
@@ -291,4 +287,11 @@ impl<P: ConsensusProtocol + 'static> RpcHandler<P> {
         }
     }
 
+}
+
+pub(crate) struct TransactionContext<'a> {
+    pub block_hash: &'a str,
+    pub block_number: u32,
+    pub index: u16,
+    pub timestamp: u64,
 }
