@@ -93,7 +93,7 @@ You can also specify your own configuration file:
 nimiq-client -c path/to/client.toml
 ```
 
-Take a look at [`client/client.example.toml`](client/config.example.toml) for all the configuration options.
+Take a look at [`client/client.example.toml`](client/client.example.toml) for all the configuration options.
 
 ### From crates.io
 
