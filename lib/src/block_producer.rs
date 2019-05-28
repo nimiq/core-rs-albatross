@@ -15,7 +15,7 @@ pub struct DummyBlockProducer {}
 impl<P: ConsensusProtocol + 'static> BlockProducer<P> for DummyBlockProducer {
     type Config = ();
 
-    fn new(config: (), consensus: Arc<Consensus<P>>) -> Result<Self, ClientError> {
+    fn new(_config: (), _consensus: Arc<Consensus<P>>) -> Result<Self, ClientError> {
         Ok(DummyBlockProducer{})
     }
 }
@@ -55,7 +55,7 @@ pub mod albatross {
     }
 
     impl From<ValidatorError> for ClientError {
-        fn from(e: ValidatorError) -> Self {
+        fn from(_e: ValidatorError) -> Self {
             ClientError::BlockProducerError
         }
     }
@@ -81,7 +81,7 @@ pub mod mock {
     impl BlockProducer<AlbatrossConsensusProtocol> for MockBlockProducer {
         type Config = ();
 
-        fn new(config: Self::Config, consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) -> Result<Self, ClientError> {
+        fn new(_config: Self::Config, consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) -> Result<Self, ClientError> {
             let validator = MockValidator::new(consensus);
             validator.start();
             Ok(Self {

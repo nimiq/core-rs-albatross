@@ -11,7 +11,7 @@ use network_primitives::address::NetAddress;
 use network_primitives::protocol::Protocol;
 use primitives::networks::NetworkId;
 use utils::key_store::KeyStore;
-use network_primitives::services::{ServiceFlags, Services};
+use network_primitives::services::ServiceFlags;
 
 use crate::error::ClientError;
 use crate::block_producer::BlockProducer;

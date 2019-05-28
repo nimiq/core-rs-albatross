@@ -283,6 +283,7 @@ impl<'env> AccountsTree<'env> {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
     use nimiq_primitives::coin::Coin;
 
     use super::*;

@@ -1,4 +1,4 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use hex;
 
 use account::{Account, AccountType, PrunedAccount, VestingContract, Receipt, ReceiptType};

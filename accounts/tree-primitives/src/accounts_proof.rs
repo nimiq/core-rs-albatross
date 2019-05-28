@@ -69,6 +69,7 @@ impl AccountsProof {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryFrom;
     use crate::accounts_tree_node::AccountsTreeNodeChild;
     use account::BasicAccount;
     use nimiq_primitives::coin::Coin;

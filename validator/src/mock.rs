@@ -42,9 +42,9 @@ impl MockValidator {
 
         self.timers.set_interval(MockTimers::ProduceBlock, move || {
             // get next producer
-            let (next_producer_idx, next_producer_slot) = block_producer.blockchain.get_next_block_producer(0);
+            // let (next_producer_idx, next_producer_slot) = block_producer.blockchain.get_next_block_producer(0);
             // check that we are the producer
-            let validator_idx = next_producer_idx; // our own validator index
+            // let validator_idx = next_producer_idx; // our own validator index
 
             // get block type
             let block_type = block_producer.blockchain.get_next_block_type(None);

@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
+use network_primitives::validator_info::SignedValidatorInfo;
 use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
-use bls::bls12_381::{CompressedPublicKey, PublicKey};
+use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      SignedPbftProposal, ViewChange, Block, MacroBlock, ForkProof};
+                      SignedPbftProposal, ViewChange, ForkProof};
 use primitives::policy::TWO_THIRD_VALIDATORS;
 use blockchain_albatross::Blockchain;
 use hash::{Hash, Blake2bHash};
@@ -158,11 +158,11 @@ impl ValidatorAgent {
             let public_key = &slot.public_key.uncompress_unchecked();
 
             // check the validity of the block
-            let block = Block::Macro(MacroBlock {
+            /*let block = Block::Macro(MacroBlock {
                 header: proposal.message.header.clone(),
                 justification: None,
                 extrinsics: None
-            });
+            });*/
             if let Err(e) = self.blockchain.verify_macro_block_header(&proposal.message.header, proposal.message.view_change.as_ref()) {
                 debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
                 return;

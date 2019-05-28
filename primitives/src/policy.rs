@@ -184,6 +184,7 @@ pub fn macro_block_of(epoch: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::convert::TryFrom;
 
     #[test]
     fn it_correctly_computes_block_reward() {

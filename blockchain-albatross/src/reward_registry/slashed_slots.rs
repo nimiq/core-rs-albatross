@@ -1,6 +1,5 @@
 use collections::bitset::BitSet;
 use primitives::validators::{Slot, Slots};
-use std::iter;
 
 pub struct SlashedSlots<'a> {
     slots: &'a Slots,

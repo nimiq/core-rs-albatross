@@ -1,3 +1,4 @@
+/*
 use std::sync::Arc;
 
 use beserial::Serialize;
@@ -10,6 +11,7 @@ use nimiq_mempool::{Mempool, MempoolConfig, ReturnCode};
 use nimiq_network_primitives::{networks::NetworkId, time::NetworkTime};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::{SignatureProof, Transaction};
+*/
 
 #[test]
 fn it_can_produce_empty_blocks() {

@@ -57,9 +57,8 @@ use network::network_config::Seed;
 use utils::key_store::KeyStore;
 use primitives::networks::NetworkId;
 use consensus::{ConsensusProtocol, AlbatrossConsensusProtocol, NimiqConsensusProtocol};
-use bls::bls12_381::{SecretKey, PublicKey, KeyPair};
-use beserial::Deserialize;
-use network_primitives::services::{Services, ServiceFlags};
+use bls::bls12_381::KeyPair;
+use network_primitives::services::ServiceFlags;
 #[cfg(feature = "metrics-server")]
 use metrics_server::{metrics_server, AlbatrossChainMetrics, NimiqChainMetrics, AbstractChainMetrics};
 #[cfg(feature = "rpc-server")]

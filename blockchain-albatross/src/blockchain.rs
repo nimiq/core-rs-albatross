@@ -11,7 +11,7 @@ use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
 use beserial::Serialize;
-use block::{Block, BlockError, BlockType, MacroBlock, MacroHeader, MicroBlock, ForkProof, ViewChange, ViewChanges, ViewChangeProof};
+use block::{Block, BlockError, BlockType, MacroBlock, MacroHeader, MicroBlock, ForkProof, ViewChanges, ViewChangeProof};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -230,7 +230,7 @@ impl<'env> Blockchain<'env> {
         (slots, validators)
     }
 
-    pub fn verify_macro_block_header(&self, header: &MacroHeader, view_change_proof: Option<&ViewChangeProof>) -> Result<(), PushError> {
+    pub fn verify_macro_block_header(&self, header: &MacroHeader, _view_change_proof: Option<&ViewChangeProof>) -> Result<(), PushError> {
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash, false, None);
         if prev_info_opt.is_none() {

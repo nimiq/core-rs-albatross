@@ -372,7 +372,7 @@ impl Validator {
         }
     }
 
-    pub fn on_pbft_commit_complete(&self, hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
+    pub fn on_pbft_commit_complete(&self, _hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
         let header = proposal.header.clone();
 
         // Note: we're not verifying the justification as the validator network already did that
@@ -382,7 +382,7 @@ impl Validator {
         let block = Block::Macro(MacroBlock { header, justification, extrinsics: Some(extrinsics) });
 
         // Automatically relays block.
-        self.blockchain.push(block);
+        self.blockchain.push(block).unwrap();
     }
 
     fn start_view_change(&self) {
@@ -415,7 +415,7 @@ impl Validator {
         let compressed = self.validator_key.public.compress();
         let validator_list = self.blockchain.current_validators();
         validator_list.iter().enumerate()
-            .find(|(i, validator)| validator.public_key.compressed() == &compressed)
+            .find(|(_, validator)| validator.public_key.compressed() == &compressed)
             .map(|(i, validator)| (i as u16, validator.num_slots))
     }
 
