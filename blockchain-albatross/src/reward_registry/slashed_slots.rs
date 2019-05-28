@@ -1,5 +1,6 @@
 use collections::bitset::BitSet;
 use primitives::validators::{Slot, Slots};
+use std::iter;
 
 pub struct SlashedSlots<'a> {
     slots: &'a Slots,
@@ -16,7 +17,7 @@ impl<'a> SlashedSlots<'a> {
     }
 
     pub fn slot_states(&self) -> impl Iterator<Item=(&Slot, bool)> {
-        self.slots.iter().zip(self.slashed_set.iter_bits().map(|b| !b))
+        self.slots.iter().zip(self.slashed_set.iter_bits().map(|b| !b).chain(iter::repeat(true)))
     }
 
     pub fn enabled(&self) -> impl Iterator<Item=&Slot> {
