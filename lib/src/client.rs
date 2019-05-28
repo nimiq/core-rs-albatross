@@ -11,6 +11,7 @@ use network_primitives::address::NetAddress;
 use network_primitives::protocol::Protocol;
 use primitives::networks::NetworkId;
 use utils::key_store::KeyStore;
+use network_primitives::services::{ServiceFlags, Services};
 
 use crate::error::ClientError;
 use crate::block_producer::BlockProducer;
@@ -33,7 +34,8 @@ pub struct ClientBuilder {
     additional_seeds: Vec<Seed>,
     identity_file: Option<String>,
     identity_password: Option<String>,
-    mempool_config: Option<MempoolConfig>
+    mempool_config: Option<MempoolConfig>,
+    service_flags: Option<ServiceFlags>,
 }
 
 impl ClientBuilder {
@@ -50,7 +52,8 @@ impl ClientBuilder {
             additional_seeds: Vec::new(),
             identity_file: None,
             identity_password: None,
-            mempool_config: None
+            mempool_config: None,
+            service_flags: None,
         }
     }
 
@@ -94,6 +97,11 @@ impl ClientBuilder {
         self
     }
 
+    pub fn with_service_flags(&mut self, service_flags: ServiceFlags) -> &mut Self {
+        self.service_flags = Some(service_flags);
+        self
+    }
+
     pub fn build_client<P, BP>(self, block_producer_config: BP::Config) -> Result<ClientInitializeFuture<P, BP>, ClientError>
         where P: ConsensusProtocol + 'static,
               BP: BlockProducer<P> + 'static
@@ -134,6 +142,7 @@ impl ClientBuilder {
             identity_password,
             user_agent,
             additional_seeds,
+            service_flags,
         } = self;
 
         // build network config
@@ -165,6 +174,13 @@ impl ClientBuilder {
         network_config.set_user_agent(user_agent);
         network_config.set_additional_seeds(additional_seeds);
         network_config.init_persistent(&peer_key_store)?;
+
+        if let Some(flags) = service_flags {
+            let mut services = network_config.services().clone();
+            services.accepted |= flags;
+            services.provided |= flags;
+            network_config.set_services(services);
+        }
 
         let mempool_config = mempool_config.unwrap_or_else(MempoolConfig::default);
         Ok(Consensus::new(environment, network_id, network_config, mempool_config)?)

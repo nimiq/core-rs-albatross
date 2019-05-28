@@ -50,20 +50,26 @@ use log::Level;
 use rand::rngs::OsRng;
 
 use database::lmdb::{LmdbEnvironment, open};
-use lib::client::{Client, ClientBuilder, ClientInitializeFuture};
 use mempool::MempoolConfig;
 use network_primitives::protocol::Protocol;
 use network_primitives::address::NetAddress;
 use network::network_config::Seed;
 use utils::key_store::KeyStore;
 use primitives::networks::NetworkId;
-use consensus::{ConsensusProtocol, NimiqConsensusProtocol, AlbatrossConsensusProtocol};
-
+use consensus::{ConsensusProtocol, AlbatrossConsensusProtocol, NimiqConsensusProtocol};
+use bls::bls12_381::{SecretKey, PublicKey, KeyPair};
+use beserial::Deserialize;
+use network_primitives::services::{Services, ServiceFlags};
 #[cfg(feature = "metrics-server")]
-use metrics_server::{metrics_server, AbstractChainMetrics, NimiqChainMetrics, AlbatrossChainMetrics};
-
+use metrics_server::{metrics_server, AlbatrossChainMetrics, NimiqChainMetrics, AbstractChainMetrics};
 #[cfg(feature = "rpc-server")]
 use rpc_server::{rpc_server, Credentials, JsonRpcConfig, AbstractRpcHandler, RpcHandler};
+
+use lib::block_producer::{BlockProducer, DummyBlockProducer};
+use lib::block_producer::albatross::{ValidatorConfig, AlbatrossBlockProducer};
+use lib::block_producer::mock::MockBlockProducer;
+use lib::error::ClientError;
+use lib::client::{Client, ClientBuilder, ClientInitializeFuture};
 
 use crate::cmdline::Options;
 use crate::logging::{DEFAULT_LEVEL, NimiqDispatch};
@@ -73,11 +79,7 @@ use crate::settings::Settings;
 use crate::static_env::ENV;
 use crate::serialization::SeedError;
 use crate::files::LazyFileLocations;
-use lib::block_producer::{BlockProducer, DummyBlockProducer};
-use lib::block_producer::albatross::{ValidatorConfig, AlbatrossBlockProducer};
-use lib::block_producer::mock::MockBlockProducer;
-use bls::bls12_381::KeyPair;
-use lib::error::ClientError;
+
 
 #[derive(Debug, Fail)]
 pub enum ConfigError {
@@ -370,6 +372,8 @@ fn run() -> Result<(), Error> {
                         key_store.load_key()?
                     }
                 };
+
+                client_builder.with_service_flags(ServiceFlags::VALIDATOR);
 
                 let validator_config = ValidatorConfig {
                     validator_key,

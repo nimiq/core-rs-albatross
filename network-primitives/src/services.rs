@@ -7,9 +7,6 @@ bitflags! {
         const NANO  = 0b0000_0001;
         const LIGHT = 0b0000_0010;
         const FULL  = 0b0000_0100;
-
-        // Albatross specific services
-
         // Node supports validator protocol
         const VALIDATOR  = 0b0100_0000_0000;
     }
