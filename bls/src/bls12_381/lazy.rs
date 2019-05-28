@@ -1,11 +1,19 @@
+use std::fmt;
+
 use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
 
 use super::*;
 
-#[derive(Debug)]
+
 pub struct LazyPublicKey {
     pub(crate) compressed: CompressedPublicKey,
     pub(crate) cache: Mutex<Option<PublicKey>>,
+}
+
+impl fmt::Debug for LazyPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "LazyPublicKey({})", &hex::encode(self.compressed.p_pub.as_ref()))
+    }
 }
 
 impl Clone for LazyPublicKey {

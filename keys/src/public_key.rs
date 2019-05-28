@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
 use std::io;
+use std::fmt;
+
 use hex::FromHex;
 use ed25519_dalek;
 
@@ -9,7 +11,7 @@ use crate::{PrivateKey, Signature};
 use hash::{Hash, SerializeContent};
 use crate::errors::{KeysError, ParseError};
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy)]
 pub struct PublicKey(pub(in super) ed25519_dalek::PublicKey);
 
 impl PublicKey {
@@ -32,6 +34,12 @@ impl PublicKey {
 
     pub fn to_hex(&self) -> String {
         hex::encode(self.as_bytes())
+    }
+}
+
+impl fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&self.to_hex())
     }
 }
 

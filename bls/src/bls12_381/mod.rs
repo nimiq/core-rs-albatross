@@ -147,7 +147,7 @@ pub struct CompressedPublicKey {
 
 impl fmt::Debug for CompressedPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CompressedSignature({})", &::hex::encode(self.p_pub.as_ref()))
+        write!(f, "CompressedPublicKey({})", &::hex::encode(self.p_pub.as_ref()))
     }
 }
 
