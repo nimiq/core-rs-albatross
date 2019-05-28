@@ -68,7 +68,7 @@ def create_nimiq_address():
 
 
 def create_validator(path, i):
-    path.mkdir(parents=True)
+    path.mkdir(parents=True, exist_ok=True)
 
     # create BLS keypair
     validator_key = create_bls_keypair()
