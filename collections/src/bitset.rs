@@ -114,7 +114,6 @@ impl BitSet {
     /// Infinite iterator of excluded items
     pub fn iter_excluded<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
         self.iter_bits()
-            .chain(repeat(false))
             .enumerate()
             .filter_map(|(i, one)| if one { None } else { Some(i) })
     }
@@ -122,12 +121,16 @@ impl BitSet {
     /// Iterator of included items
     pub fn iter<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
         self.iter_bits()
+            .take(self.store.len() * 64)
             .enumerate()
             .filter_map(|(i, one)| if one { Some(i) } else { None })
     }
 
+    /// Infinite iterator of bits
     pub fn iter_bits<'a>(&'a self) -> impl Iterator<Item=bool> + 'a {
-        self.store.iter().flat_map(|store| Bits64Iter::new(*store))
+        self.store.iter()
+            .flat_map(|store| Bits64Iter::new(*store))
+            .chain(repeat(false))
     }
 }
 

@@ -17,7 +17,7 @@ impl<'a> SlashedSlots<'a> {
     }
 
     pub fn slot_states(&self) -> impl Iterator<Item=(&Slot, bool)> {
-        self.slots.iter().zip(self.slashed_set.iter_bits().map(|b| !b).chain(iter::repeat(true)))
+        self.slots.iter().zip(self.slashed_set.iter_bits().map(|b| !b))
     }
 
     pub fn enabled(&self) -> impl Iterator<Item=&Slot> {

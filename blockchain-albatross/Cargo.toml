@@ -37,6 +37,7 @@ nimiq-utils = { path = "../utils", version = "0.1.0", features = ["observer", "u
 
 [dev-dependencies]
 atomic = "0.4"
+rand = "0.6"
 
 [features]
 default = ["transaction-store"]

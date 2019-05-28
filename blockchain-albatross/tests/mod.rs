@@ -1,0 +1,1 @@
+mod reward_registry;
