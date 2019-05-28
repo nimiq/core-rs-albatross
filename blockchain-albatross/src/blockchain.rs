@@ -11,7 +11,7 @@ use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
 use beserial::Serialize;
-use block::{Block, BlockError, BlockType, MacroBlock, MicroBlock, ForkProof, ViewChanges};
+use block::{Block, BlockError, BlockType, MacroBlock, MacroHeader, MicroBlock, ForkProof, ViewChange, ViewChanges, ViewChangeProof};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -230,6 +230,41 @@ impl<'env> Blockchain<'env> {
         (slots, validators)
     }
 
+    pub fn verify_macro_block_header(&self, header: &MacroHeader, view_change_proof: Option<&ViewChangeProof>) -> Result<(), PushError> {
+        // Check if the block's immediate predecessor is part of the chain.
+        let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash, false, None);
+        if prev_info_opt.is_none() {
+            warn!("Rejecting block - unknown predecessor");
+            return Err(PushError::Orphan);
+        }
+
+        // Check that the block is a valid successor of its predecessor.
+        let prev_info = prev_info_opt.unwrap();
+
+        if self.get_next_block_type(Some(prev_info.head.block_number())) != BlockType::Macro {
+            warn!("Rejecting block - not expecting a macro block");
+            return Err(PushError::InvalidSuccessor);
+        }
+
+        // Check the block number
+        if prev_info.head.block_number() + 1 != header.block_number {
+            warn!("Rejecting block - wrong block number ({:?})", header.block_number);
+            return Err(PushError::InvalidSuccessor)
+        }
+
+        // TODO: Check validators
+
+        // TODO: Check view number (ViewChangeProof in PbftProposal)
+
+        // TODO: Check parent macro hash
+
+        // TODO: Check seed (need current block producer)
+
+        // TODO: Check timestamp
+
+        Ok(())
+    }
+
     /// Verification required for macro block proposals and micro blocks
     pub fn push_verify_dry(&self, block: &Block) -> Result<(), PushError> {
         // Check (sort of) intrinsic block invariants.
@@ -255,7 +290,7 @@ impl<'env> Blockchain<'env> {
 
         // Check the block number
         if prev_info.head.block_number() + 1 != block.block_number() {
-            warn!("Rejecting block - wrong block number ({:?})", block.ty());
+            warn!("Rejecting block - wrong block number ({:?})", block.block_number());
             return Err(PushError::InvalidSuccessor)
         }
 

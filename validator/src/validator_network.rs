@@ -1,9 +1,9 @@
-use std::collections::btree_map::BTreeMap;
 use std::collections::HashMap;
+use std::collections::btree_map::BTreeMap;
 use std::sync::{Arc, Weak};
 
 use failure::Fail;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use block_albatross::{
     ForkProof, PbftProof, PbftProofBuilder, PbftProposal,
@@ -53,13 +53,13 @@ struct ValidatorNetworkState {
     /// The peers that are connected that have the validator service flag set. So this is not
     /// exactly the set of validators. Potential validators should set this flag and then broadcast
     /// a `ValidatorInfo`.
-    agents: HashMap<PeerId, Arc<RwLock<ValidatorAgent>>>,
+    agents: HashMap<PeerId, Arc<ValidatorAgent>>,
 
     /// Peers for which we received a `ValidatorInfo` and thus have a BLS public key
-    validators: HashMap<ValidatorId, Arc<RwLock<ValidatorAgent>>>,
+    validators: HashMap<Arc<ValidatorId>, Arc<ValidatorAgent>>,
 
     /// Subset of validators that only includes validators that are active in the current epoch.
-    active: HashMap<ValidatorId, Arc<RwLock<ValidatorAgent>>>,
+    active: HashMap<Arc<ValidatorId>, Arc<ValidatorAgent>>,
 
     /// maps (view-change-number, block-number) to the proof that is being aggregated
     /// clear after macro block
@@ -126,7 +126,7 @@ impl ValidatorNetwork {
             self.state.write().agents.insert(peer.peer_address().peer_id.clone(), Arc::clone(&agent));
 
             // register for messages received by agent
-            agent.read().notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), |this, event| {
+            agent.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), |this, event| {
                 match event {
                     ValidatorAgentEvent::ValidatorInfo(info) => {
                         this.on_validator_info(info);
@@ -155,9 +155,9 @@ impl ValidatorNetwork {
 
             // send known validator infos to peer
             let mut infos = self.state.read().validators.iter()
-                .take(64) // only send 64
-                .filter_map(|(_, validator)| {
-                    validator.read().validator_info.clone()
+                //.take(64) // only send 64
+                .filter_map(|(_, agent)| {
+                    agent.state.read().validator_info.clone()
                 }).collect::<Vec<SignedValidatorInfo>>();
             infos.push(self.info.clone());
             peer.channel.send_or_close(Message::ValidatorInfo(infos));
@@ -168,7 +168,7 @@ impl ValidatorNetwork {
         let mut state = self.state.write();
 
         if let Some(agent) = state.agents.remove(&peer.peer_address().peer_id) {
-            if let Some(info) = &agent.read().validator_info {
+            if let Some(info) = &agent.state.read().validator_info {
                 state.validators.remove(&info.message.validator_id);
                 state.active.remove(&info.message.validator_id);
             }
@@ -182,8 +182,9 @@ impl ValidatorNetwork {
 
         if let Some(agent) = state.agents.get(&info.message.peer_address.peer_id) {
             let agent = Arc::clone(&agent);
+            let agent_state = agent.state.upgradable_read();
 
-            if let Some(current_info) = &agent.read().validator_info {
+            if let Some(current_info) = &agent_state.validator_info {
                 if current_info.message.validator_id == info.message.validator_id {
                     // didn't change, do nothing
                     return;
@@ -193,13 +194,23 @@ impl ValidatorNetwork {
                 state.validators.remove(&current_info.message.validator_id);
             }
 
-            // add peer to validator agents
-            state.validators.insert(info.message.validator_id.clone(), Arc::clone(&agent));
+            let validator_id = Arc::new(info.message.validator_id.clone());
+            let agent = Arc::clone(&agent);
 
-            // TODO: check if active validator and put into `active` list
+            // add peer to validator agents
+            state.validators.insert(Arc::clone(&validator_id), Arc::clone(&agent));
+
+            // check if active validator and put into `active` list
+            for validator in self.blockchain.current_validators().iter() {
+                if ValidatorId::from_public_key(validator.public_key.compressed()) == *validator_id {
+                    trace!("Validator is active");
+                    state.active.insert(validator_id, agent);
+                    break;
+                }
+            }
 
             // put validator info into agent
-            agent.write().validator_info = Some(info);
+            RwLockUpgradableReadGuard::upgrade(agent_state).validator_info = Some(info);
         }
         else {
             debug!("ValidatorInfo for unknown peer: {:?}", info);
@@ -216,17 +227,24 @@ impl ValidatorNetwork {
     }
 
     /// Called when we reach finality - i.e. when a macro block was produced
-    /// TODO: register in consensus for macro blocks
     /// TODO: Remove validators with keys that don't have stake anymore?
-    /// TODO: Compute set of validator agents that are now active.
     pub fn on_finality(&self) {
         debug!("Clearing view change and pBFT proof");
-
         let mut state = self.state.write();
 
+        // clear state
         state.view_changes.clear();
         state.pbft_proof = None;
         state.active.clear();
+
+        // fill active list with new set of active validators
+        for validator in self.blockchain.current_validators().iter() {
+            let validator_id = Arc::new(ValidatorId::from_public_key(validator.public_key.compressed()));
+            if let Some(agent) = state.validators.get(&validator_id) {
+                let agent = Arc::clone(agent);
+                state.active.insert(validator_id, agent);
+            }
+        }
     }
 
     /// Commit a view change to the proofs being build and relay it if it's new
@@ -276,7 +294,7 @@ impl ValidatorNetwork {
             }
             else if proposal.message.header.view_number <= current_proposal.header.view_number {
                 // if it has a lower view number than the current one, ignore it
-                debug!("Ignoring new macro block proposal with lower view change: {:#?}", proposal.message);
+                debug!("Ignoring new macro block proposal with lower view number: block_number={}, view_number={}", proposal.message.header.block_number, proposal.message.header.view_number);
                 false
             }
             else {
@@ -299,11 +317,11 @@ impl ValidatorNetwork {
             // drop lock
             drop(state);
 
-            // notify Jeff, a.k.a notify `Validator`
-            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash, proposal.message.clone()));
-
             // relay proposal
-            self.broadcast_active(Message::PbftProposal(Box::new(proposal)));
+            self.broadcast_active(Message::PbftProposal(Box::new(proposal.clone())));
+
+            // notify Jeff, a.k.a notify `Validator`
+            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash, proposal.message));
         }
 
         Ok(())
@@ -334,6 +352,9 @@ impl ValidatorNetwork {
                 // drop lock before notifying and broadcasting
                 drop(state);
 
+                // broadcast new pbft prepare signature
+                self.broadcast_active(Message::PbftPrepare(Box::new(prepare.clone())));
+
                 // notify if we reach threshold on prepare to begin commit
                 if prepare_complete {
                     self.notifier.read()
@@ -346,9 +367,6 @@ impl ValidatorNetwork {
                     self.notifier.read()
                         .notify(ValidatorNetworkEvent::PbftCommitComplete(prepare.message.block_hash.clone(), proposal, proof))
                 }
-
-                // broadcast new pbft prepare signature
-                self.broadcast_active(Message::PbftPrepare(Box::new(prepare)));
             }
             Ok(())
         }
@@ -382,13 +400,13 @@ impl ValidatorNetwork {
                 // drop lock before notifying
                 drop(state);
 
+                // broadcast new pbft commit signature
+                self.broadcast_active(Message::PbftCommit(Box::new(commit.clone())));
+
                 if commit_complete {
                     self.notifier.read()
                         .notify(ValidatorNetworkEvent::PbftCommitComplete(commit.message.block_hash.clone(), proposal, proof));
                 }
-
-                // broadcast new pbft commit signature
-                self.broadcast_active(Message::PbftCommit(Box::new(commit)));
             }
             Ok(())
         }
@@ -400,15 +418,20 @@ impl ValidatorNetwork {
 
     /// Broadcast to all known active validators
     pub fn broadcast_active(&self, msg: Message) {
+        // FIXME: Active validators don't actively connect to other active validators right now.
+        /*trace!("Broadcast to active validators: {:#?}", msg);
         for (_, agent) in self.state.read().active.iter() {
             agent.read().peer.channel.send_or_close(msg.clone())
-        }
+        }*/
+        self.broadcast_all(msg);
     }
 
     /// Broadcast to all known validators
     pub fn broadcast_all(&self, msg: Message) {
+        trace!("Broadcast to all validators: {}", msg.ty());
         for (_, agent) in self.state.read().validators.iter() {
-            agent.read().peer.channel.send_or_close(msg.clone());
+            trace!("Sending to {}", agent.peer.peer_address());
+            agent.peer.channel.send_or_close(msg.clone());
         }
     }
 

@@ -118,7 +118,12 @@ impl Validator {
             self_weak: MutableOnce::new(Weak::new()),
         });
         Validator::init_listeners(&this);
-        this.init_validator();
+
+        // trigger initial block production (if it's our turn)
+        if this.state.read().status == ValidatorStatus::Active {
+            this.init_validator();
+        }
+
         Ok(this)
     }
 
@@ -159,9 +164,6 @@ impl Validator {
             let this = upgrade_weak!(weak);
             this.on_block_timeout();
         }, Self::BLOCK_TIMEOUT);
-
-        // trigger initial block production (if it's our turn)
-        this.on_slot_change(SlotChange::NextBlock);
     }
 
     fn on_block_timeout(&self) {
@@ -193,22 +195,30 @@ impl Validator {
             state.status
         };
 
-        trace!("Blockchain event: {:?}", event);
-
-        // Blockchain events are only interesting to validators (potential or active).
-        if status == ValidatorStatus::None || status == ValidatorStatus::Synced {
-            return;
-        }
-
-        // Reset the view change timeout because we received a valid block.
-        self.reset_view_change_interval();
-
         // Handle each block type (which is directly related to each event type).
         match event {
-            BlockchainEvent::Finalized => self.on_blockchain_finalized(), // i.e. a macro block was accepted
-            BlockchainEvent::Extended(hash) => self.on_blockchain_extended(hash),
-            BlockchainEvent::Rebranched(old_chain, new_chain) =>
-                self.on_blockchain_rebranched(old_chain, new_chain),
+            BlockchainEvent::Finalized => {
+                // i.e. a macro block was accepted
+
+                // Notify validator network
+                self.validator_network.on_finality();
+
+                // Init new validator epoch
+                self.init_validator()
+            },
+
+            BlockchainEvent::Extended(hash) => {
+                self.on_blockchain_extended(hash)
+            },
+
+            BlockchainEvent::Rebranched(old_chain, new_chain) => {
+                self.on_blockchain_rebranched(old_chain, new_chain)
+            }
+        }
+
+        if status == ValidatorStatus::Potential || status == ValidatorStatus::Active {
+            // Reset the view change timeout because we received a valid block.
+            self.reset_view_change_interval();
         }
 
         // If we're an active validator, we need to check if we're the next block producer.
@@ -240,12 +250,6 @@ impl Validator {
                 state.status = if self.is_potential_validator() { ValidatorStatus::Potential } else { ValidatorStatus::Synced };
             },
         }
-    }
-
-    // Resets the state and checks if we are on the new validator list
-    pub fn on_blockchain_finalized(&self) {
-        self.init_validator();
-        self.validator_network.on_finality();
     }
 
     // Sets the state according to the information on the block
@@ -308,7 +312,7 @@ impl Validator {
         // Check if we are the next block producer and act accordingly
         let (_, slot) = self.blockchain.get_next_block_producer(view_number);
         let public_key = self.validator_key.public.compress();
-        trace!("Next block producer: {:?}", public_key);
+        trace!("Next block producer: {:?}", slot.public_key.compressed());
 
         if slot.public_key.compressed() == &public_key {
             let weak = self.self_weak.clone();
@@ -409,7 +413,7 @@ impl Validator {
 
     fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {
         let compressed = self.validator_key.public.compress();
-        let validator_list = self.blockchain.next_validators();
+        let validator_list = self.blockchain.current_validators();
         validator_list.iter().enumerate()
             .find(|(i, validator)| validator.public_key.compressed() == &compressed)
             .map(|(i, validator)| (i as u16, validator.num_slots))
@@ -444,7 +448,6 @@ impl Validator {
 
         let block = self.block_producer.next_micro_block(fork_proofs, timestamp, view_number, vec![], view_change_proof);
         info!("Produced block: {}", block.header.hash::<Blake2bHash>());
-        trace!("{:#?}", block);
 
         drop(state);
 
