@@ -26,6 +26,7 @@ use account::{Account, BasicAccount, StakingContract, AccountError, AccountsList
 use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
 use database::WriteTransaction;
 use accounts::Accounts;
+use primitives::policy;
 
 
 #[derive(Debug, Fail)]
@@ -149,7 +150,7 @@ impl GenesisBuilder {
 
     fn select_validators(&self, pre_genesis_hash: &BlsSignature, staking_contract: &StakingContract) -> Result<(Slots, Validators), GenesisBuilderError> {
         let slot_allocation = staking_contract
-            .select_validators(&pre_genesis_hash.compress(), 512, 16384);
+            .select_validators(&pre_genesis_hash.compress(), policy::ACTIVE_VALIDATORS, policy::MIN_STAKE as usize);
 
         let validators = { // construct validator slot list with slot counts
             // count slots per public key

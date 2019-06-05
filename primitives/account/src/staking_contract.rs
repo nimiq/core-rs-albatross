@@ -3,6 +3,8 @@ use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
+use std::convert::TryInto;
+use std::ops::AddAssign;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
@@ -368,51 +370,84 @@ impl StakingContract {
     }
 
     pub fn select_validators(&self, seed: &BlsSignature, num_slots: u16, max_considered: usize) -> Slots {
+        assert!(max_considered >= num_slots.try_into().expect("Failed to cast u16 to usize"));
+
         let mut potential_validators = Vec::new();
         let mut min_stake = Coin::ZERO;
         let mut total_stake = Coin::ZERO;
 
-        let max_considered = min(self.active_stake_by_address.len(), max_considered);
+        trace!("Select validators: num_slots = {}, max_considered = {}", num_slots, max_considered);
 
         // Build potential validator set and find minimum stake.
         // Iterate from highest balance to lowest.
         for validator in self.active_stake_sorted.iter() {
+            trace!("Checking {:?} (min_stake={})", validator, min_stake);
+
             // This implicitly ensures that no more than max_considered validators end up in the potential_validators list.
             if validator.balance <= min_stake {
                 break;
             }
 
             total_stake += validator.balance;
-            min_stake = Coin::from_u64_unchecked(u64::from(total_stake) / max_considered as u64);
+            min_stake = total_stake / (max_considered as u64);
             potential_validators.push(Arc::clone(validator));
+
+            trace!("total_stake = {}", total_stake);
+            trace!("min_stake = {}", min_stake);
+        }
+
+        trace!("Potential validators:");
+        for validator in potential_validators.iter() {
+            trace!("  * Staking address: {}", validator.staker_address);
         }
 
         // Build lookup tree of all potential validators
         let mut weights: Vec<(Address, u64)> = potential_validators.iter()
-            .map(|stake| (stake.staker_address.clone(), stake.balance.into())).collect();
+            .map(|stake| (stake.staker_address.clone(), stake.balance.into()))
+            .collect::<Vec<(Address, u64)>>();
+        weights.sort_by(|(address1, _), (address2, _)| address1.cmp(address2));
         let lookup = SegmentTree::new(&mut weights);
 
+        // Lookup for how much of the staking balance is not reserved yet
+        let mut balances: HashMap<Address, Coin> = HashMap::new();
+        for stake in potential_validators.iter() {
+            balances.entry(stake.staker_address.clone())
+                .or_insert(Coin::ZERO).add_assign(stake.balance);
+        }
+
         // Build active validator set: Use the VRF to pick validators
+        // XXX If we hash both `i` and `counter` and reset `counter` for every slot, this can be
+        //     parallelized.
         let mut validators = Vec::<Slot>::with_capacity(num_slots as usize);
+        let mut counter: u16 = 0;
         for i in 0..num_slots {
-            // Hash seed and index
-            let mut hash_state = Blake2bHasher::new();
-            seed.serialize(&mut hash_state).expect("Failed to hash seed");
-            hash_state.write(&i.to_be_bytes()).expect("Failed to hash index");
-            let hash = hash_state.finish();
+            let active_stake = loop {
+                // Hash seed and index
+                let mut hash_state = Blake2bHasher::new();
+                seed.serialize(&mut hash_state).expect("Failed to hash seed");
+                hash_state.write(&counter.to_be_bytes()).expect("Failed to hash index");
+                counter += 1;
+                let hash = hash_state.finish();
 
-            // Get number from first 8 bytes
-            let mut num_bytes = [0u8; 8];
-            num_bytes.copy_from_slice(&hash.as_bytes()[..8]);
-            let num = u64::from_be_bytes(num_bytes);
+                // Get number from first 8 bytes
+                let mut num_bytes = [0u8; 8];
+                num_bytes.copy_from_slice(&hash.as_bytes()[..8]);
+                let num = u64::from_be_bytes(num_bytes);
 
-            let index = num % u64::from(lookup.range());
-            let staking_address = lookup.find(index).unwrap();
-            let active_stake = &self.active_stake_by_address[&staking_address];
+                // XXX This is not uniform
+                let index = num % u64::from(lookup.range());
+                let staking_address = lookup.find(index).expect("Expected to find a validator in SegmentTree");
+                let active_stake = &self.active_stake_by_address[&staking_address];
+
+                if *balances.get(&active_stake.staker_address).unwrap_or(&Coin::ZERO) >= min_stake {
+                    break active_stake;
+                }
+            };
+
             validators.push(Slot {
-                public_key:       active_stake.validator_key.clone().into(),
+                public_key: active_stake.validator_key.clone().into(),
                 reward_address_opt: active_stake.reward_address.clone(),
-                staker_address:   active_stake.staker_address.clone(),
+                staker_address: active_stake.staker_address.clone(),
             });
         }
 
@@ -537,6 +572,7 @@ impl AccountTransactionInteraction for StakingContract {
 
 impl AccountInherentInteraction for StakingContract {
     fn check_inherent(&self, inherent: &Inherent) -> Result<(), AccountError> {
+        trace!("check inherent: {:?}", inherent);
         match inherent.ty {
             InherentType::Slash => {
                 // Invalid data length
@@ -551,12 +587,14 @@ impl AccountInherentInteraction for StakingContract {
 
                 // Inherent slashes more than staked in total
                 if inherent.value > self.balance {
+                    trace!("Slashing more than staked in total: {}", self.balance);
                     return Err(AccountError::InvalidForTarget);
                 }
 
                 // Inherent slashes more than staked by address
                 let staker_address = Deserialize::deserialize(&mut &inherent.data[..])?;
                 if inherent.value > self.get_balance(&staker_address) {
+                    trace!("Slashing more than staked by {}: {}", &staker_address, self.get_balance(&staker_address));
                     return Err(AccountError::InvalidForTarget)
                 }
 
@@ -575,6 +613,8 @@ impl AccountInherentInteraction for StakingContract {
 
         let mut to_pay = inherent.value;
         let staker_address = Deserialize::deserialize(&mut &inherent.data[..])?;
+
+        warn!("Slashing {} with {}", &staker_address, to_pay);
 
         if let Some(active_stake) = self.active_stake_by_address.remove(&staker_address) {
             self.active_stake_sorted.remove(&active_stake);

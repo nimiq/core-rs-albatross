@@ -97,6 +97,7 @@ network = "dev-albatross"
 [log]
 level = "trace"
 file = "{path}/nimiq-client.log"
+timestamps = true
 
 [database]
 path = "{path}/"
@@ -143,7 +144,7 @@ timestamp="{timestamp}"
 staker_address = "{staker_address}"
 reward_address = "{reward_address}"
 validator_key = "{validator_key}"
-balance = 100000
+balance = 100000000
         """.format(
             staker_address=validator["staker_address"]["address"],
             reward_address=validator["reward_address"]["address"],
