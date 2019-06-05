@@ -4,8 +4,9 @@ from pathlib import Path
 from sys import argv
 
 
-TARGET = Path("/home/janosch/nimiq/dev/core-rs-albatross/target/debug")
-nimiq_client = sh.Command(str(TARGET / "nimiq-client"))
+target = Path.cwd() / "target" / "debug"
+
+nimiq_client = sh.Command(str(target / "nimiq-client"))
 
 
 def run_client(config_path, i):

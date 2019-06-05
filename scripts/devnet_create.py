@@ -20,28 +20,29 @@
 
 from binascii import unhexlify
 from pathlib import Path
-from tempfile import mkdtemp
 import sh
 import json
-from datetime import datetime
 from sys import argv
 
 
 try:
     num_validators = int(argv[1])
+    seed_uri = argv[2]
 except (IndexError, ValueError):
-    print("Usage: {} NUM_VALIDATORS".format(argv[0]))
+    print("Usage: {} NUM_VALIDATORS SEED_URI OUTPUT".format(argv[0]))
     exit(1)
 
+try:
+    output = Path(argv[3])
+except IndexError:
+    output = Path("/tmp/nimiq-devnet")
 
-#tmp = Path(mkdtemp(prefix="nimiq_devnet-"))
-tmp = Path("/tmp/nimiq-devnet")
 
+target = Path.cwd() / "target" / "debug"
 
-TARGET = Path("/home/janosch/nimiq/dev/core-rs-albatross/target/debug")
-nimiq_address = sh.Command(str(TARGET / "nimiq-address"))
-nimiq_bls = sh.Command(str(TARGET / "nimiq-bls"))
-nimiq_client = sh.Command(str(TARGET / "nimiq-client"))
+nimiq_address = sh.Command(str(target / "nimiq-address"))
+nimiq_bls = sh.Command(str(target / "nimiq-bls"))
+nimiq_client = sh.Command(str(target / "nimiq-client"))
 
 def create_bls_keypair():
     lines = []
@@ -88,7 +89,7 @@ peer-key-file = "{path}/peer_key.dat"
 host = "{hostname}"
 port = {port}
 seed_nodes = [
-    {{ uri = "ws://127.0.0.1:8443/8a90ec195a8cba3643509171cc59095cb3de6bd65f5aa7a2f84b63805989566f" }}
+    {{ uri = "{seed_uri}" }}
 ]
 
 [consensus]
@@ -107,6 +108,7 @@ type = "validator"
 block_delay = 250
 key_file = "{path}/validator_key.dat"
     """.format(
+            seed_uri=seed_uri,
             hostname="127.0.1.{}".format(i + 1),
             port=str(8500 + i),
             path=str(path)
@@ -119,16 +121,16 @@ key_file = "{path}/validator_key.dat"
         "path": str(path)
     }
 
-print("Writing devnet to: {}".format(tmp))
+print("Writing devnet to: {}".format(output))
 print("Creating validators...")
 validators = []
 for i in range(num_validators):
-    validator = create_validator(tmp / "validator{:d}".format(i), i)
+    validator = create_validator(output / "validator{:d}".format(i), i)
     validators.append(validator)
     print("Created validator: {}..".format(validator["validator_key"]["public_key"][0:16]))
 
 print("Writing genesis config")
-with (tmp / "dev-albatross.toml").open("wt") as f:
+with (output / "dev-albatross.toml").open("wt") as f:
     f.write("""
 name = "dev-albatross"
 seed_message = "Albatross DevNet"
@@ -152,5 +154,5 @@ balance = 100000000
         ))
 
 print("Writing configuration")
-with (tmp / "validators.json").open("wt") as f:
+with (output / "validators.json").open("wt") as f:
     json.dump(validators, f)
