@@ -751,7 +751,7 @@ impl<'env> Blockchain<'env> {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         let staking_account = self.state.read().accounts().get(validator_registry, None);
         if let Account::Staking(ref staking_contract) = staking_account {
-            return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::ACTIVE_VALIDATORS, policy::MIN_STAKE as usize);
+            return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::ACTIVE_VALIDATORS, policy::MAX_CONSIDERED as usize);
         }
         panic!("Account at validator registry address is not the stacking contract!");
     }

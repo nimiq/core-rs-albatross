@@ -113,6 +113,9 @@ pub fn block_reward_at(block_height: u32) -> Coin {
 /// Number of active validators
 pub const ACTIVE_VALIDATORS: u16 = 512;
 
+/// Maximum number of stakes considered for validator selection
+pub const MAX_CONSIDERED: u32 = 10_000;
+
 /// ceil(2/3) of active validators
 // (2 * n + 3) / 3 = ceil(2f + 1) where n = 3f + 1
 pub const TWO_THIRD_VALIDATORS: u16 = (2 * ACTIVE_VALIDATORS + 3) / 3;
