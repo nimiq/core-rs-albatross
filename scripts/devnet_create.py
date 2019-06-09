@@ -29,7 +29,7 @@ try:
     num_validators = int(argv[1])
     seed_uri = argv[2]
 except (IndexError, ValueError):
-    print("Usage: {} NUM_VALIDATORS SEED_URI OUTPUT".format(argv[0]))
+    print("Usage: {} NUM_VALIDATORS SEED_URI [OUTPUT]".format(argv[0]))
     exit(1)
 
 try:
@@ -42,7 +42,6 @@ target = Path.cwd() / "target" / "debug"
 
 nimiq_address = sh.Command(str(target / "nimiq-address"))
 nimiq_bls = sh.Command(str(target / "nimiq-bls"))
-nimiq_client = sh.Command(str(target / "nimiq-client"))
 
 def create_bls_keypair():
     lines = []
