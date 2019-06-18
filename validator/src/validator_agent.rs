@@ -9,7 +9,7 @@ use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
                       SignedPbftProposal, ViewChange, ForkProof, Block};
-use primitives::policy::TWO_THIRD_VALIDATORS;
+use primitives::policy;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
 use hash::{Hash, Blake2bHash};
@@ -110,28 +110,35 @@ impl ValidatorAgent {
             .register(weak_listener(Arc::downgrade(this), |this, event| {
                 match event {
                     BlockchainEvent::Extended(_) => {
-                        let mut proposals: Vec<SignedPbftProposal> = Vec::new();
-                        let mut state = this.state.write();
+                        let block_number = this.blockchain.block_number();
+                        if policy::is_macro_block_at(block_number + 1) {
+                            let mut proposals: Vec<SignedPbftProposal> = Vec::new();
+                            let mut state = this.state.write();
+                            let view_number = this.blockchain.view_number();
 
-                        // get all proposals that are now valid
-                        while let Some(proposal) = state.proposal_buf.peek() {
-                            if this.blockchain.block_number() == proposal.0.message.header.block_number + 1 {
-                                // unwrap is safe, since we already peeked and have the write lock
-                                proposals.push(state.proposal_buf.pop().unwrap().0);
+                            trace!("Blockchain extended, replaying proposals");
+                            trace!("blockchain: block_number={}, view_number={}", block_number, view_number);
+
+                            // get all proposals that are now valid
+                            while let Some(proposal) = state.proposal_buf.peek() {
+                                trace!("proposal: block_number={}, view_number={}", proposal.0.message.header.block_number, proposal.0.message.header.view_number);
+                                if proposal.0.message.header.block_number <= block_number + 1 {
+                                    // unwrap is safe, since we already peeked and have the write lock
+                                    proposals.push(state.proposal_buf.pop().unwrap().0);
+                                } else {
+                                    break;
+                                }
                             }
-                            else {
-                                break
+
+                            // drop lock
+                            // NOTE: Since we basically pretend to just receive the proposals now, it
+                            //       doesn't matter that we have concurrency here
+                            drop(state);
+
+                            // replay proposals
+                            for proposal in proposals {
+                                this.on_pbft_proposal_message(proposal);
                             }
-                        }
-
-                        // drop lock
-                        // NOTE: Since we basically pretend to just receive the proposals now, it
-                        //       doesn't matter that we have concurrency here
-                        drop(state);
-
-                        // replay proposals
-                        for proposal in proposals {
-                            this.on_pbft_proposal_message(proposal);
                         }
                     },
                     _ => {}
@@ -239,7 +246,7 @@ impl ValidatorAgent {
             // check the view change proof
             if let Some(view_change_proof) = &proposal.message.view_change {
                 let view_change = ViewChange { block_number, new_view_number: view_number };
-                if view_change_proof.verify(&view_change, &self.blockchain.current_validators(), TWO_THIRD_VALIDATORS).is_err() {
+                if view_change_proof.verify(&view_change, &self.blockchain.current_validators(), policy::TWO_THIRD_VALIDATORS).is_err() {
                     debug!("[PBFT-PROPOSAL] Invalid view change proof: {:?}", view_change_proof);
                     return;
                 }
