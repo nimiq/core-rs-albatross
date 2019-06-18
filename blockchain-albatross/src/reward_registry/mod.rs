@@ -224,28 +224,32 @@ impl<'env> SlashRegistry<'env> {
     // Get slot owner at block and view number
     pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots) -> Option<(u16, Slot)> {
         // Get context
-        let prev_block = self.chain_store
-            .get_block_at(block_number - 1, None)
-            .expect("Failed to determine slot owner - preceding block not found");
+        if let Some(prev_block) = self.chain_store
+            .get_block_at(block_number - 1, None) {
 
-        // Get slots of epoch
-        let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number).unwrap();
-        let honest_validators = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
+            // Get slots of epoch
+            let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number).unwrap();
+            let honest_validators = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
 
-        // Hash seed and index
-        let mut hash_state = Blake2bHasher::new();
-        prev_block.seed().serialize(&mut hash_state).unwrap();
-        hash_state.write(&view_number.to_be_bytes()).unwrap();
-        let hash = hash_state.finish();
+            // Hash seed and index
+            let mut hash_state = Blake2bHasher::new();
+            prev_block.seed().serialize(&mut hash_state).unwrap();
+            hash_state.write(&view_number.to_be_bytes()).unwrap();
+            let hash = hash_state.finish();
 
-        // Get number from first 8 bytes
-        let mut num_bytes = [0u8; 8];
-        num_bytes.copy_from_slice(&hash.as_bytes()[..8]);
-        let num = u64::from_be_bytes(num_bytes);
+            // Get number from first 8 bytes
+            let mut num_bytes = [0u8; 8];
+            num_bytes.copy_from_slice(&hash.as_bytes()[..8]);
+            let num = u64::from_be_bytes(num_bytes);
 
-        // XXX This is not uniform!
-        let index = num % honest_validators.len() as u64;
-        Some((index as u16, honest_validators[index as usize].clone()))
+            // XXX This is not uniform!
+            let index = num % honest_validators.len() as u64;
+            Some((index as u16, honest_validators[index as usize].clone()))
+        }
+        else {
+            // XXX No slot owner available for this block. Use an Result?
+            None
+        }
     }
 
     // Get latest known slash set of epoch

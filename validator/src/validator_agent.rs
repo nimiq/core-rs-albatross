@@ -1,13 +1,17 @@
 use std::sync::Arc;
+use std::cmp::Ordering;
+use std::collections::binary_heap::BinaryHeap;
+
 use network_primitives::validator_info::SignedValidatorInfo;
 use network::Peer;
-use utils::observer::{PassThroughNotifier, weak_passthru_listener};
-use parking_lot::RwLock;
+use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      SignedPbftProposal, ViewChange, ForkProof};
+                      SignedPbftProposal, ViewChange, ForkProof, Block};
 use primitives::policy::TWO_THIRD_VALIDATORS;
 use blockchain_albatross::Blockchain;
+use blockchain_base::BlockchainEvent;
 use hash::{Hash, Blake2bHash};
 
 
@@ -20,8 +24,33 @@ pub enum ValidatorAgentEvent {
     PbftCommit { commit: SignedPbftCommitMessage, public_key: PublicKey, slots: u16 }
 }
 
+/// Small wrapper to sort buffered pBFT proposals by block number
+#[derive(Clone, Debug)]
+struct BufferedPbftProposal(SignedPbftProposal);
+impl Eq for BufferedPbftProposal {}
+impl Ord for BufferedPbftProposal {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.message.header.block_number
+            .cmp(&other.0.message.header.block_number)
+            .then(self.0.message.header.view_number
+                      .cmp(&other.0.message.header.view_number))
+    }
+}
+impl PartialOrd for BufferedPbftProposal {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+impl PartialEq for BufferedPbftProposal {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.message.header.block_number == other.0.message.header.block_number
+            && self.0.message.header.view_number == other.0.message.header.view_number
+    }
+}
+
 pub struct ValidatorAgentState {
     pub(crate) validator_info: Option<SignedValidatorInfo>,
+    proposal_buf: BinaryHeap<BufferedPbftProposal>,
 }
 
 pub struct ValidatorAgent {
@@ -38,6 +67,7 @@ impl ValidatorAgent {
             blockchain,
             state: RwLock::new(ValidatorAgentState {
                 validator_info: None,
+                proposal_buf: BinaryHeap::new(),
             }),
             notifier: RwLock::new(PassThroughNotifier::new()),
         });
@@ -75,6 +105,37 @@ impl ValidatorAgent {
             .register(weak_passthru_listener(Arc::downgrade(this), |this, commit| {
                 trace!("Received pBFT commit: {:?}", &commit);
                 this.on_pbft_commit_message(commit);
+            }));
+        this.blockchain.notifier.write()
+            .register(weak_listener(Arc::downgrade(this), |this, event| {
+                match event {
+                    BlockchainEvent::Extended(_) => {
+                        let mut proposals: Vec<SignedPbftProposal> = Vec::new();
+                        let mut state = this.state.write();
+
+                        // get all proposals that are now valid
+                        while let Some(proposal) = state.proposal_buf.peek() {
+                            if this.blockchain.block_number() == proposal.0.message.header.block_number + 1 {
+                                // unwrap is safe, since we already peeked and have the write lock
+                                proposals.push(state.proposal_buf.pop().unwrap().0);
+                            }
+                            else {
+                                break
+                            }
+                        }
+
+                        // drop lock
+                        // NOTE: Since we basically pretend to just receive the proposals now, it
+                        //       doesn't matter that we have concurrency here
+                        drop(state);
+
+                        // replay proposals
+                        for proposal in proposals {
+                            this.on_pbft_proposal_message(proposal);
+                        }
+                    },
+                    _ => {}
+                }
             }));
     }
 
@@ -188,7 +249,13 @@ impl ValidatorAgent {
             self.notifier.read().notify(ValidatorAgentEvent::PbftProposal(proposal));
         }
         else {
-            debug!("[PBFT-PROPOSAL] No pBFT leader");
+            if proposal.message.header.block_number > self.blockchain.block_number() + 1 {
+                debug!("[PBFT-PROPOSAL] Missing micro blocks for proposal.");
+                self.state.write().proposal_buf.push(BufferedPbftProposal(proposal))
+            }
+            else {
+                warn!("[PBFT-PROPOSAL] No pBFT leader");
+            }
         }
     }
 
@@ -214,6 +281,8 @@ impl ValidatorAgent {
     }
 
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
+    /// FIXME This will verify a commit message with the current validator set, not with the one for
+    /// which this commit is for.
     fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
         debug!("[PBFT-COMMIT] Received commit from {}: {:#?}", self.peer.peer_address(), commit.message);
         if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(commit.signer_idx) {
