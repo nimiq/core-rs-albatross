@@ -197,16 +197,19 @@ impl<M: Message> AggregateProof<M> {
         for signer_idx in self.signers.iter() {
             let validator: &Validator = validators
                 .get(signer_idx)
-                .ok_or(AggregateProofError::InvalidSignerIndex)?;
+                .ok_or(AggregateProofError::InvalidSignerIndex)
+                .map_err(|e| { trace!("Invalid signer index"); e })?;
             public_key.aggregate(&validator.public_key.uncompress_unchecked());
             num_slots += validator.num_slots;
         }
 
         if num_slots < threshold {
+            trace!("Threshold not reached: {} < {}", num_slots, threshold);
             return Err(AggregateProofError::InsufficientSigners);
         }
 
         if !public_key.verify_hash(message.hash_with_prefix(), &self.signature) {
+            trace!("Invalid signature");
             return Err(AggregateProofError::InvalidSignature);
         }
 

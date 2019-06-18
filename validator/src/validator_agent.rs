@@ -256,6 +256,7 @@ impl ValidatorAgent {
             self.notifier.read().notify(ValidatorAgentEvent::PbftProposal(proposal));
         }
         else {
+            // TODO: Limit this somehow
             if proposal.message.header.block_number > self.blockchain.block_number() + 1 {
                 debug!("[PBFT-PROPOSAL] Missing micro blocks for proposal.");
                 self.state.write().proposal_buf.push(BufferedPbftProposal(proposal))

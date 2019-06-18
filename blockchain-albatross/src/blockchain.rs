@@ -318,7 +318,8 @@ impl<'env> Blockchain<'env> {
                 return Err(PushError::InvalidSuccessor);
             };
 
-            let justification = micro_block.justification.signature.uncompress().map_err(|_| PushError::InvalidBlock(BlockError::InvalidJustification))?;
+            let justification = micro_block.justification.signature.uncompress()
+                .map_err(|_| PushError::InvalidBlock(BlockError::InvalidJustification))?;
             if !intended_slot_owner.verify(&micro_block.header, &justification) {
                 warn!("Rejecting block - not a valid successor");
                 return Err(PushError::InvalidSuccessor);
@@ -363,11 +364,13 @@ impl<'env> Blockchain<'env> {
                         warn!("Rejecting block - macro block without justification");
                         return Err(PushError::InvalidBlock(BlockError::NoJustification))
                     },
-                    Some(ref justification) => justification.verify(
-                        macro_block.hash(),
-                        &self.current_validators(),
-                        policy::TWO_THIRD_VALIDATORS)
-                        .map_err(|_| BlockError::InvalidJustification)?,
+                    Some(ref justification) => {
+                        justification.verify(
+                            macro_block.hash(),
+                            &self.current_validators(),
+                            policy::TWO_THIRD_VALIDATORS)
+                            .map_err(|_| BlockError::InvalidJustification)?
+                    },
                 }
             },
             Block::Micro(ref _micro_block) => self.push_verify_dry(&block)?,

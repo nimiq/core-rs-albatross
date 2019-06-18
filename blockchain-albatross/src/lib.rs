@@ -21,9 +21,9 @@ extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
 
 pub mod blockchain;
-mod chain_info;
-mod chain_store;
+pub mod chain_info;
+pub mod chain_store;
 pub mod reward_registry;
-mod transaction_cache;
+pub mod transaction_cache;
 
 pub use blockchain::Blockchain;
