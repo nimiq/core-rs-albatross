@@ -310,7 +310,7 @@ impl Validator {
         };
 
         // Check if we are the next block producer and act accordingly
-        let (_, slot) = self.blockchain.get_next_block_producer(view_number);
+        let (_, slot) = self.blockchain.get_next_block_producer(view_number, None);
         let public_key = self.validator_key.public.compress();
         trace!("Next block producer: {:?}", slot.public_key.compressed());
 

@@ -309,10 +309,13 @@ impl<'env> Blockchain<'env> {
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
             }
 
+            // XXX We might want to pass this as argument to this method
+            let read_txn = ReadTransaction::new(self.env);
+
             // Check if the block was produced (and signed) by the intended producer
             // Public keys are checked when staking, so this should never fail.
             let intended_slot_owner = if let Some((_, slot)) = self
-                .get_block_producer_at(block.block_number(), block.view_number()) {
+                .get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn)) {
                 slot.public_key.uncompress_unchecked().clone()
             } else {
                 return Err(PushError::InvalidSuccessor);
@@ -327,7 +330,7 @@ impl<'env> Blockchain<'env> {
 
             // Validate slash inherents
             for fork_proof in &micro_block.extrinsics.as_ref().unwrap().fork_proofs {
-                match self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number) {
+                match self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number, Some(&read_txn)) {
                     None => {
                         warn!("Rejecting block - Bad fork proof: Unknown block owner");
                         return Err(PushError::InvalidSuccessor)
@@ -651,7 +654,7 @@ impl<'env> Blockchain<'env> {
             Block::Micro(ref micro_block) => {
                 let extrinsics = micro_block.extrinsics.as_ref().unwrap();
                 let view_changes = ViewChanges::new(micro_block.header.block_number, self.view_number(), micro_block.header.view_number);
-                let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes);
+                let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes, Some(txn));
 
                 // Commit block to AccountsTree.
                 let receipts = accounts.commit(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number);
@@ -680,7 +683,7 @@ impl<'env> Blockchain<'env> {
 
         let extrinsics = micro_block.extrinsics.as_ref().unwrap();
         let view_changes = ViewChanges::new(micro_block.header.block_number, prev_view_number, micro_block.header.view_number);
-        let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes);
+        let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes, Some(txn));
 
         if let Err(e) = accounts.revert(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number, &extrinsics.receipts) {
             panic!("Failed to revert - {}", e);
@@ -745,9 +748,9 @@ impl<'env> Blockchain<'env> {
         self.state.read().macro_head_hash.clone()
     }
 
-    pub fn get_next_block_producer(&self, view_number: u32) -> (u16, Slot) {
+    pub fn get_next_block_producer(&self, view_number: u32, txn_option: Option<&Transaction>) -> (u16, Slot) {
         let block_number =self.height() + 1;
-        self.get_block_producer_at(block_number, view_number)
+        self.get_block_producer_at(block_number, view_number, txn_option)
             .expect("Can't get block producer for next block")
     }
 
@@ -796,9 +799,17 @@ impl<'env> Blockchain<'env> {
         macro_block_number > policy::EPOCH_LENGTH && block_number >= macro_block_number - policy::EPOCH_LENGTH && block_number < macro_block_number
     }
 
-    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, Slot)> {
+    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<(/*Index in slot list*/ u16, Slot)> {
         let state = self.state.read();
-        let txn = ReadTransaction::new(self.env);
+
+        let read_txn;
+        let txn = if let Some(txn) = txn_option {
+            txn
+        }
+        else {
+            read_txn = ReadTransaction::new(self.env);
+            &read_txn
+        };
 
         let slots_owned;
         let slots;
@@ -824,20 +835,20 @@ impl<'env> Blockchain<'env> {
         self.state.read()
     }
 
-    pub fn create_slash_inherents(&self, fork_proofs: &Vec<ForkProof>, view_changes: &Option<ViewChanges>) -> Vec<Inherent> {
+    pub fn create_slash_inherents(&self, fork_proofs: &Vec<ForkProof>, view_changes: &Option<ViewChanges>, txn_option: Option<&Transaction>) -> Vec<Inherent> {
         let mut inherents = vec![];
         for fork_proof in fork_proofs {
-            inherents.push(self.inherent_from_fork_proof(fork_proof));
+            inherents.push(self.inherent_from_fork_proof(fork_proof, txn_option));
         }
         if let Some(view_changes) = view_changes {
-            inherents.append(&mut self.inherents_from_view_changes(view_changes));
+            inherents.append(&mut self.inherents_from_view_changes(view_changes, txn_option));
         }
         inherents
     }
 
     /// Expects a *verified* proof!
-    pub fn inherent_from_fork_proof(&self, fork_proof: &ForkProof) -> Inherent {
-        let producer = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number)
+    pub fn inherent_from_fork_proof(&self, fork_proof: &ForkProof, txn_option: Option<&Transaction>) -> Inherent {
+        let producer = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number, txn_option)
             .expect("Failed to create inherent from fork proof - could not get block producer");
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         Inherent {
@@ -849,11 +860,11 @@ impl<'env> Blockchain<'env> {
     }
 
     /// Expects a *verified* proof!
-    pub fn inherents_from_view_changes(&self, view_changes: &ViewChanges) -> Vec<Inherent> {
+    pub fn inherents_from_view_changes(&self, view_changes: &ViewChanges, txn_option: Option<&Transaction>) -> Vec<Inherent> {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
 
         (view_changes.first_view_number .. view_changes.last_view_number).map(|view_number| {
-            let producer = self.get_block_producer_at(view_changes.block_number, view_number)
+            let producer = self.get_block_producer_at(view_changes.block_number, view_number, txn_option)
                 .expect("Failed to create inherent from fork proof - could not get block producer");
             Inherent {
                 ty: InherentType::Slash,

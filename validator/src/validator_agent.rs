@@ -177,7 +177,7 @@ impl ValidatorAgent {
         let block_number = fork_proof.block_number();
         let view_number = fork_proof.view_number();
 
-        let producer = self.blockchain.get_block_producer_at(block_number, view_number);
+        let producer = self.blockchain.get_block_producer_at(block_number, view_number, None);
         if producer.is_none() {
             debug!("[FORK-PROOF] Unknown block producer: block_number={}, view_number={}", block_number, view_number);
             return;
@@ -222,7 +222,7 @@ impl ValidatorAgent {
 
         debug!("[PBFT-PROPOSAL] Macro block proposal: block_number={}, view_number={}: {}", block_number, view_number, proposal.message.header.hash::<Blake2bHash>());
 
-        if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number) {
+        if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number, None) {
             let public_key = &slot.public_key.uncompress_unchecked();
 
             // check the validity of the block
