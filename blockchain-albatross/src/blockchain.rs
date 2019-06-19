@@ -365,6 +365,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidBlock(BlockError::NoJustification))
                     },
                     Some(ref justification) => {
+                        trace!("checking justification for macro block: {:#?}", &macro_block.justification);
                         justification.verify(
                             macro_block.hash(),
                             &self.current_validators(),
