@@ -798,6 +798,7 @@ impl<'env> Blockchain<'env> {
 
     pub fn get_block_producer_at(&self, block_number: u32, view_number: u32) -> Option<(/*Index in slot list*/ u16, Slot)> {
         let state = self.state.read();
+        let txn = ReadTransaction::new(self.env);
 
         let slots_owned;
         let slots;
@@ -807,7 +808,7 @@ impl<'env> Blockchain<'env> {
             slots = state.last_slots.as_ref().expect("Missing previous epoch's slots");
         } else {
             let macro_block = self.chain_store
-                .get_block_at(policy::macro_block_before(block_number), None)
+                .get_block_at(policy::macro_block_before(block_number), Some(&txn))
                 .expect("Failed to determine slots - preceding macro block not found")
                 .unwrap_macro();
 
@@ -816,7 +817,7 @@ impl<'env> Blockchain<'env> {
             slots = &slots_owned;
         }
 
-        self.state.read().reward_registry.slot_owner(block_number, view_number, slots)
+        self.state.read().reward_registry.slot_owner(block_number, view_number, slots, Some(&txn))
     }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {

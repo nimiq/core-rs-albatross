@@ -9,7 +9,8 @@ use failure::Fail;
 use beserial::{Deserialize, Serialize};
 use block::{Block, MicroBlock};
 use collections::bitset::BitSet;
-use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue, ReadTransaction, WriteTransaction};
+use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue,
+               ReadTransaction, WriteTransaction, Transaction};
 use database::cursor::{ReadCursor, WriteCursor};
 use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
@@ -113,7 +114,8 @@ impl<'env> SlashRegistry<'env> {
         for fork_proof in fork_proofs {
             let block_number = fork_proof.header1.block_number;
             let view_number = fork_proof.header1.view_number;
-            let slot_owner = self.slot_owner(block_number, view_number, slots).expect("Could not determine block producer in the current epoch");
+            let slot_owner = self.slot_owner(block_number, view_number, slots, Some(&txn))
+                .expect("Could not determine block producer in the current epoch");
 
             let slash_epoch = policy::epoch_at(block_number);
             if block_epoch == slash_epoch {
@@ -170,7 +172,8 @@ impl<'env> SlashRegistry<'env> {
 
         // Mark from view changes, ignoring duplicates.
         for view in 0..block.header.view_number {
-            let slot_owner = self.slot_owner(block.header.block_number, view, slots).expect("Could not determine block producer in the current epoch");
+            let slot_owner = self.slot_owner(block.header.block_number, view, slots, Some(&txn))
+                .expect("Could not determine block producer in the current epoch");
             epoch_diff.insert(slot_owner.0 as usize);
         }
 
@@ -222,10 +225,10 @@ impl<'env> SlashRegistry<'env> {
     }
 
     // Get slot owner at block and view number
-    pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots) -> Option<(u16, Slot)> {
+    pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots, txn_option: Option<&Transaction>) -> Option<(u16, Slot)> {
         // Get context
         if let Some(prev_block) = self.chain_store
-            .get_block_at(block_number - 1, None) {
+            .get_block_at(block_number - 1, txn_option) {
 
             // Get slots of epoch
             let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number).unwrap();
