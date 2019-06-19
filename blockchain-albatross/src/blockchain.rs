@@ -889,19 +889,19 @@ impl<'env> Blockchain<'env> {
 
     pub fn current_slashed_set(&self) -> BitSet {
         let s = self.state.read();
-        s.reward_registry.slashed_set(policy::epoch_at(self.block_number()))
+        s.reward_registry.slashed_set(policy::epoch_at(self.block_number()), None)
     }
 
     pub fn last_slashed_set(&self) -> BitSet {
         let s = self.state.read();
-        s.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1)
+        s.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1, None)
     }
 
     // Get slash set of epoch at specific block number
     // Returns slash set before applying block with that block_number (TODO Tests)
     pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32) -> Result<BitSet, EpochStateError> {
         let s = self.state.read();
-        s.reward_registry.slashed_set_at(epoch_number, block_number)
+        s.reward_registry.slashed_set_at(epoch_number, block_number, None)
     }
 
     pub fn current_validators(&self) -> MappedRwLockReadGuard<Validators> {
@@ -937,7 +937,7 @@ impl<'env> Blockchain<'env> {
         // Find slots that are eligible for rewards.
         // TODO: Proper error handling.
         let slots = state.last_slots.clone().expect("Slots for last epoch are missing");
-        let slashed_set = state.reward_registry.slashed_set(epoch);
+        let slashed_set = state.reward_registry.slashed_set(epoch, None);
         let reward_eligible = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
 
         let reward_pot: Coin = state.reward_registry.previous_reward_pot();

@@ -231,7 +231,7 @@ impl<'env> SlashRegistry<'env> {
             .get_block_at(block_number - 1, txn_option) {
 
             // Get slots of epoch
-            let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number).unwrap();
+            let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number, txn_option).unwrap();
             let honest_validators = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
 
             // Hash seed and index
@@ -256,13 +256,14 @@ impl<'env> SlashRegistry<'env> {
     }
 
     // Get latest known slash set of epoch
-    pub fn slashed_set(&self, epoch_number: u32) -> BitSet {
-        self.slashed_set_at(epoch_number, policy::first_block_of(epoch_number + 2)).unwrap()
+    pub fn slashed_set(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> BitSet {
+        self.slashed_set_at(epoch_number, policy::first_block_of(epoch_number + 2), txn_option)
+            .unwrap()
     }
 
     // Get slash set of epoch at specific block number
     // Returns slash set before applying block with that block_number (TODO Tests)
-    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32) -> Result<BitSet, EpochStateError> {
+    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32, txn_option: Option<&Transaction>) -> Result<BitSet, EpochStateError> {
         let epoch_start = policy::first_block_of(policy::epoch_at(block_number));
 
         // Epoch cannot have slashes if in the future
@@ -276,7 +277,13 @@ impl<'env> SlashRegistry<'env> {
             return Err(EpochStateError::HistoricEpoch);
         }
 
-        let txn = ReadTransaction::new(self.env);
+        let read_txn;
+        let txn = if let Some(txn) = txn_option {
+            txn
+        } else {
+            read_txn = ReadTransaction::new(self.env);
+            &read_txn
+        };
 
         // Lookup slash state.
         let mut cursor = txn.cursor(&self.slash_registry_db);
