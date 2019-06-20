@@ -296,7 +296,16 @@ impl<'env> Blockchain<'env> {
 
         if let Block::Micro(ref micro_block) = block {
             // Check if a view change occurred - if so, validate the proof
-            if prev_info.head.view_number() < block.view_number() {
+            let view_number = if policy::is_macro_block_at(micro_block.header.block_number - 1) {
+                0
+            }
+            else {
+                prev_info.head.view_number()
+            };
+            if block.view_number() < view_number {
+                return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
+            }
+            else if block.view_number() > view_number {
                 match micro_block.justification.view_change_proof {
                     None => return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof)),
                     Some(ref view_change_proof) => view_change_proof.verify(
@@ -305,7 +314,8 @@ impl<'env> Blockchain<'env> {
                         policy::TWO_THIRD_VALIDATORS)
                         .map_err(|_| BlockError::InvalidJustification)?,
                 }
-            } else if micro_block.justification.view_change_proof.is_some() {
+            }
+            else if micro_block.justification.view_change_proof.is_some() {
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
             }
 

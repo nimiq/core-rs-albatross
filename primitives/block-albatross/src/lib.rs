@@ -56,6 +56,7 @@ pub enum BlockError {
 
     InvalidJustification,
     InvalidSlash,
+    InvalidViewNumber,
 }
 
 impl block_base::BlockError for BlockError {}
