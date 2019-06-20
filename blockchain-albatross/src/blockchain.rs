@@ -296,7 +296,7 @@ impl<'env> Blockchain<'env> {
 
         if let Block::Micro(ref micro_block) = block {
             // Check if a view change occurred - if so, validate the proof
-            if prev_info.head.view_number() != block.view_number() {
+            if prev_info.head.view_number() < block.view_number() {
                 match micro_block.justification.view_change_proof {
                     None => return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof)),
                     Some(ref view_change_proof) => view_change_proof.verify(
