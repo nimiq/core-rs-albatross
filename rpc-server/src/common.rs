@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::convert::TryFrom;
 
 use hex;
 use json::{Array, JsonValue, Null};
@@ -18,7 +19,10 @@ use network::connection::connection_info::ConnectionInfo;
 use network::connection::connection_pool::ConnectionId;
 use network::peer_scorer::Score;
 use network_primitives::address::{PeerId, PeerUri};
-use transaction::Transaction;
+use transaction::{Transaction, TransactionFlags};
+use keys::Address;
+use primitives::coin::Coin;
+use primitives::account::AccountType;
 
 use crate::rpc_not_implemented;
 use crate::{JsonRpcConfig, JsonRpcServerState};
@@ -223,8 +227,7 @@ impl<P: ConsensusProtocol + 'static> RpcHandler<P> {
         }
     }
 
-    pub(crate) fn obj_to_transaction(&self, _obj: &JsonValue) -> Result<Transaction, JsonValue> {
-        /*
+    pub(crate) fn obj_to_transaction(&self, obj: &JsonValue) -> Result<Transaction, JsonValue> {
         let from = Address::from_any_str(obj["from"].as_str()
             .ok_or_else(|| object!{"message" => "Sender address must be a string"})?)
             .map_err(|_|  object!{"message" => "Sender address invalid"})?;
@@ -245,11 +248,13 @@ impl<P: ConsensusProtocol + 'static> RpcHandler<P> {
             _ => None
         }.ok_or_else(|| object!{"message" => "Invalid recipient account type"})?;
 
-        let value = Coin::from(obj["value"].as_u64()
-            .ok_or_else(|| object!{"message" => "Invalid transaction value"})?);
+        let value = Coin::try_from(obj["value"].as_u64()
+            .ok_or_else(|| object!{"message" => "Invalid transaction value"})?)
+            .map_err(|e| object!{"message" => format!("{}", e)})?;
 
-        let fee = Coin::from(obj["value"].as_u64()
-            .ok_or_else(|| object!{"message" => "Invalid transaction fee"})?);
+        let fee = Coin::try_from(obj["value"].as_u64()
+            .ok_or_else(|| object!{"message" => "Invalid transaction fee"})?)
+            .map_err(|e| object!{"message" => format!("{}", e)})?;
 
         let flags = obj["flags"].as_u8()
             .map_or_else(|| Some(TransactionFlags::empty()), TransactionFlags::from_bits)
@@ -259,9 +264,18 @@ impl<P: ConsensusProtocol + 'static> RpcHandler<P> {
             .map(|d| hex::decode(d))
             .transpose().map_err(|_| object!{"message" => "Invalid transaction data"})?
             .unwrap_or(vec![]);
-        */
 
-        rpc_not_implemented()
+        // TODO: Support account creation
+        if from_type != AccountType::Basic || to_type != AccountType::Basic {
+            warn!("sendTransaction only supports basic account types");
+            return rpc_not_implemented();
+        }
+
+        let validity_start_height = self.consensus.blockchain.head_height();
+
+        let transaction = Transaction::new_basic(from, to, value, fee, validity_start_height, self.consensus.blockchain.network_id());
+
+        Ok(transaction)
     }
 
     pub(crate) fn peer_address_info_to_obj(&self, peer_address_info: &PeerAddressInfo, connection_info: Option<&ConnectionInfo<P::Blockchain>>, score: Option<Score>) -> JsonValue {
