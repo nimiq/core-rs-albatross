@@ -12,7 +12,7 @@ use hex::FromHex;
 
 use nimiq_keys::{PublicKey};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 create_typed_array!(PeerId, u8, 16);
 add_hex_io_fns_typed_arr!(PeerId, PeerId::SIZE);
@@ -33,19 +33,7 @@ impl<'a> From<&'a PublicKey> for PeerId {
 
 fn is_ip_globally_reachable_legacy(ip: &IpAddr) -> bool {
     match ip {
-        IpAddr::V4(ipv4) => {
-            let octets = ipv4.octets();
-            if let [127, 0, 0, 1] = octets {
-                return false;
-            }
-            if ipv4.is_private() || ipv4.is_link_local() {
-                return false;
-            }
-            // 100.64.0.0/10
-            if octets[0] == 100 && (octets[1] >= 64 && octets[1] <= 127) {
-                return false;
-            }
-        },
+        IpAddr::V4(ipv4) => is_ipv4_globally_reachable_legacy(ipv4),
         IpAddr::V6(ipv6) => {
             let octets = ipv6.octets();
             // check for local ip ::1
@@ -61,8 +49,27 @@ fn is_ip_globally_reachable_legacy(ip: &IpAddr) -> bool {
             if octets[0] == 0xfe && (octets[1] & 0xc0) == 0x80 {
                 return false;
             }
+            // IPv4-mapped or compatible
+            if let Some(ipv4) = ipv6.to_ipv4() {
+                return is_ipv4_globally_reachable_legacy(&ipv4);
+            }
+            true
         }
-    };
+    }
+}
+
+fn is_ipv4_globally_reachable_legacy(ipv4: &Ipv4Addr) -> bool {
+    let octets = ipv4.octets();
+    if let [127, 0, 0, 1] = octets {
+        return false;
+    }
+    if ipv4.is_private() || ipv4.is_link_local() {
+        return false;
+    }
+    // 100.64.0.0/10
+    if octets[0] == 100 && (octets[1] >= 64 && octets[1] <= 127) {
+        return false;
+    }
     true
 }
 
