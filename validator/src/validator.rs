@@ -83,6 +83,7 @@ pub struct ValidatorState {
 
 impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
+    const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair, block_delay: u64) -> Result<Arc<Self>, Error> {
         let compressed_public_key = validator_key.public.compress();
@@ -181,12 +182,12 @@ impl Validator {
         state.status = ValidatorStatus::None;
     }
 
-    fn reset_view_change_interval(&self) {
+    fn reset_view_change_interval(&self, timeout: Duration) {
         let weak = self.self_weak.clone();
         self.timers.reset_interval(ValidatorTimer::ViewChange, move || {
             let this = upgrade_weak!(weak);
             this.on_block_timeout();
-        }, Self::BLOCK_TIMEOUT);
+        }, timeout);
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
@@ -218,7 +219,7 @@ impl Validator {
 
         if status == ValidatorStatus::Potential || status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
-            self.reset_view_change_interval();
+            self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
         }
 
         // If we're an active validator, we need to check if we're the next block producer.
@@ -302,7 +303,7 @@ impl Validator {
             SlotChange::NextBlock => (self.blockchain.view_number(), None),
             SlotChange::ViewChange(view_change, view_change_proof) => {
                 // Reset view change interval again.
-                self.reset_view_change_interval();
+                self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
                 self.state.write().view_number += 1;
 
                 (view_change.new_view_number, Some(view_change_proof))
@@ -329,6 +330,9 @@ impl Validator {
     }
 
     pub fn on_pbft_proposal(&self, hash: Blake2bHash, _proposal: PbftProposal) {
+        // reset time out for pBFT phase
+        self.reset_view_change_interval(Self::PBFT_TIMEOUT);
+
         let state = self.state.read();
         trace!("Received proposal: {}", hash);
         // View change messages should only be sent by active validators.
