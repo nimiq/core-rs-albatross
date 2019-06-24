@@ -11,15 +11,20 @@ create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
 add_hex_io_fns_typed_arr!(Address, Address::SIZE);
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum AddressParseError {
     // User-friendly
+    #[fail(display = "Wrong country code")]
     WrongCountryCode,
+    #[fail(display = "Wrong length")]
     WrongLength,
+    #[fail(display = "Invalid checksum")]
     InvalidChecksum,
     // from Hash
+    #[fail(display = "Invalid hash")]
     InvalidHash,
     // trying both
+    #[fail(display = "Unknown format")]
     UnknownFormat
 }
 

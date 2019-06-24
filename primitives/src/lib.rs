@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate beserial_derive;
+#[macro_use]
+extern crate failure;
 extern crate log;
 #[cfg(feature = "lazy_static")]
 #[macro_use]
