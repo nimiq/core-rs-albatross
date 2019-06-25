@@ -45,5 +45,8 @@ try:
 except KeyboardInterrupt:
     print("Keyboard interrupt. Terminating processes.")
     for process in processes:
-        process.terminate()
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            pass
 
