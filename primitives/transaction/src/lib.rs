@@ -77,7 +77,7 @@ pub struct SignatureProof {
 }
 
 impl SignatureProof {
-    pub fn from(public_key: PublicKey, signature: Signature) -> Self {
+    pub fn single_sig(public_key: PublicKey, signature: Signature) -> Self {
         SignatureProof {
             public_key,
             merkle_path: Blake2bMerklePath::empty(),
@@ -370,7 +370,7 @@ impl Deserialize for Transaction {
                     validity_start_height: Deserialize::deserialize(reader)?,
                     network_id: Deserialize::deserialize(reader)?,
                     flags: TransactionFlags::empty(),
-                    proof: SignatureProof::from(sender_public_key, Deserialize::deserialize(reader)?).serialize_to_vec(),
+                    proof: SignatureProof::single_sig(sender_public_key, Deserialize::deserialize(reader)?).serialize_to_vec(),
                     valid: false
                 })
             }

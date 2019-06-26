@@ -6,6 +6,7 @@ use std::io;
 use std::iter::Iterator;
 use std::str::FromStr;
 use hex::FromHex;
+use crate::key_pair::KeyPair;
 
 create_typed_array!(Address, u8, 20);
 hash_typed_array!(Address);
@@ -115,5 +116,11 @@ impl<'a> From<&'a PublicKey> for Address {
     fn from(public_key: &'a PublicKey) -> Self {
         let hash = Blake2bHasher::default().digest(public_key.as_bytes());
         Address::from(hash)
+    }
+}
+
+impl<'a> From<&'a KeyPair> for Address {
+    fn from(key_pair: &'a KeyPair) -> Self {
+        Address::from(&key_pair.public)
     }
 }

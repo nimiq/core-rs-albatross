@@ -40,7 +40,8 @@ members = [
     "bls",
     "validator",
     "tools",
-    "build-tools"
+    "build-tools",
+    "wallet"
 ]
 
 [profile.dev.overrides.pairing]
