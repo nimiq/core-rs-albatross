@@ -33,6 +33,6 @@ nimiq-validator = { path = "../validator", version = "0.1.0", optional = true }
 nimiq-bls = { path = "../bls", version = "0.1.0", optional = true }
 
 [features]
-default = ["validator", "mock-validator"]
+default = ["validator"]
 validator = ["nimiq-validator", "nimiq-bls"]
 mock-validator = ["validator"]

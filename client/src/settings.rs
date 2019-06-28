@@ -314,7 +314,6 @@ pub(crate) struct ValidatorSettings {
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum ValidatorType {
     None,
-    Mock,
     Validator,
 }
 
@@ -324,7 +323,6 @@ impl FromStr for ValidatorType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s.to_lowercase().as_str() {
             "none" => ValidatorType::None,
-            "mock" => ValidatorType::Mock,
             "validator" => ValidatorType::Validator,
             _ => Err(())?
         })

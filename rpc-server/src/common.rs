@@ -24,8 +24,8 @@ use keys::Address;
 use primitives::coin::Coin;
 use primitives::account::AccountType;
 
-use crate::rpc_not_implemented;
 use crate::{JsonRpcConfig, JsonRpcServerState};
+use crate::rpc_not_implemented;
 
 pub struct RpcHandler<P: ConsensusProtocol + 'static> {
     pub state: Arc<RwLock<JsonRpcServerState>>,

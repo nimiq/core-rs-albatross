@@ -26,8 +26,8 @@ impl AbstractRpcHandler<NimiqConsensusProtocol> for RpcHandler<NimiqConsensusPro
     fn new(consensus: Arc<Consensus<NimiqConsensusProtocol>>, state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self {
         Self {
             state,
-            consensus: consensus.clone(),
             starting_block: consensus.blockchain.height(),
+            consensus,
             config
         }
     }

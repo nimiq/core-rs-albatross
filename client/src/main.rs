@@ -66,7 +66,6 @@ use rpc_server::{rpc_server, Credentials, JsonRpcConfig, AbstractRpcHandler, Rpc
 
 use lib::block_producer::{BlockProducer, DummyBlockProducer};
 use lib::block_producer::albatross::{ValidatorConfig, AlbatrossBlockProducer};
-use lib::block_producer::mock::MockBlockProducer;
 use lib::error::ClientError;
 use lib::client::{Client, ClientBuilder, ClientInitializeFuture};
 
@@ -100,10 +99,6 @@ fn main() {
     #[cfg(feature = "deadlock-detection")]
     deadlock::deadlock_detection();
 
-    // setup a human-readable panic message
-    //#[cfg(feature = "human-panic")]
-    //setup_panic!();
-
     if let Err(e) = run() {
         force_log_error_cause_chain(e.as_fail(), Level::Error);
     }
@@ -125,11 +120,10 @@ fn find_config_file(cmdline: &Options, files: &mut LazyFileLocations) -> Result<
     Ok(files.config()?)
 }
 
-fn run_node<CC, BP>(client_builder: ClientBuilder, settings: Settings, block_producer_config: BP::Config) -> Result<(), Error>
+fn run_node<CC>(client_builder: ClientBuilder, settings: Settings, block_producer_config: <CC::BlockProducer as BlockProducer<CC::Protocol>>::Config) -> Result<(), Error>
     where CC: ClientConfiguration,
-          BP: BlockProducer<CC::Protocol> + 'static,
 {
-    let client: ClientInitializeFuture<CC::Protocol, BP> = client_builder.build_client::<CC::Protocol, BP>(block_producer_config)?;
+    let client: ClientInitializeFuture<CC::Protocol, CC::BlockProducer> = client_builder.build_client::<CC::Protocol, CC::BlockProducer>(block_producer_config)?;
 
     let consensus = client.consensus();
 
@@ -179,7 +173,7 @@ fn run_node<CC, BP>(client_builder: ClientBuilder, settings: Settings, block_pro
         }
     }
 
-    // start metrics server if enabled
+    // Start metrics server if enabled
     #[cfg(feature = "metrics-server")] {
         if let Some(metrics_settings) = settings.metrics_server {
             let bind = metrics_settings.bind
@@ -214,13 +208,13 @@ fn run_node<CC, BP>(client_builder: ClientBuilder, settings: Settings, block_pro
 }
 
 fn run() -> Result<(), Error> {
-    // parse command line arguments
+    // Parse command line arguments.
     let cmdline = Options::parse()?;
 
-    // default file locations
+    // Default file locations.
     let mut files = LazyFileLocations::new();
 
-    // load config file
+    // Load config file.
     let config_file = find_config_file(&cmdline, &mut files)?;
     if !config_file.exists() {
         eprintln!("Can't find config file at: {}", config_file.display());
@@ -254,13 +248,13 @@ fn run() -> Result<(), Error> {
     debug!("Command-line options: {:#?}", cmdline);
     debug!("Settings: {:#?}", settings);
 
-    // we only allow full nodes right now
+    // We only allow full nodes right now.
     if settings.consensus.node_type != s::NodeType::Full {
         error!("Only full consensus is implemented right now.");
         unimplemented!();
     }
 
-    // get network ID
+    // Get network ID.
     let network_id = NetworkId::from(cmdline.network.unwrap_or(settings.consensus.network));
 
     // Start database and obtain a 'static reference to it.
@@ -273,19 +267,19 @@ fn run() -> Result<(), Error> {
     // Initialize the static environment variable
     ENV.initialize(env);
 
-    // open peer key store
+    // Open peer key store.
     let peer_key_store = KeyStore::new(settings.peer_key_file.clone()
         .unwrap_or_else(|| files.peer_key()
             .expect("Failed to find peer key file")
             .to_str().unwrap().into()));
 
-    // Start building the client with network ID and environment
+    // Start building the client with network ID and environment.
     let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), ENV.get(), peer_key_store);
 
-    // Map network ID from command-line or config to actual network ID
+    // Map network ID from command-line or config to actual network ID.
     client_builder.with_network_id(network_id);
 
-    // add hostname and port to builder
+    // Add hostname and port to builder.
     if let Some(hostname) = cmdline.hostname.or_else(|| settings.network.host.clone()) {
         client_builder.with_hostname(&hostname);
     }
@@ -296,7 +290,7 @@ fn run() -> Result<(), Error> {
         client_builder.with_port(port);
     }
 
-    // add reverse proxy settings to builder
+    // Add reverse proxy settings to builder.
     if let Some(ref r) = settings.reverse_proxy {
         client_builder.with_reverse_proxy(
             r.port.unwrap_or(s::DEFAULT_REVERSE_PROXY_PORT),
@@ -306,13 +300,13 @@ fn run() -> Result<(), Error> {
         );
     }
 
-    // Add mempool settings to filter
+    // Add mempool settings to filter.
     if let Some(mempool_settings) = settings.mempool.clone() {
         client_builder.with_mempool_config(MempoolConfig::from(mempool_settings.clone()));
     }
 
-    // Add TLS configuration, if present
-    // NOTE: Currently we only need to set TLS settings for Wss
+    // Add TLS configuration, if present.
+    // NOTE: Currently we only need to set TLS settings for Wss.
     if settings.network.protocol == s::Protocol::Wss {
         if let Some(tls_settings) = settings.network.tls.clone() {
             client_builder.with_tls_identity(&tls_settings.identity_file, &tls_settings.identity_password);
@@ -322,7 +316,7 @@ fn run() -> Result<(), Error> {
         }
     }
 
-    // Parse additional seed nodes and add them
+    // Parse additional seed nodes and add them.
     let seeds = settings.network.seed_nodes.iter()
         .map(|s| s::Seed::try_from(s.clone()))
         .collect::<Result<Vec<Seed>, SeedError>>()?;
@@ -334,7 +328,7 @@ fn run() -> Result<(), Error> {
     }
     client_builder.with_seeds(seeds);
 
-    // Setup client future to initialize and connect
+    // Setup client future to initialize and connect.
     if network_id.is_albatross() {
         warn!("!!!!");
         warn!("!!!! Albatross node running");
@@ -345,12 +339,7 @@ fn run() -> Result<(), Error> {
             s::ValidatorType::None => {
                 info!("No validator");
                 info!("Ignoring validator config");
-                run_node::<AlbatrossConfiguration, DummyBlockProducer>(client_builder, settings, ())?;
-            },
-            s::ValidatorType::Mock => {
-                info!("Mock validator");
-                info!("Ignoring validator config");
-                run_node::<AlbatrossConfiguration, MockBlockProducer>(client_builder, settings, ())?;
+                run_node::<AlbatrossConfiguration>(client_builder, settings, ())?;
             },
             s::ValidatorType::Validator => {
                 let validator_key = {
@@ -378,12 +367,12 @@ fn run() -> Result<(), Error> {
                     validator_key,
                     block_delay: settings.validator.block_delay.unwrap_or(1000),
                 };
-                run_node::<AlbatrossConfiguration, AlbatrossBlockProducer>(client_builder, settings, validator_config)?;
+                run_node::<AlbatrossValidatorConfiguration>(client_builder, settings, validator_config)?;
             },
         };
     }
     else {
-        run_node::<NimiqConfiguration, DummyBlockProducer>(client_builder, settings, ())?;
+        run_node::<NimiqConfiguration>(client_builder, settings, ())?;
     }
 
     Ok(())
@@ -393,6 +382,7 @@ trait ClientConfiguration {
     type Protocol: ConsensusProtocol + 'static;
     type ChainMetrics: AbstractChainMetrics<Self::Protocol> + metrics_server::server::Metrics + 'static;
     type RpcHandler: AbstractRpcHandler<Self::Protocol> + 'static;
+    type BlockProducer: BlockProducer<Self::Protocol> + 'static;
 }
 
 struct NimiqConfiguration();
@@ -400,6 +390,7 @@ impl ClientConfiguration for NimiqConfiguration {
     type Protocol = NimiqConsensusProtocol;
     type ChainMetrics = NimiqChainMetrics;
     type RpcHandler = RpcHandler<Self::Protocol>;
+    type BlockProducer = DummyBlockProducer;
 }
 
 struct AlbatrossConfiguration();
@@ -407,4 +398,13 @@ impl ClientConfiguration for AlbatrossConfiguration {
     type Protocol = AlbatrossConsensusProtocol;
     type ChainMetrics = AlbatrossChainMetrics;
     type RpcHandler = RpcHandler<Self::Protocol>;
+    type BlockProducer = DummyBlockProducer;
+}
+
+struct AlbatrossValidatorConfiguration();
+impl ClientConfiguration for AlbatrossValidatorConfiguration {
+    type Protocol = AlbatrossConsensusProtocol;
+    type ChainMetrics = AlbatrossChainMetrics;
+    type RpcHandler = RpcHandler<Self::Protocol>;
+    type BlockProducer = AlbatrossBlockProducer;
 }

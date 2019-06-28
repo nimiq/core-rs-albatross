@@ -11,8 +11,8 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_database as database;
 
-mod wallet;
+mod wallet_account;
 mod wallet_store;
 
-pub use wallet::Wallet;
+pub use wallet_account::WalletAccount;
 pub use wallet_store::WalletStore;

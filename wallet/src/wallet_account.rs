@@ -9,16 +9,16 @@ use database::{FromDatabaseValue, IntoDatabaseValue};
 
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct Wallet {
+pub struct WalletAccount {
     pub key_pair: KeyPair,
     #[beserial(skip)]
     pub address: Address,
 }
 
 
-impl Wallet {
+impl WalletAccount {
     pub fn generate() -> Self {
-        Wallet::from(KeyPair::generate())
+        WalletAccount::from(KeyPair::generate())
     }
 
     pub fn create_transaction(&self, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
@@ -33,14 +33,14 @@ impl Wallet {
     }
 }
 
-impl Deserialize for Wallet {
+impl Deserialize for WalletAccount {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let key_pair: KeyPair = Deserialize::deserialize(reader)?;
-        Ok(Wallet::from(key_pair))
+        Ok(WalletAccount::from(key_pair))
     }
 }
 
-impl From<KeyPair> for Wallet {
+impl From<KeyPair> for WalletAccount {
     fn from(key_pair: KeyPair) -> Self {
         let address = Address::from(&key_pair);
         Self {
@@ -50,7 +50,7 @@ impl From<KeyPair> for Wallet {
     }
 }
 
-impl IntoDatabaseValue for Wallet {
+impl IntoDatabaseValue for WalletAccount {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -60,7 +60,7 @@ impl IntoDatabaseValue for Wallet {
     }
 }
 
-impl FromDatabaseValue for Wallet {
+impl FromDatabaseValue for WalletAccount {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)

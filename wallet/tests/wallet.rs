@@ -7,7 +7,7 @@ extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 
 use beserial::{Serialize, Deserialize};
-use wallet::Wallet;
+use wallet::WalletAccount;
 use keys::{KeyPair, Address, PrivateKey};
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
@@ -44,7 +44,7 @@ fn test_create_transaction() {
 fn test_serialize_deserialize() {
     let wallet = WALLET.clone();
     let serialized = wallet.serialize_to_vec();
-    match Wallet::deserialize_from_vec(&serialized) {
+    match WalletAccount::deserialize_from_vec(&serialized) {
         Ok(deserialized) => {
             assert_eq!(wallet, deserialized);
         },

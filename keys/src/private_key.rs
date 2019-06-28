@@ -2,14 +2,17 @@ use std::fmt::Debug;
 use std::fmt::Error;
 use std::fmt::Formatter;
 use std::io;
+use std::str::FromStr;
 
 use ed25519_dalek;
+use hex;
+use hex::FromHex;
 use rand::rngs::OsRng;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use hash::{Hash, SerializeContent};
 
 use crate::PublicKey;
-use hash::{Hash, SerializeContent};
 
 pub struct PrivateKey(pub(in super) ed25519_dalek::SecretKey);
 
@@ -26,6 +29,9 @@ impl PrivateKey {
 
     #[inline]
     pub (crate) fn as_dalek(&self) -> &ed25519_dalek::SecretKey { &self.0 }
+
+    #[inline]
+    pub fn to_hex(&self) -> String { hex::encode(self.as_bytes()) }
 }
 
 impl<'a> From<&'a [u8; PrivateKey::SIZE]> for PrivateKey {
@@ -85,3 +91,13 @@ impl PartialEq for PrivateKey {
 }
 
 impl Eq for PrivateKey {}
+
+impl FromStr for PrivateKey {
+    type Err = hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let vec = Vec::from_hex(s)?;
+        Ok(Deserialize::deserialize_from_vec(&vec)
+            .map_err(|_| hex::FromHexError::InvalidStringLength)?)
+    }
+}

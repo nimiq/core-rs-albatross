@@ -30,7 +30,8 @@ use hyper::Server;
 use json::JsonValue;
 use parking_lot::RwLock;
 
-use consensus::{Consensus, ConsensusEvent, ConsensusProtocol, AlbatrossConsensusProtocol};
+pub use common::RpcHandler;
+use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent, ConsensusProtocol};
 
 use crate::error::Error;
 
@@ -39,8 +40,7 @@ pub mod error;
 pub mod common;
 pub mod nimiq;
 pub mod albatross;
-
-pub use common::RpcHandler;
+pub mod wallet;
 
 fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
     Err(object!{"message" => "Not implemented"})

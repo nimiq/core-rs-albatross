@@ -20,11 +20,11 @@ use crate::{AbstractRpcHandler, JsonRpcConfig, JsonRpcServerState};
 use crate::common::{RpcHandler, TransactionContext};
 
 impl AbstractRpcHandler<AlbatrossConsensusProtocol> for RpcHandler<AlbatrossConsensusProtocol> {
-    fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self {
+    fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self {
         Self {
             state,
-            consensus: consensus.clone(),
             starting_block: consensus.blockchain.height(),
+            consensus,
             config
         }
     }
