@@ -66,14 +66,14 @@ impl std::fmt::Display for Never {
 }
 
 pub struct MetricsServer {
-    metrics: Vec<Arc<Metrics>>,
+    metrics: Vec<Arc<dyn Metrics>>,
     common_attributes: CachedAttributes,
     password: Option<String>,
 }
 
 impl MetricsServer {
     #[inline]
-    pub fn new<A: Into<CachedAttributes>>(metrics: Vec<Arc<Metrics>>, common_attributes: A, password: Option<String>) -> Self{
+    pub fn new<A: Into<CachedAttributes>>(metrics: Vec<Arc<dyn Metrics>>, common_attributes: A, password: Option<String>) -> Self{
         MetricsServer {
             metrics,
             common_attributes: common_attributes.into(),
@@ -125,7 +125,7 @@ impl hyper::service::Service for MetricsServer {
     type ReqBody = Body;
     type ResBody = Body;
     type Error = hyper::Error;
-    type Future = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send>;
+    type Future = Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>;
 
     fn call(&mut self, req: Request<<Self as hyper::service::Service>::ReqBody>) -> <Self as hyper::service::Service>::Future {
         // Check URI.

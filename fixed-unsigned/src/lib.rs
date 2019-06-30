@@ -78,7 +78,7 @@ impl Error for ParseError {
         "Failed to parse fixed point decimal:"
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         None
     }
 }

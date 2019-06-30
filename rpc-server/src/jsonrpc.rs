@@ -181,7 +181,7 @@ impl<H> hyper::service::Service for Service<H> where H: Handler + 'static {
     type ReqBody = Body;
     type ResBody = Body;
     type Error = hyper::Error;
-    type Future = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send>;
+    type Future = Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>;
 
     fn call(&mut self, req: Request<<Self as hyper::service::Service>::ReqBody>) -> <Self as hyper::service::Service>::Future {
         let handler = Arc::clone(&self.handler);

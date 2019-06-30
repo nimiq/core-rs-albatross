@@ -135,7 +135,7 @@ macro_rules! force_log {
 }
 
 #[inline]
-pub fn force_log_error_cause_chain(mut fail: &Fail, level: Level) {
+pub fn force_log_error_cause_chain(mut fail: &dyn Fail, level: Level) {
     force_log!(level, "{}", fail);
     if fail.cause().is_some() {
         force_log!(level, "  caused by");

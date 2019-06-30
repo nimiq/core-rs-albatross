@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 
-use libc::{c_int, uint32_t, size_t};
+use libc::{c_int, size_t};
 
 extern {
-    fn argon2d_hash_raw_flags(t_cost: uint32_t, m_cost: uint32_t,
-        parallelism: uint32_t, pwd: *const u8,
+    fn argon2d_hash_raw_flags(t_cost: u32, m_cost: u32,
+        parallelism: u32, pwd: *const u8,
         pwdlen: size_t, salt: *const u8,
         saltlen: size_t, hash: *mut u8,
-        hashlen: size_t, flags: uint32_t) -> c_int;
+        hashlen: size_t, flags: u32) -> c_int;
 }
 
 pub fn argon2d_hash(t_cost: u32, m_cost: u32, parallelism: u32, pwd: &[u8], salt: &[u8], out: &mut [u8], flags: u32) {
