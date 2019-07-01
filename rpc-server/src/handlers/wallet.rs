@@ -3,22 +3,30 @@ use std::sync::Arc;
 
 use json::{Array, JsonValue, Null};
 
+use nimiq_database::Environment;
 use keys::{KeyPair, PrivateKey};
 use nimiq_wallet::{WalletAccount, WalletStore};
 
+use crate::handlers::Handler;
 use crate::rpc_not_implemented;
 
 pub struct WalletHandler {
-    pub wallet_store: Arc<WalletStore<'static>>,
+    pub wallet_store: WalletStore<'static>,
 }
 
 impl WalletHandler {
+    pub(crate) fn new(env: &'static Environment) -> Self {
+        WalletHandler {
+            wallet_store: WalletStore::new(env),
+        }
+    }
+
     /// Imports a raw hex-string private key.
     /// Parameters:
     /// - key data (string): The hex encoded private key.
     /// - passphrase (optional, string): The passphrase to lock the key with.
     /// Returns the user friendly address corresponding to the private key.
-    pub fn import_raw_key(&self, params: Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn import_raw_key(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         let private_key = params.get(0).unwrap_or(&Null).as_str()
             .ok_or_else(|| object!{"message" => "Missing private key data"})?;
         let private_key = PrivateKey::from_str(private_key)
@@ -35,7 +43,7 @@ impl WalletHandler {
     }
 
     /// Returns a list of all user friendly addresses in the store.
-    pub fn list_accounts(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn list_accounts(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
         Ok(JsonValue::Array(self.wallet_store.list(None).iter().map(|wallet_account| {
             JsonValue::String(wallet_account.address.to_user_friendly_address())
         }).collect()))
@@ -44,7 +52,7 @@ impl WalletHandler {
     /// Removes the unencrypted private key from memory.
     /// Parameters:
     /// - address (string)
-    pub fn lock_account(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn lock_account(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
         // TODO: Implement
         rpc_not_implemented()
     }
@@ -53,7 +61,7 @@ impl WalletHandler {
     /// Parameters:
     /// - passphrase (optional, string): The passphrase to lock the key with.
     /// Returns the user friendly address corresponding to the private key.
-    pub fn new_account(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn new_account(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
         // TODO: Passphrase is currently ignored.
 
         let wallet_account = WalletAccount::generate();
@@ -70,7 +78,7 @@ impl WalletHandler {
     /// - address (string)
     /// - passphrase (string)
     /// - duration (number)
-    pub fn unlock_account(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn unlock_account(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
         // TODO: Implement
         rpc_not_implemented()
     }
@@ -80,17 +88,44 @@ impl WalletHandler {
     /// - transaction (object)
     /// - passphrase (string)
     /// Returns the transaction hash.
-    pub fn send_transaction(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn send_transaction(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
         // TODO: Implement
         rpc_not_implemented()
     }
 
-    pub fn sign(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn sign(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
         // TODO: Implement
         rpc_not_implemented()
     }
-    pub fn ec_recover(&self, _params: Array) -> Result<JsonValue, JsonValue> {
+
+    pub(crate) fn ec_recover(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
         // TODO: Implement
         rpc_not_implemented()
+    }
+}
+
+impl WalletHandler {
+    const PREFIX: &'static str = "personal_";
+}
+
+impl Handler for WalletHandler {
+    fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+        if !name.starts_with(Self::PREFIX) {
+            return None;
+        }
+
+        match &name[Self::PREFIX.len()..] {
+            // Wallet
+            "importRawKey" => Some(self.import_raw_key(params)),
+            "listAccounts" => Some(self.list_accounts(params)),
+            "lockAccount" => Some(self.lock_account(params)),
+            "newAccount" => Some(self.new_account(params)),
+            "unlockAccount" => Some(self.unlock_account(params)),
+            "sendTransaction" => Some(self.send_transaction(params)),
+            "sign" => Some(self.sign(params)),
+            "ec_recover" => Some(self.ec_recover(params)),
+
+            _ => None
+        }
     }
 }

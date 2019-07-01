@@ -8,7 +8,7 @@ use json::{Array, JsonValue, Null};
 use crate::error::AuthenticationError;
 
 pub trait Handler: Send + Sync {
-    fn get_method(&self, name: &str) -> Option<fn(&Self, params: Array) -> Result<JsonValue, JsonValue>>;
+    fn call_method(&self, name: &str, params: Array) -> Option<Result<JsonValue, JsonValue>>;
     fn authorize(&self, _username: &str, _password: &str) -> Result<(), AuthenticationError> {
         Ok(())
     }
@@ -103,8 +103,18 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
                         });
             continue;
         }
-        let method_o = handler.get_method(msg["method"].as_str().unwrap());
-        if method_o.is_none() {
+
+        let params = msg["params"].clone();
+        let params_array = match params {
+            JsonValue::Array(a) => a,
+            _ => vec![params]
+        };
+
+        let result_o = handler.call_method(
+            msg["method"].as_str().unwrap(),
+            params_array
+        );
+        if result_o.is_none() {
             warn!("Unknown method called: {}", msg["method"]);
             results.push(object!{
                             "jsonrpc" => "2.0",
@@ -116,14 +126,8 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
                         });
             continue;
         }
-        let method = method_o.unwrap();
-        let params = msg["params"].clone();
-        let params_array = match params {
-            JsonValue::Array(a) => a,
-            _ => vec![params]
-        };
 
-        results.push(match method(&handler, params_array) {
+        results.push(match result_o.unwrap() {
             Ok(result) => object!{
                             "jsonrpc" => "2.0",
                             "id" => msg["id"].clone(),

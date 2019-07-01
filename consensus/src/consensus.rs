@@ -27,6 +27,7 @@ pub struct Consensus<P: ConsensusProtocol + 'static> {
     pub blockchain: Arc<P::Blockchain>,
     pub mempool: Arc<Mempool<'static, P::Blockchain>>,
     pub network: Arc<Network<P::Blockchain>>,
+    pub env: &'static Environment,
 
     inv_mgr: Arc<RwLock<InventoryManager<P::Blockchain, P::MessageAdapter>>>,
     timers: Timers<ConsensusTimer>,
@@ -75,6 +76,7 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
             blockchain,
             mempool,
             network,
+            env,
 
             inv_mgr: InventoryManager::new(),
             timers: Timers::new(),

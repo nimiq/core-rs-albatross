@@ -8,14 +8,11 @@ extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
 extern crate nimiq_block_production as block_production;
-extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
-extern crate nimiq_mempool as mempool;
-extern crate nimiq_network as network;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
@@ -27,6 +24,7 @@ use std::sync::Arc;
 
 use futures::future::Future;
 use hyper::Server;
+use json::Array;
 use json::JsonValue;
 use parking_lot::RwLock;
 
@@ -40,7 +38,7 @@ pub mod error;
 pub mod common;
 pub mod nimiq;
 pub mod albatross;
-pub mod wallet;
+pub mod handlers;
 
 fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
     Err(object!{"message" => "Not implemented"})
@@ -121,7 +119,7 @@ impl AbstractRpcHandler<AlbatrossConsensusProtocol> for DummyRpcHandler {
 }
 
 impl jsonrpc::Handler for DummyRpcHandler {
-    fn get_method(&self, _name: &str) -> Option<fn(&Self, Vec<JsonValue>) -> Result<JsonValue, JsonValue>> {
+    fn call_method(&self, _name: &str, _params: Array) -> Option<Result<JsonValue, JsonValue>> {
         None
     }
 }

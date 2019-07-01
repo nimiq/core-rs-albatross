@@ -389,7 +389,7 @@ struct NimiqConfiguration();
 impl ClientConfiguration for NimiqConfiguration {
     type Protocol = NimiqConsensusProtocol;
     type ChainMetrics = NimiqChainMetrics;
-    type RpcHandler = RpcHandler<Self::Protocol>;
+    type RpcHandler = RpcHandler;
     type BlockProducer = DummyBlockProducer;
 }
 
@@ -397,7 +397,7 @@ struct AlbatrossConfiguration();
 impl ClientConfiguration for AlbatrossConfiguration {
     type Protocol = AlbatrossConsensusProtocol;
     type ChainMetrics = AlbatrossChainMetrics;
-    type RpcHandler = RpcHandler<Self::Protocol>;
+    type RpcHandler = RpcHandler;
     type BlockProducer = DummyBlockProducer;
 }
 
@@ -405,6 +405,6 @@ struct AlbatrossValidatorConfiguration();
 impl ClientConfiguration for AlbatrossValidatorConfiguration {
     type Protocol = AlbatrossConsensusProtocol;
     type ChainMetrics = AlbatrossChainMetrics;
-    type RpcHandler = RpcHandler<Self::Protocol>;
+    type RpcHandler = RpcHandler;
     type BlockProducer = AlbatrossBlockProducer;
 }
