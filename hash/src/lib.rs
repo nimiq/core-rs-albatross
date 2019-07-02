@@ -4,6 +4,7 @@ extern crate nimiq_macros as macros;
 pub mod hmac;
 pub mod pbkdf2;
 pub mod sha512;
+pub mod argon2kdf;
 
 use blake2_rfc::blake2b::Blake2b;
 use libargon2_sys::argon2d_hash;
@@ -171,7 +172,8 @@ impl Argon2dHasher {
 
     fn hash_bytes(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {
         let mut out = [0u8; ARGON2D_LENGTH];
-        argon2d_hash(self.passes, self.kib, self.lanes,bytes, salt, &mut out, 0);
+        let result = argon2d_hash(self.passes, self.kib, self.lanes,bytes, salt, &mut out, 0);
+        assert!(result.is_ok());
         Argon2dHash::from(out)
     }
 }

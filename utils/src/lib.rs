@@ -30,3 +30,5 @@ pub mod throttled_queue;
 pub mod rate_limit;
 #[cfg(feature = "unique-id")]
 pub mod unique_id;
+#[cfg(feature = "otp")]
+pub mod otp;

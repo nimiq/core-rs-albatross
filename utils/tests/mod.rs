@@ -1,3 +1,7 @@
+#[cfg(feature = "otp")]
+#[macro_use]
+extern crate beserial_derive;
+
 #[cfg(feature = "crc")]
 pub mod crc;
 #[cfg(feature = "merkle")]
@@ -12,3 +16,5 @@ pub mod throttled_queue;
 pub mod rate_limit;
 #[cfg(feature = "unique-id")]
 pub mod unique_id;
+#[cfg(feature = "otp")]
+pub mod otp;
