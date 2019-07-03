@@ -19,9 +19,9 @@ pub struct Service<H> where H: Handler {
 }
 
 impl<H> Service<H> where H: Handler {
-    pub fn new(handler: H) -> Self {
+    pub fn new(handler: Arc<H>) -> Self {
         Service {
-            handler: Arc::new(handler)
+            handler,
         }
     }
 }

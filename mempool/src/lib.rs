@@ -26,6 +26,7 @@ use transaction::{Transaction, TransactionFlags};
 use utils::observer::Notifier;
 
 use crate::filter::{MempoolFilter, Rules};
+use primitives::networks::NetworkId;
 
 pub mod filter;
 
@@ -345,6 +346,14 @@ impl<'env, B: AbstractBlockchain<'env> + 'env> Mempool<'env, B> {
             };
         }
         txs
+    }
+
+    pub fn current_height(&self) -> u32 {
+        self.blockchain.head_height()
+    }
+
+    pub fn network_id(&self) -> NetworkId {
+        self.blockchain.network_id()
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent<B::Block>) {

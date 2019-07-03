@@ -27,6 +27,7 @@ failure = "0.1"
 parking_lot = "0.7"
 base64 = "0.10"
 beserial = { path = "../beserial", version = "0.1.0" }
+clear_on_drop = { version = "0.2" }
 nimiq-database = { path = "../database", version = "0.1.0" }
 nimiq-consensus = { path = "../consensus", version = "0.1.0" }
 nimiq-blockchain = { path = "../blockchain", version = "0.1.0" }
@@ -42,6 +43,6 @@ nimiq-block-base = { path = "../primitives/block-base", version = "0.1.0" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
 nimiq-keys = { path = "../keys", version = "0.1.0" }
 nimiq-block-production = { path = "../block-production", version = "0.1.0" }
-nimiq-utils = { path = "../utils", version = "0.1.0", features = ["merkle", "time"] }
+nimiq-utils = { path = "../utils", version = "0.1.0", features = ["merkle", "time", "otp"] }
 nimiq-primitives = { path = "../primitives", version = "0.1.0" }
 nimiq-wallet = { path = "../wallet", version = "0.1.0" }

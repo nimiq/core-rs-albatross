@@ -14,6 +14,7 @@ use hash::{Hash, SerializeContent};
 
 use crate::PublicKey;
 
+#[derive(Default)]
 pub struct PrivateKey(pub(in super) ed25519_dalek::SecretKey);
 
 impl PrivateKey {

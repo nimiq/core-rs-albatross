@@ -28,7 +28,7 @@ fn create_unlocked_checked() {
     let password = "password";
     let wrong_password = "wrong_password";
 
-    let lock = match OtpLock::new_unlocked_with_defaults(secret.clone(), password.as_bytes()) {
+    let lock = match OtpLock::unlocked_with_defaults(secret.clone(), password.as_bytes()) {
         Ok(l) => l,
         Err(e) => panic!("{:?}", e),
     };
@@ -60,7 +60,7 @@ fn create_locked_unchecked() {
     let password = "password";
     let wrong_password = "wrong_password";
 
-    let lock = match OtpLock::new_locked_with_defaults(secret, password.as_bytes()) {
+    let lock = match OtpLock::locked_with_defaults(secret, password.as_bytes()) {
         Ok(l) => l,
         Err(e) => panic!("{:?}", e),
     };

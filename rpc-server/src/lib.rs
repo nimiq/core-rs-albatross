@@ -99,9 +99,10 @@ pub fn rpc_server<P, PH>(consensus: Arc<Consensus<P>>, ip: IpAddr, port: u16, co
     }
 
     let config = Arc::new(config);
+    let handler = Arc::new(PH::new(Arc::clone(&consensus), Arc::clone(&state), Arc::clone(&config)));
     Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
         .serve(move || {
-            jsonrpc::Service::new(PH::new(Arc::clone(&consensus), Arc::clone(&state), Arc::clone(&config)))
+            jsonrpc::Service::new(Arc::clone(&handler))
         })
         .map_err(|e| error!("RPC server failed: {}", e)))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
 }

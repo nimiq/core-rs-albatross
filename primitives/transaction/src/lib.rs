@@ -137,6 +137,23 @@ impl Transaction {
         }
     }
 
+    pub fn new_extended(sender: Address, sender_type: AccountType, recipient: Address, recipient_type: AccountType, value: Coin, fee: Coin, data: Vec<u8>, validity_start_height: u32, network_id: NetworkId) -> Self {
+        Self {
+            data,
+            sender,
+            sender_type,
+            recipient,
+            recipient_type,
+            value,
+            fee,
+            validity_start_height,
+            network_id,
+            flags: TransactionFlags::empty(),
+            proof: Vec::new(),
+            valid: false
+        }
+    }
+
     pub fn new_contract_creation(data: Vec<u8>, sender: Address, sender_type: AccountType, recipient_type: AccountType, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
         let mut tx = Self {
             data,

@@ -11,7 +11,7 @@ use crate::{PrivateKey, Signature};
 use hash::{Hash, SerializeContent};
 use crate::errors::{KeysError, ParseError};
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Default, Eq, PartialEq, Clone, Copy)]
 pub struct PublicKey(pub(in super) ed25519_dalek::PublicKey);
 
 impl PublicKey {
