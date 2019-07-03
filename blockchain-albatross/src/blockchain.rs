@@ -11,13 +11,13 @@ use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
 use beserial::Serialize;
-use block::{Block, BlockError, BlockType, MacroBlock, MacroHeader, MicroBlock, ForkProof, ViewChanges, ViewChangeProof};
+use block::{Block, BlockHeader, BlockError, BlockType, MacroBlock, MacroExtrinsics, MicroBlock, ForkProof, ViewChange, ViewChanges, ViewChangeProof};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
 use collections::bitset::BitSet;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
-use hash::Blake2bHash;
+use hash::{Blake2bHash, Hash};
 use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
@@ -230,9 +230,9 @@ impl<'env> Blockchain<'env> {
         (slots, validators)
     }
 
-    pub fn verify_macro_block_header(&self, header: &MacroHeader, _view_change_proof: Option<&ViewChangeProof>) -> Result<(), PushError> {
+    pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: Option<&ViewChangeProof>) -> Result<(), PushError> {
         // Check if the block's immediate predecessor is part of the chain.
-        let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash, false, None);
+        let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash(), false, None);
         if prev_info_opt.is_none() {
             warn!("Rejecting block - unknown predecessor");
             return Err(PushError::Orphan);
@@ -241,98 +241,118 @@ impl<'env> Blockchain<'env> {
         // Check that the block is a valid successor of its predecessor.
         let prev_info = prev_info_opt.unwrap();
 
-        if self.get_next_block_type(Some(prev_info.head.block_number())) != BlockType::Macro {
-            warn!("Rejecting block - not expecting a macro block");
+        if self.get_next_block_type(Some(prev_info.head.block_number())) != header.ty() {
+            warn!("Rejecting block - wrong block type ({:?})", header.ty());
             return Err(PushError::InvalidSuccessor);
         }
 
         // Check the block number
-        if prev_info.head.block_number() + 1 != header.block_number {
-            warn!("Rejecting block - wrong block number ({:?})", header.block_number);
+        if prev_info.head.block_number() + 1 != header.block_number() {
+            warn!("Rejecting block - wrong block number ({:?})", header.block_number());
             return Err(PushError::InvalidSuccessor)
         }
 
-        // TODO: Check validators
+        // Check if a view change occurred - if so, validate the proof
+        let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
+            0 // Reset view number in new epoch
+        } else {
+            prev_info.head.view_number()
+        };
 
-        // TODO: Check view number (ViewChangeProof in PbftProposal)
+        if header.view_number() < view_number {
+            warn!("Rejecting block - lower view number {:?} < {:?}", header.view_number(), view_number);
+            return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
+        } else if prev_info.head.view_number() > view_number {
+            match view_change_proof {
+                None => {
+                    warn!("Rejecting block - missing view change proof");
+                    return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof));
+                },
+                Some(ref view_change_proof) => {
+                    let view_change = ViewChange {
+                        block_number: header.block_number(),
+                        new_view_number: header.view_number(),
+                    };
+                    if let Err(e) = view_change_proof.verify(&view_change,&self.current_validators(),policy::TWO_THIRD_VALIDATORS) {
+                        warn!("Rejecting block - bad view change proof: {:?}", e);
+                        return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+                    }
+                },
+            }
+        } else if prev_info.head.view_number() == view_number && view_change_proof.is_some() {
+            warn!("Rejecting block - should not contain view change proof");
+            return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+        }
 
-        // TODO: Check parent macro hash
+        // Check if the block was produced (and signed) by the intended producer
+        // Public keys are checked when staking, so this should never fail.
+        let intended_slot_owner = if let Some((_, slot)) = self.get_block_producer_at(header.block_number(), header.view_number(), None) {
+            slot.public_key.uncompress_unchecked().clone()
+        } else {
+            return Err(PushError::InvalidSuccessor);
+        };
 
-        // TODO: Check seed (need current block producer)
+        match header.seed().uncompress() {
+            Ok(ref signature) => {
+                if !intended_slot_owner.verify(&prev_info.head.seed().uncompress().unwrap(), signature) { // todo nicer
+                    warn!("Rejecting block - bad seed");
+                    return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+                }
+            },
+            Err(_) => {
+                warn!("Rejecting block - invalid seed");
+                return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+            }
+        }
 
-        // TODO: Check timestamp
+        if let BlockHeader::Macro(ref header) = header {
+
+            // Check if the parent macro hash matches the current macro head hash
+            if header.parent_macro_hash != self.state().macro_head_hash {
+                warn!("Rejecting block - wrong patent macro hash");
+                return Err(PushError::InvalidSuccessor);
+            }
+        }
 
         Ok(())
     }
 
-    /// Verification required for macro block proposals and micro blocks
-    pub fn push_verify_dry(&self, block: &Block) -> Result<(), PushError> {
+    pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
+        // Only one push operation at a time.
+        let _lock = self.push_lock.lock();
+
+        // Check if we already know this block.
+        let hash: Blake2bHash = block.hash();
+        if self.chain_store.get_chain_info(&hash, false, None).is_some() {
+            return Ok(PushResult::Known);
+        }
+
         // Check (sort of) intrinsic block invariants.
         if let Err(e) = block.verify(self.network_id) {
             warn!("Rejecting block - verification failed ({:?})", e);
             return Err(PushError::InvalidBlock(e));
         }
 
-        // Check if the block's immediate predecessor is part of the chain.
-        let prev_info_opt = self.chain_store.get_chain_info(&block.parent_hash(), false, None);
-        if prev_info_opt.is_none() {
-            warn!("Rejecting block - unknown predecessor");
-            return Err(PushError::Orphan);
-        }
-
-        // Check that the block is a valid successor of its predecessor.
-        let prev_info = prev_info_opt.unwrap();
-
-        if self.get_next_block_type(Some(prev_info.head.block_number())) != block.ty() {
-            warn!("Rejecting block - wrong block type ({:?})", block.ty());
-            return Err(PushError::InvalidSuccessor);
-        }
-
-        // Check the block number
-        if prev_info.head.block_number() + 1 != block.block_number() {
-            warn!("Rejecting block - wrong block number ({:?})", block.block_number());
-            return Err(PushError::InvalidSuccessor)
-        }
-
         if let Block::Micro(ref micro_block) = block {
-            // Check if a view change occurred - if so, validate the proof
-            let view_number = if policy::is_macro_block_at(micro_block.header.block_number - 1) {
-                0
-            }
-            else {
-                prev_info.head.view_number()
-            };
-            if block.view_number() < view_number {
-                return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
-            }
-            else if block.view_number() > view_number {
-                match micro_block.justification.view_change_proof {
-                    None => return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof)),
-                    Some(ref view_change_proof) => view_change_proof.verify(
-                        &micro_block.view_change().unwrap(),
-                        &self.current_validators(),
-                        policy::TWO_THIRD_VALIDATORS)
-                        .map_err(|_| BlockError::InvalidJustification)?,
-                }
-            }
-            else if micro_block.justification.view_change_proof.is_some() {
-                return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-            }
 
             // XXX We might want to pass this as argument to this method
             let read_txn = ReadTransaction::new(self.env);
 
             // Check if the block was produced (and signed) by the intended producer
             // Public keys are checked when staking, so this should never fail.
-            let intended_slot_owner = if let Some((_, slot)) = self
-                .get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn)) {
+            let intended_slot_owner = if let Some((_, slot)) = self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn)) {
                 slot.public_key.uncompress_unchecked().clone()
             } else {
                 return Err(PushError::InvalidSuccessor);
             };
 
-            let justification = micro_block.justification.signature.uncompress()
-                .map_err(|_| PushError::InvalidBlock(BlockError::InvalidJustification))?;
+            let justification = match micro_block.justification.signature.uncompress() {
+                Ok(justification) => justification,
+                Err(_) => {
+                    warn!("Rejecting block - bad justification");
+                    return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+                }
+            };
             if !intended_slot_owner.verify(&micro_block.header, &justification) {
                 warn!("Rejecting block - not a valid successor");
                 return Err(PushError::InvalidSuccessor);
@@ -355,39 +375,34 @@ impl<'env> Blockchain<'env> {
             }
         }
 
-        // TODO: Macro block (proposal) checking. Also generate and validate MacroExtrinsics if None.
+        if let Block::Macro(ref macro_block) = block {
+            match macro_block.justification {
+                None => {
+                    warn!("Rejecting block - macro block without justification");
+                    return Err(PushError::InvalidBlock(BlockError::NoJustification));
+                },
+                Some(ref justification) => {
+                    if justification.verify(macro_block.hash(),&self.current_validators(), policy::TWO_THIRD_VALIDATORS).is_err() {
+                        warn!("Rejecting block - macro block with bad justification");
+                        return Err(PushError::InvalidBlock(BlockError::NoJustification));
+                    }
+                },
+            }
 
-        return Ok(());
-    }
+            let computed_extrinsics: MacroExtrinsics = self.next_slots().into();
+            let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
+            if computed_extrinsics_hash != macro_block.header.extrinsics_root {
+                warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
+                return Err(PushError::InvalidBlock(BlockError::NoJustification));
+            }
 
-    pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
-        // Only one push operation at a time.
-        let _lock = self.push_lock.lock();
-
-        // Check if we already know this block.
-        let hash: Blake2bHash = block.hash();
-        if self.chain_store.get_chain_info(&hash, false, None).is_some() {
-            return Ok(PushResult::Known);
-        }
-
-        match block {
-            Block::Macro(ref macro_block) => {
-                match macro_block.justification {
-                    None => {
-                        warn!("Rejecting block - macro block without justification");
-                        return Err(PushError::InvalidBlock(BlockError::NoJustification))
-                    },
-                    Some(ref justification) => {
-                        trace!("checking justification for macro block: {:#?}", &macro_block.justification);
-                        justification.verify(
-                            macro_block.hash(),
-                            &self.current_validators(),
-                            policy::TWO_THIRD_VALIDATORS)
-                            .map_err(|_| BlockError::InvalidJustification)?
-                    },
+            if let Some(ref extrinsics) = macro_block.extrinsics {
+                let extrinsics_hash: Blake2bHash = extrinsics.hash();
+                if extrinsics_hash != macro_block.header.extrinsics_root {
+                    warn!("Rejecting block - Header extrinsics hash doesn't match real extrinsics hash");
+                    return Err(PushError::InvalidBlock(BlockError::NoJustification));
                 }
-            },
-            Block::Micro(ref _micro_block) => self.push_verify_dry(&block)?,
+            }
         }
 
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
@@ -759,7 +774,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn get_next_block_producer(&self, view_number: u32, txn_option: Option<&Transaction>) -> (u16, Slot) {
-        let block_number =self.height() + 1;
+        let block_number = self.height() + 1;
         self.get_block_producer_at(block_number, view_number, txn_option)
             .expect("Can't get block producer for next block")
     }

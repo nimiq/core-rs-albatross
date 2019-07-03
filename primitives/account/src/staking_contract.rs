@@ -1,4 +1,4 @@
-use std::cmp::{Ordering, min};
+use std::cmp::Ordering;
 use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
 use std::io::Write;
@@ -420,7 +420,7 @@ impl StakingContract {
         //     parallelized.
         let mut validators = Vec::<Slot>::with_capacity(num_slots as usize);
         let mut counter: u16 = 0;
-        for i in 0..num_slots {
+        for _ in 0..num_slots {
             let active_stake = loop {
                 // Hash seed and index
                 let mut hash_state = Blake2bHasher::new();

@@ -220,6 +220,13 @@ impl BlockHeader {
         }
     }
 
+    pub fn seed(&self) -> &CompressedSignature {
+        match self {
+            BlockHeader::Macro(ref header) => &header.seed,
+            BlockHeader::Micro(ref header) => &header.seed,
+        }
+    }
+
     pub fn hash(&self) -> Blake2bHash {
         match self {
             BlockHeader::Macro(ref header) => header.hash(),
