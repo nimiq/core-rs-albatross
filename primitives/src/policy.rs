@@ -42,11 +42,6 @@ const EMISSION_TAIL_REWARD: u64 = 4000;
 /// Emission speed.
 const EMISSION_SPEED: u64 = 4_194_304;
 
-/// Number of micro blocks to wait for unstaking after next macro block.
-pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.
-
-pub const BLOCKS_PER_EPOCH: u32 = 128;
-
 lazy_static! {
     static ref SUPPLY_CACHE: RwLock<Vec<u64>> = RwLock::new(vec![INITIAL_SUPPLY]);
 }
@@ -110,6 +105,9 @@ pub fn block_reward_at(block_height: u32) -> Coin {
 
 /* Albatross */
 
+/// Number of micro blocks to wait for unstaking after next macro block.
+pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.
+
 /// Number of active validators
 pub const ACTIVE_VALIDATORS: u16 = 512;
 
@@ -146,17 +144,17 @@ pub fn macro_block_before(block_number: u32) -> u32 {
 
 #[inline]
 pub fn epoch_at(block_number: u32) -> u32 {
-    (block_number + BLOCKS_PER_EPOCH - 1) / BLOCKS_PER_EPOCH
+    (block_number + EPOCH_LENGTH - 1) / EPOCH_LENGTH
 }
 
 #[inline]
 pub fn epoch_index_at(block_number: u32) -> u32 {
-    (block_number + BLOCKS_PER_EPOCH - 1) % BLOCKS_PER_EPOCH
+    (block_number + EPOCH_LENGTH - 1) % EPOCH_LENGTH
 }
 
 #[inline]
 pub fn is_macro_block_at(block_number: u32) -> bool {
-    epoch_index_at(block_number) == BLOCKS_PER_EPOCH - 1
+    epoch_index_at(block_number) == EPOCH_LENGTH - 1
 }
 
 #[inline]
@@ -177,11 +175,11 @@ pub fn first_block_of(epoch: u32) -> u32 {
     if epoch == 0 {
         panic!("Called first_block_of for epoch 0");
     }
-    epoch * BLOCKS_PER_EPOCH - BLOCKS_PER_EPOCH + 1
+    epoch * EPOCH_LENGTH - EPOCH_LENGTH + 1
 }
 
 pub fn macro_block_of(epoch: u32) -> u32 {
-    epoch * BLOCKS_PER_EPOCH
+    epoch * EPOCH_LENGTH
 }
 
 #[cfg(test)]
