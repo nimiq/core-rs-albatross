@@ -7,12 +7,11 @@ use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
-use block_albatross::{BlockHeader, SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
+use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
                       SignedPbftProposal, ViewChange, ForkProof};
 use primitives::policy;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
-use hash::{Hash, Blake2bHash};
 
 
 pub enum ValidatorAgentEvent {
@@ -121,7 +120,6 @@ impl ValidatorAgent {
 
                             // get all proposals that are now valid
                             while let Some(proposal) = state.proposal_buf.peek() {
-                                trace!("proposal: block_number={}, view_number={}", proposal.0.message.header.block_number, proposal.0.message.header.view_number);
                                 if proposal.0.message.header.block_number <= block_number + 1 {
                                     // unwrap is safe, since we already peeked and have the write lock
                                     proposals.push(state.proposal_buf.pop().unwrap().0);
@@ -154,7 +152,7 @@ impl ValidatorAgent {
             // the signature of this info.
             if let Ok(public_key) = signed_info.message.public_key.uncompress() {
                 let signature_okay = signed_info.verify(&public_key);
-                debug!("[VALIDATOR-INFO] {:#?}, signature_okay={}", signed_info.message, signature_okay);
+                trace!("[VALIDATOR-INFO] {:#?}, signature_okay={}", signed_info.message, signature_okay);
                 if !signature_okay {
                     continue;
                 }
@@ -194,7 +192,7 @@ impl ValidatorAgent {
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
     fn on_view_change_message(&self, view_change: SignedViewChange) {
-        debug!("[VIEW-CHANGE] Received view change from {}: {:#?}", self.peer.peer_address(), view_change.message);
+        trace!("[VIEW-CHANGE] Received view change from {}", self.peer.peer_address());
         if !self.blockchain.is_in_current_epoch(view_change.message.block_number) {
             debug!("[VIEW-CHANGE] View change for old epoch: block_number={}", view_change.message.block_number);
         }
@@ -220,7 +218,11 @@ impl ValidatorAgent {
         let block_number = proposal.message.header.block_number;
         let view_number = proposal.message.header.view_number;
 
-        debug!("[PBFT-PROPOSAL] Macro block proposal: block_number={}, view_number={}: {}", block_number, view_number, proposal.message.header.hash::<Blake2bHash>());
+        // Reject proposal if block number already known
+        if proposal.message.header.block_number <= self.blockchain.head().block_number() {
+            trace!("[PBFT-PROPOSAL] Ignoring old proposal: {:?}", proposal.message.header);
+            return;
+        }
 
         if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number, None) {
             let public_key = &slot.public_key.uncompress_unchecked();
@@ -269,7 +271,7 @@ impl ValidatorAgent {
 
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
-        debug!("[PBFT-PREPARE] Received prepare from {}: {}", self.peer.peer_address(), prepare.message.block_hash);
+        trace!("[PBFT-PREPARE] Received prepare from {}: {}", self.peer.peer_address(), prepare.message.block_hash);
         if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(prepare.signer_idx) {
             if prepare.verify(&validator_slots.public_key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
@@ -292,7 +294,7 @@ impl ValidatorAgent {
     /// FIXME This will verify a commit message with the current validator set, not with the one for
     /// which this commit is for.
     fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
-        debug!("[PBFT-COMMIT] Received commit from {}: {:#?}", self.peer.peer_address(), commit.message);
+        trace!("[PBFT-COMMIT] Received commit from {}", self.peer.peer_address());
         if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(commit.signer_idx) {
             if commit.verify(&validator_slots.public_key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {

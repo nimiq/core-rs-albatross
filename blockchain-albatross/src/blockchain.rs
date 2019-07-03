@@ -798,6 +798,7 @@ impl<'env> Blockchain<'env> {
             Some(n) => n
 
         };
+        // TODO Replace with policy helper function
         match (last_block_number + 1) % policy::EPOCH_LENGTH {
             0 => BlockType::Macro,
             _ => BlockType::Micro
@@ -816,11 +817,13 @@ impl<'env> Blockchain<'env> {
 
     fn is_in_current_epoch_locked(&self, block_number: u32, state: &RwLockReadGuard<BlockchainState>) -> bool {
         let macro_block_number = state.macro_head.header.block_number;
+        // TODO Replace with policy helper function
         block_number > macro_block_number && block_number <= macro_block_number + policy::EPOCH_LENGTH
     }
 
     fn is_in_previous_epoch_locked(&self, block_number: u32, state: &RwLockReadGuard<BlockchainState>) -> bool {
         let macro_block_number = state.macro_head.header.block_number;
+        // TODO Replace with policy helper function
         macro_block_number > policy::EPOCH_LENGTH && block_number >= macro_block_number - policy::EPOCH_LENGTH && block_number < macro_block_number
     }
 

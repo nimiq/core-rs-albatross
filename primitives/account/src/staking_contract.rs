@@ -425,7 +425,7 @@ impl StakingContract {
                 // Hash seed and index
                 let mut hash_state = Blake2bHasher::new();
                 seed.serialize(&mut hash_state).expect("Failed to hash seed");
-                hash_state.write(&counter.to_be_bytes()).expect("Failed to hash index");
+                hash_state.write_all(&counter.to_be_bytes()).expect("Failed to hash index");
                 counter += 1;
                 let hash = hash_state.finish();
 
@@ -520,7 +520,7 @@ impl AccountTransactionInteraction for StakingContract {
                 .ok_or(AccountError::InvalidForSender)?;
 
             // Check unstake delay.
-            if block_height < policy::macro_block_after(inactive_stake.retire_time) + policy::UNSTAKE_DELAY {
+            if block_height < policy::macro_block_after(inactive_stake.retire_time) + policy::UNSTAKING_DELAY {
                 return Err(AccountError::InvalidForSender);
             }
 

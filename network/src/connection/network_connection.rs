@@ -132,7 +132,7 @@ impl NetworkConnection {
 }
 
 pub struct ProcessConnectionFuture {
-    inner: Box<Future<Item=(), Error=()> + Send + Sync + 'static>,
+    inner: Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>,
 }
 
 impl ProcessConnectionFuture {

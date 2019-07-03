@@ -166,7 +166,7 @@ impl PeerAddressSeeder {
 
     // Note: this is a standalone function to help the compiler because as a closure in the fetch() function
     // it would fail to infer the types correctly
-    fn fetch_callback(res: Response) -> Box<Future<Item=Chunk, Error=PeerAddressSeederError> + Send> {
+    fn fetch_callback(res: Response) -> Box<dyn Future<Item=Chunk, Error=PeerAddressSeederError> + Send> {
         let status = res.status();
 
         if status == 200 {

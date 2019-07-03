@@ -14,8 +14,8 @@ use block_albatross::{
     MicroHeader,
     PbftCommitMessage,
     PbftPrepareMessage,
-    PbftProposal,
     PbftProof,
+    PbftProposal,
     SignedPbftCommitMessage,
     SignedPbftPrepareMessage,
     SignedPbftProposal,
@@ -23,6 +23,7 @@ use block_albatross::{
     ViewChange,
     ViewChangeProof,
 };
+use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
 use bls::bls12_381::KeyPair;
@@ -30,7 +31,7 @@ use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
 use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId, ValidatorInfo};
-use block_production_albatross::BlockProducer;
+use primitives::policy;
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
 
@@ -98,6 +99,14 @@ impl Validator {
 
         debug!("Initializing validator");
 
+        let last_block = consensus.blockchain.head();
+        let last_view_number = if policy::is_macro_block_at(last_block.block_number()) {
+            0
+        } else {
+            last_block.view_number()
+        };
+        drop(last_block);
+
         let this = Arc::new(Validator {
             blockchain: consensus.blockchain.clone(),
             block_producer,
@@ -113,7 +122,7 @@ impl Validator {
                 slots: None,
                 status: ValidatorStatus::None,
                 fork_proof_pool: ForkProofPool::new(),
-                view_number: 0,
+                view_number: last_view_number,
             }),
 
             self_weak: MutableOnce::new(Weak::new()),
@@ -304,7 +313,7 @@ impl Validator {
             SlotChange::ViewChange(view_change, view_change_proof) => {
                 // Reset view change interval again.
                 self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
-                self.state.write().view_number += 1;
+                self.state.write().view_number = view_change.new_view_number;
 
                 (view_change.new_view_number, Some(view_change_proof))
             },
@@ -451,13 +460,20 @@ impl Validator {
         let view_number = state.view_number;
 
         let block = self.block_producer.next_micro_block(fork_proofs, timestamp, view_number, vec![], view_change_proof);
-        info!("Produced block: {}", block.header.hash::<Blake2bHash>());
+        info!("Produced block: block_number={}, view_number={}, hash={}",
+              block.header.block_number,
+              block.header.view_number,
+              block.header.hash::<Blake2bHash>());
 
         drop(state);
 
         // Automatically relays block.
         let r = self.blockchain.push(Block::Micro(block));
-        trace!("Push result: {:?}", r);
+        if let Err(ref e) = r {
+            error!("Failed to push produced micro block to blockchain: {:?}", e);
+        } else {
+            trace!("Push result: {:?}", r);
+        }
     }
 
     fn is_potential_validator(&self) -> bool {

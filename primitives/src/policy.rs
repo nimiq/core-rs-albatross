@@ -119,10 +119,7 @@ pub const MAX_CONSIDERED: u32 = 10_000;
 pub const TWO_THIRD_VALIDATORS: u16 = (2 * ACTIVE_VALIDATORS + 3) / 3;
 
 // Length of epoch including macro block
-pub const EPOCH_LENGTH: u32 = 128;
-
-/// Number of micro blocks to wait before unstaking after next macro block.
-pub const UNSTAKE_DELAY: u32 = 100; // TODO: Set.
+pub const EPOCH_LENGTH: u32 = 4;
 
 /// Minimum stake in units
 pub const MIN_STAKE: u64 = 100_000_000;

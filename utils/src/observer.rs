@@ -15,7 +15,7 @@ pub type ListenerHandle = usize;
 
 #[derive(Default)]
 pub struct Notifier<'l, E> {
-    listeners: Vec<(ListenerHandle, Box<Listener<E> + 'l>)>,
+    listeners: Vec<(ListenerHandle, Box<dyn Listener<E> + 'l>)>,
     next_handle: ListenerHandle
 }
 
@@ -82,7 +82,7 @@ impl<E, F: Fn(E)> PassThroughListener<E> for F
 
 #[derive(Default)]
 pub struct PassThroughNotifier<'l, E> {
-    listener: Option<Box<PassThroughListener<E> + 'l>>,
+    listener: Option<Box<dyn PassThroughListener<E> + 'l>>,
 }
 
 impl<'l, E> PassThroughNotifier<'l, E> {

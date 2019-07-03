@@ -17,11 +17,12 @@ use messages::Message;
 use network::{Network, NetworkEvent, Peer};
 use network_primitives::address::PeerId;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
-use primitives::policy::TWO_THIRD_VALIDATORS;
+use primitives::policy::{ACTIVE_VALIDATORS, TWO_THIRD_VALIDATORS};
 use utils::mutable_once::MutableOnce;
 use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
 
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
+use crate::validator_network::ValidatorNetworkError::NotInPbftPhase;
 
 #[derive(Clone, Debug, Fail)]
 pub enum ValidatorNetworkError {
@@ -29,6 +30,15 @@ pub enum ValidatorNetworkError {
     IncorrectProposal,
     #[fail(display = "Not in pBFT voting phase")]
     NotInPbftPhase
+}
+
+impl ValidatorNetworkError {
+    fn is_minor(&self) -> bool {
+        match self {
+            NotInPbftPhase => true,
+            _ => false
+        }
+    }
 }
 
 pub enum ValidatorNetworkEvent {
@@ -62,8 +72,9 @@ struct ValidatorNetworkState {
     active: HashMap<Arc<ValidatorId>, Arc<ValidatorAgent>>,
 
     /// maps (view-change-number, block-number) to the proof that is being aggregated
-    /// clear after macro block
-    view_changes: BTreeMap<ViewChange, ViewChangeProofBuilder>,
+    /// and a flag whether it's finalized. clear after macro block
+    /// TODO use a struct instead of a tuple / clean this up
+    view_changes: BTreeMap<ViewChange, (bool, ViewChangeProofBuilder)>,
 
     /// The current proposed macro header and pbft proof.
     ///
@@ -136,19 +147,19 @@ impl ValidatorNetwork {
                     }
                     ValidatorAgentEvent::ViewChange { view_change, public_key, slots } => {
                         this.commit_view_change(view_change, &public_key, slots)
-                            .unwrap_or_else(|e| warn!("Failed to commit view change: {}", e));
+                            .unwrap_or_else(|e| if !e.is_minor() { warn!("Failed to commit view change: {}", e) });
                     },
                     ValidatorAgentEvent::PbftProposal(proposal) => {
                         this.commit_pbft_proposal(proposal)
-                            .unwrap_or_else(|e| warn!("Failed to commit pBFT proposal: {}", e));
+                            .unwrap_or_else(|e| if !e.is_minor() { warn!("Failed to commit pBFT proposal: {}", e) });
                     },
                     ValidatorAgentEvent::PbftPrepare { prepare, public_key, slots } => {
                         this.commit_pbft_prepare(prepare, &public_key, slots)
-                            .unwrap_or_else(|e| warn!("Failed to commit pBFT prepare: {}", e));
+                            .unwrap_or_else(|e| if !e.is_minor() { warn!("Failed to commit pBFT prepare: {}", e) });
                     },
                     ValidatorAgentEvent::PbftCommit { commit, public_key, slots } => {
                         this.commit_pbft_commit(commit, &public_key, slots)
-                            .unwrap_or_else(|e| warn!("Failed to commit pBFT commit: {}", e));
+                            .unwrap_or_else(|e| if !e.is_minor() { warn!("Failed to commit pBFT commit: {}", e) });
                     },
                 }
             }));
@@ -251,21 +262,25 @@ impl ValidatorNetwork {
     pub fn commit_view_change(&self, view_change: SignedViewChange, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
         let mut state = self.state.write();
 
-        trace!("Commit view change: {:?}", view_change);
-
         // get the proof with the specific block number and view change number
         // if it doesn't exist, create a new one.
         let proof = state.view_changes.entry(view_change.message.clone())
-            .or_insert_with(|| ViewChangeProofBuilder::new());
+            .or_insert_with(|| (false, ViewChangeProofBuilder::new()));
+
+        // if view change was already completed
+        if proof.0 {
+            return Ok(());
+        }
 
         // Aggregate signature - if it wasn't included yet, relay it
-        if proof.add_signature(public_key, slots, &view_change) {
-            let proof_complete = proof.verify(&view_change.message, TWO_THIRD_VALIDATORS).is_ok();
-            trace!("Added signature to view change proof: votes={}, complete={}", proof.num_slots, proof_complete);
+        if proof.1.add_signature(public_key, slots, &view_change) {
+            let proof_complete = proof.1.verify(&view_change.message, TWO_THIRD_VALIDATORS).is_ok();
+            debug!("Applying view change: votes={} / {}, complete={}", proof.1.num_slots, ACTIVE_VALIDATORS, proof_complete);
 
             // if we have enough signatures, notify listeners
             if proof_complete {
-                let proof = proof.clone().build();
+                proof.0 = true; // mark completed
+                let proof = proof.1.clone().build();
 
                 drop(state); // drop before notify and broadcast
 
@@ -299,13 +314,13 @@ impl ValidatorNetwork {
             }
             else {
                 // if it has a higher view number, commit it
-                debug!("New macro block proposal with higher view change: {:#?}", proposal.message);
+                debug!("New macro block proposal with higher view change: block_number={}, view_number={}", proposal.message.header.block_number, proposal.message.header.view_number);
                 true
             }
         }
         else {
             // if we don't have a proposal yet, commit it
-            debug!("New macro block proposal: {:#?}", proposal.message);
+            debug!("New macro block proposal: block_number={}, view_number={}", proposal.message.header.block_number, proposal.message.header.view_number);
             true
         };
 
@@ -343,7 +358,7 @@ impl ValidatorNetwork {
                 let prepare_complete = proof.prepare.verify(&prepare.message, TWO_THIRD_VALIDATORS).is_ok();
                 let commit_complete = proof.verify(prepare.message.block_hash.clone(), &self.blockchain.current_validators(), TWO_THIRD_VALIDATORS).is_ok();
 
-                trace!("Committing pBFT prepare: prepare_complete={}, commit_complete={}", prepare_complete, commit_complete);
+                debug!("[PBFT-PREPARE] {} / {} signatures", proof.prepare.num_slots, ACTIVE_VALIDATORS);
 
                 // XXX Can we get rid of the eager cloning here?
                 let proposal = proposal.clone();
@@ -371,7 +386,6 @@ impl ValidatorNetwork {
             Ok(())
         }
         else {
-            debug!("Not in pBFT phase");
             Err(ValidatorNetworkError::NotInPbftPhase)
         }
     }
@@ -391,7 +405,7 @@ impl ValidatorNetwork {
             if proof.add_commit_signature(public_key, slots, &commit) {
                 let commit_complete = proof.verify(commit.message.block_hash.clone(), &self.blockchain.current_validators(), TWO_THIRD_VALIDATORS).is_ok();
 
-                trace!("Committing pBFT commit: commit_complete={}", commit_complete);
+                debug!("[PBFT-COMMIT] {} / {} signatures", proof.commit.num_slots, ACTIVE_VALIDATORS);
 
                 // XXX Can we get rid of the eager cloning here?
                 let proposal = proposal.clone();
@@ -411,7 +425,6 @@ impl ValidatorNetwork {
             Ok(())
         }
         else {
-            debug!("Not in pBFT phase");
             Err(ValidatorNetworkError::NotInPbftPhase)
         }
     }

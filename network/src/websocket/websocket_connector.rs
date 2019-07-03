@@ -85,7 +85,7 @@ pub enum WebSocketConnectorEvent {
 
 /// This function wraps a stream with a TLS certificate.
 pub fn wrap_stream<S>(socket: S, tls_acceptor: Option<TlsAcceptor>, mode: Mode)
-        -> Box<Future<Item=MaybeTlsStream<S>, Error=Error> + Send>
+        -> Box<dyn Future<Item=MaybeTlsStream<S>, Error=Error> + Send>
     where
         S: 'static + AsyncRead + AsyncWrite + Send,
 {

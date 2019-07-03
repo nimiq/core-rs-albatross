@@ -245,8 +245,8 @@ fn run() -> Result<(), Error> {
     log_panics::init();
 
     info!("Loaded config file from: {}", config_file.display());
-    debug!("Command-line options: {:#?}", cmdline);
-    debug!("Settings: {:#?}", settings);
+    trace!("Command-line options: {:#?}", cmdline);
+    trace!("Settings: {:#?}", settings);
 
     // We only allow full nodes right now.
     if settings.consensus.node_type != s::NodeType::Full {

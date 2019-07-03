@@ -200,17 +200,6 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
     fn on_blockchain_event(&self, event: &BlockchainEvent<<P::Blockchain as AbstractBlockchain<'static>>::Block>) {
         let state = self.state.read();
 
-        // Don't relay blocks if we are not synced yet.
-        if !state.established {
-            let height = self.blockchain.head_height();
-            if height % 100 == 0 {
-                info!("Now at block #{}", height);
-            }
-            return;
-        } else {
-            info!("Now at block #{}", self.blockchain.head_height());
-        }
-
         let blocks: Vec<&<P::Blockchain as AbstractBlockchain<'static>>::Block>;
         let block;
         match event {
@@ -224,6 +213,17 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
             },
             // TODO Do we have to do anything here?
             BlockchainEvent::Finalized => return,
+        }
+
+        // Don't relay blocks if we are not synced yet.
+        if !state.established {
+            let height = self.blockchain.head_height();
+            if height % 100 == 0 {
+                info!("Now at block #{}", height);
+            }
+            return;
+        } else {
+            info!("Now at block #{}", self.blockchain.head_height());
         }
 
         for agent in state.agents.values() {
