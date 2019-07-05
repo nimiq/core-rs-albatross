@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
 use itertools::{EitherOrBoth, Itertools};
 use beserial::{Serialize, Deserialize, uvar, SerializingError, ReadBytesExt, WriteBytesExt, FromPrimitive, ToPrimitive};
 use std::fmt;
@@ -43,6 +43,10 @@ impl BitSet {
 
     pub fn len(&self) -> usize {
         self.count
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
     }
 
     pub fn contains(&self, value: usize) -> bool {
@@ -132,6 +136,35 @@ impl BitSet {
             .flat_map(|store| Bits64Iter::new(*store))
             .chain(repeat(false))
     }
+
+    /// Test if this is a superset of `other`
+    pub fn is_superset(&self, other: &Self) -> bool {
+        for t in self.store.iter().zip_longest(other.store.iter()) {
+            let c = match t {
+                EitherOrBoth::Both(&a, &b) => a & b == b,
+                EitherOrBoth::Left(_) => {
+                    // Since the left side can't change the result anymore, it must be a superset
+                    return true;
+                },
+                EitherOrBoth::Right(&b) => b == 0
+            };
+            if !c {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Test if this is a subset of `other`
+    pub fn is_subset(&self, other: &Self) -> bool {
+        other.is_superset(self)
+    }
+
+    pub fn intersection_size(&self, other: &Self) -> usize {
+        self.store.iter().zip(other.store.iter())
+            .map(|(a, b)| (a & b).count_ones() as usize)
+            .sum()
+    }
 }
 
 impl Default for BitSet {
@@ -183,6 +216,30 @@ impl BitOrAssign for BitSet {
         self.apply_op_assign(other, BitOrAssign::bitor_assign)
     }
 }
+
+impl BitXor for BitSet {
+    type Output = BitSet;
+
+    fn bitxor(self, other: Self) -> Self::Output {
+        self.apply_op(&other, BitXor::bitxor)
+    }
+}
+
+impl BitXor for &BitSet {
+    type Output = BitSet;
+
+    fn bitxor(self, other: Self) -> Self::Output {
+        self.apply_op(other, BitXor::bitxor)
+    }
+}
+
+impl BitXorAssign for BitSet {
+    fn bitxor_assign(&mut self, other: Self) {
+        self.apply_op_assign(other, BitXorAssign::bitxor_assign)
+    }
+}
+
+
 
 impl PartialEq for BitSet {
     fn eq(&self, other: &Self) -> bool {
@@ -236,7 +293,7 @@ impl Deserialize for BitSet {
 
 impl fmt::Display for BitSet {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{{ ")?;
+        write!(f, "[")?;
         let mut it = self.iter::<>().peekable();
         while let Some(value) = it.next() {
             write!(f, "{}", value)?;
@@ -244,14 +301,14 @@ impl fmt::Display for BitSet {
                 write!(f, ", ")?;
             }
         }
-        write!(f, " }}")?;
+        write!(f, "]")?;
         Ok(())
     }
 }
 
 impl fmt::Debug for BitSet {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "BitSet")?;
+        write!(f, "BitSet({})", self.len())?;
         fmt::Display::fmt(self, f)?;
         Ok(())
     }

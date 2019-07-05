@@ -122,7 +122,7 @@ impl From<PublicKeyAffine> for PublicKey {
 
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CompressedSignature({})", &::hex::encode(self.compress().as_ref()))
+        write!(f, "PublicKey({})", &::hex::encode(self.compress().as_ref()))
     }
 }
 
