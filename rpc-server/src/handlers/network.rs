@@ -17,7 +17,6 @@ use nimiq_network::peer_scorer::Score;
 
 use crate::handlers::Handler;
 use crate::JsonRpcServerState;
-use crate::rpc_not_implemented;
 
 pub struct NetworkHandler<P: ConsensusProtocol + 'static> {
     pub state: Arc<RwLock<JsonRpcServerState>>,

@@ -8,7 +8,7 @@ use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      SignedPbftProposal, ViewChange, ForkProof};
+                      SignedPbftProposal, ViewChange, ForkProof, BlockHeader};
 use primitives::policy;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;

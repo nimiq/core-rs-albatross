@@ -1,24 +1,19 @@
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use json::{Array, JsonValue, Null};
-use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
 use block::Block;
 use block::Difficulty;
 use blockchain_base::AbstractBlockchain;
-use consensus::ConsensusProtocol;
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use keys::Address;
-use network_primitives::address::{PeerId, PeerUri};
 use nimiq_blockchain::Blockchain;
 use transaction::{Transaction, TransactionReceipt};
 
 use crate::handlers::Handler;
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
-use crate::JsonRpcServerState;
 use crate::rpc_not_implemented;
 
 pub struct BlockchainHandler {

@@ -1,28 +1,21 @@
-use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use json::{Array, JsonValue, Null};
-use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
-use block::{Block, BlockHeader, Difficulty};
+use block::{Block, BlockHeader};
 use block_production::BlockProducer;
-use hash::{Argon2dHash, Blake2bHash, Blake2bHasher, Hash};
+use hash::{Blake2bHash, Blake2bHasher, Hash};
 use keys::Address;
-use network_primitives::address::{PeerId, PeerUri};
 use nimiq_blockchain::Blockchain;
 use nimiq_blockchain::PushResult;
 use nimiq_mempool::Mempool;
-use transaction::{Transaction, TransactionReceipt};
 use utils::merkle::MerklePath;
 use utils::time::systemtime_to_timestamp;
 
 use crate::handlers::Handler;
-use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
-use crate::JsonRpcServerState;
-use crate::rpc_not_implemented;
+use crate::handlers::mempool::transaction_to_obj;
 
 pub struct BlockProductionHandler {
     pub blockchain: Arc<Blockchain<'static>>,

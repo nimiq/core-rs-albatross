@@ -1,18 +1,14 @@
-use std::str::FromStr;
 use std::sync::Arc;
-use std::convert::TryFrom;
 
-use json::{Array, JsonValue, Null};
-use json::object::Object;
+use json::{Array, JsonValue};
 
-use crate::{JsonRpcConfig, JsonRpcServerState};
+use crate::JsonRpcConfig;
 use crate::error::AuthenticationError;
 use crate::handlers::Handler;
 use crate::jsonrpc;
-use crate::rpc_not_implemented;
 
 pub struct RpcHandler {
-    pub handlers: Vec<Box<Handler>>,
+    pub handlers: Vec<Box<dyn Handler>>,
     pub config: Arc<JsonRpcConfig>,
 }
 

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use clear_on_drop::ClearOnDrop;
 use hex;
 use json::{Array, JsonValue, Null};
 use parking_lot::RwLock;
@@ -14,7 +13,6 @@ use nimiq_wallet::{WalletAccount, WalletStore};
 use utils::otp::{Locked, Unlocked};
 
 use crate::handlers::Handler;
-use crate::rpc_not_implemented;
 
 pub struct UnlockedWalletManager {
     pub unlocked_wallets: HashMap<Address, Unlocked<WalletAccount>>,

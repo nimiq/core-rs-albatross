@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -20,8 +19,6 @@ use transaction::{Transaction, TransactionFlags};
 
 use crate::handlers::Handler;
 use crate::handlers::wallet::UnlockedWalletManager;
-use crate::JsonRpcServerState;
-use crate::rpc_not_implemented;
 
 pub struct MempoolHandler<P: ConsensusProtocol + 'static> {
     pub mempool: Arc<Mempool<'static, P::Blockchain>>,

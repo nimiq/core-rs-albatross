@@ -1,29 +1,24 @@
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use json::{Array, JsonValue, Null};
-use parking_lot::RwLock;
 
-use beserial::{Deserialize, Serialize};
+use beserial::Deserialize;
 use block_albatross::{Block, ForkProof, MicroBlock};
 use block_albatross::signed::{AggregateProof, Message};
 use blockchain_albatross::Blockchain;
 use blockchain_albatross::reward_registry::SlashedSlots;
 use blockchain_base::AbstractBlockchain;
-use consensus::ConsensusProtocol;
-use hash::{Argon2dHash, Blake2bHash, Hash};
+use hash::{Blake2bHash, Hash};
 use keys::Address;
-use network_primitives::address::{PeerId, PeerUri};
 use primitives::policy;
 use primitives::validators::Slots;
 use transaction::{Transaction, TransactionReceipt};
 
 use crate::handlers::Handler;
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
-use crate::JsonRpcServerState;
 use crate::rpc_not_implemented;
 
 pub struct BlockchainAlbatrossHandler {
