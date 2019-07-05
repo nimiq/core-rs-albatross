@@ -62,6 +62,7 @@ impl BlockchainHandler {
     /// - includeTransactions (bool, optional): Default is false. If set to false, only hashes are included.
     ///
     /// The block object contains:
+    /// ```text
     /// {
     ///     number: number,
     ///     hash: string,
@@ -78,6 +79,7 @@ impl BlockchainHandler {
     ///     timestamp: number,
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
+    /// ```
     pub(crate) fn get_block_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         Ok(self.block_to_obj(&self.block_by_hash(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
@@ -88,6 +90,7 @@ impl BlockchainHandler {
     /// - includeTransactions (bool, optional): Default is false. If set to false, only hashes are included.
     ///
     /// The block object contains:
+    /// ```text
     /// {
     ///     number: number,
     ///     hash: string,
@@ -104,6 +107,7 @@ impl BlockchainHandler {
     ///     timestamp: number,
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
+    /// ```
     pub(crate) fn get_block_by_number(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         Ok(self.block_to_obj(&self.block_by_number(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
@@ -153,6 +157,7 @@ impl BlockchainHandler {
     /// - transactionIndex (number)
     ///
     /// Returns an info object:
+    /// ```text
     /// {
     ///     hash: string,
     ///     from: string, // hex encoded
@@ -173,6 +178,7 @@ impl BlockchainHandler {
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }
+    /// ```
     pub(crate) fn get_transaction_by_block_hash_and_index(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         let block = self.block_by_hash(params.get(0).unwrap_or(&Null))?;
         let index = params.get(1).and_then(JsonValue::as_u16)
@@ -186,6 +192,7 @@ impl BlockchainHandler {
     /// - transactionIndex (number)
     ///
     /// Returns an info object:
+    /// ```text
     /// {
     ///     hash: string,
     ///     from: string, // hex encoded
@@ -206,6 +213,7 @@ impl BlockchainHandler {
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }
+    /// ```
     pub(crate) fn get_transaction_by_block_number_and_index(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         let block = self.block_by_number(params.get(0).unwrap_or(&Null))?;
         let index = params.get(1).and_then(JsonValue::as_u16)
@@ -218,6 +226,7 @@ impl BlockchainHandler {
     /// - transactionHash (string)
     ///
     /// Returns an info object:
+    /// ```text
     /// {
     ///     hash: string,
     ///     from: string, // hex encoded
@@ -238,6 +247,7 @@ impl BlockchainHandler {
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }
+    /// ```
     pub(crate) fn get_transaction_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
@@ -251,6 +261,7 @@ impl BlockchainHandler {
     /// - transactionHash (string)
     ///
     /// Returns a receipt:
+    /// ```text
     /// {
     ///     transactionHash: string,
     ///     blockHash: string,
@@ -259,6 +270,7 @@ impl BlockchainHandler {
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }
+    /// ```
     pub(crate) fn get_transaction_receipt(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         let hash = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
@@ -283,6 +295,7 @@ impl BlockchainHandler {
     /// - address (string)
     ///
     /// Returns a list of receipts:
+    /// ```text
     /// Array<{
     ///     transactionHash: string,
     ///     blockHash: string,
@@ -291,6 +304,7 @@ impl BlockchainHandler {
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }>
+    /// ```
     pub(crate) fn get_transactions_by_address(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         let address = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid address"})

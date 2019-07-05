@@ -19,10 +19,10 @@ lazy_static! {
     /// Address (raw): 9cd82948650d902d95d52ea2ec91eae6deb0c9fe
     /// Public Key:    7f07b8a4c2f6c2f7cb56584a00672af88733cb6f80f5d6e6cf4043a3d4aeec05
     /// Private Key:   b410a7a583cbc13ef4f1cbddace30928bcb4f9c13722414bc4a2faaba3f4e187
-    static ref WALLET: Wallet = {
+    static ref WALLET: WalletAccount = {
         let raw_private_key = hex::decode("b410a7a583cbc13ef4f1cbddace30928bcb4f9c13722414bc4a2faaba3f4e187").unwrap();
         let private_key: PrivateKey = Deserialize::deserialize_from_vec(&raw_private_key).unwrap();
-        Wallet::from(KeyPair::from(private_key))
+        WalletAccount::from(KeyPair::from(private_key))
     };
 }
 

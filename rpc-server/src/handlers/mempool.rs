@@ -57,10 +57,12 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
 
     /// Returns mempool statistics on the number of transactions ordered by fee/byte.
     /// The numbers will be reported for the buckets `[0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]`.
+    /// ```text
     /// {
     ///     total: number,
     ///     buckets: Array<number>,
     /// }
+    /// ```
     pub(crate) fn mempool(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
         // Transactions sorted by fee/byte, ascending
         let transactions = self.mempool.get_transactions(usize::max_value(), 0f64);
@@ -107,6 +109,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// - transaction (object)
     ///
     /// The transaction looks like the following:
+    /// ```text
     /// {
     ///     from: string,
     ///     fromType: number|null,
@@ -118,6 +121,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     ///     data: string|null,
     ///     validityStartHeight: number|null,
     /// }
+    /// ```
     /// Fields that can be null are optional.
     pub(crate) fn create_raw_transaction(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         let mut transaction = obj_to_transaction(params.get(0).unwrap_or(&Null), self.mempool.current_height(), self.mempool.network_id())?;
@@ -140,6 +144,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// - transaction (object)
     ///
     /// The transaction looks like the following:
+    /// ```text
     /// {
     ///     from: string,
     ///     fromType: number|null,
@@ -151,6 +156,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     ///     data: string|null,
     ///     validityStartHeight: number|null,
     /// }
+    /// ```
     /// Fields that can be null are optional.
     pub(crate) fn send_transaction(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         let mut transaction = obj_to_transaction(params.get(0).unwrap_or(&Null), self.mempool.current_height(), self.mempool.network_id())?;
@@ -175,6 +181,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// - transactionHash (string)
     ///
     /// The transaction object returned has the following fields:
+    /// ```text
     /// {
     ///     hash: string,
     ///     from: string, // hex encoded
@@ -196,6 +203,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     ///     confirmations: null,
     ///     transactionIndex: null,
     /// }
+    /// ```
     pub(crate) fn get_transaction(&self, params: &Array) -> Result<JsonValue, JsonValue> {
         let hash = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
