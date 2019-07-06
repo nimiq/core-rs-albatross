@@ -38,6 +38,10 @@ nimiq-network-primitives = { path = "../network-primitives", version = "0.1", fe
 nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }
+nimiq-handel = { path = "../handel", version = "0.1", optional = true }
 
 [dev-dependencies]
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time", "iterators"] }
+
+[features]
+handel = ["nimiq-handel"]

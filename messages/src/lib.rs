@@ -21,6 +21,8 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
+#[cfg(feature = "handel")]
+extern crate nimiq_handel as handel;
 
 use std::fmt::Display;
 use std::io;
@@ -34,7 +36,8 @@ use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, Seri
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
 use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof,
-                      SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange};
+                      SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange,
+                      ViewChange};
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
@@ -48,6 +51,10 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::{PassThroughListener, PassThroughNotifier};
+#[cfg(feature = "handel")]
+use handel::message::AggregationMessage;
+
+
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
 #[repr(u64)]
@@ -101,6 +108,10 @@ pub enum MessageType {
     PbftProposal = 120,
     PbftPrepare = 121,
     PbftCommit = 122,
+
+    // Albatross / Handel - experimental. Use "handel" feature
+    #[cfg(feature = "handel")]
+    HandelViewChange = 130,
 }
 
 #[derive(Clone, Debug)]
@@ -153,6 +164,10 @@ pub enum Message {
     PbftProposal(Box<SignedPbftProposal>),
     PbftPrepare(Box<SignedPbftPrepareMessage>),
     PbftCommit(Box<SignedPbftCommitMessage>),
+
+    // Albatross / Handel - experimental. Use "handel" feature
+    #[cfg(feature = "handel")]
+    HandelViewChange(Box<AggregationMessage<ViewChange>>),
 }
 
 impl Message {
@@ -200,6 +215,9 @@ impl Message {
             Message::PbftProposal(_) => MessageType::PbftProposal,
             Message::PbftPrepare(_) => MessageType::PbftPrepare,
             Message::PbftCommit(_) => MessageType::PbftCommit,
+            // Albatross / Handel - experimental. Use "handel" feature
+            #[cfg(feature = "handel")]
+            Message::HandelViewChange(_) => MessageType::HandelViewChange,
         }
     }
 
@@ -310,6 +328,9 @@ impl Deserialize for Message {
             MessageType::PbftProposal => Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftPrepare => Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftCommit => Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
+            // Albatross / Handel - experimental. Use "handel" feature
+            #[cfg(feature = "handel")]
+            MessageType::HandelViewChange => Message::HandelViewChange(Deserialize::deserialize(&mut crc32_reader)?),
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
@@ -379,6 +400,9 @@ impl Serialize for Message {
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
             Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
+            // Albatross / Handel - experimental. Use "handel" feature
+            #[cfg(feature = "handel")]
+            Message::HandelViewChange(aggregation_message) => aggregation_message.serialize(&mut v)?,
         };
 
         // write checksum to placeholder
@@ -437,6 +461,9 @@ impl Serialize for Message {
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialized_size(),
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialized_size(),
             Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
+            // Albatross / Handel - experimental. Use "handel" feature
+            #[cfg(feature = "handel")]
+            Message::HandelViewChange(aggregation_message) => aggregation_message.serialized_size(),
         };
         size
     }

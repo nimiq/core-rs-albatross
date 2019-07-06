@@ -2,6 +2,8 @@
 extern crate log;
 #[macro_use]
 extern crate nimiq_macros as macros;
+#[cfg(feature = "handel")]
+extern crate nimiq_handel as handel;
 
 extern crate nimiq_account as account;
 extern crate nimiq_bls as bls;
@@ -27,3 +29,5 @@ pub mod error;
 pub mod slash;
 #[cfg(feature = "mock")]
 pub mod mock;
+#[cfg(feature = "handel")]
+pub mod signature_aggregation;

@@ -41,7 +41,8 @@ members = [
     "validator",
     "tools",
     "build-tools",
-    "wallet"
+    "wallet",
+    "handel"
 ]
 
 [profile.dev.overrides.pairing]
