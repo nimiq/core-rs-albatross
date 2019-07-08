@@ -132,7 +132,7 @@ impl<E: Engine> KeyPair<E> {
         self.public.verify::<M>(msg, signature)
     }
 
-    pub fn verify_hash<H>(&self, hash: SigHash, signature: &Signature<E>) -> bool {
+    pub fn verify_hash(&self, hash: SigHash, signature: &Signature<E>) -> bool {
         self.public.verify_hash(hash, signature)
     }
 }
