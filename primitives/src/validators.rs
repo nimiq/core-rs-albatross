@@ -29,6 +29,13 @@ impl Slot {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct IndexedSlot {
+    // Index in honest slots
+    pub idx: u16,
+    pub slot: Slot,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Slots {
     #[beserial(len_type(u16))]
     slots: Vec<Slot>,

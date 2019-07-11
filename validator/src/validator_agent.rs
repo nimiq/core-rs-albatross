@@ -10,6 +10,7 @@ use bls::bls12_381::PublicKey;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
                       SignedPbftProposal, ViewChange, ForkProof, BlockHeader};
 use primitives::policy;
+use primitives::validators::IndexedSlot;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
 
@@ -181,7 +182,7 @@ impl ValidatorAgent {
             return;
         }
 
-        let slot = producer.unwrap().1;
+        let slot = producer.unwrap().slot;
         if let Err(e) = fork_proof.verify(&slot.public_key.uncompress_unchecked()) {
             debug!("[FORK-PROOF] Invalid signature in fork proof: {:?}", e);
             return;
@@ -224,7 +225,7 @@ impl ValidatorAgent {
             return;
         }
 
-        if let Some((_, slot)) = self.blockchain.get_block_producer_at(block_number, view_number, None) {
+        if let Some(IndexedSlot { slot, .. }) = self.blockchain.get_block_producer_at(block_number, view_number, None) {
             let public_key = &slot.public_key.uncompress_unchecked();
 
             // check the validity of the block

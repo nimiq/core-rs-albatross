@@ -15,7 +15,7 @@ use database::cursor::{ReadCursor, WriteCursor};
 use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
 use primitives::policy;
-use primitives::validators::{Slot, Slots};
+use primitives::validators::{IndexedSlot, Slots};
 
 use crate::chain_store::ChainStore;
 use crate::reward_registry::reward_pot::RewardPot;
@@ -119,15 +119,15 @@ impl<'env> SlashRegistry<'env> {
 
             let slash_epoch = policy::epoch_at(block_number);
             if block_epoch == slash_epoch {
-                if epoch_diff.contains(slot_owner.0 as usize) {
+                if epoch_diff.contains(slot_owner.idx as usize) {
                     return Err(SlashPushError::DuplicateForkProof);
                 }
-                epoch_diff.insert(slot_owner.0 as usize);
+                epoch_diff.insert(slot_owner.idx as usize);
             } else if block_epoch == slash_epoch + 1 {
-                if prev_epoch_diff.contains(slot_owner.0 as usize) {
+                if prev_epoch_diff.contains(slot_owner.idx as usize) {
                     return Err(SlashPushError::DuplicateForkProof);
                 }
-                prev_epoch_diff.insert(slot_owner.0 as usize);
+                prev_epoch_diff.insert(slot_owner.idx as usize);
             } else {
                 return Err(SlashPushError::InvalidEpochTarget);
             }
@@ -174,7 +174,7 @@ impl<'env> SlashRegistry<'env> {
         for view in 0..block.header.view_number {
             let slot_owner = self.slot_owner(block.header.block_number, view, slots, Some(&txn))
                 .expect("Could not determine block producer in the current epoch");
-            epoch_diff.insert(slot_owner.0 as usize);
+            epoch_diff.insert(slot_owner.idx as usize);
         }
 
         // Apply slashes.
@@ -191,14 +191,15 @@ impl<'env> SlashRegistry<'env> {
     }
 
     fn gc(&self, txn: &mut WriteTransaction, current_epoch: u32) {
+        let cutoff = policy::first_block_of_registry(current_epoch);
+        if cutoff == 0u32 {
+            // The first possible block is part of the registry.
+            // We can't delete any descriptors.
+            return;
+        }
+
         let mut cursor = txn.write_cursor(&self.slash_registry_db);
         let mut pos: Option<(u32, BlockDescriptor)> = cursor.first();
-
-        let cutoff = if current_epoch > 2 {
-            policy::first_block_of(current_epoch - 1)
-        } else {
-            0u32
-        };
 
         while let Some((block_number, _)) = pos {
             if block_number >= cutoff {
@@ -225,7 +226,7 @@ impl<'env> SlashRegistry<'env> {
     }
 
     // Get slot owner at block and view number
-    pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots, txn_option: Option<&Transaction>) -> Option<(u16, Slot)> {
+    pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots, txn_option: Option<&Transaction>) -> Option<IndexedSlot> {
         // Get context
         if let Some(prev_block) = self.chain_store
             .get_block_at(block_number - 1, txn_option) {
@@ -247,7 +248,10 @@ impl<'env> SlashRegistry<'env> {
 
             // XXX This is not uniform!
             let index = num % honest_validators.len() as u64;
-            Some((index as u16, honest_validators[index as usize].clone()))
+            Some(IndexedSlot {
+                idx: index as u16,
+                slot: honest_validators[index as usize].clone()
+            })
         }
         else {
             // XXX No slot owner available for this block. Use an Result?

@@ -24,7 +24,7 @@ use network_primitives::time::NetworkTime;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use primitives::validators::{Slot, Slots, Validator, Validators};
+use primitives::validators::{IndexedSlot, Slots, Validator, Validators};
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
@@ -76,6 +76,26 @@ impl<'env> BlockchainState<'env> {
 
     pub fn transaction_cache(&self) -> &TransactionCache {
         &self.transaction_cache
+    }
+
+    pub fn block_number(&self) -> u32 {
+        self.main_chain.head.block_number()
+    }
+
+    pub fn current_slots(&self) -> Option<&Slots> {
+        self.current_slots.as_ref()
+    }
+
+    pub fn last_slots(&self) -> Option<&Slots> {
+        self.last_slots.as_ref()
+    }
+
+    pub fn current_slashed_set(&self) -> BitSet {
+        self.reward_registry.slashed_set(policy::epoch_at(self.block_number()), None)
+    }
+
+    pub fn last_slashed_set(&self) -> BitSet {
+        self.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1, None)
     }
 }
 
@@ -286,11 +306,9 @@ impl<'env> Blockchain<'env> {
 
         // Check if the block was produced (and signed) by the intended producer
         // Public keys are checked when staking, so this should never fail.
-        let intended_slot_owner = if let Some((_, slot)) = self.get_block_producer_at(header.block_number(), header.view_number(), None) {
-            slot.public_key.uncompress_unchecked().clone()
-        } else {
-            return Err(PushError::InvalidSuccessor);
-        };
+        let IndexedSlot { slot, .. } = self.get_block_producer_at(header.block_number(), header.view_number(), None)
+            .ok_or(PushError::InvalidSuccessor)?;
+        let intended_slot_owner = slot.public_key.uncompress_unchecked();
 
         match header.seed().uncompress() {
             Ok(ref signature) => {
@@ -333,6 +351,8 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::InvalidBlock(e));
         }
 
+        let mut slot: Option<IndexedSlot> = None;
+
         if let Block::Micro(ref micro_block) = block {
 
             // XXX We might want to pass this as argument to this method
@@ -340,11 +360,12 @@ impl<'env> Blockchain<'env> {
 
             // Check if the block was produced (and signed) by the intended producer
             // Public keys are checked when staking, so this should never fail.
-            let intended_slot_owner = if let Some((_, slot)) = self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn)) {
-                slot.public_key.uncompress_unchecked().clone()
-            } else {
-                return Err(PushError::InvalidSuccessor);
-            };
+            slot = Some(
+                self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn))
+                    .ok_or(PushError::InvalidSuccessor)?
+            );
+
+            let intended_slot_owner = slot.as_ref().unwrap().slot.public_key.uncompress_unchecked().clone();
 
             let justification = match micro_block.justification.signature.uncompress() {
                 Ok(justification) => justification,
@@ -354,8 +375,10 @@ impl<'env> Blockchain<'env> {
                 }
             };
             if !intended_slot_owner.verify(&micro_block.header, &justification) {
-                warn!("Rejecting block - not a valid successor");
-                return Err(PushError::InvalidSuccessor);
+                warn!("Rejecting block - invalid justification for intended slot owner");
+                debug!("Block hash: {}", micro_block.header.hash::<Blake2bHash>());
+                debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
+                return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
             }
 
             // Validate slash inherents
@@ -365,7 +388,7 @@ impl<'env> Blockchain<'env> {
                         warn!("Rejecting block - Bad fork proof: Unknown block owner");
                         return Err(PushError::InvalidSuccessor)
                     },
-                    Some((_idx, slot)) => {
+                    Some(IndexedSlot { slot, .. }) => {
                         if !fork_proof.verify(&slot.public_key.uncompress_unchecked()).is_ok() {
                             warn!("Rejecting block - Bad fork proof: invalid owner signature");
                             return Err(PushError::InvalidSuccessor)
@@ -406,7 +429,7 @@ impl<'env> Blockchain<'env> {
         }
 
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
-        let chain_info = prev_info.next(block);
+        let chain_info = prev_info.next(block, slot);
 
         if *chain_info.head.parent_hash() == self.head_hash() {
             return self.extend(chain_info.head.hash(), chain_info, prev_info);
@@ -774,7 +797,7 @@ impl<'env> Blockchain<'env> {
         self.state.read().macro_head_hash.clone()
     }
 
-    pub fn get_next_block_producer(&self, view_number: u32, txn_option: Option<&Transaction>) -> (u16, Slot) {
+    pub fn get_next_block_producer(&self, view_number: u32, txn_option: Option<&Transaction>) -> IndexedSlot {
         let block_number = self.height() + 1;
         self.get_block_producer_at(block_number, view_number, txn_option)
             .expect("Can't get block producer for next block")
@@ -829,7 +852,9 @@ impl<'env> Blockchain<'env> {
         macro_block_number > policy::EPOCH_LENGTH && block_number >= macro_block_number - policy::EPOCH_LENGTH && block_number < macro_block_number
     }
 
-    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<(/*Index in slot list*/ u16, Slot)> {
+    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<IndexedSlot> {
+        // Try to get block producer using state
+
         let state = self.state.read();
 
         let read_txn;
@@ -858,7 +883,24 @@ impl<'env> Blockchain<'env> {
             slots = &slots_owned;
         }
 
-        self.state.read().reward_registry.slot_owner(block_number, view_number, slots, Some(&txn))
+        let idx_slot = state.reward_registry.slot_owner(block_number, view_number, slots, Some(&txn));
+        drop(state);
+
+        if idx_slot.is_some() {
+            return idx_slot;
+        }
+
+        // Try to get block producer from chain store
+        // if outside of range tracked by registry
+
+        let epoch_number = policy::epoch_at(block_number);
+        if block_number >= policy::first_block_of_registry(epoch_number) {
+            return None;
+        }
+
+        self.chain_store.get_chain_info_at(block_number, false, Some(&txn))
+            .filter(|info| view_number == info.head.view_number())
+            .and_then(|info| info.slot)
     }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
@@ -885,7 +927,7 @@ impl<'env> Blockchain<'env> {
             ty: InherentType::Slash,
             target: validator_registry.clone(),
             value: self.slash_fine_at(fork_proof.header1.block_number),
-            data: producer.1.staker_address.serialize_to_vec(),
+            data: producer.slot.staker_address.serialize_to_vec(),
         }
     }
 
@@ -900,42 +942,28 @@ impl<'env> Blockchain<'env> {
                 ty: InherentType::Slash,
                 target: validator_registry.clone(),
                 value: self.slash_fine_at(view_changes.block_number),
-                data: producer.1.staker_address.serialize_to_vec(),
+                data: producer.slot.staker_address.serialize_to_vec(),
             }
         }).collect::<Vec<Inherent>>()
     }
 
     fn slash_fine_at(&self, block_number: u32) -> Coin {
-        let current_epoch = policy::epoch_at(self.block_number() + 1);
+        let state = self.state();
+        let head_number = state.block_number();
+        let current_fine = state.current_slots().map(|s| s.slash_fine());
+        let last_fine = state.last_slots().map(|s| s.slash_fine());
+        drop(state);
+
+        let current_epoch = policy::epoch_at(head_number + 1);
         let slash_epoch = policy::epoch_at(block_number);
         if slash_epoch == current_epoch {
-            self.current_slots().slash_fine()
+            current_fine.unwrap_or_else(|| panic!("Tried to retrieve slash fine with unknown current slots"))
         } else if slash_epoch + 1 == current_epoch {
-            self.last_slots().slash_fine()
+            last_fine.unwrap_or_else(|| panic!("Tried to retrieve slash fine with unknown last slots"))
         } else {
             // TODO Error handling
             panic!("Tried to retrieve slash fine outside of reporting window");
         }
-    }
-
-    pub fn current_slots(&self) -> MappedRwLockReadGuard<Slots> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.current_slots.as_ref().unwrap())
-    }
-
-    pub fn last_slots(&self) -> MappedRwLockReadGuard<Slots> {
-        let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.last_slots.as_ref().unwrap())
-    }
-
-    pub fn current_slashed_set(&self) -> BitSet {
-        let s = self.state.read();
-        s.reward_registry.slashed_set(policy::epoch_at(self.block_number()), None)
-    }
-
-    pub fn last_slashed_set(&self) -> BitSet {
-        let s = self.state.read();
-        s.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1, None)
     }
 
     // Get slash set of epoch at specific block number

@@ -32,6 +32,7 @@ use hash::{Blake2bHash, Hash};
 use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId, ValidatorInfo};
 use primitives::policy;
+use primitives::validators::IndexedSlot;
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
 
@@ -319,7 +320,7 @@ impl Validator {
         };
 
         // Check if we are the next block producer and act accordingly
-        let (_, slot) = self.blockchain.get_next_block_producer(view_number, None);
+        let IndexedSlot { slot, .. } = self.blockchain.get_next_block_producer(view_number, None);
         let public_key = self.validator_key.public.compress();
         trace!("Next block producer: {:?}", slot.public_key.compressed());
 

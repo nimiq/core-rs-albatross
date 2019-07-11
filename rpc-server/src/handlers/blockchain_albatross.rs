@@ -7,14 +7,13 @@ use json::{Array, JsonValue, Null};
 
 use beserial::Deserialize;
 use block_albatross::{Block, ForkProof, MicroBlock};
-use block_albatross::signed::{AggregateProof, Message};
 use blockchain_albatross::Blockchain;
 use blockchain_albatross::reward_registry::SlashedSlots;
 use blockchain_base::AbstractBlockchain;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use primitives::policy;
-use primitives::validators::Slots;
+use primitives::validators::{IndexedSlot, Slots};
 use transaction::{Transaction, TransactionReceipt};
 
 use crate::handlers::Handler;
@@ -117,40 +116,75 @@ impl BlockchainAlbatrossHandler {
         Ok(self.block_to_obj(&self.block_by_number(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
 
-    /// Returns a list of slot objects.
-    /// Each slot object looks like:
+    /// Returns the producer of a block given the block and view number.
+    /// The block number has to be less or equal to the current chain height
+    /// and greater than that of the second last known macro block.
+    /// Parameters:
+    /// - block_number (number)
+    /// TODO - view_number (number) (optional)
+    ///
+    /// The producer object contains:
     /// ```text
     /// {
     ///     index: number,
     ///     publicKey: string,
     ///     stakerAddress: string,
-    ///     reward_address: string,
+    ///     rewardAddress: string,
     /// }
     /// ```
-    pub(crate) fn current_slots(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
-        let slots = self.blockchain.current_slots();
-        let slashed_set = self.blockchain.current_slashed_set();
+    pub(crate) fn get_producer(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+        let block_number = params.get(0)
+            .and_then(|v| v.as_u32())
+            .ok_or(object!{"message" => "Invalid block number"})?;
 
-        let slashed_slots = SlashedSlots::new(&slots, &slashed_set);
-        Ok(Self::slashed_slots_to_obj(&slashed_slots))
+        if policy::is_macro_block_at(block_number) {
+            return Err(object!{"message" => "Block is a macro block"});
+        }
+
+        let block = self.blockchain.get_block_at(block_number, true)
+            .ok_or(object!{"message" => "Unknown block"})?;
+        let producer = self.blockchain.get_block_producer_at(block_number, block.view_number(), None)
+            .ok_or(object!{"message" => "Block number out of range"})?;
+
+        Ok(Self::indexed_slot_to_obj(&producer))
     }
 
-    /// Returns a list of slot objects.
-    /// Each slot object looks like:
+    /// Returns the state of the slots.
+    ///
+    /// The state object contains:
+    /// ```text
+    /// {
+    ///     blockNumber: number,
+    ///     currentSlots: SlotList,
+    ///     lastSlots: SlotList
+    /// }
+    /// ```
+    ///
+    /// A SlotList is an array with objects looking like:
     /// ```text
     /// {
     ///     index: number,
     ///     publicKey: string,
     ///     stakerAddress: string,
-    ///     reward_address: string,
+    ///     rewardAddress: string,
     /// }
     /// ```
-    pub(crate) fn last_slots(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
-        let slots = self.blockchain.last_slots();
-        let slashed_set = self.blockchain.last_slashed_set();
+    pub(crate) fn slot_state(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+        let state = self.blockchain.state();
 
-        let slashed_slots = SlashedSlots::new(&slots, &slashed_set);
-        Ok(Self::slashed_slots_to_obj(&slashed_slots))
+        let current_slots = state.current_slots().ok_or(object!{"message" => "No current slots"})?;
+        let current_slashed_set = state.current_slashed_set();
+        let current_slashed_slots = SlashedSlots::new(&current_slots, &current_slashed_set);
+
+        let last_slots = state.last_slots().ok_or(object!{"message" => "No last slots"})?;
+        let last_slashed_set = state.last_slashed_set();
+        let last_slashed_slots = SlashedSlots::new(&last_slots, &last_slashed_set);
+
+        Ok(object!{
+            "blockNumber" => state.block_number(),
+            "currentSlots" => Self::slashed_slots_to_obj(&current_slashed_slots),
+            "lastSlots" => Self::slashed_slots_to_obj(&last_slashed_slots),
+        })
     }
 
     // Transactions
@@ -409,7 +443,6 @@ impl BlockchainAlbatrossHandler {
 
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
         let hash = block.hash().to_hex();
-        let slots = self.blockchain.current_slots();
         let height = self.blockchain.height();
         match block {
             Block::Macro(ref block) => object! {
@@ -425,10 +458,6 @@ impl BlockchainAlbatrossHandler {
                 "timestamp" => block.header.timestamp,
                 "slots" => block.clone().try_into().as_ref().map(Self::slots_to_obj).unwrap_or(Null),
                 "slashFine" => block.extrinsics.as_ref().map(|body| JsonValue::from(u64::from(body.slash_fine))).unwrap_or(Null),
-                "pbft" => block.justification.as_ref().map(|pbft| object! {
-                    "prepare" => Self::aggregate_proof_to_obj(&pbft.prepare, slots.len()),
-                    "commit" => Self::aggregate_proof_to_obj(&pbft.commit, slots.len()),
-                }).unwrap_or(Null),
             },
             Block::Micro(ref block) => object! {
                 "type" => "micro",
@@ -453,7 +482,6 @@ impl BlockchainAlbatrossHandler {
                     body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
                 }).unwrap_or_else(Vec::new)),
                 "signature" => hex::encode(&block.justification.signature),
-                "viewChangeProof" => block.justification.view_change_proof.as_ref().map(|p| Self::aggregate_proof_to_obj(p, slots.len())).unwrap_or(Null),
             }
         }
     }
@@ -490,13 +518,11 @@ impl BlockchainAlbatrossHandler {
     fn slots_to_obj(slots: &Slots) -> JsonValue {
         JsonValue::Array(Vec::from_iter(slots.iter()
             .enumerate()
-            .map(|(i, slot)| {
-                object! {
-                        "index" => i,
-                        "publicKey" => hex::encode(&slot.public_key),
-                        "stakerAddress" => slot.staker_address.to_hex(),
-                        "rewardAddress" => slot.reward_address().to_hex(),
-                    }
+            .map(|(i, slot)| object! {
+                "index" => i,
+                "publicKey" => hex::encode(&slot.public_key),
+                "stakerAddress" => slot.staker_address.to_hex(),
+                "rewardAddress" => slot.reward_address().to_hex(),
             })
         ))
     }
@@ -504,39 +530,35 @@ impl BlockchainAlbatrossHandler {
     fn slashed_slots_to_obj(slashed_slots: &SlashedSlots) -> JsonValue {
         JsonValue::Array(Vec::from_iter(slashed_slots.slot_states()
             .enumerate()
-            .map(|(i, (slot, enabled))| {
-                object! {
-                        "index" => i,
-                        "publicKey" => hex::encode(&slot.public_key),
-                        "stakerAddress" => slot.staker_address.to_hex(),
-                        "rewardAddress" => slot.reward_address().to_hex(),
-                        "slashed" => !enabled,
-                    }
+            .map(|(i, (slot, enabled))| object! {
+                "index" => i,
+                "publicKey" => hex::encode(&slot.public_key),
+                "stakerAddress" => slot.staker_address.to_hex(),
+                "rewardAddress" => slot.reward_address().to_hex(),
+                "slashed" => !enabled,
             })
         ))
     }
 
     fn fork_proof_to_obj(fork_proof: &ForkProof) -> JsonValue {
         object! {
-                "blockNumber" => fork_proof.header1.block_number,
-                "viewNumber" => fork_proof.header1.view_number,
-                "parentHash" => fork_proof.header1.parent_hash.to_hex(),
-                "hashes" => vec![
-                    fork_proof.header1.hash::<Blake2bHash>().to_hex(),
-                    fork_proof.header2.hash::<Blake2bHash>().to_hex(),
-                ]
-            }
+            "blockNumber" => fork_proof.header1.block_number,
+            "viewNumber" => fork_proof.header1.view_number,
+            "parentHash" => fork_proof.header1.parent_hash.to_hex(),
+            "hashes" => vec![
+                fork_proof.header1.hash::<Blake2bHash>().to_hex(),
+                fork_proof.header2.hash::<Blake2bHash>().to_hex(),
+            ]
+        }
     }
 
-    // TODO Return individual signers?
-    fn aggregate_proof_to_obj<M>(proof: &AggregateProof<M>, n_signers: usize) -> JsonValue
-        where M: Message
-    {
+    fn indexed_slot_to_obj(idx_slot: &IndexedSlot) -> JsonValue {
         object! {
-                "signatures" => proof.signers.len(),
-                "participants" => n_signers,
-                "signerIndices" => JsonValue::Array(Vec::from_iter(proof.signers.iter().map(|e| e.into()))),
-            }
+            "index" => idx_slot.idx,
+            "publicKey" => hex::encode(&idx_slot.slot.public_key),
+            "stakerAddress" => idx_slot.slot.staker_address.to_hex(),
+            "rewardAddress" => idx_slot.slot.reward_address().to_hex(),
+        }
     }
 }
 
@@ -558,8 +580,9 @@ impl Handler for BlockchainAlbatrossHandler {
             "getBlockTransactionCountByNumber" => Some(self.get_block_transaction_count_by_number(params)),
             "getBlockByHash" => Some(self.get_block_by_hash(params)),
             "getBlockByNumber" => Some(self.get_block_by_number(params)),
-            "currentSlots" => Some(self.current_slots(params)),
-            "lastSlots" => Some(self.last_slots(params)),
+            "getProducer" => Some(self.get_producer(params)),
+
+            "slotState" => Some(self.slot_state(params)),
 
             _ => None
         }

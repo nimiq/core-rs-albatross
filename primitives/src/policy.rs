@@ -175,6 +175,16 @@ pub fn first_block_of(epoch: u32) -> u32 {
     epoch * EPOCH_LENGTH - EPOCH_LENGTH + 1
 }
 
+/// First block in reward registry (first block of previous epoch)
+/// Returns `0u32` during epoch 0 (genesis) and 1.
+pub fn first_block_of_registry(epoch: u32) -> u32 {
+    if epoch <= 1 {
+        0u32
+    } else {
+        first_block_of(epoch - 1)
+    }
+}
+
 pub fn macro_block_of(epoch: u32) -> u32 {
     epoch * EPOCH_LENGTH
 }

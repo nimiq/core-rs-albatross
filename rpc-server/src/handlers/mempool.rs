@@ -226,22 +226,22 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
 
 pub(crate) fn transaction_to_obj(transaction: &Transaction, context: Option<&TransactionContext>, head_height: Option<u32>) -> JsonValue {
     object!{
-            "hash" => transaction.hash::<Blake2bHash>().to_hex(),
-            "blockHash" => context.map(|c| c.block_hash.into()).unwrap_or(Null),
-            "blockNumber" => context.map(|c| c.block_number.into()).unwrap_or(Null),
-            "timestamp" => context.map(|c| c.timestamp.into()).unwrap_or(Null),
-            "confirmations" => context.map(|c| head_height.map(|height| (height - c.block_number).into()).unwrap_or(Null)).unwrap_or(Null),
-            "transactionIndex" => context.map(|c| c.index.into()).unwrap_or(Null),
-            "from" => transaction.sender.to_hex(),
-            "fromAddress" => transaction.sender.to_user_friendly_address(),
-            "to" => transaction.recipient.to_hex(),
-            "toAddress" => transaction.recipient.to_user_friendly_address(),
-            "value" => u64::from(transaction.value),
-            "fee" => u64::from(transaction.fee),
-            "data" => hex::encode(&transaction.data),
-            "flags" => transaction.flags.bits(),
-            "validityStartHeight" => transaction.validity_start_height
-        }
+        "hash" => transaction.hash::<Blake2bHash>().to_hex(),
+        "blockHash" => context.map(|c| c.block_hash.into()).unwrap_or(Null),
+        "blockNumber" => context.map(|c| c.block_number.into()).unwrap_or(Null),
+        "timestamp" => context.map(|c| c.timestamp.into()).unwrap_or(Null),
+        "confirmations" => context.map(|c| head_height.map(|height| (height - c.block_number).into()).unwrap_or(Null)).unwrap_or(Null),
+        "transactionIndex" => context.map(|c| c.index.into()).unwrap_or(Null),
+        "from" => transaction.sender.to_hex(),
+        "fromAddress" => transaction.sender.to_user_friendly_address(),
+        "to" => transaction.recipient.to_hex(),
+        "toAddress" => transaction.recipient.to_user_friendly_address(),
+        "value" => u64::from(transaction.value),
+        "fee" => u64::from(transaction.fee),
+        "data" => hex::encode(&transaction.data),
+        "flags" => transaction.flags.bits(),
+        "validityStartHeight" => transaction.validity_start_height
+    }
 }
 
 // {

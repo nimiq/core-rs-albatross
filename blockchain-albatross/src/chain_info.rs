@@ -4,12 +4,14 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use block::{Block, BlockType, MacroExtrinsics, MicroExtrinsics};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
+use primitives::validators::IndexedSlot;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ChainInfo {
     pub head: Block,
     pub on_main_chain: bool,
     pub main_chain_successor: Option<Blake2bHash>,
+    pub slot: Option<IndexedSlot>,
 }
 
 impl ChainInfo {
@@ -18,22 +20,25 @@ impl ChainInfo {
             head: block,
             on_main_chain: true,
             main_chain_successor: None,
+            slot: None,
         }
     }
 
-    pub fn next(&self, block: Block) -> Self {
+    pub fn next(&self, block: Block, slot: Option<IndexedSlot>) -> Self {
         ChainInfo {
             head: block,
             on_main_chain: false,
-            main_chain_successor: None
+            main_chain_successor: None,
+            slot,
         }
     }
 
-    pub fn prev(&self, block: Block) -> Self {
+    pub fn prev(&self, block: Block, slot: Option<IndexedSlot>) -> Self {
         ChainInfo {
             head: block,
             on_main_chain: false,
-            main_chain_successor: None
+            main_chain_successor: None,
+            slot,
         }
     }
 }
@@ -58,6 +63,7 @@ impl Serialize for ChainInfo {
         }
         size += Serialize::serialize(&self.on_main_chain, writer)?;
         size += Serialize::serialize(&self.main_chain_successor, writer)?;
+        size += Serialize::serialize(&self.slot, writer)?;
         Ok(size)
     }
 
@@ -78,6 +84,7 @@ impl Serialize for ChainInfo {
         }
         size += Serialize::serialized_size(&self.on_main_chain);
         size += Serialize::serialized_size(&self.main_chain_successor);
+        size += Serialize::serialized_size(&self.slot);
         size
     }
 }
@@ -91,11 +98,13 @@ impl Deserialize for ChainInfo {
         };
         let on_main_chain = Deserialize::deserialize(reader)?;
         let main_chain_successor = Deserialize::deserialize(reader)?;
+        let slot = Deserialize::deserialize(reader)?;
 
         Ok(ChainInfo {
             head,
             on_main_chain,
             main_chain_successor,
+            slot,
         })
     }
 }
