@@ -279,10 +279,11 @@ impl<'env> Blockchain<'env> {
             prev_info.head.view_number()
         };
 
-        if header.view_number() < view_number {
+        let new_view_number = header.view_number();
+        if new_view_number < view_number {
             warn!("Rejecting block - lower view number {:?} < {:?}", header.view_number(), view_number);
             return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
-        } else if prev_info.head.view_number() > view_number {
+        } else if new_view_number > view_number {
             match view_change_proof {
                 None => {
                     warn!("Rejecting block - missing view change proof");
@@ -299,7 +300,7 @@ impl<'env> Blockchain<'env> {
                     }
                 },
             }
-        } else if prev_info.head.view_number() == view_number && view_change_proof.is_some() {
+        } else if new_view_number == view_number && view_change_proof.is_some() {
             warn!("Rejecting block - should not contain view change proof");
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
