@@ -319,6 +319,26 @@ impl BlockchainHandler {
             .collect::<Array>()))
     }
 
+    // Accounts
+
+    /// Look up the balance of an address.
+    /// Parameters:
+    /// - address (string)
+    ///
+    /// Returns the amount in Luna (10000 = 1 NIM):
+    /// ```text
+    /// 1200000
+    /// ```
+    pub(crate) fn get_balance(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+        let address = params.get(0).and_then(JsonValue::as_str)
+            .ok_or_else(|| object!{"message" => "Invalid address"})
+            .and_then(|s| Address::from_any_str(s)
+                .map_err(|_| object!{"message" => "Invalid address"}))?;
+
+        let account = self.blockchain.get_account(&address);
+        Ok(JsonValue::from(u64::from(account.balance())))
+    }
+
     // Helper functions
 
     fn block_by_number(&self, number: &JsonValue) -> Result<Block, JsonValue> {
@@ -439,6 +459,9 @@ impl Handler for BlockchainHandler {
             "getBlockTransactionCountByNumber" => Some(self.get_block_transaction_count_by_number(params)),
             "getBlockByHash" => Some(self.get_block_by_hash(params)),
             "getBlockByNumber" => Some(self.get_block_by_number(params)),
+
+            // Accounts
+            "getBalance" => Some(self.get_balance(params)),
 
             _ => None
         }
