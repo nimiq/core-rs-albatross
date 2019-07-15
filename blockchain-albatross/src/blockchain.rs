@@ -730,8 +730,7 @@ impl<'env> Blockchain<'env> {
 
     pub fn get_block(&self, hash: &Blake2bHash, include_forks: bool, include_body: bool) -> Option<Block> {
         let chain_info_opt = self.chain_store.get_chain_info(hash, include_body, None);
-        if chain_info_opt.is_some() {
-            let chain_info = chain_info_opt.unwrap();
+        if let Some(chain_info) = chain_info_opt {
             if chain_info.on_main_chain || include_forks {
                 return Some(chain_info.head);
             }

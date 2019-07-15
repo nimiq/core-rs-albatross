@@ -459,13 +459,15 @@ impl Validator {
         let timestamp = self.consensus.network.network_time.now();
         let view_number = state.view_number;
 
+        // Drop lock before push, otherwise two concurrent threads can dead-lock because the
+        // validator and blockchain lock are circular dependent.
+        drop(state);
+
         let block = self.block_producer.next_micro_block(fork_proofs, timestamp, view_number, vec![], view_change_proof);
         info!("Produced block: block_number={}, view_number={}, hash={}",
               block.header.block_number,
               block.header.view_number,
               block.header.hash::<Blake2bHash>());
-
-        drop(state);
 
         // Automatically relays block.
         let r = self.blockchain.push(Block::Micro(block));
