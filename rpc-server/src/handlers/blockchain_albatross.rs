@@ -12,19 +12,19 @@ use primitives::policy;
 use primitives::validators::{IndexedSlot, Slots};
 
 use crate::handlers::Handler;
-use crate::handlers::generic_blockchain::GenericBlockchainHandler;
+use crate::handlers::blockchain::BlockchainHandler;
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 use crate::rpc_not_implemented;
 
 pub struct BlockchainAlbatrossHandler {
     pub blockchain: Arc<Blockchain<'static>>,
-    generic: GenericBlockchainHandler<Blockchain<'static>>,
+    generic: BlockchainHandler<Blockchain<'static>>,
 }
 
 impl BlockchainAlbatrossHandler {
     pub(crate) fn new(blockchain: Arc<Blockchain<'static>>) -> Self {
         BlockchainAlbatrossHandler {
-            generic: GenericBlockchainHandler::new(blockchain.clone()),
+            generic: BlockchainHandler::new(blockchain.clone()),
             blockchain,
         }
     }

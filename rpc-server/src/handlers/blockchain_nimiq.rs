@@ -11,19 +11,19 @@ use nimiq_blockchain::Blockchain;
 use transaction::{Transaction, TransactionReceipt};
 
 use crate::handlers::Handler;
-use crate::handlers::generic_blockchain::{parse_hash, GenericBlockchainHandler};
+use crate::handlers::blockchain::{parse_hash, BlockchainHandler};
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 use crate::rpc_not_implemented;
 
-pub struct BlockchainHandler {
+pub struct BlockchainNimiqHandler {
     pub blockchain: Arc<Blockchain<'static>>,
-    generic: GenericBlockchainHandler<Blockchain<'static>>,
+    generic: BlockchainHandler<Blockchain<'static>>,
 }
 
-impl BlockchainHandler {
+impl BlockchainNimiqHandler {
     pub(crate) fn new(blockchain: Arc<Blockchain<'static>>) -> Self {
         Self {
-            generic: GenericBlockchainHandler::new(blockchain.clone()),
+            generic: BlockchainHandler::new(blockchain.clone()),
             blockchain,
         }
     }
@@ -253,7 +253,7 @@ impl BlockchainHandler {
     }
 }
 
-impl Handler for BlockchainHandler {
+impl Handler for BlockchainNimiqHandler {
     fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
         if let Some(res) = self.generic.call(name, params) {
             return Some(res);

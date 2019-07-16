@@ -3,7 +3,7 @@ use json::JsonValue;
 
 pub mod wallet;
 pub mod network;
-pub mod generic_blockchain;
+pub mod blockchain;
 pub mod blockchain_nimiq;
 pub mod blockchain_albatross;
 pub mod mempool;
