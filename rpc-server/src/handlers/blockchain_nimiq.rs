@@ -6,50 +6,29 @@ use json::{Array, JsonValue, Null};
 use beserial::{Deserialize, Serialize};
 use block::Block;
 use block::Difficulty;
-use blockchain_base::AbstractBlockchain;
 use hash::{Argon2dHash, Blake2bHash, Hash};
-use keys::Address;
 use nimiq_blockchain::Blockchain;
 use transaction::{Transaction, TransactionReceipt};
 
 use crate::handlers::Handler;
+use crate::handlers::generic_blockchain::{parse_hash, GenericBlockchainHandler};
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 use crate::rpc_not_implemented;
 
 pub struct BlockchainHandler {
     pub blockchain: Arc<Blockchain<'static>>,
+    generic: GenericBlockchainHandler<Blockchain<'static>>,
 }
 
 impl BlockchainHandler {
     pub(crate) fn new(blockchain: Arc<Blockchain<'static>>) -> Self {
-        BlockchainHandler {
+        Self {
+            generic: GenericBlockchainHandler::new(blockchain.clone()),
             blockchain,
         }
     }
 
     // Blocks
-    /// Returns the current block number.
-    pub(crate) fn block_number(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
-        Ok(self.blockchain.head_height().into())
-    }
-
-    /// Returns the number of transactions for a block hash.
-    /// Parameters:
-    /// - hash (string)
-    pub(crate) fn get_block_transaction_count_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        Ok(self.block_by_hash(params.get(0).unwrap_or(&Null))?
-            .body.ok_or_else(|| object!{"message" => "No body for block found"})?
-            .transactions.len().into())
-    }
-
-    /// Returns the number of transactions for a block number.
-    /// Parameters:
-    /// - height (number)
-    pub(crate) fn get_block_transaction_count_by_number(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        Ok(self.block_by_number(params.get(0).unwrap_or(&Null))?
-            .body.ok_or_else(|| object!{"message" => "No body for block found"})?
-            .transactions.len().into())
-    }
 
     /// Returns a block object for a block hash.
     /// Parameters:
@@ -76,7 +55,8 @@ impl BlockchainHandler {
     /// }
     /// ```
     pub(crate) fn get_block_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        Ok(self.block_to_obj(&self.block_by_hash(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
+        let block = self.generic.block_by_hash(params.get(0).unwrap_or(&Null))?;
+        Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
 
     /// Returns a block object for a block number.
@@ -104,7 +84,8 @@ impl BlockchainHandler {
     /// }
     /// ```
     pub(crate) fn get_block_by_number(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        Ok(self.block_to_obj(&self.block_by_number(params.get(0).unwrap_or(&Null))?, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
+        let block = self.generic.block_by_number(params.get(0).unwrap_or(&Null))?;
+        Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
 
     // Transactions
@@ -146,76 +127,6 @@ impl BlockchainHandler {
         rpc_not_implemented()
     }
 
-    /// Retrieves information about a transaction by its block hash and transaction index.
-    /// Parameters:
-    /// - blockHash (string)
-    /// - transactionIndex (number)
-    ///
-    /// Returns an info object:
-    /// ```text
-    /// {
-    ///     hash: string,
-    ///     from: string, // hex encoded
-    ///     fromAddress: string, // user friendly address
-    ///     fromType: number,
-    ///     to: string, // hex encoded
-    ///     toAddress: string, // user friendly address
-    ///     toType: number,
-    ///     value: number,
-    ///     fee: number,
-    ///     data: string,
-    ///     flags: number,
-    ///     validityStartHeight: number,
-    ///
-    ///     blockHash: string,
-    ///     blockNumber: number,
-    ///     timestamp: number,
-    ///     confirmations: number,
-    ///     transactionIndex: number,
-    /// }
-    /// ```
-    pub(crate) fn get_transaction_by_block_hash_and_index(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        let block = self.block_by_hash(params.get(0).unwrap_or(&Null))?;
-        let index = params.get(1).and_then(JsonValue::as_u16)
-            .ok_or_else(|| object!("message" => "Invalid transaction index"))?;
-        self.get_transaction_by_block_and_index(&block, index)
-    }
-
-    /// Retrieves information about a transaction by its block number and transaction index.
-    /// Parameters:
-    /// - blockNumber (number)
-    /// - transactionIndex (number)
-    ///
-    /// Returns an info object:
-    /// ```text
-    /// {
-    ///     hash: string,
-    ///     from: string, // hex encoded
-    ///     fromAddress: string, // user friendly address
-    ///     fromType: number,
-    ///     to: string, // hex encoded
-    ///     toAddress: string, // user friendly address
-    ///     toType: number,
-    ///     value: number,
-    ///     fee: number,
-    ///     data: string,
-    ///     flags: number,
-    ///     validityStartHeight: number,
-    ///
-    ///     blockHash: string,
-    ///     blockNumber: number,
-    ///     timestamp: number,
-    ///     confirmations: number,
-    ///     transactionIndex: number,
-    /// }
-    /// ```
-    pub(crate) fn get_transaction_by_block_number_and_index(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        let block = self.block_by_number(params.get(0).unwrap_or(&Null))?;
-        let index = params.get(1).and_then(JsonValue::as_u16)
-            .ok_or_else(|| object!("message" => "Invalid transaction index"))?;
-        self.get_transaction_by_block_and_index(&block, index)
-    }
-
     /// Retrieves information about a transaction by its hash.
     /// Parameters:
     /// - transactionHash (string)
@@ -244,10 +155,9 @@ impl BlockchainHandler {
     /// }
     /// ```
     pub(crate) fn get_transaction_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        params.get(0).and_then(JsonValue::as_str)
-            .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
-            .and_then(|s| Blake2bHash::from_str(s)
-                .map_err(|_| object!{"message" => "Invalid transaction hash"}))
+        params.get(0)
+            .ok_or(object!{"message" => "First argument must be hash"})
+            .and_then(parse_hash)
             .and_then(|h| self.get_transaction_by_hash_helper(&h))
     }
 
@@ -285,92 +195,7 @@ impl BlockchainHandler {
                                            block.as_ref()))
     }
 
-    /// Retrieves transaction receipts for an address.
-    /// Parameters:
-    /// - address (string)
-    ///
-    /// Returns a list of receipts:
-    /// ```text
-    /// Array<{
-    ///     transactionHash: string,
-    ///     blockHash: string,
-    ///     blockNumber: number,
-    ///     timestamp: number,
-    ///     confirmations: number,
-    ///     transactionIndex: number,
-    /// }>
-    /// ```
-    pub(crate) fn get_transactions_by_address(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        let address = params.get(0).and_then(JsonValue::as_str)
-            .ok_or_else(|| object!{"message" => "Invalid address"})
-            .and_then(|s| Address::from_any_str(s)
-                .map_err(|_| object!{"message" => "Invalid address"}))?;
-
-        // TODO: Accept two limit parameters?
-        let limit = params.get(0).and_then(JsonValue::as_usize)
-            .unwrap_or(1000);
-        let sender_limit = limit / 2;
-        let recipient_limit = limit / 2;
-
-        Ok(JsonValue::Array(self.blockchain
-            .get_transaction_receipts_by_address(&address, sender_limit, recipient_limit)
-            .iter()
-            .map(|receipt| self.transaction_receipt_to_obj(&receipt, None, None))
-            .collect::<Array>()))
-    }
-
-    // Accounts
-
-    /// Look up the balance of an address.
-    /// Parameters:
-    /// - address (string)
-    ///
-    /// Returns the amount in Luna (10000 = 1 NIM):
-    /// ```text
-    /// 1200000
-    /// ```
-    pub(crate) fn get_balance(&self, params: &Array) -> Result<JsonValue, JsonValue> {
-        let address = params.get(0).and_then(JsonValue::as_str)
-            .ok_or_else(|| object!{"message" => "Invalid address"})
-            .and_then(|s| Address::from_any_str(s)
-                .map_err(|_| object!{"message" => "Invalid address"}))?;
-
-        let account = self.blockchain.get_account(&address);
-        Ok(JsonValue::from(u64::from(account.balance())))
-    }
-
     // Helper functions
-
-    fn block_by_number(&self, number: &JsonValue) -> Result<Block, JsonValue> {
-        let mut block_number = if number.is_string() {
-            if number.as_str().unwrap().starts_with("latest-") {
-                self.blockchain.height() - u32::from_str(&number.as_str().unwrap()[7..]).map_err(|_| object!{"message" => "Invalid block number"})?
-            } else if number.as_str().unwrap() == "latest" {
-                self.blockchain.height()
-            } else {
-                u32::from_str(number.as_str().unwrap()).map_err(|_| object!{"message" => "Invalid block number"})?
-            }
-        } else if number.is_number() {
-            number.as_u32().ok_or_else(|| object!{"message" => "Invalid block number"})?
-        } else {
-            return Err(object!{"message" => "Invalid block number"});
-        };
-        if block_number == 0 {
-            block_number = 1;
-        }
-        self.blockchain
-            .get_block_at(block_number, true)
-            .ok_or_else(|| object!{"message" => "Block not found"})
-    }
-
-    fn block_by_hash(&self, hash: &JsonValue) -> Result<Block, JsonValue> {
-        let hash = hash.as_str()
-            .ok_or_else(|| object!{"message" => "Hash must be a string"})
-            .and_then(|s| Blake2bHash::from_str(s)
-                .map_err(|_| object!{"message" => "Invalid Blake2b hash"}))?;
-        self.blockchain.get_block(&hash, false, true)
-            .ok_or_else(|| object!{"message" => "Block not found"})
-    }
 
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
         let hash = block.header.hash::<Blake2bHash>().to_hex();
@@ -394,7 +219,7 @@ impl BlockchainHandler {
                     block_hash: &hash,
                     block_number: block.header.height,
                     index: i as u16,
-                    timestamp: u64::from(block.header.timestamp),
+                    //timestamp: block.header.timestamp as u64,
                 }), Some(height))).collect()
             } else {
                 body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
@@ -413,21 +238,7 @@ impl BlockchainHandler {
         let block = self.blockchain.get_block(&transaction_info.block_hash, false, true)
             .ok_or_else(|| object!{"message" => "Block not found"})?;
 
-        self.get_transaction_by_block_and_index(&block, transaction_info.index)
-    }
-
-    fn get_transaction_by_block_and_index(&self, block: &Block, index: u16) -> Result<JsonValue, JsonValue> {
-        // Get the transaction. If the body doesn't store transaction, return an error
-        let transaction = block.body.as_ref()
-            .and_then(|b| b.transactions.get(index as usize))
-            .ok_or_else(|| object!{"message" => "Block doesn't contain transaction."})?;
-
-        Ok(transaction_to_obj(&transaction, Some(&TransactionContext {
-            block_hash: &block.header.hash::<Blake2bHash>().to_hex(),
-            block_number: block.header.height,
-            index,
-            timestamp: u64::from(block.header.timestamp),
-        }), Some(self.blockchain.height())))
+        self.generic.get_transaction_by_block_and_index(&block, transaction_info.index)
     }
 
     fn transaction_receipt_to_obj(&self, receipt: &TransactionReceipt, index: Option<u16>, block: Option<&Block>) -> JsonValue {
@@ -444,24 +255,19 @@ impl BlockchainHandler {
 
 impl Handler for BlockchainHandler {
     fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+        if let Some(res) = self.generic.call(name, params) {
+            return Some(res);
+        }
+
         match name {
             // Transactions
             "getRawTransactionInfo" => Some(self.get_raw_transaction_info(params)),
-            "getTransactionByBlockHashAndIndex" => Some(self.get_transaction_by_block_hash_and_index(params)),
-            "getTransactionByBlockNumberAndIndex" => Some(self.get_transaction_by_block_number_and_index(params)),
             "getTransactionByHash" => Some(self.get_transaction_by_hash(params)),
             "getTransactionReceipt" => Some(self.get_transaction_receipt(params)),
-            "getTransactionsByAddress" => Some(self.get_transactions_by_address(params)),
 
             // Blockchain
-            "blockNumber" => Some(self.block_number(params)),
-            "getBlockTransactionCountByHash" => Some(self.get_block_transaction_count_by_hash(params)),
-            "getBlockTransactionCountByNumber" => Some(self.get_block_transaction_count_by_number(params)),
             "getBlockByHash" => Some(self.get_block_by_hash(params)),
             "getBlockByNumber" => Some(self.get_block_by_number(params)),
-
-            // Accounts
-            "getBalance" => Some(self.get_balance(params)),
 
             _ => None
         }

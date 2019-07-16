@@ -7,7 +7,7 @@ use consensus::{Consensus, NimiqConsensusProtocol};
 use crate::{AbstractRpcHandler, JsonRpcConfig, JsonRpcServerState};
 use crate::common::RpcHandler;
 use crate::handlers::block_production::BlockProductionHandler;
-use crate::handlers::blockchain::BlockchainHandler;
+use crate::handlers::blockchain_nimiq::BlockchainHandler;
 use crate::handlers::Handler;
 use crate::handlers::mempool::MempoolHandler;
 use crate::handlers::network::NetworkHandler;
