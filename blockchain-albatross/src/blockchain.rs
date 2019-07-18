@@ -144,7 +144,7 @@ impl<'env> Blockchain<'env> {
             transaction_cache.push_block(block);
         }
         transaction_cache.push_block(&main_chain.head);
-        assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.block_number() + 1));
+        assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS.saturating_sub(main_chain.head.block_number() + 1));
 
         // Initialize SlashRegistry.
         let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
@@ -596,7 +596,7 @@ impl<'env> Blockchain<'env> {
         for block in blocks.iter() {
             cache_txn.prepend_block(block)
         }
-        assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.block_number() + 1));
+        assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS.saturating_sub(ancestor.1.head.block_number() + 1));
 
         // Check each fork block against TransactionCache & commit to AccountsTree and SlashRegistry.
         let mut fork_iter = fork_chain.iter().rev();
