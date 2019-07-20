@@ -62,7 +62,7 @@ struct ConsensusState<P: ConsensusProtocol + 'static> {
 
 
 impl<P: ConsensusProtocol + 'static> Consensus<P> {
-    const MIN_FULL_NODES: usize = 1;
+    const MIN_FULL_NODES: usize = 0;
     const SYNC_THROTTLE: Duration = Duration::from_millis(1500);
 
     pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {

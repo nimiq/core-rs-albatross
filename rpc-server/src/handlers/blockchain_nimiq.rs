@@ -51,6 +51,7 @@ impl BlockchainNimiqHandler {
     ///     extraData: string,
     ///     size: number,
     ///     timestamp: number,
+    ///     timestampMillis: number,
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
     /// ```
@@ -80,6 +81,7 @@ impl BlockchainNimiqHandler {
     ///     extraData: string,
     ///     size: number,
     ///     timestamp: number,
+    ///     timestampMillis: number,
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
     /// ```
@@ -150,6 +152,7 @@ impl BlockchainNimiqHandler {
     ///     blockHash: string,
     ///     blockNumber: number,
     ///     timestamp: number,
+    ///     timestampMillis: number,
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }
@@ -172,6 +175,7 @@ impl BlockchainNimiqHandler {
     ///     blockHash: string,
     ///     blockNumber: number,
     ///     timestamp: number,
+    ///     timestampMillis: number,
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }
@@ -214,12 +218,13 @@ impl BlockchainNimiqHandler {
             "extraData" => block.body.as_ref().map(|body| hex::encode(&body.extra_data).into()).unwrap_or(Null),
             "size" => block.serialized_size(),
             "timestamp" => block.header.timestamp,
+            "timestampMillis" => (block.header.timestamp as u64) * 1000,
             "transactions" => JsonValue::Array(block.body.as_ref().map(|body| if include_transactions {
                 body.transactions.iter().enumerate().map(|(i, tx)| transaction_to_obj(tx, Some(&TransactionContext {
                     block_hash: &hash,
                     block_number: block.header.height,
                     index: i as u16,
-                    //timestamp: block.header.timestamp as u64,
+                    timestamp: block.header.timestamp_in_millis(),
                 }), Some(height))).collect()
             } else {
                 body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
@@ -248,6 +253,7 @@ impl BlockchainNimiqHandler {
             "blockHash" => receipt.block_hash.to_hex(),
             "confirmations" => self.blockchain.height() - receipt.block_height,
             "timestamp" => block.map(|block| block.header.timestamp.into()).unwrap_or(Null),
+            "timestampMillis" => block.map(|block| ((block.header.timestamp as u64) * 1000).into()).unwrap_or(Null),
             "transactionIndex" => index.map(|i| i.into()).unwrap_or(Null)
         }
     }

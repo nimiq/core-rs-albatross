@@ -57,6 +57,7 @@ impl BlockchainAlbatrossHandler {
     ///     extraData: string,
     ///     size: number,
     ///     timestamp: number,
+    ///     timestampMillis: number,
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
     /// ```
@@ -86,6 +87,7 @@ impl BlockchainAlbatrossHandler {
     ///     extraData: string,
     ///     size: number,
     ///     timestamp: number,
+    ///     timestampMillis: number,
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
     /// ```
@@ -229,6 +231,7 @@ impl BlockchainAlbatrossHandler {
     ///     blockHash: string,
     ///     blockNumber: number,
     ///     timestamp: number,
+    ///     timestampMillis: number,
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }
@@ -248,6 +251,7 @@ impl BlockchainAlbatrossHandler {
     ///     blockHash: string,
     ///     blockNumber: number,
     ///     timestamp: number,
+    ///     timestampMillis: number,
     ///     confirmations: number,
     ///     transactionIndex: number,
     /// }
@@ -290,7 +294,8 @@ impl BlockchainAlbatrossHandler {
                 "seed" => hex::encode(&block.header.seed),
                 "stateRoot" => block.header.state_root.to_hex(),
                 "extrinsicsRoot" => block.header.extrinsics_root.to_hex(),
-                "timestamp" => block.header.timestamp,
+                "timestamp" => block.header.timestamp / 1000,
+                "timestampMillis" => block.header.timestamp,
                 "slots" => block.clone().try_into().as_ref().map(Self::slots_to_obj).unwrap_or(Null),
                 "slashFine" => block.extrinsics.as_ref().map(|body| JsonValue::from(u64::from(body.slash_fine))).unwrap_or(Null),
             },
@@ -311,7 +316,7 @@ impl BlockchainAlbatrossHandler {
                         block_hash: &hash,
                         block_number: block.header.block_number,
                         index: i as u16,
-                        //timestamp: block.header.timestamp,
+                        timestamp: block.header.timestamp,
                     }), Some(height))).collect()
                 } else {
                     body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()

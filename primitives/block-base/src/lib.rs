@@ -27,6 +27,9 @@ pub trait BlockHeader: Serialize + Deserialize {
     fn hash(&self) -> Blake2bHash;
 
     fn height(&self) -> u32;
+
+    /// Time since unix epoch in milliseconds
+    fn timestamp(&self) -> u64;
 }
 
 pub trait BlockError: Debug + Clone + PartialEq + Eq {}

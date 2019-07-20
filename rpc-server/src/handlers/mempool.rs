@@ -229,7 +229,8 @@ pub(crate) fn transaction_to_obj(transaction: &Transaction, context: Option<&Tra
         "hash" => transaction.hash::<Blake2bHash>().to_hex(),
         "blockHash" => context.map(|c| c.block_hash.into()).unwrap_or(Null),
         "blockNumber" => context.map(|c| c.block_number.into()).unwrap_or(Null),
-        // TODO "timestamp" => context.map(|c| c.timestamp.into()).unwrap_or(Null),
+        "timestamp" => context.map(|c| (c.timestamp / 1000).into()).unwrap_or(Null),
+        "timestampMillis" => context.map(|c| c.timestamp.into()).unwrap_or(Null),
         "confirmations" => context.map(|c| head_height.map(|height| (height - c.block_number).into()).unwrap_or(Null)).unwrap_or(Null),
         "transactionIndex" => context.map(|c| c.index.into()).unwrap_or(Null),
         "from" => transaction.sender.to_hex(),
@@ -317,7 +318,7 @@ pub(crate) struct TransactionContext<'a> {
     pub block_hash: &'a str,
     pub block_number: u32,
     pub index: u16,
-    // TODO pub timestamp: u64,
+    pub timestamp: u64, // Milliseconds
 }
 
 impl<P: ConsensusProtocol + 'static> Handler for MempoolHandler<P> {

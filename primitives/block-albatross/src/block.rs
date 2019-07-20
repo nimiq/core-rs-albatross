@@ -253,6 +253,13 @@ impl block_base::BlockHeader for BlockHeader {
     fn height(&self) -> u32 {
         self.block_number()
     }
+
+    fn timestamp(&self) -> u64 {
+        match self {
+            BlockHeader::Macro(header) => header.timestamp,
+            BlockHeader::Micro(header) => header.timestamp,
+        }
+    }
 }
 
 impl Serialize for BlockHeader {

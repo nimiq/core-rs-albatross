@@ -73,4 +73,8 @@ impl block_base::BlockHeader for BlockHeader {
     fn height(&self) -> u32 {
         self.height
     }
+
+    fn timestamp(&self) -> u64 {
+        self.timestamp_in_millis()
+    }
 }

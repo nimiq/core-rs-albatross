@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use json::{Array, JsonValue, Null};
 
-use block_base::Block;
+use block_base::{Block, BlockHeader};
 use blockchain_base::AbstractBlockchain;
 use keys::Address;
 
@@ -203,22 +203,24 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
             block_hash: &block.hash().to_hex(),
             block_number: block.height(),
             index,
+            timestamp: block.header().timestamp(),
         }), Some(self.blockchain.head_height())))
     }
 
-    pub(crate) fn transaction_receipt_to_obj(&self, receipt: &TransactionReceipt, index: Option<u16>, _block: Option<&B::Block>) -> JsonValue {
+    pub(crate) fn transaction_receipt_to_obj(&self, receipt: &TransactionReceipt, index: Option<u16>, block: Option<&B::Block>) -> JsonValue {
         object!{
             "transactionHash" => receipt.transaction_hash.to_hex(),
             "blockNumber" => receipt.block_height,
             "blockHash" => receipt.block_hash.to_hex(),
             "confirmations" => self.blockchain.head_height() - receipt.block_height,
-            // TODO "timestamp" => block.map(|block| block.header.timestamp.into()).unwrap_or(Null),
+            "timestamp" => block.map(|block| block.header().timestamp().into()).unwrap_or(Null),
+            "timestampMillis" => block.map(|block| (block.header().timestamp() / 1000).into()).unwrap_or(Null),
             "transactionIndex" => index.map(|i| i.into()).unwrap_or(Null)
         }
     }
 
     pub(crate) fn parse_block_number(&self, number: &JsonValue) -> Result<u32, JsonValue> {
-        let mut block_number = if number.is_string() {
+        let block_number = if number.is_string() {
             if number.as_str().unwrap().starts_with("latest-") {
                 let offset = u32::from_str(&number.as_str().unwrap()[7..])
                     .map_err(|_| object!{"message" => "Invalid block number"})?;
@@ -234,9 +236,6 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
         } else {
             return Err(object!{"message" => "Invalid block number"});
         };
-        if block_number == 0 {
-            block_number = 1;
-        }
         Ok(block_number)
     }
 
