@@ -19,7 +19,7 @@ impl<'env> Blockchain<'env> {
         if state.chain_proof.is_none() {
             let start = Instant::now();
             let chain_proof = self.prove(&state.main_chain.head, Self::NIPOPOW_M, Self::NIPOPOW_K, Self::NIPOPOW_DELTA);
-            trace!("Chain proof took {}ms to compute (prefix={}, suffix={})", utils::time::duration_as_millis(&(Instant::now() - start)), chain_proof.prefix.len(), chain_proof.suffix.len());
+            trace!("Chain proof took {}ms to compute (prefix={}, suffix={})", (Instant::now() - start).as_millis(), chain_proof.prefix.len(), chain_proof.suffix.len());
             state.chain_proof = Some(chain_proof);
         }
         // XXX Get rid of the clone here? ChainProof is typically >1mb.

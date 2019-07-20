@@ -254,20 +254,20 @@ impl<B: AbstractBlockchain<'static> + 'static> PeerScorer<B> {
         0.15 * score_age + 0.25 * score_outbound + 0.2 * score_type + 0.2 * score_protocol + 0.2 * score_speed
     }
 
-    fn score_by_age(age: u64, best_age: u64, max_age: u64) -> Score {
+    fn score_by_age(age: u128, best_age: u128, max_age: u128) -> Score {
         f64::max(f64::min(1. - (age as f64 - best_age as f64) / max_age as f64, 1.), 0.)
     }
 
     fn score_connection_age(connection_info: &ConnectionInfo<B>) -> Score {
-        let age = time::duration_as_millis(&connection_info.age_established());
+        let age = connection_info.age_established().as_millis();
         let services = connection_info.peer_address().expect("No peer address").services;
 
         if services.is_full_node() {
-            (age as f64 / (2.0 * time::duration_as_millis(&Self::BEST_AGE_FULL) as f64) + 0.5) as Score
+            (age as f64 / (2.0 * (Self::BEST_AGE_FULL.as_millis()) as f64) + 0.5) as Score
         } else if services.is_light_node() {
-            Self::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_LIGHT), time::duration_as_millis(&Self::MAX_AGE_LIGHT)) as Score
+            Self::score_by_age(age, Self::BEST_AGE_LIGHT.as_millis(), Self::MAX_AGE_LIGHT.as_millis()) as Score
         } else {
-            Self::score_by_age(age, time::duration_as_millis(&Self::BEST_AGE_NANO), time::duration_as_millis(&Self::MAX_AGE_NANO)) as Score
+            Self::score_by_age(age, Self::BEST_AGE_NANO.as_millis(), Self::MAX_AGE_NANO.as_millis()) as Score
         }
     }
 
