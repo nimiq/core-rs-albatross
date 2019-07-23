@@ -246,7 +246,7 @@ impl ValidatorAgent {
             // check the view change proof
             if let Some(view_change_proof) = &proposal.message.view_change {
                 let view_change = ViewChange { block_number, new_view_number: view_number };
-                if view_change_proof.verify(&view_change, &self.blockchain.current_validators(), policy::TWO_THIRD_VALIDATORS).is_err() {
+                if view_change_proof.verify(&view_change, &self.blockchain.current_validators(), policy::TWO_THIRD_SLOTS).is_err() {
                     debug!("[PBFT-PROPOSAL] Invalid view change proof: {:?}", view_change_proof);
                     return;
                 }

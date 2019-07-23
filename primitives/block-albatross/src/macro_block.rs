@@ -8,6 +8,7 @@ use bls::bls12_381::CompressedSignature;
 use bls::bls12_381::lazy::LazyPublicKey;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::coin::Coin;
+use primitives::policy;
 use primitives::validators::{Slot, Slots, Validators};
 use collections::bitset::BitSet;
 
@@ -63,18 +64,43 @@ impl TryInto<Slots> for MacroBlock {
         let mut compressed_public_keys = self.header.validators;
         let extrinsics = self.extrinsics.expect("Just checked it above");
         let mut compressed_addresses = extrinsics.slot_allocation;
-        let size = compressed_public_keys.slot_allocation.len();
+        let slot_ones = compressed_public_keys.slot_allocation.len();
 
         // A well-formed block will always have the same length for both BitSets and be greater than 0
-        if size == 0 || size != compressed_addresses.slot_allocation.len() { return Err(TryIntoError::InvalidLength) };
+        if slot_ones == 0 || slot_ones != compressed_addresses.slot_allocation.len() {
+            return Err(TryIntoError::InvalidLength)
+        };
+
+        let num_slots = policy::SLOTS.try_into().unwrap();
+
+        let bitset_zeros = compressed_addresses.slot_allocation
+            .iter_bits().take(num_slots)
+            .filter(|e| !*e)
+            .count();
+
+        debug_assert_eq!(
+            bitset_zeros, compressed_public_keys.public_keys.len(),
+            "Number of public keys ({}) must be equal to number of zeros in slot allocation bitset ({})",
+            bitset_zeros, compressed_public_keys.public_keys.len(),
+        );
+
+        debug_assert_eq!(
+            bitset_zeros, compressed_addresses.addresses.len(),
+            "Number of addresses ({}) must be equal to number of zeros in slot allocation bitset ({})",
+            bitset_zeros, compressed_addresses.addresses.len(),
+        );
 
         // Create the final vector we will be returning
-        let mut slots = Vec::with_capacity(size);
+        let mut slots = Vec::with_capacity(policy::SLOTS.try_into().unwrap());
 
         let mut public_key = compressed_public_keys.public_keys.remove(0);
 
         let mut addresses = compressed_addresses.addresses.remove(0);
-        let mut reward_address_opt = if addresses.reward_address == addresses.staker_address { None } else { Some(addresses.reward_address) };
+        let mut reward_address_opt = if addresses.reward_address != addresses.staker_address {
+            Some(addresses.reward_address)
+        } else {
+            None
+        };
         let mut staker_address = addresses.staker_address;
 
         slots.push(Slot {
@@ -83,7 +109,7 @@ impl TryInto<Slots> for MacroBlock {
             staker_address: staker_address.clone(),
         });
 
-        for i in 1..size {
+        for i in 1..num_slots {
             if !compressed_public_keys.slot_allocation.contains(i) {
                 public_key = compressed_public_keys.public_keys.remove(0);
             }

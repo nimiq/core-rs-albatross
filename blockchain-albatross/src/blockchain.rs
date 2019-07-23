@@ -294,7 +294,7 @@ impl<'env> Blockchain<'env> {
                         block_number: header.block_number(),
                         new_view_number: header.view_number(),
                     };
-                    if let Err(e) = view_change_proof.verify(&view_change,&self.current_validators(),policy::TWO_THIRD_VALIDATORS) {
+                    if let Err(e) = view_change_proof.verify(&view_change,&self.current_validators(),policy::TWO_THIRD_SLOTS) {
                         warn!("Rejecting block - bad view change proof: {:?}", e);
                         return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                     }
@@ -406,7 +406,7 @@ impl<'env> Blockchain<'env> {
                     return Err(PushError::InvalidBlock(BlockError::NoJustification));
                 },
                 Some(ref justification) => {
-                    if justification.verify(macro_block.hash(),&self.current_validators(), policy::TWO_THIRD_VALIDATORS).is_err() {
+                    if justification.verify(macro_block.hash(),&self.current_validators(), policy::TWO_THIRD_SLOTS).is_err() {
                         warn!("Rejecting block - macro block with bad justification");
                         return Err(PushError::InvalidBlock(BlockError::NoJustification));
                     }
@@ -808,7 +808,7 @@ impl<'env> Blockchain<'env> {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         let staking_account = self.state.read().accounts().get(validator_registry, None);
         if let Account::Staking(ref staking_contract) = staking_account {
-            return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::ACTIVE_VALIDATORS, policy::MAX_CONSIDERED as usize);
+            return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::SLOTS, policy::MAX_CONSIDERED as usize);
         }
         panic!("Account at validator registry address is not the stacking contract!");
     }

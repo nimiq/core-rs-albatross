@@ -1,7 +1,7 @@
 extern crate nimiq_bls as bls;
 extern crate nimiq_keys as keys;
 
-use crate::policy::TWO_THIRD_VALIDATORS;
+use crate::policy::TWO_THIRD_SLOTS;
 
 use beserial::{Deserialize, Serialize};
 
@@ -55,7 +55,7 @@ impl Slots {
     }
 
     pub fn enough_votes(&self, num_votes: u16) -> bool {
-        num_votes > TWO_THIRD_VALIDATORS
+        num_votes > TWO_THIRD_SLOTS
     }
 
     pub fn len(&self) -> usize {

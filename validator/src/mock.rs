@@ -86,11 +86,11 @@ impl MockValidator {
                     let mut pbft_proof = PbftProofBuilder::new();
                     pbft_proof.add_prepare_signature(
                         &block_producer.validator_key.public,
-                        policy::ACTIVE_VALIDATORS,
+                        policy::SLOTS,
                         &prepare);
                     pbft_proof.add_commit_signature(
                         &block_producer.validator_key.public,
-                        policy::ACTIVE_VALIDATORS,
+                        policy::SLOTS,
                         &commit);
 
                     let macro_block = MacroBlock {

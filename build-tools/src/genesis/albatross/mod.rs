@@ -150,7 +150,7 @@ impl GenesisBuilder {
 
     fn select_validators(&self, pre_genesis_hash: &BlsSignature, staking_contract: &StakingContract) -> Result<(Slots, Validators), GenesisBuilderError> {
         let slot_allocation = staking_contract
-            .select_validators(&pre_genesis_hash.compress(), policy::ACTIVE_VALIDATORS, policy::MAX_CONSIDERED as usize);
+            .select_validators(&pre_genesis_hash.compress(), policy::SLOTS, policy::MAX_CONSIDERED as usize);
 
         let validators = { // construct validator slot list with slot counts
             // count slots per public key
