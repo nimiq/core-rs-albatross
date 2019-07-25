@@ -30,6 +30,7 @@ reqwest = "0.9"
 tokio = "0.1"
 tokio-tls = "0.2"
 tokio-tungstenite = "0.8"
+tk-listen = "0.2.1"
 url = "1.7"
 beserial = { path = "../beserial", version = "0.1.0" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }

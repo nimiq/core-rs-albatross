@@ -5,10 +5,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use futures::future::poll_fn;
-use futures::sync::oneshot;
 use futures::prelude::*;
+use futures::sync::oneshot;
 use native_tls::{Identity, TlsAcceptor};
 use parking_lot::{Mutex, RwLock};
+use tk_listen::ListenExt;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
@@ -25,13 +26,13 @@ use crate::connection::{AddressInfo, NetworkConnection};
 use crate::connection::close_type::CloseType;
 use crate::network_config::{NetworkConfig, ProtocolConfig};
 use crate::websocket::{
+    Error,
     nimiq_accept_async,
     nimiq_connect_async,
     NimiqMessageStream,
     reverse_proxy::ReverseProxyCallback,
     reverse_proxy::ToCallback,
     SharedNimiqMessageStream,
-    Error,
 };
 use crate::websocket::error::ConnectError;
 use crate::websocket::error::ServerStartError;
@@ -125,7 +126,9 @@ pub struct WebSocketConnector {
 }
 
 impl WebSocketConnector {
-    const CONNECT_TIMEOUT: Duration = Duration::from_secs(5); // 5 seconds
+    const CONNECTIONS_MAX: usize = 4050; // A little more than Network.PEER_COUNT_MAX to allow for inbound exchange
+    const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+    const WAIT_TIME_ON_ERROR: Duration = Duration::from_millis(100);
 
     pub fn new(network_config: Arc<NetworkConfig>) -> WebSocketConnector {
         WebSocketConnector {
@@ -154,7 +157,8 @@ impl WebSocketConnector {
         let notifier = Arc::clone(&self.notifier);
 
         let srv = socket.incoming()
-            .for_each(move |tcp| {
+            .sleep_on_error(Self::WAIT_TIME_ON_ERROR)
+            .map(move |tcp| {
                 let reverse_proxy_config = reverse_proxy_config.clone();
 
                 let notifier = Arc::clone(&notifier);
@@ -180,9 +184,11 @@ impl WebSocketConnector {
                     // Do not stop the websocket server on inner connection errors!
                     future::ok(())
                 })
-
-            }).map_err(|err| {
-                error!("WebSocket server failed and was stopped: {}", Error::from(err));
+            })
+            .listen(Self::CONNECTIONS_MAX)
+            .then(#[allow(unreachable_code)] |_result| {
+                panic!("WebSocket stream ended unexpectedly");
+                _result
             });
 
         tokio::spawn(srv);
