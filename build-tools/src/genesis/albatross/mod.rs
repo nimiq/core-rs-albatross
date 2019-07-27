@@ -222,7 +222,9 @@ impl GenesisBuilder {
         // the header
         let header = MacroHeader {
             version: 1,
-            validators: validators.into(),
+            validators: validators.iter()
+                .map(|v| v.public_key.clone())
+                .collect(),
             block_number: 0,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),

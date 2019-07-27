@@ -3,6 +3,10 @@
 #![feature(specialization)]
 #![feature(map_get_key_value)]
 
+extern crate beserial;
+#[macro_use]
+extern crate beserial_derive;
+
 pub mod linked_list;
 pub mod unique_linked_list;
 pub mod queue;
@@ -13,6 +17,8 @@ pub mod segment_tree;
 
 #[cfg(feature = "bitset")]
 pub mod bitset;
+#[cfg(feature = "bitset")]
+pub mod compressed_list;
 
 
 pub use self::linked_list::LinkedList;

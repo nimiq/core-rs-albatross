@@ -8,9 +8,8 @@ use bls::bls12_381::CompressedSignature;
 use bls::bls12_381::lazy::LazyPublicKey;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::coin::Coin;
-use primitives::policy;
-use primitives::validators::{Slot, Slots, Validators};
-use collections::bitset::BitSet;
+use primitives::validators::{Slot, Slots};
+use collections::compressed_list::CompressedList;
 
 use crate::BlockError;
 use crate::pbft::PbftProof;
@@ -19,7 +18,6 @@ use crate::signed;
 #[derive(Debug)]
 pub enum TryIntoError {
     MissingExtrinsics,
-    InvalidLength,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -33,7 +31,7 @@ pub struct MacroBlock {
 pub struct MacroHeader {
     pub version: u16,
 
-    pub validators: CompressedPublicKeys,
+    pub validators: CompressedList<LazyPublicKey>,
 
     pub block_number: u32,
     pub view_number: u32,
@@ -49,7 +47,7 @@ pub struct MacroHeader {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroExtrinsics {
-    pub slot_allocation: CompressedAddresses,
+    pub slot_addresses: CompressedList<SlotAddresses>,
     pub slash_fine: Coin,
 }
 
@@ -60,72 +58,22 @@ impl TryInto<Slots> for MacroBlock {
         if self.extrinsics.is_none() {
             return Err(TryIntoError::MissingExtrinsics);
         }
+        let extrinsics = self.extrinsics.unwrap();
 
-        let mut compressed_public_keys = self.header.validators;
-        let extrinsics = self.extrinsics.expect("Just checked it above");
-        let mut compressed_addresses = extrinsics.slot_allocation;
-        let slot_ones = compressed_public_keys.slot_allocation.len();
+        let public_keys = self.header.validators.into_iter();
+        let addresses = extrinsics.slot_addresses.into_iter();
 
-        // A well-formed block will always have the same length for both BitSets and be greater than 0
-        if slot_ones == 0 || slot_ones != compressed_addresses.slot_allocation.len() {
-            return Err(TryIntoError::InvalidLength)
-        };
-
-        let num_slots = policy::SLOTS.try_into().unwrap();
-
-        let bitset_zeros = compressed_addresses.slot_allocation
-            .iter_bits().take(num_slots)
-            .filter(|e| !*e)
-            .count();
-
-        debug_assert_eq!(
-            bitset_zeros, compressed_public_keys.public_keys.len(),
-            "Number of public keys ({}) must be equal to number of zeros in slot allocation bitset ({})",
-            bitset_zeros, compressed_public_keys.public_keys.len(),
-        );
-
-        debug_assert_eq!(
-            bitset_zeros, compressed_addresses.addresses.len(),
-            "Number of addresses ({}) must be equal to number of zeros in slot allocation bitset ({})",
-            bitset_zeros, compressed_addresses.addresses.len(),
-        );
-
-        // Create the final vector we will be returning
-        let mut slots = Vec::with_capacity(policy::SLOTS.try_into().unwrap());
-
-        let mut public_key = compressed_public_keys.public_keys.remove(0);
-
-        let mut addresses = compressed_addresses.addresses.remove(0);
-        let mut reward_address_opt = if addresses.reward_address != addresses.staker_address {
-            Some(addresses.reward_address)
-        } else {
-            None
-        };
-        let mut staker_address = addresses.staker_address;
-
-        slots.push(Slot {
-            public_key: public_key.clone(),
-            reward_address_opt: reward_address_opt.clone(),
-            staker_address: staker_address.clone(),
-        });
-
-        for i in 1..num_slots {
-            if !compressed_public_keys.slot_allocation.contains(i) {
-                public_key = compressed_public_keys.public_keys.remove(0);
-            }
-
-            if !compressed_addresses.slot_allocation.contains(i) {
-                addresses = compressed_addresses.addresses.remove(0);
-                reward_address_opt = if addresses.reward_address == addresses.staker_address { None } else { Some(addresses.reward_address) };
-                staker_address = addresses.staker_address;
-            }
-
-            slots.push(Slot {
-                public_key: public_key.clone(),
-                reward_address_opt: reward_address_opt.clone(),
-                staker_address: staker_address.clone(),
-            });
-        }
+        let slots = public_keys.zip(addresses)
+            .map(|(p, a)| Slot {
+                public_key: p.clone(),
+                staker_address: a.staker_address.clone(),
+                reward_address_opt: if a.reward_address == a.staker_address {
+                    None
+                } else {
+                    Some(a.reward_address.clone())
+                }
+            })
+            .collect();
 
         let slash_fine = extrinsics.slash_fine;
         Ok(Slots::new(slots, slash_fine))
@@ -135,99 +83,16 @@ impl TryInto<Slots> for MacroBlock {
 // CHECKME: Check for performance
 impl From<Slots> for MacroExtrinsics {
     fn from(slots: Slots) -> Self {
-        let size = slots.len();
-        let mut addresses = Vec::with_capacity(size);
-        let mut slot_allocation = BitSet::with_capacity(size);
-
-        let first_slot = slots.get(0).clone();
-
-        let mut current_reward_address = first_slot.reward_address().clone();
-        let mut current_staker_address = first_slot.staker_address;
-        addresses.push(SlotAddresses {
-            staker_address: current_staker_address.clone(),
-            reward_address: current_reward_address.clone(),
-        });
-
+        let addresses = slots.iter().map(|slot| SlotAddresses {
+            staker_address: slot.staker_address.clone(),
+            reward_address: slot.reward_address_opt.as_ref().unwrap_or(&slot.staker_address).clone(),
+        }).into_iter();
         let slash_fine = slots.slash_fine();
-
-        for (i, slot) in slots.into_iter().enumerate().skip(1) {
-            if slot.staker_address == current_staker_address && *slot.reward_address() == current_reward_address {
-                slot_allocation.insert(i);
-            } else {
-                current_reward_address = slot.reward_address().clone();
-                current_staker_address = slot.staker_address.clone();
-                addresses.push(SlotAddresses {
-                    reward_address: slot.reward_address().clone(),
-                    staker_address: slot.staker_address,
-                });
-            }
-        }
-
-        let slot_allocation = CompressedAddresses { addresses, slot_allocation };
-
         MacroExtrinsics {
-            slot_allocation,
+            slot_addresses: addresses.collect(),
             slash_fine,
         }
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CompressedPublicKeys {
-    #[beserial(len_type(u16))]
-    public_keys: Vec<LazyPublicKey>,
-    slot_allocation: BitSet,
-}
-
-impl From<Slots> for CompressedPublicKeys {
-    fn from(slots: Slots) -> Self {
-        let size = slots.len();
-        let mut public_keys = Vec::with_capacity(size);
-        let mut slot_allocation = BitSet::with_capacity(size);
-
-        for i in 1..slots.len() {
-            if slots.get(i - 1).public_key == slots.get(i).public_key {
-                slot_allocation.insert(i);
-            } else {
-                public_keys.push(slots.get(i).public_key.clone());
-            }
-        }
-
-        Self { public_keys, slot_allocation }
-    }
-}
-
-// CHECKME: Check for performance
-impl From<Validators> for CompressedPublicKeys {
-    fn from(validators: Validators) -> Self {
-        let size = validators.len();
-        let mut public_keys = Vec::with_capacity(size);
-        let mut slot_allocation = BitSet::with_capacity(size);
-
-        let mut i = 1;
-        for validator in validators {
-            public_keys.push(validator.public_key);
-
-            let mut last_set_bit = i + validator.num_slots - 1;
-            for j in i..last_set_bit {
-                slot_allocation.insert(j as usize);
-                last_set_bit = j;
-            }
-            i = last_set_bit + 2;
-        }
-
-        CompressedPublicKeys {
-            public_keys,
-            slot_allocation,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CompressedAddresses {
-    #[beserial(len_type(u16))]
-    addresses: Vec<SlotAddresses>,
-    slot_allocation: BitSet,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

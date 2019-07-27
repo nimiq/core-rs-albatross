@@ -107,7 +107,9 @@ impl<'env> BlockProducer<'env> {
         let parent_macro_hash = self.blockchain.macro_head_hash();
         let extrinsics_root = extrinsics.hash();
 
-        let validators = self.blockchain.next_validators().into();
+        let validators = self.blockchain.next_validators().iter()
+            .map(|v| v.public_key.clone())
+            .collect();
 
         let inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
         // Rewards are distributed with delay.
