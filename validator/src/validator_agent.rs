@@ -7,6 +7,7 @@ use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::PublicKey;
+use collections::grouped_list::Group;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
                       SignedPbftProposal, ViewChange, ForkProof, BlockHeader};
 use primitives::policy;
@@ -87,25 +88,19 @@ impl ValidatorAgent {
                 this.on_fork_proof_message(fork_proof);
             }));
         this.peer.channel.msg_notifier.view_change.write()
-            .register(weak_passthru_listener( Arc::downgrade(this), |this, signed_view_change| {
-                trace!("Received view change message: {:?}", &signed_view_change);
-                this.on_view_change_message(signed_view_change);
-            }));
+            .register(weak_passthru_listener( Arc::downgrade(this),
+                |this, signed_view_change| this.on_view_change_message(signed_view_change)));
         this.peer.channel.msg_notifier.pbft_proposal.write()
             .register(weak_passthru_listener(Arc::downgrade(this), |this, proposal| {
                 trace!("Received macro block proposal: {:?}", &proposal);
                 this.on_pbft_proposal_message(proposal);
             }));
         this.peer.channel.msg_notifier.pbft_prepare.write()
-            .register(weak_passthru_listener(Arc::downgrade(this), |this, prepare| {
-                trace!("Received pBFT prepare: {:?}", &prepare);
-                this.on_pbft_prepare_message(prepare);
-            }));
+            .register(weak_passthru_listener(Arc::downgrade(this),
+                |this, prepare| this.on_pbft_prepare_message(prepare)));
         this.peer.channel.msg_notifier.pbft_commit.write()
-            .register(weak_passthru_listener(Arc::downgrade(this), |this, commit| {
-                trace!("Received pBFT commit: {:?}", &commit);
-                this.on_pbft_commit_message(commit);
-            }));
+            .register(weak_passthru_listener(Arc::downgrade(this),
+                |this, commit| this.on_pbft_commit_message(commit)));
         this.blockchain.notifier.write()
             .register(weak_listener(Arc::downgrade(this), |this, event| {
                 if let BlockchainEvent::Extended(_) = event {
@@ -116,7 +111,7 @@ impl ValidatorAgent {
                         let view_number = this.blockchain.view_number();
 
                         trace!("Blockchain extended, replaying proposals");
-                        trace!("blockchain: block_number={}, view_number={}", block_number, view_number);
+                        trace!("Blockchain: number=#{}.{}", block_number, view_number);
 
                         // get all proposals that are now valid
                         while let Some(proposal) = state.proposal_buf.peek() {
@@ -175,7 +170,7 @@ impl ValidatorAgent {
 
         let producer = self.blockchain.get_block_producer_at(block_number, view_number, None);
         if producer.is_none() {
-            debug!("[FORK-PROOF] Unknown block producer: block_number={}, view_number={}", block_number, view_number);
+            debug!("[FORK-PROOF] Unknown block producer for #{}.{}", block_number, view_number);
             return;
         }
 
@@ -190,16 +185,20 @@ impl ValidatorAgent {
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
     fn on_view_change_message(&self, view_change: SignedViewChange) {
-        trace!("[VIEW-CHANGE] Received view change from {}", self.peer.peer_address());
+        trace!("[VIEW-CHANGE] Received: number=#{}.{} signer_idx={} peer={}",
+            view_change.message.block_number,
+            view_change.message.new_view_number,
+            view_change.signer_idx,
+            self.peer.peer_address());
         if !self.blockchain.is_in_current_epoch(view_change.message.block_number) {
-            debug!("[VIEW-CHANGE] View change for old epoch: block_number={}", view_change.message.block_number);
+            debug!("[VIEW-CHANGE] Epoch too old: block_number={}", view_change.message.block_number);
         }
-        else if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(view_change.signer_idx) {
-            if view_change.verify(&validator_slots.public_key.uncompress_unchecked()) {
+        else if let Some(Group(count, key)) = self.blockchain.get_current_validator_by_idx(view_change.signer_idx) {
+            if view_change.verify(&key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::ViewChange {
                     view_change,
-                    public_key: validator_slots.public_key.uncompress_unchecked().clone(),
-                    slots: validator_slots.num_slots
+                    public_key: key.uncompress_unchecked().clone(),
+                    slots: count
                 });
             }
             else {
@@ -269,18 +268,21 @@ impl ValidatorAgent {
 
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
     fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
-        trace!("[PBFT-PREPARE] Received prepare from {}: {}", self.peer.peer_address(), prepare.message.block_hash);
-        if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(prepare.signer_idx) {
-            if prepare.verify(&validator_slots.public_key.uncompress_unchecked()) {
+        trace!("[PBFT-PREPARE] Received: block={} signer_idx={} peer={}",
+            prepare.message.block_hash,
+            prepare.signer_idx,
+            self.peer.peer_address());
+        if let Some(Group(count, key)) = self.blockchain.get_current_validator_by_idx(prepare.signer_idx) {
+            if prepare.verify(&key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
                     prepare,
-                    public_key: validator_slots.public_key.uncompress_unchecked().clone(),
-                    slots: validator_slots.num_slots
+                    public_key: key.uncompress_unchecked().clone(),
+                    slots: count
                 });
             }
             else {
                 warn!("[PBFT-PREPARE] Invalid signature: {:#?}", prepare);
-                trace!("Public Key: {:?}", validator_slots.public_key);
+                trace!("Public Key: {:?}", key);
             }
         }
         else {
@@ -292,13 +294,16 @@ impl ValidatorAgent {
     /// FIXME This will verify a commit message with the current validator set, not with the one for
     /// which this commit is for.
     fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
-        trace!("[PBFT-COMMIT] Received commit from {}", self.peer.peer_address());
-        if let Some(validator_slots) = self.blockchain.get_current_validator_by_idx(commit.signer_idx) {
-            if commit.verify(&validator_slots.public_key.uncompress_unchecked()) {
+        trace!("[PBFT-COMMIT] Received: block={} signer_idx={} peer={}",
+            commit.message.block_hash,
+            commit.signer_idx,
+            self.peer.peer_address());
+        if let Some(Group(count, key)) = self.blockchain.get_current_validator_by_idx(commit.signer_idx) {
+            if commit.verify(&key.uncompress_unchecked()) {
                 self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
                     commit,
-                    public_key: validator_slots.public_key.uncompress_unchecked().clone(),
-                    slots: validator_slots.num_slots
+                    public_key: key.uncompress_unchecked().clone(),
+                    slots: count
                 });
             }
             else {

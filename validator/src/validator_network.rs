@@ -12,6 +12,7 @@ use block_albatross::{
 };
 use blockchain_albatross::Blockchain;
 use bls::bls12_381::PublicKey;
+use collections::grouped_list::Group;
 use hash::{Blake2bHash, Hash};
 use messages::Message;
 use network::{Network, NetworkEvent, Peer};
@@ -224,8 +225,8 @@ impl ValidatorNetwork {
             state.validators.insert(Arc::clone(&validator_id), Arc::clone(&agent));
 
             // check if active validator and put into `active` list
-            for validator in self.blockchain.current_validators().iter() {
-                if ValidatorId::from_public_key(validator.public_key.compressed()) == *validator_id {
+            for Group(_, key) in self.blockchain.current_validators().groups().iter() {
+                if ValidatorId::from_public_key(key.compressed()) == *validator_id {
                     trace!("Validator is active");
                     state.active.insert(validator_id, agent);
                     break;
@@ -261,8 +262,8 @@ impl ValidatorNetwork {
         state.active.clear();
 
         // fill active list with new set of active validators
-        for validator in self.blockchain.current_validators().iter() {
-            let validator_id = Arc::new(ValidatorId::from_public_key(validator.public_key.compressed()));
+        for Group(_, validator) in self.blockchain.current_validators().groups().iter() {
+            let validator_id = Arc::new(ValidatorId::from_public_key(validator.compressed()));
             if let Some(agent) = state.validators.get(&validator_id) {
                 let agent = Arc::clone(agent);
                 state.active.insert(validator_id, agent);

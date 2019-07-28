@@ -12,6 +12,7 @@ path = "src/genesis/main.rs"
 nimiq-bls = { path = "../bls", optional = true }
 nimiq-block = { path = "../primitives/block", optional = true }
 nimiq-block-albatross = { path = "../primitives/block-albatross", optional = true }
+nimiq-collections = { path = "../collections" }
 nimiq-hash = { path = "../hash" }
 nimiq-keys = { path = "../keys" }
 nimiq-primitives = { path = "../primitives" }

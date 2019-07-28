@@ -27,6 +27,7 @@ use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
 use bls::bls12_381::KeyPair;
+use collections::grouped_list::Group;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
 use network_primitives::networks::NetworkInfo;
@@ -427,9 +428,9 @@ impl Validator {
     fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {
         let compressed = self.validator_key.public.compress();
         let validator_list = self.blockchain.current_validators();
-        validator_list.iter().enumerate()
-            .find(|(_, validator)| validator.public_key.compressed() == &compressed)
-            .map(|(i, validator)| (i as u16, validator.num_slots))
+        let item = validator_list.groups().iter().enumerate()
+            .find(|(_, Group(_, public_key))| public_key.compressed() == &compressed);
+        item.map(|(i, Group(num_slots, _))| (i as u16, *num_slots))
     }
 
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {

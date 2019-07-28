@@ -1,7 +1,8 @@
 use beserial::{Deserialize, Serialize};
 use bls::bls12_381::PublicKey;
+use bls::bls12_381::lazy::LazyPublicKey;
+use collections::grouped_list::{GroupedList, Group};
 use hash::{Blake2bHash, SerializeContent};
-use primitives::validators::Validators;
 
 use crate::ViewChangeProof;
 
@@ -73,7 +74,7 @@ impl PbftProofBuilder {
 
     /// Verify that we have enough valid commit signatures that also signed the prepare
     /// TODO: Duplicate code (in PbftProof)
-    pub fn verify(&self, block_hash: Blake2bHash, validators: &Validators, threshold: u16) -> Result<(), AggregateProofError> {
+    pub fn verify(&self, block_hash: Blake2bHash, validators: &GroupedList<LazyPublicKey>, threshold: u16) -> Result<(), AggregateProofError> {
         // XXX if we manually hash the message prefix and the block hash, we don't need to clone
         let prepare = PbftPrepareMessage { block_hash: block_hash.clone() };
         let commit = PbftCommitMessage { block_hash };
@@ -83,9 +84,13 @@ impl PbftProofBuilder {
 
         // sum up votes of signers that signed prepare and commit
         let votes: u16 = (&self.prepare.signers & &self.commit.signers)
-            .iter().map(|s| {
-                validators.get(s).map(|v| v.num_slots).unwrap_or(0)
-            }).sum();
+            .iter()
+            .map(|s|
+                validators.groups().get(s)
+                .map(|Group (count, _)| *count)
+                .unwrap_or(0)
+            )
+            .sum();
         trace!("votes on prepare and commit: {}", votes);
 
         if votes < threshold {
@@ -122,7 +127,7 @@ pub struct PbftProof {
 }
 
 impl PbftProof {
-    pub fn verify(&self, block_hash: Blake2bHash, validators: &Validators, threshold: u16) -> Result<(), AggregateProofError> {
+    pub fn verify(&self, block_hash: Blake2bHash, validators: &GroupedList<LazyPublicKey>, threshold: u16) -> Result<(), AggregateProofError> {
         // XXX if we manually hash the message prefix and the block hash, we don't need to clone
         let prepare = PbftPrepareMessage { block_hash: block_hash.clone() };
         let commit = PbftCommitMessage { block_hash };
@@ -133,9 +138,14 @@ impl PbftProof {
             .map_err(|e| {trace!("commit verify failed"); e})?;
 
         // sum up votes of signers that signed prepare and commit
-        let votes: u16 = (&self.prepare.signers & &self.commit.signers).iter().map(|s| {
-            validators.get(s).map(|v| v.num_slots).unwrap_or(0)
-        }).sum();
+        let votes: u16 = (&self.prepare.signers & &self.commit.signers)
+            .iter()
+            .map(|s|
+                validators.groups().get(s)
+                .map(|Group (count, _)| *count)
+                .unwrap_or(0)
+            )
+            .sum();
         trace!("votes on prepare and commit: {}", votes);
 
         if votes < threshold {

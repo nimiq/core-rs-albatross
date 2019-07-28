@@ -1,10 +1,12 @@
-use itertools::Itertools;
-
 use beserial::{Serialize, Deserialize};
-use crate::bitset::BitSet;
+use itertools::Itertools;
 use std::iter::FromIterator;
 
-// CompressedList compresses a list of items by deduplication
+use crate::bitset::BitSet;
+use crate::grouped_list::{Group, GroupedList};
+
+// CompressedList compresses a list of items by deduplication,
+// using a bit vector to track duplicates.
 // Compression algorithm:
 //  - Group ranges of identical items, remembering the starting index of each group
 //  - Insert all distinct items into the vector
@@ -58,8 +60,10 @@ impl<T> FromIterator<T> for CompressedList<T>
         let mut count = 0u16;
         let mut allocation = BitSet::new();
         let distinct = iter.into_iter()
+            // Keep track of total count
             .map(|item| { count += 1; item })
             .enumerate()
+            // Group by items
             .group_by(|item| item.1.clone())
             .into_iter()
             // Save first item of inner iterator (rest is equal)
@@ -109,5 +113,21 @@ impl<'a, T> Iterator for CompressedListIterator<'a, T>
             }
             self.last_item
         })
+    }
+}
+
+impl<T> From<GroupedList<T>> for CompressedList<T>
+    where T: Clone + Eq + PartialEq + Serialize + Deserialize
+{
+    fn from(grouped: GroupedList<T>) -> Self {
+        let mut count = 0u16;
+        let mut allocation = BitSet::new();
+        let mut distinct = Vec::with_capacity(grouped.0.len());
+        for Group(group_count, item) in grouped.groups().iter() {
+            allocation.insert(count as usize);
+            distinct.push(item.clone());
+            count += group_count;
+        }
+        Self { count, distinct, allocation }
     }
 }

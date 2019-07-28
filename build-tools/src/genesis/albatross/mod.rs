@@ -18,10 +18,12 @@ use bls::bls12_381::{
     SecretKey as BlsSecretKey,
     Signature as BlsSignature,
 };
+use bls::bls12_381::lazy::LazyPublicKey;
 use block_albatross::{Block, MacroBlock, MacroHeader, MacroExtrinsics};
 use beserial::{Serialize, SerializingError};
+use collections::grouped_list::{Group, GroupedList};
 use primitives::coin::Coin;
-use primitives::validators::{Slots, Validator, Validators};
+use primitives::validators::Slots;
 use account::{Account, BasicAccount, StakingContract, AccountError, AccountsList};
 use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
 use database::WriteTransaction;
@@ -148,7 +150,7 @@ impl GenesisBuilder {
         Ok(self)
     }
 
-    fn select_validators(&self, pre_genesis_hash: &BlsSignature, staking_contract: &StakingContract) -> Result<(Slots, Validators), GenesisBuilderError> {
+    fn select_validators(&self, pre_genesis_hash: &BlsSignature, staking_contract: &StakingContract) -> Result<(Slots, GroupedList<LazyPublicKey>), GenesisBuilderError> {
         let slot_allocation = staking_contract
             .select_validators(&pre_genesis_hash.compress(), policy::SLOTS, policy::MAX_CONSIDERED as usize);
 
@@ -162,13 +164,11 @@ impl GenesisBuilder {
             }
 
             // map to Validators
-            let mut validators: Validators = Vec::new();
-            for (public_key, num_slots) in slot_counts {
-                validators.push(Validator {
-                    public_key: public_key.clone().into(),
-                    num_slots
-                });
-            }
+            let validators = GroupedList(
+                slot_counts.iter()
+                    .map(|(key, num)| Group(*num, (*key.clone()).into()))
+                    .collect()
+            );
 
             validators
         };
@@ -222,9 +222,7 @@ impl GenesisBuilder {
         // the header
         let header = MacroHeader {
             version: 1,
-            validators: validators.iter()
-                .map(|v| v.public_key.clone())
-                .collect(),
+            validators: validators.iter().collect(),
             block_number: 0,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),

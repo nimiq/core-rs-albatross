@@ -8,6 +8,7 @@ use bls::bls12_381::CompressedSignature;
 use bls::bls12_381::lazy::LazyPublicKey;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::coin::Coin;
+use primitives::policy;
 use primitives::validators::{Slot, Slots};
 use collections::compressed_list::CompressedList;
 
@@ -63,7 +64,7 @@ impl TryInto<Slots> for MacroBlock {
         let public_keys = self.header.validators.into_iter();
         let addresses = extrinsics.slot_addresses.into_iter();
 
-        let slots = public_keys.zip(addresses)
+        let slots: Vec<Slot> = public_keys.zip(addresses)
             .map(|(p, a)| Slot {
                 public_key: p.clone(),
                 staker_address: a.staker_address.clone(),
@@ -74,6 +75,7 @@ impl TryInto<Slots> for MacroBlock {
                 }
             })
             .collect();
+        assert_eq!(slots.len(), policy::SLOTS as usize);
 
         let slash_fine = extrinsics.slash_fine;
         Ok(Slots::new(slots, slash_fine))
@@ -109,6 +111,15 @@ impl MacroBlock {
     pub fn verify(&self) -> Result<(), BlockError> {
         if self.header.block_number >= 1 && self.justification.is_none() {
             return Err(BlockError::NoJustification);
+        }
+        if !self.header.validators.verify() || self.header.validators.len() != policy::SLOTS as usize {
+            return Err(BlockError::InvalidValidators);
+        }
+        if let Some(ref extrinsics) = self.extrinsics {
+            let addr = &extrinsics.slot_addresses;
+            if !addr.verify() || addr.len() != policy::SLOTS as usize {
+                return Err(BlockError::InvalidValidators);
+            }
         }
         Ok(())
     }

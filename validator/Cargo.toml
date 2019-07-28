@@ -17,6 +17,7 @@ beserial = { path = "../beserial" }
 nimiq-account = { path = "../primitives/account" }
 nimiq-bls = { path = "../bls" }
 nimiq-consensus = { path = "../consensus" }
+nimiq-collections = { path = "../collections" }
 nimiq-database = { path = "../database", features = ["full-nimiq"] }
 nimiq-macros = { path = "../macros" }
 nimiq-mempool = { path = "../mempool" }

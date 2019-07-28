@@ -5,6 +5,7 @@ extern crate nimiq_macros as macros;
 
 extern crate nimiq_account as account;
 extern crate nimiq_bls as bls;
+extern crate nimiq_collections as collections;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_database as database;
 extern crate nimiq_mempool as mempool;

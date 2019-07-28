@@ -16,6 +16,7 @@ use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
 use collections::bitset::BitSet;
+use collections::grouped_list::GroupedList;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
@@ -156,7 +157,7 @@ impl<'env> Blockchain<'env> {
         let prev_block = chain_store.get_block(&macro_head.header.parent_macro_hash, true, None);
         let (last_slots, last_validators) = match prev_block {
             Some(Block::Macro(prev_macro_block)) => Self::slots_and_validators_from_block(&prev_macro_block),
-            None => (Slots::new(vec![], Coin::ZERO), Validators::new()),
+            None => (Slots::new(vec![], Coin::ZERO), GroupedList::empty()),
             _ => return Err(BlockchainError::InconsistentState),
         };
 
@@ -215,7 +216,7 @@ impl<'env> Blockchain<'env> {
 
         // current slots and validators
         let (current_slots, current_validators) = Self::slots_and_validators_from_block(&genesis_macro_block);
-        let (last_slots, last_validators) = (Slots::new(vec![], Coin::ZERO), Validators::new());
+        let (last_slots, last_validators) = (Slots::new(vec![], Coin::ZERO), GroupedList::empty());
 
         Ok(Blockchain {
             env,
@@ -832,7 +833,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<Validator> {
-        self.current_validators().get(validator_idx as usize).map(Validator::clone)
+        self.current_validators().0.get(validator_idx as usize).map(Validator::clone)
     }
 
     // Checks if a block number is within the range of the current epoch

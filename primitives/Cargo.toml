@@ -31,6 +31,7 @@ nimiq-macros = { path = "../macros", version = "0.1", optional = true }
 fixed-unsigned = { path = "../fixed-unsigned", version = "0.1", optional = true }
 nimiq-bls = { path = "../bls", features = ["beserial"], optional = true }
 nimiq-keys = { path = "../keys", optional = true }
+nimiq-collections = { path = "../collections", version = "0.1" }
 
 [dev-dependencies]
 lazy_static = "1.2"

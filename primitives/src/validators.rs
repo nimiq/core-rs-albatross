@@ -5,6 +5,7 @@ use crate::policy::TWO_THIRD_SLOTS;
 
 use beserial::{Deserialize, Serialize};
 
+use nimiq_collections::grouped_list::{Group, GroupedList};
 use keys::Address;
 use bls::bls12_381::lazy::LazyPublicKey;
 
@@ -62,6 +63,10 @@ impl Slots {
         self.slots.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
     pub fn get(&self, index: usize) -> &Slot {
         &self.slots[index]
     }
@@ -84,41 +89,13 @@ impl IntoIterator for Slots {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Validator {
-    pub public_key: LazyPublicKey,
-    pub num_slots: u16,
-}
+pub type Validator = Group<LazyPublicKey>;
+pub type Validators = GroupedList<LazyPublicKey>;
 
-pub type Validators = Vec<Validator>;
-
-// CHECKME: Improve performace?
 impl From<Slots> for Validators {
     fn from(slots: Slots) -> Self {
-        let mut validators = Vec::new();
-
-        let mut public_key = slots.get(0).public_key.clone();
-        let mut i = 0;
-
-        while i < slots.len() {
-            let mut num_slots = 0;
-
-            while i < slots.len() && public_key == slots.get(i).public_key {
-                num_slots += 1;
-                i += 1;
-            }
-
-            validators.push(Validator{
-                public_key,
-                num_slots
-            });
-
-            if i >= slots.len() {
-                break;
-            }
-            public_key = slots.get(i).public_key.clone();
-        }
-
-        validators
+        slots.iter()
+            .map(|slot| slot.public_key.clone())
+            .collect()
     }
 }

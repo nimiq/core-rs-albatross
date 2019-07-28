@@ -13,6 +13,7 @@ pub mod queue;
 pub mod limit_hash_set;
 pub mod sparse_vec;
 pub mod segment_tree;
+pub mod grouped_list;
 
 
 #[cfg(feature = "bitset")]

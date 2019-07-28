@@ -1,6 +1,7 @@
 use std::iter::empty;
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::compressed_list::CompressedList;
+use nimiq_collections::grouped_list::{GroupedList, Group};
 
 const SAMPLE_LIST: &str = "008000030102030200000000000000010000000000000300";
 
@@ -68,4 +69,12 @@ fn it_rejects_bad_lists() {
 fn assert_list_bad(hexdump: &str) {
     let list = CompressedList::<u8>::deserialize_from_vec(&hex::decode(hexdump).unwrap()).unwrap();
     assert!(!list.verify());
+}
+
+#[test]
+fn it_can_from_grouped_list() {
+    let grouped_list = GroupedList(vec![Group(72, 1u8), Group(1, 2u8), Group(55, 3u8)]);
+    let list = CompressedList::from(grouped_list);
+    let bin = list.serialize_to_vec();
+    assert_eq!(SAMPLE_LIST, hex::encode(bin));
 }

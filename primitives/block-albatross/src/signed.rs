@@ -2,11 +2,12 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use beserial::{Serialize, Deserialize, WriteBytesExt};
-use nimiq_bls::bls12_381::{Signature, SecretKey, PublicKey, AggregateSignature, AggregatePublicKey};
-use nimiq_bls::SigHash;
+use bls::bls12_381::{Signature, SecretKey, PublicKey, AggregateSignature, AggregatePublicKey};
+use bls::bls12_381::lazy::LazyPublicKey;
+use bls::SigHash;
 use hash::{Blake2bHasher, SerializeContent, Hasher};
 use collections::bitset::BitSet;
-use primitives::validators::{Validator, Validators};
+use collections::grouped_list::{Group, GroupedList};
 
 // TODO: Move this to primitives?
 
@@ -190,17 +191,17 @@ pub struct AggregateProof<M: Message> {
 impl<M: Message> AggregateProof<M> {
     /// Verify message against aggregate signature and check the required number of signatures.
     /// Expects valid validator public keys.
-    pub fn verify(&self, message: &M, validators: &Validators, threshold: u16) -> Result<(), AggregateProofError> {
+    pub fn verify(&self, message: &M, validators: &GroupedList<LazyPublicKey>, threshold: u16) -> Result<(), AggregateProofError> {
         // Aggregate signatures and count votes
         let mut public_key = AggregatePublicKey::new();
         let mut num_slots = 0;
         for signer_idx in self.signers.iter() {
-            let validator: &Validator = validators
-                .get(signer_idx)
+            let validator: &Group<LazyPublicKey> = validators
+                .groups().get(signer_idx)
                 .ok_or(AggregateProofError::InvalidSignerIndex)
                 .map_err(|e| { trace!("Invalid signer index"); e })?;
-            public_key.aggregate(&validator.public_key.uncompress_unchecked());
-            num_slots += validator.num_slots;
+            public_key.aggregate(&validator.1.uncompress_unchecked());
+            num_slots += validator.0;
         }
 
         if num_slots < threshold {
