@@ -166,7 +166,7 @@ impl GenesisBuilder {
             // map to Validators
             let validators = GroupedList(
                 slot_counts.iter()
-                    .map(|(key, num)| Group(*num, (*key.clone()).into()))
+                    .map(|(key, num)| Group(*num, (*key).clone().into()))
                     .collect()
             );
 

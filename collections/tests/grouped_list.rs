@@ -34,7 +34,7 @@ fn it_can_deserialize_and_iterate() {
     }
     assert_eq!(iter.next(), None);
 
-    let mut iter_groups = list.iter_groups();
+    let mut iter_groups = list.groups().iter();
     assert_eq!(iter_groups.next(), Some(&Group(72, 1)));
     assert_eq!(iter_groups.next(), Some(&Group(1, 2)));
     assert_eq!(iter_groups.next(), Some(&Group(55, 3)));
