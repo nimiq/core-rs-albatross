@@ -260,7 +260,7 @@ impl<B: AbstractBlockchain<'static> + 'static> Network<B> {
 
         // Recycle.
         let peer_count = connections.peer_count();
-        if peer_count < Self::PEER_COUNT_RECYCLING_ACTIVE {
+        if peer_count > Self::PEER_COUNT_RECYCLING_ACTIVE {
             // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
             let percentage_to_recycle = (peer_count as f64 - Self::PEER_COUNT_RECYCLING_ACTIVE as f64) * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN) / (Self::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64 + Self::RECYCLING_PERCENTAGE_MIN as f64;
             let connections_to_recycle = f64::ceil(peer_count as f64 * percentage_to_recycle) as u32;
