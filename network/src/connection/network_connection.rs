@@ -41,7 +41,7 @@ impl ClosedFlag {
         self.closed.swap(closed, Ordering::AcqRel)
     }
     #[inline]
-    pub fn set_closed_type(&self, ty: CloseType) {
+    pub fn set_close_type(&self, ty: CloseType) {
         self.close_type.lock().replace(ty);
     }
 

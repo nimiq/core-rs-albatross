@@ -45,7 +45,7 @@ impl PeerSink {
         if self.closed_flag.set_closed(true) {
             return Ok(());
         }
-        self.closed_flag.set_closed_type(ty);
+        self.closed_flag.set_close_type(ty);
         debug!("Closing connection, reason: {:?} ({:?})", ty, reason);
         self.sink.unbounded_send(WebSocketMessage::Close(None))
         /*
