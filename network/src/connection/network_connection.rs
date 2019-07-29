@@ -91,8 +91,9 @@ impl NetworkConnection {
         (network_connection, process_connection)
     }
 
-    pub fn close(&self, ty: CloseType) -> bool {
-        self.peer_sink.close(ty, None).is_ok()
+    pub fn close(&self, ty: CloseType) {
+        self.peer_sink.close(ty, None);
+        self.notifier.read().notify(PeerStreamEvent::Close(ty));
     }
 
     pub fn net_address(&self) -> Arc<NetAddress> {
