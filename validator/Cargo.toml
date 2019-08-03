@@ -9,7 +9,7 @@ repository = "https://github.com/nimiq/core-rs"
 license = "Apache-2.0"
 
 [badges]
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]

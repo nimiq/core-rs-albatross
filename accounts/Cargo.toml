@@ -11,20 +11,19 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
 hex = "0.3"
-beserial = { path = "../beserial", version = "0.1.0" }
-nimiq-keys = { path = "../keys", version = "0.1.0" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "networks", "policy"], version = "0.1.0" }
-nimiq-hash = { path = "../hash", version = "0.1.0" }
-nimiq-account = { path = "../primitives/account", version = "0.1.0" }
-nimiq-block = { path = "../primitives/block", version = "0.1.0" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
-nimiq-database = { path = "../database", features = ["full-nimiq"], version = "0.1.0" }
-nimiq-tree-primitives = { path = "./tree-primitives", version = "0.1.0" }
+beserial = { path = "../beserial", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-primitives = { path = "../primitives", features = ["coin", "networks", "policy"], version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-account = { path = "../primitives/account", version = "0.1" }
+nimiq-block = { path = "../primitives/block", version = "0.1" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-database = { path = "../database", features = ["full-nimiq"], version = "0.1" }
+nimiq-tree-primitives = { path = "./tree-primitives", version = "0.1" }

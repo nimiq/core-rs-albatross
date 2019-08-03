@@ -11,10 +11,9 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
@@ -32,16 +31,16 @@ tokio-tls = "0.2"
 tokio-tungstenite = "0.8"
 tk-listen = "0.2.1"
 url = "1.7"
-beserial = { path = "../beserial", version = "0.1.0" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1.0" }
-nimiq-collections = { path = "../collections", version = "0.1.0" }
-nimiq-keys = { path = "../keys", version = "0.1.0" }
-nimiq-hash = { path = "../hash", version = "0.1.0" }
-nimiq-macros = { path = "../macros", version = "0.1.0" }
-nimiq-messages = { path = "../messages", version = "0.1.0" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["all"] }
-nimiq-utils = { path = "../utils", version = "0.1.0", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
+beserial = { path = "../beserial", version = "0.1" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
+nimiq-collections = { path = "../collections", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-macros = { path = "../macros", version = "0.1" }
+nimiq-messages = { path = "../messages", version = "0.1" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["all"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
 
 [dependencies.tungstenite]
 version = "0.8"

@@ -11,10 +11,9 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
@@ -26,23 +25,23 @@ hex = "0.3"
 failure = "0.1"
 parking_lot = "0.7"
 base64 = "0.10"
-beserial = { path = "../beserial", version = "0.1.0" }
+beserial = { path = "../beserial", version = "0.1" }
 clear_on_drop = { version = "0.2" }
-nimiq-database = { path = "../database", version = "0.1.0" }
-nimiq-consensus = { path = "../consensus", version = "0.1.0" }
-nimiq-blockchain = { path = "../blockchain", version = "0.1.0" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1.0" }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1.0" }
-nimiq-mempool = { path = "../mempool", version = "0.1.0" }
-nimiq-network = { path = "../network", version = "0.1.0" }
-nimiq-hash = { path = "../hash", version = "0.1.0" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0" }
-nimiq-block = { path = "../primitives/block", version = "0.1.0" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1.0" }
-nimiq-block-base = { path = "../primitives/block-base", version = "0.1.0" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
-nimiq-keys = { path = "../keys", version = "0.1.0" }
-nimiq-block-production = { path = "../block-production", version = "0.1.0" }
-nimiq-utils = { path = "../utils", version = "0.1.0", features = ["merkle", "time", "otp"] }
-nimiq-primitives = { path = "../primitives", version = "0.1.0" }
-nimiq-wallet = { path = "../wallet", version = "0.1.0" }
+nimiq-database = { path = "../database", version = "0.1" }
+nimiq-consensus = { path = "../consensus", version = "0.1" }
+nimiq-blockchain = { path = "../blockchain", version = "0.1" }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
+nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
+nimiq-mempool = { path = "../mempool", version = "0.1" }
+nimiq-network = { path = "../network", version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1" }
+nimiq-block = { path = "../primitives/block", version = "0.1" }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
+nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-block-production = { path = "../block-production", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["merkle", "time", "otp"] }
+nimiq-primitives = { path = "../primitives", version = "0.1" }
+nimiq-wallet = { path = "../wallet", version = "0.1" }

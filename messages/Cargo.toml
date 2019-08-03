@@ -11,10 +11,9 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
@@ -26,19 +25,19 @@ log = "0.4"
 parking_lot = "0.7"
 rand = "0.6"
 enum-display-derive = "0.1"
-beserial = { path = "../beserial", version = "0.1.0" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
-nimiq-block = { path = "../primitives/block", version = "0.1.0" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1.0" }
-nimiq-block-base = { path = "../primitives/block-base", version = "0.1.0" }
+beserial = { path = "../beserial", version = "0.1" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+nimiq-block = { path = "../primitives/block", version = "0.1" }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
+nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
 nimiq-bls = { path = "../bls" }
-nimiq-hash = { path = "../hash", version = "0.1.0" }
-nimiq-keys = { path = "../keys", version = "0.1.0" }
-nimiq-macros = { path = "../macros", version = "0.1.0" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0", features = ["networks", "subscription", "version"] }
-nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1.0" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1.0" }
-nimiq-utils = { path = "../utils", version = "0.1.0", features = ["observer", "crc", "time"] }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-macros = { path = "../macros", version = "0.1" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "subscription", "version"] }
+nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }
 
 [dev-dependencies]
-nimiq-utils = { path = "../utils", version = "0.1.0", features = ["observer", "crc", "time", "iterators"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time", "iterators"] }

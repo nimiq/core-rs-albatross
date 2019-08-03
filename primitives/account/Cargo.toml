@@ -11,10 +11,9 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
@@ -22,13 +21,13 @@ log = "0.4"
 failure = "0.1"
 parking_lot = "0.7"
 lazy_static = "1.3"
-beserial = { path = "../../beserial", version = "0.1.0" }
-beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1.0" }
-nimiq-hash = { path = "../../hash", version = "0.1.0" }
-nimiq-keys = { path = "../../keys", version = "0.1.0" }
-nimiq-transaction = { path = "../transaction", version = "0.1.0" }
-nimiq-primitives = { path = "..", version = "0.1.0", features = ["coin", "policy", "validators"] }
-nimiq-bls = { path = "../../bls", version = "0.1.0" }
+beserial = { path = "../../beserial", version = "0.1" }
+beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
+nimiq-hash = { path = "../../hash", version = "0.1" }
+nimiq-keys = { path = "../../keys", version = "0.1" }
+nimiq-transaction = { path = "../transaction", version = "0.1" }
+nimiq-primitives = { path = "..", version = "0.1", features = ["coin", "policy", "validators"] }
+nimiq-bls = { path = "../../bls", version = "0.1" }
 nimiq-collections = { path = "../../collections" }
 
 [dev-dependencies]

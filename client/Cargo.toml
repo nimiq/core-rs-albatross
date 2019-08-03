@@ -12,10 +12,9 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 exclude = ["db", "peer_key.dat"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
@@ -38,19 +37,19 @@ rand = "0.6"
 directories = "1.0"
 human-panic = { version = "1.0", optional = true }
 log-panics = { version = "2.0", features = ["with-backtrace"] }
-nimiq-database = { path = "../database", version = "0.1.0" }
-nimiq-network = { path = "../network", version = "0.1.0" }
-nimiq-primitives = { path = "../primitives", version = "0.1.0", features = ["networks", "coin"] }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1.0" }
-nimiq-rpc-server = { path = "../rpc-server", version = "0.1.0", optional = true }
-nimiq-metrics-server = { path = "../metrics-server", version = "0.1.0", optional = true }
-nimiq-mempool = { path = "../mempool", version = "0.1.0" }
-nimiq-lib = { path = "../lib", version = "0.1.0" }
-nimiq-keys = { path = "../keys", version = "0.1.0" }
-nimiq-utils = { path = "../utils", version = "0.1.0" }
-nimiq-consensus = { path = "../consensus", version = "0.1.0" }
-nimiq-bls = { path = "../bls", version = "0.1.0" }
-beserial = { path = "../beserial", version = "0.1.0" }
+nimiq-database = { path = "../database", version = "0.1" }
+nimiq-network = { path = "../network", version = "0.1" }
+nimiq-primitives = { path = "../primitives", version = "0.1", features = ["networks", "coin"] }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1" }
+nimiq-rpc-server = { path = "../rpc-server", version = "0.1", optional = true }
+nimiq-metrics-server = { path = "../metrics-server", version = "0.1", optional = true }
+nimiq-mempool = { path = "../mempool", version = "0.1" }
+nimiq-lib = { path = "../lib", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1" }
+nimiq-consensus = { path = "../consensus", version = "0.1" }
+nimiq-bls = { path = "../bls", version = "0.1" }
+beserial = { path = "../beserial", version = "0.1" }
 
 [features]
 default = ["all"]

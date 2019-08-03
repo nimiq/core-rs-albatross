@@ -12,10 +12,9 @@ keywords = ["nimiq", "cryptocurrency", "blockchain"]
 build = "build.rs"
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
@@ -30,7 +29,7 @@ beserial_derive = { path = "../beserial/beserial_derive"}
 nimiq-keys = { path = "../keys" }
 nimiq-hash = { path = "../hash" }
 nimiq-hash_derive = { path = "../hash/hash_derive" }
-nimiq-block = { path = "../primitives/block", version = "0.1.0" }
+nimiq-block = { path = "../primitives/block", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross" }
 nimiq-bls = { path = "../bls" }
 nimiq-transaction = { path = "../primitives/transaction" }

@@ -11,16 +11,15 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../../beserial", version = "0.1.0" }
-nimiq-hash = { path = "../../hash", version = "0.1.0" }
-nimiq-transaction = { path = "../transaction", version = "0.1.0" }
+beserial = { path = "../../beserial", version = "0.1" }
+nimiq-hash = { path = "../../hash", version = "0.1" }
+nimiq-transaction = { path = "../transaction", version = "0.1" }
 
 [dev-dependencies]
 num-traits = "0.2"

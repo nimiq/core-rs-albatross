@@ -11,27 +11,26 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
 num-bigint = "0.2"
 log = "0.4"
 hex = "0.3"
-beserial = { path = "../../beserial", version = "0.1.0" }
-beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1.0" }
-fixed-unsigned = { path = "../../fixed-unsigned", version = "0.1.0" }
-nimiq-block-base = { path = "../block-base", version = "0.1.0" }
-nimiq-hash = { path = "../../hash", version = "0.1.0" }
-nimiq-keys = { path = "../../keys", version = "0.1.0" }
-nimiq-utils = { path = "../../utils", version = "0.1.0", features = ["merkle"] }
-nimiq-primitives = { path = "..", version = "0.1.0", features = ["policy", "networks"] }
-nimiq-transaction = { path = "../transaction", version = "0.1.0" }
-nimiq-account = { path = "../account", version = "0.1.0" }
-nimiq-macros = { path = "../../macros", version = "0.1.0" }
+beserial = { path = "../../beserial", version = "0.1" }
+beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
+fixed-unsigned = { path = "../../fixed-unsigned", version = "0.1" }
+nimiq-block-base = { path = "../block-base", version = "0.1" }
+nimiq-hash = { path = "../../hash", version = "0.1" }
+nimiq-keys = { path = "../../keys", version = "0.1" }
+nimiq-utils = { path = "../../utils", version = "0.1", features = ["merkle"] }
+nimiq-primitives = { path = "..", version = "0.1", features = ["policy", "networks"] }
+nimiq-transaction = { path = "../transaction", version = "0.1" }
+nimiq-account = { path = "../account", version = "0.1" }
+nimiq-macros = { path = "../../macros", version = "0.1" }
 
 [dev-dependencies]
 num-traits = "0.2"

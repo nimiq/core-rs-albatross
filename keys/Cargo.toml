@@ -11,10 +11,9 @@ categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
 
 [badges]
-gitlab = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-travis-ci = { repository = "https://github.com/nimiq/core-rs", branch = "master" }
-is-it-maintained-issue-resolution = { repository = "https://github.com/nimiq/core-rs" }
-is-it-maintained-open-issues = { repository = "https://github.com/nimiq/core-rs" }
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
@@ -25,7 +24,7 @@ sha2 = "0.8"
 rand = "0.6"
 hex = "0.3"
 failure = "0.1"
-beserial = { path = "../beserial", version = "0.1.0" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1.0" }
-nimiq-hash = { path = "../hash", version = "0.1.0" }
-nimiq-macros = { path = "../macros", version = "0.1.0" }
+beserial = { path = "../beserial", version = "0.1" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-macros = { path = "../macros", version = "0.1" }
