@@ -242,7 +242,8 @@ pub(crate) struct LogSettings {
 pub(crate) struct DatabaseSettings {
     pub path: Option<String>,
     pub size: Option<usize>,
-    pub max_dbs: Option<u32>
+    pub max_dbs: Option<u32>,
+    pub no_lmdb_sync: Option<bool>,
 }
 
 impl Default for DatabaseSettings {
@@ -250,7 +251,8 @@ impl Default for DatabaseSettings {
         DatabaseSettings {
             path: None,
             size: Some(1024 * 1024 * 50),
-            max_dbs: Some(10)
+            max_dbs: Some(10),
+            no_lmdb_sync: None,
         }
     }
 }
