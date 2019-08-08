@@ -261,9 +261,9 @@ fn run() -> Result<(), Error> {
     let default_database_settings = s::DatabaseSettings::default();
     let env = LmdbEnvironment::new(&settings.database.path.clone()
         .unwrap_or_else(|| files.database(network_id).expect("Failed to find database").to_str().unwrap().to_string()),
-                                   settings.database.size.unwrap_or_else(|| default_database_settings.size.unwrap()),
-                                   settings.database.max_dbs.unwrap_or_else(|| default_database_settings.max_dbs.unwrap()),
-                                   if settings.database.no_lmdb_sync.unwrap_or(false) { open::NOMETASYNC } else { open::Flags::empty() })?;
+            settings.database.size.unwrap_or_else(|| default_database_settings.size.unwrap()),
+            settings.database.max_dbs.unwrap_or_else(|| default_database_settings.max_dbs.unwrap()),
+            if settings.database.no_lmdb_sync.unwrap_or(false) { open::NOSYNC } else { open::NOMETASYNC })?;
     // Initialize the static environment variable
     ENV.initialize(env);
 
