@@ -78,7 +78,7 @@ impl error::Error for InvalidScalarError {
         "Generated scalar was invalid (0 or 1)."
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 }

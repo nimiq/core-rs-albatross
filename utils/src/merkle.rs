@@ -468,7 +468,7 @@ impl error::Error for InvalidMerkleProofError {
         &self.0
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 }
