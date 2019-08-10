@@ -67,7 +67,7 @@ impl WalletAccount {
 
     pub fn verify_message(public_key: &PublicKey, message: &[u8], signature: &Signature) -> bool {
         let hash = Self::prepare_message_for_signature(message);
-        public_key.verify(signature, message)
+        public_key.verify(signature, hash.as_bytes())
     }
 }
 

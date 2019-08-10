@@ -24,7 +24,6 @@ nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1", features = ["keys"] }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["otp"]}
 failure = "0.1"
-log = "0.4"
 hex = "0.3"
 
 [dev-dependencies]

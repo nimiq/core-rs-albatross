@@ -13,7 +13,6 @@ pub struct WalletStore<'env> {
 
 impl<'env> WalletStore<'env> {
     const WALLET_DB_NAME: &'static str = "Wallet";
-    const DEFAULT_KEY: &'static str = "default";
 
     pub fn create_read_transaction(&self) -> ReadTransaction {
         ReadTransaction::new(self.env)
