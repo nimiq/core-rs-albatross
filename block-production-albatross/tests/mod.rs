@@ -3,7 +3,15 @@ use std::sync::Arc;
 use beserial::Deserialize;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_block_albatross::{Block, MacroBlock, MacroExtrinsics, PbftProposal, PbftProofBuilder, PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage};
+use nimiq_block_albatross::{
+    Block,
+    ForkProof,
+    MacroBlock, MacroExtrinsics,
+    PbftProposal, PbftProofBuilder,
+    PbftPrepareMessage, PbftCommitMessage,
+    SignedPbftPrepareMessage, SignedPbftCommitMessage,
+    ViewChange, ViewChangeProof, ViewChangeProofBuilder,
+};
 use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -11,21 +19,43 @@ use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_primitives::{networks::NetworkId};
 use nimiq_primitives::policy;
 use nimiq_blockchain_base::AbstractBlockchain;
+use nimiq_block_albatross::signed::SignedMessage;
 
 const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
 
 #[test]
-fn it_can_produce_empty_micro_blocks() {
+fn it_can_produce_micro_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(Blockchain::new(&env, NetworkId::DevAlbatross).unwrap());
     let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
     let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair);
+    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair.clone());
 
+    // #1.0: Empty standard micro block
     let block = producer.next_micro_block(vec![], 1565713920000, 0, vec![0x41], None);
+    assert_eq!(blockchain.push(Block::Micro(block.clone())), Ok(PushResult::Extended));
+
+    // Create fork at #1.0
+    let fork_proof: ForkProof;
+    {
+        let header1 = block.header.clone();
+        let justification1 = block.justification.signature.clone();
+        let mut header2 = header1.clone();
+        header2.timestamp += 1;
+        let justification2 = keypair.sign(&header2).compress();
+        fork_proof = ForkProof {
+            header1, header2,
+            justification1, justification2,
+        };
+    }
+
+    // #2.0: Empty micro block with fork proof
+    let block = producer.next_micro_block(vec![fork_proof], 1565713922000, 0, vec![0x41], None);
     assert_eq!(blockchain.push(Block::Micro(block)), Ok(PushResult::Extended));
 
-    let block = producer.next_micro_block(vec![], 1565713922000, 0, vec![0x41], None);
+    // #2.1: Empty view-changed micro block
+    let view_change = sign_view_change(2, 1);
+    let block = producer.next_micro_block(vec![], 1565713924000, 1, vec![0x41], Some(view_change));
     assert_eq!(blockchain.push(Block::Micro(block)), Ok(PushResult::Extended));
 }
 
@@ -33,8 +63,8 @@ fn it_can_produce_empty_micro_blocks() {
 fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     let init_height = blockchain.head_height();
     let macro_block_number = policy::macro_block_of(init_height + 1);
-    for _ in (init_height + 1)..macro_block_number {
-        let last_micro_block = producer.next_micro_block(vec![], 1565713924000, 0, vec![0x42], None);
+    for i in (init_height + 1)..macro_block_number {
+        let last_micro_block = producer.next_micro_block(vec![], 1565713920000 + i as u64 * 2000, 0, vec![0x42], None);
         assert_eq!(blockchain.push(Block::Micro(last_micro_block)), Ok(PushResult::Extended));
     }
     assert_eq!(blockchain.head_height(), macro_block_number - 1);
@@ -67,6 +97,18 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroExtrinsics) -> Macr
     }
 }
 
+fn sign_view_change(block_number: u32, new_view_number: u32) -> ViewChangeProof {
+    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+
+    let view_change = SignedMessage::from_message(
+        ViewChange { block_number, new_view_number },
+        &keypair.secret, 0);
+
+    let mut pbft_proof = ViewChangeProofBuilder::new();
+    pbft_proof.add_signature(&keypair.public, policy::SLOTS, &view_change);
+    pbft_proof.build()
+}
+
 #[test]
 fn it_can_produce_macro_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
@@ -78,13 +120,11 @@ fn it_can_produce_macro_blocks() {
 
     fill_micro_blocks(&producer, &blockchain);
 
-    let proposal = producer.next_macro_block_proposal(1565713920000u64, 3u32, None);
+    let proposal = producer.next_macro_block_proposal(1565720000000u64, 3u32, None);
     let extrinsics = producer.next_macro_extrinsics();
 
     let block = sign_macro_block(proposal, extrinsics);
     assert_eq!(blockchain.push(Block::Macro(block)), Ok(PushResult::Extended));
 }
 
-// TODO Test view changes
-// TODO Test fork proofs
 // TODO Test transactions
