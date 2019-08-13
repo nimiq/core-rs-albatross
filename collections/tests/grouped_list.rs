@@ -15,6 +15,8 @@ fn it_can_collect_and_serialize() {
     }
     let list: GroupedList<u8> = vec.iter().cloned().collect();
     assert_eq!(list.len(), 128);
+    assert_eq!(list.num_groups(), 3);
+    assert_eq!(list.is_empty(), false);
     let bin = list.serialize_to_vec();
     assert_eq!(SAMPLE_LIST, hex::encode(bin));
 }
@@ -23,6 +25,8 @@ fn it_can_collect_and_serialize() {
 fn it_can_deserialize_and_iterate() {
     let list = GroupedList::<u8>::deserialize_from_vec(&hex::decode(SAMPLE_LIST).unwrap()).unwrap();
     assert_eq!(list.len(), 128);
+    assert_eq!(list.num_groups(), 3);
+    assert_eq!(list.is_empty(), false);
 
     let mut iter = list.iter();
     for _ in 0..72 {

@@ -58,7 +58,15 @@ impl<T> GroupedList<T>
             .sum()
     }
 
+    pub fn num_groups(&self) -> usize {
+        self.0.len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    pub fn get(&self, i: usize) -> Option<&Group<T>> {
+        self.0.get(i)
     }
 }
