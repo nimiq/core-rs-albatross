@@ -34,7 +34,7 @@ stages:
     - rustc --version
     - cargo --version
     - apt-get update -yq
-    - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y cmake libelf-dev libdw-dev binutils-dev libiberty-dev jq
+    - apt-get install -y cmake libelf-dev libdw-dev binutils-dev libiberty-dev jq
     - ./scripts/coverage.sh --all --tests
   artifacts:
     paths:
@@ -87,10 +87,3 @@ coverage-nightly:
 #pages:
 #  extends: .pages
 #  image: 'rustlang/rust:nightly'
-
-cache:
-  paths:
-    - apt/
-    - cargo/
-    - cov/
-    - target/
