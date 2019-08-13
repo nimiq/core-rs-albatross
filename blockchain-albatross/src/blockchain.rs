@@ -914,24 +914,6 @@ impl<'env> Blockchain<'env> {
         self.current_validators().0.get(validator_idx as usize).map(Validator::clone)
     }
 
-    // Checks if a block number is within the range of the current epoch
-    pub fn is_in_current_epoch(&self, block_number: u32) -> bool {
-        let state = self.state.read();
-        self.is_in_current_epoch_locked(block_number, &state)
-    }
-
-    fn is_in_current_epoch_locked(&self, block_number: u32, state: &RwLockReadGuard<BlockchainState>) -> bool {
-        let macro_block_number = state.macro_head.header.block_number;
-        // TODO Replace with policy helper function
-        block_number > macro_block_number && block_number <= macro_block_number + policy::EPOCH_LENGTH
-    }
-
-    fn is_in_previous_epoch_locked(&self, block_number: u32, state: &RwLockReadGuard<BlockchainState>) -> bool {
-        let macro_block_number = state.macro_head.header.block_number;
-        // TODO Replace with policy helper function
-        macro_block_number > policy::EPOCH_LENGTH && block_number >= macro_block_number - policy::EPOCH_LENGTH && block_number < macro_block_number
-    }
-
     pub fn get_block_producer_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<IndexedSlot> {
         // Try to get block producer using state
 
@@ -948,9 +930,9 @@ impl<'env> Blockchain<'env> {
 
         let slots_owned;
         let slots;
-        if self.is_in_current_epoch_locked(block_number, &state) {
+        if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) {
             slots = state.current_slots.as_ref().expect("Missing current epoch's slots");
-        } else if self.is_in_previous_epoch_locked(block_number, &state) {
+        } else if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1 {
             slots = state.last_slots.as_ref().expect("Missing previous epoch's slots");
         } else {
             let macro_block = self.chain_store

@@ -225,7 +225,6 @@ impl ValidatorAgent {
             Ordering::Equal => (),
         };
 
-
         self.notifier.read().notify(ValidatorAgentEvent::ViewChange(update_message))
     }
 
