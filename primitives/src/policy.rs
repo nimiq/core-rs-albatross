@@ -242,12 +242,18 @@ mod tests {
 
     #[test]
     fn it_correctly_computes_macro_block_position() {
-        assert_eq!(is_macro_block_at(0), true);
-        assert_eq!(is_macro_block_at(1), false);
-        assert_eq!(is_macro_block_at(2), false);
-        assert_eq!(is_macro_block_at(127), false);
-        assert_eq!(is_macro_block_at(128), true);
-        assert_eq!(is_macro_block_at(129), false);
+        assert_eq!( is_macro_block_at(0), true);
+        assert_eq!(!is_micro_block_at(0), true);
+        assert_eq!( is_macro_block_at(1), false);
+        assert_eq!(!is_micro_block_at(1), false);
+        assert_eq!( is_macro_block_at(2), false);
+        assert_eq!(!is_micro_block_at(2), false);
+        assert_eq!( is_macro_block_at(127), false);
+        assert_eq!(!is_micro_block_at(127), false);
+        assert_eq!( is_macro_block_at(128), true);
+        assert_eq!(!is_micro_block_at(128), true);
+        assert_eq!( is_macro_block_at(129), false);
+        assert_eq!(!is_micro_block_at(129), false);
     }
 
     #[test]

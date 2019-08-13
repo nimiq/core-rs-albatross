@@ -29,6 +29,7 @@ nimiq-network-primitives = { path = "../network-primitives", version = "0.1", fe
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 
 [dev-dependencies]
+hex = "0.3"
 nimiq-account = { path = "../primitives/account", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
