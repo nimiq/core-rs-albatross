@@ -328,6 +328,8 @@ fn run() -> Result<(), Error> {
     }
     client_builder.with_seeds(seeds);
 
+    client_builder.with_instant_inbound(settings.network.instant_inbound.unwrap_or(false));
+
     // Setup client future to initialize and connect.
     if network_id.is_albatross() {
         warn!("!!!!");

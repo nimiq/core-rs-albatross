@@ -31,10 +31,11 @@ pub struct NetworkConfig {
     protocol_config: ProtocolConfig,
     user_agent: Option<String>,
     additional_seeds: Vec<Seed>,
+    pub instant_inbound: bool,
 }
 
 impl NetworkConfig {
-    pub fn new_ws_network_config(host: String, port: u16, reverse_proxy_config: Option<ReverseProxyConfig>) -> Self {
+    pub fn new_ws_network_config(host: String, port: u16, instant_inbound: bool, reverse_proxy_config: Option<ReverseProxyConfig>) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -46,11 +47,12 @@ impl NetworkConfig {
                 reverse_proxy_config,
             },
             user_agent: None,
-            additional_seeds: Vec::new()
+            additional_seeds: Vec::new(),
+            instant_inbound,
         }
     }
 
-    pub fn new_wss_network_config(host: String, port: u16, identity_file: String, identity_password: String) -> Self {
+    pub fn new_wss_network_config(host: String, port: u16, instant_inbound: bool, identity_file: String, identity_password: String) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -63,7 +65,8 @@ impl NetworkConfig {
                 identity_password,
             },
             user_agent: None,
-            additional_seeds: Vec::new()
+            additional_seeds: Vec::new(),
+            instant_inbound,
         }
     }
 
@@ -75,7 +78,8 @@ impl NetworkConfig {
             services: Services::full(),
             protocol_config: ProtocolConfig::Dumb,
             user_agent: None,
-            additional_seeds: Vec::new()
+            additional_seeds: Vec::new(),
+            instant_inbound: true,
         }
     }
 

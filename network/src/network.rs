@@ -107,6 +107,10 @@ impl<B: AbstractBlockchain<'static> + 'static> Network<B> {
             }
         });
 
+        if this.network_config.instant_inbound {
+            this.connections.set_allow_inbound_connections(true);
+        }
+
         Ok(this)
     }
 

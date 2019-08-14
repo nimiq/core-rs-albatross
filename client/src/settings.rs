@@ -55,6 +55,7 @@ pub(crate) struct NetworkSettings {
     #[serde(default)]
     pub user_agent: Option<String>,
     pub tls: Option<TlsSettings>,
+    pub instant_inbound: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

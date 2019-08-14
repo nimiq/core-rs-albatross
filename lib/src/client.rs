@@ -31,6 +31,7 @@ pub struct ClientBuilder {
     user_agent: String,
     network_id: NetworkId,
     reverse_proxy_config: Option<ReverseProxyConfig>,
+    instant_inbound: bool,
     additional_seeds: Vec<Seed>,
     identity_file: Option<String>,
     identity_password: Option<String>,
@@ -49,6 +50,7 @@ impl ClientBuilder {
             user_agent: DEFAULT_USER_AGENT.clone(),
             network_id: NetworkId::Main,
             reverse_proxy_config: None,
+            instant_inbound: false,
             additional_seeds: Vec::new(),
             identity_file: None,
             identity_password: None,
@@ -102,6 +104,11 @@ impl ClientBuilder {
         self
     }
 
+    pub fn with_instant_inbound(&mut self, instant_inbound: bool) -> &mut Self {
+        self.instant_inbound = instant_inbound;
+        self
+    }
+
     pub fn build_client<P, BP>(self, block_producer_config: BP::Config) -> Result<ClientInitializeFuture<P, BP>, ClientError>
         where P: ConsensusProtocol + 'static,
               BP: BlockProducer<P> + 'static
@@ -138,6 +145,7 @@ impl ClientBuilder {
             hostname,
             port,
             reverse_proxy_config,
+            instant_inbound,
             identity_file,
             identity_password,
             user_agent,
@@ -157,7 +165,7 @@ impl ClientBuilder {
                 let hostname = hostname.ok_or(ClientError::MissingHostname)?;
                 let port = port.unwrap_or(self.protocol.default_port()
                     .ok_or(ClientError::MissingPort)?);
-                NetworkConfig::new_ws_network_config(hostname, port, reverse_proxy_config)
+                NetworkConfig::new_ws_network_config(hostname, port, instant_inbound, reverse_proxy_config)
             },
             Protocol::Wss => {
                 let hostname = hostname.ok_or(ClientError::MissingHostname)?;
@@ -165,7 +173,7 @@ impl ClientBuilder {
                     .ok_or(ClientError::MissingPort)?);
                 let identity_file = identity_file.ok_or(ClientError::MissingIdentityFile)?;
                 let identity_password = identity_password.ok_or(ClientError::MissingIdentityFile)?;
-                NetworkConfig::new_wss_network_config(hostname, port, identity_file, identity_password)
+                NetworkConfig::new_wss_network_config(hostname, port, instant_inbound, identity_file, identity_password)
             },
             Protocol::Rtc => {
                 return Err(ClientError::RtcNotImplemented)
