@@ -1,4 +1,4 @@
-use nimiq_account::Receipt;
+use nimiq_account::{Receipt, Receipts};
 use nimiq_block::*;
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
@@ -57,7 +57,7 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
                 miner: [0u8; Address::SIZE].into(),
                 extra_data: Vec::new(),
                 transactions: Vec::new(),
-                receipts: Vec::new()
+                receipts: Receipts::default(),
             }
         }
     }
@@ -93,7 +93,7 @@ impl<'env, 'bc> BlockBuilder<'env, 'bc> {
     }
 
     pub fn with_receipts(mut self, receipts: Vec<Receipt>) -> Self {
-        self.body.receipts = receipts;
+        self.body.receipts.receipts = receipts;
         self
     }
 

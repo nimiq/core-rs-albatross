@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use beserial::Serialize;
 use nimiq_account::{Account, AccountTransactionInteraction, AccountType, BasicAccount, PrunedAccount};
-use nimiq_account::Receipt;
+use nimiq_account::{Receipt, Receipts};
 use nimiq_accounts::Accounts;
 use nimiq_block::BlockBody;
 use nimiq_database::ReadTransaction;
@@ -25,7 +25,7 @@ fn it_can_commit_and_revert_a_block_body() {
         miner: address_miner.clone(),
         extra_data: Vec::new(),
         transactions: Vec::new(),
-        receipts: Vec::new()
+        receipts: Receipts::default()
     };
 
     assert_eq!(accounts.get(&address_miner, None).balance(), Coin::ZERO);
@@ -89,7 +89,7 @@ fn it_correctly_rewards_miners() {
         miner: address_miner1.clone(),
         extra_data: Vec::new(),
         transactions: Vec::new(),
-        receipts: Vec::new()
+        receipts: Receipts::default()
     };
 
     // address_miner1 mines first block.
@@ -160,7 +160,7 @@ fn it_checks_for_sufficient_funds() {
         miner: address_sender.clone(),
         extra_data: Vec::new(),
         transactions: vec![tx.clone()],
-        receipts: Vec::new()
+        receipts: Receipts::default()
     };
 
     let hash1 = accounts.hash(None);
@@ -235,7 +235,7 @@ fn it_correctly_prunes_account() {
         miner: address.clone(),
         extra_data: Vec::new(),
         transactions: Vec::new(),
-        receipts: Vec::new()
+        receipts: Receipts::default()
     };
 
     // Give a block reward
@@ -267,7 +267,7 @@ fn it_correctly_prunes_account() {
     body.transactions = vec![tx_prune.clone()];
     let mut pruned_account = accounts.get(&contract_address, None);
     pruned_account.commit_outgoing_transaction(&tx_prune, 2).unwrap();
-    body.receipts = vec![Receipt::PrunedAccount(PrunedAccount {
+    body.receipts.receipts = vec![Receipt::PrunedAccount(PrunedAccount {
         address: contract_address.clone(),
         account: pruned_account
     })];
@@ -296,7 +296,7 @@ fn it_correctly_prunes_account() {
     }
 
     // Now revert account
-    body.receipts = Vec::new();
+    body.receipts.receipts = Vec::new();
     body.transactions = vec![tx_create.clone()];
     {
         let mut txn = WriteTransaction::new(&env);
@@ -320,7 +320,7 @@ fn can_generate_accounts_proof() {
     let address_recipient1 = Address::from([3u8; Address::SIZE]);
     let address_recipient2 = Address::from([4u8; Address::SIZE]);
 
-    let mut body = BlockBody { miner: address_miner1.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
+    let mut body = BlockBody { miner: address_miner1.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
 
     {
         let mut txn = WriteTransaction::new(&env);

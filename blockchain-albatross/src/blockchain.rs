@@ -672,6 +672,7 @@ impl<'env> Blockchain<'env> {
 
                 // Commit block to AccountsTree.
                 let receipts = accounts.commit(txn, &vec![], &inherents, macro_block.header.block_number);
+                self.chain_store.clear_receipts(txn);
                 if let Err(e) = receipts {
                     return Err(PushError::AccountsError(e));
                 }
@@ -687,10 +688,9 @@ impl<'env> Blockchain<'env> {
                     return Err(PushError::AccountsError(e));
                 }
 
-                // Verify receipts.
-                if extrinsics.receipts != receipts.unwrap() {
-                    return Err(PushError::InvalidBlock(BlockError::InvalidReceipt));
-                }
+                // Store receipts.
+                let receipts = receipts.unwrap();
+                self.chain_store.put_receipts(txn, micro_block.header.block_number, &receipts);
             }
         }
 
@@ -709,8 +709,10 @@ impl<'env> Blockchain<'env> {
         let extrinsics = micro_block.extrinsics.as_ref().unwrap();
         let view_changes = ViewChanges::new(micro_block.header.block_number, prev_view_number, micro_block.header.view_number);
         let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes, Some(txn));
+        let receipts = self.chain_store.get_receipts(micro_block.header.block_number, Some(txn))
+            .expect("Failed to revert - missing receipts");
 
-        if let Err(e) = accounts.revert(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number, &extrinsics.receipts) {
+        if let Err(e) = accounts.revert(txn, &extrinsics.transactions, &inherents, micro_block.header.block_number, &receipts) {
             panic!("Failed to revert - {}", e);
         }
 

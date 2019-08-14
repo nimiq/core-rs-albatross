@@ -76,29 +76,26 @@ impl<'env> BlockProducer<'env> {
 
         let inherents = self.blockchain.create_slash_inherents(&fork_proofs, view_changes, None);
 
-        let mut receipts = self.blockchain.state().accounts()
+        self.blockchain.state().accounts()
             .collect_receipts(&transactions, &inherents, self.blockchain.height() + 1)
             .expect("Failed to collect receipts during block production");
 
-        let mut size = transactions.iter().fold(0, |size, tx| size + tx.serialized_size())
-            + receipts.iter().fold(0, |size, receipt| size + receipt.serialized_size());
+        let mut size = transactions.iter().fold(0, |size, tx| size + tx.serialized_size());
         if size > max_size {
             while size > max_size {
                 size -= transactions.pop().serialized_size();
             }
-            receipts = self.blockchain.state().accounts()
+            self.blockchain.state().accounts()
                 .collect_receipts(&transactions, &inherents, self.blockchain.height() + 1)
                 .expect("Failed to collect pruned accounts during block production");
         }
 
         transactions.sort_unstable_by(|a, b| a.cmp_block_order(b));
-        receipts.sort_unstable();
 
         MicroExtrinsics {
             fork_proofs,
             extra_data,
             transactions,
-            receipts,
         }
     }
 

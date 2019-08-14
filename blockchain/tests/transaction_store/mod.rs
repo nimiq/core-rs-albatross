@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 
+use nimiq_account::Receipts;
 use nimiq_block::{Block, BlockBody, BlockHeader, BlockInterlink, TargetCompact};
 use nimiq_blockchain::transaction_store::*;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -45,7 +46,7 @@ fn create_block(transactions: Vec<Transaction>, height: u32) -> Block {
         miner: Address::default(),
         extra_data: Vec::new(),
         transactions,
-        receipts: Vec::new(),
+        receipts: Receipts::default(),
     };
     let interlink = BlockInterlink::default();
 

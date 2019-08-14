@@ -1,7 +1,9 @@
+use account::Receipts;
 use block::Block;
 use blockchain_base::Direction;
 use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
 use database::cursor::ReadCursor;
+use database::cursor::WriteCursor;
 use hash::Blake2bHash;
 
 use crate::chain_info::ChainInfo;
@@ -11,13 +13,15 @@ pub struct ChainStore<'env> {
     env: &'env Environment,
     chain_db: Database<'env>,
     block_db: Database<'env>,
-    height_idx: Database<'env>
+    height_idx: Database<'env>,
+    receipt_db: Database<'env>,
 }
 
 impl<'env> ChainStore<'env> {
     const CHAIN_DB_NAME: &'static str = "ChainData";
     const BLOCK_DB_NAME: &'static str = "Block";
     const HEIGHT_IDX_NAME: &'static str = "HeightIdx";
+    const RECEIPT_DB_NAME: &'static str = "Receipts";
 
     const HEAD_KEY: &'static str = "head";
 
@@ -26,7 +30,9 @@ impl<'env> ChainStore<'env> {
         let block_db = env.open_database(Self::BLOCK_DB_NAME.to_string());
         let height_idx = env.open_database_with_flags(Self::HEIGHT_IDX_NAME.to_string(),
                                                       DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES);
-        ChainStore { env, chain_db, block_db, height_idx }
+        let receipt_db = env.open_database_with_flags(Self::RECEIPT_DB_NAME.to_string(),
+                                                      DatabaseFlags::UINT_KEYS);
+        ChainStore { env, chain_db, block_db, height_idx, receipt_db }
     }
 
     pub fn get_head(&self, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
@@ -220,6 +226,33 @@ impl<'env> ChainStore<'env> {
         match direction {
             Direction::Forward => self.get_blocks_forward(start_block_hash, count, include_body, txn_option),
             Direction::Backward => self.get_blocks_backward(start_block_hash, count, include_body, txn_option),
+        }
+    }
+
+    pub fn put_receipts(&self, txn: &mut WriteTransaction, block_height: u32, receipts: &Receipts) {
+        txn.put_reserve(&self.receipt_db, &block_height, receipts);
+    }
+
+    pub fn get_receipts(&self, block_height: u32, txn_option: Option<&Transaction>) -> Option<Receipts> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(self.env);
+                &read_txn
+            }
+        };
+
+        txn.get(&self.receipt_db, &block_height)
+    }
+
+    pub fn clear_receipts(&self, txn: &mut WriteTransaction) {
+        let mut cursor = txn.write_cursor(&self.receipt_db);
+        let mut pos: Option<(u32, Receipts)> = cursor.first();
+
+        while let Some(_) = pos {
+            cursor.remove();
+            pos = cursor.next();
         }
     }
 }

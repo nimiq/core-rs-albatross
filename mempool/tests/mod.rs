@@ -4,6 +4,7 @@ use std::sync::Arc;
 use hex;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_account::Receipts;
 use nimiq_block::BlockBody;
 use nimiq_blockchain::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -11,7 +12,7 @@ use nimiq_database::WriteTransaction;
 use nimiq_hash::Hash;
 use nimiq_keys::Address;
 use nimiq_keys::KeyPair;
-use nimiq_mempool::{Mempool, ReturnCode, MempoolConfig};
+use nimiq_mempool::{Mempool, MempoolConfig, ReturnCode};
 use nimiq_network_primitives::time::NetworkTime;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
@@ -30,7 +31,7 @@ fn push_same_tx_twice() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
+    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
     let mut txn = WriteTransaction::new(&env);
     blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
     txn.commit();
@@ -78,7 +79,7 @@ fn push_and_get_valid_tx() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
+    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
     let mut txn = WriteTransaction::new(&env);
     blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
     txn.commit();
@@ -108,7 +109,7 @@ fn push_and_get_two_tx_same_user() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
+    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
     let mut txn = WriteTransaction::new(&env);
     blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
     txn.commit();
@@ -144,7 +145,7 @@ fn reject_free_tx_beyond_limit() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Vec::new() };
+    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
     let mut txn = WriteTransaction::new(&env);
     blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
     txn.commit();

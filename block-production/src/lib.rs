@@ -53,7 +53,7 @@ impl<'env> BlockProducer<'env> {
             .expect("Failed to collect receipts during block production");
 
         let mut size = transactions.iter().fold(0, |size, tx| size + tx.serialized_size())
-            + receipts.iter().fold(0, |size, pruned_account| size + pruned_account.serialized_size());
+            + receipts.receipts.iter().fold(0, |size, pruned_account| size + pruned_account.serialized_size());
         if size > max_size {
             while size > max_size {
                 size -= transactions.pop().serialized_size();
@@ -64,7 +64,7 @@ impl<'env> BlockProducer<'env> {
         }
 
         transactions.sort_unstable_by(|a, b| a.cmp_block_order(b));
-        receipts.sort_unstable();
+        receipts.receipts.sort_unstable();
 
         BlockBody {
             miner,

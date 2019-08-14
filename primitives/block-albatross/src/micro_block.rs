@@ -49,8 +49,6 @@ pub struct MicroExtrinsics {
     pub fork_proofs: Vec<ForkProof>,
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
-    #[beserial(len_type(u16))]
-    pub receipts: Vec<Receipt>,
 }
 
 impl MicroBlock {
@@ -127,42 +125,6 @@ impl MicroExtrinsics {
             }
         }
 
-        // Verify receipts.
-        let mut previous_receipt: Option<&Receipt> = None;
-        for receipt in &self.receipts {
-            // Ensure pruned accounts are ordered and unique.
-            if let Some(previous) = previous_receipt {
-                match previous.cmp(receipt) {
-                    Ordering::Equal => {
-                        return Err(BlockError::DuplicateReceipt);
-                    }
-                    Ordering::Greater => {
-                        return Err(BlockError::ReceiptsNotOrdered);
-                    }
-                    _ => (),
-                }
-            }
-            previous_receipt = Some(receipt);
-
-            match receipt {
-                Receipt::PrunedAccount(acc) => {
-                    // Check that the account is actually supposed to be pruned.
-                    if !acc.account.is_to_be_pruned() {
-                        return Err(BlockError::InvalidReceipt);
-                    }
-                },
-                Receipt::Transaction { index, .. } => {
-                    // Check receipt index.
-                    if *index >= self.transactions.len() as u16 {
-                        return Err(BlockError::InvalidReceipt);
-                    }
-                },
-                Receipt::Inherent { .. } => {
-                    // We can't check the index here as we don't know the inherents.
-                }
-            }
-        }
-
         return Ok(());
     }
 
@@ -171,8 +133,7 @@ impl MicroExtrinsics {
             + num_fork_proofs * ForkProof::SIZE
             + /*extra_data size*/ 1
             + extra_data_size
-            + /*transactions size*/ 2
-            + /*receipts size*/ 2;
+            + /*transactions size*/ 2;
     }
 }
 

@@ -267,9 +267,6 @@ pub enum ReceiptType {
     Inherent = 2,
 }
 
-/// TODO: Receipts do not necessarily need to be part of the block.
-/// They are only needed for reversion of blocks, but if the blocks have been applied before,
-/// the information can also be stored off-chain.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Receipt {
     PrunedAccount(PrunedAccount),
@@ -382,6 +379,28 @@ impl Ord for Receipt {
 impl PartialOrd for Receipt {
     fn partial_cmp(&self, other: &Receipt) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct Receipts {
+    #[beserial(len_type(u16))]
+    pub receipts: Vec<Receipt>,
+}
+
+impl Receipts {
+    pub fn sort(&mut self) {
+        self.receipts.sort();
+    }
+
+    pub fn len(&self) -> usize {
+        self.receipts.len()
+    }
+}
+
+impl From<Vec<Receipt>> for Receipts {
+    fn from(receipts: Vec<Receipt>) -> Self {
+        Receipts { receipts }
     }
 }
 

@@ -97,7 +97,7 @@ impl BlockProductionHandler {
             "extraData" => hex::encode(body.extra_data),
             "transactions" => JsonValue::Array(body.transactions.iter().map(|tx| transaction_to_obj(tx, None, None)).collect()),
             "merkleHashes" => JsonValue::Array(merkle_path.hashes().iter().map(|hash| JsonValue::String(hash.to_hex())).skip(1).collect()),
-            "prunedAccounts" => JsonValue::Array(body.receipts.iter().map(|acc| JsonValue::String(hex::encode(acc.serialize_to_vec()))).collect()),
+            "prunedAccounts" => JsonValue::Array(body.receipts.receipts.iter().map(|acc| JsonValue::String(hex::encode(acc.serialize_to_vec()))).collect()),
         };
 
         Ok(object!{

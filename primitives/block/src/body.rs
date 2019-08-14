@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, io};
 
-use account::Receipt;
+use account::{Receipt, Receipts};
 use account::inherent::{Inherent, InherentType};
 use beserial::{Deserialize, Serialize};
 use hash::{Hash, HashOutput, SerializeContent};
@@ -20,8 +20,7 @@ pub struct BlockBody {
     pub extra_data: Vec<u8>,
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
-    #[beserial(len_type(u16))]
-    pub receipts: Vec<Receipt>,
+    pub receipts: Receipts,
 }
 
 impl SerializeContent for BlockBody {
@@ -74,7 +73,7 @@ impl BlockBody {
         }
 
         let mut previous_receipt: Option<&Receipt> = None;
-        for receipt in &self.receipts {
+        for receipt in &self.receipts.receipts {
             // Ensure receipts are ordered and unique.
             if let Some(previous) = previous_receipt {
                 match previous.cmp(receipt) {
@@ -111,7 +110,7 @@ impl BlockBody {
         for t in &self.transactions {
             vec.push(t.hash());
         }
-        for p in &self.receipts {
+        for p in &self.receipts.receipts {
             vec.push(p.hash());
         }
         vec

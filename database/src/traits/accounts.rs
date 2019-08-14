@@ -4,6 +4,7 @@ use std::io;
 use beserial::{Deserialize, Serialize};
 use nimiq_tree_primitives::accounts_tree_node::AccountsTreeNode;
 use nimiq_tree_primitives::address_nibbles::AddressNibbles;
+use nimiq_account::Receipts;
 
 use crate::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
@@ -26,6 +27,23 @@ impl IntoDatabaseValue for AccountsTreeNode {
 }
 
 impl FromDatabaseValue for AccountsTreeNode {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+        let mut cursor = io::Cursor::new(bytes);
+        Ok(Deserialize::deserialize(&mut cursor)?)
+    }
+}
+
+impl IntoDatabaseValue for Receipts {
+    fn database_byte_size(&self) -> usize {
+        self.serialized_size()
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl FromDatabaseValue for Receipts {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)

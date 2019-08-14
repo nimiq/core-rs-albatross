@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt};
+use account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt, Receipts};
 use account::inherent::{AccountInherentInteraction, Inherent};
 use database::{Environment, ReadTransaction, WriteTransaction};
 use database as db;
@@ -64,26 +64,26 @@ impl<'env> Accounts<'env> {
     }
 
     /// Returns receipts in processing order, *not* block order!
-    pub fn collect_receipts(&self, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32) -> Result<Vec<Receipt>, AccountError> {
+    pub fn collect_receipts(&self, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32) -> Result<Receipts, AccountError> {
         let mut txn = WriteTransaction::new(&self.env);
         let receipts = self.commit_nonfinal(&mut txn, transactions, inherents, block_height)?;
         txn.abort();
         Ok(receipts)
     }
 
-    pub fn commit(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32) -> Result<Vec<Receipt>, AccountError> {
+    pub fn commit(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32) -> Result<Receipts, AccountError> {
         let receipts = self.commit_nonfinal(txn, transactions, inherents, block_height)?;
         self.tree.finalize_batch(txn);
         Ok(receipts)
     }
 
-    pub fn revert(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32, receipts: &Vec<Receipt>) -> Result<(), AccountError> {
+    pub fn revert(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32, receipts: &Receipts) -> Result<(), AccountError> {
         self.revert_nonfinal(txn, transactions, inherents, block_height, receipts)?;
         self.tree.finalize_batch(txn);
         Ok(())
     }
 
-    fn commit_nonfinal(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32) -> Result<Vec<Receipt>, AccountError> {
+    fn commit_nonfinal(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32) -> Result<Receipts, AccountError> {
         let mut receipts = Vec::new();
 
         receipts.append(&mut self.process_senders(txn, transactions, block_height, HashMap::new(),
@@ -101,10 +101,10 @@ impl<'env> Accounts<'env> {
         receipts.append(&mut self.process_inherents(txn, inherents, HashMap::new(),
                                                     |account, inherent, _| account.commit_inherent(inherent))?);
 
-        Ok(receipts)
+        Ok(Receipts::from(receipts))
     }
 
-    fn revert_nonfinal(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32, receipts: &Vec<Receipt>) -> Result<(), AccountError> {
+    fn revert_nonfinal(&self, txn: &mut WriteTransaction, transactions: &Vec<Transaction>, inherents: &Vec<Inherent>, block_height: u32, receipts: &Receipts) -> Result<(), AccountError> {
         let (sender_receipts, recipient_receipts, inherent_receipts, pruned_accounts) = Self::prepare_receipts(receipts);
 
         self.process_inherents(txn, inherents, inherent_receipts,
@@ -279,12 +279,12 @@ impl<'env> Accounts<'env> {
         Ok(receipt)
     }
 
-    fn prepare_receipts(receipts: &Vec<Receipt>) -> (HashMap<u16, &Vec<u8>>, HashMap<u16, &Vec<u8>>, HashMap<u16, &Vec<u8>>, Vec<&PrunedAccount>) {
+    fn prepare_receipts(receipts: &Receipts) -> (HashMap<u16, &Vec<u8>>, HashMap<u16, &Vec<u8>>, HashMap<u16, &Vec<u8>>, Vec<&PrunedAccount>) {
         let mut sender_receipts = HashMap::new();
         let mut recipient_receipts = HashMap::new();
         let mut inherent_receipts = HashMap::new();
         let mut pruned_accounts = Vec::new();
-        for receipt in receipts {
+        for receipt in &receipts.receipts {
             match receipt {
                 Receipt::Transaction { index, sender, data } => {
                     if *sender {
