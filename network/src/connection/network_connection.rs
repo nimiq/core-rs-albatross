@@ -93,7 +93,11 @@ impl NetworkConnection {
 
     pub fn close(&self, ty: CloseType) {
         self.peer_sink.close(ty, None);
-        self.notifier.read().notify(PeerStreamEvent::Close(ty));
+        let notifier = Arc::clone(&self.notifier);
+        tokio::spawn(futures::lazy(move || {
+            notifier.read().notify(PeerStreamEvent::Close(ty));
+            futures::future::ok(())
+        }));
     }
 
     pub fn net_address(&self) -> Arc<NetAddress> {
