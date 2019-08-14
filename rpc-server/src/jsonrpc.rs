@@ -48,28 +48,28 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
     if str_o.is_err() {
         return builder
             .status(StatusCode::BAD_REQUEST)
-            .body(Body::from(json::stringify(object!{
-                            "jsonrpc" => "2.0",
-                            "id" => Null,
-                            "error" => object!{
-                                "code" => -32600,
-                                "message" => "Invalid encoding"
-                            }
-                        })))
+            .body(Body::from(json::stringify(object! {
+                "jsonrpc" => "2.0",
+                "id" => Null,
+                "error" => object!{
+                    "code" => -32600,
+                    "message" => "Invalid encoding"
+                }
+            })))
             .unwrap();
     }
     let json_o = json::parse(str_o.unwrap());
     if json_o.is_err() {
         return builder
             .status(StatusCode::BAD_REQUEST)
-            .body(Body::from(json::stringify(object!{
-                            "jsonrpc" => "2.0",
-                            "id" => Null,
-                            "error" => object!{
-                                "code" => -32600,
-                                "message" => "Invalid JSON"
-                            }
-                        })))
+            .body(Body::from(json::stringify(object! {
+                "jsonrpc" => "2.0",
+                "id" => Null,
+                "error" => object!{
+                    "code" => -32600,
+                    "message" => "Invalid JSON"
+                }
+            })))
             .unwrap();
     }
     let mut json = json_o.unwrap();
@@ -80,27 +80,27 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
     if !json.is_array() {
         return builder
             .status(StatusCode::BAD_REQUEST)
-            .body(Body::from(json::stringify(object!{
-                            "jsonrpc" => "2.0",
-                            "id" => Null,
-                            "error" => object!{
-                                "code" => -32600,
-                                "message" => "Invalid request"
-                            }
-                        })))
+            .body(Body::from(json::stringify(object! {
+                "jsonrpc" => "2.0",
+                "id" => Null,
+                "error" => object!{
+                    "code" => -32600,
+                    "message" => "Invalid request"
+                }
+            })))
             .unwrap();
     }
     let mut results = vec![];
     for msg in json.members() {
         if msg["jsonrpc"] != "2.0" || !msg.has_key("method") || !msg["method"].is_string() {
-            results.push(object!{
-                            "jsonrpc" => "2.0",
-                            "id" => msg["id"].clone(),
-                            "error" => object!{
-                                "code" => -32600,
-                                "message" => "Invalid request"
-                            }
-                        });
+            results.push(object! {
+                "jsonrpc" => "2.0",
+                "id" => msg["id"].clone(),
+                "error" => object!{
+                    "code" => -32600,
+                    "message" => "Invalid request"
+                }
+            });
             continue;
         }
 
@@ -112,32 +112,32 @@ fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) 
 
         let result_o = handler.call_method(
             msg["method"].as_str().unwrap(),
-            params_array
+            params_array,
         );
         if result_o.is_none() {
             warn!("Unknown method called: {}", msg["method"]);
-            results.push(object!{
-                            "jsonrpc" => "2.0",
-                            "id" => msg["id"].clone(),
-                            "error" => object!{
-                                "code" => -32601,
-                                "message" => "Method not found"
-                            }
-                        });
+            results.push(object! {
+                "jsonrpc" => "2.0",
+                "id" => msg["id"].clone(),
+                "error" => object!{
+                    "code" => -32601,
+                    "message" => "Method not found"
+                }
+            });
             continue;
         }
 
         results.push(match result_o.unwrap() {
-            Ok(result) => object!{
-                            "jsonrpc" => "2.0",
-                            "id" => msg["id"].clone(),
-                            "result" => result
-                        },
-            Err(error) => object!{
-                            "jsonrpc" => "2.0",
-                            "id" => msg["id"].clone(),
-                            "error" => error
-                        }
+            Ok(result) => object! {
+                "jsonrpc" => "2.0",
+                "id" => msg["id"].clone(),
+                "result" => result
+            },
+            Err(error) => object! {
+                "jsonrpc" => "2.0",
+                "id" => msg["id"].clone(),
+                "error" => error
+            }
         });
     }
 
@@ -165,8 +165,7 @@ fn check_authentication<H: Handler>(handler: Arc<H>, authorization: Option<&Head
             return Err(AuthenticationError::IncorrectCredentials);
         }
         handler.authorize(authorization[0], authorization[1])
-    }
-    else {
+    } else {
         handler.authorize("", "")
     }
 }
@@ -198,7 +197,7 @@ impl<H> hyper::service::Service for Service<H> where H: Handler + 'static {
                     return Box::new(future::ok(Response::builder()
                         .status(StatusCode::UNAUTHORIZED)
                         .body(Body::from(""))
-                        .unwrap()))
+                        .unwrap()));
                 }
                 Box::new(req.into_body().concat2()
                     .map(|b| handle_request(handler, std::str::from_utf8(&b))))
