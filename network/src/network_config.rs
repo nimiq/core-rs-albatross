@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use keys::{KeyPair, PublicKey};
+use keys::{KeyPair, PublicKey, PrivateKey};
 use network_primitives::address::net_address::NetAddress;
 use network_primitives::address::peer_address::{PeerAddress, PeerAddressType};
 use network_primitives::address::PeerId;
@@ -84,15 +84,16 @@ impl NetworkConfig {
             return Ok(());
         }
 
-        let key_pair = match peer_key_store.load_key() {
+        let private_key = match peer_key_store.load_key() {
             Err(KeyStoreError::IoError(_)) => {
-                let key_pair = KeyPair::generate();
-                peer_key_store.save_key(&key_pair)?;
-                Ok(key_pair)
+                let private_key = PrivateKey::generate();
+                peer_key_store.save_key(&private_key)?;
+                Ok(private_key)
             },
             res => res,
         }?;
 
+        let key_pair = KeyPair::from(private_key);
         self.peer_id = Some(PeerId::from(&key_pair.public));
         self.key_pair = Some(key_pair);
         Ok(())
