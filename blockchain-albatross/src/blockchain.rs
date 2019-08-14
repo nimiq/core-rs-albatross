@@ -797,10 +797,11 @@ impl<'env> Blockchain<'env> {
             Some(n) => n
 
         };
-        // TODO Replace with policy helper function
-        match (last_block_number + 1) % policy::EPOCH_LENGTH {
-            0 => BlockType::Macro,
-            _ => BlockType::Micro
+
+        if policy::is_macro_block_at(last_block_number + 1) {
+            BlockType::Macro
+        } else {
+            BlockType::Micro
         }
     }
 

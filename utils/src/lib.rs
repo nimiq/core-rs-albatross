@@ -1,3 +1,6 @@
+// TODO: Remove when stabilized.
+#![feature(div_duration)]
+
 #[cfg(feature = "log")]
 #[macro_use]
 extern crate log;

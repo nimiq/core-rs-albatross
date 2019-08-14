@@ -131,7 +131,7 @@ impl Validator {
 
         // trigger initial block production (if it's our turn)
         if this.state.read().status == ValidatorStatus::Active {
-            this.init_validator();
+            this.init_epoch();
         }
 
         Ok(this)
@@ -182,7 +182,7 @@ impl Validator {
 
     pub fn on_consensus_established(&self) {
         trace!("Consensus established");
-        self.init_validator();
+        self.init_epoch();
     }
 
     pub fn on_consensus_lost(&self) {
@@ -214,7 +214,7 @@ impl Validator {
                 self.validator_network.on_finality();
 
                 // Init new validator epoch
-                self.init_validator()
+                self.init_epoch()
             },
 
             BlockchainEvent::Extended(hash) => {
@@ -237,8 +237,7 @@ impl Validator {
         }
     }
 
-    // TODO better name? This is called when a epoch begins
-    fn init_validator(&self) {
+    fn init_epoch(&self) {
         let mut state = self.state.write();
 
         state.view_number = 0;

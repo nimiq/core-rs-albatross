@@ -22,7 +22,6 @@ use utils::mutable_once::MutableOnce;
 use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
 
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
-use crate::validator_network::ValidatorNetworkError::NotInPbftPhase;
 
 #[derive(Clone, Debug, Fail)]
 pub enum ValidatorNetworkError {
@@ -59,6 +58,20 @@ pub enum ValidatorNetworkEvent {
     PbftCommitComplete(Blake2bHash, PbftProposal, PbftProof),
 }
 
+struct ViewChangeProofState {
+    proof: ViewChangeProofBuilder,
+    finalized: bool,
+}
+
+impl ViewChangeProofState {
+    fn new() -> Self {
+        ViewChangeProofState {
+            proof: ViewChangeProofBuilder::new(),
+            finalized: false,
+        }
+    }
+}
+
 struct ValidatorNetworkState {
     /// The peers that are connected that have the validator service flag set. So this is not
     /// exactly the set of validators. Potential validators should set this flag and then broadcast
@@ -73,8 +86,7 @@ struct ValidatorNetworkState {
 
     /// maps (view-change-number, block-number) to the proof that is being aggregated
     /// and a flag whether it's finalized. clear after macro block
-    /// TODO use a struct instead of a tuple / clean this up
-    view_changes: BTreeMap<ViewChange, (bool, ViewChangeProofBuilder)>,
+    view_changes: BTreeMap<ViewChange, ViewChangeProofState>,
 
     /// The current proposed macro header and pbft proof.
     ///
@@ -265,22 +277,22 @@ impl ValidatorNetwork {
         // get the proof with the specific block number and view change number
         // if it doesn't exist, create a new one.
         let proof = state.view_changes.entry(view_change.message.clone())
-            .or_insert_with(|| (false, ViewChangeProofBuilder::new()));
+            .or_insert_with(|| ViewChangeProofState::new());
 
         // if view change was already completed
-        if proof.0 {
+        if proof.finalized {
             return Ok(());
         }
 
         // Aggregate signature - if it wasn't included yet, relay it
-        if proof.1.add_signature(public_key, slots, &view_change) {
-            let proof_complete = proof.1.verify(&view_change.message, TWO_THIRD_VALIDATORS).is_ok();
-            debug!("Applying view change: votes={} / {}, complete={}", proof.1.num_slots, ACTIVE_VALIDATORS, proof_complete);
+        if proof.proof.add_signature(public_key, slots, &view_change) {
+            let proof_complete = proof.proof.verify(&view_change.message, TWO_THIRD_VALIDATORS).is_ok();
+            debug!("Applying view change: votes={} / {}, complete={}", proof.proof.num_slots, ACTIVE_VALIDATORS, proof_complete);
 
             // if we have enough signatures, notify listeners
             if proof_complete {
-                proof.0 = true; // mark completed
-                let proof = proof.1.clone().build();
+                proof.finalized = true; // mark completed
+                let proof = proof.proof.clone().build();
 
                 drop(state); // drop before notify and broadcast
 
