@@ -5,7 +5,6 @@ use bls::bls12_381;
 use collections::bitset::BitSet;
 
 
-
 #[derive(Clone, Debug, Fail)]
 pub enum SignatureError {
     #[fail(display = "Signatures are overlapping: {:?}", _0)]
@@ -23,12 +22,12 @@ pub struct IndividualSignature {
 impl Serialize for IndividualSignature {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let n = self.signature.serialize(writer)?;
-        writer.write_u64::<BigEndian>(self.signer as u64)?;
-        Ok(n + 8)
+        writer.write_u16::<BigEndian>(self.signer as u16)?;
+        Ok(n + 2)
     }
 
     fn serialized_size(&self) -> usize {
-        self.signature.serialized_size() + 8
+        self.signature.serialized_size() + 2
     }
 }
 
@@ -36,7 +35,7 @@ impl Deserialize for IndividualSignature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         Ok(Self {
             signature: Deserialize::deserialize(reader)?,
-            signer: reader.read_u64::<BigEndian>()? as usize
+            signer: reader.read_u16::<BigEndian>()? as usize
         })
     }
 }
@@ -126,6 +125,8 @@ pub enum Signature {
 }
 
 impl Signature {
+    // TODO: Don't use `Box`. We need a specific type for the `BitSet` iterator. Then we can create an
+    // enum that is either a `Once` iterator or an iterator over the `BitSet`.
     pub fn signers<'a>(&'a self) -> Box<dyn Iterator<Item=usize> + 'a> {
         match self {
             Signature::Individual(individual) => {
@@ -141,6 +142,20 @@ impl Signature {
         match self {
             Signature::Individual(_) => 1,
             Signature::Multi(multisig) => multisig.len()
+        }
+    }
+
+    pub fn is_individual(&self) -> bool {
+        match self {
+            Signature::Individual(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn is_multisig(&self) -> bool {
+        match self {
+            Signature::Multi(_) => true,
+            _ => false
         }
     }
 }

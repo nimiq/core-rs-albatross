@@ -420,9 +420,12 @@ impl Validator {
         drop(state);
 
         // Broadcast our view change number message to the other validators.
+        #[cfg(not(feature = "handel"))]
         match self.validator_network.commit_view_change(view_change_message, &self.validator_key.public, slots) {
             _ => (), // FIXME: error handling
         }
+        #[cfg(feature = "handel")]
+        self.validator_network.start_view_change(view_change_message);
      }
 
     fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {

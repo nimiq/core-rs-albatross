@@ -39,3 +39,5 @@ pub mod rate_limit;
 pub mod unique_id;
 #[cfg(feature = "otp")]
 pub mod otp;
+#[cfg(feature = "log2")]
+pub mod log2;

@@ -189,6 +189,14 @@ pub struct AggregateProof<M: Message> {
 }
 
 impl<M: Message> AggregateProof<M> {
+    pub fn new(signature: AggregateSignature, signers: BitSet) -> Self {
+        Self {
+            signature,
+            signers,
+            _message: PhantomData
+        }
+    }
+
     /// Verify message against aggregate signature and check the required number of signatures.
     /// Expects valid validator public keys.
     pub fn verify(&self, message: &M, validators: &GroupedList<LazyPublicKey>, threshold: u16) -> Result<(), AggregateProofError> {

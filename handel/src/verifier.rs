@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use futures::Future;
+use futures::{future, Future};
 use futures::future::FutureResult;
 use futures_cpupool::{CpuPool, CpuFuture};
 
@@ -12,18 +12,23 @@ use crate::identity::IdentityRegistry;
 
 
 
-#[derive(Clone, Debug, Fail, PartialEq, Eq)]
-pub enum VerificationError {
-    #[fail(display = "Signed by unknown signer: {}", signer)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VerificationResult {
+    Ok,
     UnknownSigner { signer: usize },
-    #[fail(display = "Forged signature")]
     Forged,
+}
+
+impl VerificationResult {
+    pub fn is_ok(&self) -> bool {
+        *self == VerificationResult::Ok
+    }
 }
 
 
 /// Trait for a signature verification backend
 pub trait Verifier {
-    type Output: Future<Item=(), Error=VerificationError>;
+    type Output: Future<Item=VerificationResult, Error=()> + Send + Sync + 'static;
 
     fn verify(&self, signature: &Signature) -> Self::Output;
 }
@@ -33,10 +38,10 @@ pub trait Verifier {
 pub struct DummyVerifier();
 
 impl Verifier for DummyVerifier {
-    type Output = FutureResult<(), VerificationError>;
+    type Output = FutureResult<VerificationResult, ()>;
 
     fn verify(&self, _signature: &Signature) -> Self::Output {
-        Ok(()).into()
+        future::ok(VerificationResult::Ok)
     }
 }
 
@@ -63,42 +68,42 @@ impl<I: IdentityRegistry> MultithreadedVerifier<I> {
         }
     }
 
-    fn verify_individual(identity_registry: Arc<I>, message_hash: Blake2bHash, individual: &IndividualSignature) -> Result<(), VerificationError> {
+    fn verify_individual(identity_registry: Arc<I>, message_hash: Blake2bHash, individual: &IndividualSignature) -> VerificationResult {
         if let Some(public_key) = identity_registry.public_key(individual.signer) {
             if public_key.verify_hash(message_hash, &individual.signature) {
-                Ok(())
+                VerificationResult::Ok
             }
             else {
-                Err(VerificationError::Forged)
+                VerificationResult::Forged
             }
         }
         else {
-            Err(VerificationError::UnknownSigner { signer: individual.signer })
+            VerificationResult::UnknownSigner { signer: individual.signer }
         }
     }
 
-    fn verify_multisig(identity_registry: Arc<I>, message_hash: Blake2bHash, multisig: &MultiSignature) -> Result<(), VerificationError> {
+    fn verify_multisig(identity_registry: Arc<I>, message_hash: Blake2bHash, multisig: &MultiSignature) -> VerificationResult {
         let mut aggregated_public_key = AggregatePublicKey::new();
         for signer in multisig.signers.iter() {
             if let Some(public_key) = identity_registry.public_key(signer) {
                 aggregated_public_key.aggregate(&public_key);
             }
             else {
-                return Err(VerificationError::UnknownSigner { signer })
+                return VerificationResult::UnknownSigner { signer }
             }
         }
 
         if aggregated_public_key.verify_hash(message_hash, &multisig.signature) {
-            Ok(())
+            VerificationResult::Ok
         }
         else {
-            Err(VerificationError::Forged)
+            VerificationResult::Forged
         }
     }
 }
 
 impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVerifier<I> {
-    type Output = CpuFuture<(), VerificationError>;
+    type Output = CpuFuture<VerificationResult, ()>;
 
     fn verify(&self, signature: &Signature) -> Self::Output {
         // We clone it so that we can move it into the closure
@@ -107,14 +112,14 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVeri
         let identity_registry = Arc::clone(&self.identity_registry);
 
         self.workers.spawn_fn(move || {
-            match signature {
+            Ok(match signature {
                 Signature::Individual(ref individual) => {
                     Self::verify_individual(identity_registry, message_hash, individual)
                 },
                 Signature::Multi(ref multisig) => {
                     Self::verify_multisig(identity_registry, message_hash, multisig)
                 }
-            }
+            })
         })
     }
 }

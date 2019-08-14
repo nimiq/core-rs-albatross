@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use futures::{Stream, Async, task};
+use futures::task::Task;
 
 use crate::multisig::Signature;
-use crate::store::SignatureStore;
 use crate::evaluator::Evaluator;
 
 
@@ -23,6 +24,7 @@ impl TodoItem {
 pub(crate) struct TodoList<E: Evaluator> {
     list: RwLock<Vec<TodoItem>>,
     evaluator: Arc<E>,
+    //task: Option<Task>
 }
 
 impl<E: Evaluator> TodoList<E> {
@@ -30,10 +32,12 @@ impl<E: Evaluator> TodoList<E> {
         Self {
             list: RwLock::new(Vec::new()),
             evaluator,
+            //task: None,
         }
     }
 
     pub fn put(&self, signature: Signature, level: usize) {
+        trace!("Putting {:?} (level {}) into TODO list", signature, level);
         self.list.write().push(TodoItem {
             signature,
             level
@@ -54,7 +58,7 @@ impl<E: Evaluator> TodoList<E> {
             }
         }
 
-        //debug!("Best score: {}", best_score);
+        //trace!("Best score: {}", best_score);
         if best_score > 0 {
             let mut list = RwLockUpgradableReadGuard::upgrade(list);
             let best_todo = list.swap_remove(best_i);
@@ -65,9 +69,26 @@ impl<E: Evaluator> TodoList<E> {
         }
     }
 
-    pub fn process_todos<F: FnMut(Signature, usize, usize)>(&self, mut f: F) {
+    fn process_todos<F: FnMut(Signature, usize, usize)>(&mut self, mut f: F) {
         while let Some((signature, level, score)) = self.get_best() {
             f(signature, level, score);
         }
     }
 }
+
+
+/*impl<E: Evaluator> Stream for TodoList<E> {
+    type Item = (Signature, usize, usize); // TODO: Use `TodoItem` or some other container type
+    type Error = ();
+
+    fn poll(&mut self) -> Result<Async<Option<Self::Item>>, Self::Error> {
+        self.task.write().get_or_insert_with(task::current);
+
+        if let Some(best) = self.get_best() {
+            Ok(Async::Ready(Some(best)))
+        }
+        else {
+            Ok(Async::NotReady)
+        }
+    }
+}*/

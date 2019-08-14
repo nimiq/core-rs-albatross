@@ -2,5 +2,4 @@
 /// the Handel protocol. The Handel protocol itself is implemented in the nimiq-handel crate.
 
 pub mod view_change;
-pub mod pbft;
 pub mod validators;

@@ -21,8 +21,19 @@ use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
 use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use utils::mutable_once::MutableOnce;
 use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
+#[cfg(feature = "handel")]
+use handel::aggregation::{Aggregation, AggregationEvent};
+#[cfg(feature = "handel")]
+use handel::update::LevelUpdateMessage;
+#[cfg(feature = "handel")]
+use handel::store::SignatureStore;
 
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
+use crate::validator_network::ValidatorNetworkError::NotInPbftPhase;
+#[cfg(feature = "handel")]
+use crate::signature_aggregation::view_change::ViewChangeProtocol;
+
+
 
 #[derive(Clone, Debug, Fail)]
 pub enum ValidatorNetworkError {
@@ -41,6 +52,7 @@ impl ValidatorNetworkError {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum ValidatorNetworkEvent {
     /// When a fork proof was given
     ForkProof(ForkProof),
@@ -80,14 +92,19 @@ struct ValidatorNetworkState {
     agents: HashMap<PeerId, Arc<ValidatorAgent>>,
 
     /// Peers for which we received a `ValidatorInfo` and thus have a BLS public key
+    /// TODO: Make this a HashSet
     validators: HashMap<Arc<ValidatorId>, Arc<ValidatorAgent>>,
 
     /// Subset of validators that only includes validators that are active in the current epoch.
+    /// TODO: map usize (pk_idx) to ValidatorAgent
     active: HashMap<Arc<ValidatorId>, Arc<ValidatorAgent>>,
 
     /// maps (view-change-number, block-number) to the proof that is being aggregated
     /// and a flag whether it's finalized. clear after macro block
+    #[cfg(not(feature = "handel"))]
     view_changes: BTreeMap<ViewChange, ViewChangeProofState>,
+    #[cfg(feature = "handel")]
+    view_changes: BTreeMap<ViewChange, Arc<Aggregation<ViewChangeProtocol>>>,
 
     /// The current proposed macro header and pbft proof.
     ///
@@ -158,8 +175,14 @@ impl ValidatorNetwork {
                     ValidatorAgentEvent::ForkProof(fork_proof) => {
                         this.on_fork_proof(fork_proof);
                     }
+                    #[cfg(not(feature = "handel"))]
                     ValidatorAgentEvent::ViewChange { view_change, public_key, slots } => {
                         this.commit_view_change(view_change, &public_key, slots)
+                            .unwrap_or_else(|e| if !e.is_minor() { warn!("Failed to commit view change: {}", e) });
+                    },
+                    #[cfg(feature = "handel")]
+                    ValidatorAgentEvent::ViewChange(update_message) => {
+                        this.push_view_change(update_message)
                             .unwrap_or_else(|e| if !e.is_minor() { warn!("Failed to commit view change: {}", e) });
                     },
                     ValidatorAgentEvent::PbftProposal(proposal) => {
@@ -272,6 +295,9 @@ impl ValidatorNetwork {
     }
 
     /// Commit a view change to the proofs being build and relay it if it's new
+    ///
+    /// NOTE: Legacy code for gossiping protocol
+    #[cfg(not(feature = "handel"))]
     pub fn commit_view_change(&self, view_change: SignedViewChange, public_key: &PublicKey, slots: u16) -> Result<(), ValidatorNetworkError> {
         let mut state = self.state.write();
 
@@ -306,6 +332,68 @@ impl ValidatorNetwork {
 
             // broadcast new view change signature
             self.broadcast_active(Message::ViewChange(Box::new(view_change.clone())));
+        }
+
+        Ok(())
+    }
+
+
+    /// Starts a new view-change
+    ///
+    /// NOTE: The validator agent already checked if this view change is relevant (i.e. in current epoch)
+    #[cfg(feature = "handel")]
+    pub fn start_view_change(&self, signed_view_change: SignedViewChange) {
+        let view_change = signed_view_change.message.clone();
+        let mut state = self.state.write();
+
+        if let Some(aggregation) = state.view_changes.get(&view_change) {
+            warn!("{:?} already exists with {} votes", signed_view_change.message, aggregation.protocol.total_votes());
+        }
+        else {
+            let validators = self.blockchain.current_validators().clone();
+
+            // map validator index to peer
+            // TODO: This is temporary. Calcualte this mapping at the start of each epoch
+            let mut peers: HashMap<usize, Arc<Peer>> = HashMap::new();
+            for (i, g) in validators.iter_groups().enumerate() {
+                let vid = ValidatorId::from_public_key(&g.1.compressed());
+                if let Some(agent) = state.validators.get(&vid) {
+                    peers.insert(i, Arc::clone(&agent.peer));
+                }
+            }
+
+            let aggregation = ViewChangeProtocol::start(signed_view_change, validators, peers);
+
+            // register handler for when done and start (or use Future)
+            {
+                let view_change = view_change.clone();
+                aggregation.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
+                    match event {
+                        AggregationEvent::Complete { best } => {
+                            info!("Complete: {:?}", view_change);
+                            let proof = ViewChangeProof::new(best.signature, best.signers);
+                            this.notifier.read()
+                                .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.clone(), proof))
+                        },
+                        _ => {}
+                    }
+                }));
+            }
+
+            state.view_changes.insert(view_change, aggregation);
+        }
+    }
+
+    /// Pushes the update to the signature aggregation for this view-change
+    #[cfg(feature = "handel")]
+    fn push_view_change(&self, update_message: LevelUpdateMessage<ViewChange>) -> Result<(), ValidatorNetworkError> {
+        //debug!("Received view change level update: {:?}", update_message);
+        let LevelUpdateMessage { update, message: view_change } = update_message;
+        let state = self.state.read();
+
+        if let Some(aggregation) = state.view_changes.get(&view_change) {
+            //debug!("Pushing it into aggregation: {:?}", aggregation);
+            aggregation.push_update(update);
         }
 
         Ok(())

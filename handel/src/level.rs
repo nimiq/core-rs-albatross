@@ -59,6 +59,7 @@ impl Level {
                     ids.shuffle(&mut rng);
 
                     let size = ids.len();
+                    trace!("Level {} peers: {:?}", i, ids);
                     let level = Level::new(i, ids, send_expected_full_size);
 
                     if !first_active {
@@ -91,20 +92,25 @@ impl Level {
     }
 
     pub fn select_next_peers(&self, count: usize) -> Vec<usize> {
-        let size = min(count, self.peer_ids.len());
-        let mut selected: Vec<usize> = Vec::new();
-
-        let mut state = self.state.write();
-        for _ in 0..size {
-            // NOTE: Unwrap is safe, since we make sure at least `size` elements are in `self.peers`
-            selected.push(*self.peer_ids.get(state.send_peers_pos).unwrap());
-            state.send_peers_pos += 1;
-            if state.send_peers_pos >= self.peer_ids.len() {
-                state.send_peers_pos = 0;
-            }
+        if self.id == 0 {
+            vec![]
         }
+        else {
+            let size = min(count, self.peer_ids.len());
+            let mut selected: Vec<usize> = Vec::new();
 
-        selected
+            let mut state = self.state.write();
+            for _ in 0..size {
+                // NOTE: Unwrap is safe, since we make sure at least `size` elements are in `self.peers`
+                selected.push(*self.peer_ids.get(state.send_peers_pos).unwrap());
+                state.send_peers_pos += 1;
+                if state.send_peers_pos >= self.peer_ids.len() {
+                    state.send_peers_pos = 0;
+                }
+            }
+
+            selected
+        }
     }
 
     pub fn update_signature_to_send(&self, signature: &Signature) -> bool {

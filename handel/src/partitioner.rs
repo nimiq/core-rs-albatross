@@ -1,7 +1,8 @@
 use std::ops::RangeInclusive;
 
+use utils::log2::log2;
+
 use crate::multisig::MultiSignature;
-use crate::utils::log2;
 
 
 /// Errors that can happen during partitioning
@@ -95,7 +96,8 @@ impl Partitioner for BinomialPartitioner {
     }
 
     /// TODO: Why do we have `_level` as argument?
-    fn combine(&self, signatures: Vec<&MultiSignature>, _level: usize) -> Option<MultiSignature> {
+    fn combine(&self, signatures: Vec<&MultiSignature>, level: usize) -> Option<MultiSignature> {
+        //debug!("Combining signatures for level {}: {:?}", level, signatures);
         let mut combined = (*signatures.first()?).clone();
 
         for signature in signatures.iter().skip(1) {
@@ -103,6 +105,7 @@ impl Partitioner for BinomialPartitioner {
                 .unwrap_or_else(|e| panic!("Failed to combine signatures: {}", e));
         }
 
+        //debug!("Combined signature: {:?}", combined);
         Some(combined)
     }
 

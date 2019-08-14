@@ -52,7 +52,7 @@ use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::{PassThroughListener, PassThroughNotifier};
 #[cfg(feature = "handel")]
-use handel::message::AggregationMessage;
+use handel::update::{LevelUpdate, LevelUpdateMessage};
 
 
 
@@ -167,7 +167,7 @@ pub enum Message {
 
     // Albatross / Handel - experimental. Use "handel" feature
     #[cfg(feature = "handel")]
-    HandelViewChange(Box<AggregationMessage<ViewChange>>),
+    HandelViewChange(Box<LevelUpdateMessage<ViewChange>>),
 }
 
 impl Message {
@@ -512,6 +512,9 @@ pub struct MessageNotifier {
     pub pbft_proposal:  RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
     pub pbft_prepare: RwLock<PassThroughNotifier<'static, SignedPbftPrepareMessage>>,
     pub pbft_commit: RwLock<PassThroughNotifier<'static, SignedPbftCommitMessage>>,
+    // Albatross / Handel - experimental. Use "handel" feature
+    #[cfg(feature = "handel")]
+    pub handel_view_change: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<ViewChange>>>,
 }
 
 impl MessageNotifier {
@@ -563,6 +566,9 @@ impl MessageNotifier {
             Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
             Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
             Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
+            // Albatross / Handel - experimental. Use "handel" feature
+            #[cfg(feature = "handel")]
+            Message::HandelViewChange(update) => self.handel_view_change.read().notify(*update),
 
             // catch unimplemented
             _ => info!("Received message for unimplemented type: {}", msg.ty())

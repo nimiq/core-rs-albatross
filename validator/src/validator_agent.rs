@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::cmp::Ordering;
 use std::collections::binary_heap::BinaryHeap;
 
-use network_primitives::validator_info::SignedValidatorInfo;
+use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
 use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
 use parking_lot::RwLock;
@@ -14,12 +14,17 @@ use primitives::policy;
 use primitives::validators::IndexedSlot;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
+#[cfg(feature = "handel")]
+use handel::update::LevelUpdateMessage;
 
 
 pub enum ValidatorAgentEvent {
     ValidatorInfo(SignedValidatorInfo),
     ForkProof(ForkProof),
+    #[cfg(not(feature = "handel"))]
     ViewChange { view_change: SignedViewChange, public_key: PublicKey, slots: u16 },
+    #[cfg(feature = "handel")]
+    ViewChange(LevelUpdateMessage<ViewChange>),
     PbftProposal(SignedPbftProposal),
     PbftPrepare { prepare: SignedPbftPrepareMessage, public_key: PublicKey, slots: u16 },
     PbftCommit { commit: SignedPbftCommitMessage, public_key: PublicKey, slots: u16 }
@@ -87,9 +92,7 @@ impl ValidatorAgent {
             .register(weak_passthru_listener(Arc::downgrade(this), |this, fork_proof| {
                 this.on_fork_proof_message(fork_proof);
             }));
-        this.peer.channel.msg_notifier.view_change.write()
-            .register(weak_passthru_listener( Arc::downgrade(this),
-                |this, signed_view_change| this.on_view_change_message(signed_view_change)));
+
         this.peer.channel.msg_notifier.pbft_proposal.write()
             .register(weak_passthru_listener(Arc::downgrade(this), |this, proposal| {
                 trace!("Received macro block proposal: {:?}", &proposal);
@@ -101,6 +104,21 @@ impl ValidatorAgent {
         this.peer.channel.msg_notifier.pbft_commit.write()
             .register(weak_passthru_listener(Arc::downgrade(this),
                 |this, commit| this.on_pbft_commit_message(commit)));
+
+        #[cfg(not(feature = "handel"))]
+        this.peer.channel.msg_notifier.view_change.write()
+            .register(weak_passthru_listener( Arc::downgrade(this), |this, signed_view_change| {
+                #[cfg(feature = "handel")]
+                this.on_view_change_message(signed_view_change);
+
+                warn!("Ignoring legacy view change message.");
+            }));
+        #[cfg(feature = "handel")]
+        this.peer.channel.msg_notifier.handel_view_change.write()
+            .register(weak_passthru_listener( Arc::downgrade(this), |this, update_message| {
+                this.on_view_change_message(update_message);
+            }));
+
         this.blockchain.notifier.write()
             .register(weak_listener(Arc::downgrade(this), |this, event| {
                 if let BlockchainEvent::Extended(_) = event {
@@ -184,6 +202,7 @@ impl ValidatorAgent {
     }
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
+    #[cfg(not(feature = "handel"))]
     fn on_view_change_message(&self, view_change: SignedViewChange) {
         trace!("[VIEW-CHANGE] Received: number=#{}.{} signer_idx={} peer={}",
             view_change.message.block_number,
@@ -208,6 +227,36 @@ impl ValidatorAgent {
         else {
             debug!("[VIEW-CHANGE] Invalid validator index: {}", view_change.signer_idx);
         }
+    }
+
+    #[cfg(feature = "handel")]
+    fn on_view_change_message(&self, update_message: LevelUpdateMessage<ViewChange>) {
+        trace!("[VIEW-CHANGE] Received: number=#{}.{} update={:?} peer={}",
+               update_message.message.block_number,
+               update_message.message.new_view_number,
+               update_message.update,
+               self.peer.peer_address());
+
+        let blockchain_epoch = policy::epoch_at(self.blockchain.block_number());
+        let view_change_epoch = policy::epoch_at(update_message.message.block_number);
+        match view_change_epoch.cmp(&blockchain_epoch) {
+            Ordering::Greater => {
+                debug!("[VIEW-CHANGE] Ignoring view change message for a future epoch: epoch={} block_number=#{}",
+                       view_change_epoch,
+                       update_message.message.block_number);
+                return;
+            },
+            Ordering::Less => {
+                debug!("[VIEW-CHANGE] Ignoring view change message for an old epoch: epoch={} block_number=#{}",
+                       view_change_epoch,
+                       update_message.message.block_number);
+                return;
+            },
+            Ordering::Equal => (),
+        };
+
+
+        self.notifier.read().notify(ValidatorAgentEvent::ViewChange(update_message))
     }
 
     /// When a pbft block proposal is received
@@ -308,5 +357,9 @@ impl ValidatorAgent {
         else {
             warn!("[PBFT-COMMIT] Invalid validator index: {}", commit.signer_idx);
         }
+    }
+
+    pub fn validator_info(&self) -> Option<ValidatorInfo> {
+        self.state.read().validator_info.as_ref().map(|signed| signed.message.clone())
     }
 }

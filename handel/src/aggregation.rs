@@ -1,0 +1,383 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Weak};
+use std::fmt;
+
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use futures::{future, Future};
+
+use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
+use utils::mutable_once::MutableOnce;
+use utils::timers::Timers;
+
+use crate::verifier::Verifier;
+use crate::store::SignatureStore;
+use crate::level::Level;
+use crate::evaluator::Evaluator;
+use crate::multisig::{MultiSignature, IndividualSignature, Signature};
+use crate::config::Config;
+use crate::todo::TodoList;
+use crate::protocol::Protocol;
+use crate::update::LevelUpdate;
+
+
+
+
+#[derive(Clone, Debug)]
+pub enum AggregationEvent {
+    Complete { best: MultiSignature },
+    LevelComplete { level: usize },
+    Aborted,
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum AggregationTimer {
+    Timeout,
+    Update,
+}
+
+
+struct AggregationState {
+    result: Option<MultiSignature>,
+
+    /// Our contribution
+    contribution: Option<IndividualSignature>,
+
+    next_level_timeout: usize,
+}
+
+
+pub struct Aggregation<P: Protocol> {
+    /// Handel configuration, including the hash being signed, this node's contributed signature, etc.
+    config: Config,
+
+    /// Levels
+    levels: Vec<Level>,
+
+    /// Signatures that still need to be processed
+    todos: Arc<TodoList<P::Evaluator>>,
+
+    /// The underlying protocol
+    pub protocol: P,
+
+    /// Timers for updates and level timeouts
+    timers: Timers<AggregationTimer>,
+
+    /// Internal state
+    state: RwLock<AggregationState>,
+
+    /// Weak reference to the Aggregation itself
+    self_weak: MutableOnce<Weak<Self>>,
+
+    /// Notifications for completion
+    pub notifier: RwLock<PassThroughNotifier<'static, AggregationEvent>>,
+}
+
+
+impl<P: Protocol + fmt::Debug> Aggregation<P> {
+    pub fn new(protocol: P, config: Config) -> Arc<Self> {
+        let levels = Level::create_levels(protocol.partitioner());
+        let todos = Arc::new(TodoList::new(protocol.evaluator()));
+
+        // create aggregation
+        let this = Arc::new(Self {
+            config,
+            levels,
+            todos,
+            protocol,
+            timers: Timers::new(),
+            state: RwLock::new(AggregationState {
+                result: None,
+                next_level_timeout: 0,
+                contribution: None,
+            }),
+            self_weak: MutableOnce::new(Weak::new()),
+            notifier: RwLock::new(PassThroughNotifier::new()),
+        });
+
+        Self::init_background(&this);
+
+        this
+    }
+
+    pub fn push_contribution(&self, contribution: IndividualSignature) {
+        assert_eq!(contribution.signer, self.protocol.node_id());
+
+        let mut state = self.state.write();
+        if state.contribution.is_none() {
+            state.contribution = Some(contribution.clone());
+            let signature = Signature::Individual(contribution.clone());
+
+            // put our own contribution into store at level 0
+            self.protocol.store().write().put(signature.clone(), 0);
+
+            // drop state before sending updates
+            drop(state);
+
+            // check for completed levels
+            self.check_completed_level(&signature, 0);
+            self.check_final_signature();
+
+            // send level 0
+            let level = self.levels.get(0).expect("Level 0 missing");
+            self.send_update(contribution.as_multisig(), level, self.config.peer_count);
+        }
+        else {
+            error!("Contribution already exists");
+        }
+    }
+
+    fn init_background(this: &Arc<Self>) {
+        unsafe { this.self_weak.replace(Arc::downgrade(&this)) };
+
+        // register timer for updates
+        /*let weak = Arc::downgrade(this);
+        this.timers.set_interval(AggregationTimer::Update, move || {
+            let this = upgrade_weak!(weak);
+            trace!("Update for {:?}", this.protocol);
+            let store = this.protocol.store();
+            let store = store.read();
+            // NOTE: Skip level 0
+            for level in this.levels.iter().skip(1) {
+                // send update
+                if let Some(multisig) = store.combined(level.id - 1) {
+                    this.send_update(multisig, &level, this.config.update_count);
+                }
+            }
+        }, this.config.update_interval);*/
+
+        // register timer for level timeouts
+        // TODO: This ignores the timeout strategy
+        let weak = Arc::downgrade(this);
+        this.timers.set_interval(AggregationTimer::Timeout, move || {
+            let this = upgrade_weak!(weak);
+            let mut state = this.state.write();
+            let level = state.next_level_timeout;
+            if level < this.num_levels() {
+                trace!("Timeout for {:?} at level {}", this.protocol, level);
+                state.next_level_timeout += 1;
+                drop(state);
+                this.start_level(level);
+            }
+            else {
+                this.timers.clear_interval(&AggregationTimer::Timeout);
+            }
+        }, this.config.timeout);
+
+        // spawn thread handling TODOs
+        //tokio::spawn(Arc::clone(&this.todos).into_future());
+    }
+
+    pub fn num_levels(&self) -> usize {
+        self.levels.len()
+    }
+
+    /// Starts level `level`
+    fn start_level(&self, level: usize) {
+        let level = self.levels.get(level)
+            .unwrap_or_else(|| panic!("Timeout for invalid level {}", level));
+
+        trace!("Starting level {}: Peers: {:?}", level.id, level.peer_ids);
+
+        level.start();
+        if level.id > 0 {
+            if let Some(best) = self.protocol.store().read().combined(level.id - 1) {
+                self.send_update(best, level, self.config.peer_count);
+            }
+        }
+    }
+
+    /// Send updated `multisig` for `level` to `count` peers
+    fn send_update(&self, multisig: MultiSignature, level: &Level, count: usize) {
+        let peer_ids = level.select_next_peers(count);
+
+        if !peer_ids.is_empty() {
+            // TODO: optimize, if the multi-sig, only contains our individual, we don't have to send it
+            let individual = if level.receive_complete() { None } else { self.state.read().contribution.clone() };
+            let update_message = LevelUpdate::new(multisig, individual, level.id, self.protocol.node_id());
+
+            trace!("Sending updates to {:?}: {:#?}", peer_ids, update_message);
+
+            for peer_id in peer_ids {
+                assert_ne!(peer_id, self.protocol.node_id(), "Nodes must not send updates to them-self");
+                self.protocol.send_to(peer_id, update_message.clone())
+                    .unwrap_or_else(|e| error!("Failed to send update message."))
+            }
+        }
+    }
+
+    /// Check if a level was completed
+    fn check_completed_level(&self, signature: &Signature, level: usize) {
+        let level = self.levels.get(level)
+            .unwrap_or_else(|| panic!("Invalid level: {}", level));
+
+        trace!("Checking for completed level {}: signers={:?}", level.id, signature.signers().collect::<Vec<usize>>());
+
+        let store = self.protocol.store();
+        let store = store.upgradable_read();
+
+        // check if level is completed
+        {
+            let mut level_state = level.state.write();
+
+            if level_state.receive_completed {
+                trace!("check_completed_level: receive_completed=true");
+                return
+            }
+
+            let best = store.best(level.id)
+                .unwrap_or_else(|| panic!("Expected a best signature for level {}", level.id));
+
+            trace!("check_completed_level: level={}, best.len={}, num_peers={}", level.id, best.len(), level.num_peers());
+            if best.len() == level.num_peers() {
+                trace!("Level {} complete", level.id);
+                level_state.receive_completed = true;
+
+                if level.id + 1 < self.levels.len() {
+                    // activate next level
+                    self.start_level(level.id + 1)
+                }
+            }
+        }
+
+        for i in level.id + 1 .. self.levels.len() {
+            if let Some(multisig) = store.combined(i - 1) {
+                let level = self.levels.get(i)
+                    .unwrap_or_else(|| panic!("No level {}", i));
+                if level.update_signature_to_send(&multisig.clone().into()) { // XXX Do this without cloning
+                    self.send_update(multisig, &level, self.config.peer_count);
+                }
+            }
+        }
+    }
+
+    /// Check if the best signature is final
+    fn check_final_signature(&self) -> bool {
+        // first check if we're already done
+        let state = self.state.upgradable_read();
+        if let Some(multisig) = &state.result {
+            return true;
+        }
+
+        let last_level = self.levels.last().expect("No levels");
+        let store = self.protocol.store();
+        let store = store.read();
+
+        if let Some(combined) = store.combined(last_level.id) {
+            if self.protocol.evaluator().is_final(&combined.clone().into()) { // XXX Do this without cloning
+                trace!("Last level combined: {:#?}", combined);
+
+                let mut state = RwLockUpgradableReadGuard::upgrade(state);
+                state.result = Some(combined.clone());
+
+                self.notifier.read().notify(AggregationEvent::Complete {
+                    best: combined,
+                });
+
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn result(&self) -> Option<MultiSignature> {
+        self.state.read().result.clone()
+    }
+
+    pub fn push_update(&self, update: LevelUpdate) {
+        if self.state.read().result.is_some() {
+            // NOP, if we already have a valid multi-signature
+            return;
+        }
+
+        let LevelUpdate {
+            origin, level, multisig, individual
+        } = update;
+
+        trace!("Level Update: origin={}, level={}, has_individual={}", origin, level, individual.is_some());
+
+        // Future that verifies the individual signature and puts it into the TODO list
+        // NOTE: We use `map` instead of `and_then`, because `and_then` needs to return a future,
+        //       and `upgrade_weak!` might return `()`.
+        let individual_fut = if let Some(individual) = individual {
+            let sig = Signature::Individual(individual);
+            let weak = self.self_weak.clone();
+            future::Either::A(self.protocol
+                .verify(&sig)
+                .map(move |result| {
+                    if result.is_ok() {
+                        let this = upgrade_weak!(weak);
+                        this.todos.put(sig, level as usize);
+                    }
+                    else {
+                        warn!("Invalid signature: {:?}", result);
+                    }
+                }))
+        }
+        else {
+            future::Either::B(future::ok::<(), ()>(()))
+        };
+
+        // Future that verifies the multi-signature and puts it into the TODO list
+        let multisig_fut = {
+            let sig = Signature::Multi(multisig);
+            let weak = Weak::clone(&self.self_weak);
+            self.protocol
+                .verify(&sig)
+                .map(move |result| {
+                    if result.is_ok() {
+                        let this = upgrade_weak!(weak);
+                        this.todos.put(sig, level as usize);
+                    }
+                    else {
+                        warn!("Invalid signature: {:?}", result);
+                    }
+                })
+        };
+
+        // Creates a future that will first verify the signatures and then gets all good TODOs
+        // and applies them.
+        // TODO: The processing should not be done in this spawn. It should run in one seperate Spawn
+        //       that processes the whole TODO list until completion.
+        let process_fut = {
+            let weak = Weak::clone(&self.self_weak);
+            individual_fut
+                .join(multisig_fut)
+                .map(move |_| {
+                    // continuously put best todo into store, until there is no good one anymore
+                    let this = upgrade_weak!(weak);
+
+                    // get store and acquire write lock
+                    let store = this.protocol.store();
+
+                    while let Some((signature, level, score)) = this.todos.get_best() {
+                        trace!("Processing: score={}, level={}: {:?}", score, level, signature);
+
+                        // TODO: put signature from todo into store - is this correct?
+                        let mut store = store.write();
+                        store.put(signature.clone(), level);
+                        // drop store before we check for completed levels
+                        drop(store);
+
+                        this.check_completed_level(&signature, level);
+                        this.check_final_signature();
+                    }
+                })
+                .map_err(|e| {
+                    // Technically nothing here can fail, but we need to handle that case anyway
+                    warn!("The signature processing future somehow failed: {:?}", e);
+                    e
+                })
+        };
+
+        tokio::spawn(process_fut);
+    }
+}
+
+
+impl<P: Protocol + fmt::Debug> fmt::Debug for Aggregation<P> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        let state = self.state.read();
+        write!(f, "Aggregation {{ protocol: {:?}, contribution: {:?}, result: {:?} }}", self.protocol, state.contribution, state.result)
+    }
+}

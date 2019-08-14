@@ -1,5 +1,5 @@
 name = "dev-albatross"
-seed_message = "Albatross TestNet"
+seed_message = "Albatross DevNet"
 signing_key = "230cf5070e9362108e3549360b84be23826c23839124b917629fb525db3baece"
 timestamp="2019-05-10T23:56:52.776772644+00:00"
 
@@ -13,3 +13,4 @@ validator_key = "8dee007dd1af35c79b6abb901a787f1ee97d89cd4b6390987c9f6e2b9a135cd
 [[accounts]]
 address = "NQ57 UC15 80L7 LHCK DBTB 709R M91Q PRG5 DL00"
 balance = 1000000
+

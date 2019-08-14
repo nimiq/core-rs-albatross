@@ -461,7 +461,7 @@ impl<B: AbstractBlockchain<'static> + 'static> NetworkAgent<B> {
                 return;
             }
 
-            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss) && !address.is_globally_reachable(true) {
+            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss) /*&& !address.is_globally_reachable(true)*/ {
                 self.channel.close(CloseType::AddrNotGloballyReachable);
                 return;
             }
