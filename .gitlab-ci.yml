@@ -1,10 +1,4 @@
 image: 'rust:latest'
-
-stages:
-  - test
-  - doc
-  - build
-
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
   APT_CACHE_DIR: $CI_PROJECT_DIR/apt
@@ -12,6 +6,7 @@ variables:
 stages:
   - build
   - test
+  - coverage
   - deploy
 
 .build:
@@ -20,6 +15,9 @@ stages:
     - rustc --version
     - cargo --version
     - cargo build --all
+  artifacts:
+    paths:
+      - target/debug/nimiq-client
 
 .test:
   stage: test
@@ -29,7 +27,7 @@ stages:
     - cargo test --all
 
 .coverage:
-  stage: test
+  stage: coverage
   script:
     - rustc --version
     - cargo --version
