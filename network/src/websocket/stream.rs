@@ -222,7 +222,7 @@ impl NimiqMessageStream {
             // Detect if this is a new message.
             if self.msg_buf.is_none() {
 
-                if let Some(msg_size) = NimiqMessage::peek_length(chunk) {
+                if let Ok(msg_size) = NimiqMessage::peek_length(chunk) {
                     if msg_size > MAX_MESSAGE_SIZE {
                         error!("Max message size exceeded ({} > {})", msg_size, MAX_MESSAGE_SIZE);
                         return Err(Error::MessageSizeExceeded);

@@ -24,7 +24,7 @@ extern crate nimiq_utils as utils;
 
 use std::fmt::Display;
 use std::io;
-use std::io::Read;
+use std::io::{Read, Cursor, Seek, SeekFrom};
 
 use byteorder::{BigEndian, ByteOrder};
 use parking_lot::RwLock;
@@ -204,13 +204,17 @@ impl Message {
         }
     }
 
-    pub fn peek_length(buffer: &[u8]) -> Option<usize> {
-        // FIXME: support for message types > 253 is pending (it changes the length position in the chunk).
-        // The magic number is 4 bytes and the type is 1 byte, so we want to start at the 6th byte (index 5), and the length field is 4 bytes.
-        if buffer.len() >= 10 {
-            return Some(BigEndian::read_u32(&buffer[5..9]) as usize);
-        }
-        None
+    pub fn peek_length(buffer: &[u8]) -> Result<usize, SerializingError> {
+        let mut c = Cursor::new(buffer);
+
+        // skip 4 bytes of magic
+        c.seek(SeekFrom::Start(4));
+
+        // skip type (uvar)
+        let _ = uvar::deserialize(&mut c)?;
+        let n = u32::deserialize(&mut c)?;
+
+        Ok(n as usize)
     }
 }
 
@@ -221,7 +225,7 @@ impl Deserialize for Message {
         pub struct ReaderComputeCrc32<'a, T: 'a + ReadBytesExt> {
             reader: &'a mut T,
             crc32: Crc32Computer,
-            nth_element: u32
+            at_checksum: bool,
         }
 
         impl<'a, T: ReadBytesExt> ReaderComputeCrc32<'a, T> {
@@ -229,7 +233,7 @@ impl Deserialize for Message {
                 ReaderComputeCrc32 {
                     reader,
                     crc32: Crc32Computer::default(),
-                    nth_element: 0
+                    at_checksum: false,
                 }
             }
         }
@@ -238,19 +242,18 @@ impl Deserialize for Message {
             fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
                 let size = self.reader.read(buf)?;
                 if size > 0 {
-                    self.nth_element += 1;
-
-                    // checksum is the 4th element. Use 0's instead for checksum computation.
-                    if self.nth_element != 4 {
-                        self.crc32.update(&buf[..size]);
-                    } else {
-                        self.crc32.update(&[0, 0, 0, 0]);
+                    if self.at_checksum {
+                        // We're at the checksum, so'll just ignore it
+                        let zeros = [0u8; 4];
+                        self.crc32.update(&zeros);
+                    }
+                    else {
+                        self.crc32.update(&buf[.. size]);
                     }
                 }
                 Ok(size)
             }
         }
-
 
         let mut crc32_reader = ReaderComputeCrc32::new(reader);
         let magic: u32 = Deserialize::deserialize(&mut crc32_reader)?;
@@ -261,7 +264,9 @@ impl Deserialize for Message {
         let ty: MessageType = Deserialize::deserialize(&mut crc32_reader)?;
         // Length is ignored (just like in JS implementation).
         let _length: u32 = Deserialize::deserialize(&mut crc32_reader)?;
+        crc32_reader.at_checksum = true;
         let checksum: u32 = Deserialize::deserialize(&mut crc32_reader)?;
+        crc32_reader.at_checksum = false;
 
         let message: Message = match ty {
             MessageType::Version => Message::Version(Deserialize::deserialize(&mut crc32_reader)?),
