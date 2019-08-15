@@ -1,5 +1,3 @@
-#![feature(type_alias_enum_variants)]
-
 use nimiq_account::Receipt;
 use nimiq_block::*;
 use nimiq_blockchain::Blockchain;

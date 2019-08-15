@@ -1,5 +1,3 @@
-#![feature(type_alias_enum_variants)]
-
 #[macro_use]
 extern crate json;
 #[macro_use]

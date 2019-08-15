@@ -1,5 +1,3 @@
-#![feature(type_alias_enum_variants)]
-
 use std::convert::TryFrom;
 use std::sync::Arc;
 
