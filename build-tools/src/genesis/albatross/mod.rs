@@ -230,6 +230,7 @@ impl GenesisBuilder {
             parent_hash: [0u8; 32].into(),
             state_root,
             extrinsics_root,
+            transactions_root: [0u8; 32].into(),
             timestamp: u64::try_from(timestamp.timestamp_millis())
                 .map_err(|_| GenesisBuilderError::InvalidTimestamp(timestamp))?,
         };

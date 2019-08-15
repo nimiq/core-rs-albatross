@@ -57,6 +57,7 @@ pub enum BlockError {
     InvalidJustification,
     InvalidSlash,
     InvalidViewNumber,
+    InvalidTransactionsRoot,
     InvalidValidators,
 }
 

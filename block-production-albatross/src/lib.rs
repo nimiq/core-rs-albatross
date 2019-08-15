@@ -1,25 +1,25 @@
 extern crate nimiq_block_albatross as block;
 extern crate nimiq_blockchain_albatross as blockchain;
+extern crate nimiq_blockchain_base as blockchain_base;
+extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_primitives as network_primitives;
-extern crate nimiq_bls as bls;
 extern crate nimiq_primitives as primitives;
-extern crate nimiq_blockchain_base as blockchain_base;
 
 use std::sync::Arc;
 
 use beserial::Serialize;
-use block::{Block, MicroBlock, PbftProposal, MacroHeader, MicroExtrinsics, MacroExtrinsics, MicroHeader, ViewChangeProof, ViewChanges};
+use block::{Block, MacroExtrinsics, MacroHeader, MicroBlock, MicroExtrinsics, MicroHeader, PbftProposal, ViewChangeProof, ViewChanges};
 use block::ForkProof;
+use block::MicroJustification;
 use blockchain::blockchain::Blockchain;
+use blockchain_base::AbstractBlockchain;
+use bls::bls12_381::KeyPair;
 use hash::Hash;
 use mempool::Mempool;
-use bls::bls12_381::KeyPair;
-use block::MicroJustification;
-use blockchain_base::AbstractBlockchain;
-
+use primitives::policy;
 
 pub struct BlockProducer<'env> {
     pub blockchain: Arc<Blockchain<'env>>,
@@ -117,6 +117,9 @@ impl<'env> BlockProducer<'env> {
 
         let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();
 
+        let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number))
+            .expect("Failed to compute transactions root, micro blocks missing");
+
         MacroHeader {
             version: Block::VERSION,
             validators: validators.into(),
@@ -128,6 +131,7 @@ impl<'env> BlockProducer<'env> {
             state_root,
             extrinsics_root,
             timestamp,
+            transactions_root,
         }
     }
 

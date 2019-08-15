@@ -64,6 +64,7 @@ fn it_can_convert_macro_block_into_slots() {
             parent_hash: hash.clone(),
             state_root: hash.clone(),
             extrinsics_root: hash.clone(),
+            transactions_root: [0u8; 32].into(),
             timestamp: 0,
         },
         justification: None,

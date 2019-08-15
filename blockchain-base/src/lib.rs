@@ -145,6 +145,7 @@ pub enum PushError<BE: Debug + Clone + PartialEq + Eq> {
     DuplicateTransaction,
     AccountsError(AccountError),
     InvalidFork,
+    BlockchainError(BlockchainError),
 }
 
 impl<BE: Debug + Clone + PartialEq + Eq>  From<BE> for PushError<BE> {

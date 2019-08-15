@@ -11,7 +11,7 @@ use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
 use beserial::Serialize;
-use block::{Block, BlockHeader, BlockError, BlockType, MacroBlock, MacroExtrinsics, MicroBlock, ForkProof, ViewChange, ViewChanges, ViewChangeProof};
+use block::{Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroExtrinsics, MicroBlock, ViewChange, ViewChangeProof, ViewChanges};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -29,11 +29,12 @@ use primitives::validators::{IndexedSlot, Slots, Validator, Validators};
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
+use utils::merkle;
 use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
-use crate::reward_registry::{EpochStateError, SlashRegistry, SlashedSlots};
+use crate::reward_registry::{EpochStateError, SlashedSlots, SlashRegistry};
 use crate::transaction_cache::TransactionCache;
 
 pub type PushResult = blockchain_base::PushResult;
@@ -251,6 +252,7 @@ impl<'env> Blockchain<'env> {
         (slots, validators)
     }
 
+    /// This method is called by the validator only.
     pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: Option<&ViewChangeProof>) -> Result<(), PushError> {
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash(), false, None);
@@ -326,11 +328,19 @@ impl<'env> Blockchain<'env> {
         }
 
         if let BlockHeader::Macro(ref header) = header {
-
             // Check if the parent macro hash matches the current macro head hash
             if header.parent_macro_hash != self.state().macro_head_hash {
                 warn!("Rejecting block - wrong patent macro hash");
                 return Err(PushError::InvalidSuccessor);
+            }
+
+            // Since this method is called by the validator only,
+            // we are very strict and always check the micro block root.
+            let transactions_root = self.get_transactions_root(policy::epoch_at(header.block_number))
+                .ok_or(PushError::BlockchainError(BlockchainError::FailedLoadingMainChain))?;
+            if header.transactions_root != transactions_root {
+                warn!("Rejecting block - wrong transactions root");
+                return Err(PushError::InvalidBlock(BlockError::InvalidTransactionsRoot));
             }
         }
 
@@ -412,6 +422,16 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidBlock(BlockError::NoJustification));
                     }
                 },
+            }
+
+            // Check micro block root if micro blocks are available.
+            // TODO: Should we expose a flag to require this check?
+            let computed_micro_block_root = self.get_transactions_root(policy::epoch_at(macro_block.header.block_number));
+            if let Some(computed_micro_block_root) = computed_micro_block_root {
+                if computed_micro_block_root != macro_block.header.transactions_root {
+                    warn!("Rejecting block - Transactions root doesn't match real transactions root");
+                    return Err(PushError::InvalidBlock(BlockError::InvalidTransactionsRoot));
+                }
             }
 
             let computed_extrinsics: MacroExtrinsics = self.next_slots().into();
@@ -767,6 +787,27 @@ impl<'env> Blockchain<'env> {
 
     pub fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Block> {
         self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
+    }
+
+    pub fn get_transactions_root(&self, epoch: u32) -> Option<Blake2bHash> {
+        let mut hashes = Vec::new();
+
+        let first_block = policy::first_block_of(epoch);
+        let first_block = self.get_block_at(first_block, true)?;
+        hashes.extend(first_block.transactions().unwrap().iter().map(|tx| tx.hash()));
+
+        // Excludes current block and macro block.
+        let blocks = self.get_blocks(&first_block.hash(), policy::EPOCH_LENGTH - 2, true, Direction::Forward);
+        // We need to make sure that we have all micro blocks.
+        if blocks.len() as u32 != policy::EPOCH_LENGTH - 2 {
+            return None;
+        }
+
+        for block in blocks {
+            hashes.extend(block.transactions().unwrap().iter().map(|tx| tx.hash()));
+        }
+
+        Some(merkle::compute_root_from_hashes::<Blake2bHash>(&hashes))
     }
 
     pub fn height(&self) -> u32 {

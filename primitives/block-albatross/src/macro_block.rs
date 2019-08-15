@@ -43,6 +43,8 @@ pub struct MacroHeader {
     pub state_root: Blake2bHash,
     pub extrinsics_root: Blake2bHash,
 
+    pub transactions_root: Blake2bHash,
+
     pub timestamp: u64,
 }
 
