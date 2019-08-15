@@ -213,7 +213,8 @@ impl Validator {
             },
 
             BlockchainEvent::Extended(hash) => {
-                self.on_blockchain_extended(hash)
+                self.on_blockchain_extended(hash);
+                self.validator_network.on_blockchain_extended();
             },
 
             BlockchainEvent::Rebranched(old_chain, new_chain) => {
