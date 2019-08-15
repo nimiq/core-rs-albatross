@@ -92,7 +92,10 @@ impl NetworkConnection {
     }
 
     pub fn close(&self, ty: CloseType) {
-        self.peer_sink.close(ty, None);
+        if let Err(error) = self.peer_sink.close(ty, None) {
+            debug!("Error closing connection to {}: {}",
+                self.address_info, error);
+        }
         let notifier = Arc::clone(&self.notifier);
         tokio::spawn(futures::lazy(move || {
             notifier.read().notify(PeerStreamEvent::Close(ty));
