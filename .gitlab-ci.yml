@@ -6,6 +6,7 @@ variables:
 stages:
   - build
   - test
+  - image
   - coverage
   - deploy
 
@@ -38,9 +39,9 @@ stages:
     paths:
       - cov/cov
 
-#build-nightly:
-#  extends: .build
-#  image: 'rustlang/rust:nightly'
+build-nightly:
+  extends: .build
+  image: 'rustlang/rust:nightly'
 
 test-nightly:
   extends: .test
@@ -85,3 +86,25 @@ coverage-nightly:
 #pages:
 #  extends: .pages
 #  image: 'rustlang/rust:nightly'
+
+docker:
+  stage: image
+  image: docker:18
+  only:
+    - branches
+  services:
+    - docker:18-dind
+  dependencies:
+    - build-nightly
+  before_script:
+    - docker info
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - >
+      case "$CI_COMMIT_REF_NAME" in
+        master) TAG=latest ;;
+        *)      TAG=$(echo $CI_COMMIT_REF_NAME | sed -e 's/\//-/g') ;;
+      esac
+    - docker pull $CI_REGISTRY_IMAGE:$TAG || true
+    - docker build --tag $CI_REGISTRY_IMAGE:$TAG .
+    - docker push $CI_REGISTRY_IMAGE:$TAG
