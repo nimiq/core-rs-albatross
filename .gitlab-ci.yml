@@ -5,8 +5,8 @@ variables:
 
 stages:
   - build
-  - test
   - image
+  - test
   - coverage
   - deploy
 
@@ -26,6 +26,11 @@ stages:
     - rustc --version
     - cargo --version
     - cargo test --all
+
+.clippy:
+  stage: test
+  script:
+    - cargo clippy --all
 
 .coverage:
   stage: coverage
@@ -50,6 +55,10 @@ test-nightly:
 #    - build-nightly
 
 coverage-nightly:
+  extends: .coverage
+  image: 'rustlang/rust:nightly'
+
+clippy-nightly:
   extends: .coverage
   image: 'rustlang/rust:nightly'
 
