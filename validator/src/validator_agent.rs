@@ -232,24 +232,24 @@ impl ValidatorAgent {
     #[cfg(feature = "handel")]
     fn on_view_change_message(&self, update_message: LevelUpdateMessage<ViewChange>) {
         trace!("[VIEW-CHANGE] Received: number=#{}.{} update={:?} peer={}",
-               update_message.message.block_number,
-               update_message.message.new_view_number,
+               update_message.tag.block_number,
+               update_message.tag.new_view_number,
                update_message.update,
                self.peer.peer_address());
 
         let blockchain_epoch = policy::epoch_at(self.blockchain.block_number());
-        let view_change_epoch = policy::epoch_at(update_message.message.block_number);
+        let view_change_epoch = policy::epoch_at(update_message.tag.block_number);
         match view_change_epoch.cmp(&blockchain_epoch) {
             Ordering::Greater => {
                 debug!("[VIEW-CHANGE] Ignoring view change message for a future epoch: epoch={} block_number=#{}",
                        view_change_epoch,
-                       update_message.message.block_number);
+                       update_message.tag.block_number);
                 return;
             },
             Ordering::Less => {
                 debug!("[VIEW-CHANGE] Ignoring view change message for an old epoch: epoch={} block_number=#{}",
                        view_change_epoch,
-                       update_message.message.block_number);
+                       update_message.tag.block_number);
                 return;
             },
             Ordering::Equal => (),

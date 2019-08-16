@@ -48,6 +48,10 @@ impl<T> GroupedList<T>
             .flat_map(|group| repeat(group.1.clone()).take(group.0 as usize))
     }
 
+    pub fn iter_groups<'a>(&'a self) -> impl Iterator<Item=&Group<T>> + 'a {
+        self.0.iter()
+    }
+
     pub fn groups(&self) -> &Vec<Group<T>> {
         &self.0
     }

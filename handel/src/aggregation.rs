@@ -1,11 +1,10 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::fmt;
 
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use futures::{future, Future};
 
-use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
+use utils::observer::PassThroughNotifier;
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
 
@@ -18,7 +17,7 @@ use crate::config::Config;
 use crate::todo::TodoList;
 use crate::protocol::Protocol;
 use crate::update::LevelUpdate;
-
+use crate::sender::Sender;
 
 
 
@@ -194,13 +193,13 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         if !peer_ids.is_empty() {
             // TODO: optimize, if the multi-sig, only contains our individual, we don't have to send it
             let individual = if level.receive_complete() { None } else { self.state.read().contribution.clone() };
-            let update_message = LevelUpdate::new(multisig, individual, level.id, self.protocol.node_id());
+            let update = LevelUpdate::new(multisig, individual, level.id, self.protocol.node_id());
 
-            trace!("Sending updates to {:?}: {:#?}", peer_ids, update_message);
+            trace!("Sending updates to {:?}: {:#?}", peer_ids, update);
 
             for peer_id in peer_ids {
                 assert_ne!(peer_id, self.protocol.node_id(), "Nodes must not send updates to them-self");
-                self.protocol.send_to(peer_id, update_message.clone())
+                self.protocol.sender().send_to(peer_id, update.clone())
                     .unwrap_or_else(|e| error!("Failed to send update message."))
             }
         }
@@ -371,13 +370,5 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         };
 
         tokio::spawn(process_fut);
-    }
-}
-
-
-impl<P: Protocol + fmt::Debug> fmt::Debug for Aggregation<P> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        let state = self.state.read();
-        write!(f, "Aggregation {{ protocol: {:?}, contribution: {:?}, result: {:?} }}", self.protocol, state.contribution, state.result)
     }
 }

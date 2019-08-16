@@ -35,9 +35,7 @@ use rand::rngs::OsRng;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
-use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof,
-                      SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange,
-                      ViewChange};
+use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange, ViewChange, PbftPrepareMessage, PbftCommitMessage};
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
@@ -112,6 +110,8 @@ pub enum MessageType {
     // Albatross / Handel - experimental. Use "handel" feature
     #[cfg(feature = "handel")]
     HandelViewChange = 130,
+    HandelPrepare = 131,
+    HandelCommit = 132,
 }
 
 #[derive(Clone, Debug)]
@@ -168,6 +168,10 @@ pub enum Message {
     // Albatross / Handel - experimental. Use "handel" feature
     #[cfg(feature = "handel")]
     HandelViewChange(Box<LevelUpdateMessage<ViewChange>>),
+    #[cfg(feature = "handel")]
+    HandelPbftPrepare(Box<LevelUpdateMessage<PbftPrepareMessage>>),
+    #[cfg(feature = "handel")]
+    HandelPbftCommit(Box<LevelUpdateMessage<PbftCommitMessage>>),
 }
 
 impl Message {
@@ -218,6 +222,10 @@ impl Message {
             // Albatross / Handel - experimental. Use "handel" feature
             #[cfg(feature = "handel")]
             Message::HandelViewChange(_) => MessageType::HandelViewChange,
+            #[cfg(feature = "handel")]
+            Message::HandelPbftPrepare(_) => MessageType::HandelPrepare,
+            #[cfg(feature = "handel")]
+            Message::HandelPbftCommit(_) => MessageType::HandelCommit,
         }
     }
 
@@ -331,6 +339,10 @@ impl Deserialize for Message {
             // Albatross / Handel - experimental. Use "handel" feature
             #[cfg(feature = "handel")]
             MessageType::HandelViewChange => Message::HandelViewChange(Deserialize::deserialize(&mut crc32_reader)?),
+            #[cfg(feature = "handel")]
+            MessageType::HandelPrepare => Message::HandelPbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
+            #[cfg(feature = "handel")]
+            MessageType::HandelCommit => Message::HandelPbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
@@ -402,7 +414,11 @@ impl Serialize for Message {
             Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
             // Albatross / Handel - experimental. Use "handel" feature
             #[cfg(feature = "handel")]
-            Message::HandelViewChange(aggregation_message) => aggregation_message.serialize(&mut v)?,
+            Message::HandelViewChange(level_update) => level_update.serialize(&mut v)?,
+            #[cfg(feature = "handel")]
+            Message::HandelPbftPrepare(level_update) => level_update.serialize(&mut v)?,
+            #[cfg(feature = "handel")]
+            Message::HandelPbftCommit(level_update) => level_update.serialize(&mut v)?,
         };
 
         // write checksum to placeholder
@@ -463,7 +479,11 @@ impl Serialize for Message {
             Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
             // Albatross / Handel - experimental. Use "handel" feature
             #[cfg(feature = "handel")]
-            Message::HandelViewChange(aggregation_message) => aggregation_message.serialized_size(),
+            Message::HandelViewChange(level_update) => level_update.serialized_size(),
+            #[cfg(feature = "handel")]
+            Message::HandelPbftPrepare(level_update) => level_update.serialized_size(),
+            #[cfg(feature = "handel")]
+            Message::HandelPbftCommit(level_update) => level_update.serialized_size(),
         };
         size
     }
@@ -515,6 +535,10 @@ pub struct MessageNotifier {
     // Albatross / Handel - experimental. Use "handel" feature
     #[cfg(feature = "handel")]
     pub handel_view_change: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<ViewChange>>>,
+    #[cfg(feature = "handel")]
+    pub handel_pbft_prepare: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftPrepareMessage>>>,
+    #[cfg(feature = "handel")]
+    pub handel_pbft_commit: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftCommitMessage>>>,
 }
 
 impl MessageNotifier {
@@ -569,6 +593,10 @@ impl MessageNotifier {
             // Albatross / Handel - experimental. Use "handel" feature
             #[cfg(feature = "handel")]
             Message::HandelViewChange(update) => self.handel_view_change.read().notify(*update),
+            #[cfg(feature = "handel")]
+            Message::HandelPbftPrepare(update) => self.handel_pbft_prepare.read().notify(*update),
+            #[cfg(feature = "handel")]
+            Message::HandelPbftCommit(update) => self.handel_pbft_commit.read().notify(*update),
 
             // catch unimplemented
             _ => info!("Received message for unimplemented type: {}", msg.ty())

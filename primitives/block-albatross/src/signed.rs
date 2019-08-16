@@ -76,7 +76,7 @@ pub const PREFIX_POKOSK: u8 = 0x05;
 pub const PREFIX_VALIDATOR_INFO: u8 = 0x06;
 
 
-pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent {
+pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent + Send + Sync + Sized + PartialEq + 'static {
     const PREFIX: u8;
 
     fn hash_with_prefix(&self) -> SigHash {

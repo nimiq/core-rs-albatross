@@ -22,6 +22,8 @@ impl ValidatorId {
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent)]
 pub struct ValidatorInfo {
     /// The validator ID
+    /// TODO: obsolete
+    #[deprecated]
     pub validator_id: ValidatorId,
 
     /// The validator's public key (BLS12-381)
@@ -29,6 +31,12 @@ pub struct ValidatorInfo {
 
     /// The validator's peer address
     pub peer_address: PeerAddress,
+}
+
+impl PartialEq for ValidatorInfo {
+    fn eq(&self, other: &ValidatorInfo) -> bool {
+        self.public_key == other.public_key
+    }
 }
 
 impl Message for ValidatorInfo {

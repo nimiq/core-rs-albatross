@@ -31,7 +31,7 @@ use handel::store::SignatureStore;
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
 use crate::validator_network::ValidatorNetworkError::NotInPbftPhase;
 #[cfg(feature = "handel")]
-use crate::signature_aggregation::view_change::ViewChangeProtocol;
+use crate::signature_aggregation::view_change::ViewChangeAggregation;
 
 
 
@@ -104,7 +104,7 @@ struct ValidatorNetworkState {
     #[cfg(not(feature = "handel"))]
     view_changes: BTreeMap<ViewChange, ViewChangeProofState>,
     #[cfg(feature = "handel")]
-    view_changes: BTreeMap<ViewChange, Arc<Aggregation<ViewChangeProtocol>>>,
+    view_changes: BTreeMap<ViewChange, ViewChangeAggregation>,
 
     /// The current proposed macro header and pbft proof.
     ///
@@ -347,7 +347,7 @@ impl ValidatorNetwork {
         let mut state = self.state.write();
 
         if let Some(aggregation) = state.view_changes.get(&view_change) {
-            warn!("{:?} already exists with {} votes", signed_view_change.message, aggregation.protocol.total_votes());
+            warn!("{:?} already exists with {} votes", signed_view_change.message, aggregation.votes());
         }
         else {
             let validators = self.blockchain.current_validators().clone();
@@ -362,12 +362,13 @@ impl ValidatorNetwork {
                 }
             }
 
-            let aggregation = ViewChangeProtocol::start(signed_view_change, validators, peers);
+            // create view change aggregation
+            let aggregation = ViewChangeAggregation::new(view_change.clone(), signed_view_change.signer_idx as usize, validators, peers, None);
 
             // register handler for when done and start (or use Future)
             {
                 let view_change = view_change.clone();
-                aggregation.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
+                aggregation.aggregation.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
                     match event {
                         AggregationEvent::Complete { best } => {
                             info!("Complete: {:?}", view_change);
@@ -380,6 +381,9 @@ impl ValidatorNetwork {
                 }));
             }
 
+            // push our contribution
+            aggregation.push_contribution(signed_view_change);
+
             state.view_changes.insert(view_change, aggregation);
         }
     }
@@ -388,12 +392,11 @@ impl ValidatorNetwork {
     #[cfg(feature = "handel")]
     fn push_view_change(&self, update_message: LevelUpdateMessage<ViewChange>) -> Result<(), ValidatorNetworkError> {
         //debug!("Received view change level update: {:?}", update_message);
-        let LevelUpdateMessage { update, message: view_change } = update_message;
         let state = self.state.read();
 
-        if let Some(aggregation) = state.view_changes.get(&view_change) {
+        if let Some(aggregation) = state.view_changes.get(&update_message.tag) {
             //debug!("Pushing it into aggregation: {:?}", aggregation);
-            aggregation.push_update(update);
+            aggregation.push_update(update_message);
         }
 
         Ok(())

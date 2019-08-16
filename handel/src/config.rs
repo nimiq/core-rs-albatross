@@ -1,9 +1,4 @@
-/// TODO: Move to validator/signature_aggregation/config
-
 use std::time::Duration;
-
-use hash::Blake2bHash;
-use bls::bls12_381::Signature;
 
 
 #[derive(Clone, Debug)]

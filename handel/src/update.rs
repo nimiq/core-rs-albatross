@@ -33,10 +33,10 @@ impl LevelUpdate {
         }
     }
 
-    pub fn with_message<M: Clone + Debug + Serialize + Deserialize>(self, message: M) -> LevelUpdateMessage<M> {
+    pub fn with_tag<T: Clone + Debug + Serialize + Deserialize>(self, tag: T) -> LevelUpdateMessage<T> {
         LevelUpdateMessage {
             update: self,
-            message,
+            tag,
         }
     }
 
@@ -51,13 +51,13 @@ impl LevelUpdate {
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LevelUpdateMessage<M: Clone + Debug + Serialize + Deserialize> {
+pub struct LevelUpdateMessage<T: Clone + Debug + Serialize + Deserialize> {
     /// The update for that level
     pub update: LevelUpdate,
 
     /// The message this aggregation is running over. This is needed to differentiate to which
     /// aggregation this belongs to.
-    pub message: M,
+    pub tag: T,
 }
 
 
@@ -93,7 +93,7 @@ mod test {
     #[test]
     fn test_serialize_deserialize_with_message() {
         let update = LevelUpdate::new(create_multisig(), None, 2, 3)
-            .with_message(42u64);
+            .with_tag(42u64);
         assert_eq!(update.serialized_size(), 61 + 8);
     }
 }

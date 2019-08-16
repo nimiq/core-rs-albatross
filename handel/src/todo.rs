@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use futures::{Stream, Async, task};
-use futures::task::Task;
 
 use crate::multisig::Signature;
 use crate::evaluator::Evaluator;
@@ -75,20 +73,3 @@ impl<E: Evaluator> TodoList<E> {
         }
     }
 }
-
-
-/*impl<E: Evaluator> Stream for TodoList<E> {
-    type Item = (Signature, usize, usize); // TODO: Use `TodoItem` or some other container type
-    type Error = ();
-
-    fn poll(&mut self) -> Result<Async<Option<Self::Item>>, Self::Error> {
-        self.task.write().get_or_insert_with(task::current);
-
-        if let Some(best) = self.get_best() {
-            Ok(Async::Ready(Some(best)))
-        }
-        else {
-            Ok(Async::NotReady)
-        }
-    }
-}*/

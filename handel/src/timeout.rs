@@ -1,3 +1,8 @@
+/// A timeout strategy defines after which period a level timeouts
+///
+/// TODO: This is not used currently
+
+
 use std::time::Duration;
 use std::ops::Range;
 

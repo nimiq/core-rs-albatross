@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use crate::multisig::{Signature, IndividualSignature, MultiSignature};
+use crate::multisig::Signature;
 use crate::identity::WeightRegistry;
 use crate::store::SignatureStore;
 use crate::partitioner::Partitioner;
