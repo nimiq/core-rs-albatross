@@ -32,7 +32,7 @@ use parking_lot::RwLock;
 use rand::Rng;
 use rand::rngs::OsRng;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt, BigEndian, ByteOrder};
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
 use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange, ViewChange, PbftPrepareMessage, PbftCommitMessage};
@@ -50,7 +50,7 @@ use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::{PassThroughListener, PassThroughNotifier};
 #[cfg(feature = "handel")]
-use handel::update::{LevelUpdate, LevelUpdateMessage};
+use handel::update::LevelUpdateMessage;
 
 
 

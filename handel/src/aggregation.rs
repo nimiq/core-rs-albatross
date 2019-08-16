@@ -8,7 +8,6 @@ use utils::observer::PassThroughNotifier;
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
 
-use crate::verifier::Verifier;
 use crate::store::SignatureStore;
 use crate::level::Level;
 use crate::evaluator::Evaluator;
@@ -24,8 +23,8 @@ use crate::sender::Sender;
 #[derive(Clone, Debug)]
 pub enum AggregationEvent {
     Complete { best: MultiSignature },
-    LevelComplete { level: usize },
-    Aborted,
+    //LevelComplete { level: usize },
+    //Aborted,
 }
 
 
@@ -200,7 +199,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
             for peer_id in peer_ids {
                 assert_ne!(peer_id, self.protocol.node_id(), "Nodes must not send updates to them-self");
                 self.protocol.sender().send_to(peer_id, update.clone())
-                    .unwrap_or_else(|e| error!("Failed to send update message."))
+                    .unwrap_or_else(|_| error!("Failed to send update message."))
             }
         }
     }
@@ -254,7 +253,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
     fn check_final_signature(&self) -> bool {
         // first check if we're already done
         let state = self.state.upgradable_read();
-        if let Some(multisig) = &state.result {
+        if state.result.is_some() {
             return true;
         }
 

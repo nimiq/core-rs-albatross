@@ -96,7 +96,7 @@ impl Partitioner for BinomialPartitioner {
     }
 
     /// TODO: Why do we have `_level` as argument?
-    fn combine(&self, signatures: Vec<&MultiSignature>, level: usize) -> Option<MultiSignature> {
+    fn combine(&self, signatures: Vec<&MultiSignature>, _level: usize) -> Option<MultiSignature> {
         //debug!("Combining signatures for level {}: {:?}", level, signatures);
         let mut combined = (*signatures.first()?).clone();
 

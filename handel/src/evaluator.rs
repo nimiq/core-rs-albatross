@@ -33,7 +33,9 @@ impl<S: SignatureStore, P: Partitioner> SingleVote<S, P> {
 }
 
 impl<S: SignatureStore, P: Partitioner> Evaluator for SingleVote<S, P> {
-    fn evaluate(&self, signature: &Signature, level: usize) -> usize {
+    fn evaluate(&self, _signature: &Signature, _level: usize) -> usize {
+        // TODO: The code from `WeightedVote` is what actually belongs here. And then the code in
+        // `WeightedVote` must be adapted to consider the weight of a signature.
         unimplemented!()
     }
 
@@ -70,8 +72,9 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> WeightedVote<S, I, P>
 
 impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for WeightedVote<S, I, P> {
     fn evaluate(&self, signature: &Signature, level: usize) -> usize {
-        let weight = self.weights.signature_weight(&signature)
-            .unwrap_or_else(|| panic!("No weight for signature: {:?}", signature));
+        // TODO: Consider weight
+        //let weight = self.weights.signature_weight(&signature)
+        //    .unwrap_or_else(|| panic!("No weight for signature: {:?}", signature));
 
         let store = self.store.read();
 

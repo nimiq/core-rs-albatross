@@ -66,10 +66,4 @@ impl<E: Evaluator> TodoList<E> {
             None
         }
     }
-
-    fn process_todos<F: FnMut(Signature, usize, usize)>(&mut self, mut f: F) {
-        while let Some((signature, level, score)) = self.get_best() {
-            f(signature, level, score);
-        }
-    }
 }

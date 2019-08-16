@@ -22,11 +22,9 @@ use primitives::policy::{SLOTS, TWO_THIRD_SLOTS};
 use utils::mutable_once::MutableOnce;
 use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
 #[cfg(feature = "handel")]
-use handel::aggregation::{Aggregation, AggregationEvent};
+use handel::aggregation::AggregationEvent;
 #[cfg(feature = "handel")]
 use handel::update::LevelUpdateMessage;
-#[cfg(feature = "handel")]
-use handel::store::SignatureStore;
 
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
 use crate::validator_network::ValidatorNetworkError::NotInPbftPhase;
@@ -375,8 +373,7 @@ impl ValidatorNetwork {
                             let proof = ViewChangeProof::new(best.signature, best.signers);
                             this.notifier.read()
                                 .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.clone(), proof))
-                        },
-                        _ => {}
+                        }
                     }
                 }));
             }

@@ -1,14 +1,11 @@
 use std::fmt;
-use std::sync::Arc;
-use std::io::{Error as IoError, ErrorKind};
 
 use block_albatross::ViewChange;
 use messages::Message;
 
-use handel::sender::Sender;
 use handel::update::LevelUpdate;
 
-use super::voting::{VotingProtocol, VoteAggregation, Tag};
+use super::voting::{VoteAggregation, Tag};
 
 
 impl Tag for ViewChange {

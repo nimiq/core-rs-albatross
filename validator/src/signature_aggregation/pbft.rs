@@ -1,15 +1,9 @@
-use std::fmt;
-use std::sync::Arc;
-use std::io::{Error as IoError, ErrorKind};
-
-use block_albatross::{PbftProposal, PbftPrepareMessage, PbftCommitMessage};
-use hash::Blake2bHash;
+use block_albatross::{PbftPrepareMessage, PbftCommitMessage};
 use messages::Message;
 
-use handel::sender::Sender;
 use handel::update::LevelUpdate;
 
-use super::voting::{VotingProtocol, VoteAggregation, Tag};
+use super::voting::{VotingProtocol, Tag};
 
 
 impl Tag for PbftPrepareMessage {

@@ -4,24 +4,20 @@
 use std::sync::Arc;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
-use std::time::Duration;
 use std::collections::HashMap;
 use std::fmt;
 
 use parking_lot::RwLock;
-use log::Level;
 
 use primitives::validators::Validators;
 use primitives::policy::TWO_THIRD_SLOTS;
 use network::Peer;
-use utils::observer::PassThroughListener;
 use block_albatross::signed;
-use beserial::Serialize;
 use messages::Message;
 use bls::bls12_381::PublicKey;
 
 use handel::protocol::Protocol;
-use handel::multisig::{MultiSignature, IndividualSignature, Signature};
+use handel::multisig::{IndividualSignature, Signature};
 use handel::identity::{IdentityRegistry, WeightRegistry};
 use handel::verifier::MultithreadedVerifier;
 use handel::timeout::LinearTimeout;
@@ -30,7 +26,7 @@ use handel::store::ReplaceStore;
 use handel::partitioner::BinomialPartitioner;
 use handel::evaluator::WeightedVote;
 use handel::update::{LevelUpdate, LevelUpdateMessage};
-use handel::aggregation::{Aggregation, AggregationEvent};
+use handel::aggregation::Aggregation;
 use handel::store::SignatureStore;
 use handel::sender::Sender;
 
