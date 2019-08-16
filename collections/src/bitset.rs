@@ -2,7 +2,7 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
 use itertools::{EitherOrBoth, Itertools};
 use beserial::{Serialize, Deserialize, uvar, SerializingError, ReadBytesExt, WriteBytesExt, FromPrimitive, ToPrimitive};
 use std::fmt;
-use std::iter::repeat;
+use std::iter::{repeat, FromIterator};
 
 
 #[inline]
@@ -336,5 +336,15 @@ impl Iterator for Bits64Iter {
         } else {
             None
         }
+    }
+}
+
+impl FromIterator<usize> for BitSet {
+    fn from_iter<T: IntoIterator<Item=usize>>(iter: T) -> Self {
+        let mut bitset = BitSet::new();
+        for elem in iter {
+            bitset.insert(elem)
+        }
+        bitset
     }
 }
