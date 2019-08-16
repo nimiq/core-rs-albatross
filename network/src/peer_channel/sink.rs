@@ -38,16 +38,19 @@ impl PeerSink {
     }
 
     /// Closes the connection.
-    pub fn close(&self, ty: CloseType, reason: Option<String>) -> Result<(), SendError<WebSocketMessage>> {
+    pub fn close(&self, ty: CloseType, reason: Option<String>) {
         // Immediately mark channel as closed, so that no more messages are sent over it.
         // Do not send messages over already closed connections.
         // Stop sending silently until connection is really closed.
         if self.closed_flag.set_closed(true) {
-            return Ok(());
+            return;
         }
         self.closed_flag.set_close_type(ty);
         debug!("Closing connection, reason: {:?} ({:?})", ty, reason);
-        self.sink.unbounded_send(WebSocketMessage::Close(None))
+        if let Err(error) = self.sink.unbounded_send(WebSocketMessage::Close(None)) {
+            debug!("Error closing connection: {}", error);
+        }
+
         /*
          * Theoretically, we can also send the CloseType to the other party:
          * Some(CloseFrame {

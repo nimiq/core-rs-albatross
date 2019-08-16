@@ -98,7 +98,7 @@ impl PeerChannel {
 
     pub fn send_or_close(&self, msg: Message) {
         if self.peer_sink.send(msg).is_err() {
-            let _ = self.peer_sink.close(CloseType::SendFailed, Some("SendFailed".to_string())); // TODO: We ignore the error here.
+            self.peer_sink.close(CloseType::SendFailed, Some("SendFailed".to_string()));
         }
     }
 
@@ -106,8 +106,13 @@ impl PeerChannel {
         self.closed_flag.is_closed()
     }
 
-    pub fn close(&self, ty: CloseType) -> bool {
-        self.peer_sink.close(ty, None).is_ok()
+    pub fn close(&self, ty: CloseType) {
+        self.peer_sink.close(ty, None);
+        let notifier = Arc::clone(&self.close_notifier);
+        tokio::spawn(futures::lazy(move || {
+            notifier.read().notify(ty);
+            futures::future::ok(())
+        }));
     }
 }
 
