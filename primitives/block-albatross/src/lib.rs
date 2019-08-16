@@ -23,7 +23,7 @@ mod view_change;
 pub mod signed;
 
 pub use block::{Block, BlockType, BlockHeader};
-pub use macro_block::{MacroBlock, MacroHeader, MacroExtrinsics};
+pub use macro_block::{MacroBlock, MacroHeader, MacroExtrinsics, SlotAddresses};
 pub use micro_block::{MicroBlock, MicroHeader, MicroJustification, MicroExtrinsics};
 pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof, ViewChangeProofBuilder, ViewChanges};
 pub use fork_proof::ForkProof;

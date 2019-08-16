@@ -99,8 +99,8 @@ impl From<Slots> for MacroExtrinsics {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SlotAddresses {
-    staker_address: Address,
-    reward_address: Address,
+    pub staker_address: Address,
+    pub reward_address: Address,
 }
 
 impl signed::Message for MacroHeader {
