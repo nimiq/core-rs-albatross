@@ -391,8 +391,6 @@ impl ValidatorNetwork {
 
     /// Start pBFT with the given proposal.
     /// Either we generated that proposal, or we received it
-    /// TODO: Don't forget to relay the proposal
-    /// NOTE: Assumes the proposal was verified already
     pub fn on_pbft_proposal(&self, signed_proposal: SignedPbftProposal) -> Result<(), ValidatorNetworkError> {
         let mut state = self.state.write();
         let block_hash = signed_proposal.message.header.hash::<Blake2bHash>();
@@ -401,10 +399,9 @@ impl ValidatorNetwork {
             // Proposals might differ in view change
             if pbft.proposal.message.view_change != signed_proposal.message.view_change {
                 error!("Proposal with different view change already exists: {:?} and {:?}", pbft.proposal.message.view_change, signed_proposal.message.view_change);
-                unimplemented!();
+                return Err(ValidatorNetworkError::PbftAlreadyStarted(pbft.proposal.message.clone()))
             }
-            // proposal already exists
-            Ok(())
+            // proposal already exists, do nothing
         }
         else {
             let active_validators = Arc::clone(&state.active_validators);
@@ -435,13 +432,11 @@ impl ValidatorNetwork {
 
                                     // return the event
                                     Some(ValidatorNetworkEvent::PbftPrepareComplete(pbft.block_hash.clone(), pbft.proposal.message.clone()))
-                                }
-                                else {
+                                } else {
                                     warn!("Prepare proof already exists");
                                     None
                                 }
-                            }
-                            else {
+                            } else {
                                 error!("No pBFT state");
                                 None
                             };
@@ -449,8 +444,7 @@ impl ValidatorNetwork {
                             event.map(move |event| this.notifier.read().notify(event));
                         }
                     }
-
-            }));
+                }));
 
             // The commit handler. This will store the finished commit proof and construct the
             // pBFT proof.
@@ -472,8 +466,7 @@ impl ValidatorNetwork {
 
                                 // return the event
                                 Some(ValidatorNetworkEvent::PbftComplete(pbft.block_hash.clone(), pbft.proposal.message.clone(), pbft_proof))
-                            }
-                            else {
+                            } else {
                                 error!("No pBFT state");
                                 None
                             };
@@ -481,7 +474,7 @@ impl ValidatorNetwork {
                             event.map(move |event| this.notifier.read().notify(event));
                         }
                     }
-            }));
+                }));
 
             // add pBFT state
             state.pbft_states.insert(block_hash.clone(), pbft);
@@ -494,9 +487,9 @@ impl ValidatorNetwork {
 
             // broadcast to other validators
             self.broadcast_pbft_proposal(signed_proposal);
-
-            Ok(())
         }
+
+        Ok(())
     }
 
     pub fn on_pbft_prepare_level_update(&self, level_update: LevelUpdateMessage<PbftPrepareMessage>) {
@@ -649,4 +642,10 @@ impl ValidatorNetwork {
     fn broadcast_fork_proof(&self, fork_proof: ForkProof) {
         self.broadcast_active(Message::ForkProof(Box::new(fork_proof)));
     }
+}
+
+/// Pretty-print voting progress
+fn fmt_vote_progress(slots: u16) -> String {
+    let done = slots >= TWO_THIRD_SLOTS;
+    format!("votes={: >3} / {}, done={}", slots, SLOTS, done)
 }

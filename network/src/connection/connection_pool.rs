@@ -816,9 +816,11 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
         drop(state);
         drop(guard);
 
-        debug!("Peer joined: {} {} (version={}, services={:?}, userAgent={})", &peer_address,
-               peer.net_address().map_or("<unknown>".to_string(), |n| n.to_string()),
-               peer.version, peer_address.services, peer.user_agent.as_ref().unwrap_or(&"None".to_string()));
+        debug!("Peer joined: {} (v{}, {:?}, {})",
+            &peer_address,
+            peer.version,
+            peer_address.services,
+            peer.user_agent.as_ref().unwrap_or(&"None".to_string()));
 
         // Let listeners know about this peer.
         self.notifier.read().notify(ConnectionPoolEvent::PeerJoined(peer.as_ref().clone()));

@@ -295,7 +295,8 @@ impl Validator {
 
         match event {
             ValidatorNetworkEvent::ViewChangeComplete(view_change, view_change_proof) => {
-                debug!("View change complete: {:?}", view_change);
+                debug!("Completed view change to #{}.{}",
+                    view_change.block_number, view_change.new_view_number);
                 self.on_slot_change(SlotChange::ViewChange(view_change, view_change_proof));
             },
             ValidatorNetworkEvent::PbftProposal(hash, proposal) => self.on_pbft_proposal(hash, proposal),
@@ -414,12 +415,13 @@ impl Validator {
             return;
         }
 
-        info!("Starting view change");
-
         // The number of the block that timed out.
         let block_number = self.blockchain.height() + 1;
+        let new_view_number = state.view_number + 1;
 
-        let message = ViewChange { block_number, new_view_number: state.view_number + 1 };
+        info!("Starting view change to #{}.{}", block_number, new_view_number);
+
+        let message = ViewChange { block_number, new_view_number };
         let pk_idx = state.pk_idx.expect("Checked above that we are an active validator");
         let slots = state.slots.expect("Checked above that we are an active validator");
         let view_change_message = SignedViewChange::from_message(message, &self.validator_key.secret, pk_idx);
@@ -467,7 +469,7 @@ impl Validator {
         drop(state);
 
         let block = self.block_producer.next_micro_block(fork_proofs, timestamp, view_number, vec![], view_change_proof);
-        info!("Produced block: block_number={}, view_number={}, hash={}",
+        info!("Produced block #{}.{}: {}",
               block.header.block_number,
               block.header.view_number,
               block.header.hash::<Blake2bHash>());

@@ -612,9 +612,10 @@ impl AccountInherentInteraction for StakingContract {
         let mut active_slashed = false;
 
         let mut to_pay = inherent.value;
-        let staker_address = Deserialize::deserialize(&mut &inherent.data[..])?;
+        let staker_address: Address = Deserialize::deserialize(&mut &inherent.data[..])?;
+        let staker_human_address = staker_address.to_user_friendly_address();
 
-        warn!("Slashing {} with {}", &staker_address, to_pay);
+        warn!("Slashing {} with {}", &staker_human_address, to_pay);
 
         if let Some(active_stake) = self.active_stake_by_address.remove(&staker_address) {
             self.active_stake_sorted.remove(&active_stake);

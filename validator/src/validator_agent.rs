@@ -140,15 +140,11 @@ impl ValidatorAgent {
         let view_change_epoch = policy::epoch_at(update_message.tag.block_number);
         match view_change_epoch.cmp(&blockchain_epoch) {
             Ordering::Greater => {
-                debug!("[VIEW-CHANGE] Ignoring view change message for a future epoch: epoch={} block_number=#{}",
-                       view_change_epoch,
-                       update_message.tag.block_number);
+                debug!("[VIEW-CHANGE] Ignoring view change message for a future epoch: epoch={} block_number=#{}", view_change_epoch, update_message.tag.block_number);
                 return;
             },
             Ordering::Less => {
-                debug!("[VIEW-CHANGE] Ignoring view change message for an old epoch: epoch={} block_number=#{}",
-                       view_change_epoch,
-                       update_message.tag.block_number);
+                debug!("[VIEW-CHANGE] Ignoring view change message for an old epoch: epoch={} block_number=#{}", view_change_epoch, update_message.tag.block_number);
                 return;
             },
             Ordering::Equal => (),

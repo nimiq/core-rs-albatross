@@ -7,7 +7,7 @@ use fern::colors::{Color, ColoredLevelConfig};
 use fern::Dispatch;
 use log::{Level, LevelFilter};
 
-static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(0);
+static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(20);
 
 lazy_static! {
     static ref NIMIQ_MODULES: Vec<&'static str> = vec![
@@ -74,10 +74,11 @@ pub trait NimiqDispatch {
 
 fn pretty_logging(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispatch {
     dispatch.format(move |out, message, record| {
-        let max_width = max_module_width(record.target());
-        let target = format!("{: <width$}", record.target(), width=max_width);
+        let target_text = record.target().split("::").last().unwrap();
+        let max_width = max_module_width(target_text);
+        let target = format!("{: <width$}", target_text, width=max_width);
         out.finish(format_args!(
-            " {level} {target} > {message}",
+            " {level: <5} {target} | {message}",
             target = target.bold(),
             level = colors_level.color(record.level()),
             message = message,
@@ -87,10 +88,11 @@ fn pretty_logging(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispa
 
 fn pretty_logging_with_timestamps(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispatch {
     dispatch.format(move |out, message, record| {
-        let max_width = max_module_width(record.target());
-        let target = format!("{: <width$}", record.target(), width=max_width);
+        let target_text = record.target().split("::").last().unwrap();
+        let max_width = max_module_width(target_text);
+        let target = format!("{: <width$}", target_text, width=max_width);
         out.finish(format_args!(
-            " {timestamp} {level} {target} > {message}",
+            " {timestamp} {level: <5} {target} | {message}",
             timestamp = Local::now().format("%Y-%m-%d %H:%M:%S"),
             target = target.bold(),
             level = colors_level.color(record.level()),
