@@ -96,7 +96,7 @@ lazy_static! {
 
         add(&mut m, NetworkInfo {
             network_id: NetworkId::Main,
-            name: "main".into(),
+            name: "main",
             seed_peers: vec![
                 create_seed_peer_addr("seed-1.nimiq.com", 8443, "b70d0c3e6cdf95485cac0688b086597a5139bc4237173023c83411331ef90507"),
                 create_seed_peer_addr("seed-2.nimiq.com", 8443, "8580275aef426981a04ee5ea948ca3c95944ef1597ad78db9839f810d6c5b461"),
@@ -127,7 +127,7 @@ lazy_static! {
 
         add(&mut m, NetworkInfo {
             network_id: NetworkId::Test,
-            name: "test".into(),
+            name: "test",
             seed_peers: vec![
                 create_seed_peer_addr("seed1.nimiqtest.net", 8080, "175d5f01af8a5911c240a78df689a76eef782d793ca15d073bdc913edd07c74b"),
                 create_seed_peer_addr("seed2.nimiqtest.net", 8080, "2c950d2afad1aa7ad12f01a56527f709b7687b1b00c94da6e0bd8ae4d263d47c"),
@@ -140,7 +140,7 @@ lazy_static! {
 
         add(&mut m, NetworkInfo {
             network_id: NetworkId::Dev,
-            name: "dev".into(),
+            name: "dev",
             seed_peers: vec![
                 create_seed_peer_addr_ws("dev.nimiq-network.com", 8080, "e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837")
             ],

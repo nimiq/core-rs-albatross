@@ -49,7 +49,7 @@ impl<'env> BlockProducer<'env> {
         let mut transactions = self.mempool.get_transactions_for_block(max_size);
         // In v1, inherents never produce receipts, thus we can omit the reward inherent.
         let mut receipts = self.blockchain.state().accounts()
-            .collect_receipts(&transactions, &vec![], self.blockchain.height() + 1)
+            .collect_receipts(&transactions, &[], self.blockchain.height() + 1)
             .expect("Failed to collect receipts during block production");
 
         let mut size = transactions.iter().fold(0, |size, tx| size + tx.serialized_size())
@@ -59,7 +59,7 @@ impl<'env> BlockProducer<'env> {
                 size -= transactions.pop().serialized_size();
             }
             receipts = self.blockchain.state().accounts()
-                .collect_receipts(&transactions, &vec![], self.blockchain.height() + 1)
+                .collect_receipts(&transactions, &[], self.blockchain.height() + 1)
                 .expect("Failed to collect pruned accounts during block production");
         }
 
@@ -84,7 +84,7 @@ impl<'env> BlockProducer<'env> {
         let interlink_hash = interlink.hash(genesis_hash);
         let body_hash = body.hash();
         let accounts_hash = self.blockchain.state().accounts()
-            .hash_with(&body.transactions, &vec![body.get_reward_inherent(height)], height)
+            .hash_with(&body.transactions, &[body.get_reward_inherent(height)], height)
             .expect("Failed to compute accounts hash during block production");
 
         BlockHeader {

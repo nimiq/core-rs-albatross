@@ -3,13 +3,13 @@ use std::io;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use keys::{Address, KeyPair, PublicKey, Signature};
-use nimiq_hash::{Hash, HashOutput, Sha256Hash};
+use nimiq_hash::{Hash, Sha256Hash};
 use nimiq_utils::otp::Verify;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use transaction::{SignatureProof, Transaction};
 
-pub const NIMIQ_SIGN_MESSAGE_PREFIX: &'static [u8] = b"\x16Nimiq Signed Message:\n";
+pub const NIMIQ_SIGN_MESSAGE_PREFIX: &[u8] = b"\x16Nimiq Signed Message:\n";
 
 #[derive(Default, Debug, Clone, Serialize, PartialEq)]
 pub struct WalletAccount {

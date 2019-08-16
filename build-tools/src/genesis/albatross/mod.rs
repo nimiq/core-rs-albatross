@@ -183,7 +183,7 @@ impl GenesisBuilder {
         let signing_key = self.signing_key.as_ref().ok_or(GenesisBuilderError::NoSigningKey)?;
         // random message used as seed for VRF that generates pre-genesis seed
         let seed_message = self.seed_message.clone()
-            .unwrap_or("love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".to_string());
+            .unwrap_or_else(|| "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".to_string());
         // pre-genesis seed (used for slot selection)
         let pre_genesis_seed = signing_key
             .sign_hash(Blake2bHasher::new().digest(seed_message.as_bytes()));
@@ -215,7 +215,7 @@ impl GenesisBuilder {
             let mut txn = WriteTransaction::new(&db);
             // XXX need to clone, since init needs the actual data
             accounts.init(&mut txn, genesis_accounts.clone());
-            accounts.hash(Some(&mut txn))
+            accounts.hash(Some(&txn))
         };
         debug!("State root: {}", &state_root);
 

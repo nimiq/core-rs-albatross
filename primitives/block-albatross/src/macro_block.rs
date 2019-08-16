@@ -122,7 +122,7 @@ impl From<Slots> for MacroExtrinsics {
             reward_address: current_reward_address.clone(),
         });
 
-        let slash_fine = slots.slash_fine().clone();
+        let slash_fine = slots.slash_fine();
 
         for (i, slot) in slots.into_iter().enumerate().skip(1) {
             if slot.staker_address == current_staker_address && *slot.reward_address() == current_reward_address {
@@ -231,6 +231,7 @@ impl SerializeContent for MacroHeader {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for MacroHeader { }
 
 impl SerializeContent for MacroExtrinsics {
@@ -238,6 +239,7 @@ impl SerializeContent for MacroExtrinsics {
 }
 
 // TODO Do we need merkle here?
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for MacroExtrinsics { }
 
 impl fmt::Display for MacroBlock {

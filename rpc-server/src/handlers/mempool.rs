@@ -262,19 +262,19 @@ pub(crate) fn obj_to_transaction(obj: &JsonValue, current_height: u32, network_i
 
     let from_type = match &obj["fromType"] {
         &JsonValue::Null => Some(AccountType::Basic),
-        n @ JsonValue::Number(_) => n.as_u8().and_then(|n| AccountType::from_int(n)),
+        n @ JsonValue::Number(_) => n.as_u8().and_then(AccountType::from_int),
         _ => None
     }.ok_or_else(|| object!{"message" => "Invalid sender account type"})?;
 
-    let to = match &obj["to"] {
-        &JsonValue::String(ref recipient) => Some(Address::from_any_str(recipient)
+    let to = match obj["to"] {
+        JsonValue::String(ref recipient) => Some(Address::from_any_str(recipient)
             .map_err(|_|  object!{"message" => "Recipient address invalid"})?),
         _ => None,
     };
 
     let to_type = match &obj["toType"] {
         &JsonValue::Null => Some(AccountType::Basic),
-        n @ JsonValue::Number(_) => n.as_u8().and_then(|n| AccountType::from_int(n)),
+        n @ JsonValue::Number(_) => n.as_u8().and_then(AccountType::from_int),
         _ => None
     }.ok_or_else(|| object!{"message" => "Invalid recipient account type"})?;
 
@@ -291,9 +291,9 @@ pub(crate) fn obj_to_transaction(obj: &JsonValue, current_height: u32, network_i
         .ok_or_else(|| object!{"message" => "Invalid transaction flags"})?;
 
     let data = obj["data"].as_str()
-        .map(|d| hex::decode(d))
+        .map(hex::decode)
         .transpose().map_err(|_| object!{"message" => "Invalid transaction data"})?
-        .unwrap_or(vec![]);
+        .unwrap_or_else(|| vec![]);
 
     let validity_start_height = match &obj["validityStartHeight"] {
         &JsonValue::Null => Some(current_height),

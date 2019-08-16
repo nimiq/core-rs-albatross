@@ -390,7 +390,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidSuccessor)
                     },
                     Some(IndexedSlot { slot, .. }) => {
-                        if !fork_proof.verify(&slot.public_key.uncompress_unchecked()).is_ok() {
+                        if fork_proof.verify(&slot.public_key.uncompress_unchecked()).is_err() {
                             warn!("Rejecting block - Bad fork proof: invalid owner signature");
                             return Err(PushError::InvalidSuccessor)
                         }
@@ -695,7 +695,7 @@ impl<'env> Blockchain<'env> {
                 let inherents = self.finalize_last_epoch(state);
 
                 // Commit block to AccountsTree.
-                let receipts = accounts.commit(txn, &vec![], &inherents, macro_block.header.block_number);
+                let receipts = accounts.commit(txn, &[], &inherents, macro_block.header.block_number);
                 self.chain_store.clear_receipts(txn);
                 if let Err(e) = receipts {
                     return Err(PushError::AccountsError(e));
@@ -908,7 +908,7 @@ impl<'env> Blockchain<'env> {
         self.state.read()
     }
 
-    pub fn create_slash_inherents(&self, fork_proofs: &Vec<ForkProof>, view_changes: &Option<ViewChanges>, txn_option: Option<&Transaction>) -> Vec<Inherent> {
+    pub fn create_slash_inherents(&self, fork_proofs: &[ForkProof], view_changes: &Option<ViewChanges>, txn_option: Option<&Transaction>) -> Vec<Inherent> {
         let mut inherents = vec![];
         for fork_proof in fork_proofs {
             inherents.push(self.inherent_from_fork_proof(fork_proof, txn_option));
@@ -1021,7 +1021,7 @@ impl<'env> Blockchain<'env> {
 
             let inherent = Inherent {
                 ty: InherentType::Reward,
-                target: slot.reward_address_opt.clone().unwrap_or(slot.staker_address.clone()),
+                target: slot.reward_address_opt.clone().unwrap_or_else(|| slot.staker_address.clone()),
                 value: reward,
                 data: vec![],
             };

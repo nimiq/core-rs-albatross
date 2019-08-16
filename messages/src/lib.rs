@@ -210,7 +210,7 @@ impl Message {
         if buffer.len() >= 10 {
             return Some(BigEndian::read_u32(&buffer[5..9]) as usize);
         }
-        return None;
+        None
     }
 }
 
@@ -438,6 +438,7 @@ impl Serialize for Message {
     }
 }
 
+#[derive(Default)]
 pub struct MessageNotifier {
     pub version: RwLock<PassThroughNotifier<'static, VersionMessage>>,
     pub ver_ack: RwLock<PassThroughNotifier<'static, VerAckMessage>>,
@@ -483,50 +484,9 @@ pub struct MessageNotifier {
 }
 
 impl MessageNotifier {
+
     pub fn new() -> Self {
-        MessageNotifier {
-            version: RwLock::new(PassThroughNotifier::new()),
-            ver_ack: RwLock::new(PassThroughNotifier::new()),
-            inv: RwLock::new(PassThroughNotifier::new()),
-            get_data: RwLock::new(PassThroughNotifier::new()),
-            get_header: RwLock::new(PassThroughNotifier::new()),
-            not_found: RwLock::new(PassThroughNotifier::new()),
-            block: RwLock::new(PassThroughNotifier::new()),
-            header: RwLock::new(PassThroughNotifier::new()),
-            tx: RwLock::new(PassThroughNotifier::new()),
-            get_blocks: RwLock::new(PassThroughNotifier::new()),
-            mempool: RwLock::new(PassThroughNotifier::new()),
-            reject: RwLock::new(PassThroughNotifier::new()),
-            subscribe: RwLock::new(PassThroughNotifier::new()),
-            addr: RwLock::new(PassThroughNotifier::new()),
-            get_addr: RwLock::new(PassThroughNotifier::new()),
-            ping: RwLock::new(PassThroughNotifier::new()),
-            pong: RwLock::new(PassThroughNotifier::new()),
-            signal: RwLock::new(PassThroughNotifier::new()),
-            get_chain_proof: RwLock::new(PassThroughNotifier::new()),
-            chain_proof: RwLock::new(PassThroughNotifier::new()),
-            get_accounts_proof: RwLock::new(PassThroughNotifier::new()),
-            accounts_proof: RwLock::new(PassThroughNotifier::new()),
-            get_accounts_tree_chunk: RwLock::new(PassThroughNotifier::new()),
-            accounts_tree_chunk: RwLock::new(PassThroughNotifier::new()),
-            get_transactions_proof: RwLock::new(PassThroughNotifier::new()),
-            transactions_proof: RwLock::new(PassThroughNotifier::new()),
-            get_transaction_receipts: RwLock::new(PassThroughNotifier::new()),
-            transaction_receipts: RwLock::new(PassThroughNotifier::new()),
-            get_block_proof: RwLock::new(PassThroughNotifier::new()),
-            block_proof: RwLock::new(PassThroughNotifier::new()),
-            get_head: RwLock::new(PassThroughNotifier::new()),
-            head: RwLock::new(PassThroughNotifier::new()),
-            // Albatross
-            block_albatross: RwLock::new(PassThroughNotifier::new()),
-            header_albatross: RwLock::new(PassThroughNotifier::new()),
-            validator_info: RwLock::new(PassThroughNotifier::new()),
-            fork_proof: RwLock::new(PassThroughNotifier::new()),
-            view_change: RwLock::new(PassThroughNotifier::new()),
-            pbft_proposal: RwLock::new(PassThroughNotifier::new()),
-            pbft_prepare: RwLock::new(PassThroughNotifier::new()),
-            pbft_commit: RwLock::new(PassThroughNotifier::new()),
-        }
+        Self::default()
     }
 
     pub fn notify(&self, msg: Message) {

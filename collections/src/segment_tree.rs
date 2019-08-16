@@ -136,7 +136,12 @@ impl <T, U> SegmentTree<T, U>
     }
 
     pub fn len(&self) -> usize {
-        return self.size;
+        self.size
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.size == 0
     }
 
     pub fn range(&self) -> U {

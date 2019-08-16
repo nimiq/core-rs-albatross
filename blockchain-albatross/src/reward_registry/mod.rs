@@ -238,7 +238,7 @@ impl<'env> SlashRegistry<'env> {
             // Hash seed and index
             let mut hash_state = Blake2bHasher::new();
             prev_block.seed().serialize(&mut hash_state).unwrap();
-            hash_state.write(&view_number.to_be_bytes()).unwrap();
+            hash_state.write_all(&view_number.to_be_bytes()).unwrap();
             let hash = hash_state.finish();
 
             // Get number from first 8 bytes

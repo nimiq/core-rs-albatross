@@ -186,7 +186,7 @@ impl SerializeContent for AddressNibbles {
 }
 
 // Different hash implementation than std
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for AddressNibbles {}
 
 impl<'a, 'b> ops::Add<&'b AddressNibbles> for &'a AddressNibbles {

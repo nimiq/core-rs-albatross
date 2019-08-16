@@ -9,7 +9,6 @@ use network_primitives::{
     protocol::Protocol,
 };
 use network_primitives::services::ServiceFlags;
-use utils::time;
 
 use crate::{
     address::{

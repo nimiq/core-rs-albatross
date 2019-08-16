@@ -30,12 +30,18 @@ pub struct TransactionCache {
     block_order: VecDeque<BlockDescriptor>
 }
 
-impl TransactionCache {
-    pub fn new() -> Self {
+impl Default for TransactionCache {
+    fn default() -> Self {
         TransactionCache {
             transaction_hashes: HashSet::new(),
             block_order: VecDeque::with_capacity(policy::TRANSACTION_VALIDITY_WINDOW as usize)
         }
+    }
+}
+
+impl TransactionCache {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn contains(&self, transaction_hash: &Blake2bHash) -> bool {
@@ -90,8 +96,8 @@ impl TransactionCache {
 
     fn shift_block(&mut self) {
         let descriptor = self.block_order.pop_front();
-        if descriptor.is_some() {
-            for hash in &descriptor.unwrap().transaction_hashes {
+        if let Some(descriptor_some) = descriptor {
+            for hash in &descriptor_some.transaction_hashes {
                 self.transaction_hashes.remove(hash);
             }
         }

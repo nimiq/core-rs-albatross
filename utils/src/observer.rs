@@ -80,16 +80,21 @@ impl<E, F: Fn(E)> PassThroughListener<E> for F
     }
 }
 
-#[derive(Default)]
 pub struct PassThroughNotifier<'l, E> {
     listener: Option<Box<dyn PassThroughListener<E> + 'l>>,
 }
 
+impl<E> Default for PassThroughNotifier<'_, E> {
+    fn default() -> Self {
+        Self {
+            listener: None
+        }
+    }
+}
+
 impl<'l, E> PassThroughNotifier<'l, E> {
     pub fn new() -> Self {
-        Self {
-            listener: None,
-        }
+        Self::default()
     }
 
     pub fn register<T: PassThroughListener<E> + 'l>(&mut self, listener: T) {

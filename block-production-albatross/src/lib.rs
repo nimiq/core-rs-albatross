@@ -112,7 +112,7 @@ impl<'env> BlockProducer<'env> {
         let inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
         // Rewards are distributed with delay.
         let state_root = self.blockchain.state().accounts()
-            .hash_with(&vec![], &inherents, block_number)
+            .hash_with(&[], &inherents, block_number)
             .expect("Failed to compute accounts hash during block production");
 
         let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();

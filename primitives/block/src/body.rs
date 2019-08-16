@@ -28,7 +28,7 @@ impl SerializeContent for BlockBody {
 }
 
 // Different hash implementation than std
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for BlockBody {
     fn hash<H: HashOutput>(&self) -> H {
         let vec = self.get_merkle_leaves();
@@ -133,10 +133,10 @@ impl BlockBody {
     }
 
     pub fn get_metadata_size(extra_data_size: usize) -> usize {
-        return Address::SIZE
+        Address::SIZE
             + /*extra_data size*/ 1
             + extra_data_size
             + /*transactions size*/ 2
-            + /*receipts size*/ 2;
+            + /*receipts size*/ 2
     }
 }

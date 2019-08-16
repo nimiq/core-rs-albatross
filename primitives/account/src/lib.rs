@@ -349,6 +349,7 @@ impl SerializeContent for Receipt {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for Receipt {
     fn hash<H: HashOutput>(&self) -> H  {
         let h = H::Builder::default();

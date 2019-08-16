@@ -1,6 +1,5 @@
 use std::fmt;
 
-use account::Receipt;
 use beserial::{Deserialize, Serialize};
 use crate::BlockError;
 use crate::fork_proof::ForkProof;
@@ -125,18 +124,19 @@ impl MicroExtrinsics {
             }
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn get_metadata_size(num_fork_proofs: usize, extra_data_size: usize) -> usize {
-        return /*fork_proofs size*/ 2
+        /*fork_proofs size*/ 2
             + num_fork_proofs * ForkProof::SIZE
             + /*extra_data size*/ 1
             + extra_data_size
-            + /*transactions size*/ 2;
+            + /*transactions size*/ 2
     }
 }
 
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for MicroHeader { }
 
 impl fmt::Display for MicroHeader {
@@ -145,4 +145,5 @@ impl fmt::Display for MicroHeader {
     }
 }
 
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for MicroExtrinsics { }

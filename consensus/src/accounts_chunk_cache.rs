@@ -194,11 +194,11 @@ impl<B: AbstractBlockchain<'static> + 'static> Future for GetChunkFuture<B> {
                 tasks.push(task::current());
                 self.running = true;
             }
-            return Ok(Async::NotReady);
+            Ok(Async::NotReady)
         } else {
             // Else, the block is unknown, too far in the past or something else.
             // Return None in these cases.
-            return Ok(Async::Ready(None));
+            Ok(Async::Ready(None))
         }
     }
 }

@@ -271,7 +271,7 @@ impl Validator {
     }
 
     // Sets the state according to the rebranch
-    pub fn on_blockchain_rebranched(&self, old_chain: &Vec<(Blake2bHash, Block)>, new_chain: &Vec<(Blake2bHash, Block)>) {
+    pub fn on_blockchain_rebranched(&self, old_chain: &[(Blake2bHash, Block)], new_chain: &[(Blake2bHash, Block)]) {
         let mut state = self.state.write();
         for (_hash, block) in old_chain.iter() {
             state.fork_proof_pool.revert_block(block);

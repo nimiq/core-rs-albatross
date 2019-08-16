@@ -196,7 +196,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
             let (enum_type, uvar) = parse_enum_attribs(ast);
 
             let ty= if uvar {
-                enum_type.unwrap_or(Ident::new("u64", syn::export::Span::call_site()))
+                enum_type.unwrap_or_else(|| Ident::new("u64", syn::export::Span::call_site()))
             } else {
                 enum_type.expect(format!("Deserialize can not be derived for enum {} without repr(u*) or repr(i*)", name).as_str())
             };
@@ -310,5 +310,5 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
     };
-    gen.into()
+    gen
 }

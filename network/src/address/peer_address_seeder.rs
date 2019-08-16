@@ -95,8 +95,8 @@ impl PeerAddressSeeder {
                 // Process each line of the seed list
                 for line in response_body.lines() {
                     // Abort if the line can't be read properly
-                    if line.is_err() {
-                        return err(PeerAddressSeederError::IoError(line.unwrap_err()));
+                    if let Err(e) = line {
+                        return err(PeerAddressSeederError::IoError(e));
                     }
                     let line = line.expect("Validated this above");
 

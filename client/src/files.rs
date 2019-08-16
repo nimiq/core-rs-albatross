@@ -132,7 +132,7 @@ impl LazyFileLocations {
     }
 
     fn lazy_load(&mut self) -> Result<&FileLocations, Error> {
-        if let None = self.0 {
+        if self.0.is_none() {
             let files = FileLocations::default()?;
             self.0 = Some(files);
         }

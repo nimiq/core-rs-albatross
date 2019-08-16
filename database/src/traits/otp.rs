@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::io;
 
 use beserial::{Deserialize, Serialize};

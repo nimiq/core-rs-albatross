@@ -140,7 +140,7 @@ impl BlockProductionHandler {
         let timestamp = (systemtime_to_timestamp(SystemTime::now()) / 1000) as u32;
 
         let producer = BlockProducer::new(self.blockchain.clone(), self.mempool.clone());
-        return Ok(producer.next_block(timestamp, miner, extra_data));
+        Ok(producer.next_block(timestamp, miner, extra_data))
     }
 }
 

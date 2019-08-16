@@ -242,6 +242,7 @@ impl BlockHeader {
     }
 }
 
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for BlockHeader {}
 
 impl block_base::BlockHeader for BlockHeader {

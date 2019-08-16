@@ -19,7 +19,7 @@ impl fmt::Debug for LazyPublicKey {
 impl Clone for LazyPublicKey {
     fn clone(&self) -> Self {
         LazyPublicKey {
-            compressed: self.compressed,
+            compressed: self.compressed.clone(),
             cache: Mutex::new(self.cache.lock().clone()),
         }
     }
@@ -61,12 +61,11 @@ impl LazyPublicKey {
 
     pub fn uncompress(&self) -> Option<MappedMutexGuard<PublicKey>> {
         let mut cached = self.cache.lock();
-        match cached.as_ref() {
-            None => *cached = Some(match self.compressed.uncompress() {
+        if let None = cached.as_ref() {
+            *cached = Some(match self.compressed.uncompress() {
                 Ok(p) => p,
                 _ => return None,
-            }),
-            _ => (),
+            });
         }
 
         Some(MutexGuard::map(cached, |opt| opt.as_mut().unwrap()))

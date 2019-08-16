@@ -71,7 +71,7 @@ impl ConnectionHandle {
             return false;
         }
 
-        return true;
+        true
     }
 
     pub fn is_aborted(&self) -> bool {

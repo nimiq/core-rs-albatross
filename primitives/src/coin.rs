@@ -98,11 +98,11 @@ impl Rem<u64> for Coin {
 
 impl Zero for Coin {
     fn zero() -> Self {
-        return Self::ZERO;
+        Self::ZERO
     }
 
     fn is_zero(&self) -> bool {
-        return self.0 == 0;
+        self.0 == 0
     }
 }
 

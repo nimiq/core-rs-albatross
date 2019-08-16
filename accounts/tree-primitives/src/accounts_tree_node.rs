@@ -227,7 +227,7 @@ impl SerializeContent for AccountsTreeNode {
 }
 
 // Different hash implementation than std
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for AccountsTreeNode {}
 
 #[allow(clippy::type_complexity)]

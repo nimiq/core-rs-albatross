@@ -140,7 +140,7 @@ impl PublicKey {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct CompressedPublicKey {
     pub(crate) p_pub: G2Compressed,
 }

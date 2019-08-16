@@ -435,7 +435,7 @@ impl StakingContract {
                 let num = u64::from_be_bytes(num_bytes);
 
                 // XXX This is not uniform
-                let index = num % u64::from(lookup.range());
+                let index = num % lookup.range();
                 let staking_address = lookup.find(index).expect("Expected to find a validator in SegmentTree");
                 let active_stake = &self.active_stake_by_address[&staking_address];
 
@@ -829,8 +829,8 @@ impl Deserialize for StakingContract {
             active_stake_sorted.insert(Arc::clone(&active_stake));
             active_stake_by_address.insert(active_stake.staker_address.clone(), Arc::clone(&active_stake));
 
-            if inactive_stake.is_some() {
-                inactive_stake_by_address.insert(active_stake.staker_address.clone(), inactive_stake.unwrap());
+            if let Some(stake) = inactive_stake {
+                inactive_stake_by_address.insert(active_stake.staker_address.clone(), stake);
             }
         }
 

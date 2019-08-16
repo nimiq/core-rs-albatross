@@ -160,7 +160,7 @@ fn check_authentication<H: Handler>(handler: Arc<H>, authorization: Option<&Head
             .map_err(|_| AuthenticationError::InvalidHeader)?;
         let authorization = std::str::from_utf8(authorization
             .as_slice()).map_err(|_| AuthenticationError::InvalidHeader)?
-            .split(":").collect::<Vec<&str>>();
+            .split(':').collect::<Vec<&str>>();
         if authorization.len() != 2 {
             return Err(AuthenticationError::IncorrectCredentials);
         }

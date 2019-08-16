@@ -24,7 +24,7 @@ impl SerializeContent for BlockHeader {
 }
 
 // Different hash implementation than std
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for BlockHeader {}
 
 impl BlockHeader {

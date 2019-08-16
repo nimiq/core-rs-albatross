@@ -237,11 +237,11 @@ impl<E: Engine> AggregateSignature<E> {
         // Check pairings.
         let lhs = E::pairing(self.0.s, E::G2Affine::one());
         let mut rhs = E::Fqk::one();
-        for i in 0..public_keys.len() {
+        for public_key in public_keys {
             // garantueed to be available, since we check that there are as many messages/hashes
             // as public_keys.
             let h = hashes.pop().unwrap();
-            rhs.mul_assign(&E::pairing(hash_to_g1::<E>(h), public_keys[i].p_pub));
+            rhs.mul_assign(&E::pairing(hash_to_g1::<E>(h), public_key.p_pub));
         }
         lhs == rhs
     }

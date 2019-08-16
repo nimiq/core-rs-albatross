@@ -65,7 +65,7 @@ impl PowChainGenesis {
     }
 
     pub fn generate_genesis_hash(&self) -> Result<Blake2bHash, PowChainError> {
-        Ok(self.genesis_hash.clone().into())
+        Ok(self.genesis_hash.clone())
     }
 
     pub fn generate_accounts(&self)  -> Result<Vec<(Address, Account)>, PowChainError> {
@@ -1201,7 +1201,7 @@ impl PowChainGenesis {
                     493f0000000001fc5e364058ec9228c514efaca08543ba0969b145f1ab039601000000114f91cfc0\
                     ebd4ec914becf85c41585d50a81dcc0f4bae4d3d000000010001fa4000000008a7c8e7e000000011\
                     4f91cfc0ef60558d333e77839026fa1b0574e1b0f1e4d0790000000029ea5e4814f3a531509d46df\
-                    87e058c2762672a51366c3ce3b000000000014345918".into()},
+                    87e058c2762672a51366c3ce3b000000000014345918"},
         }
     }
 
@@ -1373,7 +1373,7 @@ impl PowChainGenesis {
                 0f7c77899b8b4ec5a3b2d0fd583024a08c963da6d8a0725b7b00000001000016800000010f7c7789\
                 9b0000010f7c77899b1702dc1b2cb05e372a24f84ece01c4835c6f1c800100001e9dbaf7b6df9ac9\
                 4a1a46736363a20b8e52074ca76981cc43390000000100000b400000051a49d3f3d000001e9dbaf7\
-                b6df".into()}
+                b6df"}
         }
     }
 
@@ -1548,7 +1548,7 @@ impl PowChainGenesis {
                 4ccd2cca89fc558a0000000100001680000003ee75f7f021000003ee75f7f021f4725ca23a28c4fe\
                 357eb0ec26e990798b91af6101000001b2fc634c4d0cb36a1d3be937aa313fa3c8c2611a07ac7bcb\
                 db0000000100000b40000000487f65e20d000001b2fc634c4daff24dcccbd3b3381072a31c0c1133\
-                b5f28e35f800000011a48952856d".into()}
+                b5f28e35f800000011a48952856d"}
         }
     }
 }

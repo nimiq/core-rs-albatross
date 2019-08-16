@@ -106,6 +106,6 @@ impl SerializeContent for PublicKey {
 }
 
 // This is a different Hash than the std Hash.
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
 impl Hash for PublicKey { }
 

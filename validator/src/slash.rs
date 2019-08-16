@@ -2,15 +2,14 @@ use block_albatross::{ForkProof, Block, MicroBlock};
 use std::collections::HashSet;
 use beserial::Serialize;
 
+#[derive(Default)]
 pub struct ForkProofPool {
     fork_proofs: HashSet<ForkProof>,
 }
 
 impl ForkProofPool {
     pub fn new() -> Self {
-        ForkProofPool {
-            fork_proofs: HashSet::new(),
-        }
+        Self::default()
     }
 
     /// Adds a fork proof if it is not yet part of the pool.

@@ -374,7 +374,7 @@ impl BlockchainHandler {
                     block_hash: &hash,
                     block_number: block.header.height,
                     index: i as u16,
-                    timestamp: block.header.timestamp as u64,
+                    timestamp: u64::from(block.header.timestamp),
                 }), Some(height))).collect()
             } else {
                 body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
@@ -406,7 +406,7 @@ impl BlockchainHandler {
             block_hash: &block.header.hash::<Blake2bHash>().to_hex(),
             block_number: block.header.height,
             index,
-            timestamp: block.header.timestamp as u64,
+            timestamp: u64::from(block.header.timestamp),
         }), Some(self.blockchain.height())))
     }
 

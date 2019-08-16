@@ -64,8 +64,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         if self.vectors_to_request.contains_key(vector) {
             let record = self.vectors_to_request.get_mut(&vector).unwrap();
             let current_opt = record.0.upgrade();
-            if current_opt.is_some() {
-                let current = current_opt.unwrap();
+            if let Some(current) = current_opt {
                 if !current.peer.channel.closed() {
                     let agent_arc = agent.self_weak.upgrade().unwrap();
                     if !Arc::ptr_eq(&agent_arc, &current) {
@@ -111,13 +110,12 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         let record = record_opt.unwrap();
         let current_opt = record.0.upgrade();
         let agent_opt = agent_weak.upgrade();
-        if current_opt.is_some() {
+        if let Some(current) = current_opt {
             if agent_opt.is_none() {
                 return;
             }
 
             let agent = agent_opt.unwrap();
-            let current = current_opt.unwrap();
             if !Arc::ptr_eq(&agent, &current) {
                 record.1.remove(&agent);
                 return;
