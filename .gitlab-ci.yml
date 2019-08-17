@@ -27,11 +27,6 @@ stages:
     - cargo --version
     - cargo test --all
 
-.clippy:
-  stage: test
-  script:
-    - cargo clippy --all
-
 .coverage:
   stage: coverage
   script:
@@ -43,6 +38,11 @@ stages:
   artifacts:
     paths:
       - cov/cov
+
+.clippy:
+  stage: coverage
+  script:
+    - cargo clippy --all
 
 build-nightly:
   extends: .build
@@ -59,7 +59,7 @@ coverage-nightly:
   image: 'rustlang/rust:nightly'
 
 clippy-nightly:
-  extends: .coverage
+  extends: .clippy
   image: 'rustlang/rust:nightly'
 
 #build-stable:
