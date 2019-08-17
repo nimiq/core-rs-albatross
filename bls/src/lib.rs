@@ -5,7 +5,7 @@ extern crate hex;
 
 use ff::Field;
 use group::{CurveAffine, CurveProjective};
-use hashmap_core::HashSet;
+use hashbrown::HashSet;
 use pairing::Engine;
 use rand::{Rng, SeedableRng};
 use rand04_compat::RngExt;
@@ -229,9 +229,12 @@ impl<E: Engine> AggregateSignature<E> {
         let mut hashes: Vec<SigHash> = msgs.iter().rev().map(|msg| msg.hash::<SigHash>()).collect();
 
         // check that hashes are distinct
-        let distinct_hashes: HashSet<&SigHash> = hashes.iter().collect();
-        if distinct_hashes.len() != hashes.len() {
-            panic!("Messages are not distinct");
+        // TODO: scoping currently required for borrow checker
+        {
+            let distinct_hashes: HashSet<&SigHash> = hashes.iter().collect();
+            if distinct_hashes.len() != hashes.len() {
+                panic!("Messages are not distinct");
+            }
         }
 
         // Check pairings.
