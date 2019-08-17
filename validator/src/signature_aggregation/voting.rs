@@ -48,8 +48,17 @@ pub trait Tag: signed::Message {
 
 /// Implementation for sender using a mapping from validator ID to `Peer`.
 pub struct VotingSender<T: Tag> {
-    tag: T,
-    peers: HashMap<usize, Arc<Peer>>,
+    pub tag: T,
+    pub peers: HashMap<usize, Arc<Peer>>,
+}
+
+impl<T: Tag> VotingSender<T> {
+    pub fn new(tag: T, peers: HashMap<usize, Arc<Peer>>) -> Self {
+        Self {
+            tag,
+            peers
+        }
+    }
 }
 
 impl<T: Tag> Sender for VotingSender<T> {
@@ -204,7 +213,7 @@ impl<T: Tag> Protocol for VotingProtocol<T> {
 
 /// Wrapper to make life easier ;)
 pub struct VoteAggregation<T: Tag> {
-    pub aggregation: Arc<Aggregation<VotingProtocol<T>>>
+    pub inner: Arc<Aggregation<VotingProtocol<T>>>
 }
 
 impl<T: Tag> VoteAggregation<T> {
@@ -212,7 +221,7 @@ impl<T: Tag> VoteAggregation<T> {
         let config = config.unwrap_or_default();
         let protocol = VotingProtocol::new(tag, node_id, validators, &config, peers);
         let aggregation = Aggregation::new(protocol, config);
-        Self { aggregation }
+        Self { inner: aggregation }
     }
 
     pub fn push_contribution(&self, contribution: signed::SignedMessage<T>) {
@@ -225,40 +234,40 @@ impl<T: Tag> VoteAggregation<T> {
         let node_id = node_id as usize;
 
         // panic if the contribution doesn't belong to this aggregation
-        if self.aggregation.protocol.tag != tag {
+        if self.inner.protocol.tag != tag {
             panic!("Submitting contribution for {:?}, but aggregation is for {:?}", tag, self.tag());
         }
 
         // panic if the contribution is from a different node
-        if self.aggregation.protocol.node_id != node_id {
+        if self.inner.protocol.node_id != node_id {
             panic!("Submitting contribution for validator {}, but aggregation is running as validator {}", node_id, self.node_id());
         }
 
-        self.aggregation.push_contribution(IndividualSignature::new(signature, node_id));
+        self.inner.push_contribution(IndividualSignature::new(signature, node_id));
     }
 
     pub fn push_update(&self, level_update: LevelUpdateMessage<T>) {
         if level_update.tag != *self.tag() {
             panic!("Submitting level update for {:?}, but aggregation is for {:?}");
         }
-        self.aggregation.push_update(level_update.update);
+        self.inner.push_update(level_update.update);
     }
 
     pub fn votes(&self) -> usize {
-        let store = self.aggregation.protocol.store.read();
+        let store = self.inner.protocol.store.read();
         store.best(store.best_level())
             .map(|multisig| {
-                self.aggregation.protocol.registry.signature_weight(&Signature::Multi(multisig.clone()))
+                self.inner.protocol.registry.signature_weight(&Signature::Multi(multisig.clone()))
                     .unwrap_or_else(|| panic!("Unknown signers in signature: {:?}", multisig))
             })
             .unwrap_or(0)
     }
 
     pub fn node_id(&self) -> usize {
-        self.aggregation.protocol.node_id
+        self.inner.protocol.node_id
     }
 
     pub fn tag(&self) -> &T {
-        &self.aggregation.protocol.tag
+        &self.inner.protocol.tag
     }
 }

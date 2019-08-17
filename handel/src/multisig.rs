@@ -125,6 +125,17 @@ pub enum Signature {
 }
 
 impl Signature {
+    pub fn signers_bitset(&self) -> BitSet {
+        match self {
+            Signature::Individual(individual) => {
+                let mut s = BitSet::new();
+                s.insert(individual.signer);
+                s
+            },
+            Signature::Multi(multisig) => multisig.signers.clone(),
+        }
+    }
+
     // TODO: Don't use `Box`. We need a specific type for the `BitSet` iterator. Then we can create an
     // enum that is either a `Once` iterator or an iterator over the `BitSet`.
     pub fn signers<'a>(&'a self) -> Box<dyn Iterator<Item=usize> + 'a> {

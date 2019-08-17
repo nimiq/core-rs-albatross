@@ -366,7 +366,7 @@ impl ValidatorNetwork {
             // register handler for when done and start (or use Future)
             {
                 let view_change = view_change.clone();
-                aggregation.aggregation.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
+                aggregation.inner.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
                     match event {
                         AggregationEvent::Complete { best } => {
                             info!("Complete: {:?}", view_change);

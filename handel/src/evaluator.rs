@@ -56,7 +56,7 @@ pub struct WeightedVote<S: SignatureStore, I: WeightRegistry, P: Partitioner> {
     store: Arc<RwLock<S>>,
     weights: Arc<I>,
     partitioner: Arc<P>,
-    threshold: usize
+    pub threshold: usize
 }
 
 impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> WeightedVote<S, I, P> {

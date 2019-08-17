@@ -33,6 +33,12 @@ impl Message for PbftPrepareMessage {
     const PREFIX: u8 = signed::PREFIX_PBFT_PREPARE;
 }
 
+impl From<Blake2bHash> for PbftPrepareMessage {
+    fn from(block_hash: Blake2bHash) -> Self {
+        PbftPrepareMessage { block_hash }
+    }
+}
+
 pub type SignedPbftPrepareMessage = SignedMessage<PbftPrepareMessage>;
 
 
@@ -44,6 +50,12 @@ pub struct PbftCommitMessage {
 
 impl Message for PbftCommitMessage {
     const PREFIX: u8 = signed::PREFIX_PBFT_COMMIT;
+}
+
+impl From<Blake2bHash> for PbftCommitMessage {
+    fn from(block_hash: Blake2bHash) -> Self {
+        PbftCommitMessage { block_hash }
+    }
 }
 
 pub type SignedPbftCommitMessage = SignedMessage<PbftCommitMessage>;

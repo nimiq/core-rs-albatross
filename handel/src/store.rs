@@ -174,7 +174,7 @@ impl<P: Partitioner> SignatureStore for ReplaceStore<P> {
         for (&i, signature) in self.multisig_best.range(0 ..= level) {
             trace!("collect: {:?}", signature);
             if i > signatures.len()  {
-                warn!("MultiSignature missing for level {} to {}", signatures.len(), i - 1);
+                //warn!("MultiSignature missing for level {} to {}", signatures.len(), i - 1);
                 //return None;
             }
             signatures.push(signature)
