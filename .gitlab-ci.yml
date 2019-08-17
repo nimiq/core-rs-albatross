@@ -42,7 +42,14 @@ stages:
 .clippy:
   stage: coverage
   script:
-    - cargo clippy --all
+    - set +e
+    - >
+      rustup component add clippy
+      if [[ $? == 0 ]]
+        then cargo clippy --all
+      else
+        echo "Clippy not available"
+      fi
 
 build-nightly:
   extends: .build
