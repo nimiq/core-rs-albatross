@@ -101,6 +101,7 @@ pub enum MessageType {
     PbftProposal = 120,
     PbftPrepare = 121,
     PbftCommit = 122,
+    GetMacroBlocks = 123,
 }
 
 #[derive(Clone, Debug)]
@@ -152,6 +153,7 @@ pub enum Message {
     PbftProposal(Box<SignedPbftProposal>),
     PbftPrepare(Box<LevelUpdateMessage<PbftPrepareMessage>>),
     PbftCommit(Box<LevelUpdateMessage<PbftCommitMessage>>),
+    GetMacroBlocks(Box<GetBlocksMessage>),
 }
 
 impl Message {
@@ -198,6 +200,7 @@ impl Message {
             Message::PbftProposal(_) => MessageType::PbftProposal,
             Message::PbftPrepare(_) => MessageType::PbftPrepare,
             Message::PbftCommit(_) => MessageType::PbftCommit,
+            Message::GetMacroBlocks(_) => MessageType::GetMacroBlocks,
         }
     }
 
@@ -307,6 +310,7 @@ impl Deserialize for Message {
             MessageType::PbftProposal => Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftPrepare => Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftCommit => Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetMacroBlocks => Message::GetMacroBlocks(Deserialize::deserialize(&mut crc32_reader)?),
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
@@ -375,6 +379,7 @@ impl Serialize for Message {
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
             Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
+            Message::GetMacroBlocks(get_blocks_message) => get_blocks_message.serialize(&mut v)?,
         };
 
         // write checksum to placeholder
@@ -432,6 +437,7 @@ impl Serialize for Message {
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialized_size(),
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialized_size(),
             Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
+            Message::GetMacroBlocks(get_blocks_message) => get_blocks_message.serialized_size(),
         };
         size
     }
@@ -480,6 +486,7 @@ pub struct MessageNotifier {
     pub pbft_proposal:  RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
     pub pbft_prepare: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftPrepareMessage>>>,
     pub pbft_commit: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftCommitMessage>>>,
+    pub get_macro_blocks: RwLock<PassThroughNotifier<'static, GetBlocksMessage>>,
 }
 
 impl MessageNotifier {
@@ -530,6 +537,7 @@ impl MessageNotifier {
             Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
             Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
             Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
+            Message::GetMacroBlocks(msg) => self.get_macro_blocks.read().notify(*msg),
         }
     }
 }

@@ -522,6 +522,11 @@ impl<'env> Blockchain<'env> {
         Ok(PushResult::Forked)
     }
 
+    /// Pushes a macro block without requiring the micro blocks of the previous epoch.
+    pub fn push_macro_block(&self, block: Block) -> Result<PushResult, PushError> {
+        unimplemented!()
+    }
+
     fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo, create_macro_extrinsics: bool) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(self.env);
         let state = self.state.upgradable_read();

@@ -32,6 +32,7 @@ use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 use crate::accounts_chunk_cache::AccountsChunkCache;
 
 pub mod requests;
+pub mod sync;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConsensusAgentEvent {
