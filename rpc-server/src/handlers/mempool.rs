@@ -93,10 +93,10 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
         let raw = hex::decode(params.get(0)
             .unwrap_or(&Null)
             .as_str()
-            .ok_or_else(|| object!{"message" => "Raw transaction must be a string"} )?)
-            .map_err(|_| object!{"message" => "Raw transaction must be a hex string"} )?;
+            .ok_or_else(|| object! {"message" => "Raw transaction must be a string"} )?)
+            .map_err(|_| object! {"message" => "Raw transaction must be a hex string"} )?;
         let transaction: Transaction = Deserialize::deserialize_from_vec(&raw)
-            .map_err(|_| object!{"message" => "Transaction can't be deserialized"} )?;
+            .map_err(|_| object! {"message" => "Transaction can't be deserialized"} )?;
         self.push_transaction(transaction)
     }
 
@@ -203,9 +203,9 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// ```
     pub(crate) fn get_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let hash = params.get(0).and_then(JsonValue::as_str)
-            .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
+            .ok_or_else(|| object! {"message" => "Invalid transaction hash"})
             .and_then(|s| Blake2bHash::from_str(s)
-                .map_err(|_| object!{"message" => "Invalid transaction hash"}))?;
+                .map_err(|_| object! {"message" => "Invalid transaction hash"}))?;
         let transaction = self.mempool.get_transaction(&hash);
         if let Some(tx) = transaction {
             Ok(transaction_to_obj(&tx, None, None))
@@ -216,16 +216,16 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
 
     // Helper functions
 
-    fn push_transaction(&self, transaction: Transaction) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn push_transaction(&self, transaction: Transaction) -> Result<JsonValue, JsonValue> {
         match self.mempool.push_transaction(transaction) {
-            ReturnCode::Accepted | ReturnCode::Known => Ok(object!{"message" => "Ok"}),
-            code => Err(object!{"message" => format!("Rejected: {:?}", code)})
+            ReturnCode::Accepted | ReturnCode::Known => Ok(object! {"message" => "Ok"}),
+            code => Err(object! {"message" => format!("Rejected: {:?}", code)})
         }
     }
 }
 
 pub(crate) fn transaction_to_obj(transaction: &Transaction, context: Option<&TransactionContext>, head_height: Option<u32>) -> JsonValue {
-    object!{
+    object! {
         "hash" => transaction.hash::<Blake2bHash>().to_hex(),
         "blockHash" => context.map(|c| c.block_hash.into()).unwrap_or(Null),
         "blockNumber" => context.map(|c| c.block_number.into()).unwrap_or(Null),
@@ -258,18 +258,18 @@ pub(crate) fn transaction_to_obj(transaction: &Transaction, context: Option<&Tra
 // }
 pub(crate) fn obj_to_transaction(obj: &JsonValue, current_height: u32, network_id: NetworkId) -> Result<Transaction, JsonValue> {
     let from = Address::from_any_str(obj["from"].as_str()
-        .ok_or_else(|| object!{"message" => "Sender address must be a string"})?)
-        .map_err(|_|  object!{"message" => "Sender address invalid"})?;
+        .ok_or_else(|| object! {"message" => "Sender address must be a string"})?)
+        .map_err(|_|  object! {"message" => "Sender address invalid"})?;
 
     let from_type = match &obj["fromType"] {
         &JsonValue::Null => Some(AccountType::Basic),
         n @ JsonValue::Number(_) => n.as_u8().and_then(AccountType::from_int),
         _ => None
-    }.ok_or_else(|| object!{"message" => "Invalid sender account type"})?;
+    }.ok_or_else(|| object! {"message" => "Invalid sender account type"})?;
 
     let to = match obj["to"] {
         JsonValue::String(ref recipient) => Some(Address::from_any_str(recipient)
-            .map_err(|_|  object!{"message" => "Recipient address invalid"})?),
+            .map_err(|_|  object! {"message" => "Recipient address invalid"})?),
         _ => None,
     };
 
@@ -277,30 +277,31 @@ pub(crate) fn obj_to_transaction(obj: &JsonValue, current_height: u32, network_i
         &JsonValue::Null => Some(AccountType::Basic),
         n @ JsonValue::Number(_) => n.as_u8().and_then(AccountType::from_int),
         _ => None
-    }.ok_or_else(|| object!{"message" => "Invalid recipient account type"})?;
+    }.ok_or_else(|| object! {"message" => "Invalid recipient account type"})?;
 
     let value = Coin::try_from(obj["value"].as_u64()
-        .ok_or_else(|| object!{"message" => "Invalid transaction value"})?)
-        .map_err(|_| object!{"message" => "Invalid transaction value"})?;
+        .ok_or_else(|| object! {"message" => "Invalid transaction value"})?)
+        .map_err(|_| object! {"message" => "Invalid transaction value"})?;
 
+    // FIXME Wrong fee
     let fee = Coin::try_from(obj["value"].as_u64()
-        .ok_or_else(|| object!{"message" => "Invalid transaction fee"})?)
-        .map_err(|_| object!{"message" => "Invalid transaction fee"})?;
+        .ok_or_else(|| object! {"message" => "Invalid transaction fee"})?)
+        .map_err(|_| object! {"message" => "Invalid transaction fee"})?;
 
     let flags = obj["flags"].as_u8()
         .map_or_else(|| Some(TransactionFlags::empty()), TransactionFlags::from_bits)
-        .ok_or_else(|| object!{"message" => "Invalid transaction flags"})?;
+        .ok_or_else(|| object! {"message" => "Invalid transaction flags"})?;
 
     let data = obj["data"].as_str()
         .map(hex::decode)
-        .transpose().map_err(|_| object!{"message" => "Invalid transaction data"})?
+        .transpose().map_err(|_| object! {"message" => "Invalid transaction data"})?
         .unwrap_or_else(|| vec![]);
 
     let validity_start_height = match &obj["validityStartHeight"] {
         &JsonValue::Null => Some(current_height),
         n @ JsonValue::Number(_) => n.as_u32(),
         _ => None
-    }.ok_or_else(|| object!{"message" => "Invalid validityStartHeight"})?;
+    }.ok_or_else(|| object! {"message" => "Invalid validityStartHeight"})?;
 
     if to_type != AccountType::Basic
         && flags.contains(TransactionFlags::CONTRACT_CREATION)
@@ -310,7 +311,7 @@ pub(crate) fn obj_to_transaction(obj: &JsonValue, current_height: u32, network_i
         && !flags.contains(TransactionFlags::CONTRACT_CREATION) {
         Ok(Transaction::new_extended(from, from_type, to.unwrap(), to_type, value, fee, data, validity_start_height, network_id))
     } else {
-        Err(object!{"message" => "Invalid combination of flags, toType and to."})
+        Err(object! {"message" => "Invalid combination of flags, toType and to."})
     }
 }
 

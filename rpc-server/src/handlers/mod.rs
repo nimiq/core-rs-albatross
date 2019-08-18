@@ -6,6 +6,7 @@ pub mod blockchain;
 pub mod blockchain_nimiq;
 pub mod blockchain_albatross;
 pub mod mempool;
+pub mod mempool_albatross;
 pub mod block_production;
 
 pub trait Handler: Send + Sync {

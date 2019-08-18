@@ -39,6 +39,7 @@ nimiq-network-primitives = { path = "../network-primitives", version = "0.1" }
 nimiq-block = { path = "../primitives/block", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
+nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-block-production = { path = "../block-production", version = "0.1" }

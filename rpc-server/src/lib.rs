@@ -8,6 +8,7 @@ extern crate nimiq_block_base as block_base;
 extern crate nimiq_block_production as block_production;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
+extern crate nimiq_bls as bls;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
