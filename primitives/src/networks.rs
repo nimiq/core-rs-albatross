@@ -13,6 +13,7 @@ pub enum NetworkId {
 
     TestAlbatross = 5,
     DevAlbatross = 6,
+    UnitAlbatross = 7,
 }
 
 
@@ -56,6 +57,7 @@ impl Display for NetworkId {
             NetworkId::Main => "Main",
             NetworkId::TestAlbatross => "TestAlbatross",
             NetworkId::DevAlbatross => "DevAlbatross",
+            NetworkId::UnitAlbatross => "UnitAlbatross",
         })
     }
 }

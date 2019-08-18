@@ -69,6 +69,7 @@ fn main() {
     generate_powchain("main-powchain", &out_dir, PowChainGenesis::main());
     generate_powchain("test-powchain", &out_dir, PowChainGenesis::test());
     generate_powchain("dev-powchain", &out_dir, PowChainGenesis::dev());
-    generate_albatross("dev-albatross", &out_dir, &src_dir,
-                       Address::from_str("735b84b129d1ae59bdd1d6b9849915cd8bd3d60a").expect("Invalid staking contract address"));
+    let contract_address = Address::from_str("43757a2049276d20416e20416c626174726f7373").unwrap();
+    generate_albatross("dev-albatross", &out_dir, &src_dir, contract_address.clone());
+    generate_albatross("unit-albatross", &out_dir, &src_dir, contract_address);
 }

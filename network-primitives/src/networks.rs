@@ -159,6 +159,15 @@ lazy_static! {
             genesis: include!(concat!(env!("OUT_DIR"), "/genesis/dev-albatross/genesis.rs")),
         });
 
+
+        add(&mut m, NetworkInfo {
+            network_id: NetworkId::UnitAlbatross,
+            name: "{}",
+            seed_peers: vec![],
+            seed_lists: vec![],
+            genesis: include!(concat!(env!("OUT_DIR"), "/genesis/unit-albatross/genesis.rs")),
+        });
+
         m
     };
 }
