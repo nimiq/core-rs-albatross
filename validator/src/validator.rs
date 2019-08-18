@@ -31,7 +31,7 @@ use collections::grouped_list::Group;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
 use network_primitives::networks::NetworkInfo;
-use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId, ValidatorInfo};
+use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
 use primitives::policy;
 use primitives::validators::IndexedSlot;
 use utils::mutable_once::MutableOnce;
@@ -91,7 +91,6 @@ impl Validator {
     pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair, block_delay: u64) -> Result<Arc<Self>, Error> {
         let compressed_public_key = validator_key.public.compress();
         let info = ValidatorInfo {
-            validator_id: ValidatorId::from_public_key(&compressed_public_key),
             public_key: compressed_public_key,
             peer_address: consensus.network.network_config.peer_address().clone()
         };
@@ -210,11 +209,6 @@ impl Validator {
         // Handle each block type (which is directly related to each event type).
         match event {
             BlockchainEvent::Finalized => {
-                // i.e. a macro block was accepted
-
-                // Notify validator network
-                self.validator_network.on_finality();
-
                 // Init new validator epoch
                 self.init_epoch()
             },
@@ -353,15 +347,18 @@ impl Validator {
         let slots = state.slots.expect("Checked above that we are an active validator");
 
         // Note: we don't verify this hash as the network validator already did.
-        let message = PbftPrepareMessage { block_hash: hash };
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
-        trace!("Signing prepare message: pk_idx={}", pk_idx);
-        let prepare_message = SignedPbftPrepareMessage::from_message(message, &self.validator_key.secret, pk_idx);
 
         drop(state);
-        match self.validator_network.commit_pbft_prepare(prepare_message, &self.validator_key.public, slots) {
-            _ => () // FIXME: error handling
-        }
+
+        trace!("Signing prepare and commit: pk_idx={}", pk_idx);
+        let prepare_message = SignedPbftPrepareMessage::from_message(
+            PbftPrepareMessage { block_hash: hash.clone() },
+            &self.validator_key.secret,
+            pk_idx
+        );
+
+        self.validator_network.push_prepare(prepare_message);
     }
 
     pub fn on_pbft_prepare_complete(&self, hash: Blake2bHash) {
@@ -375,15 +372,18 @@ impl Validator {
         let slots = state.slots.expect("Checked above that we are an active validator");
 
         // Note: we don't verify this hash as the network validator already did
-        let message = PbftCommitMessage { block_hash: hash };
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
-        trace!("Singing commit message: pk_idx={}", pk_idx);
-        let commit_message = SignedPbftCommitMessage::from_message(message, &self.validator_key.secret, pk_idx);
 
         drop(state);
-        match self.validator_network.commit_pbft_commit(commit_message, &self.validator_key.public , slots) {
-            _ => (), // FIXME: error handling
-        }
+
+        trace!("Singing commit message: pk_idx={}", pk_idx);
+        let commit_message = SignedPbftCommitMessage::from_message(
+            PbftCommitMessage { block_hash: hash },
+            &self.validator_key.secret,
+            pk_idx
+        );
+
+        self.validator_network.push_commit(commit_message);
     }
 
     pub fn on_pbft_commit_complete(&self, _hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
@@ -396,7 +396,7 @@ impl Validator {
         let block = Block::Macro(MacroBlock { header, justification, extrinsics: Some(extrinsics) });
 
         // Automatically relays block.
-        self.blockchain.push(block).unwrap();
+        self.blockchain.push(block).expect("Pushing macro block to blockchain failed");
     }
 
     fn start_view_change(&self) {
@@ -420,11 +420,6 @@ impl Validator {
         drop(state);
 
         // Broadcast our view change number message to the other validators.
-        #[cfg(not(feature = "handel"))]
-        match self.validator_network.commit_view_change(view_change_message, &self.validator_key.public, slots) {
-            _ => (), // FIXME: error handling
-        }
-        #[cfg(feature = "handel")]
         self.validator_network.start_view_change(view_change_message);
      }
 
@@ -440,17 +435,13 @@ impl Validator {
         let state = self.state.read();
 
         let timestamp = self.consensus.network.network_time.now();
-
         let pbft_proposal = self.block_producer.next_macro_block_proposal(timestamp, state.view_number, view_change);
-
         let pk_idx = state.pk_idx.expect("Checked that we are an active validator before entering this function");
 
-        let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
-
         drop(state);
-        match self.validator_network.commit_pbft_proposal(signed_proposal) {
-            _ => (), // FIXME: error handling
-        }
+
+        let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
+        self.validator_network.on_pbft_proposal(signed_proposal);
     }
 
     fn produce_micro_block(&self, view_change_proof: Option<ViewChangeProof>) {

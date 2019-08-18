@@ -5,13 +5,13 @@ use std::fmt;
 use parking_lot::RwLock;
 
 use primitives::validators::Validators;
-use block_albatross::{PbftPrepareMessage, PbftCommitMessage};
+use block_albatross::{PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage};
 use messages::Message;
 use hash::Blake2bHash;
 use network::Peer;
 use collections::bitset::BitSet;
 
-use handel::update::LevelUpdate;
+use handel::update::{LevelUpdate, LevelUpdateMessage};
 use handel::evaluator::{Evaluator, WeightedVote};
 use handel::protocol::Protocol;
 use handel::store::{SignatureStore, ReplaceStore};
@@ -19,21 +19,23 @@ use handel::aggregation::Aggregation;
 use handel::config::Config;
 use handel::partitioner::BinomialPartitioner;
 use handel::verifier::MultithreadedVerifier;
-use handel::multisig::{Signature, MultiSignature};
+use handel::multisig::{Signature, MultiSignature, IndividualSignature};
+use handel::identity::WeightRegistry;
 
 use super::voting::{VotingProtocol, Tag, VotingEvaluator, VotingSender, VoteAggregation, ValidatorRegistry};
+use crate::validator_agent::ValidatorAgent;
 
 
 
 impl Tag for PbftPrepareMessage {
     fn create_level_update_message(&self, update: LevelUpdate) -> Message {
-        Message::HandelPbftPrepare(Box::new(update.with_tag(self.clone())))
+        Message::PbftPrepare(Box::new(update.with_tag(self.clone())))
     }
 }
 
 impl Tag for PbftCommitMessage {
     fn create_level_update_message(&self, update: LevelUpdate) -> Message {
-        Message::HandelPbftCommit(Box::new(update.with_tag(self.clone())))
+        Message::PbftCommit(Box::new(update.with_tag(self.clone())))
     }
 }
 
@@ -147,7 +149,7 @@ impl PbftCommitProtocol {
         });
         // TODO: If we Arc the peer list, we don't need two copies. Or decouple the peer list from
         // the sender.
-        let peers = prepare_protocol.sender().peers.clone();
+        let peers = Arc::clone(&prepare_protocol.sender().peers);
         let sender = Arc::new(VotingSender::new(tag.clone(), peers));
 
         Self {
@@ -157,6 +159,17 @@ impl PbftCommitProtocol {
             sender,
             prepare_aggregation,
         }
+    }
+
+    // TODO: Duplicate code, see `VotingProtocol::votes()`
+    pub fn votes(&self) -> usize {
+        let store = self.store.read();
+        store.best(store.best_level())
+            .map(|multisig| {
+                self.registry().signature_weight(&Signature::Multi(multisig.clone()))
+                    .unwrap_or_else(|| panic!("Unknown signers in signature: {:?}", multisig))
+            })
+            .unwrap_or(0)
     }
 }
 
@@ -168,14 +181,14 @@ impl fmt::Debug for PbftCommitProtocol {
 
 
 
-struct PbftAggregation {
+pub struct PbftAggregation {
     prepare_aggregation: Arc<Aggregation<PbftPrepareProtocol>>,
     commit_aggregation: Arc<Aggregation<PbftCommitProtocol>>,
 }
 
 
 impl PbftAggregation {
-    pub fn new(proposal_hash: Blake2bHash, node_id: usize, validators: Validators, peers: HashMap<usize, Arc<Peer>>, config: Option<Config>) -> Self {
+    pub fn new(proposal_hash: Blake2bHash, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>, config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
 
         let prepare_protocol = PbftPrepareProtocol::new(
@@ -195,5 +208,76 @@ impl PbftAggregation {
             prepare_aggregation,
             commit_aggregation,
         }
+    }
+
+    pub fn push_signed_prepare(&self, contribution: SignedPbftPrepareMessage) {
+        // deconstruct signed view change
+        let SignedPbftPrepareMessage {
+            signature,
+            message: tag,
+            signer_idx: node_id,
+        } = contribution;
+        let node_id = node_id as usize;
+
+        // panic if the contribution doesn't belong to this aggregation
+        if self.prepare_aggregation.protocol.tag != tag {
+            panic!("Submitting prepare for {:?}, but aggregation is for {:?}", tag, self.prepare_aggregation.protocol.tag);
+        }
+
+        // panic if the contribution is from a different node
+        if self.prepare_aggregation.protocol.node_id != node_id {
+            panic!("Submitting prepare for validator {}, but aggregation is running as validator {}", node_id, self.node_id());
+        }
+
+        self.prepare_aggregation.push_contribution(IndividualSignature::new(signature, node_id));
+    }
+
+    pub fn push_signed_commit(&self, contribution: SignedPbftCommitMessage) {
+        // deconstruct signed view change
+        let SignedPbftCommitMessage {
+            signature,
+            message: tag,
+            signer_idx: node_id,
+        } = contribution;
+        let node_id = node_id as usize;
+
+        // panic if the contribution doesn't belong to this aggregation
+        if self.commit_aggregation.protocol.tag != tag {
+            panic!("Submitting commit for {:?}, but aggregation is for {:?}", tag, self.commit_aggregation.protocol.tag);
+        }
+
+        // panic if the contribution is from a different node
+        if self.prepare_aggregation.protocol.node_id != node_id {
+            panic!("Submitting commit for validator {}, but aggregation is running as validator {}", node_id, self.node_id());
+        }
+
+        self.commit_aggregation.push_contribution(IndividualSignature::new(signature, node_id));
+    }
+
+    pub fn push_prepare_level_update(&self, level_update: LevelUpdateMessage<PbftPrepareMessage>) {
+        if level_update.tag != self.prepare_aggregation.protocol.tag {
+            panic!("Submitting level update for {:?}, but aggregation is for {:?}");
+        }
+        self.prepare_aggregation.push_update(level_update.update);
+    }
+
+    pub fn push_commit_level_update(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
+        if level_update.tag != self.commit_aggregation.protocol.tag {
+            panic!("Submitting level update for {:?}, but aggregation is for {:?}");
+        }
+        self.commit_aggregation.push_update(level_update.update);
+    }
+
+    pub fn proposal_hash(&self) -> &Blake2bHash {
+        assert_eq!(self.prepare_aggregation.protocol.tag.block_hash, self.commit_aggregation.protocol.tag.block_hash);
+        &self.prepare_aggregation.protocol.tag.block_hash
+    }
+
+    pub fn node_id(&self) -> usize {
+        self.prepare_aggregation.protocol.node_id
+    }
+
+    pub fn votes(&self) -> (usize, usize) {
+        (self.prepare_aggregation.protocol.votes(), self.commit_aggregation.protocol.votes())
     }
 }

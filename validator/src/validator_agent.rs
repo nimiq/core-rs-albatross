@@ -1,33 +1,32 @@
 use std::sync::Arc;
 use std::cmp::Ordering;
 use std::collections::binary_heap::BinaryHeap;
+use std::fmt;
 
 use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
+use network_primitives::address::PeerId;
 use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener, weak_listener};
 use parking_lot::RwLock;
-use bls::bls12_381::PublicKey;
+use bls::bls12_381::{PublicKey, CompressedPublicKey};
 use collections::grouped_list::Group;
 use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      SignedPbftProposal, ViewChange, ForkProof, BlockHeader};
+                      SignedPbftProposal, ViewChange, ForkProof, BlockHeader, PbftPrepareMessage,
+                      PbftCommitMessage};
 use primitives::policy;
 use primitives::validators::IndexedSlot;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
-#[cfg(feature = "handel")]
 use handel::update::LevelUpdateMessage;
 
 
 pub enum ValidatorAgentEvent {
     ValidatorInfo(SignedValidatorInfo),
     ForkProof(ForkProof),
-    #[cfg(not(feature = "handel"))]
-    ViewChange { view_change: SignedViewChange, public_key: PublicKey, slots: u16 },
-    #[cfg(feature = "handel")]
     ViewChange(LevelUpdateMessage<ViewChange>),
     PbftProposal(SignedPbftProposal),
-    PbftPrepare { prepare: SignedPbftPrepareMessage, public_key: PublicKey, slots: u16 },
-    PbftCommit { commit: SignedPbftCommitMessage, public_key: PublicKey, slots: u16 }
+    PbftPrepare(LevelUpdateMessage<PbftPrepareMessage>),
+    PbftCommit(LevelUpdateMessage<PbftCommitMessage>),
 }
 
 /// Small wrapper to sort buffered pBFT proposals by block number
@@ -98,25 +97,16 @@ impl ValidatorAgent {
                 trace!("Received macro block proposal: {:?}", &proposal);
                 this.on_pbft_proposal_message(proposal);
             }));
+
         this.peer.channel.msg_notifier.pbft_prepare.write()
             .register(weak_passthru_listener(Arc::downgrade(this),
                 |this, prepare| this.on_pbft_prepare_message(prepare)));
         this.peer.channel.msg_notifier.pbft_commit.write()
             .register(weak_passthru_listener(Arc::downgrade(this),
                 |this, commit| this.on_pbft_commit_message(commit)));
-
-        #[cfg(not(feature = "handel"))]
         this.peer.channel.msg_notifier.view_change.write()
             .register(weak_passthru_listener( Arc::downgrade(this), |this, signed_view_change| {
-                #[cfg(feature = "handel")]
                 this.on_view_change_message(signed_view_change);
-
-                warn!("Ignoring legacy view change message.");
-            }));
-        #[cfg(feature = "handel")]
-        this.peer.channel.msg_notifier.handel_view_change.write()
-            .register(weak_passthru_listener( Arc::downgrade(this), |this, update_message| {
-                this.on_view_change_message(update_message);
             }));
 
         this.blockchain.notifier.write()
@@ -169,6 +159,9 @@ impl ValidatorAgent {
                 }
                 self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(signed_info));
             }
+            else {
+                error!("Uncompressing public key failed: {}", signed_info.message.peer_address);
+            }
         }
     }
 
@@ -202,34 +195,6 @@ impl ValidatorAgent {
     }
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
-    #[cfg(not(feature = "handel"))]
-    fn on_view_change_message(&self, view_change: SignedViewChange) {
-        trace!("[VIEW-CHANGE] Received: number=#{}.{} signer_idx={} peer={}",
-            view_change.message.block_number,
-            view_change.message.new_view_number,
-            view_change.signer_idx,
-            self.peer.peer_address());
-        if !self.blockchain.is_in_current_epoch(view_change.message.block_number) {
-            debug!("[VIEW-CHANGE] Epoch too old: block_number={}", view_change.message.block_number);
-        }
-        else if let Some(Group(count, key)) = self.blockchain.get_current_validator_by_idx(view_change.signer_idx) {
-            if view_change.verify(&key.uncompress_unchecked()) {
-                self.notifier.read().notify(ValidatorAgentEvent::ViewChange {
-                    view_change,
-                    public_key: key.uncompress_unchecked().clone(),
-                    slots: count
-                });
-            }
-            else {
-                debug!("[VIEW-CHANGE] Invalid signature");
-            }
-        }
-        else {
-            debug!("[VIEW-CHANGE] Invalid validator index: {}", view_change.signer_idx);
-        }
-    }
-
-    #[cfg(feature = "handel")]
     fn on_view_change_message(&self, update_message: LevelUpdateMessage<ViewChange>) {
         trace!("[VIEW-CHANGE] Received: number=#{}.{} update={:?} peer={}",
                update_message.tag.block_number,
@@ -311,55 +276,43 @@ impl ValidatorAgent {
     }
 
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
-    fn on_pbft_prepare_message(&self, prepare: SignedPbftPrepareMessage) {
-        trace!("[PBFT-PREPARE] Received: block={} signer_idx={} peer={}",
-            prepare.message.block_hash,
-            prepare.signer_idx,
-            self.peer.peer_address());
-        if let Some(Group(count, key)) = self.blockchain.get_current_validator_by_idx(prepare.signer_idx) {
-            if prepare.verify(&key.uncompress_unchecked()) {
-                self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare {
-                    prepare,
-                    public_key: key.uncompress_unchecked().clone(),
-                    slots: count
-                });
-            }
-            else {
-                warn!("[PBFT-PREPARE] Invalid signature: {:#?}", prepare);
-                trace!("Public Key: {:?}", key);
-            }
-        }
-        else {
-            debug!("[PBFT-PREPARE] Invalid validator index: {}", prepare.signer_idx);
-        }
+    /// TODO: The validator network could just register this it-self
+    fn on_pbft_prepare_message(&self, level_update: LevelUpdateMessage<PbftPrepareMessage>) {
+        trace!("[PBFT-PREPARE] Received: block_hash={} update={:?} peer={}",
+               level_update.tag.block_hash,
+               level_update.update,
+               self.peer.peer_address());
+
+        self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare(level_update));
     }
 
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
     /// FIXME This will verify a commit message with the current validator set, not with the one for
     /// which this commit is for.
-    fn on_pbft_commit_message(&self, commit: SignedPbftCommitMessage) {
-        trace!("[PBFT-COMMIT] Received: block={} signer_idx={} peer={}",
-            commit.message.block_hash,
-            commit.signer_idx,
-            self.peer.peer_address());
-        if let Some(Group(count, key)) = self.blockchain.get_current_validator_by_idx(commit.signer_idx) {
-            if commit.verify(&key.uncompress_unchecked()) {
-                self.notifier.read().notify(ValidatorAgentEvent::PbftCommit {
-                    commit,
-                    public_key: key.uncompress_unchecked().clone(),
-                    slots: count
-                });
-            }
-            else {
-                debug!("[PBFT-COMMIT] Invalid signature");
-            }
-        }
-        else {
-            warn!("[PBFT-COMMIT] Invalid validator index: {}", commit.signer_idx);
-        }
+    fn on_pbft_commit_message(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
+        trace!("[PBFT-COMMIT] Received: block_hash={} update={:?} peer={}",
+               level_update.tag.block_hash,
+               level_update.update,
+               self.peer.peer_address());
+
+        self.notifier.read().notify(ValidatorAgentEvent::PbftCommit(level_update));
     }
 
     pub fn validator_info(&self) -> Option<ValidatorInfo> {
         self.state.read().validator_info.as_ref().map(|signed| signed.message.clone())
+    }
+
+    pub fn public_key(&self) -> Option<CompressedPublicKey> {
+        self.state.read().validator_info.as_ref().map(|info| info.message.public_key.clone())
+    }
+
+    pub fn peer_id(&self) -> PeerId {
+        self.peer.peer_address().peer_id.clone()
+    }
+}
+
+impl fmt::Debug for ValidatorAgent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "ValidatorAgent {{ peer_id: {}, public_key: {:?} }}", self.peer_id(), self.public_key())
     }
 }

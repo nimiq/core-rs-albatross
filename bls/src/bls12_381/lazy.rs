@@ -61,7 +61,7 @@ impl LazyPublicKey {
 
     pub fn uncompress(&self) -> Option<MappedMutexGuard<PublicKey>> {
         let mut cached = self.cache.lock();
-        if let None = cached.as_ref() {
+        if cached.is_none() {
             *cached = Some(match self.compressed.uncompress() {
                 Ok(p) => p,
                 _ => return None,

@@ -21,7 +21,6 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
-#[cfg(feature = "handel")]
 extern crate nimiq_handel as handel;
 
 use std::fmt::Display;
@@ -42,14 +41,13 @@ use network_primitives::address::{PeerAddress, PeerId};
 use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
 use network_primitives::subscription::Subscription;
-use network_primitives::validator_info::{SignedValidatorInfo, ValidatorId};
+use network_primitives::validator_info::SignedValidatorInfo;
 use network_primitives::version;
 use transaction::{Transaction, TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
 use utils::observer::{PassThroughListener, PassThroughNotifier};
-#[cfg(feature = "handel")]
 use handel::update::LevelUpdateMessage;
 
 
@@ -101,17 +99,10 @@ pub enum MessageType {
     HeaderAlbatross = 101,
     ViewChange = 105,
     ForkProof = 106,
-    ValidatorQuery = 110,
     ValidatorInfo = 111,
     PbftProposal = 120,
     PbftPrepare = 121,
     PbftCommit = 122,
-
-    // Albatross / Handel - experimental. Use "handel" feature
-    #[cfg(feature = "handel")]
-    HandelViewChange = 130,
-    HandelPrepare = 131,
-    HandelCommit = 132,
 }
 
 #[derive(Clone, Debug)]
@@ -157,21 +148,12 @@ pub enum Message {
     // Albatross
     BlockAlbatross(Box<BlockAlbatross>),
     HeaderAlbatross(Box<BlockHeaderAlbatross>),
-    ValidatorQuery(Box<ValidatorQueryMessage>),
     ValidatorInfo(Vec<SignedValidatorInfo>),
     ForkProof(Box<ForkProof>),
-    ViewChange(Box<SignedViewChange>),
+    ViewChange(Box<LevelUpdateMessage<ViewChange>>),
     PbftProposal(Box<SignedPbftProposal>),
-    PbftPrepare(Box<SignedPbftPrepareMessage>),
-    PbftCommit(Box<SignedPbftCommitMessage>),
-
-    // Albatross / Handel - experimental. Use "handel" feature
-    #[cfg(feature = "handel")]
-    HandelViewChange(Box<LevelUpdateMessage<ViewChange>>),
-    #[cfg(feature = "handel")]
-    HandelPbftPrepare(Box<LevelUpdateMessage<PbftPrepareMessage>>),
-    #[cfg(feature = "handel")]
-    HandelPbftCommit(Box<LevelUpdateMessage<PbftCommitMessage>>),
+    PbftPrepare(Box<LevelUpdateMessage<PbftPrepareMessage>>),
+    PbftCommit(Box<LevelUpdateMessage<PbftCommitMessage>>),
 }
 
 impl Message {
@@ -212,20 +194,12 @@ impl Message {
             // Albatross
             Message::BlockAlbatross(_) => MessageType::BlockAlbatross,
             Message::HeaderAlbatross(_) => MessageType::HeaderAlbatross,
-            Message::ValidatorQuery(_) => MessageType::ValidatorQuery,
             Message::ViewChange(_) => MessageType::ViewChange,
             Message::ValidatorInfo(_) => MessageType::ValidatorInfo,
             Message::ForkProof(_) => MessageType::ForkProof,
             Message::PbftProposal(_) => MessageType::PbftProposal,
             Message::PbftPrepare(_) => MessageType::PbftPrepare,
             Message::PbftCommit(_) => MessageType::PbftCommit,
-            // Albatross / Handel - experimental. Use "handel" feature
-            #[cfg(feature = "handel")]
-            Message::HandelViewChange(_) => MessageType::HandelViewChange,
-            #[cfg(feature = "handel")]
-            Message::HandelPbftPrepare(_) => MessageType::HandelPrepare,
-            #[cfg(feature = "handel")]
-            Message::HandelPbftCommit(_) => MessageType::HandelCommit,
         }
     }
 
@@ -329,20 +303,12 @@ impl Deserialize for Message {
             // Albatross
             MessageType::BlockAlbatross => Message::BlockAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::HeaderAlbatross => Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::ValidatorQuery => Message::ValidatorQuery(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::ValidatorInfo => Message::ValidatorInfo(DeserializeWithLength::deserialize::<u8, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
             MessageType::ForkProof => Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::ViewChange => Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftProposal => Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftPrepare => Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftCommit => Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
-            // Albatross / Handel - experimental. Use "handel" feature
-            #[cfg(feature = "handel")]
-            MessageType::HandelViewChange => Message::HandelViewChange(Deserialize::deserialize(&mut crc32_reader)?),
-            #[cfg(feature = "handel")]
-            MessageType::HandelPrepare => Message::HandelPbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
-            #[cfg(feature = "handel")]
-            MessageType::HandelCommit => Message::HandelPbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
@@ -405,20 +371,12 @@ impl Serialize for Message {
             // Albatross
             Message::BlockAlbatross(block) => block.serialize(&mut v)?,
             Message::HeaderAlbatross(header) => header.serialize(&mut v)?,
-            Message::ValidatorQuery(validator_query) => validator_query.serialize(&mut v)?,
             Message::ViewChange(view_change_message) => view_change_message.serialize(&mut v)?,
             Message::ValidatorInfo(validator_infos) => validator_infos.serialize::<u8, Vec<u8>>(&mut v)?,
             Message::ForkProof(fork_proof) => fork_proof.serialize(&mut v)?,
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
             Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
-            // Albatross / Handel - experimental. Use "handel" feature
-            #[cfg(feature = "handel")]
-            Message::HandelViewChange(level_update) => level_update.serialize(&mut v)?,
-            #[cfg(feature = "handel")]
-            Message::HandelPbftPrepare(level_update) => level_update.serialize(&mut v)?,
-            #[cfg(feature = "handel")]
-            Message::HandelPbftCommit(level_update) => level_update.serialize(&mut v)?,
         };
 
         // write checksum to placeholder
@@ -470,20 +428,12 @@ impl Serialize for Message {
             // Albatross
             Message::BlockAlbatross(block) => block.serialized_size(),
             Message::HeaderAlbatross(header) => header.serialized_size(),
-            Message::ValidatorQuery(validator_query) => validator_query.serialized_size(),
             Message::ValidatorInfo(validator_info) => validator_info.serialized_size::<u8>(),
             Message::ForkProof(fork_proof) => fork_proof.serialized_size(),
             Message::ViewChange(view_change_message) => view_change_message.serialized_size(),
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialized_size(),
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialized_size(),
             Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
-            // Albatross / Handel - experimental. Use "handel" feature
-            #[cfg(feature = "handel")]
-            Message::HandelViewChange(level_update) => level_update.serialized_size(),
-            #[cfg(feature = "handel")]
-            Message::HandelPbftPrepare(level_update) => level_update.serialized_size(),
-            #[cfg(feature = "handel")]
-            Message::HandelPbftCommit(level_update) => level_update.serialized_size(),
         };
         size
     }
@@ -528,21 +478,13 @@ pub struct MessageNotifier {
     pub header_albatross: RwLock<PassThroughNotifier<'static, BlockHeaderAlbatross>>,
     pub validator_info: RwLock<PassThroughNotifier<'static, Vec<SignedValidatorInfo>>>,
     pub fork_proof: RwLock<PassThroughNotifier<'static, ForkProof>>,
-    pub view_change: RwLock<PassThroughNotifier<'static, SignedViewChange>>,
+    pub view_change: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<ViewChange>>>,
     pub pbft_proposal:  RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
-    pub pbft_prepare: RwLock<PassThroughNotifier<'static, SignedPbftPrepareMessage>>,
-    pub pbft_commit: RwLock<PassThroughNotifier<'static, SignedPbftCommitMessage>>,
-    // Albatross / Handel - experimental. Use "handel" feature
-    #[cfg(feature = "handel")]
-    pub handel_view_change: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<ViewChange>>>,
-    #[cfg(feature = "handel")]
-    pub handel_pbft_prepare: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftPrepareMessage>>>,
-    #[cfg(feature = "handel")]
-    pub handel_pbft_commit: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftCommitMessage>>>,
+    pub pbft_prepare: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftPrepareMessage>>>,
+    pub pbft_commit: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftCommitMessage>>>,
 }
 
 impl MessageNotifier {
-
     pub fn new() -> Self {
         Self::default()
     }
@@ -590,13 +532,6 @@ impl MessageNotifier {
             Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
             Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
             Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
-            // Albatross / Handel - experimental. Use "handel" feature
-            #[cfg(feature = "handel")]
-            Message::HandelViewChange(update) => self.handel_view_change.read().notify(*update),
-            #[cfg(feature = "handel")]
-            Message::HandelPbftPrepare(update) => self.handel_pbft_prepare.read().notify(*update),
-            #[cfg(feature = "handel")]
-            Message::HandelPbftCommit(update) => self.handel_pbft_commit.read().notify(*update),
 
             // catch unimplemented
             _ => info!("Received message for unimplemented type: {}", msg.ty())
@@ -1149,15 +1084,3 @@ impl VerAckMessage {
         }))
     }
 }
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ValidatorQueryMessage {
-    validator_id: ValidatorId,
-
-    // 0  : find the address of the validator with the given ID
-    // k>0: find k validators that are close to the given ID (distance defined by XOR)
-    //
-    // XXX Or should we instead request validators with a specific common prefix with us?
-    closest: u8, // 0 if exact
-}
-

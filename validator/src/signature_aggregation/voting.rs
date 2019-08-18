@@ -30,6 +30,8 @@ use handel::aggregation::Aggregation;
 use handel::store::SignatureStore;
 use handel::sender::Sender;
 
+use crate::validator_agent::ValidatorAgent;
+
 
 
 
@@ -49,11 +51,11 @@ pub trait Tag: signed::Message {
 /// Implementation for sender using a mapping from validator ID to `Peer`.
 pub struct VotingSender<T: Tag> {
     pub tag: T,
-    pub peers: HashMap<usize, Arc<Peer>>,
+    pub peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>,
 }
 
 impl<T: Tag> VotingSender<T> {
-    pub fn new(tag: T, peers: HashMap<usize, Arc<Peer>>) -> Self {
+    pub fn new(tag: T, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>) -> Self {
         Self {
             tag,
             peers
@@ -65,9 +67,9 @@ impl<T: Tag> Sender for VotingSender<T> {
     type Error = IoError;
 
     fn send_to(&self, peer_id: usize, update: LevelUpdate) -> Result<(), IoError> {
-        if let Some(peer) = self.peers.get(&peer_id) {
+        if let Some(agent) = self.peers.get(&peer_id) {
             let update_message = self.tag.create_level_update_message(update);
-            peer.channel.send(update_message)
+            agent.peer.channel.send(update_message)
                 .map_err(|e| IoError::new(ErrorKind::Other, e))
         }
         else {
@@ -120,13 +122,12 @@ pub struct VotingProtocol<T: Tag> {
 }
 
 impl<T: Tag> VotingProtocol<T> {
-    pub fn new(tag: T, node_id: usize, validators: Validators, config: &Config, peers: HashMap<usize, Arc<Peer>>) -> Self {
+    pub fn new(tag: T, node_id: usize, validators: Validators, config: &Config, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>) -> Self {
         let num_validators = validators.num_groups();
         trace!("num_validators = {}", num_validators);
-
         trace!("validator_id = {}", node_id);
-        for (&peer_id, peer) in &peers {
-            trace!("peer {}: {}", peer_id, peer.peer_address());
+        for (&peer_id, agent) in peers.iter() {
+            trace!("peer {}: {}", peer_id, agent.peer.peer_address());
         }
 
         let registry = Arc::new(ValidatorRegistry {
@@ -164,6 +165,16 @@ impl<T: Tag> VotingProtocol<T> {
             node_id,
             sender,
         }
+    }
+
+    pub fn votes(&self) -> usize {
+        let store = self.store.read();
+        store.best(store.best_level())
+            .map(|multisig| {
+                self.registry.signature_weight(&Signature::Multi(multisig.clone()))
+                    .unwrap_or_else(|| panic!("Unknown signers in signature: {:?}", multisig))
+            })
+            .unwrap_or(0)
     }
 }
 
@@ -217,7 +228,7 @@ pub struct VoteAggregation<T: Tag> {
 }
 
 impl<T: Tag> VoteAggregation<T> {
-    pub fn new(tag: T, node_id: usize, validators: Validators, peers: HashMap<usize, Arc<Peer>>, config: Option<Config>) -> Self {
+    pub fn new(tag: T, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>, config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
         let protocol = VotingProtocol::new(tag, node_id, validators, &config, peers);
         let aggregation = Aggregation::new(protocol, config);
@@ -254,13 +265,7 @@ impl<T: Tag> VoteAggregation<T> {
     }
 
     pub fn votes(&self) -> usize {
-        let store = self.inner.protocol.store.read();
-        store.best(store.best_level())
-            .map(|multisig| {
-                self.inner.protocol.registry.signature_weight(&Signature::Multi(multisig.clone()))
-                    .unwrap_or_else(|| panic!("Unknown signers in signature: {:?}", multisig))
-            })
-            .unwrap_or(0)
+        self.inner.protocol.votes()
     }
 
     pub fn node_id(&self) -> usize {

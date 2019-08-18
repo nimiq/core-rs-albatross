@@ -10,7 +10,7 @@ use super::voting::{VoteAggregation, Tag};
 
 impl Tag for ViewChange {
     fn create_level_update_message(&self, update: LevelUpdate) -> Message {
-        Message::HandelViewChange(Box::new(update.with_tag(self.clone())))
+        Message::ViewChange(Box::new(update.with_tag(self.clone())))
     }
 }
 
