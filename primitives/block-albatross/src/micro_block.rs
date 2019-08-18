@@ -1,15 +1,13 @@
 use std::fmt;
 
 use beserial::{Deserialize, Serialize};
-use crate::BlockError;
+use crate::{BlockError, ViewChangeProof};
 use crate::fork_proof::ForkProof;
-use crate::view_change::ViewChange;
 use hash::{Hash, Blake2bHash, SerializeContent};
 use primitives::networks::NetworkId;
 use nimiq_bls::bls12_381::CompressedSignature;
 use std::cmp::Ordering;
 use transaction::Transaction;
-use crate::signed;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroBlock {
@@ -37,7 +35,7 @@ pub struct MicroHeader {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroJustification {
     pub signature: CompressedSignature,
-    pub view_change_proof: Option<signed::AggregateProof<ViewChange>>,
+    pub view_change_proof: Option<ViewChangeProof>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]

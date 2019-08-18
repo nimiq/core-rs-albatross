@@ -5,7 +5,7 @@ use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
+use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, MappedMutexGuard};
 
 use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
@@ -15,6 +15,7 @@ use block::{Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, Ma
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
+use bls::bls12_381::PublicKey;
 use collections::bitset::BitSet;
 use collections::grouped_list::GroupedList;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
@@ -253,9 +254,9 @@ impl<'env> Blockchain<'env> {
     }
 
     /// This method is called by the validator only.
-    pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: Option<&ViewChangeProof>) -> Result<(), PushError> {
+    pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: Option<&ViewChangeProof>, intended_slot_owner: &MappedMutexGuard<PublicKey>, txn_opt: Option<&Transaction>) -> Result<(), PushError> {
         // Check if the block's immediate predecessor is part of the chain.
-        let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash(), false, None);
+        let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash(), false, txn_opt);
         if prev_info_opt.is_none() {
             warn!("Rejecting block - unknown predecessor");
             return Err(PushError::Orphan);
@@ -309,11 +310,6 @@ impl<'env> Blockchain<'env> {
         }
 
         // Check if the block was produced (and signed) by the intended producer
-        // Public keys are checked when staking, so this should never fail.
-        let IndexedSlot { slot, .. } = self.get_block_producer_at(header.block_number(), header.view_number(), None)
-            .ok_or(PushError::InvalidSuccessor)?;
-        let intended_slot_owner = slot.public_key.uncompress_unchecked();
-
         match header.seed().uncompress() {
             Ok(ref signature) => {
                 if !intended_slot_owner.verify(&prev_info.head.seed().uncompress().unwrap(), signature) { // todo nicer
@@ -377,7 +373,7 @@ impl<'env> Blockchain<'env> {
                     .ok_or(PushError::InvalidSuccessor)?
             );
 
-            let intended_slot_owner = slot.as_ref().unwrap().slot.public_key.uncompress_unchecked().clone();
+            let intended_slot_owner = slot.as_ref().unwrap().slot.public_key.uncompress_unchecked();
 
             let justification = match micro_block.justification.signature.uncompress() {
                 Ok(justification) => justification,
@@ -391,6 +387,11 @@ impl<'env> Blockchain<'env> {
                 debug!("Block hash: {}", micro_block.header.hash::<Blake2bHash>());
                 debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+            }
+
+            if let Err(e) = self.verify_block_header(&block.header(), micro_block.justification.view_change_proof.as_ref(), &intended_slot_owner, Some(&read_txn)) {
+                warn!("Rejecting block - Bad header / justification");
+                return Err(e);
             }
 
             // Validate slash inherents
@@ -411,6 +412,7 @@ impl<'env> Blockchain<'env> {
         }
 
         if let Block::Macro(ref macro_block) = block {
+            // Check Macro Justification
             match macro_block.justification {
                 None => {
                     warn!("Rejecting block - macro block without justification");

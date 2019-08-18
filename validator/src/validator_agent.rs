@@ -222,15 +222,10 @@ impl ValidatorAgent {
         }
 
         if let Some(IndexedSlot { slot, .. }) = self.blockchain.get_block_producer_at(block_number, view_number, None) {
-            let public_key = &slot.public_key.uncompress_unchecked();
+            let public_key = slot.public_key.uncompress_unchecked();
 
             // check the validity of the block
-            /*let block = Block::Macro(MacroBlock {
-                header: proposal.message.header.clone(),
-                justification: None,
-                extrinsics: None
-            });*/
-            if let Err(e) = self.blockchain.verify_block_header(&BlockHeader::Macro(proposal.message.header.clone()), proposal.message.view_change.as_ref()) {
+            if let Err(e) = self.blockchain.verify_block_header(&BlockHeader::Macro(proposal.message.header.clone()), proposal.message.view_change.as_ref(), &public_key, None) {
                 debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
                 return;
             }

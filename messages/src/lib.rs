@@ -26,7 +26,6 @@ use std::fmt::Display;
 use std::io;
 use std::io::{Read, Cursor, Seek, SeekFrom};
 
-use byteorder::{BigEndian, ByteOrder};
 use parking_lot::RwLock;
 use rand::Rng;
 use rand::rngs::OsRng;
