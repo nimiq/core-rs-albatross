@@ -682,6 +682,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
 
         let peer_address = peer.peer_address();
         let mut is_inbound = false;
+        let mut is_simultaneous = false;
         // Read lock.
         {
             let mut state = self.state.write();
@@ -730,6 +731,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
                                     // The peer with the lower peerId accepts this connection and closes his stored connection.
                                     if self.network_config.peer_id() < peer_address.peer_id() {
                                         Self::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
+                                        is_simultaneous = true;
                                         // The assert does not make much sense since the closing happens asynchronously.
                                         // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                                     } else {
@@ -741,6 +743,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
                                 _ => {
                                     // Accept this connection and close the stored connection.
                                     Self::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
+                                    is_simultaneous = true;
                                     // The assert does not make much sense since the closing happens asynchronously.
                                     // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
                                 },
@@ -760,7 +763,9 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
         // Write lock.
         if is_inbound {
             let mut state = self.state.write();
-            assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo already exists");
+            // Since the close of the other simultaneous connection is async, it may happen that we get to this assert before the connection has been closed
+            // so we should only panic if this assert fails and we are not in a simultaneous connection scenario
+            if !is_simultaneous { assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo already exists"); }
             state.connections.get_mut(connection_id).unwrap().set_peer_address(peer_address.clone());
             state.add_peer_address(connection_id, peer_address.clone());
 
