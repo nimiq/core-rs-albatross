@@ -40,6 +40,7 @@ use utils::timers::Timers;
 use crate::error::Error;
 use crate::slash::ForkProofPool;
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
+use block_albatross::signed::Message;
 
 #[derive(Clone, Debug)]
 pub enum SlotChange  {
@@ -141,8 +142,6 @@ impl Validator {
     pub fn init_listeners(this: &Arc<Validator>) {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
-        debug!("Initializing listeners");
-
         // Setup event handlers for blockchain events
         let weak = Arc::downgrade(this);
         this.consensus.notifier.write().register(move |e: &ConsensusEvent| {
@@ -210,7 +209,7 @@ impl Validator {
         match event {
             BlockchainEvent::Finalized => {
                 // Init new validator epoch
-                self.init_epoch()
+                self.init_epoch();
             },
 
             BlockchainEvent::Extended(hash) => {
@@ -245,6 +244,10 @@ impl Validator {
                 state.slots = Some(slots);
                 state.status = ValidatorStatus::Active;
 
+                // Notify validator network that we have finality and update epoch-related state
+                // (i.e. set the validator ID)
+                self.validator_network.on_finality(Some(pk_idx as usize));
+
                 // If we're an active validator, we need to check if we're the next block producer.
                 self.on_slot_change(SlotChange::NextBlock);
             },
@@ -253,6 +256,9 @@ impl Validator {
                 state.pk_idx = None;
                 state.slots = None;
                 state.status = if self.is_potential_validator() { ValidatorStatus::Potential } else { ValidatorStatus::Synced };
+
+                // Notify validator network that we have finality and update epoch-related state
+                self.validator_network.on_finality(None);
             },
         }
     }
@@ -293,7 +299,7 @@ impl Validator {
             },
             ValidatorNetworkEvent::PbftProposal(hash, proposal) => self.on_pbft_proposal(hash, proposal),
             ValidatorNetworkEvent::PbftPrepareComplete(hash, _) => self.on_pbft_prepare_complete(hash),
-            ValidatorNetworkEvent::PbftCommitComplete(hash, proposal, proof) => self.on_pbft_commit_complete(hash, proposal, proof),
+            ValidatorNetworkEvent::PbftComplete(hash, proposal, proof) => self.on_pbft_commit_complete(hash, proposal, proof),
             ValidatorNetworkEvent::ForkProof(proof) => self.on_fork_proof(proof),
         }
     }
@@ -362,8 +368,8 @@ impl Validator {
     }
 
     pub fn on_pbft_prepare_complete(&self, hash: Blake2bHash) {
-        let state = self.state.read();
         trace!("Complete prepare for: {}", hash);
+        let state = self.state.read();
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
             return;
@@ -434,6 +440,7 @@ impl Validator {
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {
         let state = self.state.read();
 
+        // FIXME: Don't use network time
         let timestamp = self.consensus.network.network_time.now();
         let pbft_proposal = self.block_producer.next_macro_block_proposal(timestamp, state.view_number, view_change);
         let pk_idx = state.pk_idx.expect("Checked that we are an active validator before entering this function");
@@ -441,7 +448,7 @@ impl Validator {
         drop(state);
 
         let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
-        self.validator_network.on_pbft_proposal(signed_proposal);
+        self.validator_network.start_pbft(signed_proposal);
     }
 
     fn produce_micro_block(&self, view_change_proof: Option<ViewChangeProof>) {

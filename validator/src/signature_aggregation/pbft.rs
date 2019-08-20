@@ -1,21 +1,24 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::collections::HashMap;
 use std::fmt;
 
 use parking_lot::RwLock;
 
 use primitives::validators::Validators;
-use block_albatross::{PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage};
+use block_albatross::{PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage,
+                      SignedPbftCommitMessage, PbftProof};
+use block_albatross::signed::{AggregateProof, Message as SignableMessage};
 use messages::Message;
 use hash::Blake2bHash;
 use network::Peer;
 use collections::bitset::BitSet;
+use utils::observer::{weak_passthru_listener, PassThroughNotifier};
 
 use handel::update::{LevelUpdate, LevelUpdateMessage};
 use handel::evaluator::{Evaluator, WeightedVote};
 use handel::protocol::Protocol;
 use handel::store::{SignatureStore, ReplaceStore};
-use handel::aggregation::Aggregation;
+use handel::aggregation::{Aggregation, AggregationEvent};
 use handel::config::Config;
 use handel::partitioner::BinomialPartitioner;
 use handel::verifier::MultithreadedVerifier;
@@ -61,8 +64,10 @@ impl Evaluator for PbftCommitEvaluator {
     }
 
     fn is_final(&self, signature: &Signature) -> bool {
-        signature.signers_bitset().intersection_size(&self.prepare_signers())
-            >= self.commit_evaluator.threshold
+        let signers = signature.signers_bitset() & self.prepare_signers();
+        let votes = self.commit_evaluator.weights.signers_weight(&signers)
+            .expect("Invalid signer set");
+        votes >= self.commit_evaluator.threshold
     }
 }
 
@@ -88,6 +93,10 @@ pub struct PbftCommitProtocol {
     /// The evaluator being used. This either just counts votes
     evaluator: Arc<PbftCommitEvaluator>,
 
+    /// The verifier for the commit phase. The difference from the prepare verifier is only the message
+    /// hash, which uses a different prefix.
+    verifier: Arc<MultithreadedVerifier<ValidatorRegistry>>,
+
     sender: Arc<VotingSender<PbftCommitMessage>>,
 
     prepare_aggregation: Arc<Aggregation<PbftPrepareProtocol>>,
@@ -106,7 +115,7 @@ impl Protocol for PbftCommitProtocol {
     }
 
     fn verifier(&self) -> Arc<Self::Verifier> {
-        Arc::clone(&self.prepare_aggregation.protocol.verifier())
+        Arc::clone(&self.verifier)
     }
 
     fn store(&self) -> Arc<RwLock<Self::Store>> {
@@ -136,6 +145,11 @@ impl PbftCommitProtocol {
 
         let tag = PbftCommitMessage::from(prepare_protocol.tag.block_hash.clone());
         let registry = Arc::clone(&prepare_protocol.registry());
+        let verifier = Arc::new(MultithreadedVerifier::new(
+            tag.hash_with_prefix(),
+            Arc::clone(&registry),
+            None,
+        ));
         let partitioner = Arc::clone(&prepare_protocol.partitioner());
         let store = Arc::new(RwLock::new(ReplaceStore::new(Arc::clone(&partitioner))));
         let evaluator = Arc::new(PbftCommitEvaluator {
@@ -147,8 +161,6 @@ impl PbftCommitProtocol {
             ),
             prepare_aggregation: Arc::clone(&prepare_aggregation),
         });
-        // TODO: If we Arc the peer list, we don't need two copies. Or decouple the peer list from
-        // the sender.
         let peers = Arc::clone(&prepare_protocol.sender().peers);
         let sender = Arc::new(VotingSender::new(tag.clone(), peers));
 
@@ -156,6 +168,7 @@ impl PbftCommitProtocol {
             tag,
             store,
             evaluator,
+            verifier,
             sender,
             prepare_aggregation,
         }
@@ -180,10 +193,9 @@ impl fmt::Debug for PbftCommitProtocol {
 }
 
 
-
 pub struct PbftAggregation {
-    prepare_aggregation: Arc<Aggregation<PbftPrepareProtocol>>,
-    commit_aggregation: Arc<Aggregation<PbftCommitProtocol>>,
+    pub prepare_aggregation: Arc<Aggregation<PbftPrepareProtocol>>,
+    pub commit_aggregation: Arc<Aggregation<PbftCommitProtocol>>,
 }
 
 
@@ -191,6 +203,7 @@ impl PbftAggregation {
     pub fn new(proposal_hash: Blake2bHash, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>, config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
 
+        // create prepare aggregation
         let prepare_protocol = PbftPrepareProtocol::new(
             PbftPrepareMessage::from(proposal_hash.clone()),
             node_id,
@@ -201,6 +214,7 @@ impl PbftAggregation {
         );
         let prepare_aggregation = Aggregation::new(prepare_protocol, config.clone());
 
+        // create commit aggregation
         let commit_protocol = PbftCommitProtocol::new(Arc::clone(&prepare_aggregation));
         let commit_aggregation = Aggregation::new(commit_protocol, config);
 
@@ -274,6 +288,9 @@ impl PbftAggregation {
     }
 
     pub fn node_id(&self) -> usize {
+        // NOTE: We don't need to assert that `node_id` is the same for prepare and commit, since
+        // the commit aggregation just takes the value from the prepare aggregation when you call
+        // the getter.
         self.prepare_aggregation.protocol.node_id
     }
 

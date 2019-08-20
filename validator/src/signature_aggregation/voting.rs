@@ -109,7 +109,8 @@ pub struct VotingProtocol<T: Tag> {
 
     registry: Arc<ValidatorRegistry>,
 
-    // TODO: This should not be part of the protocol
+    // TODO: This should not be part of the protocol. Except that it holds the hash which depends
+    // on the *specific* item being hashed (including prefix)
     verifier: Arc<MultithreadedVerifier<ValidatorRegistry>>,
 
     partitioner: Arc<BinomialPartitioner>,

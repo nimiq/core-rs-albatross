@@ -112,14 +112,15 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVeri
         let identity_registry = Arc::clone(&self.identity_registry);
 
         self.workers.spawn_fn(move || {
-            Ok(match signature {
-                Signature::Individual(ref individual) => {
+            let res = match &signature {
+                Signature::Individual(individual) => {
                     Self::verify_individual(identity_registry, message_hash, individual)
                 },
-                Signature::Multi(ref multisig) => {
+                Signature::Multi(multisig) => {
                     Self::verify_multisig(identity_registry, message_hash, multisig)
                 }
-            })
+            };
+            Ok(res)
         })
     }
 }

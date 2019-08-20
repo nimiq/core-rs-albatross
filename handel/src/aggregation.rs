@@ -194,8 +194,6 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
             let individual = if level.receive_complete() { None } else { self.state.read().contribution.clone() };
             let update = LevelUpdate::new(multisig, individual, level.id, self.protocol.node_id());
 
-            trace!("Sending updates to {:?}: {:#?}", peer_ids, update);
-
             for peer_id in peer_ids {
                 assert_ne!(peer_id, self.protocol.node_id(), "Nodes must not send updates to them-self");
                 self.protocol.sender().send_to(peer_id, update.clone())

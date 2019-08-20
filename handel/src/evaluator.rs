@@ -54,7 +54,7 @@ impl<S: SignatureStore, P: Partitioner> Evaluator for SingleVote<S, P> {
 /// NOTE: This can be used for ViewChanges
 pub struct WeightedVote<S: SignatureStore, I: WeightRegistry, P: Partitioner> {
     store: Arc<RwLock<S>>,
-    weights: Arc<I>,
+    pub weights: Arc<I>,
     partitioner: Arc<P>,
     pub threshold: usize
 }
