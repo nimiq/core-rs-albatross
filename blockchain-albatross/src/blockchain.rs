@@ -349,7 +349,7 @@ impl<'env> Blockchain<'env> {
 
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
         // Only one push operation at a time.
-        let _lock = self.push_lock.lock();
+        let push_lock = self.push_lock.lock();
 
         // Check if we already know this block.
         let hash: Blake2bHash = block.hash();
@@ -454,7 +454,7 @@ impl<'env> Blockchain<'env> {
         let chain_info = prev_info.next(block, slot);
 
         if *chain_info.head.parent_hash() == self.head_hash() {
-            return self.extend(chain_info.head.hash(), chain_info, prev_info);
+            return self.extend(chain_info.head.hash(), chain_info, prev_info, push_lock);
         }
 
         let is_better_chain = Ordering::Equal
@@ -462,7 +462,7 @@ impl<'env> Blockchain<'env> {
             .then_with(|| chain_info.head.block_number().cmp(&self.block_number()))
             .eq(&Ordering::Greater);
         if is_better_chain {
-            return self.rebranch(chain_info.head.hash(), chain_info);
+            return self.rebranch(chain_info.head.hash(), chain_info, push_lock);
         }
 
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
@@ -474,7 +474,7 @@ impl<'env> Blockchain<'env> {
         Ok(PushResult::Forked)
     }
 
-    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> Result<PushResult, PushError> {
+    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo, push_lock: MutexGuard<()>) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(self.env);
         let state = self.state.upgradable_read();
 
@@ -533,6 +533,7 @@ impl<'env> Blockchain<'env> {
 
         // Give up lock before notifying.
         drop(state);
+        drop(push_lock);
 
         let event = BlockchainEvent::Extended(block_hash);
         self.notifier.read().notify(event);
@@ -544,7 +545,7 @@ impl<'env> Blockchain<'env> {
         Ok(PushResult::Extended)
     }
 
-    fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo) -> Result<PushResult, PushError> {
+    fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo, push_lock: MutexGuard<()>) -> Result<PushResult, PushError> {
         debug!("Rebranching to fork {}, height #{}, view number {}", block_hash, chain_info.head.block_number(), chain_info.head.view_number());
 
         // Find the common ancestor between our current main chain and the fork chain.
@@ -693,6 +694,7 @@ impl<'env> Blockchain<'env> {
 
         // Give up lock before notifying.
         drop(state);
+        drop(push_lock);
 
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
         for (hash, chain_info) in revert_chain.into_iter().rev() {
