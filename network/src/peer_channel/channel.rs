@@ -32,6 +32,7 @@ pub struct PeerChannel {
     pub address_info: AddressInfo,
     closed_flag: ClosedFlag,
     pub last_message_received: Arc<Atomic<Instant>>,
+    close_event_sent: Arc<AtomicBool>,
 
     #[cfg(feature = "metrics")]
     pub message_metrics: Arc<MessageMetrics>,
@@ -54,7 +55,8 @@ impl PeerChannel {
         let message_metrics1 = message_metrics.clone();
 
         let info = network_connection.address_info();
-        let close_event_sent = AtomicBool::new(false);
+        let close_event_sent = Arc::new(AtomicBool::new(false));
+        let close_event_sent_inner = close_event_sent.clone();
         network_connection.notifier.write().register(move |e: PeerStreamEvent| {
             match e {
                 PeerStreamEvent::Message(msg) => {
@@ -65,13 +67,13 @@ impl PeerChannel {
                 },
                 PeerStreamEvent::Close(ty) => {
                     // Only send close event once, i.e., if close_event_sent was false.
-                    if !close_event_sent.swap(true, Ordering::AcqRel) {
+                    if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
                         close_notifier1.read().notify(ty)
                     }
                 },
                 PeerStreamEvent::Error(error) => {
                     // Only send close event once, i.e., if close_event_sent was false.
-                    if !close_event_sent.swap(true, Ordering::AcqRel) {
+                    if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
                         debug!("Stream with peer closed with error: {} ({})", error.as_ref(), info);
                         close_notifier1.read().notify(CloseType::NetworkError);
                     }
@@ -86,6 +88,7 @@ impl PeerChannel {
             address_info: network_connection.address_info(),
             closed_flag: network_connection.closed_flag(),
             last_message_received,
+            close_event_sent,
 
             #[cfg(feature = "metrics")]
             message_metrics,
@@ -108,9 +111,13 @@ impl PeerChannel {
 
     pub fn close(&self, ty: CloseType) {
         self.peer_sink.close(ty, None);
-        let notifier = Arc::clone(&self.close_notifier);
+        let notifier = self.close_notifier.clone();
+        let close_event_sent = self.close_event_sent.clone();
         tokio::spawn(futures::lazy(move || {
-            notifier.read().notify(ty);
+            // Only send close event once, i.e., if close_event_sent was false.
+            if !close_event_sent.swap(true, Ordering::AcqRel) {
+                notifier.read().notify(ty);
+            }
             futures::future::ok(())
         }));
     }
