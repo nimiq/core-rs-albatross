@@ -1,3 +1,6 @@
+// If we don't allow absurd comparisons, clippy fails because `MIN_FULL_NODES` can be 0.
+#![allow(clippy::absurd_extreme_comparisons)]
+
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
