@@ -33,3 +33,4 @@ hex = "0.3"
 nimiq-account = { path = "../primitives/account", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-collections = { path = "../collections", version = "0.1" }

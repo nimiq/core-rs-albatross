@@ -298,14 +298,14 @@ impl<'env> Blockchain<'env> {
                         block_number: header.block_number(),
                         new_view_number: header.view_number(),
                     };
-                    if let Err(e) = view_change_proof.verify(&view_change,&self.current_validators(),policy::TWO_THIRD_SLOTS) {
+                    if let Err(e) = view_change_proof.verify(&view_change, &self.current_validators(), policy::TWO_THIRD_SLOTS) {
                         warn!("Rejecting block - bad view change proof: {:?}", e);
                         return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                     }
                 },
             }
         } else if new_view_number == view_number && view_change_proof.is_some() {
-            warn!("Rejecting block - should not contain view change proof");
+            warn!("Rejecting block - must not contain view change proof");
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
