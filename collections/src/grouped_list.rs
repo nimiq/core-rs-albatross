@@ -70,3 +70,11 @@ impl<T> GroupedList<T>
         self.0.get(i)
     }
 }
+
+impl<T> Default for GroupedList<T>
+    where T: Clone + Eq + PartialEq + Serialize + Deserialize
+{
+    fn default() -> Self {
+        GroupedList(Vec::new())
+    }
+}

@@ -36,7 +36,7 @@ pub struct SignedMessage<M: Message> {
     pub signer_idx: u16,
 
     // signature over message
-    signature: Signature
+    pub signature: Signature,
 }
 
 impl<M: Message> SignedMessage<M> {
