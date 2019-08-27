@@ -186,12 +186,22 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPoolState<B> {
         assert_eq!(existing_connection, None);
     }
 
+    /// Removes a connection from the connection pool.
+    fn remove_peer_address(&mut self, connection_id: ConnectionId, peer_address: &PeerAddress) {
+        // Make sure peer address does not already point to a new connection!
+        if self.connections_by_peer_address.get(peer_address)
+            .map(|other_connection_id|  *other_connection_id == connection_id)
+            .unwrap_or(false) {
+            self.connections_by_peer_address.remove(peer_address);
+        }
+    }
+
     /// Remove a connection from the connection pool if it is present.
     fn remove(&mut self, connection_id: ConnectionId) -> Option<ConnectionInfo<B>> {
         let info = self.connections.remove(connection_id)?;
 
         if let Some(peer_address) = info.peer_address() {
-            self.connections_by_peer_address.remove(&peer_address);
+            self.remove_peer_address(connection_id, &peer_address);
         }
 
         if let Some(network_connection) = info.network_connection() {
@@ -682,7 +692,6 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
 
         let peer_address = peer.peer_address();
         let mut is_inbound = false;
-        let mut is_simultaneous = false;
         // Read lock.
         {
             let mut state = self.state.write();
@@ -698,9 +707,9 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
 
                     // Duplicate/simultaneous connection check (post handshake):
                     let stored_connection_id = state.connections_by_peer_address.get(&peer_address);
-                    if let Some(stored_connection_id) = stored_connection_id {
-                        if *stored_connection_id != connection_id {
-                            let stored_connection = state.connections.get(*stored_connection_id).unwrap_or_else(|| panic!("Missing connection #{}", *stored_connection_id));
+                    if let Some(&stored_connection_id) = stored_connection_id {
+                        if stored_connection_id != connection_id {
+                            let stored_connection = state.connections.get(stored_connection_id).unwrap_or_else(|| panic!("Missing connection #{}", stored_connection_id));
                             match stored_connection.state() {
                                 ConnectionState::Connecting => {
                                     // Abort the stored connection attempt and accept this connection.
@@ -713,15 +722,11 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
                                         handle.abort(CloseType::SimultaneousConnection);
                                     }
 
-                                    let stored_connection_id = *stored_connection_id;
-
                                     // Clean up the state from the changes made by connect_outbound()
                                     state.connections.remove(stored_connection_id);
-                                    state.connections_by_peer_address.remove(&peer_address);
-
-                                    // The assert does not make much sense since the closing happens asynchronously.
-                                    // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
+                                    state.remove_peer_address(stored_connection_id, &peer_address);
                                 },
+
                                 ConnectionState::Established => {
                                     // If we have another established connection to this peer, close this connection.
                                     Self::close(info.network_connection(), CloseType::SimultaneousConnection);
@@ -731,9 +736,8 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
                                     // The peer with the lower peerId accepts this connection and closes his stored connection.
                                     if self.network_config.peer_id() < peer_address.peer_id() {
                                         Self::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
-                                        is_simultaneous = true;
-                                        // The assert does not make much sense since the closing happens asynchronously.
-                                        // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
+                                        // Free association with peer address.
+                                        state.remove_peer_address(stored_connection_id, &peer_address);
                                     } else {
                                         // The peer with the higher peerId closes this connection and keeps his stored connection.
                                         Self::close(info.network_connection(), CloseType::SimultaneousConnection);
@@ -743,9 +747,8 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
                                 _ => {
                                     // Accept this connection and close the stored connection.
                                     Self::close(stored_connection.network_connection(), CloseType::SimultaneousConnection);
-                                    is_simultaneous = true;
-                                    // The assert does not make much sense since the closing happens asynchronously.
-                                    // assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo not removed");
+                                    // Free association with peer address.
+                                    state.remove_peer_address(stored_connection_id, &peer_address);
                                 },
                             }
                         }
@@ -763,9 +766,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
         // Write lock.
         if is_inbound {
             let mut state = self.state.write();
-            // Since the close of the other simultaneous connection is async, it may happen that we get to this assert before the connection has been closed
-            // so we should only panic if this assert fails and we are not in a simultaneous connection scenario
-            if !is_simultaneous { assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo already exists"); }
+            assert!(state.get_connection_by_peer_address(&peer_address).is_none(), "ConnectionInfo already exists");
             state.connections.get_mut(connection_id).unwrap().set_peer_address(peer_address.clone());
             state.add_peer_address(connection_id, peer_address.clone());
 
