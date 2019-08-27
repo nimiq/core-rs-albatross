@@ -14,7 +14,7 @@ mod docker;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::fs::remove_dir_all;
+use std::fs::{remove_dir_all, canonicalize};
 
 use log::Level;
 use structopt::StructOpt;
@@ -33,23 +33,26 @@ struct Args {
 
 
 #[shell]
+// NOTE: env_dir needs to be absolute
 fn build_client<S: ToString>(env_dir: S) -> Result<impl Iterator<Item=Result<String, Error>>, Error> { r#"
     mkdir $ENV_DIR/build/
-    export NIMIQ_OVERRIDE_DEVNET_CONFIG=$(realpath $ENV_DIR/dev-albatross.toml)
+    export NIMIQ_OVERRIDE_DEVNET_CONFIG=$ENV_DIR/dev-albatross.toml
     cargo build --bin nimiq-client -Z unstable-options --out-dir $ENV_DIR/build/
 "# }
 
 
 
 fn run_devnet(args: Args, keyboard_interrupt: Arc<AtomicBool>) -> Result<(), Error> {
-    let docker = Docker::new(&args.env);
+    let env_dir = canonicalize(&args.env)
+        .expect("Can't get absolute path");
 
     // Build `nimiq-client` binary
     info!("Building nimiq-client");
-    for line in build_client(args.env.to_str().unwrap())? {
+    for line in build_client(env_dir.to_str().unwrap())? {
         println!("{}", line?);
     }
 
+    let docker = Docker::new(&env_dir);
 
     // build docker containers
     docker.build("target/debug/nimiq-client")?;
@@ -68,7 +71,7 @@ fn run_devnet(args: Args, keyboard_interrupt: Arc<AtomicBool>) -> Result<(), Err
     // TODO: prune docker containers
 
     // delete build directory
-    remove_dir_all(args.env.join("build"))
+    remove_dir_all(env_dir.join("build"))
         .expect("Failed to delete build directory");
 
     Ok(())
