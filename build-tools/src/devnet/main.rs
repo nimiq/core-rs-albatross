@@ -37,7 +37,7 @@ struct Args {
 fn build_client<S: ToString>(env_dir: S) -> Result<impl Iterator<Item=Result<String, Error>>, Error> { r#"
     mkdir $ENV_DIR/build/
     export NIMIQ_OVERRIDE_DEVNET_CONFIG=$ENV_DIR/dev-albatross.toml
-    cargo build --bin nimiq-client -Z unstable-options --out-dir $ENV_DIR/build/
+    cargo build --target=x86_64-unknown-linux-gnu --bin nimiq-client -Z unstable-options --out-dir $ENV_DIR/build/
 "# }
 
 
