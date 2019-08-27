@@ -27,6 +27,10 @@ pub struct GenesisConfig {
 
     #[serde(default)]
     pub accounts: Vec<GenesisAccount>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_nimiq_address_opt")]
+    pub staking_contract: Option<Address>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

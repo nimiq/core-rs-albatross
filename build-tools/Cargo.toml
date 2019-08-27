@@ -8,6 +8,10 @@ edition = "2018"
 name = "nimiq-genesis"
 path = "src/genesis/main.rs"
 
+[[bin]]
+name = "nimiq-devnet"
+path = "src/devnet/main.rs"
+
 [dependencies]
 nimiq-bls = { path = "../bls", optional = true }
 nimiq-block = { path = "../primitives/block", optional = true }
@@ -29,9 +33,13 @@ serde = "1.0"
 serde_derive = "1.0"
 toml = "0.5"
 hex = "0.3"
-log = "0.4.6"
-simple_logger = "1.0.1"
+log = "0.4"
+simple_logger = "1.0"
 failure = "0.1"
+structopt = { version = "0.2", features = ["paw"] }
+paw = "1.0"
+shellfn = "0.1"
+ctrlc = "3.1"
 
 [features]
 default = ["albatross", "powchain"]

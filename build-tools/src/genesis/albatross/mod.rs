@@ -35,8 +35,8 @@ use primitives::policy;
 pub enum GenesisBuilderError {
     #[fail(display = "No signing key to generate genesis seed.")]
     NoSigningKey,
-    #[fail(display = "No validator registry address.")]
-    NoValidatorRegistryAddress,
+    #[fail(display = "No staking contract address.")]
+    NoStakingContractAddress,
     #[fail(display = "Invalid timestamp: {}", _0)]
     InvalidTimestamp(DateTime<Utc>),
     #[fail(display = "Serialization failed")]
@@ -85,12 +85,12 @@ impl From<VolatileDatabaseError> for GenesisBuilderError {
 
 #[derive(Default)]
 pub struct GenesisBuilder {
-    signing_key: Option<BlsSecretKey>,
-    seed_message: Option<String>,
-    timestamp: Option<DateTime<Utc>>,
-    stakes: Vec<config::GenesisStake>,
-    accounts: Vec<config::GenesisAccount>,
-    validator_registry: Option<Address>,
+    pub signing_key: Option<BlsSecretKey>,
+    pub seed_message: Option<String>,
+    pub timestamp: Option<DateTime<Utc>>,
+    pub stakes: Vec<config::GenesisStake>,
+    pub accounts: Vec<config::GenesisAccount>,
+    pub staking_contract_address: Option<Address>,
 }
 
 impl GenesisBuilder {
@@ -109,8 +109,8 @@ impl GenesisBuilder {
         self
     }
 
-    pub fn with_validator_registry_address(&mut self, address: Address) -> &mut Self {
-        self.validator_registry = Some(address);
+    pub fn with_staking_contract_address(&mut self, address: Address) -> &mut Self {
+        self.staking_contract_address = Some(address);
         self
     }
 
@@ -139,11 +139,13 @@ impl GenesisBuilder {
             timestamp,
             mut stakes,
             mut accounts,
+            staking_contract,
         } = toml::from_str(&read_to_string(path)?)?;
 
         signing_key.map(|skey| self.with_signing_key(skey));
         seed_message.map(|msg| self.with_seed_message(msg));
         timestamp.map(|t| self.with_timestamp(t));
+        staking_contract.map(|address| self.with_staking_contract_address(address));
         self.stakes.append(&mut stakes);
         self.accounts.append(&mut accounts);
 
@@ -203,7 +205,7 @@ impl GenesisBuilder {
 
         // accounts
         let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
-        genesis_accounts.push((Address::clone(self.validator_registry.as_ref().ok_or(GenesisBuilderError::NoValidatorRegistryAddress)?), Account::Staking(staking_contract)));
+        genesis_accounts.push((Address::clone(self.staking_contract_address.as_ref().ok_or(GenesisBuilderError::NoStakingContractAddress)?), Account::Staking(staking_contract)));
         for account in &self.accounts {
             genesis_accounts.push((account.address.clone(), Account::Basic(BasicAccount { balance: account.balance })));
         }

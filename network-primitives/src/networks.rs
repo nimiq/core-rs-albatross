@@ -150,7 +150,7 @@ lazy_static! {
 
         add(&mut m, NetworkInfo {
             network_id: NetworkId::DevAlbatross,
-            name: "{}",
+            name: "dev-albatross",
             seed_peers: vec![
                 // TODO
                 //create_seed_peer_addr("seed1.nimiqtest.net", 8080, "175d5f01af8a5911c240a78df689a76eef782d793ca15d073bdc913edd07c74b"),
@@ -159,10 +159,9 @@ lazy_static! {
             genesis: include!(concat!(env!("OUT_DIR"), "/genesis/dev-albatross/genesis.rs")),
         });
 
-
         add(&mut m, NetworkInfo {
             network_id: NetworkId::UnitAlbatross,
-            name: "{}",
+            name: "unit-albatross",
             seed_peers: vec![],
             seed_lists: vec![],
             genesis: include!(concat!(env!("OUT_DIR"), "/genesis/unit-albatross/genesis.rs")),

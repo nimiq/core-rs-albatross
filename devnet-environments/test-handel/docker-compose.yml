@@ -1,0 +1,52 @@
+version: '3.7'
+networks:
+  default:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.42.0/24
+services:
+  validator-00:
+    build: ./
+    environment:
+     - NIMIQ_HOST=validator-00.devnet
+     - EVENTS_EXCHANGE=validator-00
+     - VALIDATOR_KEY=49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f
+     - NIMIQ_PEER_KEY=8fc065dd2aa0f77753dd8ae86c6ed939881114f43319e6abf42b2ac4759cb46462a1985e85ed3452428d7d29623c1a55d8edc054945b3ed7d512f8487fd88063
+    env_file:
+     - validator.env
+    ports:
+     - "8649:8648"
+    restart: unless-stopped
+    networks:
+      default:
+        aliases: ["validator-00.devnet"]
+  validator-01:
+    build: ./
+    environment:
+     - NIMIQ_HOST=validator-01.devnet
+     - EVENTS_EXCHANGE=validator-01
+     - VALIDATOR_KEY=564813ca030ab5bc8a1cc3e0c0fe30063dce352426dbd7d61558cc8a7363def8
+    env_file:
+     - validator.env
+    networks:
+      default:
+        aliases: ["validator-01.devnet"]
+    depends_on:
+      - validator-00
+    restart: unless-stopped
+  validator-02:
+    build: ./
+    environment:
+      - NIMIQ_HOST=validator-02.devnet
+      - EVENTS_EXCHANGE=validator-02
+      - VALIDATOR_KEY=173a4af079b88439c4151c2397eb411a9407ff0720c5511b590bf7684c791512
+    env_file:
+      - validator.env
+    networks:
+      default:
+        aliases: ["validator-02.devnet"]
+    depends_on:
+      - validator-00
+    restart: unless-stopped
