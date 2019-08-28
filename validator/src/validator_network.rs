@@ -107,7 +107,7 @@ impl PbftState {
         let view_number = self.proposal.message.header.view_number;
 
         // Can we verify validity of macro block?
-        if let Some(IndexedSlot { slot, .. }) = chain.get_block_producer_at(block_number, view_number, None) {
+        if let Some(IndexedSlot { slot, idx }) = chain.get_block_producer_at(block_number, view_number, None) {
             let public_key = &slot.public_key.uncompress_unchecked();
 
             // Check the validity of the block
@@ -116,6 +116,12 @@ impl PbftState {
                 self.proposal.message.view_change.as_ref(),
                 unimplemented!("Intended slot owner?"), unimplemented!("Would it make sense to pass a Read transaction?")) {
                 debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
+                return Some(false);
+            }
+
+            // check the signer index
+            if self.proposal.signer_idx != idx {
+                debug!("[PBFT-PROPOSAL] Invalid signer index");
                 return Some(false);
             }
 
@@ -386,6 +392,7 @@ impl ValidatorNetwork {
         let state = self.state.read();
         if let Some(aggregation) = state.view_changes.get(&update_message.tag) {
             aggregation.push_update(update_message);
+            debug!("View change: {}", fmt_vote_progress(aggregation.votes()));
         }
     }
 
@@ -500,6 +507,8 @@ impl ValidatorNetwork {
             let aggregation = aggregation.read();
             drop(state);
             aggregation.push_prepare_level_update(level_update);
+            let (prepare_votes, commit_votes) = aggregation.votes();
+            debug!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
         }
         else {
             warn!("Not in pBFT phase, but received prepare update: {:?}", level_update);
@@ -515,6 +524,8 @@ impl ValidatorNetwork {
             let aggregation = aggregation.read();
             drop(state);
             aggregation.push_commit_level_update(level_update);
+            let (prepare_votes, commit_votes) = aggregation.votes();
+            debug!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
         } else {
             warn!("Not in pBFT phase, but received prepare update: {:?}", level_update);
         }
@@ -645,7 +656,7 @@ impl ValidatorNetwork {
 }
 
 /// Pretty-print voting progress
-fn fmt_vote_progress(slots: u16) -> String {
-    let done = slots >= TWO_THIRD_SLOTS;
+fn fmt_vote_progress(slots: usize) -> String {
+    let done = slots >= (TWO_THIRD_SLOTS as usize);
     format!("votes={: >3} / {}, done={}", slots, SLOTS, done)
 }
