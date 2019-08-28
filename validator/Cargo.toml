@@ -37,6 +37,8 @@ failure = "0.1"
 log = "0.4"
 parking_lot = "0.7"
 rand = "0.6"
+tokio = "0.1"
+futures = "0.1"
 
 [features]
 metrics = []

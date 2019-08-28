@@ -114,32 +114,37 @@ impl ValidatorAgent {
                 if let BlockchainEvent::Extended(_) = event {
                     let block_number = this.blockchain.block_number();
                     if policy::is_macro_block_at(block_number + 1) {
-                        let mut proposals: Vec<SignedPbftProposal> = Vec::new();
-                        let mut state = this.state.write();
-                        let view_number = this.blockchain.view_number();
+                        // Do this asynchronously, the handler shouldn't do this work
+                        tokio::spawn(futures::future::lazy(move || {
+                            let mut proposals: Vec<SignedPbftProposal> = Vec::new();
+                            let mut state = this.state.write();
+                            let view_number = this.blockchain.view_number();
 
-                        trace!("Blockchain extended, replaying proposals");
-                        trace!("Blockchain: number=#{}.{}", block_number, view_number);
+                            trace!("Blockchain extended, replaying proposals");
+                            trace!("Blockchain: number=#{}.{}", block_number, view_number);
 
-                        // get all proposals that are now valid
-                        while let Some(proposal) = state.proposal_buf.peek() {
-                            if proposal.0.message.header.block_number <= block_number + 1 {
-                                // unwrap is safe, since we already peeked and have the write lock
-                                proposals.push(state.proposal_buf.pop().unwrap().0);
-                            } else {
-                                break;
+                            // get all proposals that are now valid
+                            while let Some(proposal) = state.proposal_buf.peek() {
+                                if proposal.0.message.header.block_number <= block_number + 1 {
+                                    // unwrap is safe, since we already peeked and have the write lock
+                                    proposals.push(state.proposal_buf.pop().unwrap().0);
+                                } else {
+                                    break;
+                                }
                             }
-                        }
 
-                        // drop lock
-                        // NOTE: Since we basically pretend to just receive the proposals now, it
-                        //       doesn't matter that we have concurrency here
-                        drop(state);
+                            // drop lock
+                            // NOTE: Since we basically pretend to just receive the proposals now, it
+                            //       doesn't matter that we have concurrency here
+                            drop(state);
 
-                        // replay proposals
-                        for proposal in proposals {
-                            this.on_pbft_proposal_message(proposal);
-                        }
+                            // replay proposals
+                            for proposal in proposals {
+                                this.on_pbft_proposal_message(proposal);
+                            }
+
+                            Ok(())
+                        }));
                     }
                 }
             }));
