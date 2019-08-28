@@ -5,6 +5,7 @@ use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transactio
 use database::cursor::ReadCursor;
 use database::cursor::WriteCursor;
 use hash::Blake2bHash;
+use primitives::policy;
 
 use crate::chain_info::ChainInfo;
 
@@ -153,8 +154,8 @@ impl<'env> ChainStore<'env> {
         }
     }
 
-    pub fn get_block_at(&self, block_height: u32, txn_option: Option<&Transaction>) -> Option<Block> {
-        self.get_chain_info_at(block_height, true, txn_option)
+    pub fn get_block_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<Block> {
+        self.get_chain_info_at(block_height, include_body, txn_option)
             .map(|chain_info| chain_info.head)
     }
 
@@ -226,6 +227,78 @@ impl<'env> ChainStore<'env> {
         match direction {
             Direction::Forward => self.get_blocks_forward(start_block_hash, count, include_body, txn_option),
             Direction::Backward => self.get_blocks_backward(start_block_hash, count, include_body, txn_option),
+        }
+    }
+
+    /// Returns None if given start_block_hash is not a macro block.
+    pub fn get_macro_blocks_backward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<Vec<Block>> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(self.env);
+                &read_txn
+            }
+        };
+
+        let mut blocks= Vec::new();
+        let start_block = match self.get_block(start_block_hash, false, Some(&txn)) {
+            Some(Block::Macro(block)) => block,
+            Some(_) => return None,
+            None => return Some(blocks),
+        };
+
+        let mut hash = start_block.header.parent_macro_hash;
+        while (blocks.len() as u32) < count {
+            let block_opt = self.get_block(&hash, include_body, Some(&txn));
+            if let Some(Block::Macro(block)) = block_opt {
+                hash = block.header.parent_macro_hash.clone();
+                blocks.push(Block::Macro(block));
+            } else {
+                break;
+            }
+        }
+
+        Some(blocks)
+    }
+
+    /// Returns None if given start_block_hash is not a macro block.
+    pub fn get_macro_blocks_forward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<Vec<Block>> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(self.env);
+                &read_txn
+            }
+        };
+
+        let mut blocks= Vec::new();
+        let block = match self.get_block(start_block_hash, false, Some(&txn)) {
+            Some(Block::Macro(block)) => block,
+            Some(_) => return None,
+            None => return Some(blocks),
+        };
+
+        let mut next_macro_block = policy::macro_block_after(block.header.block_number);
+        while (blocks.len() as u32) < count {
+            let block_opt = self.get_block_at(next_macro_block, include_body, Some(&txn));
+            if let Some(Block::Macro(block)) = block_opt {
+                let next_macro_block = policy::macro_block_after(block.header.block_number);
+                blocks.push(Block::Macro(block));
+            } else {
+                break;
+            }
+        }
+
+        Some(blocks)
+    }
+
+    /// Returns None if given start_block_hash is not a macro block.
+    pub fn get_macro_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction, txn_option: Option<&Transaction>) -> Option<Vec<Block>> {
+        match direction {
+            Direction::Forward => self.get_macro_blocks_forward(start_block_hash, count, include_body, txn_option),
+            Direction::Backward => self.get_macro_blocks_backward(start_block_hash, count, include_body, txn_option),
         }
     }
 

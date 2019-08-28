@@ -29,7 +29,7 @@ use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use primitives::validators::{IndexedSlot, Slots, Validator, Validators};
-use transaction::{TransactionReceipt, TransactionsProof};
+use transaction::{Transaction as BlockchainTransaction, TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::merkle;
@@ -522,11 +522,6 @@ impl<'env> Blockchain<'env> {
         Ok(PushResult::Forked)
     }
 
-    /// Pushes a macro block without requiring the micro blocks of the previous epoch.
-    pub fn push_macro_block(&self, block: Block) -> Result<PushResult, PushError> {
-        unimplemented!()
-    }
-
     fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo, create_macro_extrinsics: bool) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(self.env);
         let state = self.state.upgradable_read();
@@ -846,6 +841,192 @@ impl<'env> Blockchain<'env> {
         Ok(())
     }
 
+    /// Pushes a macro block without requiring the micro blocks of the previous epoch.
+    pub fn push_isolated_macro_block(&self, block: Block, transactions: &[BlockchainTransaction]) -> Result<PushResult, PushError> {
+        // TODO: Deduplicate code as much as possible...
+        // Only one push operation at a time.
+        let push_lock = self.push_lock.lock();
+
+        // XXX We might want to pass this as argument to this method
+        let read_txn = ReadTransaction::new(self.env);
+
+        let macro_block = if let Block::Macro(ref block) = block {
+            block
+        } else {
+            return Err(PushError::InvalidSuccessor)
+        };
+
+        // Check if we already know this block.
+        let hash: Blake2bHash = block.hash();
+        if self.chain_store.get_chain_info(&hash, false, Some(&read_txn)).is_some() {
+            return Ok(PushResult::Known);
+        }
+
+        // We can only accept isolated macro blocks that follow our current macro head.
+        if self.head_hash() != macro_block.header.parent_macro_hash {
+            warn!("Rejecting block - does not follow on our current macro head");
+            return Err(PushError::Orphan);
+        }
+
+        // Check (sort of) intrinsic block invariants.
+        if let Err(e) = block.verify(self.network_id) {
+            warn!("Rejecting block - verification failed ({:?})", e);
+            return Err(PushError::InvalidBlock(e));
+        }
+
+        // Public keys are checked when staking, so this should never fail.
+        let mut slot: IndexedSlot = self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn))
+            .ok_or(PushError::InvalidSuccessor)?;
+
+        // Check if the block's immediate predecessor is part of the chain.
+        let prev_info_opt = self.chain_store.get_chain_info(&macro_block.header.parent_macro_hash, false, Some(&read_txn));
+        if prev_info_opt.is_none() {
+            warn!("Rejecting block - unknown predecessor");
+            return Err(PushError::Orphan);
+        }
+
+        // Check that the block is a valid successor of its predecessor.
+        let prev_info = prev_info_opt.unwrap();
+
+        // Check the block number
+        if policy::macro_block_after(prev_info.head.block_number()) != macro_block.header.block_number {
+            warn!("Rejecting block - wrong block number ({:?})", macro_block.header.block_number);
+            return Err(PushError::InvalidSuccessor);
+        }
+
+        // Check transactions root
+        let hashes: Vec<Blake2bHash> = transactions.iter().map(|tx| tx.hash()).collect();
+        let transactions_root = merkle::compute_root_from_hashes::<Blake2bHash>(&hashes);
+        if macro_block.header.transactions_root != transactions_root {
+            warn!("Rejecting block - wrong transactions root");
+            return Err(PushError::InvalidBlock(BlockError::InvalidTransactionsRoot));
+        }
+
+        // Check Macro Justification
+        match macro_block.justification {
+            None => {
+                warn!("Rejecting block - macro block without justification");
+                return Err(PushError::InvalidBlock(BlockError::NoJustification));
+            },
+            Some(ref justification) => {
+                if justification.verify(macro_block.hash(),&self.current_validators(), policy::TWO_THIRD_SLOTS).is_err() {
+                    warn!("Rejecting block - macro block with bad justification");
+                    return Err(PushError::InvalidBlock(BlockError::NoJustification));
+                }
+            },
+        }
+
+        // The correct construction of the extrinsics is only checked after the block's inherents are applied.
+
+        // The macro extrinsics must not be None for this function.
+        if let Some(ref extrinsics) = macro_block.extrinsics {
+            let extrinsics_hash: Blake2bHash = extrinsics.hash();
+            if extrinsics_hash != macro_block.header.extrinsics_root {
+                warn!("Rejecting block - Header extrinsics hash doesn't match real extrinsics hash");
+                return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
+            }
+        } else {
+            return Err(PushError::InvalidBlock(BlockError::MissingExtrinsics))
+        }
+
+        // Drop read transaction before creating the write transaction.
+        drop(read_txn);
+
+        let chain_info = ChainInfo::new(block, Some(slot));
+
+        self.extend_isolated_macro(chain_info.head.hash(), transactions,chain_info, prev_info, push_lock)
+    }
+
+    fn extend_isolated_macro(&self, block_hash: Blake2bHash, transactions: &[BlockchainTransaction], mut chain_info: ChainInfo, mut prev_info: ChainInfo, push_lock: MutexGuard<()>) -> Result<PushResult, PushError> {
+        let mut txn = WriteTransaction::new(self.env);
+        let state = self.state.upgradable_read();
+
+
+        // TODO: We need to commit the whole epoch to the reward registry.
+        /*if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching")) {
+            warn!("Rejecting block - slash commit failed: {:?}", e);
+            return Err(PushError::InvalidSuccessor);
+        }*/
+
+        // Apply transactions to AccountsTree.
+        let receipts = state.accounts.commit(&mut txn, transactions, &[], chain_info.head.block_number());
+        if let Err(e) = receipts {
+            return Err(PushError::AccountsError(e));
+        }
+
+        // Verify accounts hash.
+        if chain_info.head.state_root() != &state.accounts.hash(Some(&txn)) {
+            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
+        }
+
+        // Commit block to AccountsTree.
+        if let Err(e) = self.commit_accounts(&state, &mut txn, &chain_info.head) {
+            warn!("Rejecting block - commit failed: {:?}", e);
+            txn.abort();
+            #[cfg(feature = "metrics")]
+                self.metrics.note_invalid_block();
+            return Err(e);
+        }
+
+        // Only now can we check macro extrinsics.
+        if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
+            let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
+            let computed_validators: Validators = slots.clone().into();
+            let computed_validators: CompressedList<LazyPublicKey> = computed_validators.into();
+            if computed_validators != macro_block.header.validators {
+                warn!("Rejecting block - Validators don't match real validators");
+                return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+            }
+
+            let computed_extrinsics: MacroExtrinsics = slots.into();
+            let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
+            if computed_extrinsics_hash != macro_block.header.extrinsics_root {
+                warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
+                return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+            }
+        }
+
+        chain_info.on_main_chain = true;
+        prev_info.main_chain_successor = Some(chain_info.head.hash());
+
+        self.chain_store.put_chain_info(&mut txn, &block_hash, &chain_info, true);
+        // TODO: Do we want that?
+        self.chain_store.put_chain_info(&mut txn, &chain_info.head.parent_hash(), &prev_info, false);
+        self.chain_store.set_head(&mut txn, &block_hash);
+
+        // Acquire write lock & commit changes.
+        let mut state = RwLockUpgradableReadGuard::upgrade(state);
+        state.transaction_cache.push_block(&chain_info.head);
+
+        if let Block::Macro(ref macro_block) = chain_info.head {
+            state.macro_head = macro_block.clone();
+            state.macro_head_hash = block_hash.clone();
+
+            let slots = state.current_slots.take().unwrap();
+            let validators = state.current_validators.take().unwrap();
+            state.last_slots.replace(slots);
+            state.last_validators.replace(validators);
+
+            let (slot, validators) = Self::slots_and_validators_from_block(&macro_block);
+            state.current_slots.replace(slot);
+            state.current_validators.replace(validators);
+        } else {
+            unreachable!("Block is not a macro block");
+        }
+
+        state.main_chain = chain_info;
+        state.head_hash = block_hash.clone();
+        txn.commit();
+
+        // Give up lock before notifying.
+        drop(state);
+        drop(push_lock);
+
+        self.notifier.read().notify(BlockchainEvent::Finalized(block_hash));
+
+        Ok(PushResult::Extended)
+    }
+
     pub fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
         match self.chain_store.get_chain_info(hash, false, None) {
             Some(chain_info) => include_forks || chain_info.on_main_chain,
@@ -875,7 +1056,7 @@ impl<'env> Blockchain<'env> {
         let mut hashes = Vec::new();
 
         let first_block = policy::first_block_of(epoch);
-        let first_block = self.chain_store.get_block_at(first_block, txn_option)?;
+        let first_block = self.chain_store.get_block_at(first_block, true, txn_option)?;
         hashes.extend(first_block.transactions().unwrap().iter().map(|tx| tx.hash()));
 
         // Excludes current block and macro block.
@@ -985,7 +1166,7 @@ impl<'env> Blockchain<'env> {
             slots = state.last_slots.as_ref().expect("Missing previous epoch's slots");
         } else {
             let macro_block = self.chain_store
-                .get_block_at(policy::macro_block_before(block_number), Some(&txn))
+                .get_block_at(policy::macro_block_before(block_number), true, Some(&txn))
                 .expect("Failed to determine slots - preceding macro block not found")
                 .unwrap_macro();
 
@@ -1163,6 +1344,64 @@ impl<'env> Blockchain<'env> {
         inherents
     }
 
+    pub fn get_macro_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
+        let mut locators: Vec<Blake2bHash> = Vec::with_capacity(max_count);
+        let mut hash = self.macro_head_hash();
+
+        // Push top ten hashes.
+        locators.push(hash.clone());
+        for _ in 0..cmp::min(10, policy::epoch_at(self.height())) {
+            let block = self.chain_store.get_block(&hash, false, None);
+            match block {
+                Some(Block::Macro(block)) => {
+                    hash = block.header.parent_macro_hash;
+                    locators.push(hash.clone());
+                },
+                Some(_) => unreachable!("macro head must be a macro block"),
+                None => break,
+            }
+        }
+
+        let mut step = 2;
+        let mut height = policy::last_macro_block(self.height()).saturating_sub((10 + step) * policy::EPOCH_LENGTH);
+        let mut opt_block = self.chain_store.get_block_at(height, false, None);
+        while let Some(block) = opt_block {
+            assert_eq!(block.ty(), BlockType::Macro);
+            locators.push(block.header().hash());
+
+            // Respect max count.
+            if locators.len() >= max_count {
+                break;
+            }
+
+            step *= 2;
+            height = match height.checked_sub(step * policy::EPOCH_LENGTH) {
+                Some(0) => break, // 0 or underflow means we need to end the loop
+                Some(v) => v,
+                None => break,
+            };
+
+            opt_block = self.chain_store.get_block_at(height, false, None);
+        }
+
+        // Push the genesis block hash.
+        let genesis_hash = NetworkInfo::from_network_id(self.network_id).genesis_hash();
+        if locators.is_empty() || locators.last().unwrap() != genesis_hash {
+            // Respect max count, make space for genesis hash if necessary
+            if locators.len() >= max_count {
+                locators.pop();
+            }
+            locators.push(genesis_hash.clone());
+        }
+
+        locators
+    }
+
+    /// Returns None if given start_block_hash is not a macro block.
+    pub fn get_macro_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Option<Vec<Block>> {
+        self.chain_store.get_macro_blocks(start_block_hash, count, include_body, direction, None)
+    }
+
     pub fn write_transaction(&self) -> WriteTransaction {
         WriteTransaction::new(self.env)
     }
@@ -1208,7 +1447,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
         let mut locators: Vec<Blake2bHash> = Vec::with_capacity(max_count);
         let mut hash = self.head_hash();
 
-        // push top ten hashes
+        // Push top ten hashes.
         locators.push(hash.clone());
         for _ in 0..cmp::min(10, self.height()) {
             let block = self.chain_store.get_block(&hash, false, None);
@@ -1223,7 +1462,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
 
         let mut step = 2;
         let mut height = self.height().saturating_sub(10 + step);
-        let mut opt_block = self.chain_store.get_block_at(height, None);
+        let mut opt_block = self.chain_store.get_block_at(height, false, None);
         while let Some(block) = opt_block {
             locators.push(block.header().hash());
 
@@ -1239,7 +1478,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
                 None => break,
             };
 
-            opt_block = self.chain_store.get_block_at(height, None);
+            opt_block = self.chain_store.get_block_at(height, false, None);
         }
 
         // Push the genesis block hash.

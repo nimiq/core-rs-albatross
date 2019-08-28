@@ -24,7 +24,7 @@ impl ChainInfo {
         }
     }
 
-    pub fn next(&self, block: Block, slot: Option<IndexedSlot>) -> Self {
+    pub fn new(block: Block, slot: Option<IndexedSlot>) -> Self {
         ChainInfo {
             head: block,
             on_main_chain: false,
@@ -33,13 +33,12 @@ impl ChainInfo {
         }
     }
 
+    pub fn next(&self, block: Block, slot: Option<IndexedSlot>) -> Self {
+        ChainInfo::new(block, slot)
+    }
+
     pub fn prev(&self, block: Block, slot: Option<IndexedSlot>) -> Self {
-        ChainInfo {
-            head: block,
-            on_main_chain: false,
-            main_chain_successor: None,
-            slot,
-        }
+        ChainInfo::new(block, slot)
     }
 }
 

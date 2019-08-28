@@ -289,7 +289,7 @@ impl<'env> SlashRegistry<'env> {
     pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots, txn_option: Option<&Transaction>) -> Option<IndexedSlot> {
         // Get context
         if let Some(prev_block) = self.chain_store
-            .get_block_at(block_number - 1, txn_option) {
+            .get_block_at(block_number - 1, false, txn_option) {
 
             // Get slots of epoch
             let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number, txn_option).unwrap();

@@ -62,7 +62,7 @@ impl<'env> SyncProtocol for MacroBlockSync<'env> {
     type Block = <AlbatrossBlockchain<'env> as AbstractBlockchain<'env>>::Block;
 
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
-        unimplemented!()
+        self.blockchain.get_macro_block_locators(max_count)
     }
 
     fn request_block(&self, block_hash: Blake2bHash) -> Self::Block {
