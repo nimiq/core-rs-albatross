@@ -125,8 +125,7 @@ impl PbftState {
                 return Some(false);
             }
 
-            // check the signature of the proposal
-            // XXX We ignore the `pk_idx` field in the `SignedMessage`
+            // Check the signature of the proposal
             if !self.proposal.verify(&public_key) {
                 debug!("[PBFT-PROPOSAL] Invalid signature");
                 return Some(false);
@@ -222,7 +221,7 @@ impl ValidatorNetwork {
     fn init_listeners(this: &Arc<Self>, network: Arc<Network<Blockchain<'static>>>) {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
-        // register for peers joining and leaving
+        // Register for peers joining and leaving
         network.notifier.write().register(weak_listener(Arc::downgrade(this), |this, event| {
             match event {
                 NetworkEvent::PeerJoined(peer) => this.on_peer_joined(&peer),
@@ -236,10 +235,10 @@ impl ValidatorNetwork {
         if peer.peer_address().services.is_validator() {
             let agent = ValidatorAgent::new(Arc::clone(peer), Arc::clone(&self.blockchain));
 
-            // insert into set of all agents that have the validator service flag
+            // Insert into set of all agents that have the validator service flag
             self.state.write().agents.insert(agent.peer_id(), Arc::clone(&agent));
 
-            // register for messages received by agent
+            // Register for messages received by agent
             agent.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), |this, event| {
                 match event {
                     ValidatorAgentEvent::ValidatorInfo(info) => {
@@ -263,7 +262,7 @@ impl ValidatorNetwork {
                 }
             }));
 
-            // send known validator infos to peer
+            // Send known validator infos to peer
             let mut infos = self.state.read().agents.iter()
                 .filter_map(|(_, agent)| {
                     agent.state.read().validator_info.clone()
@@ -295,15 +294,15 @@ impl ValidatorNetwork {
 
             if let Some(current_info) = &agent_state.validator_info {
                 if current_info.message.public_key == info.message.public_key {
-                    // didn't change, do nothing
+                    // Didn't change, do nothing
                     return;
                 }
             }
 
-            // insert into potential validators, indexed by compressed public key
+            // Insert into potential validators, indexed by compressed public key
             state.potential_validators.insert(info.message.public_key.clone(), Arc::clone(&agent));
 
-            // check if active validator and put into `active` list
+            // Check if active validator and put into `active` list
             // TODO: Use a HashMap to map PublicKeys to validator ID
             /*for (id, Group(_, public_key)) in self.blockchain.current_validators().groups().iter().enumerate() {
                 if *public_key.compressed() == info.message.public_key {
@@ -313,7 +312,7 @@ impl ValidatorNetwork {
                 }
             }*/
 
-            // put validator info into agent
+            // Put validator info into agent
             RwLockUpgradableReadGuard::upgrade(agent_state).validator_info = Some(info);
         }
         else {
@@ -334,16 +333,16 @@ impl ValidatorNetwork {
         trace!("Clearing view change and pBFT proof");
         let mut state = self.state.write();
 
-        // clear view changes
+        // Clear view changes
         state.view_changes.clear();
 
-        // clear pBFT states
+        // Clear pBFT states
         state.pbft_states.clear();
 
-        // set validator ID
+        // Set validator ID
         state.validator_id = validator_id;
 
-        // create mapping from validator ID to agent/peer
+        // Create mapping from validator ID to agent/peer
         let validators = self.blockchain.current_validators();
         let mut active_validators = HashMap::new();
         for (id, Group(n, public_key)) in validators.iter_groups().enumerate() {
@@ -408,7 +407,7 @@ impl ValidatorNetwork {
                 error!("Proposal with different view change already exists: {:?} and {:?}", pbft.proposal.message.view_change, signed_proposal.message.view_change);
                 return Err(ValidatorNetworkError::PbftAlreadyStarted(pbft.proposal.message.clone()))
             }
-            // proposal already exists, do nothing
+            // Proposal already exists, do nothing
         }
         else {
             let active_validators = Arc::clone(&state.active_validators);
@@ -432,12 +431,12 @@ impl ValidatorNetwork {
                         AggregationEvent::Complete { best } => {
                             let event = if let Some(pbft) = this.state.write().pbft_states.get_mut(&key) {
                                 if pbft.prepare_proof.is_none() {
-                                    // build prepare proof
+                                    // Build prepare proof
                                     let prepare_proof = AggregateProof::new(best.signature, best.signers);
                                     trace!("Prepare complete: {:?}", prepare_proof);
                                     pbft.prepare_proof = Some(prepare_proof);
 
-                                    // return the event
+                                    // Return the event
                                     Some(ValidatorNetworkEvent::PbftPrepareComplete(pbft.block_hash.clone(), pbft.proposal.message.clone()))
                                 } else {
                                     warn!("Prepare proof already exists");
@@ -461,7 +460,7 @@ impl ValidatorNetwork {
                     match event {
                         AggregationEvent::Complete { best } => {
                             let event = if let Some(pbft) = this.state.write().pbft_states.get_mut(&key) {
-                                // build commit proof
+                                // Build commit proof
                                 let commit_proof = AggregateProof::new(best.signature, best.signers);
                                 trace!("Commit complete: {:?}", commit_proof);
 
@@ -471,7 +470,7 @@ impl ValidatorNetwork {
                                 let prepare_proof = pbft.prepare_proof.take().expect("No pBFT prepare proof");
                                 let pbft_proof = PbftProof { prepare: prepare_proof, commit: commit_proof };
 
-                                // return the event
+                                // Return the event
                                 Some(ValidatorNetworkEvent::PbftComplete(pbft.block_hash.clone(), pbft.proposal.message.clone(), pbft_proof))
                             } else {
                                 error!("No pBFT state");
@@ -483,16 +482,16 @@ impl ValidatorNetwork {
                     }
                 }));
 
-            // add pBFT state
+            // Add pBFT state
             state.pbft_states.insert(block_hash.clone(), pbft);
 
             // We need to drop the state before notifying and relaying
             drop(state);
 
-            // notify Validator
+            // Notify Validator
             self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash.clone(), signed_proposal.message.clone()));
 
-            // broadcast to other validators
+            // Broadcast to other validators
             self.broadcast_pbft_proposal(signed_proposal);
         }
 
@@ -549,7 +548,7 @@ impl ValidatorNetwork {
             let node_id = state.validator_id.expect("Validator ID not set");
             assert_eq!(signed_view_change.signer_idx as usize, node_id);
 
-            // create view change aggregation
+            // Create view change aggregation
             let aggregation = ViewChangeAggregation::new(
                 view_change.clone(),
                 node_id,
@@ -558,7 +557,7 @@ impl ValidatorNetwork {
                 None
             );
 
-            // register handler for when done and start (or use Future)
+            // Register handler for when done and start (or use Future)
             {
                 let view_change = view_change.clone();
                 aggregation.inner.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
@@ -573,7 +572,7 @@ impl ValidatorNetwork {
                 }));
             }
 
-            // push our contribution
+            // Push our contribution
             aggregation.push_contribution(signed_view_change);
 
             state.view_changes.insert(view_change, aggregation);
