@@ -8,14 +8,14 @@ use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use block_albatross::{
     BlockHeader,
-    ForkProof, PbftProof, PbftProofBuilder, PbftProposal,
+    ForkProof, PbftProof, PbftProposal,
     PbftPrepareMessage, PbftCommitMessage,
     SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
-    SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder
+    SignedViewChange, ViewChange, ViewChangeProof
 };
 use block_albatross::signed::AggregateProof;
-use blockchain_albatross::{Blockchain, blockchain::BlockchainEvent};
-use bls::bls12_381::{PublicKey, CompressedPublicKey};
+use blockchain_albatross::Blockchain;
+use bls::bls12_381::CompressedPublicKey;
 use collections::grouped_list::Group;
 use hash::{Blake2bHash, Hash};
 use messages::Message;
@@ -30,7 +30,6 @@ use handel::aggregation::AggregationEvent;
 use handel::update::LevelUpdateMessage;
 
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
-use crate::validator_network::ValidatorNetworkError::NotInPbftPhase;
 use crate::signature_aggregation::view_change::ViewChangeAggregation;
 use crate::signature_aggregation::pbft::PbftAggregation;
 
@@ -39,15 +38,13 @@ use crate::signature_aggregation::pbft::PbftAggregation;
 pub enum ValidatorNetworkError {
     #[fail(display = "View change already in progress: {:?}", _0)]
     ViewChangeAlreadyExists(ViewChange),
-    #[fail(display = "pBFT phase already in progress: {:?}", _0)]
-    PbftAlreadyStarted(PbftProposal),
 
-    // TODO: check if those are still used
-    #[fail(display = "Not in pBFT voting phase")]
-    NotInPbftPhase,
-
-    #[fail(display = "Unkown pBFT proposal")]
+    #[fail(display = "Already got another pBFT proposal at this view")]
+    ProposalCollision,
+    #[fail(display = "Unknown pBFT proposal")]
     UnknownProposal,
+    #[fail(display = "Invalid pBFT proposal")]
+    InvalidProposal,
 }
 
 #[derive(Clone, Debug)]
@@ -71,13 +68,10 @@ pub enum ValidatorNetworkEvent {
 
 
 /// State of current pBFT phase
+#[derive(Clone)]
 struct PbftState {
     /// The proposed macro block with justification
     proposal: SignedPbftProposal,
-
-    /// Whether the Proposal has been checked and if it's valid. The proposal might not have been
-    /// validated if the block chain isn't complete up to the proposed macro block.
-    proposal_valid: Option<bool>,
 
     /// The hash of the header of the proposed macro block
     block_hash: Blake2bHash,
@@ -94,66 +88,53 @@ impl PbftState {
         let aggregation = Arc::new(RwLock::new(PbftAggregation::new(block_hash.clone(), node_id, validators, peers, None)));
         Self {
             proposal,
-            proposal_valid: None,
             block_hash,
             aggregation,
             prepare_proof: None,
         }
-        // TODO: Call `update_verified` on this. But I'd rather do it outside of the constructor.
     }
 
-    fn check_verified(&self, chain: &Blockchain, chain_height: u32) -> Option<bool> {
+    // Only works on non-buffered proposals
+    fn check_verified(&self, chain: &Blockchain, chain_height: u32) -> bool {
         let block_number = self.proposal.message.header.block_number;
         let view_number = self.proposal.message.header.view_number;
 
         // Can we verify validity of macro block?
-        if let Some(IndexedSlot { slot, .. }) = chain.get_block_producer_at(block_number, view_number, None) {
-            let public_key = &slot.public_key.uncompress_unchecked();
+        let IndexedSlot { slot, .. } = chain.get_block_producer_at(block_number, view_number, None)
+            .expect("check_verified() called without enough micro blocks");
 
-            // Check the validity of the block
-            if let Err(e) = chain.verify_block_header(
-                &BlockHeader::Macro(self.proposal.message.header.clone()),
-                self.proposal.message.view_change.as_ref(),
-                unimplemented!("Intended slot owner?"), unimplemented!("Would it make sense to pass a Read transaction?")) {
-                debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
-                return Some(false);
+        // Check the signer index
+        if let Some(ref validator) = chain.get_current_validator_by_idx(self.proposal.signer_idx) {
+            let Group(_, validator_key) = validator;
+            // Does the key own the current slot?
+            if validator_key != &slot.public_key {
+                return false;
             }
-
-            // Check the signer index
-            if let Some(ref validator) = chain.get_current_validator_by_idx(self.proposal.signer_idx) {
-                // Does the key own the current slot?
-                if validator != slot.public_key {
-                    return Some(false);
-                }
-            } else {
-                // No validator at this index
-                return Some(false);
-            }
-
-            // Check the signature of the proposal
-            if !self.proposal.verify(&public_key) {
-                debug!("[PBFT-PROPOSAL] Invalid signature");
-                return Some(false);
-            }
-
-            Some(true)
         } else {
-            // TODO: Limit this somehow
-            if self.proposal.message.header.block_number > chain_height + 1 {
-                None
-            } else {
-                warn!("Rejecting proposal: No such pBFT leader");
-                Some(false)
-            }
+            // No validator at this index
+            return false;
         }
-    }
 
-    // Returns true if verified is true for the first time
-    pub fn update_verified(&mut self, blockchain: &Blockchain, chain_height: u32) -> Option<bool> {
-        if self.proposal_valid.is_none() {
-            self.proposal_valid = self.check_verified(blockchain, chain_height);
+        // Check the validity of the block
+        // TODO: We check the view change proof the second time here if previously buffered
+        if let Err(e) = chain.verify_block_header(
+            &BlockHeader::Macro(self.proposal.message.header.clone()),
+            self.proposal.message.view_change.as_ref().into(),
+            &slot.public_key.uncompress().unwrap(),
+            None // TODO Would it make sense to pass a Read transaction?
+        ) {
+            debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
+            return false;
         }
-        self.proposal_valid
+
+        // Check the signature of the proposal
+        let public_key = &slot.public_key.uncompress_unchecked();
+        if !self.proposal.verify(&public_key) {
+            debug!("[PBFT-PROPOSAL] Invalid signature");
+            return false;
+        }
+
+        true
     }
 }
 
@@ -186,12 +167,21 @@ struct ValidatorNetworkState {
     view_changes: HashMap<ViewChange, ViewChangeAggregation>,
 
     /// If we're in pBFT phase, this is the current state of it
-    pbft_states: BTreeMap<Blake2bHash, PbftState>,
+    pbft_states: Vec<PbftState>,
 
     /// If we're an active validator, set our validator ID here
     validator_id: Option<usize>,
 }
 
+impl ValidatorNetworkState {
+    pub(crate) fn get_pbft_state(&self, hash: &Blake2bHash) -> Option<&PbftState> {
+        self.pbft_states.iter().find(|state| &state.block_hash == hash)
+    }
+
+    pub(crate) fn get_pbft_state_mut(&mut self, hash: &Blake2bHash) -> Option<&mut PbftState> {
+        self.pbft_states.iter_mut().find(|state| &state.block_hash == hash)
+    }
+}
 
 pub struct ValidatorNetwork {
     blockchain: Arc<Blockchain<'static>>,
@@ -203,7 +193,7 @@ pub struct ValidatorNetwork {
     state: RwLock<ValidatorNetworkState>,
 
     self_weak: MutableOnce<Weak<ValidatorNetwork>>,
-    pub notifier: Arc<RwLock<PassThroughNotifier<'static, ValidatorNetworkEvent>>>,
+    pub notifier: RwLock<PassThroughNotifier<'static, ValidatorNetworkEvent>>,
 }
 
 impl ValidatorNetwork {
@@ -215,7 +205,7 @@ impl ValidatorNetwork {
             info,
             state: RwLock::new(ValidatorNetworkState::default()),
             self_weak: MutableOnce::new(Weak::new()),
-            notifier: Arc::new(RwLock::new(PassThroughNotifier::new())),
+            notifier: RwLock::new(PassThroughNotifier::new()),
         });
 
         Self::init_listeners(&this, network);
@@ -350,7 +340,7 @@ impl ValidatorNetwork {
         // Create mapping from validator ID to agent/peer
         let validators = self.blockchain.current_validators();
         let mut active_validators = HashMap::new();
-        for (id, Group(n, public_key)) in validators.iter_groups().enumerate() {
+        for (id, Group(_, public_key)) in validators.iter_groups().enumerate() {
             if let Some(agent) = state.potential_validators.get(public_key.compressed()) {
                 trace!("Validator {}: {}", id, agent.validator_info().unwrap().peer_address.as_uri());
                 active_validators.insert(id, Arc::clone(agent));
@@ -364,31 +354,48 @@ impl ValidatorNetwork {
 
     /// Called when a new block is added
     pub fn on_blockchain_extended(&self) {
+        // Check if next block will be a macro block
         let new_height = self.blockchain.block_number();
-
-        // We only have to do this update if we actually got the last micro block of an epoch
-        if is_macro_block_at(new_height + 1) {
-            let mut state = self.state.write();
-            let mut invalid = Vec::<Blake2bHash>::new();
-
-            for (block_hash, pbft) in &mut state.pbft_states {
-                match pbft.update_verified(&self.blockchain, new_height) {
-                    None => return,  // Verification status didn't change
-                    Some(false) => { // Invalid proposal
-                        invalid.push(block_hash.clone());
-                        break;
-                    }
-                    Some(true) => () // continue
-                }
-
-                debug!("Verified macro block proposal: {}", block_hash);
-            }
-
-            for key in invalid {
-                debug!("Previously unconfirmed macro block proposal now confirmed invalid: {}", key);
-                state.pbft_states.remove(&key);
-            }
+        if !is_macro_block_at(new_height + 1) {
+            return;
         }
+
+        // Switch state from buffered to complete
+        let mut state = self.state.write();
+
+        // Remove invalid proposals
+        state.pbft_states.retain(|pbft| {
+            let verified = pbft.check_verified(&self.blockchain, new_height);
+            if !verified {
+                debug!("Buffered pBFT proposal confirmed invalid: {}", &pbft.block_hash);
+            } else {
+                debug!("Verified pBFT proposal: {}", pbft.block_hash);
+            }
+            verified
+        });
+
+        if state.pbft_states.is_empty() {
+            return;
+        }
+
+        // Remove proposals that collide on the same views
+        state.pbft_states.dedup_by_key(|pbft| {
+            let header = &pbft.proposal.message.header;
+            (header.block_number, header.view_number)
+        });
+
+        // Choose proposal with the highest view number
+        let best_pbft = state.pbft_states.iter()
+            .max_by_key(|pbft| pbft.proposal.message.header.view_number)
+            .unwrap().clone();
+        state.pbft_states = vec![best_pbft.clone()];
+
+        // We need to drop the state before notifying and relaying
+        drop(state);
+
+        // Notify Validator (and send prepare message)
+        let block_hash = best_pbft.proposal.message.header.hash::<Blake2bHash>();
+        self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash, best_pbft.proposal.message));
     }
 
     /// Pushes the update to the signature aggregation for this view-change
@@ -402,111 +409,144 @@ impl ValidatorNetwork {
 
     /// Start pBFT with the given proposal.
     /// Either we generated that proposal, or we received it
+    /// Proposal yet to be verified
     pub fn on_pbft_proposal(&self, signed_proposal: SignedPbftProposal) -> Result<(), ValidatorNetworkError> {
         let mut state = self.state.write();
         let block_hash = signed_proposal.message.header.hash::<Blake2bHash>();
 
-        if let Some(pbft) = state.pbft_states.get(&block_hash) {
-            // Proposals might differ in view change
-            if pbft.proposal.message.view_change != signed_proposal.message.view_change {
-                error!("Proposal with different view change already exists: {:?} and {:?}", pbft.proposal.message.view_change, signed_proposal.message.view_change);
-                return Err(ValidatorNetworkError::PbftAlreadyStarted(pbft.proposal.message.clone()))
-            }
-            // Proposal already exists, do nothing
+        if state.get_pbft_state(&block_hash).is_some() {
+            // Proposal already known, ignore
+            trace!("Ignoring known pBFT proposal: {}", &block_hash);
+            return Ok(());
         }
-        else {
-            let active_validators = Arc::clone(&state.active_validators);
-            let validator_id = state.validator_id.expect("Not an active validator");
 
-            debug!("pBFT proposal by validator {}: {:#?}", validator_id, signed_proposal);
+        let active_validators = Arc::clone(&state.active_validators);
+        let validator_id = state.validator_id.expect("Not an active validator");
 
-            let pbft = PbftState::new(
-                block_hash.clone(),
-                signed_proposal.clone(),
-                validator_id,
-                self.blockchain.current_validators().clone(),
-                active_validators,
-            );
+        debug!("pBFT proposal by validator {}: {:#?}", validator_id, signed_proposal);
 
-            // The prepare handler. This will store the finished prepare proof in the pBFT state
-            let key = block_hash.clone();
-            pbft.aggregation.read().prepare_aggregation.notifier.write()
-                .register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
-                    match event {
-                        AggregationEvent::Complete { best } => {
-                            let event = if let Some(pbft) = this.state.write().pbft_states.get_mut(&key) {
-                                if pbft.prepare_proof.is_none() {
-                                    // Build prepare proof
-                                    let prepare_proof = AggregateProof::new(best.signature, best.signers);
-                                    trace!("Prepare complete: {:?}", prepare_proof);
-                                    pbft.prepare_proof = Some(prepare_proof);
+        let pbft = PbftState::new(
+            block_hash.clone(),
+            signed_proposal.clone(),
+            validator_id,
+            self.blockchain.current_validators().clone(),
+            active_validators,
+        );
 
-                                    // Return the event
-                                    Some(ValidatorNetworkEvent::PbftPrepareComplete(pbft.block_hash.clone(), pbft.proposal.message.clone()))
-                                } else {
-                                    warn!("Prepare proof already exists");
-                                    None
-                                }
-                            } else {
-                                error!("No pBFT state");
-                                None
-                            };
-                            // If we generated a prepare complete event, notify the validator
-                            event.map(move |event| this.notifier.read().notify(event));
-                        }
-                    }
-                }));
+        let chain_height = self.blockchain.height();
+        let buffered = !is_macro_block_at(chain_height + 1);
 
-            // The commit handler. This will store the finished commit proof and construct the
-            // pBFT proof.
-            let key = block_hash.clone();
-            pbft.aggregation.read().commit_aggregation.notifier.write()
-                .register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
-                    match event {
-                        AggregationEvent::Complete { best } => {
-                            let event = if let Some(pbft) = this.state.write().pbft_states.get_mut(&key) {
-                                // Build commit proof
-                                let commit_proof = AggregateProof::new(best.signature, best.signers);
-                                trace!("Commit complete: {:?}", commit_proof);
+        // Check validity if proposal not buffered
+        if !buffered {
+            let verified = pbft.check_verified(&self.blockchain, chain_height);
+            if !verified {
+                return Err(ValidatorNetworkError::InvalidProposal);
+            }
 
-                                // NOTE: The commit evaluator will only mark the signature as final, if there are enough commit signatures from validators that also
-                                //       signed prepare messages. Thus a complete prepare proof must exist at this point.
-                                // NOTE: Either `take()` it, or `clone()` it. Really doesn't matter I guess
-                                let prepare_proof = pbft.prepare_proof.take().expect("No pBFT prepare proof");
-                                let pbft_proof = PbftProof { prepare: prepare_proof, commit: commit_proof };
+            // FIXME Is this race condition scenario possible?:
+            // on_blockchain_extended for the current height not yet fired,
+            // but this on_pbft_proposal call in progress
+            // If so, a potentially invalid proposal could replace this proposal
+
+            // Check if another proposal has same or greater view number
+            let header = &pbft.proposal.message.header;
+            let other_header = state.pbft_states.iter()
+                .map(|pbft| &pbft.proposal.message.header)
+                .find(|other_header| header.view_number <= other_header.view_number);
+            if let Some(other_header) = other_header {
+                if header.view_number == other_header.view_number {
+                    return Err(ValidatorNetworkError::ProposalCollision);
+                } else {
+                    return Ok(());
+                }
+            }
+        }
+
+        // The prepare handler. This will store the finished prepare proof in the pBFT state
+        let key = block_hash.clone();
+        pbft.aggregation.read().prepare_aggregation.notifier.write()
+            .register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
+                match event {
+                    AggregationEvent::Complete { best } => {
+                        let event = if let Some(pbft) = this.state.write().get_pbft_state_mut(&key) {
+                            if pbft.prepare_proof.is_none() {
+                                // Build prepare proof
+                                let prepare_proof = AggregateProof::new(best.signature, best.signers);
+                                trace!("Prepare complete: {:?}", prepare_proof);
+                                pbft.prepare_proof = Some(prepare_proof);
 
                                 // Return the event
-                                Some(ValidatorNetworkEvent::PbftComplete(pbft.block_hash.clone(), pbft.proposal.message.clone(), pbft_proof))
+                                Some(ValidatorNetworkEvent::PbftPrepareComplete(pbft.block_hash.clone(), pbft.proposal.message.clone()))
                             } else {
-                                error!("No pBFT state");
+                                warn!("Prepare proof already exists");
                                 None
-                            };
-                            // If we generated a prepare complete event, notify the validatir
-                            event.map(move |event| this.notifier.read().notify(event));
-                        }
+                            }
+                        } else {
+                            error!("No pBFT state");
+                            None
+                        };
+                        // If we generated a prepare complete event, notify the validator
+                        event.map(move |event| this.notifier.read().notify(event));
                     }
-                }));
+                }
+            }));
 
+        // The commit handler. This will store the finished commit proof and construct the
+        // pBFT proof.
+        let key = block_hash.clone();
+        pbft.aggregation.read().commit_aggregation.notifier.write()
+            .register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
+                match event {
+                    AggregationEvent::Complete { best } => {
+                        let event = if let Some(pbft) = this.state.write().get_pbft_state_mut(&key) {
+                            // Build commit proof
+                            let commit_proof = AggregateProof::new(best.signature, best.signers);
+                            trace!("Commit complete: {:?}", commit_proof);
+
+                            // NOTE: The commit evaluator will only mark the signature as final, if there are enough commit signatures from validators that also
+                            //       signed prepare messages. Thus a complete prepare proof must exist at this point.
+                            // NOTE: Either `take()` it, or `clone()` it. Really doesn't matter I guess
+                            let prepare_proof = pbft.prepare_proof.take().expect("No pBFT prepare proof");
+                            let pbft_proof = PbftProof { prepare: prepare_proof, commit: commit_proof };
+
+                            // Return the event
+                            Some(ValidatorNetworkEvent::PbftComplete(pbft.block_hash.clone(), pbft.proposal.message.clone(), pbft_proof))
+                        } else {
+                            error!("No pBFT state");
+                            None
+                        };
+                        // If we generated a prepare complete event, notify the validatir
+                        event.map(move |event| this.notifier.read().notify(event));
+                    }
+                }
+            }));
+
+        if !buffered {
+            // Replace pBFT state
+            state.pbft_states = vec![pbft];
+        } else {
             // Add pBFT state
-            state.pbft_states.insert(block_hash.clone(), pbft);
-
-            // We need to drop the state before notifying and relaying
-            drop(state);
-
-            // Notify Validator
-            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash.clone(), signed_proposal.message.clone()));
-
-            // Broadcast to other validators
-            self.broadcast_pbft_proposal(signed_proposal);
+            state.pbft_states.push(pbft);
         }
+
+        // We need to drop the state before notifying and relaying
+        drop(state);
+
+        // Notify Validator (and send prepare message)
+        if !buffered {
+            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash.clone(), signed_proposal.message.clone()));
+        }
+
+        // Broadcast to other validators
+        self.broadcast_pbft_proposal(signed_proposal);
 
         Ok(())
     }
 
     pub fn on_pbft_prepare_level_update(&self, level_update: LevelUpdateMessage<PbftPrepareMessage>) {
-        let mut state = self.state.write();
+        let state = self.state.read();
 
-        if let Some(pbft) = state.pbft_states.get(&level_update.tag.block_hash) {
+        if let Some(pbft) = state.get_pbft_state(&level_update.tag.block_hash) {
             let aggregation = Arc::clone(&pbft.aggregation);
             let aggregation = aggregation.read();
             drop(state);
@@ -521,9 +561,9 @@ impl ValidatorNetwork {
 
     pub fn on_pbft_commit_level_update(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
         // TODO: This is almost identical to the prepare one, maybe we can make the method generic over it?
-        let mut state = self.state.write();
+        let state = self.state.read();
 
-        if let Some(pbft) = state.pbft_states.get(&level_update.tag.block_hash) {
+        if let Some(pbft) = state.get_pbft_state(&level_update.tag.block_hash) {
             let aggregation = Arc::clone(&pbft.aggregation);
             let aggregation = aggregation.read();
             drop(state);
@@ -594,7 +634,7 @@ impl ValidatorNetwork {
 
     pub fn push_prepare(&self, signed_prepare: SignedPbftPrepareMessage) -> Result<(), ValidatorNetworkError> {
         let state = self.state.read();
-        if let Some(pbft) = state.pbft_states.get(&signed_prepare.message.block_hash) {
+        if let Some(pbft) = state.get_pbft_state(&signed_prepare.message.block_hash) {
             let aggregation = Arc::clone(&pbft.aggregation);
             let aggregation = aggregation.read();
             drop(state);
@@ -602,13 +642,13 @@ impl ValidatorNetwork {
             Ok(())
         }
         else {
-            Err(ValidatorNetworkError::NotInPbftPhase)
+            Err(ValidatorNetworkError::UnknownProposal)
         }
     }
 
     pub fn push_commit(&self, signed_commit: SignedPbftCommitMessage) -> Result<(), ValidatorNetworkError> {
         let state = self.state.read();
-        if let Some(pbft) = state.pbft_states.get(&signed_commit.message.block_hash) {
+        if let Some(pbft) = state.get_pbft_state(&signed_commit.message.block_hash) {
             let aggregation = Arc::clone(&pbft.aggregation);
             let aggregation = aggregation.read();
             drop(state);
@@ -616,7 +656,7 @@ impl ValidatorNetwork {
             Ok(())
         }
         else {
-            Err(ValidatorNetworkError::NotInPbftPhase)
+            Err(ValidatorNetworkError::UnknownProposal)
         }
     }
 

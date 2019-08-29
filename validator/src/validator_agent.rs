@@ -1,20 +1,21 @@
 use std::sync::Arc;
 use std::cmp::Ordering;
 use std::fmt;
+use std::time::Duration;
 
 use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
 use network_primitives::address::PeerId;
 use network::Peer;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
-use bls::bls12_381::{PublicKey, CompressedPublicKey};
-use collections::grouped_list::Group;
-use block_albatross::{SignedViewChange, SignedPbftPrepareMessage, SignedPbftCommitMessage,
-                      SignedPbftProposal, ForkProof, ViewChange, PbftPrepareMessage,
+use bls::bls12_381::CompressedPublicKey;
+use block_albatross::{SignedPbftProposal, ForkProof, ViewChange, PbftPrepareMessage,
                       PbftCommitMessage};
 use primitives::policy;
 use blockchain_albatross::Blockchain;
-use handel::update::{LevelUpdateMessage, LevelUpdate};
+use hash::{Hash, Blake2bHash};
+use handel::update::LevelUpdateMessage;
+use utils::rate_limit::RateLimit;
 
 
 pub enum ValidatorAgentEvent {
@@ -28,6 +29,7 @@ pub enum ValidatorAgentEvent {
 
 pub struct ValidatorAgentState {
     pub(crate) validator_info: Option<SignedValidatorInfo>,
+    pbft_proposal_limit: RateLimit,
 }
 
 pub struct ValidatorAgent {
@@ -42,7 +44,10 @@ impl ValidatorAgent {
         let agent = Arc::new(Self {
             peer,
             blockchain,
-            state: RwLock::new(ValidatorAgentState { validator_info: None }),
+            state: RwLock::new(ValidatorAgentState {
+                validator_info: None,
+                pbft_proposal_limit: RateLimit::new(5, Duration::from_secs(10)),
+            }),
             notifier: RwLock::new(PassThroughNotifier::new()),
         });
 
@@ -62,10 +67,8 @@ impl ValidatorAgent {
             }));
 
         this.peer.channel.msg_notifier.pbft_proposal.write()
-            .register(weak_passthru_listener(Arc::downgrade(this), |this, proposal| {
-                trace!("Received macro block proposal: {:?}", &proposal);
-                this.on_pbft_proposal_message(proposal);
-            }));
+            .register(weak_passthru_listener(Arc::downgrade(this),
+                |this, proposal| this.on_pbft_proposal_message(proposal)));
 
         this.peer.channel.msg_notifier.pbft_prepare.write()
             .register(weak_passthru_listener(Arc::downgrade(this),
@@ -154,9 +157,26 @@ impl ValidatorAgent {
 
     /// When a pbft block proposal is received
     fn on_pbft_proposal_message(&self, proposal: SignedPbftProposal) {
+        if !self.state.write().pbft_proposal_limit.note_single() {
+            warn!("Ignoring proposal - rate limit exceeded");
+            return;
+        }
+
+        trace!("Received macro block proposal: {:?}", &proposal);
+
+        let proposal_block = proposal.message.header.block_number;
+        let current_block = self.blockchain.head().block_number();
+
         // Reject proposal if the blockchain is already longer
-        if proposal.message.header.block_number <= self.blockchain.head().block_number() {
+        if proposal_block <= current_block {
             trace!("[PBFT-PROPOSAL] Ignoring old proposal: {:?}", proposal.message.header);
+            return;
+        }
+
+        // Reject proposal if it lies in another epoch
+        if policy::epoch_at(proposal_block) != policy::epoch_at(current_block) {
+            warn!("[PBFT-PROPOSAL] Ignoring proposal in another epoch: {}",
+                  proposal.message.header.hash::<Blake2bHash>());
             return;
         }
 
