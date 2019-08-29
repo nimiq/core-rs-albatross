@@ -107,7 +107,7 @@ impl PbftState {
         let view_number = self.proposal.message.header.view_number;
 
         // Can we verify validity of macro block?
-        if let Some(IndexedSlot { slot, idx }) = chain.get_block_producer_at(block_number, view_number, None) {
+        if let Some(IndexedSlot { slot, .. }) = chain.get_block_producer_at(block_number, view_number, None) {
             let public_key = &slot.public_key.uncompress_unchecked();
 
             // Check the validity of the block
@@ -119,9 +119,14 @@ impl PbftState {
                 return Some(false);
             }
 
-            // check the signer index
-            if self.proposal.signer_idx != idx {
-                debug!("[PBFT-PROPOSAL] Invalid signer index");
+            // Check the signer index
+            if let Some(ref validator) = chain.get_current_validator_by_idx(self.proposal.signer_idx) {
+                // Does the key own the current slot?
+                if validator != slot.public_key {
+                    return Some(false);
+                }
+            } else {
+                // No validator at this index
                 return Some(false);
             }
 
