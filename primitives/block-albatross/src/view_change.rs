@@ -1,3 +1,5 @@
+use std::fmt;
+
 use beserial::{Deserialize, Serialize};
 
 use hash::SerializeContent;
@@ -41,5 +43,11 @@ impl ViewChanges {
         } else {
             None
         }
+    }
+}
+
+impl fmt::Display for ViewChange {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "#{}.{}", self.block_number, self.new_view_number)
     }
 }

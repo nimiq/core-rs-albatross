@@ -130,9 +130,8 @@ impl ValidatorAgent {
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
     fn on_view_change_message(&self, update_message: LevelUpdateMessage<ViewChange>) {
-        trace!("[VIEW-CHANGE] Received: number=#{}.{} update={:?} peer={}",
-               update_message.tag.block_number,
-               update_message.tag.new_view_number,
+        trace!("[VIEW-CHANGE] Received: number={} update={:?} peer={}",
+               update_message.tag,
                update_message.update,
                self.peer.peer_address());
 
