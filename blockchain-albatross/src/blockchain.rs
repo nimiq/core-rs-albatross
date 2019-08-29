@@ -42,6 +42,47 @@ pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
 pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
 
+pub enum OptionalCheck<T> {
+    Some(T),
+    None,
+    Skip,
+}
+
+impl<T> OptionalCheck<T> {
+    pub fn is_some(&self) -> bool {
+        if let OptionalCheck::Some(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        if let OptionalCheck::None = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_skip(&self) -> bool {
+        if let OptionalCheck::Skip = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl<T> From<Option<T>> for OptionalCheck<T> {
+    fn from(opt: Option<T>) -> Self {
+        match opt {
+            Some(t) => OptionalCheck::Some(t),
+            None => OptionalCheck::None,
+        }
+    }
+}
+
 pub struct Blockchain<'env> {
     pub(crate) env: &'env Environment,
     pub network_id: NetworkId,
@@ -253,8 +294,7 @@ impl<'env> Blockchain<'env> {
         (slots, validators)
     }
 
-    /// This method is called by the validator only.
-    pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: Option<&ViewChangeProof>, intended_slot_owner: &MappedMutexGuard<PublicKey>, txn_opt: Option<&Transaction>) -> Result<(), PushError> {
+    pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: OptionalCheck<&ViewChangeProof>, intended_slot_owner: &MappedMutexGuard<PublicKey>, txn_opt: Option<&Transaction>) -> Result<(), PushError> {
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash(), false, txn_opt);
         if prev_info_opt.is_none() {
@@ -289,11 +329,11 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::InvalidBlock(BlockError::InvalidViewNumber));
         } else if new_view_number > view_number {
             match view_change_proof {
-                None => {
+                OptionalCheck::None => {
                     warn!("Rejecting block - missing view change proof");
                     return Err(PushError::InvalidBlock(BlockError::NoViewChangeProof));
                 },
-                Some(ref view_change_proof) => {
+                OptionalCheck::Some(ref view_change_proof) => {
                     let view_change = ViewChange {
                         block_number: header.block_number(),
                         new_view_number: header.view_number(),
@@ -303,6 +343,7 @@ impl<'env> Blockchain<'env> {
                         return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                     }
                 },
+                OptionalCheck::Skip => {},
             }
         } else if new_view_number == view_number && view_change_proof.is_some() {
             warn!("Rejecting block - must not contain view change proof");
@@ -330,9 +371,7 @@ impl<'env> Blockchain<'env> {
                 return Err(PushError::InvalidSuccessor);
             }
 
-            // Since this method is called by the validator only,
-            // we are very strict and always check the micro block root.
-            let transactions_root = self.get_transactions_root(policy::epoch_at(header.block_number))
+            let transactions_root = self.get_transactions_root(policy::epoch_at(header.block_number), txn_opt)
                 .ok_or(PushError::BlockchainError(BlockchainError::FailedLoadingMainChain))?;
             if header.transactions_root != transactions_root {
                 warn!("Rejecting block - wrong transactions root");
@@ -347,9 +386,12 @@ impl<'env> Blockchain<'env> {
         // Only one push operation at a time.
         let push_lock = self.push_lock.lock();
 
+        // XXX We might want to pass this as argument to this method
+        let read_txn = ReadTransaction::new(self.env);
+
         // Check if we already know this block.
         let hash: Blake2bHash = block.hash();
-        if self.chain_store.get_chain_info(&hash, false, None).is_some() {
+        if self.chain_store.get_chain_info(&hash, false, Some(&read_txn)).is_some() {
             return Ok(PushResult::Known);
         }
 
@@ -359,22 +401,25 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::InvalidBlock(e));
         }
 
-        let mut slot: Option<IndexedSlot> = None;
+        let view_change_proof = match block {
+            Block::Macro(_) => OptionalCheck::Skip,
+            Block::Micro(ref micro_block) => micro_block.justification.view_change_proof.as_ref().into(),
+        };
+
+        // Public keys are checked when staking, so this should never fail.
+        let mut slot: IndexedSlot = self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn))
+            .ok_or(PushError::InvalidSuccessor)?;
+
+        {
+            let intended_slot_owner = slot.slot.public_key.uncompress_unchecked();
+            // This will also check that the type at this block number is correct.
+            if let Err(e) = self.verify_block_header(&block.header(), view_change_proof, &intended_slot_owner, Some(&read_txn)) {
+                warn!("Rejecting block - Bad header / justification");
+                return Err(e);
+            }
+        }
 
         if let Block::Micro(ref micro_block) = block {
-
-            // XXX We might want to pass this as argument to this method
-            let read_txn = ReadTransaction::new(self.env);
-
-            // Check if the block was produced (and signed) by the intended producer
-            // Public keys are checked when staking, so this should never fail.
-            slot = Some(
-                self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn))
-                    .ok_or(PushError::InvalidSuccessor)?
-            );
-
-            let intended_slot_owner = slot.as_ref().unwrap().slot.public_key.uncompress_unchecked();
-
             let justification = match micro_block.justification.signature.uncompress() {
                 Ok(justification) => justification,
                 Err(_) => {
@@ -382,16 +427,13 @@ impl<'env> Blockchain<'env> {
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                 }
             };
+
+            let intended_slot_owner = slot.slot.public_key.uncompress_unchecked();
             if !intended_slot_owner.verify(&micro_block.header, &justification) {
                 warn!("Rejecting block - invalid justification for intended slot owner");
                 debug!("Block hash: {}", micro_block.header.hash::<Blake2bHash>());
                 debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-            }
-
-            if let Err(e) = self.verify_block_header(&block.header(), micro_block.justification.view_change_proof.as_ref(), &intended_slot_owner, Some(&read_txn)) {
-                warn!("Rejecting block - Bad header / justification");
-                return Err(e);
             }
 
             // Validate slash inherents
@@ -426,17 +468,7 @@ impl<'env> Blockchain<'env> {
                 },
             }
 
-            // Check micro block root if micro blocks are available.
-            // TODO: Should we expose a flag to require this check?
-            let computed_micro_block_root = self.get_transactions_root(policy::epoch_at(macro_block.header.block_number));
-            if let Some(computed_micro_block_root) = computed_micro_block_root {
-                if computed_micro_block_root != macro_block.header.transactions_root {
-                    warn!("Rejecting block - Transactions root doesn't match real transactions root");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidTransactionsRoot));
-                }
-            }
-
-            let computed_extrinsics: MacroExtrinsics = self.next_slots().into();
+            let computed_extrinsics: MacroExtrinsics = self.next_slots(Some(&read_txn)).into();
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
@@ -452,8 +484,11 @@ impl<'env> Blockchain<'env> {
             }
         }
 
-        let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, None).unwrap();
-        let chain_info = prev_info.next(block, slot);
+        let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, Some(&read_txn)).unwrap();
+        let chain_info = prev_info.next(block, Some(slot));
+
+        // Drop read transaction before calling other functions.
+        drop(read_txn);
 
         if *chain_info.head.parent_hash() == self.head_hash() {
             return self.extend(chain_info.head.hash(), chain_info, prev_info, push_lock);
@@ -793,15 +828,15 @@ impl<'env> Blockchain<'env> {
         self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
-    pub fn get_transactions_root(&self, epoch: u32) -> Option<Blake2bHash> {
+    pub fn get_transactions_root(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
         let mut hashes = Vec::new();
 
         let first_block = policy::first_block_of(epoch);
-        let first_block = self.get_block_at(first_block, true)?;
+        let first_block = self.chain_store.get_block_at(first_block, txn_option)?;
         hashes.extend(first_block.transactions().unwrap().iter().map(|tx| tx.hash()));
 
         // Excludes current block and macro block.
-        let blocks = self.get_blocks(&first_block.hash(), policy::EPOCH_LENGTH - 2, true, Direction::Forward);
+        let blocks = self.chain_store.get_blocks(&first_block.hash(), policy::EPOCH_LENGTH - 2, true, Direction::Forward, txn_option);
         // We need to make sure that we have all micro blocks.
         if blocks.len() as u32 != policy::EPOCH_LENGTH - 2 {
             return None;
@@ -850,9 +885,9 @@ impl<'env> Blockchain<'env> {
             .expect("Can't get block producer for next block")
     }
 
-    pub fn next_slots(&self) -> Slots {
+    pub fn next_slots(&self, txn_option: Option<&Transaction>) -> Slots {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
-        let staking_account = self.state.read().accounts().get(validator_registry, None);
+        let staking_account = self.state.read().accounts().get(validator_registry, txn_option);
         if let Account::Staking(ref staking_contract) = staking_account {
             return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::SLOTS, policy::MAX_CONSIDERED as usize);
         }
@@ -860,7 +895,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn next_validators(&self) -> Validators {
-        self.next_slots().into()
+        self.next_slots(None).into()
     }
 
     pub fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {

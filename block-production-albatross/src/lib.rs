@@ -65,7 +65,7 @@ impl<'env> BlockProducer<'env> {
     }
 
     pub fn next_macro_extrinsics(&self) -> MacroExtrinsics {
-        self.blockchain.next_slots().into()
+        self.blockchain.next_slots(None).into()
     }
 
     fn next_micro_extrinsics(&self, fork_proofs: Vec<ForkProof>, extra_data: Vec<u8>, view_changes: &Option<ViewChanges>) -> MicroExtrinsics {
@@ -117,7 +117,7 @@ impl<'env> BlockProducer<'env> {
 
         let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();
 
-        let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number))
+        let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number), None)
             .expect("Failed to compute transactions root, micro blocks missing");
 
         MacroHeader {

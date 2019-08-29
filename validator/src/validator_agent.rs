@@ -239,7 +239,7 @@ impl ValidatorAgent {
             let public_key = slot.public_key.uncompress_unchecked();
 
             // check the validity of the block
-            if let Err(e) = self.blockchain.verify_block_header(&BlockHeader::Macro(proposal.message.header.clone()), proposal.message.view_change.as_ref(), &public_key, None) {
+            if let Err(e) = self.blockchain.verify_block_header(&BlockHeader::Macro(proposal.message.header.clone()), proposal.message.view_change.as_ref().into(), &public_key, None) {
                 debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
                 return;
             }
