@@ -11,7 +11,6 @@ use parking_lot::RwLock;
 
 use primitives::validators::Validators;
 use primitives::policy::TWO_THIRD_SLOTS;
-use network::Peer;
 use block_albatross::signed;
 use messages::Message;
 use bls::bls12_381::PublicKey;

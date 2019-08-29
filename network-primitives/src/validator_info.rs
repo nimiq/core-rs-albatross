@@ -2,8 +2,7 @@ use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
 use crate::address::peer_address::PeerAddress;
 use bls::bls12_381::CompressedPublicKey;
 use beserial::{Serialize, Deserialize};
-use hex::FromHex;
-use hash::{SerializeContent, Hash, Blake2bHash};
+use hash::SerializeContent;
 
 
 

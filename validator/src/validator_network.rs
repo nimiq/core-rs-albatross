@@ -683,11 +683,6 @@ impl ValidatorNetwork {
         }
     }
 
-    /// Broadcast our own validator info
-    fn broadcast_validator_info(&self, info: SignedValidatorInfo) {
-        self.broadcast_all(Message::ValidatorInfo(vec![info]));
-    }
-
     /// Broadcast pBFT proposal
     fn broadcast_pbft_proposal(&self, proposal: SignedPbftProposal) {
         self.broadcast_active(Message::PbftProposal(Box::new(proposal)));

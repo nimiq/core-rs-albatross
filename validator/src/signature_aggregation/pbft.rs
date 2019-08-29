@@ -1,4 +1,4 @@
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -6,26 +6,24 @@ use parking_lot::RwLock;
 
 use primitives::validators::Validators;
 use block_albatross::{PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage,
-                      SignedPbftCommitMessage, PbftProof};
-use block_albatross::signed::{AggregateProof, Message as SignableMessage};
+                      SignedPbftCommitMessage};
+use block_albatross::signed::Message as SignableMessage;
 use messages::Message;
 use hash::Blake2bHash;
-use network::Peer;
 use collections::bitset::BitSet;
-use utils::observer::{weak_passthru_listener, PassThroughNotifier};
 
 use handel::update::{LevelUpdate, LevelUpdateMessage};
-use handel::evaluator::{Evaluator, WeightedVote};
+use handel::evaluator::Evaluator;
 use handel::protocol::Protocol;
 use handel::store::{SignatureStore, ReplaceStore};
-use handel::aggregation::{Aggregation, AggregationEvent};
+use handel::aggregation::Aggregation;
 use handel::config::Config;
 use handel::partitioner::BinomialPartitioner;
 use handel::verifier::MultithreadedVerifier;
-use handel::multisig::{Signature, MultiSignature, IndividualSignature};
+use handel::multisig::{Signature, IndividualSignature};
 use handel::identity::WeightRegistry;
 
-use super::voting::{VotingProtocol, Tag, VotingEvaluator, VotingSender, VoteAggregation, ValidatorRegistry};
+use super::voting::{VotingProtocol, Tag, VotingEvaluator, VotingSender, ValidatorRegistry};
 use crate::validator_agent::ValidatorAgent;
 
 

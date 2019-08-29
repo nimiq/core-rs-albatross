@@ -407,7 +407,7 @@ impl<'env> Blockchain<'env> {
         };
 
         // Public keys are checked when staking, so this should never fail.
-        let mut slot: IndexedSlot = self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn))
+        let slot: IndexedSlot = self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn))
             .ok_or(PushError::InvalidSuccessor)?;
 
         {

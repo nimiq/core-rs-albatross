@@ -30,7 +30,6 @@ rand04_compat = "0.1"
 rand_chacha = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 serde = "1.0"
-serde_derive = "1.0"
 toml = "0.5"
 hex = "0.3"
 log = "0.4"

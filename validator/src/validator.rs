@@ -40,7 +40,6 @@ use utils::timers::Timers;
 use crate::error::Error;
 use crate::slash::ForkProofPool;
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
-use block_albatross::signed::Message;
 
 #[derive(Clone, Debug)]
 pub enum SlotChange  {
@@ -351,8 +350,6 @@ impl Validator {
             return;
         }
 
-        let slots = state.slots.expect("Checked above that we are an active validator");
-
         // Note: we don't verify this hash as the network validator already did.
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
 
@@ -375,8 +372,6 @@ impl Validator {
         if state.status != ValidatorStatus::Active {
             return;
         }
-
-        let slots = state.slots.expect("Checked above that we are an active validator");
 
         // Note: we don't verify this hash as the network validator already did
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
@@ -422,7 +417,6 @@ impl Validator {
         info!("Starting view change to {}", message);
 
         let pk_idx = state.pk_idx.expect("Checked above that we are an active validator");
-        let slots = state.slots.expect("Checked above that we are an active validator");
         let view_change_message = SignedViewChange::from_message(message, &self.validator_key.secret, pk_idx);
 
         drop(state);
