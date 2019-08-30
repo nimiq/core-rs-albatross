@@ -362,7 +362,8 @@ impl Validator {
             pk_idx
         );
 
-        self.validator_network.push_prepare(prepare_message);
+        self.validator_network.push_prepare(prepare_message)
+            .unwrap_or_else(|e| debug!("Failed to push pBFT prepare: {}", e));
     }
 
     pub fn on_pbft_prepare_complete(&self, hash: Blake2bHash) {
@@ -385,7 +386,8 @@ impl Validator {
             pk_idx
         );
 
-        self.validator_network.push_commit(commit_message);
+        self.validator_network.push_commit(commit_message)
+            .unwrap_or_else(|e| debug!("Failed to push pBFT commit: {}", e));
     }
 
     pub fn on_pbft_commit_complete(&self, _hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
@@ -422,7 +424,8 @@ impl Validator {
         drop(state);
 
         // Broadcast our view change number message to the other validators.
-        self.validator_network.start_view_change(view_change_message);
+        self.validator_network.start_view_change(view_change_message)
+            .unwrap_or_else(|e| debug!("Failed to start view change: {}", e));
      }
 
     fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {
@@ -444,7 +447,8 @@ impl Validator {
         drop(state);
 
         let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
-        self.validator_network.start_pbft(signed_proposal);
+        self.validator_network.start_pbft(signed_proposal)
+            .unwrap_or_else(|e| debug!("Failed to start pBFT proposal: {}", e));
     }
 
     fn produce_micro_block(&self, view_change_proof: Option<ViewChangeProof>) {

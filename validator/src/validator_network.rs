@@ -95,7 +95,7 @@ impl PbftState {
     }
 
     // Only works on non-buffered proposals
-    fn check_verified(&self, chain: &Blockchain, chain_height: u32) -> bool {
+    fn check_verified(&self, chain: &Blockchain) -> bool {
         let block_number = self.proposal.message.header.block_number;
         let view_number = self.proposal.message.header.view_number;
 
@@ -246,7 +246,8 @@ impl ValidatorNetwork {
                         this.on_view_change_level_update(update_message);
                     },
                     ValidatorAgentEvent::PbftProposal(proposal) => {
-                        this.on_pbft_proposal(proposal);
+                        this.on_pbft_proposal(proposal)
+                            .unwrap_or_else(|e| debug!("Rejecting pBFT proposal: {}", e));
                     },
                     ValidatorAgentEvent::PbftPrepare(level_update) => {
                         this.on_pbft_prepare_level_update(level_update);
@@ -360,12 +361,13 @@ impl ValidatorNetwork {
             return;
         }
 
-        // Switch state from buffered to complete
+        // The rest of this function switches the state from buffered to complete.
+        // Only the proposal with the highest view number will remain.
         let mut state = self.state.write();
 
         // Remove invalid proposals
         state.pbft_states.retain(|pbft| {
-            let verified = pbft.check_verified(&self.blockchain, new_height);
+            let verified = pbft.check_verified(&self.blockchain);
             if !verified {
                 debug!("Buffered pBFT proposal confirmed invalid: {}", &pbft.block_hash);
             } else {
@@ -438,15 +440,10 @@ impl ValidatorNetwork {
 
         // Check validity if proposal not buffered
         if !buffered {
-            let verified = pbft.check_verified(&self.blockchain, chain_height);
+            let verified = pbft.check_verified(&self.blockchain);
             if !verified {
                 return Err(ValidatorNetworkError::InvalidProposal);
             }
-
-            // FIXME Is this race condition scenario possible?:
-            // on_blockchain_extended for the current height not yet fired,
-            // but this on_pbft_proposal call in progress
-            // If so, a potentially invalid proposal could replace this proposal
 
             // Check if another proposal has same or greater view number
             let header = &pbft.proposal.message.header;
