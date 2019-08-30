@@ -38,7 +38,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// - includeTransactions (bool, optional): Default is `false`.
     ///     If set to `true`, the full transactions will be included,
     ///     otherwise it will only include the hashes.
-    pub(crate) fn mempool_content(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn mempool_content(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let include_transactions = params.get(0).and_then(JsonValue::as_bool)
             .unwrap_or(false);
 
@@ -60,7 +60,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     ///     buckets: Array<number>,
     /// }
     /// ```
-    pub(crate) fn mempool(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn mempool(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // Transactions sorted by fee/byte, ascending
         let transactions = self.mempool.get_transactions(usize::max_value(), 0f64);
         let bucket_values: [u64; 14] = [0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
@@ -89,7 +89,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// Sends a raw transaction.
     /// Parameters:
     /// - transaction (string)
-    pub(crate) fn send_raw_transaction(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn send_raw_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let raw = hex::decode(params.get(0)
             .unwrap_or(&Null)
             .as_str()
@@ -120,7 +120,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// }
     /// ```
     /// Fields that can be null are optional.
-    pub(crate) fn create_raw_transaction(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn create_raw_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let mut transaction = obj_to_transaction(params.get(0).unwrap_or(&Null), self.mempool.current_height(), self.mempool.network_id())?;
 
         if let Some(ref unlocked_wallets) = self.unlocked_wallets {
@@ -155,7 +155,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// }
     /// ```
     /// Fields that can be null are optional.
-    pub(crate) fn send_transaction(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn send_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let mut transaction = obj_to_transaction(params.get(0).unwrap_or(&Null), self.mempool.current_height(), self.mempool.network_id())?;
 
         if let Some(ref unlocked_wallets) = self.unlocked_wallets {
@@ -201,7 +201,7 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     ///     transactionIndex: null,
     /// }
     /// ```
-    pub(crate) fn get_transaction(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let hash = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
             .and_then(|s| Blake2bHash::from_str(s)
@@ -322,7 +322,7 @@ pub(crate) struct TransactionContext<'a> {
 }
 
 impl<P: ConsensusProtocol + 'static> Handler for MempoolHandler<P> {
-    fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
         match name {
             // Transactions
             "sendRawTransaction" => Some(self.send_raw_transaction(params)),

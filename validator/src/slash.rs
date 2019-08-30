@@ -25,25 +25,19 @@ impl ForkProofPool {
 
     /// Applies a block to the pool, removing processed fork proofs.
     pub fn apply_block(&mut self, block: &Block) {
-        match block {
-            Block::Micro(MicroBlock { extrinsics: Some(extrinsics), .. }) => {
-                for fork_proof in extrinsics.fork_proofs.iter() {
-                    self.fork_proofs.remove(fork_proof);
-                }
-            },
-            _ => {},
+        if let Block::Micro(MicroBlock { extrinsics: Some(extrinsics), .. }) = block {
+            for fork_proof in extrinsics.fork_proofs.iter() {
+                self.fork_proofs.remove(fork_proof);
+            }
         }
     }
 
     /// Reverts a block, re-adding fork proofs.
     pub fn revert_block(&mut self, block: &Block) {
-        match block {
-            Block::Micro(MicroBlock { extrinsics: Some(extrinsics), .. }) => {
-                for fork_proof in extrinsics.fork_proofs.iter() {
-                    self.fork_proofs.insert(fork_proof.clone());
-                }
-            },
-            _ => {},
+        if let Block::Micro(MicroBlock { extrinsics: Some(extrinsics), .. }) = block {
+            for fork_proof in extrinsics.fork_proofs.iter() {
+                self.fork_proofs.insert(fork_proof.clone());
+            }
         }
     }
 

@@ -78,6 +78,10 @@ impl MultiSignature {
         self.signers.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.signers.is_empty()
+    }
+
     pub fn add_multisig(&mut self, other: &MultiSignature) -> Result<(), SignatureError> {
         // TODO: If we don't need the overlapping IDs for the error, we can use `intersection_size`
         let overlap = &self.signers & &other.signers;

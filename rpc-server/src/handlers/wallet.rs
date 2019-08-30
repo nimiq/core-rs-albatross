@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use hex;
-use json::{Array, JsonValue, Null};
+use json::{JsonValue, Null};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
@@ -58,7 +58,7 @@ impl WalletHandler {
     /// - key data (string): The hex encoded private key.
     /// - passphrase (optional, string): The passphrase to lock the key with.
     /// Returns the user friendly address corresponding to the private key.
-    pub(crate) fn import_raw_key(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn import_raw_key(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let private_key = params.get(0).unwrap_or(&Null).as_str()
             .ok_or_else(|| object!{"message" => "Missing private key data"})?;
         let private_key = PrivateKey::from_str(private_key)
@@ -82,7 +82,7 @@ impl WalletHandler {
     }
 
     /// Returns a list of all user friendly addresses in the store.
-    pub(crate) fn list_accounts(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn list_accounts(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(JsonValue::Array(self.wallet_store.list(None).iter().map(|address| {
             JsonValue::String(address.to_user_friendly_address())
         }).collect()))
@@ -91,7 +91,7 @@ impl WalletHandler {
     /// Removes the unencrypted private key from memory.
     /// Parameters:
     /// - address (string)
-    pub(crate) fn lock_account(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn lock_account(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let account_address = Address::from_any_str(params.get(0)
             .unwrap_or_else(|| &Null).as_str()
             .ok_or_else(|| object!{"message" => "Address must be a string"})?)
@@ -104,7 +104,7 @@ impl WalletHandler {
     /// Parameters:
     /// - passphrase (optional, string): The passphrase to lock the key with.
     /// Returns the user friendly address corresponding to the private key.
-    pub(crate) fn new_account(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn new_account(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // FIXME: We're not clearing the passphrase right now.
         let passphrase = params.get(0).map(|s: &JsonValue| s.as_str()
                 .ok_or_else(|| object!{"message" => "Passphrase must be a string"})
@@ -127,7 +127,7 @@ impl WalletHandler {
     /// - address (string)
     /// - passphrase (string)
     /// - duration (number, not supported yet)
-    pub(crate) fn unlock_account(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn unlock_account(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let account_address = Address::from_any_str(params.get(0)
             .unwrap_or_else(|| &Null).as_str()
             .ok_or_else(|| object!{"message" => "Address must be a string"})?)
@@ -164,7 +164,7 @@ impl WalletHandler {
     ///     publicKey: string,
     ///     signature: string,
     /// }
-    pub(crate) fn sign(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn sign(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let is_hex = params.get(3).unwrap_or_else(|| &JsonValue::Boolean(false)).as_bool()
             .ok_or_else(|| object!{"message" => "Optional isHex argument must be a boolean value"})?;
 
@@ -215,7 +215,7 @@ impl WalletHandler {
     /// - isHex (bool, optional): Default is `false`.
     ///
     /// The return value is a boolean.
-    pub(crate) fn verify_signature(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn verify_signature(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let is_hex = params.get(3).unwrap_or_else(|| &JsonValue::Boolean(false)).as_bool()
             .ok_or_else(|| object!{"message" => "Optional isHex argument must be a boolean value"})?;
 
@@ -265,7 +265,7 @@ impl WalletHandler {
 }
 
 impl Handler for WalletHandler {
-    fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
         if !name.starts_with(Self::PREFIX) {
             return None;
         }

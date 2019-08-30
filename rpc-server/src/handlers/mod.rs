@@ -1,4 +1,3 @@
-use json::Array;
 use json::JsonValue;
 
 pub mod wallet;
@@ -10,5 +9,5 @@ pub mod mempool;
 pub mod block_production;
 
 pub trait Handler: Send + Sync {
-    fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>>;
+    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>>;
 }

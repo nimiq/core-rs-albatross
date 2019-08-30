@@ -26,7 +26,7 @@ impl BitSet {
     }
 
     pub fn with_capacity(nbits: usize) -> Self {
-        let nblocks = (nbits >> 6) + if nbits & 63 == 0 { 0 } else { 1 };
+        let nblocks = (nbits >> 6) + if nbits.trailing_zeros() >= 6 { 0 } else { 1 };
         Self {
             store: Vec::with_capacity(nblocks),
             count: 0,

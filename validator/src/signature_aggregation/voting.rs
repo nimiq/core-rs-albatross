@@ -259,7 +259,8 @@ impl<T: Tag> VoteAggregation<T> {
 
     pub fn push_update(&self, level_update: LevelUpdateMessage<T>) {
         if level_update.tag != *self.tag() {
-            panic!("Submitting level update for {:?}, but aggregation is for {:?}");
+            panic!("Submitting level update for {:?}, but aggregation is for {:?}",
+                level_update.tag, *self.tag());
         }
         self.inner.push_update(level_update.update);
     }

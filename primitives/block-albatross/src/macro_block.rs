@@ -90,7 +90,7 @@ impl From<Slots> for MacroExtrinsics {
         let addresses = slots.iter().map(|slot| SlotAddresses {
             staker_address: slot.staker_address.clone(),
             reward_address: slot.reward_address_opt.as_ref().unwrap_or(&slot.staker_address).clone(),
-        }).into_iter();
+        });
         let slash_fine = slots.slash_fine();
         MacroExtrinsics {
             slot_addresses: addresses.collect(),

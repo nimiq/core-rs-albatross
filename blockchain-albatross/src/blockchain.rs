@@ -367,7 +367,7 @@ impl<'env> Blockchain<'env> {
         if let BlockHeader::Macro(ref header) = header {
             // Check if the parent macro hash matches the current macro head hash
             if header.parent_macro_hash != self.state().macro_head_hash {
-                warn!("Rejecting block - wrong patent macro hash");
+                warn!("Rejecting block - wrong parent macro hash");
                 return Err(PushError::InvalidSuccessor);
             }
 

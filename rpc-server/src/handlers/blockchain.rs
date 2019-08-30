@@ -26,14 +26,14 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
     // Blocks
 
     /// Returns the current block number.
-    pub(crate) fn block_number(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn block_number(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(self.blockchain.head_height().into())
     }
 
     /// Returns the number of transactions for a block hash.
     /// Parameters:
     /// - hash (string)
-    pub(crate) fn get_block_transaction_count_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_block_transaction_count_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(self.block_by_hash(params.get(0).unwrap_or(&Null))?
             .transactions()
             .map(|l| l.len())
@@ -44,7 +44,7 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
     /// Returns the number of transactions for a block number.
     /// Parameters:
     /// - height (number)
-    pub(crate) fn get_block_transaction_count_by_number(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_block_transaction_count_by_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(self.block_by_number(params.get(0).unwrap_or(&Null))?
             .transactions()
             .map(|l| l.len())
@@ -82,7 +82,7 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_by_block_hash_and_index(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction_by_block_hash_and_index(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.block_by_hash(params.get(0).unwrap_or(&Null))?;
         let index = params.get(1).and_then(JsonValue::as_u16)
             .ok_or_else(|| object!("message" => "Invalid transaction index"))?;
@@ -117,7 +117,7 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
    ///     transactionIndex: number,
    /// }
    /// ```
-    pub(crate) fn get_transaction_by_block_number_and_index(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction_by_block_number_and_index(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.block_by_number(params.get(0).unwrap_or(&Null))?;
         let index = params.get(1).and_then(JsonValue::as_u16)
             .ok_or_else(|| object!("message" => "Invalid transaction index"))?;
@@ -139,7 +139,7 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
     ///     transactionIndex: number,
     /// }>
     /// ```
-    pub(crate) fn get_transactions_by_address(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transactions_by_address(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let address = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid address"})
             .and_then(|s| Address::from_any_str(s)
@@ -168,7 +168,7 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
     /// ```text
     /// 1200000
     /// ```
-    pub(crate) fn get_balance(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_balance(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let address = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid address"})
             .and_then(|s| Address::from_any_str(s)
@@ -239,7 +239,7 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
         Ok(block_number)
     }
 
-    pub(crate) fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+    pub(crate) fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
         match name {
             // Blockchain
             "blockNumber" => Some(self.block_number(params)),

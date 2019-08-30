@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use json::{Array, JsonValue, Null};
+use json::{JsonValue, Null};
 
 use beserial::{Deserialize, Serialize};
 use block::Block;
@@ -55,7 +55,7 @@ impl BlockchainNimiqHandler {
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
     /// ```
-    pub(crate) fn get_block_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_block_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.generic.block_by_hash(params.get(0).unwrap_or(&Null))?;
         Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
@@ -85,7 +85,7 @@ impl BlockchainNimiqHandler {
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
     /// ```
-    pub(crate) fn get_block_by_number(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_block_by_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.generic.block_by_number(params.get(0).unwrap_or(&Null))?;
         Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
@@ -97,7 +97,7 @@ impl BlockchainNimiqHandler {
     /// - transaction (string): Hex encoded transaction.
     ///
     /// Returns an info object:
-    pub(crate) fn get_raw_transaction_info(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_raw_transaction_info(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let transaction: Transaction = params.get(0).unwrap_or(&Null).as_str()
             .ok_or_else(|| object!{"message" => "Raw transaction data must be a string"}) // Result<&str, Err>
             .and_then(|s| hex::decode(s)
@@ -157,7 +157,7 @@ impl BlockchainNimiqHandler {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         params.get(0)
             .ok_or(object!{"message" => "First argument must be hash"})
             .and_then(parse_hash)
@@ -180,7 +180,7 @@ impl BlockchainNimiqHandler {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_receipt(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction_receipt(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let hash = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
             .and_then(|s| Blake2bHash::from_str(s)
@@ -260,7 +260,7 @@ impl BlockchainNimiqHandler {
 }
 
 impl Handler for BlockchainNimiqHandler {
-    fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
         if let Some(res) = self.generic.call(name, params) {
             return Some(res);
         }

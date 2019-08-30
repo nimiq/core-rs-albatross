@@ -36,19 +36,19 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
     }
 
     /// Returns the number of peers.
-    pub(crate) fn peer_count(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn peer_count(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(self.network.peer_count().into())
     }
 
     /// Returns the consensus state (string).
-    pub(crate) fn consensus(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn consensus(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(self.state.read().consensus_state.into())
     }
 
     /// If syncing is true, returns an object
     /// { starting_block: number, current_block: number, highest_block: number },
     /// otherwise returns false.
-    pub(crate) fn syncing(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn syncing(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(if self.state.read().consensus_state == "established" {
             false.into()
         }
@@ -77,7 +77,7 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
     ///     rx: number|null,
     ///     tx: number|null,
     /// }
-    pub(crate) fn peer_list(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn peer_list(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let mut scores: HashMap<ConnectionId, Score> = HashMap::new();
         for (id, score) in self.network.scorer().connection_scores() {
             scores.insert(*id, *score);
@@ -88,7 +88,7 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
                 let conn_id = self.network.connections.state()
                     .get_connection_id_by_peer_address(&info.peer_address);
                 self.peer_address_info_to_obj(info, None,
-                                              conn_id.and_then(|id| scores.get(&id)).map(|s| *s))
+                                              conn_id.and_then(|id| scores.get(&id)).copied())
             })
             .collect::<Array>().into())
     }
@@ -113,7 +113,7 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
     ///     rx: number|null,
     ///     tx: number|null,
     /// }
-    pub(crate) fn peer_state(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn peer_state(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let peer_uri = params.get(0).unwrap_or(&Null).as_str()
             .ok_or_else(|| object!{"message" => "Invalid peer URI"})
             .and_then(|uri| PeerUri::from_str(uri)
@@ -139,14 +139,14 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
         if !set.is_null() {
             let set = set.as_str().ok_or_else(|| object!{"message" => "Invalid value for 'set'"})?;
             match set {
-                "disconnect" => {
-                    peer_channel.map(|p| p.close(CloseType::ManualPeerDisconnect));
+                "disconnect" => if let Some(p) = peer_channel {
+                    p.close(CloseType::ManualPeerDisconnect);
                 },
-                "fail" => {
-                    peer_channel.map(|p| p.close(CloseType::ManualPeerFail));
+                "fail" => if let Some(p) = peer_channel {
+                    p.close(CloseType::ManualPeerFail);
                 },
-                "ban" => {
-                    peer_channel.map(|p| p.close(CloseType::ManualPeerBan));
+                "ban" => if let Some(p) = peer_channel {
+                    p.close(CloseType::ManualPeerBan);
                 },
                 "unban" => {
                     if peer_address_info.state == PeerAddressState::Banned {
@@ -193,7 +193,7 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
 }
 
 impl<P: ConsensusProtocol + 'static> Handler for NetworkHandler<P> {
-    fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
         match name {
             // Network
             "peerCount" => Some(self.peer_count(params)),

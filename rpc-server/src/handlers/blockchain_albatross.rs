@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use json::{Array, JsonValue, Null};
+use json::{JsonValue, Null};
 
 use block_albatross::{Block, ForkProof};
 use blockchain_albatross::Blockchain;
@@ -32,7 +32,7 @@ impl BlockchainAlbatrossHandler {
     // Blocks
 
     /// Returns the current epoch number.
-    pub(crate) fn epoch_number(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn epoch_number(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(policy::epoch_at(self.blockchain.height()).into())
     }
 
@@ -61,7 +61,7 @@ impl BlockchainAlbatrossHandler {
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
     /// ```
-    pub(crate) fn get_block_by_hash(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_block_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.generic.block_by_hash(params.get(0).unwrap_or(&Null))?;
         Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
@@ -91,7 +91,7 @@ impl BlockchainAlbatrossHandler {
     ///     transactions: Array<transaction_objects> | Array<string>, (depends on includeTransactions),
     /// }
     /// ```
-    pub(crate) fn get_block_by_number(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_block_by_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.generic.block_by_number(params.get(0).unwrap_or(&Null))?;
         Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
     }
@@ -112,7 +112,7 @@ impl BlockchainAlbatrossHandler {
     ///     rewardAddress: string,
     /// }
     /// ```
-    pub(crate) fn get_producer(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_producer(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block_number = params.get(0)
             .ok_or(object!{"message" => "First argument must be block number"})
             .and_then(|n| self.generic.parse_block_number(n))?;
@@ -149,7 +149,7 @@ impl BlockchainAlbatrossHandler {
     ///     rewardAddress: string,
     /// }
     /// ```
-    pub(crate) fn slot_state(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn slot_state(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let state = self.blockchain.state();
 
         let current_slots = state.current_slots().ok_or(object!{"message" => "No current slots"})?;
@@ -174,7 +174,7 @@ impl BlockchainAlbatrossHandler {
     /// - transaction (string): Hex encoded transaction.
     ///
     /// Returns an info object:
-    pub(crate) fn get_raw_transaction_info(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_raw_transaction_info(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         /*
         let transaction: Transaction = params.get(0).unwrap_or(&Null).as_str()
             .ok_or_else(|| object!{"message" => "Raw transaction data must be a string"}) // Result<&str, Err>
@@ -236,7 +236,7 @@ impl BlockchainAlbatrossHandler {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_by_hash(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction_by_hash(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         rpc_not_implemented()
     }
 
@@ -256,7 +256,7 @@ impl BlockchainAlbatrossHandler {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_receipt(&self, _params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction_receipt(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         /*
         let hash = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
@@ -374,7 +374,7 @@ impl BlockchainAlbatrossHandler {
 }
 
 impl Handler for BlockchainAlbatrossHandler {
-    fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
         if let Some(res) = self.generic.call(name, params) {
             return Some(res);
         }

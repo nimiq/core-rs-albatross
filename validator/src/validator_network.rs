@@ -483,7 +483,9 @@ impl ValidatorNetwork {
                             None
                         };
                         // If we generated a prepare complete event, notify the validator
-                        event.map(move |event| this.notifier.read().notify(event));
+                        if let Some(event) = event {
+                            this.notifier.read().notify(event)
+                        }
                     }
                 }
             }));
@@ -512,8 +514,10 @@ impl ValidatorNetwork {
                             error!("No pBFT state");
                             None
                         };
-                        // If we generated a prepare complete event, notify the validatir
-                        event.map(move |event| this.notifier.read().notify(event));
+                        // If we generated a prepare complete event, notify the validator
+                        if let Some(event) = event {
+                            this.notifier.read().notify(event)
+                        }
                     }
                 }
             }));

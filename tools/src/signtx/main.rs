@@ -106,7 +106,7 @@ fn run_app() -> Result<(), Error> {
         Ok(())
     }
     else {
-        Err(AppError::MissingSecretKey)?
+        Err(AppError::MissingSecretKey.into())
     }
 }
 

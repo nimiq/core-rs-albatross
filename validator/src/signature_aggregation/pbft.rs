@@ -268,14 +268,16 @@ impl PbftAggregation {
 
     pub fn push_prepare_level_update(&self, level_update: LevelUpdateMessage<PbftPrepareMessage>) {
         if level_update.tag != self.prepare_aggregation.protocol.tag {
-            panic!("Submitting level update for {:?}, but aggregation is for {:?}");
+            panic!("Submitting level update for {:?}, but aggregation is for {:?}",
+                level_update.tag, self.prepare_aggregation.protocol.tag);
         }
         self.prepare_aggregation.push_update(level_update.update);
     }
 
     pub fn push_commit_level_update(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
         if level_update.tag != self.commit_aggregation.protocol.tag {
-            panic!("Submitting level update for {:?}, but aggregation is for {:?}");
+            panic!("Submitting level update for {:?}, but aggregation is for {:?}",
+                level_update.tag, self.commit_aggregation.protocol.tag);
         }
         self.commit_aggregation.push_update(level_update.update);
     }

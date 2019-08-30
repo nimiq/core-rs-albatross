@@ -397,6 +397,10 @@ impl Receipts {
     pub fn len(&self) -> usize {
         self.receipts.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.receipts.is_empty()
+    }
 }
 
 impl From<Vec<Receipt>> for Receipts {

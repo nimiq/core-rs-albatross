@@ -165,8 +165,8 @@ impl<'env> SlashRegistry<'env> {
         drop(cursor);
 
         // Detect duplicate slashes
-        if (&prev_epoch_state & &prev_epoch_diff).len() != 0
-            || (&epoch_state & &epoch_diff).len() != 0 {
+        if !(&prev_epoch_state & &prev_epoch_diff).is_empty()
+            || !(&epoch_state & &epoch_diff).is_empty() {
             return Err(SlashPushError::SlotAlreadySlashed);
         }
 

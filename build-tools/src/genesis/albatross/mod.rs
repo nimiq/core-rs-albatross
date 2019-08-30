@@ -166,13 +166,11 @@ impl GenesisBuilder {
             }
 
             // map to Validators
-            let validators = GroupedList(
+            GroupedList(
                 slot_counts.iter()
                     .map(|(key, num)| Group(*num, (*key).clone().into()))
                     .collect()
-            );
-
-            validators
+            )
         };
 
         Ok((slot_allocation, validators))

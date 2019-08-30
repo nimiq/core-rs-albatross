@@ -79,15 +79,12 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
         let store = self.store.read();
 
         // check if we already know this individual signature
-        match signature {
-            Signature::Individual(individual) => {
-                if store.individual_signature(level, individual.signer).is_some() {
-                    // If we already know it for this level, score it as 0
-                    trace!("Individual signature from peer {} for level {} already known", level, individual.signer);
-                    return 0
-                }
-            },
-            _ => {}
+        if let Signature::Individual(individual) = signature {
+            if store.individual_signature(level, individual.signer).is_some() {
+                // If we already know it for this level, score it as 0
+                trace!("Individual signature from peer {} for level {} already known", level, individual.signer);
+                return 0
+            }
         }
 
         let to_receive = self.partitioner.level_size(level);
@@ -130,7 +127,7 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
         };
 
         // compute bitset of signers combined with all (verified) individual signatures that we have
-        let with_individuals = &signers | &store.individual_verified(level);
+        let with_individuals = &signers | store.individual_verified(level);
 
         // ---------------------------------------------
 

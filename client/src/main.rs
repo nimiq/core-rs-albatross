@@ -144,7 +144,7 @@ fn run_node<CC>(client_builder: ClientBuilder, settings: Settings, block_produce
             let credentials = match (rpc_settings.username, rpc_settings.password) {
                 (Some(username), Some(password)) => Some(Credentials::new(&username, &password)),
                 (None, None) => None,
-                _ => Err(ConfigError::MissingRpcCredentials)?
+                _ => return Err(ConfigError::MissingRpcCredentials.into())
             };
             if credentials.is_none() {
                 warn!("Running RPC server without authentication! Consider setting a username and password.")
@@ -219,7 +219,7 @@ fn run() -> Result<(), Error> {
     if !config_file.exists() {
         eprintln!("Can't find config file at: {}", config_file.display());
         eprintln!("If you haven't configured the Nimiq client yet, do this by copying the client.example.toml to client.toml in the path above and editing it appropriately.");
-        Err(ConfigError::MissingConfigFile)?;
+        return Err(ConfigError::MissingConfigFile.into());
     }
     let settings = Settings::from_file(&config_file)?;
 
@@ -284,7 +284,7 @@ fn run() -> Result<(), Error> {
         client_builder.with_hostname(&hostname);
     }
     else if settings.network.protocol == s::Protocol::Ws || settings.network.protocol == s::Protocol::Wss {
-        Err(ConfigError::NoHostname)?
+        return Err(ConfigError::NoHostname.into());
     }
     if let Some(port) = cmdline.port.or(settings.network.port) {
         client_builder.with_port(port);
@@ -312,7 +312,7 @@ fn run() -> Result<(), Error> {
             client_builder.with_tls_identity(&tls_settings.identity_file, &tls_settings.identity_password);
         }
         else {
-            Err(ConfigError::NoTlsIdentityFile)?
+            return Err(ConfigError::NoTlsIdentityFile.into())
         }
     }
 
@@ -324,7 +324,7 @@ fn run() -> Result<(), Error> {
         Seed::Peer(uri) => uri.public_key().is_none(),
         _ => false
     }) {
-        Err(ConfigError::MissingPublicKey)?;
+        return Err(ConfigError::MissingPublicKey.into());
     }
     client_builder.with_seeds(seeds);
 

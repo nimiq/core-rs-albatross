@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use json::{Array, JsonValue, Null};
+use json::{JsonValue, Null};
 
 use beserial::{Deserialize, Serialize};
 use block::{Block, BlockHeader};
@@ -41,7 +41,7 @@ impl BlockProductionHandler {
     /// Parameters:
     /// - minerAddress (string)
     /// - extraData (string)
-    pub(crate) fn get_work(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_work(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.produce_block(params)?;
         let block_bytes = block.serialize_to_vec();
 
@@ -78,7 +78,7 @@ impl BlockProductionHandler {
     /// Parameters:
     /// - minerAddress (string)
     /// - extraData (string)
-    pub(crate) fn get_block_template(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_block_template(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.produce_block(params)?;
         let header = block.header;
         let json_header = object!{
@@ -111,7 +111,7 @@ impl BlockProductionHandler {
     /// Submits a block to the blockchain.
     /// Parameters:
     /// - block (string)
-    pub(crate) fn submit_block(&self, params: &Array) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn submit_block(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Block must be a string"})
             .and_then(|s| hex::decode(s)
@@ -126,7 +126,7 @@ impl BlockProductionHandler {
         }
     }
 
-    fn produce_block(&self, params: &Array) -> Result<Block, JsonValue> {
+    fn produce_block(&self, params: &[JsonValue]) -> Result<Block, JsonValue> {
         let miner = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Miner address must be a string"})
             .and_then(|s| Address::from_any_str(s)
@@ -145,7 +145,7 @@ impl BlockProductionHandler {
 }
 
 impl Handler for BlockProductionHandler {
-    fn call(&self, name: &str, params: &Array) -> Option<Result<JsonValue, JsonValue>> {
+    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
         match name {
             // Block production
             "getWork" => Some(self.get_work(params)),

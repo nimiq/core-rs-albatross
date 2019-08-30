@@ -144,7 +144,7 @@ impl FromStr for NodeType {
             "full" => NodeType::Full,
             "light" => NodeType::Light,
             "nano" => NodeType::Nano,
-            _ => Err(())?
+            _ => return Err(())
         })
     }
 }
@@ -177,7 +177,7 @@ impl FromStr for Network {
 
             "test-albatross" => Network::TestAlbatross,
             "dev-albatross" => Network::DevAlbatross,
-            _ => Err(())?
+            _ => return Err(())
         })
     }
 }
@@ -327,7 +327,7 @@ impl FromStr for ValidatorType {
         Ok(match s.to_lowercase().as_str() {
             "none" => ValidatorType::None,
             "validator" => ValidatorType::Validator,
-            _ => Err(())?
+            _ => return Err(())
         })
     }
 }
