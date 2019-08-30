@@ -554,9 +554,6 @@ impl ValidatorNetwork {
             let (prepare_votes, commit_votes) = aggregation.votes();
             debug!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
         }
-        else {
-            warn!("Not in pBFT phase, but received prepare update: {:?}", level_update);
-        }
     }
 
     pub fn on_pbft_commit_level_update(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
@@ -570,8 +567,6 @@ impl ValidatorNetwork {
             aggregation.push_commit_level_update(level_update);
             let (prepare_votes, commit_votes) = aggregation.votes();
             debug!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
-        } else {
-            warn!("Not in pBFT phase, but received prepare update: {:?}", level_update);
         }
     }
 
