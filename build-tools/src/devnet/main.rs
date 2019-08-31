@@ -14,7 +14,7 @@ mod docker;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::fs::{remove_dir_all, canonicalize};
+use std::fs::{canonicalize, remove_file};
 
 use log::Level;
 use structopt::StructOpt;
@@ -55,7 +55,7 @@ fn run_devnet(args: Args, keyboard_interrupt: Arc<AtomicBool>) -> Result<(), Err
     let docker = Docker::new(&env_dir);
 
     // build docker containers
-    docker.build("target/debug/nimiq-client")?;
+    docker.build()?;
 
     // run and print output
     // TODO: We could split up the streams from validators
@@ -71,8 +71,10 @@ fn run_devnet(args: Args, keyboard_interrupt: Arc<AtomicBool>) -> Result<(), Err
     // TODO: prune docker containers
 
     // delete build directory
-    remove_dir_all(env_dir.join("build"))
-        .expect("Failed to delete build directory");
+    //remove_dir_all(env_dir.join("build"))
+    //    .expect("Failed to delete build directory");
+    remove_file(env_dir.join("build").join("nimiq-client"))
+        .expect("Failed to delete nimiq-client binary");
 
     Ok(())
 }
