@@ -8,3 +8,4 @@
 /client/peer_key.dat
 Cargo.lock
 /fixed-unsigned/target
+/devnet-environments/*/build/
