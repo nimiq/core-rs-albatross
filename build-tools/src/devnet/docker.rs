@@ -48,7 +48,7 @@ mod docker {
 
     #[shell]
     pub fn up<P: ToString>(env_dir: P) -> Result<impl Iterator<Item=Result<String, Error>>, Error> {
-        "docker-compose -f $ENV_DIR/docker-compose.yml up"
+        "docker-compose -f $ENV_DIR/docker-compose.yml up | tee $ENV_DIR/build/validators.log"
     }
 
     #[shell]
