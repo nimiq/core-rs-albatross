@@ -55,6 +55,19 @@ impl Block {
         }
     }
 
+    /// The next view number, if there is no view change. This will return 0, if the next block
+    /// will be the first of the epoch (i.e. the current one is a macro block), or the view number
+    /// of the current block.
+    /// To get the view number for after a single view change, just add 1
+    pub fn next_view_number(&self) -> u32 {
+        match self {
+            // If the previous block was a macro block, this resets the view number
+            Block::Macro(_) => 0,
+            // Otherwise we are now at the view number of the previous block
+            Block::Micro(ref block) => block.header.view_number
+        }
+    }
+
     pub fn parent_hash(&self) -> &Blake2bHash {
         match self {
             Block::Macro(ref block) => &block.header.parent_hash,
@@ -238,6 +251,19 @@ impl BlockHeader {
         match self {
             BlockHeader::Macro(ref header) => &header.parent_hash,
             BlockHeader::Micro(ref header) => &header.parent_hash
+        }
+    }
+
+    /// The next view number, if there is no view change. This will return 0, if the next block
+    /// will be the first of the epoch (i.e. the current one is a macro block), or the view number
+    /// of the current block.
+    /// To get the view number for after a single view change, just add 1
+    pub fn next_view_number(&self) -> u32 {
+        match self {
+            // If the previous block was a macro block, this resets the view number
+            BlockHeader::Macro(_) => 0,
+            // Otherwise we are now at the view number of the previous block
+            BlockHeader::Micro(header) => header.view_number
         }
     }
 }

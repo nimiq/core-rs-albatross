@@ -113,7 +113,7 @@ pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
 pub enum BlockchainEvent<BL: Block> {
     Extended(Blake2bHash),
     Rebranched(Vec<(Blake2bHash, BL)>, Vec<(Blake2bHash, BL)>),
-    Finalized,
+    Finalized(Blake2bHash),
 }
 
 #[derive(Debug, Fail, Clone, PartialEq, Eq)]

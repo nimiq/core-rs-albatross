@@ -206,7 +206,7 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
         let blocks: Vec<&<P::Blockchain as AbstractBlockchain<'static>>::Block>;
         let block;
         match event {
-            BlockchainEvent::Extended(_) => {
+            BlockchainEvent::Extended(_) | BlockchainEvent::Finalized(_) => {
                 // This implicitly takes the lock on the blockchain state.
                 block = self.blockchain.head_block();
                 blocks = vec![&block];
@@ -214,8 +214,6 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
             BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
                 blocks = adopted_blocks.iter().map(|(_, block)| block).collect();
             },
-            // TODO Do we have to do anything here?
-            BlockchainEvent::Finalized => return,
         }
 
         // Don't relay blocks if we are not synced yet.

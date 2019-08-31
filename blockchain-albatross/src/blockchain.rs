@@ -353,7 +353,8 @@ impl<'env> Blockchain<'env> {
         // Check if the block was produced (and signed) by the intended producer
         match header.seed().uncompress() {
             Ok(ref signature) => {
-                if !intended_slot_owner.verify(&prev_info.head.seed().uncompress().unwrap(), signature) { // todo nicer
+                // NOTE: the seed is the BLS signature of the previous seed (CompressedSignature)
+                if !intended_slot_owner.verify(prev_info.head.seed(), signature) { // todo nicer
                     warn!("Rejecting block - bad seed");
                     return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                 }
@@ -571,11 +572,11 @@ impl<'env> Blockchain<'env> {
         // Give up lock before notifying.
         drop(state);
 
-        let event = BlockchainEvent::Extended(block_hash);
-        self.notifier.read().notify(event);
-
         if block_type == BlockType::Macro {
-            self.notifier.read().notify(BlockchainEvent::Finalized);
+            self.notifier.read().notify(BlockchainEvent::Finalized(block_hash));
+        }
+        else {
+            self.notifier.read().notify(BlockchainEvent::Extended(block_hash));
         }
 
         Ok(PushResult::Extended)
@@ -856,7 +857,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn view_number(&self) -> u32 {
-        self.state.read().main_chain.head.view_number()
+        self.state.read().main_chain.head.next_view_number()
     }
 
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {

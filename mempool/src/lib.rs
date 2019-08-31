@@ -363,7 +363,7 @@ impl<'env, B: AbstractBlockchain<'env> + 'env> Mempool<'env, B> {
                 self.restore_transactions(reverted_blocks);
                 self.evict_transactions();
             },
-            BlockchainEvent::Finalized => (),
+            BlockchainEvent::Finalized(_) => (),
         }
     }
 

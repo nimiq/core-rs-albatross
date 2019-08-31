@@ -138,15 +138,16 @@ impl ValidatorAgent {
                update_message.update,
                self.peer.peer_address());
 
-        let blockchain_epoch = policy::epoch_at(self.blockchain.block_number());
+        let block_number = self.blockchain.block_number();
+        let blockchain_epoch = policy::epoch_at(block_number + 1);
         let view_change_epoch = policy::epoch_at(update_message.tag.block_number);
         match view_change_epoch.cmp(&blockchain_epoch) {
             Ordering::Greater => {
-                debug!("[VIEW-CHANGE] Ignoring view change message for a future epoch: epoch={} block_number=#{}", view_change_epoch, update_message.tag.block_number);
+                debug!("[VIEW-CHANGE] Ignoring view change message for a future epoch: current=#{}/{}, change_to=#{}/{}", block_number, blockchain_epoch, update_message.tag.block_number, view_change_epoch);
                 return;
             },
             Ordering::Less => {
-                debug!("[VIEW-CHANGE] Ignoring view change message for an old epoch: epoch={} block_number=#{}", view_change_epoch, update_message.tag.block_number);
+                debug!("[VIEW-CHANGE] Ignoring view change message for an old epoch: current=#{}/{}, change_to=#{}/{}", block_number, blockchain_epoch, update_message.tag.block_number, view_change_epoch);
                 return;
             },
             Ordering::Equal => (),

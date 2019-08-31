@@ -42,6 +42,7 @@ use crate::error::Error;
 use crate::slash::ForkProofPool;
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
 
+
 #[derive(Clone, Debug)]
 pub enum SlotChange  {
     NextBlock,
@@ -102,18 +103,10 @@ impl Validator {
             peer_address: consensus.network.network_config.peer_address().clone()
         };
         let validator_network = ValidatorNetwork::new(consensus.network.clone(), consensus.blockchain.clone(), SignedValidatorInfo::from_message(info, &validator_key.secret, 0));
-
         let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.clone());
+        let view_number = consensus.blockchain.view_number();
 
         debug!("Initializing validator");
-
-        let last_block = consensus.blockchain.head();
-        let last_view_number = if policy::is_macro_block_at(last_block.block_number()) {
-            0
-        } else {
-            last_block.view_number()
-        };
-        drop(last_block);
 
         let this = Arc::new(Validator {
             blockchain: consensus.blockchain.clone(),
@@ -130,7 +123,7 @@ impl Validator {
                 slots: None,
                 status: ValidatorStatus::None,
                 fork_proof_pool: ForkProofPool::new(),
-                view_number: last_view_number,
+                view_number,
             }),
 
             self_weak: MutableOnce::new(Weak::new()),
@@ -221,7 +214,7 @@ impl Validator {
 
         // Handle each block type (which is directly related to each event type).
         match event {
-            BlockchainEvent::Finalized => {
+            BlockchainEvent::Finalized(_) => {
                 // Init new validator epoch
                 self.init_epoch();
             },
@@ -262,9 +255,6 @@ impl Validator {
                 // Notify validator network that we have finality and update epoch-related state
                 // (i.e. set the validator ID)
                 self.validator_network.on_finality(Some(pk_idx as usize));
-
-                // If we're an active validator, we need to check if we're the next block producer.
-                self.on_slot_change(SlotChange::NextBlock);
             },
             None => {
                 trace!("Setting validator to inactive");
@@ -342,15 +332,16 @@ impl Validator {
 
         if slot.public_key.compressed() == &public_key {
             let weak = self.self_weak.clone();
-
-            self.timers.reset_delay(ValidatorTimer::NextBlock, move || {
-                let this = upgrade_weak!(weak);
-
-                match this.blockchain.get_next_block_type(None) {
-                    BlockType::Macro => { this.produce_macro_block(view_change_proof) },
-                    BlockType::Micro => { this.produce_micro_block(view_change_proof) },
+            trace!("Spawning thread to produce next block");
+            tokio::spawn(futures::lazy(move || {
+                if let Some(this) = Weak::upgrade(&weak) {
+                    match this.blockchain.get_next_block_type(None) {
+                        BlockType::Macro => { this.produce_macro_block(view_change_proof) },
+                        BlockType::Micro => { this.produce_micro_block(view_change_proof) },
+                    }
                 }
-            }, Duration::from_millis(self.block_delay));
+                Ok(())
+            }));
         }
     }
 
@@ -415,7 +406,8 @@ impl Validator {
         let block = Block::Macro(MacroBlock { header, justification, extrinsics: Some(extrinsics) });
 
         // Automatically relays block.
-        self.blockchain.push(block).expect("Pushing macro block to blockchain failed");
+        self.blockchain.push(block)
+            .unwrap_or_else(|e| panic!("Pushing macro block to blockchain failed: {:?}", e));
     }
 
     fn start_view_change(&self) {
@@ -440,7 +432,7 @@ impl Validator {
 
         // Broadcast our view change number message to the other validators.
         self.validator_network.start_view_change(view_change_message)
-            .unwrap_or_else(|e| debug!("Failed to start view change: {}", e));
+            .unwrap_or_else(|e| error!("Failed to start view change: {}", e));
      }
 
     fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {
@@ -463,7 +455,8 @@ impl Validator {
 
         let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
         self.validator_network.start_pbft(signed_proposal)
-            .unwrap_or_else(|e| debug!("Failed to start pBFT proposal: {}", e));
+            .unwrap_or_else(|e| error!("Failed to start pBFT proposal: {}", e));
+
     }
 
     fn produce_micro_block(&self, view_change_proof: Option<ViewChangeProof>) {
@@ -487,11 +480,9 @@ impl Validator {
               block.header.hash::<Blake2bHash>());
 
         // Automatically relays block.
-        let r = self.blockchain.push(Block::Micro(block));
-        if let Err(ref e) = r {
-            error!("Failed to push produced micro block to blockchain: {:?}", e);
-        } else {
-            trace!("Push result: {:?}", r);
+        match self.blockchain.push(Block::Micro(block)) {
+            Ok(r) => trace!("Push result: {:?}", r),
+            Err(e) => error!("Failed to push produced micro block to blockchain: {:?}", e),
         }
     }
 
