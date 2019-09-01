@@ -36,6 +36,7 @@ use primitives::policy;
 use primitives::validators::IndexedSlot;
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
+use utils::observer::ListenerHandle;
 
 use crate::error::Error;
 use crate::slash::ForkProofPool;
@@ -55,6 +56,11 @@ pub enum ValidatorStatus {
     Active,
 }
 
+struct ValidatorListeners {
+    consensus: ListenerHandle,
+    blockchain: ListenerHandle,
+}
+
 pub struct Validator {
     blockchain: Arc<Blockchain<'static>>,
     block_producer: BlockProducer<'static>,
@@ -68,6 +74,7 @@ pub struct Validator {
     state: RwLock<ValidatorState>,
 
     self_weak: MutableOnce<Weak<Validator>>,
+    listeners: MutableOnce<Option<ValidatorListeners>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -127,6 +134,7 @@ impl Validator {
             }),
 
             self_weak: MutableOnce::new(Weak::new()),
+            listeners: MutableOnce::new(None),
         });
         Validator::init_listeners(&this);
 
@@ -139,11 +147,11 @@ impl Validator {
     }
 
     pub fn init_listeners(this: &Arc<Validator>) {
-        unsafe { this.self_weak.replace(Arc::downgrade(this)) };
+        unsafe { this.self_weak.replace(Arc::downgrade(this)); };
 
         // Setup event handlers for blockchain events
         let weak = Arc::downgrade(this);
-        this.consensus.notifier.write().register(move |e: &ConsensusEvent| {
+        let consensus = this.consensus.notifier.write().register(move |e: &ConsensusEvent| {
             let this = upgrade_weak!(weak);
             match e {
                 ConsensusEvent::Established => this.on_consensus_established(),
@@ -154,7 +162,7 @@ impl Validator {
 
         // Set up event handlers for blockchain events
         let weak = Arc::downgrade(this);
-        this.blockchain.notifier.write().register(move |e: &BlockchainEvent<Block>| {
+        let blockchain = this.blockchain.notifier.write().register(move |e: &BlockchainEvent<Block>| {
             let this = upgrade_weak!(weak);
             this.on_blockchain_event(e);
         });
@@ -173,6 +181,13 @@ impl Validator {
             let this = upgrade_weak!(weak);
             this.on_block_timeout();
         }, Self::BLOCK_TIMEOUT);
+
+        // remember listeners for when we drop this validator
+        let listeners = ValidatorListeners {
+            consensus,
+            blockchain,
+        };
+        unsafe { this.listeners.replace(Some(listeners)); }
     }
 
     fn on_block_timeout(&self) {
@@ -490,6 +505,16 @@ impl Validator {
             contract.active_stake_sorted.iter().any(|stake| stake.validator_key() == &public_key)
         } else {
             panic!("Validator registry has a wrong account type.");
+        }
+    }
+}
+
+impl Drop for Validator {
+    fn drop(&mut self) {
+        if let Some(listeners) = self.listeners.as_ref() {
+            self.consensus.notifier.write().deregister(listeners.consensus);
+            self.blockchain.notifier.write().deregister(listeners.blockchain);
+            self.validator_network.notifier.write().deregister();
         }
     }
 }
