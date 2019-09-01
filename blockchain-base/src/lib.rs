@@ -145,10 +145,6 @@ pub enum PushError<BE: BlockError> {
     #[fail(display = "Block is not a valid successor")]
     InvalidSuccessor,
 
-    // TODO: Move into powchain BlockError
-    #[fail(display = "Block uses incorrect difficulty")]
-    DifficultyMismatch,
-
     // TODO: This is part of powchain's and albatross' BlockError anyway
     #[fail(display = "Block contains duplicate transactions")]
     DuplicateTransaction,
@@ -161,6 +157,17 @@ pub enum PushError<BE: BlockError> {
 
     #[fail(display = "Failed to push block onto block chain: {}", _0)]
     BlockchainError(#[cause] BlockchainError),
+}
+
+impl<BE: BlockError> PushError<BE> {
+    /// Create a `PushError` from a `BlockError`.
+    ///
+    /// NOTE: We can't implement `From<BE: BlockError>`, since the compiler can't guarantee that
+    /// nobody will implement `BlockError` for `AccountError`, which would result in a duplicate
+    /// implementation.
+    pub fn from_block_error(e: BE) -> Self {
+        PushError::InvalidBlock(e)
+    }
 }
 
 impl<BE: BlockError> From<AccountError> for PushError<BE> {

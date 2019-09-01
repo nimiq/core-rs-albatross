@@ -120,7 +120,7 @@ fn it_rejects_blocks_with_invalid_difficulty() {
     block.header.nonce = 51485;
 
     let status = blockchain.push(block);
-    assert_eq!(status, Err(PushError::DifficultyMismatch));
+    assert_eq!(status, Err(PushError::from_block_error(BlockError::DifficultyMismatch)));
 }
 
 #[test]

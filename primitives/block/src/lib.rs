@@ -45,6 +45,8 @@ pub enum BlockError {
     BodyHashMismatch,
     #[fail(display = "Accounts hash mismatch")]
     AccountsHashMismatch,
+    #[fail(display = "Block uses incorrect difficulty")]
+    DifficultyMismatch,
 
     #[fail(display = "Duplicate transaction in block")]
     DuplicateTransaction,

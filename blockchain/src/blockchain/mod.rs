@@ -241,7 +241,7 @@ impl<'env> Blockchain<'env> {
             warn!("Rejecting block - difficulty mismatch");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
-            return Err(PushError::DifficultyMismatch);
+            return Err(PushError::from_block_error(BlockError::DifficultyMismatch))
         }
 
         // Block looks good, create ChainInfo.
