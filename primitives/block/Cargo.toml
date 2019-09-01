@@ -20,6 +20,7 @@ maintenance = { status = "experimental" }
 num-bigint = "0.2"
 log = "0.4"
 hex = "0.3"
+failure = "0.1"
 beserial = { path = "../../beserial", version = "0.1" }
 beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
 fixed-unsigned = { path = "../../fixed-unsigned", version = "0.1" }

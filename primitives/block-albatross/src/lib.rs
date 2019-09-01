@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate log;
 #[macro_use]
+extern crate failure;
+#[macro_use]
 extern crate beserial_derive;
 extern crate nimiq_account as account;
 extern crate nimiq_block_base as block_base;
@@ -31,33 +33,56 @@ pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProofBuilder, PbftProo
 
 use crate::transaction::TransactionError;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Fail)]
 pub enum BlockError {
+    #[fail(display = "Unsupported version")]
     UnsupportedVersion,
+    #[fail(display = "Block is from the future")]
     FromTheFuture,
+    #[fail(display = "Block size exceeded")]
     SizeExceeded,
+    #[fail(display = "Body hash mismatch")]
     BodyHashMismatch,
+    #[fail(display = "Accounts hash mismatch")]
     AccountsHashMismatch,
+    #[fail(display = "Missing justification")]
     NoJustification,
+    #[fail(display = "Missing view change proof")]
     NoViewChangeProof,
 
+    #[fail(display = "Invalid fork proof")]
     InvalidForkProof,
+    #[fail(display = "Duplicate fork proof")]
     DuplicateForkProof,
+    #[fail(display = "Fork proofs incorrectly ordered")]
     ForkProofsNotOrdered,
 
-    InvalidTransaction(TransactionError),
-    DuplicateTransaction,
-    TransactionsNotOrdered,
-    ExpiredTransaction,
 
+    #[fail(display = "Duplicate transaction in block")]
+    DuplicateTransaction,
+    #[fail(display = "Invalid transaction in block: {}", _0)]
+    InvalidTransaction(TransactionError),
+    #[fail(display = "Expired transaction in block")]
+    ExpiredTransaction,
+    #[fail(display = "Transactions incorrectly ordered")]
+    TransactionsNotOrdered,
+
+    #[fail(display = "Duplicate receipt in block")]
     DuplicateReceipt,
+    #[fail(display = "Invalid receipt in block")]
     InvalidReceipt,
+    #[fail(display = "Receipts incorrectly ordered")]
     ReceiptsNotOrdered,
 
+    #[fail(display = "Justification is invalid")]
     InvalidJustification,
+    #[fail(display = "Contains an invalid slash inherent")]
     InvalidSlash,
+    #[fail(display = "Invalid view number")]
     InvalidViewNumber,
+    #[fail(display = "Invalid transactions root")]
     InvalidTransactionsRoot,
+    #[fail(display = "Incorrect validators")]
     InvalidValidators,
 }
 

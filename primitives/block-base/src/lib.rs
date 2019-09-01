@@ -1,7 +1,10 @@
 extern crate nimiq_hash as hash;
 extern crate nimiq_transaction as transaction;
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
+use std::error::Error;
+
+use failure::Fail;
 
 use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
@@ -32,4 +35,4 @@ pub trait BlockHeader: Serialize + Deserialize {
     fn timestamp(&self) -> u64;
 }
 
-pub trait BlockError: Debug + Clone + PartialEq + Eq {}
+pub trait BlockError: Debug + Clone + PartialEq + Eq + Fail + Send + Sync + 'static {}

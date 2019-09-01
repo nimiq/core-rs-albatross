@@ -17,7 +17,7 @@ use parking_lot::MappedRwLockReadGuard;
 use parking_lot::MutexGuard;
 
 use account::{Account, AccountError};
-use block_base::Block;
+use block_base::{Block, BlockError};
 use database::{ReadTransaction, Transaction};
 use database::Environment;
 use hash::Blake2bHash;
@@ -136,21 +136,42 @@ pub enum PushResult {
     Forked,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PushError<BE: Debug + Clone + PartialEq + Eq> {
+#[derive(Debug, Clone, PartialEq, Eq, Fail)]
+pub enum PushError<BE: BlockError> {
+    #[fail(display = "Block is an orphan")]
     Orphan,
-    InvalidBlock(BE),
+    #[fail(display = "Block is invalid: {}", _0)]
+    InvalidBlock(#[cause] BE),
+    #[fail(display = "Block is not a valid successor")]
     InvalidSuccessor,
+
+    // TODO: Move into powchain BlockError
+    #[fail(display = "Block uses incorrect difficulty")]
     DifficultyMismatch,
+
+    // TODO: This is part of powchain's and albatross' BlockError anyway
+    #[fail(display = "Block contains duplicate transactions")]
     DuplicateTransaction,
-    AccountsError(AccountError),
+
+    #[fail(display = "Block can't be applied to accounts tree: {}", _0)]
+    AccountsError(#[cause] AccountError),
+
+    #[fail(display = "Block is part of an invalid fork")]
     InvalidFork,
-    BlockchainError(BlockchainError),
+
+    #[fail(display = "Failed to push block onto block chain: {}", _0)]
+    BlockchainError(#[cause] BlockchainError),
 }
 
-impl<BE: Debug + Clone + PartialEq + Eq>  From<BE> for PushError<BE> {
-    fn from(e: BE) -> Self {
-        PushError::InvalidBlock(e)
+impl<BE: BlockError> From<AccountError> for PushError<BE> {
+    fn from(e: AccountError) -> Self {
+        PushError::AccountsError(e)
+    }
+}
+
+impl<BE: BlockError> From<BlockchainError> for PushError<BE> {
+    fn from(e: BlockchainError) -> Self {
+        PushError::BlockchainError(e)
     }
 }
 

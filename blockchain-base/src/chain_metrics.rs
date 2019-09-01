@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::fmt::Debug;
 
-use crate::{PushResult, PushError};
+use crate::{PushResult, PushError, BlockError};
 
 
 #[derive(Default)]
@@ -16,7 +16,7 @@ pub struct BlockchainMetrics {
 
 impl BlockchainMetrics {
     #[inline]
-    pub fn note<BE: Debug + Clone + PartialEq + Eq>(&self, push_result: Result<PushResult, PushError<BE>>) {
+    pub fn note<BE: BlockError>(&self, push_result: Result<PushResult, PushError<BE>>) {
         match push_result {
             Ok(PushResult::Known) => self.note_known_block(),
             Ok(PushResult::Extended) => self.note_extended_block(),

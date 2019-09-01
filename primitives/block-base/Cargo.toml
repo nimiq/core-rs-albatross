@@ -20,6 +20,7 @@ maintenance = { status = "experimental" }
 beserial = { path = "../../beserial", version = "0.1" }
 nimiq-hash = { path = "../../hash", version = "0.1" }
 nimiq-transaction = { path = "../transaction", version = "0.1" }
+failure = "0.1"
 
 [dev-dependencies]
 num-traits = "0.2"
