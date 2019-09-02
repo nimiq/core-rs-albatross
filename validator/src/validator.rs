@@ -190,6 +190,13 @@ impl Validator {
     pub fn on_consensus_established(&self) {
         trace!("Consensus established");
         self.init_epoch();
+
+        // trigger slot change, if we're active
+        let state = self.state.read();
+        if state.status == ValidatorStatus::Active {
+            drop(state);
+            self.on_slot_change(SlotChange::NextBlock);
+        }
     }
 
     pub fn on_consensus_lost(&self) {
@@ -207,11 +214,6 @@ impl Validator {
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
-        let status = {
-            let state = self.state.read();
-            state.status
-        };
-
         // Handle each block type (which is directly related to each event type).
         match event {
             BlockchainEvent::Finalized(_) => {
@@ -229,6 +231,9 @@ impl Validator {
             }
         }
 
+        let state = self.state.read();
+        let status = state.status;
+
         if status == ValidatorStatus::Potential || status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
             self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
@@ -236,6 +241,7 @@ impl Validator {
 
         // If we're an active validator, we need to check if we're the next block producer.
         if status == ValidatorStatus::Active {
+            drop(state);
             self.on_slot_change(SlotChange::NextBlock);
         }
     }
@@ -254,7 +260,7 @@ impl Validator {
 
                 // Notify validator network that we have finality and update epoch-related state
                 // (i.e. set the validator ID)
-                self.validator_network.on_finality(Some(pk_idx as usize));
+                self.validator_network.reset_epoch(Some(pk_idx as usize));
             },
             None => {
                 trace!("Setting validator to inactive");
@@ -263,7 +269,8 @@ impl Validator {
                 state.status = if self.is_potential_validator() { ValidatorStatus::Potential } else { ValidatorStatus::Synced };
 
                 // Notify validator network that we have finality and update epoch-related state
-                self.validator_network.on_finality(None);
+                // (i.e. remove the validator ID)
+                self.validator_network.reset_epoch(None);
             },
         }
     }

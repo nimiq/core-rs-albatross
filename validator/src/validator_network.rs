@@ -325,7 +325,7 @@ impl ValidatorNetwork {
     /// validator.
     ///
     /// `validator_id`: The index of the validator (a.k.a `pk_idx`), if we're active
-    pub fn on_finality(&self, validator_id: Option<usize>) {
+    pub fn reset_epoch(&self, validator_id: Option<usize>) {
         trace!("Clearing view change and pBFT proof");
         let mut state = self.state.write();
 
@@ -423,9 +423,15 @@ impl ValidatorNetwork {
         }
 
         let active_validators = Arc::clone(&state.active_validators);
-        let validator_id = state.validator_id.expect("Not an active validator");
+        let validator_id = match state.validator_id {
+            Some(validator_id) => validator_id,
+            None => {
+                debug!("Received proposal, but validator is not active");
+                return Ok(())
+            },
+        };
 
-        debug!("pBFT proposal by validator {}: {:#?}", validator_id, signed_proposal);
+        debug!("pBFT proposal by validator {}: {}", validator_id, block_hash);
 
         let pbft = PbftState::new(
             block_hash.clone(),
