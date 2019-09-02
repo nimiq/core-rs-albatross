@@ -131,11 +131,6 @@ impl Validator {
         });
         Validator::init_listeners(&this);
 
-        // trigger initial block production (if it's our turn)
-        if this.state.read().status == ValidatorStatus::Active {
-            this.init_epoch();
-        }
-
         Ok(this)
     }
 
