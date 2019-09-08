@@ -12,7 +12,8 @@ use nimiq_database::Environment;
 use nimiq_wallet::{WalletAccount, WalletStore};
 use utils::otp::{Locked, Unlocked};
 
-use crate::handlers::Handler;
+use crate::handler::Method;
+use crate::handlers::Module;
 
 pub struct UnlockedWalletManager {
     pub unlocked_wallets: HashMap<Address, Unlocked<WalletAccount>>,
@@ -46,7 +47,7 @@ pub struct WalletHandler {
 }
 
 impl WalletHandler {
-    pub(crate) fn new(env: &'static Environment) -> Self {
+    pub fn new(env: &'static Environment) -> Self {
         WalletHandler {
             wallet_store: WalletStore::new(env),
             unlocked_wallets: Arc::new(RwLock::new(UnlockedWalletManager::new())),
@@ -260,28 +261,23 @@ impl WalletHandler {
     }
 }
 
+/*
+TODO Support prefix
 impl WalletHandler {
     const PREFIX: &'static str = "personal_";
 }
+*/
 
-impl Handler for WalletHandler {
-    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
-        if !name.starts_with(Self::PREFIX) {
-            return None;
-        }
-
-        match &name[Self::PREFIX.len()..] {
-            // Wallet
-            "importRawKey" => Some(self.import_raw_key(params)),
-            "listAccounts" => Some(self.list_accounts(params)),
-            "lockAccount" => Some(self.lock_account(params)),
-            "newAccount" => Some(self.new_account(params)),
-            "unlockAccount" => Some(self.unlock_account(params)),
-//            "sendTransaction" => Some(self.send_transaction(params)),
-            "sign" => Some(self.sign(params)),
-            "verifySignature" => Some(self.verify_signature(params)),
-
-            _ => None
-        }
+impl Module for WalletHandler {
+    rpc_module_methods! {
+        // Wallet
+        "importRawKey" => import_raw_key,
+        "listAccounts" => list_accounts,
+        "lockAccount" => lock_account,
+        "newAccount" => new_account,
+        "unlockAccount" => unlock_account,
+//        "sendTransaction" => send_transaction,
+        "sign" => sign,
+        "verifySignature" => verify_signature
     }
 }

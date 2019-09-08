@@ -16,7 +16,8 @@ use primitives::coin::Coin;
 use transaction::Transaction;
 use transaction::account::staking_contract::StakingTransactionData;
 
-use crate::handlers::Handler;
+use crate::handler::Method;
+use crate::handlers::Module;
 use crate::handlers::mempool::MempoolHandler;
 use crate::handlers::wallet::UnlockedWalletManager;
 
@@ -27,7 +28,7 @@ pub struct MempoolAlbatrossHandler {
 }
 
 impl MempoolAlbatrossHandler {
-    pub(crate) fn new(
+    pub fn new(
         mempool: Arc<Mempool<'static, Blockchain<'static>>>,
         unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     ) -> Self {
@@ -174,19 +175,39 @@ impl MempoolAlbatrossHandler {
 
         self.generic.push_transaction(tx)
     }
+
+    // Methods defined on generic
+    fn send_raw_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.send_raw_transaction(params)
+    }
+
+    fn create_raw_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.create_raw_transaction(params)
+    }
+
+    fn send_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.send_transaction(params)
+    }
+
+    fn mempool_content(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.mempool_content(params)
+    }
+
+    fn mempool(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.mempool(params)
+    }
 }
 
-impl Handler for MempoolAlbatrossHandler {
-    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
-        if let Some(res) = self.generic.call(name, params) {
-            return Some(res);
-        }
-
-        match name {
-            "stake" => Some(self.stake(params)),
-            "retire" => Some(self.retire(params)),
-            "unstake" => Some(self.unstake(params)),
-            _ => None
-        }
+impl Module for MempoolAlbatrossHandler {
+    rpc_module_methods! {
+        // Transactions
+        "sendRawTransaction" => send_raw_transaction,
+        "createRawTransaction" => create_raw_transaction,
+        "sendTransaction" => send_transaction,
+        "mempoolContent" => mempool_content,
+        "mempool" => mempool,
+        "stake" => stake,
+        "retire" => retire,
+        "unstake" => unstake
     }
 }

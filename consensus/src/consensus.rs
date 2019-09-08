@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -58,13 +58,18 @@ enum ConsensusTimer {
 
 type ConsensusAgentMap<P> = HashMap<Arc<Peer>, Arc<ConsensusAgent<<P as ConsensusProtocol>::Blockchain, <P as ConsensusProtocol>::MessageAdapter>>>;
 
-struct ConsensusState<P: ConsensusProtocol + 'static> {
+pub struct ConsensusState<P: ConsensusProtocol + 'static> {
     established: bool,
     agents: ConsensusAgentMap<P>,
 
     sync_peer: Option<Arc<Peer>>,
 }
 
+impl<P: ConsensusProtocol + 'static> ConsensusState<P> {
+    pub fn established(&self) -> bool {
+        self.established
+    }
+}
 
 impl<P: ConsensusProtocol + 'static> Consensus<P> {
     const MIN_FULL_NODES: usize = 0;
@@ -323,5 +328,9 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
                 self.notifier.read().notify(ConsensusEvent::Waiting);
             }
         }
+    }
+
+    pub fn state(&self) -> RwLockReadGuard<ConsensusState<P>> {
+        self.state.read()
     }
 }

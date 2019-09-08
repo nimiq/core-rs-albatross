@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate json;
+//#[macro_use]
+//extern crate lazy_static;
 #[macro_use]
 extern crate log;
 extern crate nimiq_block as block;
@@ -23,20 +25,14 @@ use std::sync::Arc;
 
 use futures::future::Future;
 use hyper::Server;
-use json::Array;
 use json::JsonValue;
-use parking_lot::RwLock;
-
-pub use common::RpcHandler;
-use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent, ConsensusProtocol};
 
 use crate::error::Error;
+pub use crate::handler::Handler;
 
 pub mod jsonrpc;
 pub mod error;
-pub mod common;
-pub mod nimiq;
-pub mod albatross;
+pub mod handler;
 pub mod handlers;
 
 fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
@@ -68,58 +64,12 @@ impl Credentials {
     }
 }
 
-pub struct JsonRpcServerState {
-    consensus_state: &'static str,
-}
+type OtherFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>;
 
-pub fn rpc_server<P, PH>(consensus: Arc<Consensus<P>>, ip: IpAddr, port: u16, config: JsonRpcConfig) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error>
-    where P: ConsensusProtocol + 'static,
-    PH: AbstractRpcHandler<P> + 'static,
-{
-    let state = Arc::new(RwLock::new(JsonRpcServerState {
-        consensus_state: "syncing",
-    }));
-
-    // Register for consensus events.
-    {
-        trace!("Register listener for consensus");
-        let state = Arc::downgrade(&state);
-        consensus.notifier.write().register(move |e: &ConsensusEvent| {
-            trace!("Consensus Event: {:?}", e);
-            if let Some(state) = state.upgrade() {
-                match e {
-                    ConsensusEvent::Established => { state.write().consensus_state = "established" },
-                    ConsensusEvent::Lost => { state.write().consensus_state = "lost" },
-                    ConsensusEvent::Syncing => { state.write().consensus_state = "syncing" },
-                    _ => ()
-                }
-            }
-        });
-    }
-
-    let config = Arc::new(config);
-    let handler = Arc::new(PH::new(Arc::clone(&consensus), Arc::clone(&state), Arc::clone(&config)));
+pub fn rpc_server(ip: IpAddr, port: u16, handler: Arc<Handler>) -> Result<OtherFuture, Error> {
     Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
         .serve(move || {
             jsonrpc::Service::new(Arc::clone(&handler))
         })
         .map_err(|e| error!("RPC server failed: {}", e)))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
-}
-
-pub trait AbstractRpcHandler<P: ConsensusProtocol + 'static> : jsonrpc::Handler {
-    fn new(consensus: Arc<Consensus<P>>, state: Arc<RwLock<JsonRpcServerState>>, config: Arc<JsonRpcConfig>) -> Self;
-}
-
-pub struct DummyRpcHandler();
-
-impl AbstractRpcHandler<AlbatrossConsensusProtocol> for DummyRpcHandler {
-    fn new(_consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, _state: Arc<RwLock<JsonRpcServerState>>, _config: Arc<JsonRpcConfig>) -> Self {
-        Self()
-    }
-}
-
-impl jsonrpc::Handler for DummyRpcHandler {
-    fn call_method(&self, _name: &str, _params: Array) -> Option<Result<JsonValue, JsonValue>> {
-        None
-    }
 }

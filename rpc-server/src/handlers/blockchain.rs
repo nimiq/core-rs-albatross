@@ -238,25 +238,6 @@ impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
         };
         Ok(block_number)
     }
-
-    pub(crate) fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
-        match name {
-            // Blockchain
-            "blockNumber" => Some(self.block_number(params)),
-            "getBlockTransactionCountByHash" => Some(self.get_block_transaction_count_by_hash(params)),
-            "getBlockTransactionCountByNumber" => Some(self.get_block_transaction_count_by_number(params)),
-
-            // Transactions
-            "getTransactionByBlockHashAndIndex" => Some(self.get_transaction_by_block_hash_and_index(params)),
-            "getTransactionByBlockNumberAndIndex" => Some(self.get_transaction_by_block_number_and_index(params)),
-            "getTransactionsByAddress" => Some(self.get_transactions_by_address(params)),
-
-            // Accounts
-            "getBalance" => Some(self.get_balance(params)),
-
-            _ => None
-        }
-    }
 }
 
 pub(crate) fn parse_hash(hash: &JsonValue) -> Result<Blake2bHash, JsonValue> {

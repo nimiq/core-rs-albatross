@@ -11,7 +11,8 @@ use hash::{Blake2bHash, Hash};
 use primitives::policy;
 use primitives::validators::{IndexedSlot, Slots};
 
-use crate::handlers::Handler;
+use crate::handler::Method;
+use crate::handlers::Module;
 use crate::handlers::blockchain::BlockchainHandler;
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 use crate::rpc_not_implemented;
@@ -22,7 +23,7 @@ pub struct BlockchainAlbatrossHandler {
 }
 
 impl BlockchainAlbatrossHandler {
-    pub(crate) fn new(blockchain: Arc<Blockchain<'static>>) -> Self {
+    pub fn new(blockchain: Arc<Blockchain<'static>>) -> Self {
         BlockchainAlbatrossHandler {
             generic: BlockchainHandler::new(blockchain.clone()),
             blockchain,
@@ -371,29 +372,58 @@ impl BlockchainAlbatrossHandler {
             "rewardAddress" => idx_slot.slot.reward_address().to_hex(),
         }
     }
+
+    // Methods defined on generic
+    fn block_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.block_number(params)
+    }
+
+    fn get_transaction_by_block_hash_and_index(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.get_transaction_by_block_hash_and_index(params)
+    }
+
+    fn get_transaction_by_block_number_and_index(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.get_transaction_by_block_number_and_index(params)
+    }
+
+    fn get_transactions_by_address(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.get_transactions_by_address(params)
+    }
+
+    fn get_block_transaction_count_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.get_block_transaction_count_by_hash(params)
+    }
+
+    fn get_block_transaction_count_by_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.get_block_transaction_count_by_number(params)
+    }
+
+    fn get_balance(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        self.generic.get_balance(params)
+    }
 }
 
-impl Handler for BlockchainAlbatrossHandler {
-    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
-        if let Some(res) = self.generic.call(name, params) {
-            return Some(res);
-        }
+impl Module for BlockchainAlbatrossHandler {
+    rpc_module_methods! {
+        // Transactions
+        "getRawTransactionInfo" => get_raw_transaction_info,
+        "getTransactionByHash" => get_transaction_by_hash,
+        "getTransactionReceipt" => get_transaction_receipt,
+        "getTransactionByBlockHashAndIndex" => get_transaction_by_block_hash_and_index,
+        "getTransactionByBlockNumberAndIndex" => get_transaction_by_block_number_and_index,
+        "getTransactionsByAddress" => get_transactions_by_address,
 
-        match name {
-            // Transactions
-            "getRawTransactionInfo" => Some(self.get_raw_transaction_info(params)),
-            "getTransactionByHash" => Some(self.get_transaction_by_hash(params)),
-            "getTransactionReceipt" => Some(self.get_transaction_receipt(params)),
+        // Blockchain
+        "blockNumber" => block_number,
+        "epochNumber" => epoch_number,
+        "getBlockByHash" => get_block_by_hash,
+        "getBlockByNumber" => get_block_by_number,
+        "getProducer" => get_producer,
+        "getBlockTransactionCountByHash" => get_block_transaction_count_by_hash,
+        "getBlockTransactionCountByNumber" => get_block_transaction_count_by_number,
+        "slotState" => slot_state,
 
-            // Blockchain
-            "epochNumber" => Some(self.epoch_number(params)),
-            "getBlockByHash" => Some(self.get_block_by_hash(params)),
-            "getBlockByNumber" => Some(self.get_block_by_number(params)),
-            "getProducer" => Some(self.get_producer(params)),
-
-            "slotState" => Some(self.slot_state(params)),
-
-            _ => None
-        }
+        // Accounts
+        "getBalance" => get_balance
     }
 }

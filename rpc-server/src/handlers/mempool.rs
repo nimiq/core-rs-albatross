@@ -17,7 +17,8 @@ use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use transaction::{Transaction, TransactionFlags};
 
-use crate::handlers::Handler;
+use crate::handler::Method;
+use crate::handlers::Module;
 use crate::handlers::wallet::UnlockedWalletManager;
 
 pub struct MempoolHandler<P: ConsensusProtocol + 'static> {
@@ -26,7 +27,7 @@ pub struct MempoolHandler<P: ConsensusProtocol + 'static> {
 }
 
 impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
-    pub(crate) fn new(mempool: Arc<Mempool<'static, P::Blockchain>>, unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>) -> Self {
+    pub fn new(mempool: Arc<Mempool<'static, P::Blockchain>>, unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>) -> Self {
         MempoolHandler {
             mempool,
             unlocked_wallets,
@@ -322,17 +323,13 @@ pub(crate) struct TransactionContext<'a> {
     pub timestamp: u64, // Milliseconds
 }
 
-impl<P: ConsensusProtocol + 'static> Handler for MempoolHandler<P> {
-    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
-        match name {
-            // Transactions
-            "sendRawTransaction" => Some(self.send_raw_transaction(params)),
-            "createRawTransaction" => Some(self.create_raw_transaction(params)),
-            "sendTransaction" => Some(self.send_transaction(params)),
-            "mempoolContent" => Some(self.mempool_content(params)),
-            "mempool" => Some(self.mempool(params)),
-
-            _ => None
-        }
+impl<P: ConsensusProtocol + 'static> Module for MempoolHandler<P> {
+    rpc_module_methods! {
+        // Transactions
+        "sendRawTransaction" => send_raw_transaction,
+        "createRawTransaction" => create_raw_transaction,
+        "sendTransaction" => send_transaction,
+        "mempoolContent" => mempool_content,
+        "mempool" => mempool
     }
 }

@@ -14,17 +14,18 @@ use nimiq_mempool::Mempool;
 use utils::merkle::MerklePath;
 use utils::time::systemtime_to_timestamp;
 
-use crate::handlers::Handler;
+use crate::handler::Method;
+use crate::handlers::Module;
 use crate::handlers::mempool::transaction_to_obj;
 
-pub struct BlockProductionHandler {
+pub struct BlockProductionNimiqHandler {
     pub blockchain: Arc<Blockchain<'static>>,
     pub mempool: Arc<Mempool<'static, Blockchain<'static>>>,
 }
 
-impl BlockProductionHandler {
-    pub(crate) fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static, Blockchain<'static>>>) -> Self {
-        BlockProductionHandler {
+impl BlockProductionNimiqHandler {
+    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static, Blockchain<'static>>>) -> Self {
+        BlockProductionNimiqHandler {
             blockchain,
             mempool,
         }
@@ -144,15 +145,10 @@ impl BlockProductionHandler {
     }
 }
 
-impl Handler for BlockProductionHandler {
-    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
-        match name {
-            // Block production
-            "getWork" => Some(self.get_work(params)),
-            "getBlockTemplate" => Some(self.get_block_template(params)),
-            "submitBlock" => Some(self.submit_block(params)),
-
-            _ => None
-        }
+impl Module for BlockProductionNimiqHandler {
+    rpc_module_methods! {
+        "getWork" => get_work,
+        "getBlockTemplate" => get_block_template,
+        "submitBlock" => submit_block
     }
 }

@@ -20,6 +20,10 @@ if [[ ! -z "$VALIDATOR_KEY" ]]; then
     echo "$VALIDATOR_KEY" | hex2bin > $VALIDATOR_KEY_FILE
 fi
 
+if [[ -z "$NIMIQ_HOST" ]]; then
+    export NIMIQ_HOST=$(hostname -i)
+fi
+
 ./docker_config.sh > /root/.nimiq/client.toml
 
 /bin/nimiq-client $@

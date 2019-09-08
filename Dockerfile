@@ -7,8 +7,7 @@ COPY ./scripts/docker_*.sh /root/
 COPY ./target/debug/nimiq-client /bin/
 WORKDIR /root
 
-ENV NIMIQ_HOST=localhost.localdomain \
-    NIMIQ_NETWORK=dev-albatross \
+ENV NIMIQ_NETWORK=dev-albatross \
     NIMIQ_LOG_LEVEL=debug \
     NIMIQ_VALIDATOR=none \
     VALIDATOR_BLOCK_DELAY=250 \

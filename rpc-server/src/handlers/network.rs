@@ -3,7 +3,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use json::{Array, JsonValue, Null};
-use parking_lot::RwLock;
 
 use blockchain_base::AbstractBlockchain;
 use consensus::{ConsensusProtocol, Consensus};
@@ -15,20 +14,20 @@ use nimiq_network::connection::connection_pool::ConnectionId;
 use nimiq_network::Network;
 use nimiq_network::peer_scorer::Score;
 
-use crate::handlers::Handler;
-use crate::JsonRpcServerState;
+use crate::handler::Method;
+use crate::handlers::Module;
 
 pub struct NetworkHandler<P: ConsensusProtocol + 'static> {
-    pub state: Arc<RwLock<JsonRpcServerState>>,
+    pub consensus: Arc<Consensus<P>>,
     pub network: Arc<Network<P::Blockchain>>,
     pub blockchain: Arc<P::Blockchain>,
     pub starting_block: u32,
 }
 
 impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
-    pub(crate) fn new(consensus: &Arc<Consensus<P>>, state: Arc<RwLock<JsonRpcServerState>>) -> Self {
+    pub fn new(consensus: &Arc<Consensus<P>>) -> Self {
         NetworkHandler {
-            state,
+            consensus: consensus.clone(),
             network: consensus.network.clone(),
             blockchain: consensus.blockchain.clone(),
             starting_block: consensus.blockchain.head_height(),
@@ -40,16 +39,11 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
         Ok(self.network.peer_count().into())
     }
 
-    /// Returns the consensus state (string).
-    pub(crate) fn consensus(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        Ok(self.state.read().consensus_state.into())
-    }
-
     /// If syncing is true, returns an object
     /// { starting_block: number, current_block: number, highest_block: number },
     /// otherwise returns false.
     pub(crate) fn syncing(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        Ok(if self.state.read().consensus_state == "established" {
+        Ok(if self.consensus.state().established() {
             false.into()
         }
         else {
@@ -192,17 +186,11 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
     }
 }
 
-impl<P: ConsensusProtocol + 'static> Handler for NetworkHandler<P> {
-    fn call(&self, name: &str, params: &[JsonValue]) -> Option<Result<JsonValue, JsonValue>> {
-        match name {
-            // Network
-            "peerCount" => Some(self.peer_count(params)),
-            "syncing" => Some(self.syncing(params)),
-            "consensus" => Some(self.consensus(params)),
-            "peerList" => Some(self.peer_list(params)),
-            "peerState" => Some(self.peer_state(params)),
-
-            _ => None
-        }
+impl<P: ConsensusProtocol + 'static> Module for NetworkHandler<P> {
+    rpc_module_methods! {
+        "peerCount" => peer_count,
+        "syncing" => syncing,
+        "peerList" => peer_list,
+        "peerState" => peer_state
     }
 }
