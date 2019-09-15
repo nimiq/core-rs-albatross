@@ -32,7 +32,7 @@ entry port 8443 number
 echo 'seed_nodes = ['
 nodes_arr=($NIMIQ_SEED_NODES)
 for node in "${nodes_arr[@]}"; do
-    echo "{ uri = \"$node\" }"
+    echo "{ uri = \"$node\" },"
 done
 echo ']'
 optional instant_inbound NIMIQ_INSTANT_INBOUND boolean
@@ -54,8 +54,6 @@ optional statistics NIMIQ_LOG_STATISTICS number
 optional file NIMIQ_LOG_FILE string
 
 echo '[validator]'
-required type NIMIQ_VALIDATOR string
-optional block_delay VALIDATOR_BLOCK_DELAY number
 optional key_file VALIDATOR_KEY_FILE string
 
 if [[ "$RPC_ENABLED" == "true" ]]; then
