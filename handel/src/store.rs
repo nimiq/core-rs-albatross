@@ -172,7 +172,7 @@ impl<P: Partitioner> SignatureStore for ReplaceStore<P> {
         trace!("Creating combined signature for level {}", level);
 
         let mut signatures = Vec::new();
-        for (&i, signature) in self.multisig_best.range(0 ..= level) {
+        for (_, signature) in self.multisig_best.range(0 ..= level) {
             trace!("collect: {:?}", signature);
             signatures.push(signature)
         }

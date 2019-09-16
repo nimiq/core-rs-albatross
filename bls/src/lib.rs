@@ -195,6 +195,12 @@ impl<E: Engine> PartialEq for AggregatePublicKey<E> {
     }
 }
 
+impl<E: Engine> Default for AggregatePublicKey<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct AggregateSignature<E: Engine>(pub(crate) Signature<E>);
 
@@ -254,6 +260,12 @@ impl<E: Engine> Eq for AggregateSignature<E> {}
 impl<E: Engine> PartialEq for AggregateSignature<E> {
     fn eq(&self, other: &Self) -> bool {
         self.0.eq(&other.0)
+    }
+}
+
+impl<E: Engine> Default for AggregateSignature<E> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

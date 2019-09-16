@@ -56,9 +56,11 @@ enum ConsensusTimer {
     Sync,
 }
 
+type ConsensusAgentMap<P> = HashMap<Arc<Peer>, Arc<ConsensusAgent<<P as ConsensusProtocol>::Blockchain, <P as ConsensusProtocol>::MessageAdapter>>>;
+
 struct ConsensusState<P: ConsensusProtocol + 'static> {
     established: bool,
-    agents: HashMap<Arc<Peer>, Arc<ConsensusAgent<P::Blockchain, P::MessageAdapter>>>,
+    agents: ConsensusAgentMap<P>,
 
     sync_peer: Option<Arc<Peer>>,
 }

@@ -48,13 +48,13 @@ impl fmt::Debug for SecretKey {
 
 impl PartialOrd<PublicKey> for PublicKey {
     fn partial_cmp(&self, other: &PublicKey) -> Option<Ordering> {
-        self.into_affine().partial_cmp(&other.into_affine())
+        self.as_affine().partial_cmp(&other.as_affine())
     }
 }
 
 impl Ord for PublicKey {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.into_affine().cmp(&other.into_affine())
+        self.as_affine().cmp(&other.as_affine())
     }
 }
 
@@ -97,7 +97,7 @@ impl PublicKeyAffine {
         lhs == rhs
     }
 
-    pub fn into_projective(&self) -> PublicKey {
+    pub fn as_projective(&self) -> PublicKey {
         PublicKey {
             p_pub: self.p_pub.into_projective(),
         }
@@ -133,7 +133,7 @@ impl PublicKey {
         }
     }
 
-    pub fn into_affine(&self) -> PublicKeyAffine {
+    pub fn as_affine(&self) -> PublicKeyAffine {
         PublicKeyAffine {
             p_pub: self.p_pub.into_affine(),
         }

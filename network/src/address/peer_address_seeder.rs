@@ -72,17 +72,17 @@ impl PeerAddressSeeder {
         let additional_seedlists = network_config.additional_seeds().iter()
         .filter_map(|seed| {
             match seed {
-                Seed::List(seed_list) => Some(seed_list.clone()),
+                Seed::List(seed_list) => Some(&**seed_list),
                 Seed::Peer(_) => None,
             }
         });
 
         // Create a new Iterator chaining the hardcoded seed lists with the seed lists from the config file
         // TODO: Optimize this to use references instead of cloning
-        let seed_lists = network_info.seed_lists().iter().cloned().chain(additional_seedlists);
+        let seed_lists = network_info.seed_lists().iter().chain(additional_seedlists);
 
         // Process all seed lists asynchronously
-        for seed_list in seed_lists {
+        for seed_list in seed_lists.cloned() {
             let notifier = Arc::clone(&self.notifier);
             let seed_list_url = seed_list.url().clone();
 

@@ -367,7 +367,6 @@ fn run() -> Result<(), Error> {
 
                 let validator_config = ValidatorConfig {
                     validator_key,
-                    block_delay: settings.validator.block_delay.unwrap_or(1000),
                 };
                 run_node::<AlbatrossValidatorConfiguration>(client_builder, settings, validator_config)?;
             },

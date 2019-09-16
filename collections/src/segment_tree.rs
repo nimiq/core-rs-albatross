@@ -67,12 +67,8 @@ impl <T, U> SegmentTree<T, U>
     // Get searches for the node with the specified key.
     // It returns the size of the node and its offset (sum of preceding nodes).
     pub fn get(&self, key: T) -> Option<Range<U>> {
-        if self.root.is_none() {
-            return None;
-        }
-
+        let mut node = self.root.as_ref()?;
         let mut offset: U = Zero::zero();
-        let mut node = self.root.as_ref().unwrap();
         // Descend while branch node
         while node.children.is_some() {
             if key < node.key {
@@ -103,13 +99,9 @@ impl <T, U> SegmentTree<T, U>
         if point < Zero::zero() {
             return None;
         }
-        if self.root.is_none()  {
-            // Tree is empty
-            return None;
-        }
 
+        let mut node = self.root.as_ref()?;
         let mut offset: U = Zero::zero();
-        let mut node = self.root.as_ref().unwrap();
         // Descend while branch node
         while node.children.is_some() {
             // Check if point is greater than the total range

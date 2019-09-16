@@ -15,28 +15,28 @@ impl Docker {
 
     pub fn build(&self) -> Result<(), Error> {
         info!("Building docker containers: {}", self.directory.display());
-        docker::build(self.directory.to_str().unwrap())
+        docker_cmd::build(self.directory.to_str().unwrap())
     }
 
     pub fn up<'a>(&'a self) -> Result<impl Iterator<Item=Result<String, Error>> + 'a, Error> {
         info!("Starting docker containers: {}", self.directory.display());
-        docker::up(self.directory.to_str().unwrap())
+        docker_cmd::up(self.directory.to_str().unwrap())
     }
 
     pub fn down(&self) -> Result<(), Error> {
         info!("Stopping docker containers: {}", self.directory.display());
-        docker::down(self.directory.to_str().unwrap())
+        docker_cmd::down(self.directory.to_str().unwrap())
     }
 
     /*pub fn prune(&self) -> Result<(), Error> {
         panic!("TODO: Add filter argument to only prune nimiq devnet related containers");
         info!("Pruning docker containers: {}", self.directory.display());
-        docker::prune()
+        docker_cmd::prune()
     }*/
 }
 
 
-mod docker {
+mod docker_cmd {
     use failure::Error;
 
     #[shell]

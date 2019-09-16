@@ -1,5 +1,4 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::fmt::Debug;
 
 use crate::{PushResult, PushError, BlockError};
 

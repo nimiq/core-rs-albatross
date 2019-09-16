@@ -41,8 +41,10 @@ enum InventoryManagerTimer {
     Request(InvVector)
 }
 
+type VectorsToRequest<B, MA> = HashMap<InvVector, (Weak<InventoryAgent<B, MA>>, PtrWeakHashSet<Weak<InventoryAgent<B, MA>>>)>;
+
 pub struct InventoryManager<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> {
-    vectors_to_request: HashMap<InvVector, (Weak<InventoryAgent<B, MA>>, PtrWeakHashSet<Weak<InventoryAgent<B, MA>>>)>,
+    vectors_to_request: VectorsToRequest<B, MA>,
     self_weak: Weak<RwLock<InventoryManager<B, MA>>>,
     timers: Timers<InventoryManagerTimer>,
 }

@@ -125,6 +125,7 @@ impl<T> Node<T> {
         }
     }
 
+    #[allow(clippy::boxed_local)]
     pub(super) fn box_to_element(node: Box<Self>) -> T {
         node.element
     }

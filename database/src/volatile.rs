@@ -49,6 +49,7 @@ impl Error for VolatileDatabaseError {
 
 
 impl VolatileEnvironment {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(max_dbs: u32) -> Result<Environment, VolatileDatabaseError> {
         let temp_dir = TempDir::new("volatile-core").map_err(VolatileDatabaseError::IoError)?;
         let path = temp_dir.path().to_str().ok_or_else(|| VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
@@ -105,6 +106,7 @@ impl<'env> VolatileReadTransaction<'env> {
 pub struct VolatileWriteTransaction<'env>(LmdbWriteTransaction<'env>);
 
 impl<'env> VolatileWriteTransaction<'env> {
+    #[allow(clippy::new_ret_no_self)]
     pub(in super) fn new(env: &'env VolatileEnvironment) -> Self {
         VolatileWriteTransaction(LmdbWriteTransaction::new(&env.env))
     }

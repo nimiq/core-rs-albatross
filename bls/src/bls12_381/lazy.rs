@@ -80,6 +80,9 @@ impl LazyPublicKey {
     }
 
     pub fn uncompressed(&self) -> Option<PublicKey> {
+        // NOTE: We can't use Option::cloned here, as clippy suggests, since MappedMutexGuard
+        //       doesn't really implement Clone. But `guard.clone` calls the underlying clone method
+        #[allow(clippy::map_clone)]
         self.uncompress().map(|guard| guard.clone())
     }
 

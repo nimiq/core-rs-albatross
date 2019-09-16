@@ -42,8 +42,8 @@ impl ExtendedPrivateKey {
     /// Returns the derived extended private key at a given index.
     pub fn derive(&self, mut index: u32) -> Option<Self> {
         // Only hardened derivation is allowed for ed25519.
-        if index < 0x80000000 {
-            index = index.checked_add(0x80000000)?;
+        if index < 0x8000_0000 {
+            index = index.checked_add(0x8000_0000)?;
         }
 
         let mut data = Vec::<u8>::with_capacity(1 + PrivateKey::SIZE + 4);
@@ -63,7 +63,7 @@ impl ExtendedPrivateKey {
 
         let mut derived_key: Cow<ExtendedPrivateKey> = Cow::Borrowed(self);
         for segment in path.split('/').skip(1) {
-            derived_key = Cow::Owned(derived_key.derive(segment.trim_end_matches("'").parse::<u32>().unwrap())?);
+            derived_key = Cow::Owned(derived_key.derive(segment.trim_end_matches('\'').parse::<u32>().unwrap())?);
         }
 
         Some(derived_key.into_owned())

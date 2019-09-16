@@ -107,15 +107,15 @@ impl s::Seed {
     pub fn try_from(seed: s::Seed) -> Result<Seed, SeedError> {
         Ok(match seed {
             s::Seed::Uri(s::SeedUri{uri}) => {
-                Seed::Peer(PeerUri::from_str(&uri)?)
+                Seed::Peer(Box::new(PeerUri::from_str(&uri)?))
             },
             s::Seed::Info(s::SeedInfo{host, port, public_key, peer_id}) => {
                 // TODO: Implement this without having to instantiate a PeerUri
-                Seed::Peer(PeerUri::new_wss(host, port, peer_id, public_key))
+                Seed::Peer(Box::new(PeerUri::new_wss(host, port, peer_id, public_key)))
             },
             s::Seed::List(s::SeedList{list, public_key}) => {
-                Seed::List(SeedList::new(Url::from_str(&list)?, public_key
-                    .map(PublicKey::from_hex).transpose()?))
+                Seed::List(Box::new(SeedList::new(Url::from_str(&list)?, public_key
+                    .map(PublicKey::from_hex).transpose()?)))
             }
         })
     }

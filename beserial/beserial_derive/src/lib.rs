@@ -198,7 +198,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
             let ty= if uvar {
                 enum_type.unwrap_or_else(|| Ident::new("u64", syn::export::Span::call_site()))
             } else {
-                enum_type.expect(format!("Deserialize can not be derived for enum {} without repr(u*) or repr(i*)", name).as_str())
+                enum_type.unwrap_or_else(||panic!("Deserialize can not be derived for enum {} without repr(u*) or repr(i*)", name))
             };
 
             let mut num = expr_from_value(0);

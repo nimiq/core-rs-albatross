@@ -50,20 +50,20 @@ pub enum ValidatorNetworkError {
 #[derive(Clone, Debug)]
 pub enum ValidatorNetworkEvent {
     /// When a fork proof was given
-    ForkProof(ForkProof),
+    ForkProof(Box<ForkProof>),
 
     /// When a valid view change was completed
-    ViewChangeComplete(ViewChange, ViewChangeProof),
+    ViewChangeComplete(Box<(ViewChange, ViewChangeProof)>),
 
     /// When a valid macro block is proposed by the correct pBFT-leader. This can happen multiple
     /// times during an epoch - i.e. when a proposal with a higher view number is received.
-    PbftProposal(Blake2bHash, PbftProposal),
+    PbftProposal(Box<(Blake2bHash, PbftProposal)>),
 
     /// When enough prepare signatures are collected for a proposed macro block
-    PbftPrepareComplete(Blake2bHash, PbftProposal),
+    PbftPrepareComplete(Box<(Blake2bHash, PbftProposal)>),
 
     /// When the pBFT proof is complete
-    PbftComplete(Blake2bHash, PbftProposal, PbftProof),
+    PbftComplete(Box<(Blake2bHash, PbftProposal, PbftProof)>),
 }
 
 
@@ -237,23 +237,23 @@ impl ValidatorNetwork {
             agent.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), |this, event| {
                 match event {
                     ValidatorAgentEvent::ValidatorInfo(info) => {
-                        this.on_validator_info(info);
+                        this.on_validator_info(*info);
                     },
                     ValidatorAgentEvent::ForkProof(fork_proof) => {
-                        this.on_fork_proof(fork_proof);
+                        this.on_fork_proof(*fork_proof);
                     }
                     ValidatorAgentEvent::ViewChange(update_message) => {
-                        this.on_view_change_level_update(update_message);
+                        this.on_view_change_level_update(*update_message);
                     },
                     ValidatorAgentEvent::PbftProposal(proposal) => {
-                        this.on_pbft_proposal(proposal)
+                        this.on_pbft_proposal(*proposal)
                             .unwrap_or_else(|e| debug!("Rejecting pBFT proposal: {}", e));
                     },
                     ValidatorAgentEvent::PbftPrepare(level_update) => {
-                        this.on_pbft_prepare_level_update(level_update);
+                        this.on_pbft_prepare_level_update(*level_update);
                     },
                     ValidatorAgentEvent::PbftCommit(level_update) => {
-                        this.on_pbft_commit_level_update(level_update);
+                        this.on_pbft_commit_level_update(*level_update);
                     },
                 }
             }));
@@ -317,7 +317,7 @@ impl ValidatorNetwork {
     }
 
     fn on_fork_proof(&self, fork_proof: ForkProof) {
-        self.notifier.read().notify(ValidatorNetworkEvent::ForkProof(fork_proof.clone()));
+        self.notifier.read().notify(ValidatorNetworkEvent::ForkProof(Box::new(fork_proof.clone())));
         self.broadcast_fork_proof(fork_proof);
     }
 
@@ -397,7 +397,7 @@ impl ValidatorNetwork {
 
         // Notify Validator (and send prepare message)
         let block_hash = best_pbft.proposal.message.header.hash::<Blake2bHash>();
-        self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash, best_pbft.proposal.message));
+        self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(Box::new((block_hash, best_pbft.proposal.message))));
     }
 
     /// Pushes the update to the signature aggregation for this view-change
@@ -479,7 +479,7 @@ impl ValidatorNetwork {
                                 pbft.prepare_proof = Some(prepare_proof);
 
                                 // Return the event
-                                Some(ValidatorNetworkEvent::PbftPrepareComplete(pbft.block_hash.clone(), pbft.proposal.message.clone()))
+                                Some(ValidatorNetworkEvent::PbftPrepareComplete(Box::new((pbft.block_hash.clone(), pbft.proposal.message.clone()))))
                             } else {
                                 warn!("Prepare proof already exists");
                                 None
@@ -515,7 +515,7 @@ impl ValidatorNetwork {
                             let pbft_proof = PbftProof { prepare: prepare_proof, commit: commit_proof };
 
                             // Return the event
-                            Some(ValidatorNetworkEvent::PbftComplete(pbft.block_hash.clone(), pbft.proposal.message.clone(), pbft_proof))
+                            Some(ValidatorNetworkEvent::PbftComplete(Box::new((pbft.block_hash.clone(), pbft.proposal.message.clone(), pbft_proof))))
                         } else {
                             error!("No pBFT state");
                             None
@@ -541,7 +541,7 @@ impl ValidatorNetwork {
 
         // Notify Validator (and send prepare message)
         if !buffered {
-            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(block_hash.clone(), signed_proposal.message.clone()));
+            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(Box::new((block_hash.clone(), signed_proposal.message.clone()))));
         }
 
         // Broadcast to other validators
@@ -617,7 +617,7 @@ impl ValidatorNetwork {
                             info!("Complete: {:?}", view_change);
                             let proof = ViewChangeProof::new(best.signature, best.signers);
                             this.notifier.read()
-                                .notify(ValidatorNetworkEvent::ViewChangeComplete(view_change.clone(), proof))
+                                .notify(ValidatorNetworkEvent::ViewChangeComplete(Box::new((view_change.clone(), proof))))
                         }
                     }
                 }));

@@ -310,7 +310,6 @@ pub(crate) struct ValidatorSettings {
     #[serde(default)]
     pub ty: ValidatorType,
     pub key_file: Option<String>,
-    pub block_delay: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

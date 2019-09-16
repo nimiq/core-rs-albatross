@@ -161,8 +161,8 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         let result = Deserialize::deserialize_from_vec(&key).ok();
 
         // Always overwrite unencrypted vector.
-        for i in 0..key.len() {
-            key[i].clear();
+        for byte in key.iter_mut() {
+            byte.clear();
         }
 
         if let Some(data) = result {
@@ -179,8 +179,8 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         let mut key = compute_argon2_kdf(password, salt, iterations, secret.len())?;
         assert_eq!(key.len(), secret.len());
 
-        for (i, byte) in secret.iter().enumerate() {
-            key[i] = key[i] ^ *byte;
+        for (key_byte, secret_byte) in key.iter_mut().zip(secret.iter()) {
+            *key_byte ^= secret_byte;
         }
 
         Ok(key)
@@ -191,8 +191,8 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         let lock = Self::otp(&data, password, iterations, &salt)?;
 
         // Always overwrite unencrypted vector.
-        for i in 0..data.len() {
-            data[i].clear();
+        for byte in data.iter_mut() {
+            byte.clear();
         }
 
         Ok(Locked {

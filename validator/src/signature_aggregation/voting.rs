@@ -19,7 +19,6 @@ use handel::protocol::Protocol;
 use handel::multisig::{IndividualSignature, Signature};
 use handel::identity::{IdentityRegistry, WeightRegistry};
 use handel::verifier::MultithreadedVerifier;
-use handel::timeout::LinearTimeout;
 use handel::config::Config;
 use handel::store::ReplaceStore;
 use handel::partitioner::BinomialPartitioner;
@@ -122,7 +121,7 @@ pub struct VotingProtocol<T: Tag> {
 }
 
 impl<T: Tag> VotingProtocol<T> {
-    pub fn new(tag: T, node_id: usize, validators: Validators, config: &Config, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>) -> Self {
+    pub fn new(tag: T, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>) -> Self {
         let num_validators = validators.num_groups();
         trace!("num_validators = {}", num_validators);
         trace!("validator_id = {}", node_id);
@@ -138,7 +137,7 @@ impl<T: Tag> VotingProtocol<T> {
             Arc::clone(&registry),
             None,
         ));
-        let timeouts = Arc::new(LinearTimeout::new(config.timeout));
+        //let timeouts = Arc::new(LinearTimeout::new(config.timeout));
         let partitioner = Arc::new(BinomialPartitioner::new(
             node_id,
             num_validators,
@@ -230,7 +229,7 @@ pub struct VoteAggregation<T: Tag> {
 impl<T: Tag> VoteAggregation<T> {
     pub fn new(tag: T, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>, config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
-        let protocol = VotingProtocol::new(tag, node_id, validators, &config, peers);
+        let protocol = VotingProtocol::new(tag, node_id, validators, peers);
         let aggregation = Aggregation::new(protocol, config);
         Self { inner: aggregation }
     }

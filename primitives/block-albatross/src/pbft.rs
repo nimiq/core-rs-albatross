@@ -64,6 +64,8 @@ pub type SignedPbftCommitMessage = SignedMessage<PbftCommitMessage>;
 /// A pBFT proof - which is a composition of the prepare proof and the commit proof
 /// It verifies both proofs individually and then checks that at least `threshold` validators who
 /// signed the prepare also signed the commit.
+///
+/// DEPRECATED: We don't use this anymore (except for the MockValidator)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PbftProofBuilder {
     pub prepare: AggregateProofBuilder<PbftPrepareMessage>,
@@ -129,6 +131,12 @@ impl PbftProofBuilder {
             prepare: self.prepare.build(),
             commit: self.commit.build()
         }
+    }
+}
+
+impl Default for PbftProofBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

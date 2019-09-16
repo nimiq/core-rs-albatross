@@ -7,8 +7,6 @@ extern crate beserial_derive;
 extern crate bitflags;
 #[macro_use]
 extern crate enum_display_derive;
-#[macro_use]
-extern crate log;
 extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
@@ -207,7 +205,7 @@ impl Message {
         let mut c = Cursor::new(buffer);
 
         // skip 4 bytes of magic
-        c.seek(SeekFrom::Start(4));
+        c.seek(SeekFrom::Start(4))?;
 
         // skip type (uvar)
         let _ = uvar::deserialize(&mut c)?;
@@ -532,9 +530,6 @@ impl MessageNotifier {
             Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
             Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
             Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
-
-            // catch unimplemented
-            _ => info!("Received message for unimplemented type: {}", msg.ty())
         }
     }
 }

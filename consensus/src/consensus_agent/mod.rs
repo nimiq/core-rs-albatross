@@ -19,6 +19,7 @@ use network_messages::{
     MessageType,
     RejectMessage,
     RejectMessageCode,
+    GetBlockProofMessage,
 };
 use network_primitives::subscription::Subscription;
 use transaction::Transaction;
@@ -162,14 +163,12 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
             |this, e| this.on_inventory_event(e)));
 
         let msg_notifier = &this.peer.channel.msg_notifier;
-        // FIXME
-//        msg_notifier.get_chain_proof.write().register(weak_passthru_listener(
-//            Arc::downgrade(this),
-//            |this, _| this.on_get_chain_proof()));
-        // FIXME
-//        msg_notifier.get_block_proof.write().register(weak_passthru_listener(
-//            Arc::downgrade(this),
-//            |this, msg| this.on_get_block_proof(msg)));
+        msg_notifier.get_chain_proof.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, _| this.on_get_chain_proof()));
+        msg_notifier.get_block_proof.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg| this.on_get_block_proof(msg)));
         msg_notifier.get_transaction_receipts.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, msg| this.on_get_transaction_receipts(msg)));
@@ -303,6 +302,18 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
             locators,
             Self::GET_BLOCKS_MAX_RESULTS,
             Self::GET_BLOCKS_TIMEOUT);
+    }
+
+    fn on_get_chain_proof(&self) {
+        // TODO: Implement
+        // XXX This will be used here, so remove the warning
+        let _ = self.state.read().chain_proof_limit;
+    }
+
+    fn on_get_block_proof(&self, _message: GetBlockProofMessage) {
+        // TODO: Implement
+        // XXX This will be used here, so remove the warning
+        let _ = self.state.read().block_proof_limit;
     }
 
     fn on_inventory_event(&self, event: &InventoryEvent<<B::Block as Block>::Error>) {

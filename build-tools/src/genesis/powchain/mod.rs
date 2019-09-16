@@ -82,10 +82,10 @@ impl PowChainGenesis {
                     interlink_hash: [0u8; 32].into(),
                     body_hash: "7cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a".into(),
                     accounts_hash: "1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c".into(),
-                    n_bits: 0x1f010000.into(),
+                    n_bits: 0x1f01_0000.into(),
                     height: 1,
-                    timestamp: 1523727000,
-                    nonce: 137689,
+                    timestamp: 1_523_727_000,
+                    nonce: 137_689,
                 },
                 interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                 body: Some(BlockBody {
@@ -1214,10 +1214,10 @@ impl PowChainGenesis {
                     interlink_hash: [0u8; 32].into(),
                     body_hash: "f6ba2bbf7e1478a209057000471d73fbdc28df0b717747d929cfde829c4120f6".into(),
                     accounts_hash: "2e02da3d162e20fa982029dbde9cc20f6b431ab05df1764f34af4c62a4f2b33f".into(),
-                    n_bits: 0x1f010000.into(),
+                    n_bits: 0x1f01_0000.into(),
                     height: 1,
-                    timestamp: 1522735199,
-                    nonce: 79001
+                    timestamp: 1_522_735_199,
+                    nonce: 79_001
                 },
                 interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                 body: Some(BlockBody {
@@ -1386,10 +1386,10 @@ impl PowChainGenesis {
                     interlink_hash: [0u8; 32].into(),
                     body_hash: "26f32bf5cf65da6f0758d7450064c46acb4a1fe68366f967f44a295de9615488".into(),
                     accounts_hash: "d6dfd99bdd6d374a75efcf9e3dcc724796cfc6f0ba8c52ec92a8a274514edf06".into(),
-                    n_bits: 0x1f010000.into(),
+                    n_bits: 0x1f01_0000.into(),
                     height: 1,
-                    timestamp: 1522338300,
-                    nonce: 12432
+                    timestamp: 1_522_338_300,
+                    nonce: 12_432
                 },
                 interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                 body: Some(BlockBody {

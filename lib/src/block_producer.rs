@@ -37,11 +37,10 @@ pub mod albatross {
     #[derive(Clone)]
     pub struct ValidatorConfig {
         pub validator_key: KeyPair,
-        pub block_delay: u64,
     }
 
     pub struct AlbatrossBlockProducer {
-        validator: Arc<Validator>,
+        pub validator: Arc<Validator>,
     }
 
     impl BlockProducer<AlbatrossConsensusProtocol> for AlbatrossBlockProducer {
@@ -49,7 +48,7 @@ pub mod albatross {
 
         fn new(config: Self::Config, consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) -> Result<Self, ClientError> {
             Ok(Self {
-                validator: Validator::new(consensus, config.validator_key, config.block_delay)?
+                validator: Validator::new(consensus, config.validator_key)?
             })
         }
     }

@@ -82,6 +82,12 @@ impl From<VolatileDatabaseError> for GenesisBuilderError {
 }
 
 
+pub struct GenesisInfo {
+    pub block: Block,
+    pub hash: Blake2bHash,
+    pub accounts: Vec<(Address, Account)>,
+}
+
 
 #[derive(Default)]
 pub struct GenesisBuilder {
@@ -176,7 +182,7 @@ impl GenesisBuilder {
         Ok((slot_allocation, validators))
     }
 
-    pub fn generate(&self) -> Result<(Block, Blake2bHash, Vec<(Address, Account)>), GenesisBuilderError> {
+    pub fn generate(&self) -> Result<GenesisInfo, GenesisBuilderError> {
         let timestamp = self.timestamp.unwrap_or_else(Utc::now);
 
         // generate seeds
@@ -238,11 +244,15 @@ impl GenesisBuilder {
         // genesis hash
         let genesis_hash = header.hash::<Blake2bHash>();
 
-        Ok((Block::Macro(MacroBlock {
-            header,
-           justification: None,
-           extrinsics: Some(extrinsics),
-        }), genesis_hash, genesis_accounts))
+        Ok(GenesisInfo {
+            block: Block::Macro(MacroBlock {
+                header,
+                justification: None,
+                extrinsics: Some(extrinsics),
+            }),
+            hash: genesis_hash,
+            accounts: genesis_accounts,
+        })
     }
 
     fn generate_staking_contract(&self) -> Result<StakingContract, GenesisBuilderError> {
@@ -256,23 +266,23 @@ impl GenesisBuilder {
     }
 
     pub fn write_to_files<P: AsRef<Path>>(&self, directory: P) -> Result<Blake2bHash, GenesisBuilderError> {
-        let (genesis_block, genesis_hash, accounts) = self.generate()?;
+        let GenesisInfo { block, hash, accounts } = self.generate()?;
 
-        debug!("Genesis block: {}", &genesis_hash);
-        debug!("{:#?}", &genesis_block);
+        debug!("Genesis block: {}", &hash);
+        debug!("{:#?}", &block);
         debug!("Accounts:");
         debug!("{:#?}", &accounts);
 
         let block_path = directory.as_ref().join("block.dat");
         info!("Writing block to {}", block_path.display());
         let mut file = OpenOptions::new().create(true).write(true).open(&block_path)?;
-        genesis_block.serialize(&mut file)?;
+        block.serialize(&mut file)?;
 
         let accounts_path = directory.as_ref().join("accounts.dat");
         info!("Writing accounts to {}", accounts_path.display());
         let mut file = OpenOptions::new().create(true).write(true).open(&accounts_path)?;
         AccountsList(accounts).serialize(&mut file)?;
 
-        Ok(genesis_hash)
+        Ok(hash)
     }
 }

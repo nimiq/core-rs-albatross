@@ -19,12 +19,12 @@ use utils::rate_limit::RateLimit;
 
 
 pub enum ValidatorAgentEvent {
-    ValidatorInfo(SignedValidatorInfo),
-    ForkProof(ForkProof),
-    ViewChange(LevelUpdateMessage<ViewChange>),
-    PbftProposal(SignedPbftProposal),
-    PbftPrepare(LevelUpdateMessage<PbftPrepareMessage>),
-    PbftCommit(LevelUpdateMessage<PbftCommitMessage>),
+    ValidatorInfo(Box<SignedValidatorInfo>),
+    ForkProof(Box<ForkProof>),
+    ViewChange(Box<LevelUpdateMessage<ViewChange>>),
+    PbftProposal(Box<SignedPbftProposal>),
+    PbftPrepare(Box<LevelUpdateMessage<PbftPrepareMessage>>),
+    PbftCommit(Box<LevelUpdateMessage<PbftCommitMessage>>),
 }
 
 pub struct ValidatorAgentState {
@@ -94,7 +94,7 @@ impl ValidatorAgent {
                 if !signature_okay {
                     continue;
                 }
-                self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(signed_info));
+                self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(Box::new(signed_info)));
             }
             else {
                 error!("Uncompressing public key failed: {}", signed_info.message.peer_address);
@@ -128,7 +128,7 @@ impl ValidatorAgent {
             return;
         }
 
-        self.notifier.read().notify(ValidatorAgentEvent::ForkProof(fork_proof));
+        self.notifier.read().notify(ValidatorAgentEvent::ForkProof(Box::new(fork_proof)));
     }
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
@@ -153,7 +153,7 @@ impl ValidatorAgent {
             Ordering::Equal => (),
         };
 
-        self.notifier.read().notify(ValidatorAgentEvent::ViewChange(update_message))
+        self.notifier.read().notify(ValidatorAgentEvent::ViewChange(Box::new(update_message)))
     }
 
     /// When a pbft block proposal is received
@@ -181,7 +181,7 @@ impl ValidatorAgent {
             return;
         }
 
-        self.notifier.read().notify(ValidatorAgentEvent::PbftProposal(proposal));
+        self.notifier.read().notify(ValidatorAgentEvent::PbftProposal(Box::new(proposal)));
     }
 
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
@@ -192,7 +192,7 @@ impl ValidatorAgent {
                level_update.update,
                self.peer.peer_address());
 
-        self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare(level_update));
+        self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare(Box::new(level_update)));
     }
 
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
@@ -204,7 +204,7 @@ impl ValidatorAgent {
                level_update.update,
                self.peer.peer_address());
 
-        self.notifier.read().notify(ValidatorAgentEvent::PbftCommit(level_update));
+        self.notifier.read().notify(ValidatorAgentEvent::PbftCommit(Box::new(level_update)));
     }
 
     pub fn validator_info(&self) -> Option<ValidatorInfo> {

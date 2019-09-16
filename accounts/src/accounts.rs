@@ -12,6 +12,9 @@ use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 
 use crate::tree::AccountsTree;
 
+
+type ReceiptsMap<'a> = HashMap<u16, &'a Vec<u8>>;
+
 #[derive(Debug)]
 pub struct Accounts<'env> {
     env: &'env Environment,
@@ -279,7 +282,7 @@ impl<'env> Accounts<'env> {
         Ok(receipt)
     }
 
-    fn prepare_receipts(receipts: &Receipts) -> (HashMap<u16, &Vec<u8>>, HashMap<u16, &Vec<u8>>, HashMap<u16, &Vec<u8>>, Vec<&PrunedAccount>) {
+    fn prepare_receipts(receipts: &Receipts) -> (ReceiptsMap, ReceiptsMap, ReceiptsMap, Vec<&PrunedAccount>) {
         let mut sender_receipts = HashMap::new();
         let mut recipient_receipts = HashMap::new();
         let mut inherent_receipts = HashMap::new();

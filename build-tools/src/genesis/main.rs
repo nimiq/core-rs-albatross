@@ -1,4 +1,4 @@
-use nimiq_build_tools::genesis::albatross::GenesisBuilder;
+use nimiq_build_tools::genesis::albatross::{GenesisBuilder, GenesisInfo};
 use log::Level;
 use std::env;
 use std::process::exit;
@@ -15,15 +15,15 @@ fn main() {
     let args = env::args().collect::<Vec<String>>();
 
     if let Some(file) = args.get(1) {
-        let (genesis_block, genesis_hash, genesis_accounts) = GenesisBuilder::default()
+        let GenesisInfo { block, hash, accounts } = GenesisBuilder::default()
             .with_config_file(file).unwrap()
             .generate().unwrap();
 
-        println!("Genesis Block: {}", genesis_hash);
-        println!("{:#?}", genesis_block);
+        println!("Genesis Block: {}", hash);
+        println!("{:#?}", block);
         println!();
         println!("Genesis Accounts:");
-        println!("{:#?}", genesis_accounts);
+        println!("{:#?}", accounts);
     }
     else {
         usage(args);

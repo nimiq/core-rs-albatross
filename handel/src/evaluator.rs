@@ -34,9 +34,12 @@ impl<S: SignatureStore, P: Partitioner> SingleVote<S, P> {
 
 impl<S: SignatureStore, P: Partitioner> Evaluator for SingleVote<S, P> {
     fn evaluate(&self, _signature: &Signature, _level: usize) -> usize {
+        // This is going to be used here, and we don't want any warnings
+        let _ = (&self.signature_store, &self.partitioner);
+
         // TODO: The code from `WeightedVote` is what actually belongs here. And then the code in
         // `WeightedVote` must be adapted to consider the weight of a signature.
-        unimplemented!()
+        unimplemented!();
     }
 
     fn is_final(&self, signature: &Signature) -> bool {
@@ -153,8 +156,8 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
         trace!("new_total={}, added_sigs={}, combined_sigs={}", new_total, added_sigs, combined_sigs);
 
         // compute score
-        // TODO: Remove magic numbers! What do they mean???? I don't think this is discussed in the paper.
-        let score = if added_sigs == 0 {
+        // TODO: Remove magic numbers! What do they mean? I don't think this is discussed in the paper.
+        if added_sigs == 0 {
             // return 1 for an individual signature, otherwise 0
             match signature {
                 Signature::Individual(_) => 1,
@@ -162,13 +165,11 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
             }
         }
         else if new_total == to_receive {
-            1000000 - level * 10 - combined_sigs
+            1_000_000 - level * 10 - combined_sigs
         }
         else {
-            100000 - level * 100 + added_sigs * 10 - combined_sigs
-        };
-
-        score
+            100_000 - level * 100 + added_sigs * 10 - combined_sigs
+        }
     }
 
     fn is_final(&self, signature: &Signature) -> bool {

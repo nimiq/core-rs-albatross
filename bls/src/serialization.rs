@@ -124,7 +124,7 @@ impl Deserialize for Signature {
 
 impl Serialize for PublicKeyAffine {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        self.into_projective().serialize(writer)
+        self.as_projective().serialize(writer)
     }
 
     fn serialized_size(&self) -> usize {
@@ -135,7 +135,7 @@ impl Serialize for PublicKeyAffine {
 impl Deserialize for PublicKeyAffine {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let public_key: PublicKey = Deserialize::deserialize(reader)?;
-        Ok(public_key.into_affine())
+        Ok(public_key.as_affine())
     }
 }
 

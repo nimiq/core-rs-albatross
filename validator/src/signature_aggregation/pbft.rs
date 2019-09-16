@@ -200,14 +200,16 @@ impl PbftAggregation {
     pub fn new(proposal_hash: Blake2bHash, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>, config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
 
+        for (i, validator) in validators.iter_groups().enumerate() {
+            println!("Validator {}: {} votes", i, validator.0);
+        }
+
         // create prepare aggregation
         let prepare_protocol = PbftPrepareProtocol::new(
             PbftPrepareMessage::from(proposal_hash.clone()),
             node_id,
             validators,
-            &config,
             peers,
-
         );
         let prepare_aggregation = Aggregation::new(prepare_protocol, config.clone());
 

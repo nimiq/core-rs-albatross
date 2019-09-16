@@ -52,7 +52,7 @@ impl BinomialPartitioner {
         let num_levels = match num_ids {
             0 => panic!("num_ids must be greater than 0"),
             1 => 1,
-            n => log2(num_ids - 1) + 2,
+            n => log2(n - 1) + 2,
         };
         assert!(node_id < num_ids);
         Self {

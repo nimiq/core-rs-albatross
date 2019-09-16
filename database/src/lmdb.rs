@@ -20,6 +20,7 @@ pub struct LmdbEnvironment {
 }
 
 impl LmdbEnvironment {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Environment, lmdb_zero::Error> {
         Ok(Environment::Persistent(LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?))
     }

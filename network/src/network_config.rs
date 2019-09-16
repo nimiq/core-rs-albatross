@@ -17,8 +17,8 @@ use crate::error::Error;
 // One or multiple seed nodes. Either a peer URI or a http(s) URL to a seed list
 #[derive(Clone, Debug)]
 pub enum Seed {
-    Peer(PeerUri),
-    List(SeedList)
+    Peer(Box<PeerUri>),
+    List(Box<SeedList>)
 }
 
 

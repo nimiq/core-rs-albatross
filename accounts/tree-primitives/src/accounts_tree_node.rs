@@ -260,8 +260,10 @@ impl<'a> iter::IntoIterator for &'a AccountsTreeNode {
     }
 }
 
+type AccountsTreeNodeChildFilterMap<'a> = iter::FilterMap<slice::IterMut<'a, Option<AccountsTreeNodeChild>>, fn(&mut Option<AccountsTreeNodeChild>) -> Option<&mut AccountsTreeNodeChild>>;
+
 pub struct IterMut<'a> {
-    it: Option<iter::FilterMap<slice::IterMut<'a, Option<AccountsTreeNodeChild>>, fn(&mut Option<AccountsTreeNodeChild>) -> Option<&mut AccountsTreeNodeChild>>>,
+    it: Option<AccountsTreeNodeChildFilterMap<'a>>,
 }
 
 impl<'a> iter::Iterator for IterMut<'a> {

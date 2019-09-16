@@ -80,15 +80,15 @@ fn run_app() -> Result<(), Error> {
     }
     else {
         let from_address = Address::from_user_friendly_address(matches.value_of("from_address")
-            .ok_or(AppError::MissingSenderAddress)?)?;
+            .ok_or(AppError::SenderAddress)?)?;
         let to_address = Address::from_user_friendly_address(matches.value_of("to_address")
-            .ok_or(AppError::MissingRecipientAddress)?)?;
+            .ok_or(AppError::RecipientAddress)?)?;
         let value = Coin::from_str(matches.value_of("value")
-            .ok_or(AppError::MissingValue)?)?;
+            .ok_or(AppError::Value)?)?;
         let fee = Coin::from_str(matches.value_of("fee")
-            .ok_or(AppError::MissingFee)?)?;
+            .ok_or(AppError::Fee)?)?;
         let validity_start_height= u32::from_str(matches.value_of("validity_start_height")
-            .ok_or(AppError::MissingValidityStartHeight)?)?;
+            .ok_or(AppError::ValidityStartHeight)?)?;
         let network_id = match matches.value_of("network") {
             Some(s) => NetworkId::from_str(s)?,
             None => NetworkId::Main
@@ -106,7 +106,7 @@ fn run_app() -> Result<(), Error> {
         Ok(())
     }
     else {
-        Err(AppError::MissingSecretKey.into())
+        Err(AppError::SecretKey.into())
     }
 }
 
@@ -127,15 +127,15 @@ use primitives::networks::NetworkId;
 #[derive(Debug, Fail)]
 enum AppError {
     #[fail(display = "Secret key is missing")]
-    MissingSecretKey,
+    SecretKey,
     #[fail(display = "Sender address is missing")]
-    MissingSenderAddress,
+    SenderAddress,
     #[fail(display = "Recipient address is missing")]
-    MissingRecipientAddress,
+    RecipientAddress,
     #[fail(display = "Transaction value is missing")]
-    MissingValue,
+    Value,
     #[fail(display = "Transaction fee is missing")]
-    MissingFee,
+    Fee,
     #[fail(display = "Validity start height is missing")]
-    MissingValidityStartHeight
+    ValidityStartHeight
 }

@@ -160,6 +160,13 @@ impl Signature {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Signature::Individual(_) => false,
+            Signature::Multi(multisig) => multisig.is_empty()
+        }
+    }
+
     pub fn is_individual(&self) -> bool {
         match self {
             Signature::Individual(_) => true,

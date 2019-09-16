@@ -32,7 +32,6 @@ use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
 use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
-use primitives::policy;
 use primitives::validators::IndexedSlot;
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
@@ -68,7 +67,6 @@ pub struct Validator {
     consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
     validator_network: Arc<ValidatorNetwork>,
     validator_key: KeyPair,
-    block_delay: u64,
 
     timers: Timers<ValidatorTimer>,
 
@@ -81,7 +79,6 @@ pub struct Validator {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum ValidatorTimer {
     ViewChange,
-    NextBlock,
 }
 
 pub struct ValidatorState {
@@ -96,7 +93,7 @@ impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
     const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
 
-    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair, block_delay: u64) -> Result<Arc<Self>, Error> {
+    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
         let compressed_public_key = validator_key.public.compress();
         let info = ValidatorInfo {
             public_key: compressed_public_key,
@@ -113,7 +110,6 @@ impl Validator {
             block_producer,
             consensus,
             validator_network,
-            block_delay,
 
             validator_key,
             timers: Timers::new(),
@@ -303,14 +299,24 @@ impl Validator {
         }
 
         match event {
-            ValidatorNetworkEvent::ViewChangeComplete(view_change, view_change_proof) => {
+            ValidatorNetworkEvent::ViewChangeComplete(event) => {
+                let (view_change, view_change_proof) = *event;
                 debug!("Completed view change to {}", view_change);
                 self.on_slot_change(SlotChange::ViewChange(view_change, view_change_proof));
             },
-            ValidatorNetworkEvent::PbftProposal(hash, proposal) => self.on_pbft_proposal(hash, proposal),
-            ValidatorNetworkEvent::PbftPrepareComplete(hash, _) => self.on_pbft_prepare_complete(hash),
-            ValidatorNetworkEvent::PbftComplete(hash, proposal, proof) => self.on_pbft_commit_complete(hash, proposal, proof),
-            ValidatorNetworkEvent::ForkProof(proof) => self.on_fork_proof(proof),
+            ValidatorNetworkEvent::PbftProposal(event) => {
+                let (hash, proposal) = *event;
+                self.on_pbft_proposal(hash, proposal)
+            },
+            ValidatorNetworkEvent::PbftPrepareComplete(event) => {
+                let (hash, _) = *event;
+                self.on_pbft_prepare_complete(hash)
+            },
+            ValidatorNetworkEvent::PbftComplete(event) => {
+                let (hash, proposal, proof) = *event;
+                self.on_pbft_commit_complete(hash, proposal, proof)
+            },
+            ValidatorNetworkEvent::ForkProof(event) => self.on_fork_proof(*event),
         }
     }
 
@@ -366,7 +372,7 @@ impl Validator {
 
         drop(state);
 
-        trace!("Signing prepare and commit: pk_idx={}", pk_idx);
+        trace!("Signing prepare: pk_idx={}", pk_idx);
         let prepare_message = SignedPbftPrepareMessage::from_message(
             PbftPrepareMessage { block_hash: hash.clone() },
             &self.validator_key.secret,
@@ -390,7 +396,7 @@ impl Validator {
 
         drop(state);
 
-        trace!("Singing commit message: pk_idx={}", pk_idx);
+        trace!("Signing commit message: pk_idx={}", pk_idx);
         let commit_message = SignedPbftCommitMessage::from_message(
             PbftCommitMessage { block_hash: hash },
             &self.validator_key.secret,

@@ -95,6 +95,7 @@ pub enum AggregateError {
     Overlapping
 }
 
+/// DEPRECATED: We don't need this anymore.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AggregateProofBuilder<M> {
     /// Indices of validators that signed this proof
@@ -176,7 +177,14 @@ impl<M: Message> AggregateProofBuilder<M> {
     }
 }
 
+impl<M: Message> Default for AggregateProofBuilder<M> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// TODO: Maybe refactor this, since we only construct those from Handel MultiSignatures now.
 pub struct AggregateProof<M: Message> {
     /// Indices of validators that signed this proof
     pub signers: BitSet,
