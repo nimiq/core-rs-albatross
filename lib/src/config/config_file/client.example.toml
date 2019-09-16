@@ -33,9 +33,7 @@ host = "my.domain"
 # Configure the protocol to be used. Options are:
 # - "wss": Requires host, port, and TLS certificate to be set.
 # - "ws": Only requires host (can be an IP address) and port to be set.
-# - "dumb": Discouraged as other nodes might set limits on the number of dumb connections.
-#           Other nodes will not be able to connect to this node, but you may connect to others.
-# Possible values: "wss", "ws", "dumb"
+# Possible values: "wss", "ws"
 # Default: "ws"
 #protocol = "ws"
 
@@ -47,7 +45,7 @@ host = "my.domain"
 #	{ list = "https://nimiq.community/seeds.txt", public_key = "e65e39616662f2c16d62dc08915e5a1d104619db8c2b9cf9b389f96c8dce9837" },
 #	# Specify a Wss seed node with hostname, port (optional) and peer_id (optional), or public_key (optional).
 #	{ host = "seed-15.nimiq-network.com", port = 8443, peer_id = "c705843de04503656f4965a6672e70f0" },
-#	# Specify seed node using a peer's URI.
+#	# Specify seed node using a peer's URI. The last URI segment must be the public key, not the fingerprint.
 #	{ uri = "wss://seed-17.nimiq.com:8443/f1240638c6dd670467f22a04b58f7740" }
 #]
 
@@ -77,11 +75,6 @@ host = "my.domain"
 #
 ##############################################################################
 [consensus]
-
-# Specify the type of node to run.
-# Possible values: "full", "light", "nano"
-# Default: "full"
-#type = "full"
 
 # Specify the network to connect to.
 # Possible values: "main", "test", "dev", "test-albatross", "dev-albatross"
@@ -136,18 +129,6 @@ host = "my.domain"
 # Possible values: any valid port number
 # Default: 8648
 #port = 8648
-
-# Allow Cross-Origin access to the JSON-RPC server from the specified origins. Use this option with caution.
-# Default: []
-#corsdomain = []
-
-# Allow access from remote hosts (ip address) or subnet (network/CIDR). Use this option with caution.
-# Default: []
-#
-# NOTE: This is UNIMPLEMENTED! Don't expose the RPC server to any network you don't trust! If possible bind it only to
-#       localhost and always set a username and a strong password.
-#
-#allowip = ["192.168.0.0/24"]
 
 # Allow only the RPC methods listed here. All methods are allowed if this is empty.
 # Example: ["getBlockByNumber", "peerCount"],
