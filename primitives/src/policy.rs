@@ -28,7 +28,7 @@ pub const DIFFICULTY_MAX_ADJUSTMENT_FACTOR: f64 = 2f64;
 pub const TRANSACTION_VALIDITY_WINDOW: u32 = 120;
 
 /// Number of blocks a transaction is valid with Albatross consensus.
-pub const TRANSACTION_VALIDITY_WINDOW_ALBATROSS: u32 = 1200;
+pub const TRANSACTION_VALIDITY_WINDOW_ALBATROSS: u32 = 7200;
 
 /// Total supply in units.
 pub const TOTAL_SUPPLY: u64 = 2_100_000_000_000_000;
