@@ -209,6 +209,13 @@ impl Validator {
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
+        // NOTE: It seems to be important that we use the status before we proceed.
+        // Don't know why (yet) ¯\_(")_/¯ - see Issue #45 (GitLab)
+        let status = {
+            let state = self.state.read();
+            state.status
+        };
+
         // Handle each block type (which is directly related to each event type).
         match event {
             BlockchainEvent::Finalized(_) => {
@@ -226,9 +233,6 @@ impl Validator {
             }
         }
 
-        let state = self.state.read();
-        let status = state.status;
-
         if status == ValidatorStatus::Potential || status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
             self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
@@ -236,7 +240,6 @@ impl Validator {
 
         // If we're an active validator, we need to check if we're the next block producer.
         if status == ValidatorStatus::Active {
-            drop(state);
             self.on_slot_change(SlotChange::NextBlock);
         }
     }
