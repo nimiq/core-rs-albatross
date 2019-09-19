@@ -49,7 +49,12 @@ pub struct BinomialPartitioner {
 
 impl BinomialPartitioner {
     pub fn new(node_id: usize, num_ids: usize) -> Self {
-        let num_levels = if num_ids > 1 { log2(num_ids - 1) + 2 } else { 1 };
+        let num_levels = match num_ids {
+            0 => panic!("num_ids must be greater than 0"),
+            1 => 1,
+            n => log2(num_ids - 1) + 2,
+        };
+        assert!(node_id < num_ids);
         Self {
             node_id,
             num_ids,
