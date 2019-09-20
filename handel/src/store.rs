@@ -168,15 +168,12 @@ impl<P: Partitioner> SignatureStore for ReplaceStore<P> {
     }
 
     fn combined(&self, mut level: usize) -> Option<MultiSignature> {
+        // TODO: Cache this?
         trace!("Creating combined signature for level {}", level);
 
         let mut signatures = Vec::new();
         for (&i, signature) in self.multisig_best.range(0 ..= level) {
             trace!("collect: {:?}", signature);
-            if i > signatures.len()  {
-                //warn!("MultiSignature missing for level {} to {}", signatures.len(), i - 1);
-                //return None;
-            }
             signatures.push(signature)
         }
         trace!("Collected {} signatures", signatures.len());

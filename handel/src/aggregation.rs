@@ -259,9 +259,12 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         let store = self.protocol.store();
         let store = store.read();
 
+        trace!("Checking we have a final signature: last_level={}", last_level.id);
+
         if let Some(combined) = store.combined(last_level.id) {
+            trace!("Best combined signature: {:?}", combined);
             if self.protocol.evaluator().is_final(&combined.clone().into()) { // XXX Do this without cloning
-                trace!("Last level combined: {:#?}", combined);
+                trace!("Best signature is final");
 
                 let mut state = RwLockUpgradableReadGuard::upgrade(state);
                 state.result = Some(combined.clone());

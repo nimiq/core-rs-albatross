@@ -471,7 +471,7 @@ impl ValidatorNetwork {
             .register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
                 match event {
                     AggregationEvent::Complete { best } => {
-                        let event = if let Some(pbft) = this.state.write().get_pbft_state_mut(&key) {
+                        let event = if let Some(mut pbft) = this.state.write().get_pbft_state_mut(&key) {
                             if pbft.prepare_proof.is_none() {
                                 // Build prepare proof
                                 let prepare_proof = AggregateProof::new(best.signature, best.signers);
@@ -553,6 +553,8 @@ impl ValidatorNetwork {
     pub fn on_pbft_prepare_level_update(&self, level_update: LevelUpdateMessage<PbftPrepareMessage>) {
         let state = self.state.read();
 
+        trace!("Prepare level update: {:#?}", level_update);
+
         if let Some(pbft) = state.get_pbft_state(&level_update.tag.block_hash) {
             let aggregation = Arc::clone(&pbft.aggregation);
             let aggregation = aggregation.read();
@@ -566,6 +568,8 @@ impl ValidatorNetwork {
     pub fn on_pbft_commit_level_update(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
         // TODO: This is almost identical to the prepare one, maybe we can make the method generic over it?
         let state = self.state.read();
+
+        trace!("Commit level update: {:#?}", level_update);
 
         if let Some(pbft) = state.get_pbft_state(&level_update.tag.block_hash) {
             let aggregation = Arc::clone(&pbft.aggregation);
@@ -635,6 +639,7 @@ impl ValidatorNetwork {
     }
 
     pub fn push_prepare(&self, signed_prepare: SignedPbftPrepareMessage) -> Result<(), ValidatorNetworkError> {
+        trace!("Push prepare: {:#?}", signed_prepare);
         let state = self.state.read();
         if let Some(pbft) = state.get_pbft_state(&signed_prepare.message.block_hash) {
             let aggregation = Arc::clone(&pbft.aggregation);
@@ -649,6 +654,7 @@ impl ValidatorNetwork {
     }
 
     pub fn push_commit(&self, signed_commit: SignedPbftCommitMessage) -> Result<(), ValidatorNetworkError> {
+        trace!("Push commit: {:#?}", signed_commit);
         let state = self.state.read();
         if let Some(pbft) = state.get_pbft_state(&signed_commit.message.block_hash) {
             let aggregation = Arc::clone(&pbft.aggregation);
