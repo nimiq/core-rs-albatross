@@ -74,8 +74,7 @@ impl PbftCommitEvaluator {
     fn prepare_signers(&self) -> BitSet {
         let store = self.prepare_aggregation.protocol.store();
         let store = store.read();
-        // FIXME: I think this doesn't return the best combined signature.
-        store.best(store.best_level())
+        store.combined(store.best_level())
             .map(|signature| signature.signers.clone())
             .unwrap_or_default()
     }

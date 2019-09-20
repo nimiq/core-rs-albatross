@@ -169,7 +169,7 @@ impl<T: Tag> VotingProtocol<T> {
 
     pub fn votes(&self) -> usize {
         let store = self.store.read();
-        store.best(store.best_level())
+        store.combined(store.best_level())
             .map(|multisig| {
                 self.registry.signature_weight(&Signature::Multi(multisig.clone()))
                     .unwrap_or_else(|| panic!("Unknown signers in signature: {:?}", multisig))
