@@ -129,7 +129,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         unsafe { this.self_weak.replace(Arc::downgrade(&this)) };
 
         // register timer for updates
-        /*let weak = Arc::downgrade(this);
+        let weak = Arc::downgrade(this);
         this.timers.set_interval(AggregationTimer::Update, move || {
             let this = upgrade_weak!(weak);
             trace!("Update for {:?}", this.protocol);
@@ -142,7 +142,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
                     this.send_update(multisig, &level, this.config.update_count);
                 }
             }
-        }, this.config.update_interval);*/
+        }, this.config.update_interval);
 
         // register timer for level timeouts
         // TODO: This ignores the timeout strategy
