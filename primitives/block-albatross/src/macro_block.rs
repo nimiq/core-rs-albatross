@@ -11,13 +11,15 @@ use primitives::coin::Coin;
 use primitives::policy;
 use primitives::validators::{Slot, Slots};
 use collections::compressed_list::CompressedList;
+use failure::Fail;
 
 use crate::BlockError;
 use crate::pbft::PbftProof;
 use crate::signed;
 
-#[derive(Debug)]
-pub enum TryIntoError {
+#[derive(Clone, Debug, Fail)]
+pub enum IntoSlotsError {
+    #[fail(display = "Extrinsics missing in macro block")]
     MissingExtrinsics,
 }
 
@@ -55,11 +57,11 @@ pub struct MacroExtrinsics {
 }
 
 impl TryInto<Slots> for MacroBlock {
-    type Error = TryIntoError;
+    type Error = IntoSlotsError;
 
     fn try_into(self) -> Result<Slots, Self::Error> {
         if self.extrinsics.is_none() {
-            return Err(TryIntoError::MissingExtrinsics);
+            return Err(IntoSlotsError::MissingExtrinsics);
         }
         let extrinsics = self.extrinsics.unwrap();
 
