@@ -205,13 +205,6 @@ impl Validator {
     }
 
     fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
-        // NOTE: It seems to be important that we use the status before we proceed.
-        // Don't know why (yet) ¯\_(")_/¯ - see Issue #45 (GitLab)
-        let status = {
-            let state = self.state.read();
-            state.status
-        };
-
         // Handle each block type (which is directly related to each event type).
         match event {
             BlockchainEvent::Finalized(_) => {
@@ -229,13 +222,18 @@ impl Validator {
             }
         }
 
-        if status == ValidatorStatus::Potential || status == ValidatorStatus::Active {
+        let state = self.state.read();
+
+        if state.status == ValidatorStatus::Potential || state.status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
+            // NOTE: This doesn't take the state lock, so we don't need to drop it
             self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
         }
 
         // If we're an active validator, we need to check if we're the next block producer.
-        if status == ValidatorStatus::Active {
+        if state.status == ValidatorStatus::Active {
+            // NOTE: This might take the state lock, so we drop it here
+            drop(state);
             self.on_slot_change(SlotChange::NextBlock);
         }
     }
@@ -247,7 +245,7 @@ impl Validator {
 
         match self.get_pk_idx_and_slots() {
             Some((pk_idx, slots)) => {
-                trace!("Setting validator to active: pk_idx={}", pk_idx);
+                debug!("Setting validator to active: pk_idx={}", pk_idx);
                 state.pk_idx = Some(pk_idx);
                 state.slots = Some(slots);
                 state.status = ValidatorStatus::Active;
@@ -257,7 +255,7 @@ impl Validator {
                 self.validator_network.reset_epoch(Some(pk_idx as usize));
             },
             None => {
-                trace!("Setting validator to inactive");
+                debug!("Setting validator to inactive");
                 state.pk_idx = None;
                 state.slots = None;
                 state.status = if self.is_potential_validator() { ValidatorStatus::Potential } else { ValidatorStatus::Synced };
