@@ -6,11 +6,16 @@ use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Ident, Index, Meta};
 
+
+enum FieldAttribute {
+    Uvar,
+    Skip(Option<syn::Lit>),
+    LenType(syn::Ident)
+}
+
+
 // This will return a tuple once we have more options
-fn parse_field_attribs(field: &syn::Field) -> (Option<syn::Ident>, Option<Option<syn::Lit>>, bool) {
-    let mut len_type = Option::None;
-    let mut skip = Option::None;
-    let mut uvar = false;
+fn parse_field_attribs(field: &syn::Field) -> Option<FieldAttribute> {
     for attr in &field.attrs {
         if let Meta::List(ref meta_list) = attr.parse_meta().unwrap() {
             if meta_list.ident == "beserial" {
@@ -25,29 +30,29 @@ fn parse_field_attribs(field: &syn::Field) -> (Option<syn::Ident>, Option<Option
                                                 if value != "u8" && value != "u16" && value != "u32" {
                                                     panic!("beserial(len_type) must be one of [u8, u16, u32], but was {}", value);
                                                 }
-                                                len_type = Option::Some(value.clone());
+                                                return Some(FieldAttribute::LenType(value.clone()));
                                             }
                                         }
                                     }
                                 }
                                 if meta_list.ident == "skip" {
-                                    skip = Option::Some(Option::None);
                                     for nested in meta_list.nested.iter() {
                                         if let syn::NestedMeta::Meta(ref item) = nested {
                                             if let Meta::NameValue(meta_name_value) = item {
                                                 if meta_name_value.ident == "default" {
-                                                    skip = Option::Some(Option::Some(meta_name_value.lit.clone()));
+                                                    return Some(FieldAttribute::Skip(Some(meta_name_value.lit.clone())));
                                                 }
                                             }
                                         }
                                     }
+                                    return Some(FieldAttribute::Skip(None));
                                 }
                             }
                             Meta::Word(ref attr_ident) => {
                                 if attr_ident == "skip" {
-                                    skip = Option::Some(Option::None);
+                                    return Some(FieldAttribute::Skip(None));
                                 } else if attr_ident == "uvar" {
-                                    uvar = true;
+                                    return Some(FieldAttribute::Uvar);
                                 } else {
                                     panic!("unknown flag for beserial: {}", attr_ident)
                                 }
@@ -59,7 +64,7 @@ fn parse_field_attribs(field: &syn::Field) -> (Option<syn::Ident>, Option<Option
             }
         }
     }
-    (len_type, skip, uvar)
+    None
 }
 
 fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
@@ -125,8 +130,12 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
         }
         Data::Struct(ref data_struct) => {
             for (i, field) in data_struct.fields.iter().enumerate() {
-                let (len_type, skip, _) = parse_field_attribs(&field);
-                if skip.is_some() { continue; };
+                let len_type = match parse_field_attribs(&field) {
+                    Some(FieldAttribute::Skip(_)) => continue,
+                    Some(FieldAttribute::LenType(ty)) => Some(ty),
+                    _ => None,
+                };
+
                 match field.ident {
                     None => {
                         let index = Index::from(i);
@@ -245,43 +254,49 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
             let mut tuple = false;
             let mut field_cases = Vec::<TokenStream>::new();
             for field in data_struct.fields.iter() {
-                let (len_type, skip, _) = parse_field_attribs(&field);
-                match field.ident {
-                    None => {
+                let field_attrib = parse_field_attribs(&field);
+
+                match (&field.ident, &field_attrib) {
+                    // tuple field, but skip with given default value
+                    (None, Some(FieldAttribute::Skip(Some(default_value)))) => {
+                        field_cases.push(quote! { #default_value, });
+                    },
+                    // tuple field, but skip with Default trait
+                    (None, Some(FieldAttribute::Skip(None))) => {
+                        let ty = &field.ty;
+                        field_cases.push(quote! { <#ty>::default(), });
+                    },
+
+                    // struct field, but skip with given default value
+                    (Some(ident), Some(FieldAttribute::Skip(Some(default_value)))) => {
+                        field_cases.push(quote! { #ident: #default_value, });
+                    },
+                    // struct field, but skip with Default trait
+                    (Some(ident), Some(FieldAttribute::Skip(None))) => {
+                        let ty = &field.ty;
+                        field_cases.push(quote! { #ident: <#ty>::default(), });
+                    },
+
+                    // tuple field with len_type
+                    (None, Some(FieldAttribute::LenType(ty))) => {
                         tuple = true;
-                        if let Option::Some(Option::Some(default_value)) = skip {
-                            field_cases.push(quote! { #default_value, });
-                            continue;
-                        } else if let Option::Some(Option::None) = skip {
-                            let ty = &field.ty;
-                            field_cases.push(quote! { <#ty>::default(), });
-                            continue;
-                        }
-                        match len_type {
-                            Some(ty) =>
-                                field_cases.push(quote! { ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, }),
-                            None =>
-                                field_cases.push(quote! { Deserialize::deserialize(reader)?, })
-                        }
-                    }
-                    Some(ref ident) => {
-                        if let Option::Some(Option::Some(default_value)) = skip {
-                            field_cases.push(quote! { #ident: #default_value });
-                            continue;
-                        } else if let Option::Some(Option::None) = skip {
-                            let ty = &field.ty;
-                            field_cases.push(quote! { #ident: <#ty>::default() });
-                            continue;
-                        }
-                        match len_type {
-                            Some(ty) => {
-                                field_cases.push(quote! { #ident: ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, })
-                            }
-                            None => {
-                                field_cases.push(quote! { #ident: Deserialize::deserialize(reader)?, })
-                            }
-                        }
-                    }
+                        field_cases.push(quote! { ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, })
+                    },
+                    // tuple field without len_type
+                    (None, None) => {
+                        tuple = true;
+                        field_cases.push(quote! { ::beserial::Deserialize::deserialize(reader)?, })
+                    },
+
+                    // struct field with len_type
+                    (Some(ident), Some(FieldAttribute::LenType(ty))) => {
+                        field_cases.push(quote! { #ident: ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, })
+                    },
+                    // struct field without len_type
+                    (Some(ident), None) => {
+                        field_cases.push(quote! { #ident: ::beserial::Deserialize::deserialize(reader)?, })
+                    },
+                    (_, Some(FieldAttribute::Uvar)) => panic!("beserial(uvar) attribute not allowed for struct fields")
                 }
             }
 
