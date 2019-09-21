@@ -425,10 +425,12 @@ impl<'env, B: AbstractBlockchain<'env> + 'env> Mempool<'env, B> {
 
         // Notify listeners.
         for tx in txs_mined {
+            trace!("Transaction minded: {:?}", tx);
             self.notifier.read().notify(MempoolEvent::TransactionMined(tx));
         }
 
         for tx in txs_evicted {
+            trace!("Transaction evicted: {:?}", tx);
             self.notifier.read().notify(MempoolEvent::TransactionEvicted(tx));
         }
     }
