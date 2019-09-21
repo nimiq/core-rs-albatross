@@ -58,17 +58,11 @@ enum ConsensusTimer {
 
 type ConsensusAgentMap<P> = HashMap<Arc<Peer>, Arc<ConsensusAgent<<P as ConsensusProtocol>::Blockchain, <P as ConsensusProtocol>::MessageAdapter>>>;
 
-pub struct ConsensusState<P: ConsensusProtocol + 'static> {
+struct ConsensusState<P: ConsensusProtocol + 'static> {
     established: bool,
     agents: ConsensusAgentMap<P>,
 
     sync_peer: Option<Arc<Peer>>,
-}
-
-impl<P: ConsensusProtocol + 'static> ConsensusState<P> {
-    pub fn established(&self) -> bool {
-        self.established
-    }
 }
 
 impl<P: ConsensusProtocol + 'static> Consensus<P> {
@@ -330,7 +324,7 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
         }
     }
 
-    pub fn state(&self) -> RwLockReadGuard<ConsensusState<P>> {
-        self.state.read()
+    pub fn established(&self) -> bool {
+        self.state.read().established
     }
 }

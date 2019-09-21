@@ -43,7 +43,7 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
     /// { starting_block: number, current_block: number, highest_block: number },
     /// otherwise returns false.
     pub(crate) fn syncing(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        Ok(if self.consensus.state().established() {
+        Ok(if self.consensus.established() {
             false.into()
         }
         else {
