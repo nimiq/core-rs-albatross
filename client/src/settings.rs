@@ -306,8 +306,6 @@ pub(crate) struct MempoolFilterSettings {
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ValidatorSettings {
-    #[serde(rename = "type")]
-    #[serde(default)]
     pub key_file: Option<String>,
 }
 
