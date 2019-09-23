@@ -1,5 +1,5 @@
 use crate::PublicKey;
-use crate::hash::{Blake2bHash, Blake2bHasher, Hasher, SerializeContent};
+use crate::hash::{Blake2bHash, Blake2bHasher, Hasher};
 use std::convert::From;
 use std::char;
 use std::io;

@@ -36,14 +36,14 @@ macro_rules! add_hash_trait_arr {
 #[macro_export]
 macro_rules! hash_typed_array {
     ($name: ident) => {
-        impl SerializeContent for $name {
+        impl ::nimiq_hash::SerializeContent for $name {
             fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
                 state.write_all(&self.0[..])?;
                 return Ok(Self::SIZE);
             }
         }
 
-        impl nimiq_hash::Hash for $name {}
+        impl ::nimiq_hash::Hash for $name {}
     };
 }
 
@@ -92,8 +92,6 @@ impl<H> SerializeContent for H where H: HashOutput {
         Ok(Self::len())
     }
 }
-
-impl<H> Hash for H where H: HashOutput {}
 
 
 // Blake2b
@@ -261,12 +259,22 @@ impl<'a> SerializeContent for &'a [u8] {
         Ok(self.len())
     }
 }
+impl<'a> Hash for &'a [u8] {}
 
 impl<'a> SerializeContent for &'a str {
-    fn serialize_content<W: io::Write>(&self, state: &mut W) -> io::Result<usize> {
-        state.write_all(self.as_bytes())?;
-        Ok(self.len())
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        let b = self.as_bytes();
+        writer.write_all(b)?;
+        Ok(b.len())
     }
 }
-
 impl<'a> Hash for &'a str {}
+
+impl SerializeContent for String {
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        let b = self.as_bytes();
+        writer.write_all(b)?;
+        Ok(b.len())
+    }
+}
+impl Hash for String {}

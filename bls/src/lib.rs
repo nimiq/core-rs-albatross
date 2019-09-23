@@ -269,7 +269,7 @@ impl<E: Engine> Default for AggregateSignature<E> {
     }
 }
 
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use std::vec::Vec;
 
@@ -284,9 +284,9 @@ mod tests {
         let mut rng = XorShiftRng::from_seed([0x44, 0x6d, 0x4f, 0xbc, 0x6c, 0x27, 0x2f, 0xd6, 0xd0, 0xaf, 0x63, 0xb9, 0x3d, 0x86, 0x55, 0x54]);
 
         for i in 0..500 {
-            let keypair = Keypair::<Bls12>::generate(&mut rng);
+            let keypair = KeyPair::<Bls12>::generate(&mut rng);
             let message = format!("Message {}", i);
-            let sig = keypair.sign(&message.as_bytes());
+            let sig = keypair.sign(&message);
             assert_eq!(keypair.verify(&message.as_bytes(), &sig), true);
         }
     }
@@ -299,7 +299,7 @@ mod tests {
         let mut messages = Vec::with_capacity(1000);
         let mut signatures = Vec::with_capacity(1000);
         for i in 0..500 {
-            let keypair = Keypair::<Bls12>::generate(&mut rng);
+            let keypair = KeyPair::<Bls12>::generate(&mut rng);
             let message = format!("Message {}", i);
             let signature = keypair.sign(&message);
             public_keys.push(keypair.public);
@@ -318,56 +318,6 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_signatures_duplicated_messages() {
-        let mut rng = XorShiftRng::from_seed([0x44, 0x6d, 0x4f, 0xbc, 0x6c, 0x27, 0x2f, 0xd6, 0xd0, 0xaf, 0x63, 0xb9, 0x3d, 0x86, 0x55, 0x54]);
-
-        let mut public_keys = Vec::new();
-        let mut messages = Vec::new();
-        let mut asig = AggregateSignature::new();
-
-        // Create the first signature
-        let keypair = Keypair::<Bls12>::generate(&mut rng);
-        let message = "First message";
-        let signature = keypair.sign(&message.as_bytes());
-        public_keys.push(keypair.public);
-        messages.push(message);
-        asig.aggregate(&signature);
-
-        // The first "aggregate" signature should pass
-        assert_eq!(
-            asig.verify(&public_keys, &messages),
-            true
-        );
-
-        // Create the second signature
-        let keypair = Keypair::<Bls12>::generate(&mut rng);
-        let message = "Second message";
-        let signature = keypair.sign(&message.as_bytes());
-        public_keys.push(keypair.public);
-        messages.push(message);
-        asig.aggregate(&signature);
-
-        // The second (now-)aggregate signature should pass
-        assert_eq!(
-            asig.verify(&public_keys, &messages),
-            true
-        );
-
-        // Create the third signature, reusing the second message
-        let keypair = Keypair::<Bls12>::generate(&mut rng);
-        let signature = keypair.sign(&message.as_bytes());
-        public_keys.push(keypair.public);
-        messages.push(message);
-        asig.aggregate(&signature);
-
-        // The third aggregate signature should fail
-        assert_eq!(
-            asig.verify(&public_keys, &messages),
-            false
-        );
-    }
-
-    #[test]
     fn aggregate_signatures_same_messages() {
         let mut rng = XorShiftRng::from_seed([0x44, 0x6d, 0x4f, 0xbc, 0x6c, 0x27, 0x2f, 0xd6, 0xd0, 0xaf, 0x63, 0xb9, 0x3d, 0x86, 0x55, 0x54]);
 
@@ -375,7 +325,7 @@ mod tests {
         let message = "Same message";
         let mut signatures = Vec::with_capacity(1000);
         for _ in 0..500 {
-            let keypair = Keypair::<Bls12>::generate(&mut rng);
+            let keypair = KeyPair::<Bls12>::generate(&mut rng);
             let signature = keypair.sign(&message);
             public_keys.push(keypair.public);
             signatures.push(signature);
@@ -385,8 +335,8 @@ mod tests {
         let asig = AggregateSignature::from_signatures(&signatures);
 
         assert_eq!(
-            akey.verify(message, &asig),
+            akey.verify(&message, &asig),
             true
         );
     }
-}*/
+}

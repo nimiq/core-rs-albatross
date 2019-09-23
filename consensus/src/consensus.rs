@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use parking_lot::{RwLock, RwLockReadGuard};
+use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
