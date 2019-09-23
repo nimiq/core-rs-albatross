@@ -191,6 +191,6 @@ impl<P: ConsensusProtocol + 'static> Module for NetworkHandler<P> {
         "peerCount" => peer_count,
         "syncing" => syncing,
         "peerList" => peer_list,
-        "peerState" => peer_state
+        "peerState" => peer_state,
     }
 }

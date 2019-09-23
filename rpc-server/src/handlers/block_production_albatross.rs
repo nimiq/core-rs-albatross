@@ -29,6 +29,6 @@ impl BlockProductionAlbatrossHandler {
 
 impl Module for BlockProductionAlbatrossHandler {
     rpc_module_methods! {
-        "validatorKey" => validator_key
+        "validatorKey" => validator_key,
     }
 }

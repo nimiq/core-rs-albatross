@@ -1,20 +1,25 @@
 use crate::handler::Method;
 
 // Generates an RPC method vec from map syntax
-// TODO Support trailing comma
 #[macro_export]
 macro_rules! rpc_module_methods {
-    ( $( $k:expr => $v:ident ), * ) => (
+    // trailing comma
+    ( $( $k:expr => $($v:ident).+ , )* ) => (
         fn methods(self) -> Vec<(&'static str, Method)> {
             let this_base = Arc::new(self);
             let mut vec = Vec::new();
             $(
                 let this = Arc::clone(&this_base);
-                let method = Method::new(move |params| this.$v(params));
+                let method = Method::new(move |params| this. $($v).+ (params));
                 vec.push(($k, method));
             )*
             vec
         }
+    );
+
+    // no trailing comma
+    ( $( $k:expr => $($v:ident).+ ),* ) => (
+        rpc_module_methods!( $( $k => $($v).+ ,)* );
     );
 }
 

@@ -175,39 +175,19 @@ impl MempoolAlbatrossHandler {
 
         self.generic.push_transaction(tx)
     }
-
-    // Methods defined on generic
-    fn send_raw_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.send_raw_transaction(params)
-    }
-
-    fn create_raw_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.create_raw_transaction(params)
-    }
-
-    fn send_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.send_transaction(params)
-    }
-
-    fn mempool_content(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.mempool_content(params)
-    }
-
-    fn mempool(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.mempool(params)
-    }
 }
 
 impl Module for MempoolAlbatrossHandler {
     rpc_module_methods! {
         // Transactions
-        "sendRawTransaction" => send_raw_transaction,
-        "createRawTransaction" => create_raw_transaction,
-        "sendTransaction" => send_transaction,
-        "mempoolContent" => mempool_content,
-        "mempool" => mempool,
+        "sendRawTransaction" => generic.send_raw_transaction,
+        "createRawTransaction" => generic.create_raw_transaction,
+        "sendTransaction" => generic.send_transaction,
+        "mempoolContent" => generic.mempool_content,
+        "mempool" => generic.mempool,
         "stake" => stake,
         "retire" => retire,
-        "unstake" => unstake
+        "unstake" => unstake,
+        "getTransaction" => generic.get_transaction,
     }
 }

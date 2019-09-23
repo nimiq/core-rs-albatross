@@ -60,6 +60,6 @@ impl<P> ConsensusHandler<P>
 
 impl<P: ConsensusProtocol + 'static> Module for ConsensusHandler<P> {
     rpc_module_methods! {
-        "consensus" => consensus
+        "consensus" => consensus,
     }
 }

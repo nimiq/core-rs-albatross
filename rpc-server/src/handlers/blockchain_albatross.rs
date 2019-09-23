@@ -372,35 +372,6 @@ impl BlockchainAlbatrossHandler {
             "rewardAddress" => idx_slot.slot.reward_address().to_hex(),
         }
     }
-
-    // Methods defined on generic
-    fn block_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.block_number(params)
-    }
-
-    fn get_transaction_by_block_hash_and_index(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.get_transaction_by_block_hash_and_index(params)
-    }
-
-    fn get_transaction_by_block_number_and_index(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.get_transaction_by_block_number_and_index(params)
-    }
-
-    fn get_transactions_by_address(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.get_transactions_by_address(params)
-    }
-
-    fn get_block_transaction_count_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.get_block_transaction_count_by_hash(params)
-    }
-
-    fn get_block_transaction_count_by_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.get_block_transaction_count_by_number(params)
-    }
-
-    fn get_balance(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        self.generic.get_balance(params)
-    }
 }
 
 impl Module for BlockchainAlbatrossHandler {
@@ -409,21 +380,21 @@ impl Module for BlockchainAlbatrossHandler {
         "getRawTransactionInfo" => get_raw_transaction_info,
         "getTransactionByHash" => get_transaction_by_hash,
         "getTransactionReceipt" => get_transaction_receipt,
-        "getTransactionByBlockHashAndIndex" => get_transaction_by_block_hash_and_index,
-        "getTransactionByBlockNumberAndIndex" => get_transaction_by_block_number_and_index,
-        "getTransactionsByAddress" => get_transactions_by_address,
+        "getTransactionByBlockHashAndIndex" => generic.get_transaction_by_block_hash_and_index,
+        "getTransactionByBlockNumberAndIndex" => generic.get_transaction_by_block_number_and_index,
+        "getTransactionsByAddress" => generic.get_transactions_by_address,
 
         // Blockchain
-        "blockNumber" => block_number,
+        "blockNumber" => generic.block_number,
         "epochNumber" => epoch_number,
         "getBlockByHash" => get_block_by_hash,
         "getBlockByNumber" => get_block_by_number,
         "getProducer" => get_producer,
-        "getBlockTransactionCountByHash" => get_block_transaction_count_by_hash,
-        "getBlockTransactionCountByNumber" => get_block_transaction_count_by_number,
+        "getBlockTransactionCountByHash" => generic.get_block_transaction_count_by_hash,
+        "getBlockTransactionCountByNumber" => generic.get_block_transaction_count_by_number,
         "slotState" => slot_state,
 
         // Accounts
-        "getBalance" => get_balance
+        "getBalance" => generic.get_balance,
     }
 }

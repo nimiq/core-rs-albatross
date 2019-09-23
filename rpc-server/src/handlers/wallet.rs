@@ -278,6 +278,6 @@ impl Module for WalletHandler {
         "unlockAccount" => unlock_account,
 //        "sendTransaction" => send_transaction,
         "sign" => sign,
-        "verifySignature" => verify_signature
+        "verifySignature" => verify_signature,
     }
 }

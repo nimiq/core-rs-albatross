@@ -330,6 +330,7 @@ impl<P: ConsensusProtocol + 'static> Module for MempoolHandler<P> {
         "createRawTransaction" => create_raw_transaction,
         "sendTransaction" => send_transaction,
         "mempoolContent" => mempool_content,
-        "mempool" => mempool
+        "mempool" => mempool,
+        "getTransaction" => get_transaction,
     }
 }

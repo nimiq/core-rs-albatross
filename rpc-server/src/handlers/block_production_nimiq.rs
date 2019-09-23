@@ -149,6 +149,6 @@ impl Module for BlockProductionNimiqHandler {
     rpc_module_methods! {
         "getWork" => get_work,
         "getBlockTemplate" => get_block_template,
-        "submitBlock" => submit_block
+        "submitBlock" => submit_block,
     }
 }
