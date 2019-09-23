@@ -425,17 +425,11 @@ fn run() -> Result<!, Error> {
         warn!("!!!! Albatross node running");
         warn!("!!!!");
 
-        let validator_type = cmdline.validator_type.unwrap_or_else(|| settings.validator.ty.clone());
-        match validator_type {
-            s::ValidatorType::None => {
-                info!("No validator");
-                info!("Ignoring validator config");
-                run_albatross_node(client_builder, settings, ())
-            },
-            s::ValidatorType::Validator => {
+        match &settings.validator {
+            Some(validator_settings) => {
                 let validator_key = {
                     // Load validator key from key store, or create a new one, if key store doesn't exist
-                    let key_store_file = settings.validator.key_file.clone()
+                    let key_store_file = validator_settings.key_file.clone()
                         .map(|s| Ok(PathBuf::from(s)))
                         .unwrap_or_else(|| files.validator_key())?;
                     let key_store = KeyStore::new(key_store_file.to_str().unwrap().to_string());
@@ -459,6 +453,11 @@ fn run() -> Result<!, Error> {
                 };
                 run_albatross_validator_node(client_builder, settings, validator_config)
             },
+            None => {
+                info!("No validator");
+                info!("Ignoring validator config");
+                run_albatross_node(client_builder, settings, ())
+            }
         }
     }
     else {

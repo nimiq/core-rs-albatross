@@ -59,33 +59,3 @@ pub mod albatross {
         }
     }
 }
-
-
-
-#[cfg(feature = "mock-validator")]
-pub mod mock {
-    use std::sync::Arc;
-
-    use consensus::{AlbatrossConsensusProtocol, Consensus};
-    use validator::mock::MockValidator;
-
-    use super::BlockProducer;
-    use crate::error::ClientError;
-
-    #[derive(Clone)]
-    pub struct MockBlockProducer {
-        validator: Arc<MockValidator>,
-    }
-
-    impl BlockProducer<AlbatrossConsensusProtocol> for MockBlockProducer {
-        type Config = ();
-
-        fn new(_config: Self::Config, consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) -> Result<Self, ClientError> {
-            let validator = MockValidator::new(consensus);
-            validator.start();
-            Ok(Self {
-                validator,
-            })
-        }
-    }
-}

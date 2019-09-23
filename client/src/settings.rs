@@ -34,7 +34,7 @@ pub(crate) struct Settings {
     #[serde(default)]
     pub peer_key_file: Option<String>,
     #[serde(default)]
-    pub validator: ValidatorSettings,
+    pub validator: Option<ValidatorSettings>,
 }
 
 impl Settings {
@@ -308,7 +308,6 @@ pub(crate) struct MempoolFilterSettings {
 pub(crate) struct ValidatorSettings {
     #[serde(rename = "type")]
     #[serde(default)]
-    pub ty: ValidatorType,
     pub key_file: Option<String>,
 }
 

@@ -30,6 +30,3 @@ pub mod error;
 pub mod slash;
 pub mod signature_aggregation;
 
-#[cfg(feature = "mock")]
-#[deprecated]
-pub mod mock;

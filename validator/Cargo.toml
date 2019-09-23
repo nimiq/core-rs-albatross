@@ -42,4 +42,3 @@ futures = "0.1"
 
 [features]
 metrics = []
-mock = ["hex"]

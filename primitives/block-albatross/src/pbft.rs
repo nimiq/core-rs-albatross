@@ -65,7 +65,7 @@ pub type SignedPbftCommitMessage = SignedMessage<PbftCommitMessage>;
 /// It verifies both proofs individually and then checks that at least `threshold` validators who
 /// signed the prepare also signed the commit.
 ///
-/// DEPRECATED: We don't use this anymore (except for the MockValidator)
+/// DEPRECATED: We don't use this anymore
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PbftProofBuilder {
     pub prepare: AggregateProofBuilder<PbftPrepareMessage>,
