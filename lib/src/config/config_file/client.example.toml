@@ -192,8 +192,8 @@ host = "my.domain"
 
 # Determines whether the reverse proxy does TLS termination for this node.
 # In that case, we want to advertise our peer address as web socket secure.
-# So if your reverse proxy does the TLS and forwards an unencrypred websocket connection, set this to true and set the
-# network protocol to 'ws'.
+# So if your reverse proxy does the TLS and forwards an unencrypted websocket connection, set
+# this to true and set the network protocol to 'ws'.
 #
 # Default: false
 #with_tls_termination = true
