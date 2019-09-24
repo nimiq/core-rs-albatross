@@ -41,6 +41,7 @@ stages:
 
 .clippy:
   stage: coverage
+  allow_failure: true
   script:
     - set +e
     - rustup component add clippy
