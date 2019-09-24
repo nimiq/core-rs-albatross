@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
@@ -5,9 +6,14 @@ use std::sync::Arc;
 use json::{JsonValue, Null};
 
 use block_albatross::{Block, ForkProof, signed};
+use account::Account;
+use account::staking_contract::{ActiveStake, InactiveStake};
+use blockchain_base::AbstractBlockchain;
 use blockchain_albatross::Blockchain;
 use blockchain_albatross::reward_registry::SlashedSlots;
 use hash::{Blake2bHash, Hash};
+use keys::Address;
+use network_primitives::networks::NetworkInfo;
 use primitives::policy;
 use primitives::validators::{IndexedSlot, Slots, Validators};
 
@@ -279,6 +285,31 @@ impl BlockchainAlbatrossHandler {
         rpc_not_implemented()
     }
 
+    // Accounts
+
+    // Lists all stakes
+    pub(crate) fn list_stakes(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        let genesis_account = NetworkInfo::from_network_id(self.blockchain.network_id)
+            .validator_registry_address().unwrap();
+        let account = self.blockchain.get_account(&genesis_account);
+        let contract = match account {
+            Account::Staking(c) => c,
+            _ => return Err("No contract at staking contract address".into()),
+        };
+        let active_stakes: Vec<JsonValue> = contract.active_stake_by_address
+            .values()
+            .map(|stake| BlockchainAlbatrossHandler::active_stake_to_obj(stake.borrow()))
+            .collect();
+        let inactive_stakes: Vec<JsonValue> = contract.inactive_stake_by_address
+            .iter()
+            .map(|(address, stake)| BlockchainAlbatrossHandler::inactive_stake_to_obj(address, stake))
+            .collect();
+        Ok(object! {
+            "activeStakes" => active_stakes,
+            "inactive_stakes" => inactive_stakes,
+        })
+    }
+
     // Helper functions
 
     fn proof_to_object<M: signed::Message>(proof: &signed::AggregateProof<M>) -> JsonValue {
@@ -410,6 +441,27 @@ impl BlockchainAlbatrossHandler {
             "rewardAddress" => idx_slot.slot.reward_address().to_hex(),
         }
     }
+
+    fn active_stake_to_obj(stake: &ActiveStake) -> JsonValue {
+        let reward_address = match stake.reward_address {
+            Some(ref a) => a,
+            None => &stake.staker_address,
+        }.to_user_friendly_address();
+        object! {
+            "stakerAddress" => stake.staker_address.to_user_friendly_address(),
+            "balance" => u64::from(stake.balance),
+            "publicKey" => hex::encode(&stake.validator_key),
+            "rewardAddress" => reward_address,
+        }
+    }
+
+    fn inactive_stake_to_obj(address: &Address, stake: &InactiveStake) -> JsonValue {
+        object! {
+            "stakerAddress" => address.to_user_friendly_address(),
+            "balance" => u64::from(stake.balance),
+            "retireTime" => stake.retire_time,
+        }
+    }
 }
 
 impl Module for BlockchainAlbatrossHandler {
@@ -434,5 +486,6 @@ impl Module for BlockchainAlbatrossHandler {
 
         // Accounts
         "getBalance" => generic.get_balance,
+        "listStakes" => list_stakes,
     }
 }

@@ -46,3 +46,4 @@ nimiq-block-production = "0.1"
 nimiq-utils = { version = "0.1", features = ["merkle", "time", "otp"] }
 nimiq-primitives = "0.1"
 nimiq-wallet = "0.1"
+nimiq-account = "0.1"

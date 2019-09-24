@@ -4,6 +4,7 @@ extern crate json;
 //extern crate lazy_static;
 #[macro_use]
 extern crate log;
+extern crate nimiq_account as account;
 extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
