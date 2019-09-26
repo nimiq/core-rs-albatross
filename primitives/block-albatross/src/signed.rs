@@ -234,9 +234,12 @@ impl<M: Message> AggregateProof<M> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Fail)]
 pub enum AggregateProofError {
+    #[fail(display = "Invalid signer index")]
     InvalidSignerIndex,
+    #[fail(display = "Invalid signature")]
     InvalidSignature,
+    #[fail(display = "Insufficient signers")]
     InsufficientSigners,
 }

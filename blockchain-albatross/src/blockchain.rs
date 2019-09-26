@@ -523,9 +523,11 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::NoJustification));
                 },
                 Some(ref justification) => {
-                    if justification.verify(macro_block.hash(),&self.current_validators(), policy::TWO_THIRD_SLOTS).is_err() {
-                        warn!("Rejecting block - macro block with bad justification");
-                        return Err(PushError::InvalidBlock(BlockError::NoJustification));
+                    if let Err(e) = justification.verify(
+                        macro_block.hash(), &self.current_validators(), policy::TWO_THIRD_SLOTS
+                    ) {
+                        warn!("Rejecting block - macro block with bad justification: {}", e);
+                        return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
                     }
                 },
             }
