@@ -268,6 +268,10 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
                 let mut state = RwLockUpgradableReadGuard::upgrade(state);
                 state.result = Some(combined.clone());
 
+                // drop state and store before notify
+                drop(state);
+                drop(store);
+
                 self.notifier.read().notify(AggregationEvent::Complete {
                     best: combined,
                 });
