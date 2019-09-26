@@ -480,8 +480,11 @@ impl<'env> Blockchain<'env> {
                 let extrinsics_hash: Blake2bHash = extrinsics.hash();
                 if extrinsics_hash != macro_block.header.extrinsics_root {
                     warn!("Rejecting block - Header extrinsics hash doesn't match real extrinsics hash");
-                    return Err(PushError::InvalidBlock(BlockError::NoJustification));
+                    return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
                 }
+            }
+            else {
+                return Err(PushError::InvalidBlock(BlockError::MissingExtrinsics))
             }
         }
 

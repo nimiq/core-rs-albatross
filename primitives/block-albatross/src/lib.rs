@@ -84,6 +84,11 @@ pub enum BlockError {
     InvalidTransactionsRoot,
     #[fail(display = "Incorrect validators")]
     InvalidValidators,
+
+    #[fail(display = "Missing extrinsics")]
+    MissingExtrinsics,
+    #[fail(display = "Extrinsics hash mismatch")]
+    ExtrinsicsHashMismatch,
 }
 
 impl block_base::BlockError for BlockError {}
