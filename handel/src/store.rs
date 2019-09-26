@@ -99,13 +99,13 @@ impl<P: Partitioner> ReplaceStore<P> {
                 for id in complements.iter() {
                     // get individual signature
                     // TODO: Why do we need to store individual signatures per level?
-                    let individual = self.individual_signatures.get(level)
+                    if let Some(individual) = self.individual_signatures.get(level)
                         .unwrap_or_else(|| panic!("Individual signatures missing for level {}", level))
-                        .get(&id).unwrap_or_else(|| panic!("Individual signature with ID {} missing for level {}", id, level));
-
-                    // merge individual signature into multisig
-                    multisig.add_individual(individual)
-                        .unwrap_or_else(|e| panic!("Individual signature form id={} can't be added to multisig: {}", id, e));
+                        .get(&id) {
+                        // merge individual signature into multisig
+                        multisig.add_individual(individual)
+                            .unwrap_or_else(|e| panic!("Individual signature form id={} can't be added to multisig: {}", id, e));
+                    }
                 }
 
                 Some(multisig)
