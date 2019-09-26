@@ -196,8 +196,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
 
             for peer_id in peer_ids {
                 assert_ne!(peer_id, self.protocol.node_id(), "Nodes must not send updates to them-self");
-                self.protocol.sender().send_to(peer_id, update.clone())
-                    .unwrap_or_else(|_| error!("Failed to send update message."))
+                self.protocol.sender().send_to(peer_id, update.clone());
             }
         }
     }

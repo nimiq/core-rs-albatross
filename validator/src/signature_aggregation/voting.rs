@@ -7,13 +7,14 @@ use std::io::ErrorKind;
 use std::collections::HashMap;
 use std::fmt;
 
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use primitives::validators::Validators;
 use primitives::policy::TWO_THIRD_SLOTS;
 use block_albatross::signed;
 use messages::Message;
 use bls::bls12_381::PublicKey;
+use collections::bitset::BitSet;
 
 use handel::protocol::Protocol;
 use handel::multisig::{IndividualSignature, Signature};
@@ -50,13 +51,16 @@ pub trait Tag: signed::Message {
 pub struct VotingSender<T: Tag> {
     pub tag: T,
     pub peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>,
+    blacklist_peers: RwLock<BitSet>,
 }
 
 impl<T: Tag> VotingSender<T> {
     pub fn new(tag: T, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>) -> Self {
+        let blacklist = BitSet::with_capacity(peers.len());
         Self {
             tag,
-            peers
+            peers,
+            blacklist_peers: RwLock::new(blacklist),
         }
     }
 }
@@ -64,15 +68,19 @@ impl<T: Tag> VotingSender<T> {
 impl<T: Tag> Sender for VotingSender<T> {
     type Error = IoError;
 
-    fn send_to(&self, peer_id: usize, update: LevelUpdate) -> Result<(), IoError> {
-        if let Some(agent) = self.peers.get(&peer_id) {
-            let update_message = self.tag.create_level_update_message(update);
-            agent.peer.channel.send(update_message)
-                .map_err(|e| IoError::new(ErrorKind::Other, e))
-        }
-        else {
-            //warn!("No peer for validator ID {}", to);
-            Ok(())
+    fn send_to(&self, peer_id: usize, update: LevelUpdate) {
+        let blacklist = self.blacklist_peers.upgradable_read();
+
+        if !blacklist.contains(peer_id) {
+            if let Some(agent) = self.peers.get(&peer_id) {
+                let update_message = self.tag.create_level_update_message(update);
+                if let Err(e) = agent.peer.channel.send(update_message) {
+                    // send error, blacklist peer
+                    error!("IO error with peer {}, blacklisting: {}", peer_id, e);
+                    let mut blacklist = RwLockUpgradableReadGuard::upgrade(blacklist);
+                    blacklist.insert(peer_id);
+                }
+            }
         }
     }
 }
@@ -149,10 +157,7 @@ impl<T: Tag> VotingProtocol<T> {
             Arc::clone(&partitioner),
             TWO_THIRD_SLOTS as usize,
         ));
-        let sender = Arc::new(VotingSender {
-            tag: tag.clone(),
-            peers,
-        });
+        let sender = Arc::new(VotingSender::new(tag.clone(), peers));
 
         Self {
             tag,
