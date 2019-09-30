@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate serde_derive;
 
 extern crate nimiq_bls as bls;
 extern crate nimiq_block_albatross as block_albatross;
