@@ -97,7 +97,9 @@ impl Validator {
         let compressed_public_key = validator_key.public.compress();
         let info = ValidatorInfo {
             public_key: compressed_public_key,
-            peer_address: consensus.network.network_config.peer_address().clone()
+            peer_address: consensus.network.network_config.peer_address().clone(),
+            udp_address: None,
+            valid_from: consensus.blockchain.block_number(),
         };
         let validator_network = ValidatorNetwork::new(consensus.network.clone(), consensus.blockchain.clone(), SignedValidatorInfo::from_message(info, &validator_key.secret, 0));
         let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.clone());

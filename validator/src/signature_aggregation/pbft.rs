@@ -1,10 +1,8 @@
 use std::sync::Arc;
-use std::collections::HashMap;
 use std::fmt;
 
 use parking_lot::RwLock;
 
-use primitives::validators::Validators;
 use block_albatross::{PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage,
                       SignedPbftCommitMessage};
 use block_albatross::signed::Message as SignableMessage;
@@ -24,8 +22,7 @@ use handel::multisig::{Signature, IndividualSignature};
 use handel::identity::WeightRegistry;
 
 use super::voting::{VotingProtocol, Tag, VotingEvaluator, VotingSender, ValidatorRegistry};
-use crate::validator_agent::ValidatorAgent;
-
+use crate::pool::ValidatorPool;
 
 
 impl Tag for PbftPrepareMessage {
@@ -158,8 +155,8 @@ impl PbftCommitProtocol {
             ),
             prepare_aggregation: Arc::clone(&prepare_aggregation),
         });
-        let peers = Arc::clone(&prepare_protocol.sender().peers);
-        let sender = Arc::new(VotingSender::new(tag.clone(), peers));
+        let validators= Arc::clone(&prepare_protocol.sender().validators);
+        let sender = Arc::new(VotingSender::new(tag.clone(), validators));
 
         Self {
             tag,
@@ -197,19 +194,14 @@ pub struct PbftAggregation {
 
 
 impl PbftAggregation {
-    pub fn new(proposal_hash: Blake2bHash, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>, config: Option<Config>) -> Self {
+    pub fn new(proposal_hash: Blake2bHash, node_id: usize, validators: Arc<RwLock<ValidatorPool>>, config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
-
-        for (i, validator) in validators.iter_groups().enumerate() {
-            println!("Validator {}: {} votes", i, validator.0);
-        }
 
         // create prepare aggregation
         let prepare_protocol = PbftPrepareProtocol::new(
             PbftPrepareMessage::from(proposal_hash.clone()),
             node_id,
             validators,
-            peers,
         );
         let prepare_aggregation = Aggregation::new(prepare_protocol, config.clone());
 

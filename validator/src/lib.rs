@@ -29,4 +29,5 @@ pub mod validator_agent;
 pub mod error;
 pub mod slash;
 pub mod signature_aggregation;
+pub mod pool;
 

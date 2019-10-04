@@ -24,7 +24,7 @@ lazy_static = "1.2"
 atomic = "0.4"
 url = "1.7"
 failure = "0.1"
-beserial = { path = "../beserial" }
+beserial = { path = "../beserial", features = ["net"] }
 beserial_derive = { path = "../beserial/beserial_derive"}
 nimiq-keys = { path = "../keys" }
 nimiq-hash = { path = "../hash" }

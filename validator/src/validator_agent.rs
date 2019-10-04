@@ -19,7 +19,7 @@ use utils::rate_limit::RateLimit;
 
 
 pub enum ValidatorAgentEvent {
-    ValidatorInfo(Box<SignedValidatorInfo>),
+    ValidatorInfos(Vec<SignedValidatorInfo>),
     ForkProof(Box<ForkProof>),
     ViewChange(Box<LevelUpdateMessage<ViewChange>>),
     PbftProposal(Box<SignedPbftProposal>),
@@ -85,21 +85,24 @@ impl ValidatorAgent {
     /// When a list of validator infos is received, verify the signatures and notify
     fn on_validator_infos(&self, signed_infos: Vec<SignedValidatorInfo>) {
         debug!("[VALIDATOR-INFO] contains {} validator infos", signed_infos.len());
+
+        let mut valid_infos = Vec::new();
         for signed_info in signed_infos {
             // TODO: first check if we already know this validator. If so, we don't need to check
             // the signature of this info.
             if let Ok(public_key) = signed_info.message.public_key.uncompress() {
                 let signature_okay = signed_info.verify(&public_key);
                 trace!("[VALIDATOR-INFO] {:#?}, signature_okay={}", signed_info.message, signature_okay);
-                if !signature_okay {
-                    continue;
+                if signature_okay {
+                    valid_infos.push(signed_info);
                 }
-                self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfo(Box::new(signed_info)));
             }
             else {
                 error!("Uncompressing public key failed: {}", signed_info.message.peer_address);
             }
         }
+
+        self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfos(valid_infos));
     }
 
     /// When a fork proof message is received

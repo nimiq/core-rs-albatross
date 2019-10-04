@@ -1,8 +1,11 @@
-use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
-use crate::address::peer_address::PeerAddress;
-use bls::bls12_381::CompressedPublicKey;
+use std::net::SocketAddr;
+
 use beserial::{Serialize, Deserialize};
+use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
+use bls::bls12_381::CompressedPublicKey;
 use hash::SerializeContent;
+
+use crate::address::peer_address::PeerAddress;
 
 
 
@@ -14,6 +17,13 @@ pub struct ValidatorInfo {
 
     /// The validator's peer address
     pub peer_address: PeerAddress,
+
+    /// An optional UDP address for faster communication
+    pub udp_address: Option<SocketAddr>,
+
+    /// From which block number this validator info is valid. It can be used as valid before, but
+    /// we'll only accept validator info's that are newer that the newest we already know.
+    pub valid_from: u32,
 }
 
 impl PartialEq for ValidatorInfo {

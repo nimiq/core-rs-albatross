@@ -3,18 +3,14 @@
 
 use std::sync::Arc;
 use std::io::Error as IoError;
-use std::io::ErrorKind;
-use std::collections::HashMap;
 use std::fmt;
 
-use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use parking_lot::RwLock;
 
-use primitives::validators::Validators;
 use primitives::policy::TWO_THIRD_SLOTS;
 use block_albatross::signed;
 use messages::Message;
 use bls::bls12_381::PublicKey;
-use collections::bitset::BitSet;
 
 use handel::protocol::Protocol;
 use handel::multisig::{IndividualSignature, Signature};
@@ -29,13 +25,11 @@ use handel::aggregation::Aggregation;
 use handel::store::SignatureStore;
 use handel::sender::Sender;
 
-use crate::validator_agent::ValidatorAgent;
-
+use crate::pool::ValidatorPool;
 
 
 
 /// The evaluator used for voting
-/// TODO: The one for commit, needs to consider the prepare votes as well.
 pub type VotingEvaluator = WeightedVote<ReplaceStore<BinomialPartitioner>, ValidatorRegistry, BinomialPartitioner>;
 
 
@@ -49,18 +43,19 @@ pub trait Tag: signed::Message {
 
 /// Implementation for sender using a mapping from validator ID to `Peer`.
 pub struct VotingSender<T: Tag> {
-    pub tag: T,
-    pub peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>,
-    blacklist_peers: RwLock<BitSet>,
+    /// The tag over which this Handel instance is running. This is either the view-change, prepare
+    /// or commit message.
+    pub(crate) tag: T,
+
+    /// ValidatorPool
+    pub(crate) validators: Arc<RwLock<ValidatorPool>>,
 }
 
 impl<T: Tag> VotingSender<T> {
-    pub fn new(tag: T, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>) -> Self {
-        let blacklist = BitSet::with_capacity(peers.len());
+    pub fn new(tag: T, validators: Arc<RwLock<ValidatorPool>>) -> Self {
         Self {
             tag,
-            peers,
-            blacklist_peers: RwLock::new(blacklist),
+            validators,
         }
     }
 }
@@ -69,18 +64,9 @@ impl<T: Tag> Sender for VotingSender<T> {
     type Error = IoError;
 
     fn send_to(&self, peer_id: usize, update: LevelUpdate) {
-        let blacklist = self.blacklist_peers.upgradable_read();
-
-        if !blacklist.contains(peer_id) {
-            if let Some(agent) = self.peers.get(&peer_id) {
-                let update_message = self.tag.create_level_update_message(update);
-                if let Err(e) = agent.peer.channel.send(update_message) {
-                    // send error, blacklist peer
-                    error!("IO error with peer {}, blacklisting: {}", peer_id, e);
-                    let mut blacklist = RwLockUpgradableReadGuard::upgrade(blacklist);
-                    blacklist.insert(peer_id);
-                }
-            }
+        if let Some(agent) = self.validators.read().get_active_validator_agent(peer_id) {
+            let update_message = self.tag.create_level_update_message(update);
+            agent.peer.channel.send_or_close(update_message);
         }
     }
 }
@@ -89,18 +75,24 @@ impl<T: Tag> Sender for VotingSender<T> {
 
 /// Implementation for handel registry using a `Validators` list.
 pub struct ValidatorRegistry {
-    validators: Validators,
+    validators: Arc<RwLock<ValidatorPool>>
+}
+
+impl ValidatorRegistry {
+    pub fn new(validators: Arc<RwLock<ValidatorPool>>) -> Self {
+        Self { validators }
+    }
 }
 
 impl IdentityRegistry for ValidatorRegistry {
     fn public_key(&self, id: usize) -> Option<PublicKey> {
-        self.validators.get(id).and_then(|validator| validator.1.uncompressed())
+        self.validators.read().get_public_key(id).and_then(|(pubkey, _)| pubkey.uncompressed())
     }
 }
 
 impl WeightRegistry for ValidatorRegistry {
     fn weight(&self, id: usize) -> Option<usize> {
-        self.validators.get(id).map(|validator| validator.0 as usize)
+        self.validators.read().get_public_key(id).map(|(_, weight)| weight)
     }
 }
 
@@ -129,17 +121,18 @@ pub struct VotingProtocol<T: Tag> {
 }
 
 impl<T: Tag> VotingProtocol<T> {
-    pub fn new(tag: T, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>) -> Self {
-        let num_validators = validators.num_groups();
+    pub fn new(tag: T, node_id: usize, validators: Arc<RwLock<ValidatorPool>>) -> Self {
+        let guard = validators.read();
+
+        let num_validators = guard.active_validator_count();
         trace!("num_validators = {}", num_validators);
         trace!("validator_id = {}", node_id);
-        for (&peer_id, agent) in peers.iter() {
-            trace!("peer {}: {}", peer_id, agent.peer.peer_address());
+
+        for (validator_id, agent) in guard.iter_active().enumerate() {
+            trace!("Validator {}: {}", validator_id, agent.peer.peer_address());
         }
 
-        let registry = Arc::new(ValidatorRegistry {
-            validators,
-        });
+        let registry = Arc::new(ValidatorRegistry::new(Arc::clone(&validators)));
         let verifier = Arc::new(MultithreadedVerifier::new(
             tag.hash_with_prefix(),
             Arc::clone(&registry),
@@ -157,7 +150,7 @@ impl<T: Tag> VotingProtocol<T> {
             Arc::clone(&partitioner),
             TWO_THIRD_SLOTS as usize,
         ));
-        let sender = Arc::new(VotingSender::new(tag.clone(), peers));
+        let sender = Arc::new(VotingSender::new(tag.clone(), Arc::clone(&validators)));
 
         Self {
             tag,
@@ -232,9 +225,9 @@ pub struct VoteAggregation<T: Tag> {
 }
 
 impl<T: Tag> VoteAggregation<T> {
-    pub fn new(tag: T, node_id: usize, validators: Validators, peers: Arc<HashMap<usize, Arc<ValidatorAgent>>>, config: Option<Config>) -> Self {
+    pub fn new(tag: T, node_id: usize, validators: Arc<RwLock<ValidatorPool>>, config: Option<Config>) -> Self {
         let config = config.unwrap_or_default();
-        let protocol = VotingProtocol::new(tag, node_id, validators, peers);
+        let protocol = VotingProtocol::new(tag, node_id, validators);
         let aggregation = Aggregation::new(protocol, config);
         Self { inner: aggregation }
     }
