@@ -13,8 +13,8 @@ use std::sync::Arc;
 mod types;
 #[cfg(feature = "bitvec")]
 mod bitvec;
-
-
+#[cfg(feature = "net")]
+mod net;
 
 
 // Base traits
