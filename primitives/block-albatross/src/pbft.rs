@@ -108,7 +108,7 @@ impl PbftProofBuilder {
         trace!("votes on prepare and commit: {}", votes);
 
         if votes < threshold {
-            return Err(AggregateProofError::InsufficientSigners)
+            return Err(AggregateProofError::InsufficientSigners(votes, threshold))
         }
         Ok(())
     }
@@ -173,7 +173,7 @@ impl PbftProof {
         trace!("votes on prepare and commit: {}", votes);
 
         if votes < threshold {
-            return Err(AggregateProofError::InsufficientSigners)
+            return Err(AggregateProofError::InsufficientSigners(votes, threshold))
         }
         Ok(())
     }

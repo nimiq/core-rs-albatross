@@ -151,7 +151,7 @@ impl<M: Message> AggregateProofBuilder<M> {
 
     pub fn verify(&self, message: &M, threshold: u16) -> Result<(), AggregateProofError> {
         if self.num_slots < threshold {
-            return Err(AggregateProofError::InsufficientSigners);
+            return Err(AggregateProofError::InsufficientSigners(self.num_slots, threshold));
         }
 
         if !self.public_key.verify_hash(message.hash_with_prefix(), &self.signature) {
@@ -221,8 +221,7 @@ impl<M: Message> AggregateProof<M> {
         }
 
         if num_slots < threshold {
-            trace!("Threshold not reached: {} < {}", num_slots, threshold);
-            return Err(AggregateProofError::InsufficientSigners);
+            return Err(AggregateProofError::InsufficientSigners(num_slots, threshold));
         }
 
         if !public_key.verify_hash(message.hash_with_prefix(), &self.signature) {
@@ -240,6 +239,6 @@ pub enum AggregateProofError {
     InvalidSignerIndex,
     #[fail(display = "Invalid signature")]
     InvalidSignature,
-    #[fail(display = "Insufficient signers")]
-    InsufficientSigners,
+    #[fail(display = "Insufficient signers (got {}, want {})", _0, _1)]
+    InsufficientSigners(u16, u16),
 }
