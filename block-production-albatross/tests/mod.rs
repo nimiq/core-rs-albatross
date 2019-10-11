@@ -70,7 +70,7 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     assert_eq!(blockchain.head_height(), macro_block_number - 1);
 }
 
-fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroExtrinsics) -> MacroBlock {
+fn sign_macro_block(proposal: PbftProposal, extrinsics: Option<MacroExtrinsics>) -> MacroBlock {
     let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
     let block_hash = proposal.header.hash::<Blake2bHash>();
@@ -93,7 +93,7 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroExtrinsics) -> Macr
     MacroBlock {
         header: proposal.header,
         justification: Some(pbft_proof.build()),
-        extrinsics: Some(extrinsics)
+        extrinsics: extrinsics
     }
 }
 
@@ -126,10 +126,9 @@ fn it_can_produce_macro_blocks() {
     fill_micro_blocks(&producer, &blockchain);
 
     let proposal = producer.next_macro_block_proposal(1565720000000u64, 3u32, None);
-    let extrinsics = producer.next_macro_extrinsics();
 
-    let block = sign_macro_block(proposal, extrinsics);
-    assert_eq!(blockchain.push(Block::Macro(block)), Ok(PushResult::Extended));
+    let block = sign_macro_block(proposal, None);
+    assert_eq!(blockchain.push_block(Block::Macro(block), true), Ok(PushResult::Extended));
 }
 
 // TODO Test transactions

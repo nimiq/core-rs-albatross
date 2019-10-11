@@ -142,9 +142,8 @@ impl<'env> SlashRegistry<'env> {
 
     fn commit_macro_block(&self, txn: &mut WriteTransaction, block: &MacroBlock, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
         let mut epoch_diff = BitSet::new();
-        let mut prev_epoch_diff = BitSet::new();
 
-        let BlockDescriptor { mut prev_epoch_state, mut epoch_state } = self.get_epoch_state(txn, block.header.block_number);
+        let BlockDescriptor { prev_epoch_state, mut epoch_state } = self.get_epoch_state(txn, block.header.block_number);
 
         // Mark from view changes, ignoring duplicates.
         for view in prev_view_number..block.header.view_number {
@@ -154,7 +153,6 @@ impl<'env> SlashRegistry<'env> {
         }
 
         // Apply slashes.
-        prev_epoch_state |= prev_epoch_diff;
         epoch_state |= epoch_diff;
 
         // Push block descriptor and remember slash hashes.

@@ -2,6 +2,8 @@ extern crate nimiq_block_albatross as block;
 extern crate nimiq_blockchain_albatross as blockchain;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_bls as bls;
+extern crate nimiq_collections as collections;
+extern crate nimiq_database as database;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;
@@ -11,13 +13,15 @@ extern crate nimiq_primitives as primitives;
 use std::sync::Arc;
 
 use beserial::Serialize;
-use block::{Block, MacroExtrinsics, MacroHeader, MicroBlock, MicroExtrinsics, MicroHeader, PbftProposal, ViewChangeProof, ViewChanges};
+use block::{Block, MacroBlock, MacroExtrinsics, MacroHeader, MicroBlock, MicroExtrinsics, MicroHeader, PbftProposal, ViewChangeProof, ViewChanges};
 use block::ForkProof;
 use block::MicroJustification;
 use blockchain::blockchain::Blockchain;
 use blockchain_base::AbstractBlockchain;
-use bls::bls12_381::KeyPair;
-use hash::Hash;
+use bls::bls12_381::{CompressedSignature, KeyPair};
+use collections::compressed_list::CompressedList;
+use database::WriteTransaction;
+use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
 use primitives::policy;
 
@@ -36,8 +40,14 @@ impl<'env> BlockProducer<'env> {
         //  Lock blockchain/mempool while constructing the block.
         let _lock = self.blockchain.lock();
 
-        let extrinsics = self.next_macro_extrinsics();
-        let header = self.next_macro_header(timestamp, view_number, &extrinsics);
+        let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();
+        let mut txn = self.blockchain.write_transaction();
+
+        let mut header = self.next_macro_header(&mut txn, timestamp, view_number, seed);
+        let extrinsics = self.next_macro_extrinsics(&mut txn, &seed);
+        header.extrinsics_root = extrinsics.hash();
+
+        txn.abort();
 
         PbftProposal {
             header,
@@ -64,8 +74,8 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    pub fn next_macro_extrinsics(&self) -> MacroExtrinsics {
-        self.blockchain.next_slots(None).into()
+    pub fn next_macro_extrinsics(&self, txn: &mut WriteTransaction, seed: &CompressedSignature) -> MacroExtrinsics {
+        self.blockchain.next_slots(seed, Some(txn)).into()
     }
 
     fn next_micro_extrinsics(&self, fork_proofs: Vec<ForkProof>, extra_data: Vec<u8>, view_changes: &Option<ViewChanges>) -> MicroExtrinsics {
@@ -99,40 +109,52 @@ impl<'env> BlockProducer<'env> {
         }
     }
 
-    pub fn next_macro_header(&self, timestamp: u64, view_number: u32, extrinsics: &MacroExtrinsics) -> MacroHeader {
+    pub fn next_macro_header(&self, txn: &mut WriteTransaction, timestamp: u64, view_number: u32, seed: CompressedSignature) -> MacroHeader {
         let block_number = self.blockchain.height() + 1;
         let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
 
         let parent_hash = self.blockchain.head_hash();
         let parent_macro_hash = self.blockchain.macro_head_hash();
-        let extrinsics_root = extrinsics.hash();
 
-        let validators = self.blockchain.next_validators();
-
-        let inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
-        // Rewards are distributed with delay.
-        let state_root = self.blockchain.state().accounts()
-            .hash_with(&[], &inherents, block_number)
-            .expect("Failed to compute accounts hash during block production");
-
-        let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();
-
-        let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number), None)
-            .expect("Failed to compute transactions root, micro blocks missing");
-
-        MacroHeader {
+        let mut header = MacroHeader {
             version: Block::VERSION,
-            validators: validators.into(),
+            validators: CompressedList::empty(),
             block_number,
             view_number,
             parent_macro_hash,
             seed,
             parent_hash,
-            state_root,
-            extrinsics_root,
+            state_root: Blake2bHash::default(),
+            extrinsics_root: Blake2bHash::default(),
             timestamp,
-            transactions_root,
-        }
+            transactions_root: Blake2bHash::default(),
+        };
+
+        let state = self.blockchain.state();
+        state.reward_registry().commit_block(txn, &Block::Macro(MacroBlock {
+            header: header.clone(),
+            justification: None,
+            extrinsics: None,
+        }), state.current_slots().expect("Current slots missing while rebranching"), self.blockchain.view_number())
+            .expect("Failed to commit dummy block to reward registry");
+
+        let inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
+        // Rewards are distributed with delay.
+        state.accounts().commit(txn, &[], &inherents, block_number)
+            .expect("Failed to compute accounts hash during block production");
+
+        let state_root = state.accounts().hash(Some(txn));
+
+        let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number), Some(txn))
+            .expect("Failed to compute transactions root, micro blocks missing");
+
+        let validators = self.blockchain.next_validators(&seed, Some(txn));
+
+        header.validators = validators.into();
+        header.state_root = state_root;
+        header.transactions_root = transactions_root;
+
+        header
     }
 
     fn next_micro_header(&self, timestamp: u64, view_number: u32, extrinsics: &MicroExtrinsics, view_changes: &Option<ViewChanges>) -> MicroHeader {

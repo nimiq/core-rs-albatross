@@ -413,11 +413,10 @@ impl Validator {
         // Note: we're not verifying the justification as the validator network already did that
         let justification = Some(proof);
 
-        let extrinsics = self.block_producer.next_macro_extrinsics();
-        let block = Block::Macro(MacroBlock { header, justification, extrinsics: Some(extrinsics) });
+        let block = Block::Macro(MacroBlock { header, justification, extrinsics: None });
 
         // Automatically relays block.
-        self.blockchain.push(block)
+        self.blockchain.push_block(block, true)
             .unwrap_or_else(|e| panic!("Pushing macro block to blockchain failed: {:?}", e));
     }
 

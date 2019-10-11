@@ -5,7 +5,7 @@ use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, MappedMutexGuard};
+use parking_lot::{MappedMutexGuard, MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 
 use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
@@ -15,8 +15,10 @@ use block::{Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, Ma
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
-use bls::bls12_381::PublicKey;
+use bls::bls12_381::{CompressedSignature, PublicKey};
+use bls::bls12_381::lazy::LazyPublicKey;
 use collections::bitset::BitSet;
+use collections::compressed_list::CompressedList;
 use collections::grouped_list::GroupedList;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
@@ -140,6 +142,10 @@ impl<'env> BlockchainState<'env> {
 
     pub fn last_slashed_set(&self) -> BitSet {
         self.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1, None)
+    }
+
+    pub fn reward_registry(&self) -> &SlashRegistry<'env> {
+        &self.reward_registry
     }
 }
 
@@ -384,6 +390,11 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
+        self.push_block(block, false)
+    }
+
+    /// Same as push, but with more options.
+    pub fn push_block(&self, block: Block, create_macro_extrinsics: bool) -> Result<PushResult, PushError> {
         // Only one push operation at a time.
         let _push_lock = self.push_lock.lock();
 
@@ -469,13 +480,9 @@ impl<'env> Blockchain<'env> {
                 },
             }
 
-            let computed_extrinsics: MacroExtrinsics = self.next_slots(Some(&read_txn)).into();
-            let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
-            if computed_extrinsics_hash != macro_block.header.extrinsics_root {
-                warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
-                return Err(PushError::InvalidBlock(BlockError::NoJustification));
-            }
+            // The correct construction of the extrinsics is only checked after the block's inherents are applied.
 
+            // The macro extrinsics may only be None if the `create_macro_extrinsics` flag is set.
             if let Some(ref extrinsics) = macro_block.extrinsics {
                 let extrinsics_hash: Blake2bHash = extrinsics.hash();
                 if extrinsics_hash != macro_block.header.extrinsics_root {
@@ -483,7 +490,7 @@ impl<'env> Blockchain<'env> {
                     return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
                 }
             }
-            else {
+            else if !create_macro_extrinsics {
                 return Err(PushError::InvalidBlock(BlockError::MissingExtrinsics))
             }
         }
@@ -495,7 +502,7 @@ impl<'env> Blockchain<'env> {
         drop(read_txn);
 
         if *chain_info.head.parent_hash() == self.head_hash() {
-            return self.extend(chain_info.head.hash(), chain_info, prev_info);
+            return self.extend(chain_info.head.hash(), chain_info, prev_info, create_macro_extrinsics);
         }
 
         let is_better_chain = Ordering::Equal
@@ -515,7 +522,7 @@ impl<'env> Blockchain<'env> {
         Ok(PushResult::Forked)
     }
 
-    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> Result<PushResult, PushError> {
+    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo, create_macro_extrinsics: bool) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(self.env);
         let state = self.state.upgradable_read();
 
@@ -539,6 +546,29 @@ impl<'env> Blockchain<'env> {
             #[cfg(feature = "metrics")]
                 self.metrics.note_invalid_block();
             return Err(e);
+        }
+
+        // Only now can we check macro extrinsics.
+        if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
+            let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
+            let computed_validators: Validators = slots.clone().into();
+            let computed_validators: CompressedList<LazyPublicKey> = computed_validators.into();
+            if computed_validators != macro_block.header.validators {
+                warn!("Rejecting block - Validators don't match real validators");
+                return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+            }
+
+            let computed_extrinsics: MacroExtrinsics = slots.into();
+            let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
+            if computed_extrinsics_hash != macro_block.header.extrinsics_root {
+                warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
+                return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+            }
+
+            // Set macro extrinsics if the option is given.
+            if create_macro_extrinsics && macro_block.extrinsics.is_none() {
+                macro_block.extrinsics.replace(computed_extrinsics);
+            }
         }
 
         chain_info.on_main_chain = true;
@@ -893,17 +923,17 @@ impl<'env> Blockchain<'env> {
             .expect("Can't get block producer for next block")
     }
 
-    pub fn next_slots(&self, txn_option: Option<&Transaction>) -> Slots {
+    pub fn next_slots(&self, seed: &CompressedSignature, txn_option: Option<&Transaction>) -> Slots {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         let staking_account = self.state.read().accounts().get(validator_registry, txn_option);
         if let Account::Staking(ref staking_contract) = staking_account {
-            return staking_contract.select_validators(self.state.read().main_chain.head.seed(), policy::SLOTS, policy::MAX_CONSIDERED as usize);
+            return staking_contract.select_validators(seed, policy::SLOTS, policy::MAX_CONSIDERED as usize);
         }
         panic!("Account at validator registry address is not the stacking contract!");
     }
 
-    pub fn next_validators(&self) -> Validators {
-        self.next_slots(None).into()
+    pub fn next_validators(&self, seed: &CompressedSignature, txn: Option<&Transaction>) -> Validators {
+        self.next_slots(seed, txn).into()
     }
 
     pub fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {
@@ -1122,6 +1152,10 @@ impl<'env> Blockchain<'env> {
         }
 
         inherents
+    }
+
+    pub fn write_transaction(&self) -> WriteTransaction {
+        WriteTransaction::new(self.env)
     }
 }
 
