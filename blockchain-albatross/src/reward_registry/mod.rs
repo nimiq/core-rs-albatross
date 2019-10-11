@@ -7,7 +7,7 @@ use std::sync::Arc;
 use failure::Fail;
 
 use beserial::{Deserialize, Serialize};
-use block::{Block, MicroBlock};
+use block::{Block, MicroBlock, MacroBlock};
 use collections::bitset::BitSet;
 use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue,
                ReadTransaction, WriteTransaction, Transaction};
@@ -90,21 +90,83 @@ impl<'env> SlashRegistry<'env> {
     ///  * `seed`- Seed of previous block
     ///  * `staking_contract` - Contract used to check minimum stakes
     #[inline]
-    pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block, slots: &Slots) -> Result<(), SlashPushError> {
+    pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(ref macro_block) => {
-                self.reward_pot.commit_macro_block(macro_block, txn);
+                self.reward_pot.commit_macro_block(macro_block, slots, prev_view_number, txn);
+                self.commit_macro_block(txn, macro_block, slots, prev_view_number)?;
                 self.gc(txn, policy::epoch_at(macro_block.header.block_number));
                 Ok(())
             },
             Block::Micro(ref micro_block) => {
-                self.reward_pot.commit_micro_block(micro_block, slots, txn);
-                self.commit_micro_block(txn, micro_block, slots)
+                self.reward_pot.commit_micro_block(micro_block, slots, prev_view_number, txn);
+                self.commit_micro_block(txn, micro_block, slots, prev_view_number)
             },
         }
     }
 
-    fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock, slots: &Slots) -> Result<(), SlashPushError> {
+    fn get_epoch_state(&self, txn: &mut WriteTransaction, block_number: u32) -> BlockDescriptor {
+        let block_epoch = policy::epoch_at(block_number);
+
+        // Lookup slash state.
+        let mut cursor = txn.cursor(&self.slash_registry_db);
+        // Move cursor to first entry with a block number >= ours (or end of the database).
+        let _: Option<(u32, BlockDescriptor)> = cursor.seek_range_key(&block_number);
+        // Then move cursor back by one.
+        let last_change: Option<(u32, BlockDescriptor)> = cursor.prev();
+
+        let prev_epoch_state: BitSet;
+        let epoch_state: BitSet;
+        if let Some((change_block_number, change)) = last_change {
+            if change_block_number >= policy::first_block_of(block_epoch) {
+                // last_change was in current epoch
+                prev_epoch_state = change.prev_epoch_state;
+                epoch_state = change.epoch_state;
+            } else if block_epoch > 0 && change_block_number >= policy::first_block_of(block_epoch - 1) {
+                // last_change was in previous epoch
+                prev_epoch_state = change.epoch_state;
+                epoch_state = BitSet::new();
+            } else {
+                // no change in the last two epochs
+                prev_epoch_state = BitSet::new();
+                epoch_state = BitSet::new();
+            }
+        } else {
+            // no change at all
+            prev_epoch_state = BitSet::new();
+            epoch_state = BitSet::new();
+        }
+
+        BlockDescriptor { prev_epoch_state, epoch_state }
+    }
+
+    fn commit_macro_block(&self, txn: &mut WriteTransaction, block: &MacroBlock, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
+        let mut epoch_diff = BitSet::new();
+        let mut prev_epoch_diff = BitSet::new();
+
+        let BlockDescriptor { mut prev_epoch_state, mut epoch_state } = self.get_epoch_state(txn, block.header.block_number);
+
+        // Mark from view changes, ignoring duplicates.
+        for view in prev_view_number..block.header.view_number {
+            let slot_owner = self.slot_owner(block.header.block_number, view, slots, Some(&txn))
+                .expect("Could not determine block producer in the current epoch");
+            epoch_diff.insert(slot_owner.idx as usize);
+        }
+
+        // Apply slashes.
+        prev_epoch_state |= prev_epoch_diff;
+        epoch_state |= epoch_diff;
+
+        // Push block descriptor and remember slash hashes.
+        let descriptor = BlockDescriptor { epoch_state, prev_epoch_state };
+
+        // Put descriptor into database.
+        txn.put(&self.slash_registry_db, &block.header.block_number, &descriptor);
+
+        Ok(())
+    }
+
+    fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
         let block_epoch = policy::epoch_at(block.header.block_number);
         let mut epoch_diff = BitSet::new();
         let mut prev_epoch_diff = BitSet::new();
@@ -171,7 +233,7 @@ impl<'env> SlashRegistry<'env> {
         }
 
         // Mark from view changes, ignoring duplicates.
-        for view in 0..block.header.view_number {
+        for view in prev_view_number..block.header.view_number {
             let slot_owner = self.slot_owner(block.header.block_number, view, slots, Some(&txn))
                 .expect("Could not determine block producer in the current epoch");
             epoch_diff.insert(slot_owner.idx as usize);
@@ -211,9 +273,9 @@ impl<'env> SlashRegistry<'env> {
     }
 
     #[inline]
-    pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block, slots: &Slots) -> Result<(), SlashPushError> {
+    pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
         if let Block::Micro(ref block) = block {
-            self.reward_pot.revert_micro_block(block, &slots, txn);
+            self.reward_pot.revert_micro_block(block, &slots, prev_view_number, txn);
             self.revert_micro_block(txn, block)
         } else {
             unreachable!()

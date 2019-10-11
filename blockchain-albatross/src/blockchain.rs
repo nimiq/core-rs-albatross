@@ -527,7 +527,7 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
-        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching")) {
+        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"), prev_info.head.view_number()) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }
@@ -634,7 +634,7 @@ impl<'env> Blockchain<'env> {
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block, prev_info.head.view_number())?;
 
                     let slots = state.current_slots.as_ref().expect("Current slots missing while rebranching");
-                    state.reward_registry.revert_block(&mut write_txn, &current.1.head, slots).unwrap();
+                    state.reward_registry.revert_block(&mut write_txn, &current.1.head, slots, prev_info.head.view_number()).unwrap();
 
                     cache_txn.revert_block(&current.1.head);
 
@@ -661,13 +661,14 @@ impl<'env> Blockchain<'env> {
         assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS.saturating_sub(ancestor.1.head.block_number() + 1));
 
         // Check each fork block against TransactionCache & commit to AccountsTree and SlashRegistry.
+        let mut prev_view_number = ancestor.1.head.view_number();
         let mut fork_iter = fork_chain.iter().rev();
         while let Some(fork_block) = fork_iter.next() {
             match fork_block.1.head {
                 Block::Macro(_) => unreachable!(),
                 Block::Micro(ref micro_block) => {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
-                        state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"))
+                        state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"), prev_view_number)
                             .map_err(|_| PushError::InvalidBlock(BlockError::InvalidSlash))
                             .and_then(|_| self.commit_accounts(&state, &mut write_txn, &fork_block.1.head))
 
@@ -690,6 +691,7 @@ impl<'env> Blockchain<'env> {
                     }
 
                     cache_txn.push_block(&fork_block.1.head);
+                    prev_view_number = fork_block.1.head.view_number();
                 }
             }
         }

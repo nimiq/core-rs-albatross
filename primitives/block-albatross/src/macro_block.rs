@@ -34,6 +34,7 @@ pub struct MacroBlock {
 pub struct MacroHeader {
     pub version: u16,
 
+    /// The list of validator public keys for the next epoch.
     pub validators: CompressedList<LazyPublicKey>,
 
     pub block_number: u32,
@@ -45,6 +46,7 @@ pub struct MacroHeader {
     pub state_root: Blake2bHash,
     pub extrinsics_root: Blake2bHash,
 
+    /// A merkle root over all transactions from the previous epoch.
     pub transactions_root: Blake2bHash,
 
     pub timestamp: u64,
@@ -52,7 +54,9 @@ pub struct MacroHeader {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroExtrinsics {
+    /// Staker and reward addresses for the next epoch's validators.
     pub slot_addresses: CompressedList<SlotAddresses>,
+    /// The slash fine for the next epoch.
     pub slash_fine: Coin,
 }
 
