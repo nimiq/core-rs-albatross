@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
 use beserial::Deserialize;
+use nimiq_block_albatross::{Block, BlockError, ForkProof, MacroBlock, MacroExtrinsics, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder};
+use nimiq_block_albatross::signed::SignedMessage;
+use nimiq_block_production_albatross::BlockProducer;
+use nimiq_blockchain_albatross::blockchain::{Blockchain, PushError, PushResult};
+use nimiq_blockchain_base::AbstractBlockchain;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_bls::bls12_381::lazy::LazyPublicKey;
-use nimiq_block_production_albatross::BlockProducer;
-use nimiq_block_albatross::{Block, ForkProof, MacroBlock, MacroExtrinsics, PbftProposal, PbftProofBuilder, PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage, ViewChange, ViewChangeProof, ViewChangeProofBuilder, SignedViewChange};
-use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult};
+use nimiq_collections::grouped_list::{Group, GroupedList};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_primitives::{networks::NetworkId};
 use nimiq_primitives::policy;
-use nimiq_blockchain_base::AbstractBlockchain;
-use nimiq_block_albatross::signed::SignedMessage;
 use nimiq_primitives::validators::Validators;
-use nimiq_collections::grouped_list::{GroupedList, Group};
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
@@ -125,10 +125,27 @@ fn it_can_produce_macro_blocks() {
 
     fill_micro_blocks(&producer, &blockchain);
 
-    let proposal = producer.next_macro_block_proposal(1565720000000u64, 3u32, None);
+    let proposal = producer.next_macro_block_proposal(1565720000000u64, 0u32, None);
 
     let block = sign_macro_block(proposal, None);
     assert_eq!(blockchain.push_block(Block::Macro(block), true), Ok(PushResult::Extended));
+}
+
+#[test]
+fn it_slashes_view_changes_macro_blocks() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::UnitAlbatross).unwrap());
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
+
+    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair);
+
+    fill_micro_blocks(&producer, &blockchain);
+
+    let proposal = producer.next_macro_block_proposal(1565720000000u64, 3u32, None);
+
+    let block = sign_macro_block(proposal, None);
+    assert_eq!(blockchain.push_block(Block::Macro(block), true), Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch)));
 }
 
 // TODO Test transactions

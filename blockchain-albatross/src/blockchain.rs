@@ -786,7 +786,11 @@ impl<'env> Blockchain<'env> {
 
         match block {
             Block::Macro(ref macro_block) => {
-                let inherents = self.finalize_last_epoch(state);
+                let mut inherents = self.finalize_last_epoch(state);
+
+                // Add slashes for view changes.
+                let view_changes = ViewChanges::new(macro_block.header.block_number, self.view_number(), macro_block.header.view_number);
+                inherents.append(&mut self.create_slash_inherents(&[], &view_changes, Some(txn)));
 
                 // Commit block to AccountsTree.
                 let receipts = accounts.commit(txn, &[], &inherents, macro_block.header.block_number);
