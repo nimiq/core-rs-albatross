@@ -27,13 +27,17 @@ use primitives::policy;
 
 pub struct BlockProducer<'env> {
     pub blockchain: Arc<Blockchain<'env>>,
-    pub mempool: Arc<Mempool<'env, Blockchain<'env>>>,
+    pub mempool: Option<Arc<Mempool<'env, Blockchain<'env>>>>,
     pub validator_key: KeyPair,
 }
 
 impl<'env> BlockProducer<'env> {
     pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>, validator_key: KeyPair) -> Self {
-        BlockProducer { blockchain, mempool, validator_key }
+        BlockProducer { blockchain, mempool: Some(mempool), validator_key }
+    }
+
+    pub fn new_without_mempool(blockchain: Arc<Blockchain<'env>>, validator_key: KeyPair) -> Self {
+        BlockProducer { blockchain, mempool: None, validator_key }
     }
 
     pub fn next_macro_block_proposal(&self, timestamp: u64, view_number: u32, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
@@ -75,14 +79,19 @@ impl<'env> BlockProducer<'env> {
     }
 
     pub fn next_macro_extrinsics(&self, txn: &mut WriteTransaction, seed: &CompressedSignature) -> MacroExtrinsics {
-        self.blockchain.next_slots(seed, Some(txn)).into()
+        // Determine slashed set without txn, so that it is not garbage collected yet.
+        let prev_epoch = policy::epoch_at(self.blockchain.height() + 1) - 1;
+        let slashed_set = self.blockchain.state().reward_registry().slashed_set(prev_epoch, None);
+        MacroExtrinsics::from(self.blockchain.next_slots(seed, Some(txn)), slashed_set)
     }
 
     fn next_micro_extrinsics(&self, fork_proofs: Vec<ForkProof>, extra_data: Vec<u8>, view_changes: &Option<ViewChanges>) -> MicroExtrinsics {
         let max_size = MicroBlock::MAX_SIZE
             - MicroHeader::SIZE
             - MicroExtrinsics::get_metadata_size(fork_proofs.len(), extra_data.len());
-        let mut transactions = self.mempool.get_transactions_for_block(max_size);
+        let mut transactions = self.mempool.as_ref()
+            .map(|mempool| mempool.get_transactions_for_block(max_size))
+            .unwrap_or_else(Vec::new);
 
         let inherents = self.blockchain.create_slash_inherents(&fork_proofs, view_changes, None);
 

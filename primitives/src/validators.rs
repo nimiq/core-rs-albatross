@@ -1,15 +1,13 @@
 extern crate nimiq_bls as bls;
 extern crate nimiq_keys as keys;
 
-use crate::policy::TWO_THIRD_SLOTS;
-
 use beserial::{Deserialize, Serialize};
-
-use nimiq_collections::grouped_list::{Group, GroupedList};
-use keys::Address;
 use bls::bls12_381::lazy::LazyPublicKey;
+use keys::Address;
+use nimiq_collections::grouped_list::{Group, GroupedList};
 
 use crate::coin::Coin;
+use crate::policy::TWO_THIRD_SLOTS;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Slot {

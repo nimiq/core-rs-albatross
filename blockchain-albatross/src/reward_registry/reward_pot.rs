@@ -1,8 +1,10 @@
 use block::{MacroBlock, MicroBlock};
+use collections::bitset::BitSet;
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use primitives::coin::Coin;
 use primitives::policy;
 use primitives::validators::Slots;
+use transaction::Transaction as BlockchainTransaction;
 
 pub struct RewardPot<'env> {
     env: &'env Environment,
@@ -32,6 +34,32 @@ impl<'env> RewardPot<'env> {
 
         txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
         txn.put(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY, &u64::from(current_reward));
+    }
+
+    pub(super) fn commit_epoch(&self, block_number: u32, transactions: &[BlockchainTransaction], slashed_set: &BitSet, slots: &Slots, txn: &mut WriteTransaction) {
+        assert!(policy::is_macro_block_at(block_number));
+        let epoch = policy::epoch_at(block_number);
+
+        let mut reward = Coin::ZERO;
+
+        // All blocks of the epoch.
+        for block_number in policy::first_block_of(epoch)..=block_number {
+            reward += policy::block_reward_at(block_number);
+        }
+
+        // All transactions.
+        for transaction in transactions {
+            reward += transaction.fee;
+        }
+
+        // All slashes.
+        reward += match slots.slash_fine().checked_mul(slashed_set.len() as u64) {
+            Some(r) => r,
+            None => unreachable!(),
+        };
+
+        txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
+        txn.put(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY, &u64::from(reward));
     }
 
     pub(super) fn commit_micro_block(&self, block: &MicroBlock, slots: &Slots, prev_view_number: u32, txn: &mut WriteTransaction) {

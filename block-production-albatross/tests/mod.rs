@@ -62,7 +62,7 @@ fn it_can_produce_micro_blocks() {
 // Fill epoch with micro blocks
 fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     let init_height = blockchain.head_height();
-    let macro_block_number = policy::macro_block_of(init_height + 1);
+    let macro_block_number = policy::macro_block_after(init_height + 1);
     for i in (init_height + 1)..macro_block_number {
         let last_micro_block = producer.next_micro_block(vec![], 1565713920000 + i as u64 * 2000, 0, vec![0x42], None);
         assert_eq!(blockchain.push(Block::Micro(last_micro_block)), Ok(PushResult::Extended));

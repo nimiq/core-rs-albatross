@@ -1,17 +1,19 @@
+use std::convert::TryInto;
 use std::fmt;
 use std::io;
-use std::convert::TryInto;
 
-use keys::Address;
+use failure::Fail;
+
 use beserial::{Deserialize, Serialize};
 use bls::bls12_381::CompressedSignature;
 use bls::bls12_381::lazy::LazyPublicKey;
+use collections::bitset::BitSet;
+use collections::compressed_list::CompressedList;
 use hash::{Blake2bHash, Hash, SerializeContent};
+use keys::Address;
 use primitives::coin::Coin;
 use primitives::policy;
 use primitives::validators::{Slot, Slots};
-use collections::compressed_list::CompressedList;
-use failure::Fail;
 
 use crate::BlockError;
 use crate::pbft::PbftProof;
@@ -58,6 +60,8 @@ pub struct MacroExtrinsics {
     pub slot_addresses: CompressedList<SlotAddresses>,
     /// The slash fine for the next epoch.
     pub slash_fine: Coin,
+    /// The final list of slashes from the previous epoch.
+    pub slashed_set: BitSet,
 }
 
 impl TryInto<Slots> for MacroBlock {
@@ -91,8 +95,8 @@ impl TryInto<Slots> for MacroBlock {
 }
 
 // CHECKME: Check for performance
-impl From<Slots> for MacroExtrinsics {
-    fn from(slots: Slots) -> Self {
+impl MacroExtrinsics {
+    pub fn from(slots: Slots, slashed_set: BitSet) -> Self {
         let addresses = slots.iter().map(|slot| SlotAddresses {
             staker_address: slot.staker_address.clone(),
             reward_address: slot.reward_address_opt.as_ref().unwrap_or(&slot.staker_address).clone(),
@@ -101,6 +105,7 @@ impl From<Slots> for MacroExtrinsics {
         MacroExtrinsics {
             slot_addresses: addresses.collect(),
             slash_fine,
+            slashed_set,
         }
     }
 }

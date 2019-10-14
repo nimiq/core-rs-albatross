@@ -534,6 +534,12 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
+        // Get the slashed set used to finalize the previous epoch before garbage collecting it below.
+        let mut slashed_set: Option<BitSet> = None;
+        if chain_info.head.ty() == BlockType::Macro {
+            slashed_set = Some(state.reward_registry.slashed_set(policy::epoch_at(chain_info.head.block_number()) - 1, Some(&txn)));
+        }
+
         if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"), prev_info.head.next_view_number()) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
@@ -558,7 +564,8 @@ impl<'env> Blockchain<'env> {
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
 
-            let computed_extrinsics: MacroExtrinsics = slots.into();
+            let slashed_set = slashed_set.unwrap();
+            let computed_extrinsics: MacroExtrinsics = MacroExtrinsics::from(slots, slashed_set);
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
@@ -874,10 +881,6 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::InvalidBlock(e));
         }
 
-        // Public keys are checked when staking, so this should never fail.
-        let mut slot: IndexedSlot = self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn))
-            .ok_or(PushError::InvalidSuccessor)?;
-
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info_opt = self.chain_store.get_chain_info(&macro_block.header.parent_macro_hash, false, Some(&read_txn));
         if prev_info_opt.is_none() {
@@ -932,7 +935,7 @@ impl<'env> Blockchain<'env> {
         // Drop read transaction before creating the write transaction.
         drop(read_txn);
 
-        let chain_info = ChainInfo::new(block, Some(slot));
+        let chain_info = ChainInfo::new(block, None);
 
         self.extend_isolated_macro(chain_info.head.hash(), transactions,chain_info, prev_info, push_lock)
     }
@@ -940,33 +943,36 @@ impl<'env> Blockchain<'env> {
     fn extend_isolated_macro(&self, block_hash: Blake2bHash, transactions: &[BlockchainTransaction], mut chain_info: ChainInfo, mut prev_info: ChainInfo, push_lock: MutexGuard<()>) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(self.env);
         let state = self.state.upgradable_read();
+        let block_number = chain_info.head.block_number();
+        // We cannot verify the slashed set, so we need to trust it here.
+        // Also, we verified that macro extrinsics have been set in the corresponding push,
+        // thus we can unwrap here.
+        let slashed_set = if let Block::Macro(ref macro_block) = chain_info.head {
+            macro_block.extrinsics.as_ref().unwrap().slashed_set.clone()
+        } else { unreachable!() };
 
-
-        // TODO: We need to commit the whole epoch to the reward registry.
-        /*if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching")) {
+        if let Err(e) = state.reward_registry.commit_epoch(&mut txn, block_number, transactions, &slashed_set, state.current_slots.as_ref().expect("Current slots missing while rebranching")) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
-        }*/
+        }
 
-        // Apply transactions to AccountsTree.
-        let receipts = state.accounts.commit(&mut txn, transactions, &[], chain_info.head.block_number());
+        // We cannot check the accounts hash yet.
+        // Apply transactions and inherents to AccountsTree.
+        let slots = state.last_slots.as_ref().expect("Slots for last epoch are missing");
+        let mut inherents = self.inherents_from_slashed_set(&slashed_set, slots, Some(&txn));
+        inherents.append(&mut self.finalize_last_epoch(&state));
+
+        // Commit epoch to AccountsTree.
+        let receipts = state.accounts.commit(&mut txn, transactions, &inherents, chain_info.head.block_number());
         if let Err(e) = receipts {
-            return Err(PushError::AccountsError(e));
-        }
-
-        // Verify accounts hash.
-        if chain_info.head.state_root() != &state.accounts.hash(Some(&txn)) {
-            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
-        }
-
-        // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(&state, &mut txn, &chain_info.head) {
             warn!("Rejecting block - commit failed: {:?}", e);
             txn.abort();
             #[cfg(feature = "metrics")]
                 self.metrics.note_invalid_block();
-            return Err(e);
+            return Err(PushError::AccountsError(e));
         }
+
+        self.chain_store.clear_receipts(&mut txn);
 
         // Only now can we check macro extrinsics.
         if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
@@ -978,7 +984,7 @@ impl<'env> Blockchain<'env> {
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
 
-            let computed_extrinsics: MacroExtrinsics = slots.into();
+            let computed_extrinsics = MacroExtrinsics::from(slots, slashed_set);
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
@@ -996,7 +1002,9 @@ impl<'env> Blockchain<'env> {
 
         // Acquire write lock & commit changes.
         let mut state = RwLockUpgradableReadGuard::upgrade(state);
-        state.transaction_cache.push_block(&chain_info.head);
+        // FIXME: Macro block sync does not preserve transaction replay protection right now.
+        // But this is not an issue in the UTXO model.
+        //state.transaction_cache.push_block(&chain_info.head);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             state.macro_head = macro_block.clone();
@@ -1239,6 +1247,21 @@ impl<'env> Blockchain<'env> {
         }).collect::<Vec<Inherent>>()
     }
 
+    /// Expects a *verified* proof!
+    pub fn inherents_from_slashed_set(&self, slashed_set: &BitSet, slots: &Slots, txn_option: Option<&Transaction>) -> Vec<Inherent> {
+        let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
+
+        slashed_set.iter().map(|slot_index| {
+            let producer = slots.get(slot_index);
+            Inherent {
+                ty: InherentType::Slash,
+                target: validator_registry.clone(),
+                value: slots.slash_fine(),
+                data: producer.staker_address.serialize_to_vec(),
+            }
+        }).collect::<Vec<Inherent>>()
+    }
+
     fn slash_fine_at(&self, block_number: u32) -> Coin {
         let state = self.state();
         let head_number = state.block_number();
@@ -1278,7 +1301,8 @@ impl<'env> Blockchain<'env> {
     pub fn finalize_last_epoch(&self, state: &BlockchainState) -> Vec<Inherent> {
         let mut inherents = Vec::new();
 
-        let epoch = policy::epoch_at(state.main_chain.head.block_number()) - 1;
+        // It might be that we don't have any micro blocks, thus we need to look at the next macro block.
+        let epoch = policy::epoch_at(policy::macro_block_after(state.main_chain.head.block_number())) - 1;
 
         // Special case for first epoch: Epoch 0 is finalized by definition.
         if epoch == 0 {

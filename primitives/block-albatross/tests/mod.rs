@@ -2,14 +2,15 @@ use std::convert::{TryFrom, TryInto};
 use std::iter::repeat;
 
 use beserial::Deserialize;
-use nimiq_block_albatross::{MacroBlock, MacroHeader, MacroExtrinsics, SlotAddresses};
-use nimiq_bls::bls12_381::Signature;
+use nimiq_block_albatross::{MacroBlock, MacroExtrinsics, MacroHeader, SlotAddresses};
 use nimiq_bls::bls12_381::lazy::LazyPublicKey;
+use nimiq_bls::bls12_381::Signature;
+use nimiq_collections::bitset::BitSet;
 use nimiq_collections::compressed_list::CompressedList;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
-use nimiq_primitives::validators::Slots;
 use nimiq_primitives::coin::Coin;
+use nimiq_primitives::validators::Slots;
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {
@@ -71,6 +72,7 @@ fn it_can_convert_macro_block_into_slots() {
         extrinsics: Some(MacroExtrinsics {
             slot_addresses: slot_addresses.clone(),
             slash_fine: Coin::try_from(8u64).unwrap(),
+            slashed_set: BitSet::new(),
         }),
     };
 

@@ -7,23 +7,23 @@ use std::sync::Arc;
 use failure::Fail;
 
 use beserial::{Deserialize, Serialize};
-use block::{Block, MicroBlock, MacroBlock};
+use block::{Block, MacroBlock, MicroBlock};
 use collections::bitset::BitSet;
 use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue,
-               ReadTransaction, WriteTransaction, Transaction};
+               ReadTransaction, Transaction, WriteTransaction};
 use database::cursor::{ReadCursor, WriteCursor};
 use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
 use primitives::policy;
 use primitives::validators::{IndexedSlot, Slots};
+use transaction::Transaction as BlockchainTransaction;
 
 use crate::chain_store::ChainStore;
 use crate::reward_registry::reward_pot::RewardPot;
+pub use crate::reward_registry::slashed_slots::SlashedSlots;
 
 mod reward_pot;
 mod slashed_slots;
-
-pub use crate::reward_registry::slashed_slots::SlashedSlots;
 
 pub struct SlashRegistry<'env> {
     env: &'env Environment,
@@ -103,6 +103,20 @@ impl<'env> SlashRegistry<'env> {
                 self.commit_micro_block(txn, micro_block, slots, prev_view_number)
             },
         }
+    }
+
+    pub fn commit_epoch(&self, txn: &mut WriteTransaction, block_number: u32, transactions: &[BlockchainTransaction], slashed_slots: &BitSet, slots: &Slots) -> Result<(), SlashPushError> {
+        self.reward_pot.commit_epoch(block_number, transactions, slashed_slots, slots, txn);
+
+        // Just put the whole epochs slashed set at the macro blocks position.
+        // We don't have slash info for the current epoch though.
+        let descriptor = BlockDescriptor { epoch_state: BitSet::new(), prev_epoch_state: slashed_slots.clone() };
+
+        // Put descriptor into database.
+        txn.put(&self.slash_registry_db, &block_number, &descriptor);
+        self.gc(txn, policy::epoch_at(block_number));
+
+        Ok(())
     }
 
     fn get_epoch_state(&self, txn: &mut WriteTransaction, block_number: u32) -> BlockDescriptor {

@@ -284,7 +284,7 @@ impl<'env> ChainStore<'env> {
         while (blocks.len() as u32) < count {
             let block_opt = self.get_block_at(next_macro_block, include_body, Some(&txn));
             if let Some(Block::Macro(block)) = block_opt {
-                let next_macro_block = policy::macro_block_after(block.header.block_number);
+                next_macro_block = policy::macro_block_after(block.header.block_number);
                 blocks.push(Block::Macro(block));
             } else {
                 break;

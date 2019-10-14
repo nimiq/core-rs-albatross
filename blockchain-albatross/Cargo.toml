@@ -40,6 +40,7 @@ nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "uni
 [dev-dependencies]
 atomic = "0.4"
 rand = "0.6"
+nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1" }
 
 [features]
 default = ["transaction-store"]

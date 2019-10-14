@@ -1,35 +1,35 @@
-mod config;
-
-use std::convert::TryFrom;
 use std::collections::btree_map::BTreeMap;
-use std::path::Path;
+use std::convert::TryFrom;
 use std::fs::{OpenOptions, read_to_string};
 use std::io::Error as IoError;
+use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use toml::de::Error as TomlError;
 use failure::Fail;
+use toml::de::Error as TomlError;
 
-use hash::{Blake2bHasher, Hasher, Blake2bHash, Hash};
-use keys::Address;
+use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract};
+use accounts::Accounts;
+use beserial::{Serialize, SerializingError};
+use block_albatross::{Block, MacroBlock, MacroExtrinsics, MacroHeader};
 use bls::bls12_381::{
-    PublicKey as BlsPublicKey,
     CompressedPublicKey as CompressedBlsPublicKey,
+    PublicKey as BlsPublicKey,
     SecretKey as BlsSecretKey,
     Signature as BlsSignature,
 };
 use bls::bls12_381::lazy::LazyPublicKey;
-use block_albatross::{Block, MacroBlock, MacroHeader, MacroExtrinsics};
-use beserial::{Serialize, SerializingError};
+use collections::bitset::BitSet;
 use collections::grouped_list::{Group, GroupedList};
-use primitives::coin::Coin;
-use primitives::validators::Slots;
-use account::{Account, BasicAccount, StakingContract, AccountError, AccountsList};
-use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
+use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
-use accounts::Accounts;
+use hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
+use keys::Address;
+use primitives::coin::Coin;
 use primitives::policy;
+use primitives::validators::Slots;
 
+mod config;
 
 #[derive(Debug, Fail)]
 pub enum GenesisBuilderError {
@@ -203,7 +203,7 @@ impl GenesisBuilder {
         let (slot_allocation, validators) = self.select_validators(&pre_genesis_seed, &staking_contract)?;
 
         // extrinsics
-        let extrinsics: MacroExtrinsics = slot_allocation.into();
+        let extrinsics = MacroExtrinsics::from(slot_allocation, BitSet::new());
         let extrinsics_root = extrinsics.hash::<Blake2bHash>();
         debug!("Extrinsics root: {}", &extrinsics_root);
 
