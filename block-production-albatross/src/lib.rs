@@ -49,7 +49,7 @@ impl<'env> BlockProducer<'env> {
         // Lock blockchain/mempool while constructing the block.
         let _lock = self.blockchain.lock();
 
-        let view_changes = ViewChanges::new(self.blockchain.block_number() + 1, self.blockchain.view_number(), view_number);
+        let view_changes = ViewChanges::new(self.blockchain.block_number() + 1, self.blockchain.next_view_number(), view_number);
         let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data, &view_changes);
         let header = self.next_micro_header(timestamp, view_number, &extrinsics, &view_changes);
         let signature = self.validator_key.sign(&header).compress();

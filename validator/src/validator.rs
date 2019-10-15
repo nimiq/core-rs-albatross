@@ -103,7 +103,7 @@ impl Validator {
         };
         let validator_network = ValidatorNetwork::new(consensus.network.clone(), consensus.blockchain.clone(), SignedValidatorInfo::from_message(info, &validator_key.secret, 0));
         let block_producer = BlockProducer::new(consensus.blockchain.clone(), consensus.mempool.clone(), validator_key.clone());
-        let view_number = consensus.blockchain.view_number();
+        let view_number = consensus.blockchain.next_view_number();
 
         debug!("Initializing validator");
 
@@ -326,7 +326,7 @@ impl Validator {
 
     pub fn on_slot_change(&self, slot_change: SlotChange) {
         let (view_number, view_change_proof) = match slot_change {
-            SlotChange::NextBlock => (self.blockchain.view_number(), None),
+            SlotChange::NextBlock => (self.blockchain.next_view_number(), None),
             SlotChange::ViewChange(view_change, view_change_proof) => {
                 // Reset view change interval again.
                 self.reset_view_change_interval(Self::BLOCK_TIMEOUT);

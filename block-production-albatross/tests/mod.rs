@@ -56,7 +56,7 @@ fn it_can_produce_micro_blocks() {
     let block = producer.next_micro_block(vec![], 1565713924000, 1, vec![0x41], Some(view_change));
     assert_eq!(blockchain.push(Block::Micro(block)), Ok(PushResult::Extended));
     assert_eq!(blockchain.block_number(), 3);
-    assert_eq!(blockchain.view_number(), 1);
+    assert_eq!(blockchain.next_view_number(), 1);
 }
 
 // Fill epoch with micro blocks

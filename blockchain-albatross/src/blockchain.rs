@@ -499,7 +499,7 @@ impl<'env> Blockchain<'env> {
         }
 
         let is_better_chain = Ordering::Equal
-            .then_with(|| chain_info.head.view_number().cmp(&self.view_number()))
+            .then_with(|| chain_info.head.view_number().cmp(&self.next_view_number()))
             .then_with(|| chain_info.head.block_number().cmp(&self.block_number()))
             .eq(&Ordering::Greater);
         if is_better_chain {
@@ -527,7 +527,7 @@ impl<'env> Blockchain<'env> {
             return Err(PushError::DuplicateTransaction);
         }
 
-        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"), prev_info.head.view_number()) {
+        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"), prev_info.head.next_view_number()) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }
@@ -661,7 +661,7 @@ impl<'env> Blockchain<'env> {
         assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS.saturating_sub(ancestor.1.head.block_number() + 1));
 
         // Check each fork block against TransactionCache & commit to AccountsTree and SlashRegistry.
-        let mut prev_view_number = ancestor.1.head.view_number();
+        let mut prev_view_number = ancestor.1.head.next_view_number();
         let mut fork_iter = fork_chain.iter().rev();
         while let Some(fork_block) = fork_iter.next() {
             match fork_block.1.head {
@@ -691,7 +691,7 @@ impl<'env> Blockchain<'env> {
                     }
 
                     cache_txn.push_block(&fork_block.1.head);
-                    prev_view_number = fork_block.1.head.view_number();
+                    prev_view_number = fork_block.1.head.next_view_number();
                 }
             }
         }
@@ -767,7 +767,7 @@ impl<'env> Blockchain<'env> {
             },
             Block::Micro(ref micro_block) => {
                 let extrinsics = micro_block.extrinsics.as_ref().unwrap();
-                let view_changes = ViewChanges::new(micro_block.header.block_number, self.view_number(), micro_block.header.view_number);
+                let view_changes = ViewChanges::new(micro_block.header.block_number, self.next_view_number(), micro_block.header.view_number);
                 let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes, Some(txn));
 
                 // Commit block to AccountsTree.
@@ -861,8 +861,12 @@ impl<'env> Blockchain<'env> {
         self.state.read().main_chain.head.block_number()
     }
 
-    pub fn view_number(&self) -> u32 {
+    pub fn next_view_number(&self) -> u32 {
         self.state.read().main_chain.head.next_view_number()
+    }
+
+    pub fn view_number(&self) -> u32 {
+        self.state.read().main_chain.head.view_number()
     }
 
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {
