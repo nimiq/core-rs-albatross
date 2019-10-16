@@ -18,7 +18,7 @@ use handel::aggregation::Aggregation;
 use handel::config::Config;
 use handel::partitioner::BinomialPartitioner;
 use handel::verifier::MultithreadedVerifier;
-use handel::multisig::{Signature, IndividualSignature};
+use handel::multisig::{Signature, MultiSignature, IndividualSignature};
 use handel::identity::WeightRegistry;
 
 use super::voting::{VotingProtocol, Tag, VotingEvaluator, VotingSender, ValidatorRegistry};
@@ -289,5 +289,11 @@ impl PbftAggregation {
 
     pub fn votes(&self) -> (usize, usize) {
         (self.prepare_aggregation.protocol.votes(), self.commit_aggregation.protocol.votes())
+    }
+
+    pub fn prepare_signature(&self) -> Option<MultiSignature> {
+        let store = self.prepare_aggregation.protocol.store();
+        let store = store.read();
+        store.combined(store.best_level())
     }
 }

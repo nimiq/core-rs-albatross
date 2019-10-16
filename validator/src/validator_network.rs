@@ -481,8 +481,13 @@ impl ValidatorNetwork {
 
                             // NOTE: The commit evaluator will only mark the signature as final, if there are enough commit signatures from validators that also
                             //       signed prepare messages. Thus a complete prepare proof must exist at this point.
-                            // NOTE: Either `take()` it, or `clone()` it. Really doesn't matter I guess
-                            let prepare_proof = pbft.prepare_proof.take().expect("No pBFT prepare proof");
+
+                            //let prepare_proof = pbft.prepare_proof.take().expect("No pBFT prepare proof");
+
+                            // Take the best prepare signature we have to this point
+                            let prepare_signature = pbft.aggregation.read().prepare_signature().expect("Prepare signature missing");
+                            let prepare_proof = AggregateProof::new(prepare_signature.signature, prepare_signature.signers);
+
                             let pbft_proof = PbftProof { prepare: prepare_proof, commit: commit_proof };
 
                             // Return the event
