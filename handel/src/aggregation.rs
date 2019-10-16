@@ -247,6 +247,10 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
     }
 
     /// Check if the best signature is final
+    ///
+    /// TODO: In some cases we still want to make the final signature "more final", i.e. the
+    /// pbft prepare signature still can become better and thus influence the finality of the
+    /// commit signature.
     fn check_final_signature(&self) -> bool {
         // first check if we're already done
         let state = self.state.upgradable_read();

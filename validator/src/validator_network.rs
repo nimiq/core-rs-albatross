@@ -77,9 +77,6 @@ struct PbftState {
 
     /// The state of the signature aggregation for pBFT prepare and commit
     aggregation: Arc<RwLock<PbftAggregation>>,
-
-    /// The pBFT prepare proof, once it's complete
-    prepare_proof: Option<AggregateProof<PbftPrepareMessage>>,
 }
 
 impl PbftState {
@@ -89,7 +86,6 @@ impl PbftState {
             proposal,
             block_hash,
             aggregation,
-            prepare_proof: None,
         }
     }
 
@@ -442,19 +438,11 @@ impl ValidatorNetwork {
             .register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
                 match event {
                     AggregationEvent::Complete { best } => {
-                        let event = if let Some(mut pbft) = this.state.write().get_pbft_state_mut(&key) {
-                            if pbft.prepare_proof.is_none() {
-                                // Build prepare proof
-                                let prepare_proof = AggregateProof::new(best.signature, best.signers);
-                                trace!("Prepare complete: {:?}", prepare_proof);
-                                pbft.prepare_proof = Some(prepare_proof);
+                        let event = if let Some(pbft) = this.state.write().get_pbft_state_mut(&key) {
+                            trace!("Prepare complete. Signers: {}", best.signers);
 
-                                // Return the event
-                                Some(ValidatorNetworkEvent::PbftPrepareComplete(Box::new((pbft.block_hash.clone(), pbft.proposal.message.clone()))))
-                            } else {
-                                warn!("Prepare proof already exists");
-                                None
-                            }
+                            // Return the event
+                            Some(ValidatorNetworkEvent::PbftPrepareComplete(Box::new((pbft.block_hash.clone(), pbft.proposal.message.clone()))))
                         } else {
                             error!("No pBFT state");
                             None
@@ -481,9 +469,6 @@ impl ValidatorNetwork {
 
                             // NOTE: The commit evaluator will only mark the signature as final, if there are enough commit signatures from validators that also
                             //       signed prepare messages. Thus a complete prepare proof must exist at this point.
-
-                            //let prepare_proof = pbft.prepare_proof.take().expect("No pBFT prepare proof");
-
                             // Take the best prepare signature we have to this point
                             let prepare_signature = pbft.aggregation.read().prepare_signature().expect("Prepare signature missing");
                             let prepare_proof = AggregateProof::new(prepare_signature.signature, prepare_signature.signers);
