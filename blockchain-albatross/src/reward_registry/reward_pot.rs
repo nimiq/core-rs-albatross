@@ -53,10 +53,9 @@ impl<'env> RewardPot<'env> {
         }
 
         // All slashes.
-        reward += match slots.slash_fine().checked_mul(slashed_set.len() as u64) {
-            Some(r) => r,
-            None => unreachable!(),
-        };
+        reward += slots.slash_fine()
+            .checked_mul(slashed_set.len() as u64)
+            .unwrap_or_else(|| panic!("Slash fine overflowed"));
 
         txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
         txn.put(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY, &u64::from(reward));

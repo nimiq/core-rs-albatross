@@ -177,14 +177,13 @@ impl<'env> ChainStore<'env> {
 
         let mut hash = start_block.parent_hash().clone();
         while (blocks.len() as u32) < count {
-            let block_opt = self.get_block(&hash, include_body, Some(&txn));
-            if block_opt.is_none() {
+            if let Some(block) = self.get_block(&hash, include_body, Some(&txn)) {
+                hash = block.parent_hash().clone();
+                blocks.push(block);
+            }
+            else {
                 break;
             }
-
-            let block = block_opt.unwrap();
-            hash = block.parent_hash().clone();
-            blocks.push(block);
         }
 
         blocks

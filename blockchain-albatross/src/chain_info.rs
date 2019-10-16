@@ -32,14 +32,6 @@ impl ChainInfo {
             slot,
         }
     }
-
-    pub fn next(&self, block: Block, slot: Option<IndexedSlot>) -> Self {
-        ChainInfo::new(block, slot)
-    }
-
-    pub fn prev(&self, block: Block, slot: Option<IndexedSlot>) -> Self {
-        ChainInfo::new(block, slot)
-    }
 }
 
 // Do not serialize the block body.

@@ -496,7 +496,7 @@ impl<'env> Blockchain<'env> {
         }
 
         let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, Some(&read_txn)).unwrap();
-        let chain_info = prev_info.next(block, Some(slot));
+        let chain_info = ChainInfo::new(block, Some(slot));
 
         // Drop read transaction before calling other functions.
         drop(read_txn);
@@ -882,14 +882,11 @@ impl<'env> Blockchain<'env> {
         }
 
         // Check if the block's immediate predecessor is part of the chain.
-        let prev_info_opt = self.chain_store.get_chain_info(&macro_block.header.parent_macro_hash, false, Some(&read_txn));
-        if prev_info_opt.is_none() {
-            warn!("Rejecting block - unknown predecessor");
-            return Err(PushError::Orphan);
-        }
-
-        // Check that the block is a valid successor of its predecessor.
-        let prev_info = prev_info_opt.unwrap();
+        let prev_info = self.chain_store.get_chain_info(&macro_block.header.parent_macro_hash, false, Some(&read_txn))
+            .ok_or_else(|| {
+                warn!("Rejecting block - unknown predecessor");
+                PushError::Orphan
+            })?;
 
         // Check the block number
         if policy::macro_block_after(prev_info.head.block_number()) != macro_block.header.block_number {
@@ -912,7 +909,7 @@ impl<'env> Blockchain<'env> {
                 return Err(PushError::InvalidBlock(BlockError::NoJustification));
             },
             Some(ref justification) => {
-                if justification.verify(macro_block.hash(),&self.current_validators(), policy::TWO_THIRD_SLOTS).is_err() {
+                if let Err(_) = justification.verify(macro_block.hash(),&self.current_validators(), policy::TWO_THIRD_SLOTS) {
                     warn!("Rejecting block - macro block with bad justification");
                     return Err(PushError::InvalidBlock(BlockError::NoJustification));
                 }
@@ -996,7 +993,6 @@ impl<'env> Blockchain<'env> {
         prev_info.main_chain_successor = Some(chain_info.head.hash());
 
         self.chain_store.put_chain_info(&mut txn, &block_hash, &chain_info, true);
-        // TODO: Do we want that?
         self.chain_store.put_chain_info(&mut txn, &chain_info.head.parent_hash(), &prev_info, false);
         self.chain_store.set_head(&mut txn, &block_hash);
 
@@ -1336,7 +1332,7 @@ impl<'env> Blockchain<'env> {
 
             let inherent = Inherent {
                 ty: InherentType::Reward,
-                target: slot.reward_address_opt.clone().unwrap_or_else(|| slot.staker_address.clone()),
+                target: slot.reward_address_opt.as_ref().unwrap_or(&slot.staker_address).clone(),
                 value: reward,
                 data: vec![],
             };
@@ -1374,7 +1370,7 @@ impl<'env> Blockchain<'env> {
 
         // Push top ten hashes.
         locators.push(hash.clone());
-        for _ in 0..cmp::min(10, policy::epoch_at(self.height())) {
+        for _ in 0..10 {
             let block = self.chain_store.get_block(&hash, false, None);
             match block {
                 Some(Block::Macro(block)) => {
@@ -1399,11 +1395,11 @@ impl<'env> Blockchain<'env> {
             }
 
             step *= 2;
-            height = match height.checked_sub(step * policy::EPOCH_LENGTH) {
-                Some(0) => break, // 0 or underflow means we need to end the loop
-                Some(v) => v,
-                None => break,
-            };
+            height = height.saturating_sub(step * policy::EPOCH_LENGTH);
+            // 0 or underflow means we need to end the loop
+            if height == 0 {
+                break;
+            }
 
             opt_block = self.chain_store.get_block_at(height, false, None);
         }
