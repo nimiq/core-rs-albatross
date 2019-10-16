@@ -1062,12 +1062,12 @@ impl<'env> Blockchain<'env> {
         self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
-    pub fn get_transactions_root(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
-        let mut hashes = Vec::new();
+    pub fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction>) -> Option<Vec<B>> {
+        let mut transactions = Vec::new();
 
         let first_block = policy::first_block_of(epoch);
         let first_block = self.chain_store.get_block_at(first_block, true, txn_option)?;
-        hashes.extend(first_block.transactions().unwrap().iter().map(|tx| tx.hash()));
+        transactions.extend(first_block.transactions()?.iter().map(&f));
 
         // Excludes current block and macro block.
         let blocks = self.chain_store.get_blocks(&first_block.hash(), policy::EPOCH_LENGTH - 2, true, Direction::Forward, txn_option);
@@ -1077,8 +1077,14 @@ impl<'env> Blockchain<'env> {
         }
 
         for block in blocks {
-            hashes.extend(block.transactions().unwrap().iter().map(|tx| tx.hash()));
+            transactions.extend(block.transactions()?.iter().map(&f));
         }
+
+        Some(transactions)
+    }
+
+    pub fn get_transactions_root(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
+        let mut hashes = self.get_epoch_transactions(epoch, |tx| tx.hash(), txn_option)?;
 
         Some(merkle::compute_root_from_hashes::<Blake2bHash>(&hashes))
     }
@@ -1572,5 +1578,9 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
 
     fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk> {
         self.state.read().accounts.get_chunk(prefix, size, txn_option)
+    }
+
+    fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction>) -> Option<Vec<B>> {
+        Blockchain::get_epoch_transactions(self, epoch, f, txn_option)
     }
 }

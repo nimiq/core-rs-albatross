@@ -32,7 +32,7 @@ pub struct Consensus<P: ConsensusProtocol + 'static> {
     pub network: Arc<Network<P::Blockchain>>,
     pub env: &'static Environment,
 
-    inv_mgr: Arc<RwLock<InventoryManager<P::Blockchain, P::MessageAdapter>>>,
+    inv_mgr: Arc<RwLock<InventoryManager<P>>>,
     timers: Timers<ConsensusTimer>,
     accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>,
 
@@ -56,7 +56,7 @@ enum ConsensusTimer {
     Sync,
 }
 
-type ConsensusAgentMap<P> = HashMap<Arc<Peer>, Arc<ConsensusAgent<<P as ConsensusProtocol>::Blockchain, <P as ConsensusProtocol>::MessageAdapter>>>;
+type ConsensusAgentMap<P> = HashMap<Arc<Peer>, Arc<ConsensusAgent<P>>>;
 
 struct ConsensusState<P: ConsensusProtocol + 'static> {
     established: bool,
@@ -264,7 +264,7 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
         }
 
         let mut num_synced_full_nodes: usize = 0;
-        let candidates: Vec<&Arc<ConsensusAgent<P::Blockchain, P::MessageAdapter>>> = state.agents.values()
+        let candidates: Vec<&Arc<ConsensusAgent<P>>> = state.agents.values()
             .filter(|&agent| {
                 let synced = agent.synced();
                 if synced && agent.peer.peer_address().services.is_full_node() {

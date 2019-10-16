@@ -1,30 +1,36 @@
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
-use tokio::prelude::*;
 use futures::Future;
+use tokio::prelude::*;
 
+use block_base::Block;
 use blockchain_base::AbstractBlockchain;
-use hash::Blake2bHash;
+use hash::{Blake2bHash, Hash};
 use network_messages::{
-    Message,
-    MessageAdapter,
+    AccountsProofMessage,
+    AccountsTreeChunkData,
     //GetBlockProofMessage,
     //BlockProofMessage,
+    AccountsTreeChunkMessage,
+    EpochTransactionsMessage,
+    GetAccountsProofMessage,
+    GetAccountsTreeChunkMessage,
+    GetEpochTransactionsMessage,
     GetTransactionReceiptsMessage,
     GetTransactionsProofMessage,
+    Message,
     TransactionReceiptsMessage,
     TransactionsProofMessage,
-    GetAccountsProofMessage,
-    AccountsProofMessage,
-    GetAccountsTreeChunkMessage,
-    AccountsTreeChunkMessage,
-    AccountsTreeChunkData,
 };
+use primitives::policy;
+use transaction::{Transaction, TransactionsProof};
+use utils::merkle::Blake2bMerkleProof;
 
 use crate::consensus_agent::ConsensusAgent;
+use crate::ConsensusProtocol;
 
-impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> ConsensusAgent<B, MA> {
+impl<P: ConsensusProtocol> ConsensusAgent<P> {
     // FIXME
 //    pub(super) fn on_get_chain_proof(&self) {
 //        trace!("[GET-CHAIN-PROOF] from {}", self.peer.peer_address());
@@ -105,5 +111,47 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
             future::ok::<(), ()>(())
         });
         tokio::spawn(future);
+    }
+
+    pub(super) fn on_get_epoch_transactions(&self, get_epoch_transactions_message: GetEpochTransactionsMessage) {
+        trace!("[GET-EPOCH-TRANSACTIONS] from {}", self.peer.peer_address());
+        // TODO: Rate limit.
+
+        let block = self.blockchain.get_block(&get_epoch_transactions_message.macro_hash, false);
+        if let Some(block) = block {
+            let epoch = policy::epoch_at(block.height());
+            let transactions: Option<Vec<Transaction>> = self.blockchain.get_epoch_transactions(epoch, |tx| tx.clone(), None);
+            if transactions.is_none() {
+                debug!("[GET-EPOCH-TRANSACTIONS] Could not determine transactions for hash {:?}", get_epoch_transactions_message.macro_hash);
+                return;
+            }
+            let mut transactions = transactions.unwrap();
+            let hashes: Vec<Blake2bHash> = transactions.iter().map(|tx| tx.hash()).collect();
+
+            // Fast integer division ceiling, we want ceil(#txs / MAX_TRANSACTIONS).
+            let num_chunks = (transactions.len() + EpochTransactionsMessage::MAX_TRANSACTIONS - 1) / EpochTransactionsMessage::MAX_TRANSACTIONS;
+            // Divide into chunks.
+            for (i, chunk) in transactions.chunks(EpochTransactionsMessage::MAX_TRANSACTIONS).enumerate() {
+                let start_index = i * EpochTransactionsMessage::MAX_TRANSACTIONS;
+                // Create proof for each chunk.
+                let proof = Blake2bMerkleProof::new(
+                    &hashes,
+                    &hashes[start_index..(start_index+EpochTransactionsMessage::MAX_TRANSACTIONS)]
+                );
+
+                // Send individual chunks.
+                self.peer.channel.send_or_close(EpochTransactionsMessage::new(
+                    epoch,
+                    TransactionsProof {
+                        transactions: chunk.to_vec(),
+                        proof,
+                    },
+                    (EpochTransactionsMessage::MAX_TRANSACTIONS * i) as u32,
+                    i + 1 == num_chunks
+                ));
+            }
+        } else {
+            debug!("[GET-EPOCH-TRANSACTIONS] Invalid hash {:?}", get_epoch_transactions_message.macro_hash);
+        }
     }
 }

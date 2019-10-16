@@ -6,20 +6,23 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 use weak_table::PtrWeakHashSet;
 
-use block_base::{Block, BlockHeader, BlockError};
+use beserial::Serialize;
+use block_base::{Block, BlockError, BlockHeader};
 use blockchain_base::{AbstractBlockchain, Direction, PushError, PushResult};
 use collections::{LimitHashSet, UniqueLinkedList};
+use collections::queue::Queue;
 use hash::{Blake2bHash, Hash};
 use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_messages::{
-    MessageAdapter,
+    EpochTransactionsMessage,
     GetBlocksDirection,
     GetBlocksMessage,
     InvVector,
     InvVectorType,
     Message,
+    MessageAdapter,
     TxMessage,
 };
 use network_primitives::networks::NetworkInfo;
@@ -31,25 +34,26 @@ use utils::{
     observer::{Notifier, weak_listener, weak_passthru_listener},
     timers::Timers,
 };
-use utils::throttled_queue::ThrottledQueue;
-use collections::queue::Queue;
 use utils::rate_limit::RateLimit;
-use beserial::Serialize;
+use utils::throttled_queue::ThrottledQueue;
+
+use crate::consensus_agent::sync::{SyncEvent, SyncProtocol};
+use crate::ConsensusProtocol;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {
     Request(InvVector)
 }
 
-type VectorsToRequest<B, MA> = HashMap<InvVector, (Weak<InventoryAgent<B, MA>>, PtrWeakHashSet<Weak<InventoryAgent<B, MA>>>)>;
+type VectorsToRequest<P> = HashMap<InvVector, (Weak<InventoryAgent<P>>, PtrWeakHashSet<Weak<InventoryAgent<P>>>)>;
 
-pub struct InventoryManager<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> {
-    vectors_to_request: VectorsToRequest<B, MA>,
-    self_weak: Weak<RwLock<InventoryManager<B, MA>>>,
+pub struct InventoryManager<P: ConsensusProtocol + 'static> {
+    vectors_to_request: VectorsToRequest<P>,
+    self_weak: Weak<RwLock<InventoryManager<P>>>,
     timers: Timers<InventoryManagerTimer>,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> InventoryManager<B, MA> {
+impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
     const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
     pub fn new() -> Arc<RwLock<Self>> {
@@ -62,7 +66,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         this
     }
 
-    fn ask_to_request_vector(&mut self, agent: &InventoryAgent<B, MA>, vector: &InvVector) {
+    fn ask_to_request_vector(&mut self, agent: &InventoryAgent<P>, vector: &InvVector) {
         if self.vectors_to_request.contains_key(vector) {
             let record = self.vectors_to_request.get_mut(&vector).unwrap();
             let current_opt = record.0.upgrade();
@@ -85,7 +89,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         }
     }
 
-    fn request_vector(&mut self, agent: &InventoryAgent<B, MA>, vector: &InvVector) {
+    fn request_vector(&mut self, agent: &InventoryAgent<P>, vector: &InvVector) {
         agent.queue_vector(vector.clone());
 
         let weak = self.self_weak.clone();
@@ -102,7 +106,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         self.vectors_to_request.remove(vector);
     }
 
-    fn note_vector_not_received(&mut self, agent_weak: &Weak<InventoryAgent<B, MA>>, vector: &InvVector) {
+    fn note_vector_not_received(&mut self, agent_weak: &Weak<InventoryAgent<P>>, vector: &InvVector) {
         self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
         let record_opt = self.vectors_to_request.get_mut(vector);
         if record_opt.is_none() {
@@ -229,19 +233,20 @@ struct InventoryAgentState {
     last_subscription_change: Instant,
 }
 
-pub struct InventoryAgent<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> {
-    blockchain: Arc<B>,
-    mempool: Arc<Mempool<'static, B>>,
+pub struct InventoryAgent<P: ConsensusProtocol + 'static> {
+    blockchain: Arc<P::Blockchain>,
+    mempool: Arc<Mempool<'static, P::Blockchain>>,
     peer: Arc<Peer>,
-    inv_mgr: Arc<RwLock<InventoryManager<B, MA>>>,
+    inv_mgr: Arc<RwLock<InventoryManager<P>>>,
+    sync_protocol: Arc<P::SyncProtocol>,
     state: RwLock<InventoryAgentState>,
-    pub notifier: RwLock<Notifier<'static, InventoryEvent<<B::Block as Block>::Error>>>,
-    self_weak: MutableOnce<Weak<InventoryAgent<B, MA>>>,
+    pub notifier: RwLock<Notifier<'static, InventoryEvent<<<P::Blockchain as AbstractBlockchain<'static>>::Block as Block>::Error>>>,
+    self_weak: MutableOnce<Weak<InventoryAgent<P>>>,
     timers: Timers<InventoryAgentTimer>,
     mutex: Mutex<()>,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> InventoryAgent<B, MA> {
+impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
     /// Time to wait after the last received inv message before sending get-data.
     const REQUEST_THROTTLE: Duration = Duration::from_millis(500);
     /// Maximum time to wait after sending out get-data or receiving the last object for this request.
@@ -272,12 +277,13 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
 
     const SUBSCRIPTION_CHANGE_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
-    pub fn new(blockchain: Arc<B>, mempool: Arc<Mempool<'static, B>>, inv_mgr: Arc<RwLock<InventoryManager<B, MA>>>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<'static, P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, peer: Arc<Peer>, sync_agent: Arc<P::SyncProtocol>) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
             blockchain,
             mempool,
             peer,
             inv_mgr,
+            sync_protocol: sync_agent,
             state: RwLock::new(InventoryAgentState {
                 bypass_mgr: false,
                 known_objects: LimitHashSet::new(Self::KNOWN_OBJECTS_COUNT_MAX),
@@ -332,10 +338,10 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         msg_notifier.inv.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, vectors: Vec<InvVector>| this.on_inv(vectors)));
-        MA::register_block_listener(msg_notifier, weak_passthru_listener(
+        P::MessageAdapter::register_block_listener(msg_notifier, weak_passthru_listener(
             Arc::downgrade(this),
             |this, block| this.on_block(block)));
-        MA::register_header_listener(msg_notifier, weak_passthru_listener(
+        P::MessageAdapter::register_header_listener(msg_notifier, weak_passthru_listener(
             Arc::downgrade(this),
             |this, header| this.on_header(header)));
         msg_notifier.tx.write().register(weak_passthru_listener(
@@ -357,10 +363,23 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         msg_notifier.mempool.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, _ | this.on_mempool()));
+        msg_notifier.get_macro_blocks.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg: GetBlocksMessage| this.on_get_macro_blocks(msg)));
+        msg_notifier.epoch_transactions.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg: EpochTransactionsMessage| this.on_epoch_transactions(msg)));
 
         msg_notifier.subscribe.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, subscription: Subscription| this.on_subscribe(subscription)));
+
+        this.sync_protocol.register_listener(weak_passthru_listener(Arc::downgrade(this),
+        |this, event| {
+            match event {
+                SyncEvent::BlockProcessed(hash, result) => this.notifier.read().notify(InventoryEvent::BlockProcessed(hash, result)),
+            }
+        }));
 
         let mut close_notifier = channel.close_notifier.write();
         close_notifier.register(weak_listener(
@@ -387,11 +406,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
             this.notifier.read().notify(InventoryEvent::GetBlocksTimeout);
         }, timeout);
 
-        self.peer.channel.send_or_close(GetBlocksMessage::new(
-            locators,
-            max_results,
-            GetBlocksDirection::Forward,
-        ));
+        self.sync_protocol.request_blocks(locators, max_results);
     }
 
     pub fn mempool(&self) {
@@ -493,11 +508,12 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
             // Give up write lock before notifying.
             drop(state);
 
+            self.sync_protocol.on_no_new_objects_announced();
             self.notifier.read().notify(InventoryEvent::NoNewObjectsAnnounced);
         }
     }
 
-    fn on_block(&self, mut block: B::Block) {
+    fn on_block(&self, mut block: <P::Blockchain as AbstractBlockchain<'static>>::Block) {
         //let lock = self.mutex.lock();
 
         let hash = block.hash();
@@ -524,15 +540,14 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
 
         self.inv_mgr.write().note_vector_received(&vector);
 
-        // Process block & notify.
-        let result = self.blockchain.push(block);
-        self.notifier.read().notify(InventoryEvent::BlockProcessed(vector.hash.clone(), result));
+        // Process block.
+        self.sync_protocol.on_block(block);
 
         // Mark object as received.
         self.on_object_received(&vector);
     }
 
-    fn on_header(&self, header: <B::Block as Block>::Header) {
+    fn on_header(&self, header: <<P::Blockchain as AbstractBlockchain<'static>>::Block as Block>::Header) {
         trace!("[HEADER] #{} {}", header.height(), header.hash());
         warn!("Unsolicited header message received from {}, discarding", self.peer.peer_address());
     }
@@ -751,11 +766,58 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         } else {
             // Give up write lock before notifying.
             drop(state);
+            self.sync_protocol.on_all_objects_received();
             self.notifier.read().notify(InventoryEvent::AllObjectsReceived);
         }
     }
 
     fn on_get_blocks(&self, msg: GetBlocksMessage) {
+        {
+            let mut state = self.state.write();
+            if !state.get_blocks_limit.note_single() {
+                warn!("Rejecting GetBlocks message - rate limit exceeded");
+                return;
+            }
+        }
+
+        trace!("[GETBLOCKS] {} block locators max_inv_size {} received from {}", msg.locators.len(), msg.max_inv_size, self.peer.peer_address());
+
+        // A peer has requested blocks. Check all requested block locator hashes
+        // in the given order and pick the first hash that is found on our main
+        // chain, ignore the rest. If none of the requested hashes is found,
+        // pick the genesis block hash. Send the main chain starting from the
+        // picked hash back to the peer.
+        let network_info = NetworkInfo::from_network_id(self.blockchain.network_id());
+        let mut start_block_hash = network_info.genesis_hash().clone();
+        for locator in msg.locators.iter() {
+            if self.blockchain.get_block(locator, false).is_some() {
+                // We found a block, ignore remaining block locator hashes.
+                start_block_hash = locator.clone();
+                break;
+            }
+        }
+
+        // Collect up to GETBLOCKS_VECTORS_MAX inventory vectors for the blocks starting right
+        // after the identified block on the main chain.
+        let blocks = self.blockchain.get_blocks(
+            &start_block_hash,
+            cmp::min(u32::from(msg.max_inv_size), Self::GET_BLOCKS_VECTORS_MAX),
+            false,
+            match msg.direction {
+                GetBlocksDirection::Forward => Direction::Forward,
+                GetBlocksDirection::Backward => Direction::Backward,
+            },
+        );
+
+        let vectors = blocks.iter().map(|block| {
+            InvVector::from_block_hash(block.hash())
+        }).collect();
+
+        // Send the vectors back to the requesting peer.
+        self.peer.channel.send_or_close(Message::Inv(vectors));
+    }
+
+    fn on_get_macro_blocks(&self, msg: GetBlocksMessage) {
         {
             let mut state = self.state.write();
             if !state.get_blocks_limit.note_single() {
@@ -822,7 +884,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
                     let block_opt = self.blockchain.get_block(&vector.hash, true);
                     match block_opt {
                         Some(block) => {
-                            if self.peer.channel.send(MA::new_block_message(block)).is_err() {
+                            if self.peer.channel.send(P::MessageAdapter::new_block_message(block)).is_err() {
                                 self.peer.channel.close(CloseType::SendFailed);
                                 return;
                             }
@@ -875,7 +937,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
                     let block_opt = self.blockchain.get_block(&vector.hash, false);
                     match block_opt {
                         Some(block) => {
-                            if self.peer.channel.send(MA::new_header_message(block.header())).is_err() {
+                            if self.peer.channel.send(P::MessageAdapter::new_header_message(block.header())).is_err() {
                                 self.peer.channel.close(CloseType::SendFailed);
                                 return;
                             }
@@ -896,7 +958,11 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         }
     }
 
-    pub fn relay_block(&self, block: &B::Block) -> bool {
+    fn on_epoch_transactions(&self, epoch_transactions_message: EpochTransactionsMessage) {
+        self.sync_protocol.on_epoch_transactions(epoch_transactions_message);
+    }
+
+    pub fn relay_block(&self, block: &<P::Blockchain as AbstractBlockchain<'static>>::Block) -> bool {
         // Only relay block if it matches the peer's subscription.
         if !self.state.read().remote_subscription.matches_block() {
             return false;

@@ -24,7 +24,7 @@ impl<'env> Blockchain<'env> {
 
         let merkle_leaves = body.get_merkle_leaves::<Blake2bHash>();
         let matching_hashes: Vec<Blake2bHash> = matches.iter().map(Hash::hash).collect();
-        let proof = Blake2bMerkleProof::new(merkle_leaves, matching_hashes);
+        let proof = Blake2bMerkleProof::new(&merkle_leaves, &matching_hashes);
         Some(TransactionsProof {
             transactions: matches,
             proof,

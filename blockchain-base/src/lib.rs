@@ -25,6 +25,7 @@ use keys::Address;
 use nimiq_network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
 use transaction::{TransactionReceipt, TransactionsProof};
+use transaction::Transaction as BlockchainTransaction;
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle};
@@ -107,6 +108,9 @@ pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
     fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash>;
 
     fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk>;
+
+    // TODO: Currently, we can implement request responses in the ConsensusAgent only for *both* protocols, which is why AbstractBlockchain needs to support this.
+    fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction<'env>>) -> Option<Vec<B>>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

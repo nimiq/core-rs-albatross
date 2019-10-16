@@ -66,6 +66,9 @@ pub enum CloseType {
     InvalidSignatureInVerackMessage = 115,
     BannedIp = 116,
 
+    UnexpectedEpochTransactions = 117,
+    InvalidEpochTransactions = 118,
+
     RateLimitExceeded = 120,
 
     ManualPeerBan = 190,

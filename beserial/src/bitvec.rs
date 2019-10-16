@@ -26,11 +26,17 @@ impl<C: Cursor> SerializeWithLength for BitVec<C, u8> {
 }
 
 impl<C: Cursor> DeserializeWithLength for BitVec<C, u8> {
-    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
         let n_bits = D::deserialize(reader)?
             .to_usize().ok_or(SerializingError::Overflow)?;
         let n = D::deserialize(reader)?
             .to_usize().ok_or(SerializingError::Overflow)?;
+
+        // If number of bits is too large, abort.
+        if limit.map(|l| l > n_bits).unwrap_or(false) {
+            return Err(SerializingError::LimitExceeded);
+        }
+
         let mut data = Vec::with_capacity(n);
         data.resize(n, 0);
         reader.read_exact(data.as_mut_slice())?;

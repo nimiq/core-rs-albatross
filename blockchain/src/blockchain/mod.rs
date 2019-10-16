@@ -9,6 +9,8 @@ use accounts::Accounts;
 use block::{Block, BlockError, Difficulty, Target, TargetCompact};
 use block::proof::ChainProof;
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
+#[cfg(feature = "metrics")]
+use blockchain_base::chain_metrics::BlockchainMetrics;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use fixed_unsigned::RoundHalfUp;
 use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
@@ -19,6 +21,7 @@ use network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use transaction::{TransactionReceipt, TransactionsProof};
+use transaction::Transaction as BlockchainTransaction;
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle, Notifier};
@@ -26,13 +29,8 @@ use utils::observer::{Listener, ListenerHandle, Notifier};
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::transaction_cache::TransactionCache;
-
-#[cfg(feature = "metrics")]
-use blockchain_base::chain_metrics::BlockchainMetrics;
-
 #[cfg(feature = "transaction-store")]
 use crate::transaction_store::TransactionStore;
-
 
 pub mod transaction_proofs;
 
@@ -809,5 +807,9 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
 
     fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk> {
         self.state.read().accounts.get_chunk(prefix, size, txn_option)
+    }
+
+    fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction<'env>>) -> Option<Vec<B>> {
+        None
     }
 }

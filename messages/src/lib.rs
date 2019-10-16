@@ -11,6 +11,7 @@ extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
 extern crate nimiq_bls as bls;
+extern crate nimiq_handel as handel;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 #[macro_use]
@@ -19,11 +20,10 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
-extern crate nimiq_handel as handel;
 
 use std::fmt::Display;
 use std::io;
-use std::io::{Read, Cursor, Seek, SeekFrom};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use parking_lot::RwLock;
 use rand::Rng;
@@ -32,7 +32,8 @@ use rand::rngs::OsRng;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
-use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, SignedPbftProposal, ViewChange, PbftPrepareMessage, PbftCommitMessage, ViewChangeProof};
+use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, PbftCommitMessage, PbftPrepareMessage, SignedPbftProposal, ViewChange, ViewChangeProof};
+use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
 use network_primitives::address::{PeerAddress, PeerId};
@@ -45,10 +46,8 @@ use transaction::{Transaction, TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
+use utils::merkle::Blake2bMerkleProof;
 use utils::observer::{PassThroughListener, PassThroughNotifier};
-use handel::update::LevelUpdateMessage;
-
-
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
 #[repr(u64)]
@@ -103,6 +102,8 @@ pub enum MessageType {
     PbftPrepare = 121,
     PbftCommit = 122,
     GetMacroBlocks = 123,
+    GetEpochTransactions = 124,
+    EpochTransactions = 125,
 }
 
 #[derive(Clone, Debug)]
@@ -156,6 +157,8 @@ pub enum Message {
     PbftPrepare(Box<LevelUpdateMessage<PbftPrepareMessage>>),
     PbftCommit(Box<LevelUpdateMessage<PbftCommitMessage>>),
     GetMacroBlocks(Box<GetBlocksMessage>),
+    GetEpochTransactions(Box<GetEpochTransactionsMessage>),
+    EpochTransactions(Box<EpochTransactionsMessage>),
 }
 
 impl Message {
@@ -204,6 +207,8 @@ impl Message {
             Message::PbftPrepare(_) => MessageType::PbftPrepare,
             Message::PbftCommit(_) => MessageType::PbftCommit,
             Message::GetMacroBlocks(_) => MessageType::GetMacroBlocks,
+            Message::GetEpochTransactions(_) => MessageType::GetEpochTransactions,
+            Message::EpochTransactions(_) => MessageType::EpochTransactions,
         }
     }
 
@@ -273,10 +278,10 @@ impl Deserialize for Message {
 
         let message: Message = match ty {
             MessageType::Version => Message::Version(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::Inv => Message::Inv(DeserializeWithLength::deserialize::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
-            MessageType::GetData => Message::GetData(DeserializeWithLength::deserialize::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
-            MessageType::GetHeader => Message::GetHeader(DeserializeWithLength::deserialize::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
-            MessageType::NotFound => Message::NotFound(DeserializeWithLength::deserialize::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
+            MessageType::Inv => Message::Inv(DeserializeWithLength::deserialize_with_limit::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT))?),
+            MessageType::GetData => Message::GetData(DeserializeWithLength::deserialize_with_limit::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT))?),
+            MessageType::GetHeader => Message::GetHeader(DeserializeWithLength::deserialize_with_limit::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT))?),
+            MessageType::NotFound => Message::NotFound(DeserializeWithLength::deserialize_with_limit::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT))?),
             MessageType::Block => Message::Block(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Header => Message::Header(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Tx => Message::Tx(Deserialize::deserialize(&mut crc32_reader)?),
@@ -315,6 +320,8 @@ impl Deserialize for Message {
             MessageType::PbftPrepare => Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::PbftCommit => Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::GetMacroBlocks => Message::GetMacroBlocks(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetEpochTransactions => Message::GetEpochTransactions(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::EpochTransactions => Message::EpochTransactions(Deserialize::deserialize(&mut crc32_reader)?),
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
@@ -385,6 +392,8 @@ impl Serialize for Message {
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
             Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
             Message::GetMacroBlocks(get_blocks_message) => get_blocks_message.serialize(&mut v)?,
+            Message::GetEpochTransactions(get_epoch_transactions) => get_epoch_transactions.serialize(&mut v)?,
+            Message::EpochTransactions(epoch_transactions) => epoch_transactions.serialize(&mut v)?,
         };
 
         // write checksum to placeholder
@@ -444,6 +453,8 @@ impl Serialize for Message {
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialized_size(),
             Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
             Message::GetMacroBlocks(get_blocks_message) => get_blocks_message.serialized_size(),
+            Message::GetEpochTransactions(get_epoch_transactions) => get_epoch_transactions.serialized_size(),
+            Message::EpochTransactions(epoch_transactions) => epoch_transactions.serialized_size(),
         };
         size
     }
@@ -494,6 +505,8 @@ pub struct MessageNotifier {
     pub pbft_prepare: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftPrepareMessage>>>,
     pub pbft_commit: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftCommitMessage>>>,
     pub get_macro_blocks: RwLock<PassThroughNotifier<'static, GetBlocksMessage>>,
+    pub get_epoch_transactions: RwLock<PassThroughNotifier<'static, GetEpochTransactionsMessage>>,
+    pub epoch_transactions: RwLock<PassThroughNotifier<'static, EpochTransactionsMessage>>,
 }
 
 impl MessageNotifier {
@@ -546,6 +559,8 @@ impl MessageNotifier {
             Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
             Message::PbftCommit(commit) => self.pbft_commit.read().notify(*commit),
             Message::GetMacroBlocks(msg) => self.get_macro_blocks.read().notify(*msg),
+            Message::GetEpochTransactions(msg) => self.get_epoch_transactions.read().notify(*msg),
+            Message::EpochTransactions(msg) => self.epoch_transactions.read().notify(*msg),
         }
     }
 }
@@ -738,6 +753,14 @@ impl GetBlocksMessage {
 
     pub fn new(locators: Vec<Blake2bHash>, max_inv_size: u16, direction: GetBlocksDirection) -> Message {
         Message::GetBlocks(Box::new(Self {
+            locators,
+            max_inv_size,
+            direction,
+        }))
+    }
+
+    pub fn new_with_macro(locators: Vec<Blake2bHash>, max_inv_size: u16, direction: GetBlocksDirection) -> Message {
+        Message::GetMacroBlocks(Box::new(Self {
             locators,
             max_inv_size,
             direction,
@@ -1100,4 +1123,36 @@ impl VerAckMessage {
 pub struct ViewChangeProofMessage {
     pub view_change: ViewChange,
     pub proof: ViewChangeProof,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetEpochTransactionsMessage {
+    pub macro_hash: Blake2bHash,
+}
+impl GetEpochTransactionsMessage {
+    pub fn new(macro_hash: Blake2bHash) -> Message {
+        Message::GetEpochTransactions(Box::new(Self {
+            macro_hash,
+        }))
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EpochTransactionsMessage {
+    pub epoch: u32,
+    pub tx_proof: TransactionsProof,
+    pub start_index: u32,
+    pub last: bool,
+}
+impl EpochTransactionsMessage {
+    pub const MAX_TRANSACTIONS: usize = 1000;
+
+    pub fn new(epoch: u32, tx_proof: TransactionsProof, start_index: u32, last: bool) -> Message {
+        Message::EpochTransactions(Box::new(Self {
+            epoch,
+            tx_proof,
+            start_index,
+            last,
+        }))
+    }
 }

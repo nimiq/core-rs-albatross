@@ -50,6 +50,8 @@ pub enum SerializingError {
     InvalidValue,
     #[fail(display = "Overflow")]
     Overflow,
+    #[fail(display = "Length limit exceeded")]
+    LimitExceeded,
 }
 
 impl From<std::io::Error> for SerializingError {
@@ -174,8 +176,8 @@ impl Serialize for bool {
 // String
 
 impl DeserializeWithLength for String {
-    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let vec: Vec<u8> = DeserializeWithLength::deserialize::<D, R>(reader)?;
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
+        let vec: Vec<u8> = DeserializeWithLength::deserialize_with_limit::<D, R>(reader, limit)?;
         String::from_utf8(vec).or(Err(SerializingError::InvalidEncoding))
     }
 }
@@ -193,10 +195,13 @@ impl SerializeWithLength for String {
 // Vectors
 
 pub trait DeserializeWithLength: Sized {
-    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError>;
+    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        Self::deserialize_with_limit::<D, _>(reader, None)
+    }
     fn deserialize_from_vec<D: Deserialize + num::ToPrimitive>(v: &[u8]) -> Result<Self, SerializingError> {
         Self::deserialize::<D, _>(&mut &v[..])
     }
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError>;
 }
 
 pub trait SerializeWithLength {
@@ -210,9 +215,15 @@ pub trait SerializeWithLength {
 }
 
 impl<T: Deserialize> DeserializeWithLength for Vec<T> {
-    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
         let len: D = Deserialize::deserialize(reader)?;
         let len_u = len.to_usize().unwrap();
+
+        // If vector is too large, abort.
+        if limit.map(|l| len_u > l).unwrap_or(false) {
+            return Err(SerializingError::LimitExceeded);
+        }
+
         let mut v = Vec::with_capacity(len_u);
         for _ in 0..len_u {
             v.push(T::deserialize(reader)?);
@@ -281,9 +292,15 @@ impl<T, H> DeserializeWithLength for HashSet<T, H>
     where T: Deserialize + std::cmp::Eq + std::hash::Hash,
           H: BuildHasher + Default
 {
-    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
         let len: D = Deserialize::deserialize(reader)?;
         let len_u = len.to_usize().unwrap();
+
+        // If hash set is too large, abort.
+        if limit.map(|l| len_u > l).unwrap_or(false) {
+            return Err(SerializingError::LimitExceeded);
+        }
+
         let mut v = HashSet::with_capacity_and_hasher(len_u, H::default());
         for _ in 0..len_u {
             v.insert(T::deserialize(reader)?);
@@ -319,9 +336,15 @@ impl<K, V> DeserializeWithLength for BTreeMap<K, V>
     where K: Deserialize + Ord,
         V: Deserialize
 {
-    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
         let len: D = Deserialize::deserialize(reader)?;
         let len_u = len.to_usize().unwrap();
+
+        // If number of items is too large, abort.
+        if limit.map(|l| len_u > l).unwrap_or(false) {
+            return Err(SerializingError::LimitExceeded);
+        }
+
         let mut v = BTreeMap::new();
         for _ in 0..len_u {
             v.insert(K::deserialize(reader)?, V::deserialize(reader)?);
@@ -377,11 +400,11 @@ impl<T: Deserialize> Deserialize for Option<T> {
 }
 
 impl<T: DeserializeWithLength> DeserializeWithLength for Option<T> {
-    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
         let is_present: u8 = Deserialize::deserialize(reader)?;
         match is_present {
             0 => Ok(Option::None),
-            1 => Ok(Option::Some(DeserializeWithLength::deserialize::<D, R>(reader)?)),
+            1 => Ok(Option::Some(DeserializeWithLength::deserialize_with_limit::<D, R>(reader, limit)?)),
             _ => Err(SerializingError::InvalidValue),
         }
     }

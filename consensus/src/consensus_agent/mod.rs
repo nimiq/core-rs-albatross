@@ -14,12 +14,12 @@ use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_messages::{
-    MessageAdapter,
+    GetBlockProofMessage,
     GetBlocksMessage,
+    GetEpochTransactionsMessage,
     MessageType,
     RejectMessage,
     RejectMessageCode,
-    GetBlockProofMessage,
 };
 use network_primitives::subscription::Subscription;
 use transaction::Transaction;
@@ -28,8 +28,10 @@ use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
 
-use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 use crate::accounts_chunk_cache::AccountsChunkCache;
+use crate::consensus_agent::sync::SyncProtocol;
+use crate::ConsensusProtocol;
+use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 
 pub mod requests;
 pub mod sync;
@@ -85,24 +87,25 @@ enum ConsensusAgentTimer {
 }
 
 
-pub struct ConsensusAgent<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> {
-    pub(crate) blockchain: Arc<B>,
-    accounts_chunk_cache: Arc<AccountsChunkCache<B>>,
+pub struct ConsensusAgent<P: ConsensusProtocol + 'static> {
+    pub(crate) blockchain: Arc<P::Blockchain>,
+    accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>,
     pub peer: Arc<Peer>,
 
-    inv_agent: Arc<InventoryAgent<B, MA>>,
+    inv_agent: Arc<InventoryAgent<P>>,
+    sync_protocol: Arc<P::SyncProtocol>,
 
     pub(crate) state: RwLock<ConsensusAgentState>,
 
     pub notifier: RwLock<Notifier<'static, ConsensusAgentEvent>>,
-    self_weak: MutableOnce<Weak<ConsensusAgent<B, MA>>>,
+    self_weak: MutableOnce<Weak<ConsensusAgent<P>>>,
 
     sync_lock: Mutex<()>,
 
     timers: Timers<ConsensusAgentTimer>,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 'static> ConsensusAgent<B, MA> {
+impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     const SYNC_ATTEMPTS_MAX: u32 = 25;
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
@@ -119,15 +122,17 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
     /// Maximum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
 
-    pub fn new(blockchain: Arc<B>, mempool: Arc<Mempool<'static, B>>, inv_mgr: Arc<RwLock<InventoryManager<B, MA>>>, accounts_chunk_cache: Arc<AccountsChunkCache<B>>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<'static, P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
-        let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr,peer_arc.clone());
+        let sync_protocol = Arc::new(<P::SyncProtocol as SyncProtocol<'static, P::Blockchain>>::new(blockchain.clone(), peer_arc.clone()));
+        let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr, peer_arc.clone(), sync_protocol.clone());
         let this = Arc::new(ConsensusAgent {
             blockchain,
             accounts_chunk_cache,
             peer: peer_arc.clone(),
             inv_agent,
+            sync_protocol,
 
             state: RwLock::new(ConsensusAgentState {
                 syncing: false,
@@ -182,9 +187,12 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         msg_notifier.get_accounts_tree_chunk.write().register(weak_passthru_listener(
             Arc::downgrade(this),
             |this, msg| this.on_get_accounts_tree_chunk(msg)));
+        msg_notifier.get_epoch_transactions.write().register(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, msg: GetEpochTransactionsMessage| this.on_get_epoch_transactions(msg)));
     }
 
-    pub fn relay_block(&self, block: &B::Block) -> bool {
+    pub fn relay_block(&self, block: &<P::Blockchain as AbstractBlockchain<'static>>::Block) -> bool {
         // Don't relay block if have not synced with the peer yet.
         if !self.state.read().synced {
             return false;
@@ -207,6 +215,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
 
     pub fn sync(&self) {
         self.state.write().syncing = true;
+        self.sync_protocol.initiate_sync();
 
         // Don't go through the InventoryManager when syncing.
         self.inv_agent.bypass_mgr(true);
@@ -287,7 +296,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
             locators = if on_fork {
                 vec![state.fork_head.as_ref().unwrap().clone()]
             } else {
-                self.blockchain.get_block_locators(GetBlocksMessage::LOCATORS_MAX_COUNT)
+                self.sync_protocol.get_block_locators(GetBlocksMessage::LOCATORS_MAX_COUNT)
             };
         }
 
@@ -317,7 +326,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         let _ = self.state.read().block_proof_limit;
     }
 
-    fn on_inventory_event(&self, event: &InventoryEvent<<B::Block as Block>::Error>) {
+    fn on_inventory_event(&self, event: &InventoryEvent<<<P::Blockchain as AbstractBlockchain<'static>>::Block as Block>::Error>) {
         match event {
             InventoryEvent::KnownBlockAnnounced(hash) => self.on_known_block_announced(hash),
             InventoryEvent::NoNewObjectsAnnounced => self.on_no_new_objects_announced(),
@@ -349,7 +358,7 @@ impl<B: AbstractBlockchain<'static> + 'static, MA: MessageAdapter<B::Block> + 's
         }
     }
 
-    fn on_block_processed(&self, hash: &Blake2bHash, result: &Result<PushResult, PushError<<B::Block as Block>::Error>>) {
+    fn on_block_processed(&self, hash: &Blake2bHash, result: &Result<PushResult, PushError<<<P::Blockchain as AbstractBlockchain<'static>>::Block as Block>::Error>>) {
         match result {
             Ok(PushResult::Extended) | Ok(PushResult::Rebranched) => {
                 let mut state = self.state.write();

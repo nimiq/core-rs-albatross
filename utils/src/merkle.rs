@@ -203,10 +203,10 @@ pub struct MerkleProof<H: HashOutput> {
 }
 
 impl<H> MerkleProof<H> where H: HashOutput {
-    pub fn new(hashes: Vec<H>, hashes_to_proof: Vec<H>) -> Self {
+    pub fn new(hashes: &[H], hashes_to_proof: &[H]) -> Self {
         let mut nodes: Vec<H> = Vec::new();
         let mut operations: Vec<MerkleProofOperation> = Vec::new();
-        MerkleProof::compute(hashes.as_slice(), hashes_to_proof.as_slice(), &mut nodes, &mut operations);
+        MerkleProof::compute(hashes, hashes_to_proof, &mut nodes, &mut operations);
         MerkleProof {
             nodes,
             operations,
@@ -216,7 +216,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
     pub fn from_values<T: SerializeContent>(values: &[T], values_to_proof: &[T]) -> Self {
         let hashes: Vec<H> = values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
         let hashes_to_proof: Vec<H> = values_to_proof.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
-        MerkleProof::new(hashes, hashes_to_proof)
+        MerkleProof::new(&hashes, &hashes_to_proof)
     }
 
     pub fn with_absence<T: SerializeContent + Ord + Clone>(values: &[T], values_to_proof: &[T]) -> Self {
@@ -256,7 +256,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
 
         let hashes: Vec<H> = values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
         let hashes_to_proof: Vec<H> = final_values_to_proof.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
-        MerkleProof::new(hashes, hashes_to_proof)
+        MerkleProof::new(&hashes, &hashes_to_proof)
     }
 
     fn compute(hashes: &[H], hashes_to_proof: &[H], path: &mut Vec<H>, operations: &mut Vec<MerkleProofOperation>) -> (bool, H) {
