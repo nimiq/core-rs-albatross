@@ -98,14 +98,14 @@ impl<P: Partitioner> ReplaceStore<P> {
                 // put in the individual signatures
                 for id in complements.iter() {
                     // get individual signature
-                    // TODO: Why do we need to store individual signatures per level?
-                    if let Some(individual) = self.individual_signatures.get(level)
+                    let individual = self.individual_signatures.get(level)
                         .unwrap_or_else(|| panic!("Individual signatures missing for level {}", level))
-                        .get(&id) {
-                        // merge individual signature into multisig
-                        multisig.add_individual(individual)
-                            .unwrap_or_else(|e| panic!("Individual signature form id={} can't be added to multisig: {}", id, e));
-                    }
+                        .get(&id)
+                        .unwrap_or_else(|| panic!("Individual signature {} missing for level {}", id, level));
+                    // merge individual signature into multisig
+                    assert_eq!(id, individual.signer);
+                    multisig.add_individual(individual)
+                        .unwrap_or_else(|e| panic!("Individual signature from id={} can't be added to multisig: {}", id, e));
                 }
 
                 Some(multisig)
@@ -128,7 +128,7 @@ impl<P: Partitioner> SignatureStore for ReplaceStore<P> {
                     .insert(individual.signer);
                 self.individual_signatures.get_mut(level)
                     .unwrap_or_else(|| panic!("Missing level {}", level))
-                    .insert(level, individual);
+                    .insert(individual.signer, individual);
                 multisig
             },
             Signature::Multi(multisig) => multisig,
