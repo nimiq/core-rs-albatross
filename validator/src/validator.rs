@@ -209,18 +209,21 @@ impl Validator {
     fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
         // Handle each block type (which is directly related to each event type).
         match event {
-            BlockchainEvent::Finalized(_) => {
+            BlockchainEvent::Finalized(hash) => {
                 // Init new validator epoch
                 self.init_epoch();
+                self.validator_network.on_blockchain_changed(hash);
             },
 
             BlockchainEvent::Extended(hash) => {
                 self.on_blockchain_extended(hash);
-                self.validator_network.on_blockchain_extended();
+                self.validator_network.on_blockchain_changed(hash);
             },
 
             BlockchainEvent::Rebranched(old_chain, new_chain) => {
-                self.on_blockchain_rebranched(old_chain, new_chain)
+                self.on_blockchain_rebranched(old_chain, new_chain);
+                let (hash, _) = new_chain.last().expect("Expected non-empty new_chain after rebranch");
+                self.validator_network.on_blockchain_changed(hash);
             }
         }
 

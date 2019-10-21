@@ -323,16 +323,26 @@ impl ValidatorNetwork {
     }
 
     /// Called when a new block is added
-    pub fn on_blockchain_extended(&self) {
-        // Check if next block will be a macro block
+    pub fn on_blockchain_changed(&self, _hash: &Blake2bHash) {
+        let mut state = self.state.write();
         let new_height = self.blockchain.block_number();
-        if !is_macro_block_at(new_height + 1) {
-            return;
+
+        let cancel_view_changes = state.view_changes.keys()
+            .filter(|view_change| view_change.block_number <= new_height)
+            .cloned()
+            .collect::<Vec<ViewChange>>();
+        for view_change in &cancel_view_changes {
+            debug!("Deleting view change {}", view_change);
+            state.view_changes.remove(view_change);
         }
 
         // The rest of this function switches the state from buffered to complete.
         // Only the proposal with the highest view number will remain.
-        let mut state = self.state.write();
+
+        // Check if next block will be a macro block
+        if !is_macro_block_at(new_height + 1) {
+            return;
+        }
 
         // Remove invalid proposals
         state.pbft_states.retain(|pbft| {
