@@ -12,6 +12,12 @@ use crate::identity::IdentityRegistry;
 
 
 
+lazy_static! {
+    /// CPU pool that is shared between all Handel instances (that use it)
+    static ref SHARED_CPU_POOL: Arc<CpuPool> = Arc::new(CpuPool::new_num_cpus());
+}
+
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VerificationResult {
     Ok,
@@ -50,22 +56,20 @@ impl Verifier for DummyVerifier {
 pub struct MultithreadedVerifier<I: IdentityRegistry> {
     message_hash: Blake2bHash,
     identity_registry: Arc<I>,
-    workers: CpuPool,
+    cpu_pool: Arc<CpuPool>,
 }
 
 impl<I: IdentityRegistry> MultithreadedVerifier<I> {
-    pub fn new(message_hash: Blake2bHash, identity_registry: Arc<I>, num_workers: Option<usize>) -> Self {
-        let workers = if let Some(n) = num_workers {
-            CpuPool::new(n)
-        } else {
-            CpuPool::new_num_cpus()
-        };
-
+    pub fn new(message_hash: Blake2bHash, identity_registry: Arc<I>, cpu_pool: Arc<CpuPool>) -> Self {
         Self {
             message_hash,
             identity_registry,
-            workers,
+            cpu_pool,
         }
+    }
+
+    pub fn shared(message_hash: Blake2bHash, identity_registry: Arc<I>) -> Self {
+        Self::new(message_hash, identity_registry, Arc::clone(&SHARED_CPU_POOL))
     }
 
     fn verify_individual(identity_registry: Arc<I>, message_hash: Blake2bHash, individual: &IndividualSignature) -> VerificationResult {
@@ -111,7 +115,7 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVeri
         let message_hash = self.message_hash.clone();
         let identity_registry = Arc::clone(&self.identity_registry);
 
-        self.workers.spawn_fn(move || {
+        self.cpu_pool.spawn_fn(move || {
             let res = match &signature {
                 Signature::Individual(individual) => {
                     Self::verify_individual(identity_registry, message_hash, individual)

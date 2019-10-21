@@ -133,10 +133,9 @@ impl<T: Tag> VotingProtocol<T> {
         }
 
         let registry = Arc::new(ValidatorRegistry::new(Arc::clone(&validators)));
-        let verifier = Arc::new(MultithreadedVerifier::new(
+        let verifier = Arc::new(MultithreadedVerifier::shared(
             tag.hash_with_prefix(),
             Arc::clone(&registry),
-            None,
         ));
         //let timeouts = Arc::new(LinearTimeout::new(config.timeout));
         let partitioner = Arc::new(BinomialPartitioner::new(

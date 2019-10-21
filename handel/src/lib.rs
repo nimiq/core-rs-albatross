@@ -15,6 +15,8 @@ extern crate log;
 extern crate tokio;
 extern crate rand;
 extern crate parking_lot;
+#[macro_use]
+extern crate lazy_static;
 
 extern crate beserial;
 #[macro_use]

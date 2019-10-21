@@ -139,10 +139,9 @@ impl PbftCommitProtocol {
 
         let tag = PbftCommitMessage::from(prepare_protocol.tag.block_hash.clone());
         let registry = Arc::clone(&prepare_protocol.registry());
-        let verifier = Arc::new(MultithreadedVerifier::new(
+        let verifier = Arc::new(MultithreadedVerifier::shared(
             tag.hash_with_prefix(),
             Arc::clone(&registry),
-            None,
         ));
         let partitioner = Arc::clone(&prepare_protocol.partitioner());
         let store = Arc::new(RwLock::new(ReplaceStore::new(Arc::clone(&partitioner))));
