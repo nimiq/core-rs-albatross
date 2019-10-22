@@ -227,7 +227,11 @@ impl Validator {
             }
         }
 
-        let state = self.state.read();
+        let mut state = self.state.write();
+
+        // The new block might increase the view number before we actually finish the view change
+        // Therefore we always update here.
+        state.view_number = self.blockchain.next_view_number();
 
         if state.status == ValidatorStatus::Potential || state.status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
