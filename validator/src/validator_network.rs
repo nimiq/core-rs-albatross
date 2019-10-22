@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use std::fmt;
 
 use failure::Fail;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use block_albatross::{
     BlockHeader,
@@ -381,10 +381,22 @@ impl ValidatorNetwork {
 
     /// Pushes the update to the signature aggregation for this view-change
     fn on_view_change_level_update(&self, update_message: LevelUpdateMessage<ViewChange>) {
-        let state = self.state.read();
+        let state = self.state.upgradable_read();
         if let Some(aggregation) = state.view_changes.get(&update_message.tag) {
             aggregation.push_update(update_message);
             debug!("View change: {}", fmt_vote_progress(aggregation.votes()));
+        }
+        else if let Some(node_id) = state.validator_id {
+            let view_change = update_message.tag.clone();
+
+            // create view change
+            let aggregation = self.new_view_change(view_change.clone(), node_id);
+
+            // add update
+            aggregation.push_update(update_message);
+
+            let mut state = RwLockUpgradableReadGuard::upgrade(state);
+            state.view_changes.insert(view_change, aggregation);
         }
     }
 
@@ -568,36 +580,36 @@ impl ValidatorNetwork {
             let node_id = state.validator_id.expect("Validator ID not set");
             assert_eq!(signed_view_change.signer_idx as usize, node_id);
 
-            // Create view change aggregation
-            let aggregation = ViewChangeAggregation::new(
-                view_change.clone(),
-                node_id,
-                Arc::clone(&self.validators),
-                None
-            );
-
-            // Register handler for when done and start (or use Future)
-            {
-                let view_change = view_change.clone();
-                aggregation.inner.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
-                    match event {
-                        AggregationEvent::Complete { best } => {
-                            info!("Complete: {:?}", view_change);
-                            let proof = ViewChangeProof::new(best.signature, best.signers);
-                            this.notifier.read()
-                                .notify(ValidatorNetworkEvent::ViewChangeComplete(Box::new((view_change.clone(), proof))))
-                        }
-                    }
-                }));
-            }
-
-            // Push our contribution
+            let aggregation = self.new_view_change(view_change.clone(), node_id);
             aggregation.push_contribution(signed_view_change);
 
             state.view_changes.insert(view_change, aggregation);
-
             Ok(())
         }
+    }
+
+    fn new_view_change(&self, view_change: ViewChange, node_id: usize) -> ViewChangeAggregation {
+        // Create view change aggregation
+        let aggregation = ViewChangeAggregation::new(
+            view_change.clone(),
+            node_id,
+            Arc::clone(&self.validators),
+            None
+        );
+
+        // Register handler for when done and start (or use Future)
+        aggregation.inner.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
+            match event {
+                AggregationEvent::Complete { best } => {
+                    info!("Complete: {:?}", view_change);
+                    let proof = ViewChangeProof::new(best.signature, best.signers);
+                    this.notifier.read()
+                        .notify(ValidatorNetworkEvent::ViewChangeComplete(Box::new((view_change.clone(), proof))))
+                }
+            }
+        }));
+
+        aggregation
     }
 
     /// Start pBFT phase with our proposal
