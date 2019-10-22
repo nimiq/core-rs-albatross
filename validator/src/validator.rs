@@ -333,20 +333,28 @@ impl Validator {
 
     pub fn on_slot_change(&self, slot_change: SlotChange) {
         let (view_number, view_change_proof) = match slot_change {
-            SlotChange::NextBlock => (self.blockchain.next_view_number(), None),
+            SlotChange::NextBlock => {
+                // a new block will just use the current view number and no view change proof
+                (self.blockchain.next_view_number(), None)
+            },
             SlotChange::ViewChange(view_change, view_change_proof) => {
-                // Reset view change interval again.
-                self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
                 let mut state = self.state.write();
 
-                // Ignore old view changes.
-                if view_change.new_view_number < state.view_number {
-                    return;
-                }
-                state.view_number = view_change.new_view_number;
-                drop(state);
+                // check if this view change is still relevant
+                if state.view_number < view_change.new_view_number {
+                    // Reset view change interval again.
+                    self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
 
-                (view_change.new_view_number, Some(view_change_proof))
+                    // update our view number
+                    state.view_number = view_change.new_view_number;
+
+                    // we're at the new view number and need a view change proof for it
+                    (view_change.new_view_number, Some(view_change_proof))
+                }
+                else {
+                    // we're already at a better view number
+                    (state.view_number, None)
+                }
             },
         };
 
