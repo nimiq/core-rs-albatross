@@ -1,3 +1,4 @@
+use std::cmp;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -34,13 +35,12 @@ use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
 use primitives::validators::IndexedSlot;
 use utils::mutable_once::MutableOnce;
-use utils::timers::Timers;
 use utils::observer::ListenerHandle;
+use utils::timers::Timers;
 
 use crate::error::Error;
 use crate::slash::ForkProofPool;
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
-
 
 #[derive(Clone, Debug)]
 pub enum SlotChange  {
@@ -337,7 +337,14 @@ impl Validator {
             SlotChange::ViewChange(view_change, view_change_proof) => {
                 // Reset view change interval again.
                 self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
-                self.state.write().view_number = view_change.new_view_number;
+                let mut state = self.state.write();
+
+                // Ignore old view changes.
+                if view_change.new_view_number < state.view_number {
+                    return;
+                }
+                state.view_number = view_change.new_view_number;
+                drop(state);
 
                 (view_change.new_view_number, Some(view_change_proof))
             },
