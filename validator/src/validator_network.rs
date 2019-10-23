@@ -419,6 +419,12 @@ impl ValidatorNetwork {
 
     /// When we receive a complete view change proof
     fn on_view_change_proof(&self, view_change: ViewChange, proof: ViewChangeProof) {
+        // pub fn verify(&self, message: &M, validators: &GroupedList<LazyPublicKey>, threshold: u16) -> Result<(), AggregateProofError>
+        if let Err(e) = proof.verify(&view_change, &self.blockchain.current_validators(), TWO_THIRD_SLOTS) {
+            // TODO: Make this use Display instead, once the implementation for it is merged.
+            debug!("Invalid view change proof: {:?}", e);
+        }
+
         let state = self.state.upgradable_read();
         if state.complete_view_changes.contains_key(&view_change) {
             return;
@@ -430,7 +436,11 @@ impl ValidatorNetwork {
         // put into complete view changes
         state.complete_view_changes.insert(view_change.clone(), proof.clone());
 
+        // remove active view change
+        state.view_changes.remove(&view_change);
+
         // remove all active view changes that are now obsolete
+        // this was meant to also kill old view changes from older blocks even, do we need this?
         /*let cancel_view_changes = state.view_changes.keys()
             .filter(|vc| vc.new_view_number <= view_change.new_view_number)
             .cloned()

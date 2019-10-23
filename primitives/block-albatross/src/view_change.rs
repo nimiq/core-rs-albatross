@@ -24,6 +24,7 @@ pub type SignedViewChange = signed::SignedMessage<ViewChange>;
 pub type ViewChangeProof = signed::AggregateProof<ViewChange>;
 pub type ViewChangeProofBuilder = signed::AggregateProofBuilder<ViewChange>;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ViewChanges {
     pub block_number: u32,
     /// The first view number that was changed

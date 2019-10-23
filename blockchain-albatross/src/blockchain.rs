@@ -824,7 +824,10 @@ impl<'env> Blockchain<'env> {
         }
 
         // Verify accounts hash.
-        if block.state_root() != &accounts.hash(Some(&txn)) {
+        let accounts_hash = accounts.hash(Some(&txn));
+        trace!("Block state root: {}", block.state_root());
+        trace!("Accounts hash:    {}", accounts_hash);
+        if block.state_root() != &accounts_hash {
             return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
         }
 
@@ -1320,6 +1323,8 @@ impl<'env> Blockchain<'env> {
         let slots = state.last_slots.clone().expect("Slots for last epoch are missing");
         let slashed_set = state.reward_registry.slashed_set(epoch, None);
         let reward_eligible = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
+
+        debug!("SLASHING: epoch={}: {:#?}", epoch, slashed_set);
 
         let reward_pot: Coin = state.reward_registry.previous_reward_pot();
         let num_eligible = reward_eligible.len() as u64;

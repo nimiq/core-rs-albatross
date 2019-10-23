@@ -10,6 +10,7 @@ use block_albatross::{
     BlockType,
     ForkProof,
     MacroBlock,
+    MacroExtrinsics,
     MicroBlock,
     MicroExtrinsics,
     MicroHeader,
@@ -88,6 +89,7 @@ pub struct ValidatorState {
     fork_proof_pool: ForkProofPool,
     view_number: u32,
     active_view_change: Option<ViewChange>,
+    proposed_extrinsics: Option<MacroExtrinsics>,
 }
 
 impl Validator {
@@ -124,6 +126,7 @@ impl Validator {
                 fork_proof_pool: ForkProofPool::new(),
                 view_number,
                 active_view_change: None,
+                proposed_extrinsics: None,
             }),
 
             self_weak: MutableOnce::new(Weak::new()),
@@ -235,6 +238,9 @@ impl Validator {
         // Therefore we always update here.
         state.view_number = self.blockchain.next_view_number();
 
+        // clear out proposed extrinsics
+        state.proposed_extrinsics = None;
+
         if state.status == ValidatorStatus::Potential || state.status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
             // NOTE: This doesn't take the state lock, so we don't need to drop it
@@ -344,14 +350,12 @@ impl Validator {
             SlotChange::ViewChange(view_change, view_change_proof) => {
                 let mut state = self.state.write();
 
-                // if we have proof for the active view change, clear it
-                // commented out, because the slot change should cause one validator to produce
-                // the block and thus reset this anyway.
-                /*if let Some(vc) = &state.active_view_change {
-                    if vc == view_change {
+                // If we have an active view change with this view number, clear it.
+                if let Some(vc) = &state.active_view_change {
+                    if vc == &view_change {
                         state.active_view_change = None;
                     }
-                }*/
+                }
 
                 // check if this view change is still relevant
                 if state.view_number < view_change.new_view_number {
@@ -391,11 +395,8 @@ impl Validator {
         }
     }
 
-    pub fn on_pbft_proposal(&self, hash: Blake2bHash, _proposal: PbftProposal) {
-        // reset time out for pBFT phase
-        self.reset_view_change_interval(Self::PBFT_TIMEOUT);
-
-        let state = self.state.read();
+    pub fn on_pbft_proposal(&self, hash: Blake2bHash, proposal: PbftProposal) {
+        let state = self.state.write();
         trace!("Received proposal: {}", hash);
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
@@ -442,17 +443,22 @@ impl Validator {
             .unwrap_or_else(|e| debug!("Failed to push pBFT commit: {}", e));
     }
 
-    pub fn on_pbft_commit_complete(&self, _hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
-        let header = proposal.header.clone();
+    pub fn on_pbft_commit_complete(&self, hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
+        let mut state = self.state.write();
 
-        // Note: we're not verifying the justification as the validator network already did that
-        let justification = Some(proof);
+        if let Some(extrinsics) = state.proposed_extrinsics.take() {
+            let header = proposal.header.clone();
+            // Note: we're not verifying the justification as the validator network already did that
+            let justification = Some(proof);
+            let block = Block::Macro(MacroBlock { header, justification, extrinsics: Some(extrinsics) });
 
-        let block = Block::Macro(MacroBlock { header, justification, extrinsics: None });
+            //trace!("Relaying finished macro block: {:#?}", block);
+            drop(state);
 
-        // Automatically relays block.
-        self.blockchain.push_block(block, true)
-            .unwrap_or_else(|e| panic!("Pushing macro block to blockchain failed: {:?}", e));
+            // Automatically relays block.
+            self.blockchain.push_block(block, true)
+                .unwrap_or_else(|e| panic!("Pushing macro block to blockchain failed: {:?}", e));
+        }
     }
 
     fn start_view_change(&self) {
@@ -465,6 +471,7 @@ impl Validator {
 
         // If we already started a view change (i.e. added our contribution), we don't do anything
         if state.active_view_change.is_some() {
+            debug!("View change already started");
             return;
         }
 
@@ -494,11 +501,12 @@ impl Validator {
     }
 
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {
-        let state = self.state.read();
+        let mut state = self.state.write();
 
         // FIXME: Don't use network time
         let timestamp = self.consensus.network.network_time.now();
-        let pbft_proposal = self.block_producer.next_macro_block_proposal(timestamp, state.view_number, view_change);
+        let (pbft_proposal, proposed_extrinsics) = self.block_producer.next_macro_block_proposal(timestamp, state.view_number, view_change);
+        state.proposed_extrinsics = Some(proposed_extrinsics);
         let pk_idx = state.pk_idx.expect("Checked that we are an active validator before entering this function");
 
         drop(state);

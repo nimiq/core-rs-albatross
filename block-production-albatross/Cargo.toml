@@ -29,6 +29,7 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks"] }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
+log = "0.4"
 
 [dev-dependencies]
 hex = "0.3"

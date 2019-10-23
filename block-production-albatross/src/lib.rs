@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 extern crate nimiq_block_albatross as block;
 extern crate nimiq_blockchain_albatross as blockchain;
 extern crate nimiq_blockchain_base as blockchain_base;
@@ -40,7 +43,7 @@ impl<'env> BlockProducer<'env> {
         BlockProducer { blockchain, mempool: None, validator_key }
     }
 
-    pub fn next_macro_block_proposal(&self, timestamp: u64, view_number: u32, view_change_proof: Option<ViewChangeProof>) -> PbftProposal {
+    pub fn next_macro_block_proposal(&self, timestamp: u64, view_number: u32, view_change_proof: Option<ViewChangeProof>) -> (PbftProposal, MacroExtrinsics) {
         //  Lock blockchain/mempool while constructing the block.
         let _lock = self.blockchain.lock();
 
@@ -53,10 +56,10 @@ impl<'env> BlockProducer<'env> {
 
         txn.abort();
 
-        PbftProposal {
+        (PbftProposal {
             header,
             view_change: view_change_proof,
-        }
+        }, extrinsics)
     }
 
     pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, timestamp: u64, view_number: u32, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
@@ -81,7 +84,10 @@ impl<'env> BlockProducer<'env> {
     pub fn next_macro_extrinsics(&self, txn: &mut WriteTransaction, seed: &CompressedSignature) -> MacroExtrinsics {
         // Determine slashed set without txn, so that it is not garbage collected yet.
         let prev_epoch = policy::epoch_at(self.blockchain.height() + 1) - 1;
-        let slashed_set = self.blockchain.state().reward_registry().slashed_set(prev_epoch, None);
+        let slashed_set = self.blockchain.state()
+            .reward_registry()
+            .slashed_set(prev_epoch, None);
+        debug!("SLASHING: epoch={}: {:#?}", prev_epoch, slashed_set);
         MacroExtrinsics::from(self.blockchain.next_slots(seed, Some(txn)), slashed_set)
     }
 
@@ -147,12 +153,19 @@ impl<'env> BlockProducer<'env> {
         }), state.current_slots().expect("Current slots missing while rebranching"), self.blockchain.view_number())
             .expect("Failed to commit dummy block to reward registry");
 
-        let inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
+        let mut inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
+
+        // Add slashes for view changes.
+        let view_changes = ViewChanges::new(header.block_number, self.blockchain.view_number(), header.view_number);
+        debug!("view changes: {:?}", view_changes);
+        inherents.append(&mut self.blockchain.create_slash_inherents(&[], &view_changes, Some(txn)));
+
         // Rewards are distributed with delay.
         state.accounts().commit(txn, &[], &inherents, block_number)
             .expect("Failed to compute accounts hash during block production");
 
         let state_root = state.accounts().hash(Some(txn));
+        debug!("state_root = {}", state_root);
 
         let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number), Some(txn))
             .expect("Failed to compute transactions root, micro blocks missing");
