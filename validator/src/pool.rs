@@ -69,15 +69,19 @@ impl ValidatorPool {
                 // if we already know the validator as potential validator, put into active validators
                 self.active_validator_agents.insert(validator_id, Arc::clone(validator));
             }
-            else if !self.blacklist.contains(pubkey) {
+            else if self.blacklist.contains(pubkey) {
+                // ignore
+            }
+            else if let Some(info) = self.infos.get(pubkey) {
                 // otherwise we'll try to connect to them, if we have a validator info
-                if let Some(info) = self.infos.get(pubkey) {
-                    let peer_address = Arc::new(info.message.peer_address.clone());
-                    debug!("Trying to connect to: {}", peer_address);
-                    if !self.network.connections.connect_outbound(Arc::clone(&peer_address)) {
-                        warn!("Failed to connect to {}", peer_address);
-                    }
+                let peer_address = Arc::new(info.message.peer_address.clone());
+                debug!("Trying to connect to: {}", peer_address);
+                if !self.network.connections.connect_outbound(Arc::clone(&peer_address)) {
+                    warn!("Failed to connect to {}", peer_address);
                 }
+            }
+            else {
+                warn!("No validator info for: {} ({} votes)", validator_id, validator.0);
             }
         }
     }

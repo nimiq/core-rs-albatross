@@ -10,18 +10,20 @@ use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::CompressedPublicKey;
 use block_albatross::{SignedPbftProposal, ForkProof, ViewChange, PbftPrepareMessage,
-                      PbftCommitMessage};
+                      PbftCommitMessage, ViewChangeProof};
 use primitives::policy;
 use blockchain_albatross::Blockchain;
 use hash::{Hash, Blake2bHash};
 use handel::update::LevelUpdateMessage;
 use utils::rate_limit::RateLimit;
+use messages::ViewChangeProofMessage;
 
 
 pub enum ValidatorAgentEvent {
     ValidatorInfos(Vec<SignedValidatorInfo>),
     ForkProof(Box<ForkProof>),
     ViewChange(Box<LevelUpdateMessage<ViewChange>>),
+    ViewChangeProof(Box<ViewChangeProofMessage>),
     PbftProposal(Box<SignedPbftProposal>),
     PbftPrepare(Box<LevelUpdateMessage<PbftPrepareMessage>>),
     PbftCommit(Box<LevelUpdateMessage<PbftCommitMessage>>),
@@ -65,7 +67,6 @@ impl ValidatorAgent {
             .register(weak_passthru_listener(Arc::downgrade(this), |this, fork_proof| {
                 this.on_fork_proof_message(fork_proof);
             }));
-
         this.peer.channel.msg_notifier.pbft_proposal.write()
             .register(weak_passthru_listener(Arc::downgrade(this),
                 |this, proposal| this.on_pbft_proposal_message(proposal)));
@@ -77,8 +78,12 @@ impl ValidatorAgent {
             .register(weak_passthru_listener(Arc::downgrade(this),
                 |this, commit| this.on_pbft_commit_message(commit)));
         this.peer.channel.msg_notifier.view_change.write()
-            .register(weak_passthru_listener( Arc::downgrade(this), |this, signed_view_change| {
-                this.on_view_change_message(signed_view_change);
+            .register(weak_passthru_listener( Arc::downgrade(this), |this, view_change| {
+                this.on_view_change_message(view_change);
+            }));
+        this.peer.channel.msg_notifier.view_change_proof.write()
+            .register(weak_passthru_listener( Arc::downgrade(this), |this, view_change_proof| {
+                this.on_view_change_proof(view_change_proof);
             }));
     }
 
@@ -157,6 +162,12 @@ impl ValidatorAgent {
         };
 
         self.notifier.read().notify(ValidatorAgentEvent::ViewChange(Box::new(update_message)))
+    }
+
+    fn on_view_change_proof(&self, proof: ViewChangeProofMessage) {
+        trace!("[VIEW-CHANGE] Received proof: {:?}", proof);
+
+        self.notifier.read().notify(ValidatorAgentEvent::ViewChangeProof(Box::new(proof)))
     }
 
     /// When a pbft block proposal is received

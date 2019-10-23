@@ -4,6 +4,8 @@ use std::fmt;
 
 use failure::Fail;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use tokio;
+use futures::future;
 
 use block_albatross::{
     BlockHeader,
@@ -16,7 +18,7 @@ use block_albatross::signed::AggregateProof;
 use blockchain_albatross::Blockchain;
 use collections::grouped_list::Group;
 use hash::{Blake2bHash, Hash};
-use messages::Message;
+use messages::{Message, ViewChangeProofMessage};
 use network::{Network, NetworkEvent, Peer};
 use network_primitives::validator_info::{SignedValidatorInfo};
 use network_primitives::address::PeerId;
@@ -153,6 +155,7 @@ struct ValidatorNetworkState {
     /// Maps (view-change-number, block-number) to the proof that is being aggregated
     /// and a flag whether it's finalized. clear after macro block
     view_changes: HashMap<ViewChange, ViewChangeAggregation>,
+    complete_view_changes: HashMap<ViewChange, ViewChangeProof>,
 
     /// If we're in pBFT phase, this is the current state of it
     pbft_states: Vec<PbftState>,
@@ -241,6 +244,13 @@ impl ValidatorNetwork {
                     }
                     ValidatorAgentEvent::ViewChange(update_message) => {
                         this.on_view_change_level_update(*update_message);
+                    },
+                    ValidatorAgentEvent::ViewChangeProof(view_change_proof) => {
+                        let ViewChangeProofMessage { view_change, proof } = *view_change_proof;
+                        tokio::spawn(future::lazy(move || {
+                            this.on_view_change_proof(view_change, proof);
+                            Ok(())
+                        }));
                     },
                     ValidatorAgentEvent::PbftProposal(proposal) => {
                         this.on_pbft_proposal(*proposal)
@@ -382,6 +392,13 @@ impl ValidatorNetwork {
     /// Pushes the update to the signature aggregation for this view-change
     fn on_view_change_level_update(&self, update_message: LevelUpdateMessage<ViewChange>) {
         let state = self.state.upgradable_read();
+
+        // check if we already completed this view change
+        if state.complete_view_changes.contains_key(&update_message.tag) {
+            debug!("View change already complete: {}", update_message.tag);
+            return;
+        }
+
         if let Some(aggregation) = state.view_changes.get(&update_message.tag) {
             aggregation.push_update(update_message);
             debug!("View change: {}", fmt_vote_progress(aggregation.votes()));
@@ -398,6 +415,40 @@ impl ValidatorNetwork {
             let mut state = RwLockUpgradableReadGuard::upgrade(state);
             state.view_changes.insert(view_change, aggregation);
         }
+    }
+
+    /// When we receive a complete view change proof
+    fn on_view_change_proof(&self, view_change: ViewChange, proof: ViewChangeProof) {
+        let state = self.state.upgradable_read();
+        if state.complete_view_changes.contains_key(&view_change) {
+            return;
+        }
+
+        info!("Received view change proof for: {}", view_change);
+        let mut state = RwLockUpgradableReadGuard::upgrade(state);
+
+        // put into complete view changes
+        state.complete_view_changes.insert(view_change.clone(), proof.clone());
+
+        // remove all active view changes that are now obsolete
+        /*let cancel_view_changes = state.view_changes.keys()
+            .filter(|vc| vc.new_view_number <= view_change.new_view_number)
+            .cloned()
+            .collect::<Vec<ViewChange>>();
+        for view_change in cancel_view_changes {
+            state.view_changes.remove(&view_change)
+                .unwrap_or_else(|| panic!("Expected active view change {:?}", view_change));
+        }*/
+
+        drop(state);
+
+        // notify validator
+        self.notifier.read()
+            .notify(ValidatorNetworkEvent::ViewChangeComplete(Box::new((view_change.clone(), proof.clone()))));
+
+        // broadcast
+        self.broadcast_view_change_proof(view_change, proof);
+
     }
 
     /// Start pBFT with the given proposal.
@@ -567,14 +618,12 @@ impl ValidatorNetwork {
     // Public interface: start view changes, pBFT phase, push contributions
 
     /// Starts a new view-change
-    pub fn start_view_change(&self, signed_view_change: SignedViewChange) -> Result<(), ValidatorNetworkError> {
+    pub fn start_view_change(&self, signed_view_change: SignedViewChange) {
         let view_change = signed_view_change.message.clone();
         let mut state = self.state.write();
 
         if let Some(aggregation) = state.view_changes.get(&view_change) {
-            // Do nothing, but return an error. At some point the validator should increase the view number
-            warn!("{:?} already exists with {} votes", signed_view_change.message, aggregation.votes());
-            Err(ValidatorNetworkError::ViewChangeAlreadyExists(view_change))
+            aggregation.push_contribution(signed_view_change);
         }
         else {
             let node_id = state.validator_id.expect("Validator ID not set");
@@ -582,9 +631,7 @@ impl ValidatorNetwork {
 
             let aggregation = self.new_view_change(view_change.clone(), node_id);
             aggregation.push_contribution(signed_view_change);
-
             state.view_changes.insert(view_change, aggregation);
-            Ok(())
         }
     }
 
@@ -596,15 +643,18 @@ impl ValidatorNetwork {
             Arc::clone(&self.validators),
             None
         );
+        debug!("New view change for: {}, node_id={}", view_change, node_id);
 
         // Register handler for when done and start (or use Future)
         aggregation.inner.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), move |this, event| {
             match event {
                 AggregationEvent::Complete { best } => {
-                    info!("Complete: {:?}", view_change);
-                    let proof = ViewChangeProof::new(best.signature, best.signers);
-                    this.notifier.read()
-                        .notify(ValidatorNetworkEvent::ViewChangeComplete(Box::new((view_change.clone(), proof))))
+                    let view_change = view_change.clone();
+                    tokio::spawn(future::lazy(move || {
+                        let proof = ViewChangeProof::new(best.signature, best.signers);
+                        this.on_view_change_proof(view_change, proof);
+                        Ok(())
+                    }));
                 }
             }
         }));
@@ -676,6 +726,12 @@ impl ValidatorNetwork {
     /// Broadcast fork-proof
     fn broadcast_fork_proof(&self, fork_proof: ForkProof) {
         self.broadcast_active(Message::ForkProof(Box::new(fork_proof)));
+    }
+
+    fn broadcast_view_change_proof(&self, view_change: ViewChange, proof: ViewChangeProof) {
+        self.broadcast_active(Message::ViewChangeProof(Box::new(ViewChangeProofMessage {
+            view_change, proof
+        })));
     }
 }
 

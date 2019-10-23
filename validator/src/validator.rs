@@ -87,6 +87,7 @@ pub struct ValidatorState {
     status: ValidatorStatus,
     fork_proof_pool: ForkProofPool,
     view_number: u32,
+    active_view_change: Option<ViewChange>,
 }
 
 impl Validator {
@@ -122,6 +123,7 @@ impl Validator {
                 status: ValidatorStatus::None,
                 fork_proof_pool: ForkProofPool::new(),
                 view_number,
+                active_view_change: None,
             }),
 
             self_weak: MutableOnce::new(Weak::new()),
@@ -237,6 +239,8 @@ impl Validator {
             // Reset the view change timeout because we received a valid block.
             // NOTE: This doesn't take the state lock, so we don't need to drop it
             self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
+            state.active_view_change = None;
+
         }
 
         // If we're an active validator, we need to check if we're the next block producer.
@@ -339,6 +343,15 @@ impl Validator {
             },
             SlotChange::ViewChange(view_change, view_change_proof) => {
                 let mut state = self.state.write();
+
+                // if we have proof for the active view change, clear it
+                // commented out, because the slot change should cause one validator to produce
+                // the block and thus reset this anyway.
+                /*if let Some(vc) = &state.active_view_change {
+                    if vc == view_change {
+                        state.active_view_change = None;
+                    }
+                }*/
 
                 // check if this view change is still relevant
                 if state.view_number < view_change.new_view_number {
@@ -443,10 +456,15 @@ impl Validator {
     }
 
     fn start_view_change(&self) {
-        let state = self.state.write();
+        let mut state = self.state.write();
 
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
+            return;
+        }
+
+        // If we already started a view change (i.e. added our contribution), we don't do anything
+        if state.active_view_change.is_some() {
             return;
         }
 
@@ -458,13 +476,13 @@ impl Validator {
         info!("Starting view change to {}", message);
 
         let pk_idx = state.pk_idx.expect("Checked above that we are an active validator");
-        let view_change_message = SignedViewChange::from_message(message, &self.validator_key.secret, pk_idx);
+        let view_change_message = SignedViewChange::from_message(message.clone(), &self.validator_key.secret, pk_idx);
+        state.active_view_change = Some(message);
 
         drop(state);
 
         // Broadcast our view change number message to the other validators.
-        self.validator_network.start_view_change(view_change_message)
-            .unwrap_or_else(|e| error!("Failed to start view change: {}", e));
+        self.validator_network.start_view_change(view_change_message);
      }
 
     fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {
