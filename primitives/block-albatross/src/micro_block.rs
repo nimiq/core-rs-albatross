@@ -62,6 +62,10 @@ impl MicroBlock {
 
         Ok(())
     }
+
+    pub fn hash(&self) -> Blake2bHash {
+        self.header.hash()
+    }
 }
 
 impl MicroHeader {

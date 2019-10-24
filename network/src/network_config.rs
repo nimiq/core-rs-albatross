@@ -21,6 +21,16 @@ pub enum Seed {
     List(Box<SeedList>)
 }
 
+impl Seed {
+    pub fn new_peer(peer_uri: PeerUri) -> Self {
+        Seed::Peer(Box::new(peer_uri))
+    }
+
+    pub fn new_list(seed_list: SeedList) -> Self {
+        Seed::List(Box::new(seed_list))
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub struct NetworkConfig {

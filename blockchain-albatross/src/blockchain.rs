@@ -92,7 +92,7 @@ pub struct Blockchain {
     pub network_id: NetworkId,
     // TODO network_time: Arc<NetworkTime>,
     pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
-    pub(crate) chain_store: Arc<ChainStore>,
+    pub chain_store: Arc<ChainStore>,
     pub(crate) state: RwLock<BlockchainState>,
     pub push_lock: Mutex<()>, // TODO: Not very nice to have this public
 
