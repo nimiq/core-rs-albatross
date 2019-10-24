@@ -569,7 +569,7 @@ impl<'env> Blockchain<'env> {
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
-                return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
             }
 
             // Set macro extrinsics if the option is given.

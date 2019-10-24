@@ -125,27 +125,10 @@ fn it_can_produce_macro_blocks() {
 
     fill_micro_blocks(&producer, &blockchain);
 
-    let proposal = producer.next_macro_block_proposal(1565720000000u64, 0u32, None);
+    let (proposal, extrinsics) = producer.next_macro_block_proposal(1565720000000u64, 0u32, None);
 
-    let block = sign_macro_block(proposal, None);
+    let block = sign_macro_block(proposal, Some(extrinsics));
     assert_eq!(blockchain.push_block(Block::Macro(block), true), Ok(PushResult::Extended));
-}
-
-#[test]
-fn it_slashes_view_changes_macro_blocks() {
-    let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::UnitAlbatross).unwrap());
-    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
-
-    let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
-    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair);
-
-    fill_micro_blocks(&producer, &blockchain);
-
-    let proposal = producer.next_macro_block_proposal(1565720000000u64, 3u32, None);
-
-    let block = sign_macro_block(proposal, None);
-    assert_eq!(blockchain.push_block(Block::Macro(block), true), Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch)));
 }
 
 // TODO Test transactions

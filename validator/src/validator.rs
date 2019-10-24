@@ -1,4 +1,3 @@
-use std::cmp;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -36,8 +35,8 @@ use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
 use primitives::validators::IndexedSlot;
 use utils::mutable_once::MutableOnce;
-use utils::observer::ListenerHandle;
 use utils::timers::Timers;
+use utils::observer::ListenerHandle;
 
 use crate::error::Error;
 use crate::slash::ForkProofPool;
@@ -456,7 +455,7 @@ impl Validator {
             drop(state);
 
             // Automatically relays block.
-            self.blockchain.push_block(block, true)
+            self.blockchain.push_block(block, false)
                 .unwrap_or_else(|e| panic!("Pushing macro block to blockchain failed: {:?}", e));
         }
     }

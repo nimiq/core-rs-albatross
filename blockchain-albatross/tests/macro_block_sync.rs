@@ -62,7 +62,7 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
         fill_micro_blocks(producer, blockchain);
 
         let next_block_height = blockchain.head_height() + 1;
-        let proposal = producer.next_macro_block_proposal(1565713920000 + next_block_height as u64 * 2000, 0u32, None);
+        let (proposal, extrinsics) = producer.next_macro_block_proposal(1565713920000 + next_block_height as u64 * 2000, 0u32, None);
 
         let block = sign_macro_block(proposal);
         assert_eq!(blockchain.push_block(Block::Macro(block), true), Ok(PushResult::Extended));
