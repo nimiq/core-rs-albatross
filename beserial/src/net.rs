@@ -21,7 +21,7 @@ macro_rules! impl_serialize_ipaddr {
         impl Deserialize for $name {
             fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
                 let mut octets: [u8; $bytes] = [0u8; $bytes];
-                reader.read(&mut octets)?;
+                reader.read_exact(&mut octets)?;
                 Ok(Self::from(octets))
             }
         }
