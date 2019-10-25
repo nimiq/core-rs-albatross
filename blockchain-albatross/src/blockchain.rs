@@ -734,6 +734,10 @@ impl<'env> Blockchain<'env> {
         }
 
         // Fork looks good.
+
+        // drop read transaction
+        read_txn.close();
+
         // Acquire write lock.
         let mut state = RwLockUpgradableReadGuard::upgrade(state);
 
