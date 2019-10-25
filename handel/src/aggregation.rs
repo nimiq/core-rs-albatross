@@ -106,11 +106,13 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
             state.contribution = Some(contribution.clone());
             let signature = Signature::Individual(contribution.clone());
 
+            // drop state before sending updates
+            // Drop state before store is locked. Otherwise we have a circular dependency with
+            // `send_update` waiting for the state lock, but holding the store lock. See Issue #58
+            drop(state);
+
             // put our own contribution into store at level 0
             self.protocol.store().write().put(signature.clone(), 0);
-
-            // drop state before sending updates
-            drop(state);
 
             // check for completed levels
             self.check_completed_level(&signature, 0);
