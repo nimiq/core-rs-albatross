@@ -308,28 +308,3 @@ pub(crate) struct MempoolFilterSettings {
 pub(crate) struct ValidatorSettings {
     pub key_file: Option<String>,
 }
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum ValidatorType {
-    None,
-    Validator,
-}
-
-impl FromStr for ValidatorType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.to_lowercase().as_str() {
-            "none" => ValidatorType::None,
-            "validator" => ValidatorType::Validator,
-            _ => return Err(())
-        })
-    }
-}
-
-impl Default for ValidatorType {
-    fn default() -> Self {
-        ValidatorType::None
-    }
-}
