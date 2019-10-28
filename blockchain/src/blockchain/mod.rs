@@ -426,6 +426,8 @@ impl<'env> Blockchain<'env> {
         }
 
         // Fork looks good.
+        // Drop read transaction.
+        read_txn.close();
 
         {
             // Acquire write lock.
