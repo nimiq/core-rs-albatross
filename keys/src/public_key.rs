@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::io;
 use std::fmt;
+use std::str::FromStr;
 
 use hex::FromHex;
 use ed25519_dalek;
@@ -48,6 +49,14 @@ impl FromHex for PublicKey {
 
     fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<PublicKey, ParseError> {
         Ok(PublicKey::from_bytes(hex::decode(hex)?.as_slice())?)
+    }
+}
+
+impl FromStr for PublicKey {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        PublicKey::from_hex(s)
     }
 }
 
