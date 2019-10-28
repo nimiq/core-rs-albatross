@@ -38,9 +38,15 @@ impl PublicKey {
     }
 }
 
-impl fmt::Debug for PublicKey {
+impl fmt::Display for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str(&self.to_hex())
+    }
+}
+
+impl fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(self, f)
     }
 }
 
