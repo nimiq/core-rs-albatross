@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use hex::FromHex;
@@ -111,7 +113,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
 #[repr(u8)]
 pub enum HashAlgorithm {
     Blake2b = 1,
