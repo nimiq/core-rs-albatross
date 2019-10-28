@@ -101,9 +101,9 @@ pub struct Blockchain {
 }
 
 pub struct BlockchainState {
-    accounts: Accounts,
-    transaction_cache: TransactionCache,
-    pub(crate) reward_registry: SlashRegistry,
+    pub accounts: Accounts,
+    pub transaction_cache: TransactionCache,
+    pub reward_registry: SlashRegistry,
 
     pub(crate) main_chain: ChainInfo,
     head_hash: Blake2bHash,
