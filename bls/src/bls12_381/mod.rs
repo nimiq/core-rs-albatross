@@ -147,7 +147,13 @@ pub struct CompressedPublicKey {
 
 impl fmt::Debug for CompressedPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CompressedPublicKey({})", &::hex::encode(self.p_pub.as_ref()))
+        write!(f, "CompressedPublicKey({})", &self.to_hex())
+    }
+}
+
+impl fmt::Display for CompressedPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", &self.to_hex())
     }
 }
 
@@ -184,6 +190,10 @@ impl CompressedPublicKey {
         Ok(PublicKey {
             p_pub: self.p_pub.into_affine()?.into_projective()
         })
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.p_pub.as_ref())
     }
 }
 
