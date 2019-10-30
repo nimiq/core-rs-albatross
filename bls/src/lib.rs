@@ -202,7 +202,7 @@ impl<E: Engine> Default for AggregatePublicKey<E> {
 }
 
 #[derive(Clone, Copy)]
-pub struct AggregateSignature<E: Engine>(pub(crate) Signature<E>);
+pub struct AggregateSignature<E: Engine>(pub Signature<E>);
 
 impl<E: Engine> AggregateSignature<E> {
     pub fn new() -> Self {
