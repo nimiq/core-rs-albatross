@@ -15,17 +15,19 @@ use crate::grouped_list::{Group, GroupedList};
 //  - Iterate over the bits in the bitset (size is policy::SLOTS)
 //  - If one bit, the next item is popped off the start of the vector
 //  - If zero bit, the next item is the same as the previous item
-
-// TODO Use BitVec instead of BitSet
+//
+// TODO: Use BitVec instead of BitSet
+// TODO: T should not have to be Serialize + Deserialize. We can implement Serialize and Deserialize
+//       for CompressedList where T: Serialize + Deserialize
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CompressedList<T>
     where T: Clone + Eq + PartialEq + Serialize + Deserialize
 {
-    count: u16, // TODO Move to const type parameter?
+    pub count: u16, // TODO Move to const type parameter?
     #[beserial(len_type(u16))]
-    distinct: Vec<T>,
-    allocation: BitSet,
+    pub distinct: Vec<T>,
+    pub allocation: BitSet,
 }
 
 impl<T> CompressedList<T>
@@ -78,6 +80,7 @@ impl<T> FromIterator<T> for CompressedList<T>
     }
 }
 
+// TODO: This should be iter() and not into_iter() as into_iter() should actually return owned elements
 impl<'a, T> IntoIterator for &'a CompressedList<T>
     where T: Clone + Eq + PartialEq + Serialize + Deserialize
 {

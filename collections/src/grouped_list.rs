@@ -1,6 +1,7 @@
 use beserial::{Serialize, Deserialize};
 use itertools::Itertools;
 use std::iter::{FromIterator, repeat};
+use crate::compressed_list::CompressedList;
 
 // GroupedList compresses a list of items by deduplication,
 // internally represented by a list of length-prefixed distinct items.
@@ -80,5 +81,32 @@ impl<T> Default for GroupedList<T>
 {
     fn default() -> Self {
         GroupedList(Vec::new())
+    }
+}
+
+impl<T> From<CompressedList<T>> for GroupedList<T>
+    where T: Clone + Eq + PartialEq + Serialize + Deserialize
+{
+    fn from(mut compressed: CompressedList<T>) -> Self {
+        let mut current: Option<T> = None;
+        let mut groups = Vec::with_capacity(compressed.distinct.len());
+        let mut distinct = compressed.distinct.drain(..);
+        let mut n = 0;
+
+        for i in 0 .. (compressed.count as usize) {
+            if compressed.allocation.contains(i) {
+                if let Some(x) = current {
+                    groups.push(Group(n, x))
+                }
+                current = distinct.next();
+                n = 0;
+            }
+            n += 1;
+        }
+        if let Some(x) = current {
+            groups.push(Group(n, x))
+        }
+
+        GroupedList(groups)
     }
 }

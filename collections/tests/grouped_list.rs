@@ -1,5 +1,6 @@
 use beserial::{Deserialize, Serialize};
 use nimiq_collections::grouped_list::{Group, GroupedList};
+use nimiq_collections::compressed_list::CompressedList;
 
 const SAMPLE_LIST: &str = "0003004801000102003703";
 
@@ -43,4 +44,12 @@ fn it_can_deserialize_and_iterate() {
     assert_eq!(iter_groups.next(), Some(&Group(1, 2)));
     assert_eq!(iter_groups.next(), Some(&Group(55, 3)));
     assert_eq!(iter_groups.next(), None);
+}
+
+#[test]
+fn it_can_be_from_compressed_list() {
+    let grouped_list = GroupedList::<u8>::deserialize_from_vec(&hex::decode(SAMPLE_LIST).unwrap()).unwrap();
+    let compressed_list = CompressedList::from(grouped_list.clone());
+    let grouped_list2 = GroupedList::from(compressed_list);
+    assert_eq!(grouped_list, grouped_list2);
 }
