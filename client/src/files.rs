@@ -111,7 +111,9 @@ impl FileLocations {
 
     /// Return default path for database, depending on network ID
     pub fn database(&self, network: NetworkId) -> PathBuf {
-        self.database_parent.join(format!("db.{}", network))
+        // NOTE: This is analog to the names in core-js. But since we currently only have full
+        // consensus, this part is hard-coded.
+        self.database_parent.join(format!("{}-full-consensus", network))
     }
 
     pub fn default() -> Result<Self, Error> {

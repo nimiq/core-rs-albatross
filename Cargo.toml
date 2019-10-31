@@ -35,6 +35,7 @@ members = [
     "rpc-server",
     "metrics-server",
     "lib",
+    "lib2",
     "messages",
     "fixed-unsigned",
     "bls",
