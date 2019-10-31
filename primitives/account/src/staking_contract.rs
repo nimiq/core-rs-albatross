@@ -439,8 +439,12 @@ impl StakingContract {
                 let staking_address = lookup.find(index).expect("Expected to find a validator in SegmentTree");
                 let active_stake = &self.active_stake_by_address[&staking_address];
 
-                if *balances.get(&active_stake.staker_address).unwrap_or(&Coin::ZERO) >= min_stake {
-                    break active_stake;
+                if let Some(balance) = balances.get_mut(&active_stake.staker_address) {
+                    if *balance >= min_stake {
+                        // Subtract min_stake to ensure that all slots of a validator can be slashed.
+                        *balance -= min_stake;
+                        break active_stake;
+                    }
                 }
             };
 
