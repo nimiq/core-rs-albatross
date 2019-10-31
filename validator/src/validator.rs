@@ -1,5 +1,6 @@
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use std::collections::HashMap;
 
 use parking_lot::RwLock;
 
@@ -41,6 +42,7 @@ use utils::observer::ListenerHandle;
 use crate::error::Error;
 use crate::slash::ForkProofPool;
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
+
 
 #[derive(Clone, Debug)]
 pub enum SlotChange  {
@@ -88,12 +90,12 @@ pub struct ValidatorState {
     fork_proof_pool: ForkProofPool,
     view_number: u32,
     active_view_change: Option<ViewChange>,
-    proposed_extrinsics: Option<MacroExtrinsics>,
+    proposed_extrinsics: HashMap<Blake2bHash, MacroExtrinsics>,
 }
 
 impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
-    const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
+    //const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
         let compressed_public_key = validator_key.public.compress();
@@ -125,7 +127,7 @@ impl Validator {
                 fork_proof_pool: ForkProofPool::new(),
                 view_number,
                 active_view_change: None,
-                proposed_extrinsics: None,
+                proposed_extrinsics: HashMap::new(),
             }),
 
             self_weak: MutableOnce::new(Weak::new()),
@@ -238,7 +240,7 @@ impl Validator {
         state.view_number = self.blockchain.next_view_number();
 
         // clear out proposed extrinsics
-        state.proposed_extrinsics = None;
+        state.proposed_extrinsics.clear();
 
         if state.status == ValidatorStatus::Potential || state.status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
@@ -394,7 +396,7 @@ impl Validator {
         }
     }
 
-    pub fn on_pbft_proposal(&self, hash: Blake2bHash, proposal: PbftProposal) {
+    pub fn on_pbft_proposal(&self, hash: Blake2bHash, _proposal: PbftProposal) {
         let state = self.state.write();
         trace!("Received proposal: {}", hash);
         // View change messages should only be sent by active validators.
@@ -445,11 +447,15 @@ impl Validator {
     pub fn on_pbft_commit_complete(&self, hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
         let mut state = self.state.write();
 
-        if let Some(extrinsics) = state.proposed_extrinsics.take() {
-            let header = proposal.header.clone();
+        if let Some(extrinsics) = state.proposed_extrinsics.remove(&hash) {
+            assert_eq!(proposal.header.extrinsics_root, extrinsics.hash());
+
             // Note: we're not verifying the justification as the validator network already did that
-            let justification = Some(proof);
-            let block = Block::Macro(MacroBlock { header, justification, extrinsics: Some(extrinsics) });
+            let block = Block::Macro(MacroBlock {
+                header: proposal.header,
+                justification: Some(proof),
+                extrinsics: Some(extrinsics)
+            });
 
             //trace!("Relaying finished macro block: {:#?}", block);
             drop(state);
@@ -505,7 +511,7 @@ impl Validator {
         // FIXME: Don't use network time
         let timestamp = self.consensus.network.network_time.now();
         let (pbft_proposal, proposed_extrinsics) = self.block_producer.next_macro_block_proposal(timestamp, state.view_number, view_change);
-        state.proposed_extrinsics = Some(proposed_extrinsics);
+        state.proposed_extrinsics.insert(pbft_proposal.header.hash(), proposed_extrinsics);
         let pk_idx = state.pk_idx.expect("Checked that we are an active validator before entering this function");
 
         drop(state);

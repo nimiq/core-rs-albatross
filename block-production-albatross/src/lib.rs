@@ -87,7 +87,6 @@ impl<'env> BlockProducer<'env> {
         let slashed_set = self.blockchain.state()
             .reward_registry()
             .slashed_set(prev_epoch, None);
-        debug!("SLASHING: epoch={}: {:#?}", prev_epoch, slashed_set);
         MacroExtrinsics::from(self.blockchain.next_slots(seed, Some(txn)), slashed_set)
     }
 
@@ -157,7 +156,6 @@ impl<'env> BlockProducer<'env> {
 
         // Add slashes for view changes.
         let view_changes = ViewChanges::new(header.block_number, self.blockchain.view_number(), header.view_number);
-        debug!("view changes: {:?}", view_changes);
         inherents.append(&mut self.blockchain.create_slash_inherents(&[], &view_changes, Some(txn)));
 
         // Rewards are distributed with delay.
@@ -165,7 +163,6 @@ impl<'env> BlockProducer<'env> {
             .expect("Failed to compute accounts hash during block production");
 
         let state_root = state.accounts().hash(Some(txn));
-        debug!("state_root = {}", state_root);
 
         let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number), Some(txn))
             .expect("Failed to compute transactions root, micro blocks missing");

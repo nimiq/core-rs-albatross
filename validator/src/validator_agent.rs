@@ -10,7 +10,7 @@ use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use parking_lot::RwLock;
 use bls::bls12_381::CompressedPublicKey;
 use block_albatross::{SignedPbftProposal, ForkProof, ViewChange, PbftPrepareMessage,
-                      PbftCommitMessage, ViewChangeProof};
+                      PbftCommitMessage};
 use primitives::policy;
 use blockchain_albatross::Blockchain;
 use hash::{Hash, Blake2bHash};
