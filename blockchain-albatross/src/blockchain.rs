@@ -1177,7 +1177,7 @@ impl<'env> Blockchain<'env> {
         } else {
             let macro_block = self.chain_store
                 .get_block_at(policy::macro_block_before(block_number), true, Some(&txn))
-                .expect("Failed to determine slots - preceding macro block not found")
+                .unwrap_or_else(|| panic!("Failed to determine slots - preceding macro block not found: block_number={}, view_number={}, state.block_number()={}", block_number, view_number, state.block_number()))
                 .unwrap_macro();
 
             // Get slots of epoch
