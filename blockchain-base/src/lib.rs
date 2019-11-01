@@ -109,7 +109,7 @@ pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
     fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk>;
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BlockchainEvent<BL: Block> {
     Extended(Blake2bHash),
     Rebranched(Vec<(Blake2bHash, BL)>, Vec<(Blake2bHash, BL)>),

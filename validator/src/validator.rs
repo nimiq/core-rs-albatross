@@ -155,8 +155,20 @@ impl Validator {
         // Set up event handlers for blockchain events
         let weak = Arc::downgrade(this);
         let blockchain = this.blockchain.notifier.write().register(move |e: &BlockchainEvent<Block>| {
+            // We're spawning this handler in a thread, since it does quite a lot of work.
+            // Specifically this might lock the validator state, but in this handler the Blockchain
+            // also still holds the push_lock. This can cause a dead-lock with another thread that
+            // produces a block, because this will first lock the validator state and then
+            // Blockchain's push_lock.
             let this = upgrade_weak!(weak);
-            this.on_blockchain_event(e);
+            // We need to clone to move this into the thread. Alternatively we could Arc events.
+            // But except for rebranching, this is only the type of the event and a hash, so not
+            // very expensive to clone anyway.
+            let e = e.clone();
+            tokio::spawn(futures::future::lazy(move|| {
+                this.on_blockchain_event(&e);
+                Ok(())
+            }));
         });
 
         // Set up event handlers for validator network events
@@ -260,7 +272,6 @@ impl Validator {
 
     fn init_epoch(&self) {
         let mut state = self.state.write();
-
         state.view_number = 0;
 
         match self.get_pk_idx_and_slots() {
