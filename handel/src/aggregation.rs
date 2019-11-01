@@ -119,8 +119,9 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
             self.check_final_signature();
 
             // send level 0
-            let level = self.levels.get(0).expect("Level 0 missing");
-            self.send_update(contribution.as_multisig(), level, self.config.peer_count);
+            // This will be done by check_completed level
+            //let level = self.levels.get(0).expect("Level 0 missing");
+            //self.send_update(contribution.as_multisig(), level, self.config.peer_count);
         }
         else {
             error!("Contribution already exists");
