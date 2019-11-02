@@ -198,7 +198,7 @@ impl<A: AccountsTreeLeave> AccountsTree<A> {
                 // Because of our ordering, they have to be located next to the current prefix.
                 // Hence, we iterate over the next prefixes, until we don't find commonalities anymore.
                 // In the next main iteration we can skip those we already requested here.
-                let mut sub_prefixes = vec![ prefixes[0].clone() ];
+                let mut sub_prefixes = vec![ prefixes[i].clone() ];
                 // Find other prefixes to descend into this tree as well.
                 for (j, prefix) in prefixes.iter().enumerate().skip(i+1) {
                     // Since we ordered prefixes, there can't be any other prefixes with commonalities.
