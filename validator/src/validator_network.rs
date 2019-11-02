@@ -474,6 +474,8 @@ impl ValidatorNetwork {
             return Ok(());
         }
 
+        debug!("pBFT proposal by validator {}: {}", signed_proposal.signer_idx, block_hash);
+
         let validator_id = match state.validator_id {
             Some(validator_id) => validator_id,
             None => {
@@ -481,8 +483,6 @@ impl ValidatorNetwork {
                 return Ok(())
             },
         };
-
-        debug!("pBFT proposal by validator {}: {}", validator_id, block_hash);
 
         let pbft = PbftState::new(
             block_hash.clone(),
