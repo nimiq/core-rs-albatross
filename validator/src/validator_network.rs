@@ -175,7 +175,7 @@ impl ValidatorNetworkState {
 }
 
 pub struct ValidatorNetwork {
-    blockchain: Arc<Blockchain<'static>>,
+    blockchain: Arc<Blockchain>,
 
     /// The signed validator info for this node
     info: SignedValidatorInfo,
@@ -193,7 +193,7 @@ pub struct ValidatorNetwork {
 impl ValidatorNetwork {
     const MAX_VALIDATOR_INFOS: usize = 64;
 
-    pub fn new(network: Arc<Network<Blockchain<'static>>>, blockchain: Arc<Blockchain<'static>>, info: SignedValidatorInfo) -> Arc<Self> {
+    pub fn new(network: Arc<Network<Blockchain>>, blockchain: Arc<Blockchain>, info: SignedValidatorInfo) -> Arc<Self> {
         let mut pool = ValidatorPool::new(Arc::clone(&network));
 
         // blacklist ourself
@@ -213,7 +213,7 @@ impl ValidatorNetwork {
         this
     }
 
-    fn init_listeners(this: &Arc<Self>, network: Arc<Network<Blockchain<'static>>>) {
+    fn init_listeners(this: &Arc<Self>, network: Arc<Network<Blockchain>>) {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
         // Register for peers joining and leaving

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use account::Receipts;
 use block::Block;
 use blockchain_base::Direction;
@@ -10,15 +12,15 @@ use primitives::policy;
 use crate::chain_info::ChainInfo;
 
 #[derive(Debug)]
-pub struct ChainStore<'env> {
-    env: &'env Environment,
-    chain_db: Database<'env>,
-    block_db: Database<'env>,
-    height_idx: Database<'env>,
-    receipt_db: Database<'env>,
+pub struct ChainStore {
+    env: Environment,
+    chain_db: Database,
+    block_db: Database,
+    height_idx: Database,
+    receipt_db: Database,
 }
 
-impl<'env> ChainStore<'env> {
+impl ChainStore {
     const CHAIN_DB_NAME: &'static str = "ChainData";
     const BLOCK_DB_NAME: &'static str = "Block";
     const HEIGHT_IDX_NAME: &'static str = "HeightIdx";
@@ -26,7 +28,7 @@ impl<'env> ChainStore<'env> {
 
     const HEAD_KEY: &'static str = "head";
 
-    pub fn new(env: &'env Environment) -> Self {
+    pub fn new(env: Environment) -> Self {
         let chain_db = env.open_database(Self::CHAIN_DB_NAME.to_string());
         let block_db = env.open_database(Self::BLOCK_DB_NAME.to_string());
         let height_idx = env.open_database_with_flags(Self::HEIGHT_IDX_NAME.to_string(),
@@ -39,7 +41,7 @@ impl<'env> ChainStore<'env> {
     pub fn get_head(&self, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
         match txn_option {
             Some(txn) => txn.get(&self.chain_db, ChainStore::HEAD_KEY),
-            None => ReadTransaction::new(self.env).get(&self.chain_db, ChainStore::HEAD_KEY)
+            None => ReadTransaction::new(&self.env).get(&self.chain_db, ChainStore::HEAD_KEY)
         }
     }
 
@@ -52,7 +54,7 @@ impl<'env> ChainStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -98,7 +100,7 @@ impl<'env> ChainStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -142,7 +144,7 @@ impl<'env> ChainStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -164,7 +166,7 @@ impl<'env> ChainStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -194,7 +196,7 @@ impl<'env> ChainStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -235,7 +237,7 @@ impl<'env> ChainStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -267,7 +269,7 @@ impl<'env> ChainStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -310,7 +312,7 @@ impl<'env> ChainStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };

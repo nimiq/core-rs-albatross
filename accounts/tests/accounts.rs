@@ -17,7 +17,7 @@ use nimiq_transaction::{SignatureProof, Transaction};
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
+    let accounts = Accounts::new(env.clone());
     let address_miner = Address::from([1u8; Address::SIZE]);
     let address_recipient = Address::from([2u8; Address::SIZE]);
 
@@ -79,7 +79,7 @@ fn it_can_deal_with_multiple_transactions_per_sender() {
 #[test]
 fn it_correctly_rewards_miners() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
+    let accounts = Accounts::new(env.clone());
     let address_miner1 = Address::from([1u8; Address::SIZE]);
     let address_miner2 = Address::from([2u8; Address::SIZE]);
     let address_recipient1 = Address::from([3u8; Address::SIZE]);
@@ -143,7 +143,7 @@ fn it_correctly_rewards_miners() {
 #[test]
 fn it_checks_for_sufficient_funds() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
+    let accounts = Accounts::new(env.clone());
     let address_sender = Address::from([1u8; Address::SIZE]);
     let address_recipient = Address::from([2u8; Address::SIZE]);
 
@@ -228,7 +228,7 @@ fn it_prevents_spending_of_funds_received_in_the_same_block() {
 #[test]
 fn it_correctly_prunes_account() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
+    let accounts = Accounts::new(env.clone());
     let key_pair = KeyPair::generate();
     let address = Address::from(&key_pair.public);
     let mut body = BlockBody {
@@ -314,7 +314,7 @@ fn it_correctly_prunes_account() {
 #[test]
 fn can_generate_accounts_proof() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(&env);
+    let accounts = Accounts::new(env.clone());
     let address_miner1 = Address::from([1u8; Address::SIZE]);
     let address_miner2 = Address::from([2u8; Address::SIZE]);
     let address_recipient1 = Address::from([3u8; Address::SIZE]);

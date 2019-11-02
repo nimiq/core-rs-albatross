@@ -10,7 +10,7 @@ use utils::merkle::Blake2bMerkleProof;
 
 use crate::Blockchain;
 
-impl<'env> Blockchain<'env> {
+impl Blockchain {
     pub fn get_transactions_proof(&self, block_hash: &Blake2bHash, addresses: &HashSet<Address>) -> Option<TransactionsProof> {
         let block = self.get_block(block_hash, /*include_forks*/ false, /*include_body*/ true)?;
         let body = block.body.as_ref()?;
@@ -37,7 +37,7 @@ impl<'env> Blockchain<'env> {
         if block_hash != &state.head_hash {
             return None;
         }
-        let txn = ReadTransaction::new(self.env);
+        let txn = ReadTransaction::new(&self.env);
         Some(state.accounts.get_accounts_proof(&txn, addresses))
     }
 }

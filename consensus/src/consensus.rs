@@ -28,9 +28,9 @@ use crate::protocol::ConsensusProtocol;
 
 pub struct Consensus<P: ConsensusProtocol + 'static> {
     pub blockchain: Arc<P::Blockchain>,
-    pub mempool: Arc<Mempool<'static, P::Blockchain>>,
+    pub mempool: Arc<Mempool<P::Blockchain>>,
     pub network: Arc<Network<P::Blockchain>>,
-    pub env: &'static Environment,
+    pub env: Environment,
 
     inv_mgr: Arc<RwLock<InventoryManager<P>>>,
     timers: Timers<ConsensusTimer>,
@@ -65,16 +65,16 @@ struct ConsensusState<P: ConsensusProtocol + 'static> {
     sync_peer: Option<Arc<Peer>>,
 }
 
-impl<P: ConsensusProtocol + 'static> Consensus<P> {
+impl<P: ConsensusProtocol> Consensus<P> {
     const MIN_FULL_NODES: usize = 0;
     const SYNC_THROTTLE: Duration = Duration::from_millis(1500);
 
-    pub fn new(env: &'static Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {
+    pub fn new(env: Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {
         let network_time = Arc::new(NetworkTime::new());
-        let blockchain = Arc::new(<P::Blockchain as AbstractBlockchain<'static>>::new(env, network_id, Arc::clone(&network_time))?);
-        let mempool = Mempool::new(blockchain.clone(), mempool_config);
-        let network = Network::new(blockchain.clone(), network_config, network_time, network_id)?;
-        let accounts_chunk_cache = AccountsChunkCache::new(env, Arc::clone(&blockchain));
+        let blockchain = Arc::new(<P::Blockchain as AbstractBlockchain>::new(env.clone(), network_id, Arc::clone(&network_time))?);
+        let mempool = Mempool::new(Arc::clone(&blockchain), mempool_config);
+        let network = Network::new(Arc::clone(&blockchain), network_config, network_time, network_id)?;
+        let accounts_chunk_cache = AccountsChunkCache::new(env.clone(), Arc::clone(&blockchain));
 
         let this = Arc::new(Consensus {
             blockchain,
@@ -128,7 +128,7 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
 
         // Notify peers when our blockchain head changes.
         let weak = Arc::downgrade(this);
-        this.blockchain.register_listener(move |e: &BlockchainEvent<<P::Blockchain as AbstractBlockchain<'static>>::Block>| {
+        this.blockchain.register_listener(move |e: &BlockchainEvent<<P::Blockchain as AbstractBlockchain>::Block>| {
             let this = upgrade_weak!(weak);
             this.on_blockchain_event(e);
         });
@@ -201,10 +201,10 @@ impl<P: ConsensusProtocol + 'static> Consensus<P> {
         self.sync_blockchain();
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent<<P::Blockchain as AbstractBlockchain<'static>>::Block>) {
+    fn on_blockchain_event(&self, event: &BlockchainEvent<<P::Blockchain as AbstractBlockchain>::Block>) {
         let state = self.state.read();
 
-        let blocks: Vec<&<P::Blockchain as AbstractBlockchain<'static>>::Block>;
+        let blocks: Vec<&<P::Blockchain as AbstractBlockchain>::Block>;
         let block;
         match event {
             BlockchainEvent::Extended(_) | BlockchainEvent::Finalized(_) => {

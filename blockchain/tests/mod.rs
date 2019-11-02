@@ -26,19 +26,19 @@ pub fn mine_header(header: &mut BlockHeader) {
     println!("Found nonce {} for header {:?}", header.nonce, header);
 }
 
-pub fn next_block<'env, 'bc>(blockchain: &'bc Blockchain<'env>) -> BlockBuilder<'env, 'bc> {
+pub fn next_block<'bc>(blockchain: &'bc Blockchain) -> BlockBuilder<'bc> {
     BlockBuilder::new(blockchain)
 }
 
-pub struct BlockBuilder<'env, 'bc> {
-    blockchain: &'bc Blockchain<'env>,
+pub struct BlockBuilder<'bc> {
+    blockchain: &'bc Blockchain,
     header: BlockHeader,
     interlink: Option<BlockInterlink>,
     body: BlockBody,
 }
 
-impl<'env, 'bc> BlockBuilder<'env, 'bc> {
-    pub fn new(blockchain: &'bc Blockchain<'env>) -> Self {
+impl<'bc> BlockBuilder<'bc> {
+    pub fn new(blockchain: &'bc Blockchain) -> Self {
         Self {
             blockchain,
             header: BlockHeader {

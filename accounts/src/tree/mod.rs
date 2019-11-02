@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::sync::Arc;
 
 use account::Account;
 use database::{Database, Environment, Transaction, WriteTransaction};
@@ -10,18 +11,18 @@ use tree_primitives::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
 use tree_primitives::address_nibbles::AddressNibbles;
 
 #[derive(Debug)]
-pub struct AccountsTree<'env> {
-    db: Database<'env>
+pub struct AccountsTree {
+    db: Database
 }
 
-impl<'env> AccountsTree<'env> {
+impl AccountsTree {
     const DB_NAME: &'static str = "accounts";
 
-    pub fn new(env: &'env Environment) -> Self {
+    pub fn new(env: Environment) -> Self {
         let db = env.open_database(Self::DB_NAME.to_string());
         let tree = AccountsTree { db };
 
-        let mut txn = WriteTransaction::new(env);
+        let mut txn = WriteTransaction::new(&env);
         if tree.get_root(&txn).is_none() {
             let root = AddressNibbles::empty();
             txn.put_reserve(&tree.db, &root, &AccountsTreeNode::new_branch(root.clone(), NO_CHILDREN));
@@ -298,7 +299,7 @@ mod tests {
         let account3 = Account::Basic(account::BasicAccount { balance: Coin::try_from(55555555).unwrap() });
 
         let env = database::volatile::VolatileEnvironment::new(10).unwrap();
-        let tree = AccountsTree::new(&env);
+        let tree = AccountsTree::new(env.clone());
         let mut txn = WriteTransaction::new(&env);
 
         // Put accounts and check.

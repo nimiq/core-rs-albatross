@@ -22,7 +22,7 @@ use utils::mutable_once::MutableOnce;
 use utils::observer::{PassThroughListener, PassThroughNotifier, weak_listener};
 use utils::timers::Timers;
 
-pub trait SyncProtocol<'env, B: AbstractBlockchain<'env>>: Send + Sync {
+pub trait SyncProtocol<B: AbstractBlockchain>: Send + Sync {
     fn new(blockchain: Arc<B>, peer: Arc<Peer>) -> Arc<Self>;
     fn initiate_sync(&self) {}
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash>;
@@ -40,13 +40,13 @@ pub enum SyncEvent<BE: BlockError> {
     BlockProcessed(Blake2bHash, Result<PushResult, PushError<BE>>),
 }
 
-pub struct FullSync<'env, B: AbstractBlockchain<'env>> {
+pub struct FullSync<B: AbstractBlockchain> {
     blockchain: Arc<B>,
     peer: Arc<Peer>,
     notifier: RwLock<PassThroughNotifier<'static, SyncEvent<<B::Block as Block>::Error>>>,
 }
 
-impl<'env, B: AbstractBlockchain<'env>> SyncProtocol<'env, B> for FullSync<'env, B> {
+impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
     fn new(blockchain: Arc<B>, peer: Arc<Peer>) -> Arc<Self> {
         Arc::new(Self {
             blockchain,
@@ -127,16 +127,16 @@ enum MacroBlockSyncTimer {
     EpochTransactions(u32)
 }
 
-pub struct MacroBlockSync<'env> {
-    blockchain: Arc<AlbatrossBlockchain<'env>>,
+pub struct MacroBlockSync {
+    blockchain: Arc<AlbatrossBlockchain>,
     state: RwLock<MacroBlockSyncState>,
     peer: Arc<Peer>,
     notifier: RwLock<PassThroughNotifier<'static, SyncEvent<AlbatrossBlockError>>>,
     timers: Timers<MacroBlockSyncTimer>,
-    self_weak: MutableOnce<Weak<MacroBlockSync<'env>>>,
+    self_weak: MutableOnce<Weak<MacroBlockSync>>,
 }
 
-impl MacroBlockSync<'static> {
+impl MacroBlockSync {
     /// Maximum time to wait after sending out get-data or receiving the last object for this request.
     const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -176,8 +176,8 @@ impl MacroBlockSync<'static> {
     }
 }
 
-impl SyncProtocol<'static, AlbatrossBlockchain<'static>> for MacroBlockSync<'static> {
-    fn new(blockchain: Arc<AlbatrossBlockchain<'static>>, peer: Arc<Peer>) -> Arc<Self> {
+impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
+    fn new(blockchain: Arc<AlbatrossBlockchain>, peer: Arc<Peer>) -> Arc<Self> {
         let this = Arc::new(Self {
             peer,
             blockchain,

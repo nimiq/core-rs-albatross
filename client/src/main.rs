@@ -32,7 +32,6 @@ mod deadlock;
 mod logging;
 mod settings;
 mod cmdline;
-mod static_env;
 mod serialization;
 mod files;
 
@@ -89,7 +88,6 @@ use crate::logging::{DEFAULT_LEVEL, NimiqDispatch};
 use crate::logging::force_log_error_cause_chain;
 use crate::settings as s;
 use crate::settings::{Settings, RpcServerSettings};
-use crate::static_env::ENV;
 use crate::serialization::SeedError;
 use crate::files::LazyFileLocations;
 
@@ -353,8 +351,6 @@ fn run() -> Result<!, Error> {
             settings.database.size.unwrap_or_else(|| default_database_settings.size.unwrap()),
             settings.database.max_dbs.unwrap_or_else(|| default_database_settings.max_dbs.unwrap()),
             if settings.database.no_lmdb_sync.unwrap_or(false) { open::NOSYNC } else { open::NOMETASYNC })?;
-    // Initialize the static environment variable
-    ENV.initialize(env);
 
     // Open peer key store.
     let peer_key_store = KeyStore::new(settings.peer_key_file.clone()
@@ -363,7 +359,7 @@ fn run() -> Result<!, Error> {
             .to_str().unwrap().into()));
 
     // Start building the client with network ID and environment.
-    let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), ENV.get(), peer_key_store);
+    let mut client_builder = ClientBuilder::new(Protocol::from(settings.network.protocol), env, peer_key_store);
 
     // Map network ID from command-line or config to actual network ID.
     client_builder.with_network_id(network_id);
@@ -512,7 +508,7 @@ fn add_generic_rpc_modules<CP>(handler: &Arc<RpcHandler>, consensus: &Arc<Consen
     where CP: ConsensusProtocol
 {
     let consensus_handler = ConsensusHandler::new(Arc::clone(&consensus));
-    let wallet_handler = WalletHandler::new(consensus.env);
+    let wallet_handler = WalletHandler::new(consensus.env.clone());
     let network_handler = NetworkHandler::new(&consensus);
     let unlocked_wallets = Arc::clone(&wallet_handler.unlocked_wallets);
 

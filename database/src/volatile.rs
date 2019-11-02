@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use std::io;
+use std::sync::Arc;
 
 use tempdir::TempDir;
 
@@ -11,14 +12,23 @@ use super::lmdb::*;
 
 #[derive(Debug)]
 pub struct VolatileEnvironment {
-    temp_dir: TempDir,
+    temp_dir: Arc<TempDir>,
     env: LmdbEnvironment,
+}
+
+impl Clone for VolatileEnvironment {
+    fn clone(&self) -> Self {
+        Self {
+            temp_dir: Arc::clone(&self.temp_dir),
+            env: self.env.clone(),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum VolatileDatabaseError {
     IoError(io::Error),
-    LmdbError(lmdb_zero::Error),
+    LmdbError(LmdbError),
 }
 
 
@@ -54,7 +64,7 @@ impl VolatileEnvironment {
         let temp_dir = TempDir::new("volatile-core").map_err(VolatileDatabaseError::IoError)?;
         let path = temp_dir.path().to_str().ok_or_else(|| VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
         Ok(Environment::Volatile(VolatileEnvironment {
-            temp_dir,
+            temp_dir: Arc::new(temp_dir),
             env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, open::NOSYNC | open::WRITEMAP).map_err(VolatileDatabaseError::LmdbError)?,
         }))
     }
@@ -63,7 +73,7 @@ impl VolatileEnvironment {
         let temp_dir = TempDir::new("volatile-core").map_err(VolatileDatabaseError::IoError)?;
         let path = temp_dir.path().to_str().ok_or_else(|| VolatileDatabaseError::IoError(io::Error::new(io::ErrorKind::InvalidInput, "Path cannot be converted into a string.")))?.to_string();
         Ok(Environment::Volatile(VolatileEnvironment {
-            temp_dir,
+            temp_dir: Arc::new(temp_dir),
             env: LmdbEnvironment::new_lmdb_environment(&path, 0, max_dbs, flags | open::NOSYNC | open::WRITEMAP).map_err(VolatileDatabaseError::LmdbError)?,
         }))
     }
@@ -78,10 +88,10 @@ impl VolatileEnvironment {
 }
 
 #[derive(Debug)]
-pub struct VolatileDatabase<'env>(LmdbDatabase<'env>);
+pub struct VolatileDatabase(LmdbDatabase);
 
-impl<'env> VolatileDatabase<'env> {
-    pub(in super) fn as_lmdb<'a>(&'a self) -> &'a LmdbDatabase<'env> { &self.0 }
+impl VolatileDatabase {
+    pub(in super) fn as_lmdb<'a>(&'a self) -> &'a LmdbDatabase { &self.0 }
 }
 
 
@@ -97,7 +107,7 @@ impl<'env> VolatileReadTransaction<'env> {
         self.0.get(&db.0, key)
     }
 
-    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> VolatileCursor<'txn, 'db> {
+    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> VolatileCursor<'txn, 'db> {
         VolatileCursor(self.0.cursor(db))
     }
 }
@@ -135,11 +145,11 @@ impl<'env> VolatileWriteTransaction<'env> {
         self.0.commit()
     }
 
-    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> VolatileCursor<'txn, 'db> {
+    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> VolatileCursor<'txn, 'db> {
         VolatileCursor(self.0.cursor(db))
     }
 
-    pub(in super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> VolatileWriteCursor<'txn, 'db> {
+    pub(in super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> VolatileWriteCursor<'txn, 'db> {
         VolatileWriteCursor(self.0.write_cursor(db))
     }
 }
@@ -151,7 +161,7 @@ impl<'txn, 'db> ReadCursor for VolatileCursor<'txn, 'db> {
         self.0.first()
     }
 
-    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn first_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
         self.0.first_duplicate()
     }
 
@@ -159,7 +169,7 @@ impl<'txn, 'db> ReadCursor for VolatileCursor<'txn, 'db> {
         self.0.last()
     }
 
-    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn last_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
         self.0.last_duplicate()
     }
 
@@ -223,7 +233,7 @@ impl<'txn, 'db> ReadCursor for VolatileWriteCursor<'txn, 'db> {
         self.0.first()
     }
 
-    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn first_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
         self.0.first_duplicate()
     }
 
@@ -231,7 +241,7 @@ impl<'txn, 'db> ReadCursor for VolatileWriteCursor<'txn, 'db> {
         self.0.last()
     }
 
-    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn last_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
         self.0.last_duplicate()
     }
 

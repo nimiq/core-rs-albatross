@@ -25,11 +25,11 @@ pub use crate::reward_registry::slashed_slots::SlashedSlots;
 mod reward_pot;
 mod slashed_slots;
 
-pub struct SlashRegistry<'env> {
-    env: &'env Environment,
-    chain_store: Arc<ChainStore<'env>>,
-    slash_registry_db: Database<'env>,
-    reward_pot: RewardPot<'env>,
+pub struct SlashRegistry {
+    env: Environment,
+    chain_store: Arc<ChainStore>,
+    slash_registry_db: Database,
+    reward_pot: RewardPot,
 }
 
 // TODO Better error messages
@@ -61,17 +61,18 @@ struct BlockDescriptor {
 
 // TODO Pass in active validator set + seed through parameters
 //      or always load from chain store?
-impl<'env> SlashRegistry<'env> {
+impl SlashRegistry {
     const SLASH_REGISTRY_DB_NAME: &'static str = "SlashRegistry";
 
-    pub fn new(env: &'env Environment, chain_store: Arc<ChainStore<'env>>) -> Self {
+    pub fn new(env: Environment, chain_store: Arc<ChainStore>) -> Self {
         let slash_registry_db = env.open_database_with_flags(SlashRegistry::SLASH_REGISTRY_DB_NAME.to_string(), DatabaseFlags::UINT_KEYS);
+        let reward_pot = RewardPot::new(env.clone());
 
         Self {
             env,
             chain_store,
             slash_registry_db,
-            reward_pot: RewardPot::new(env),
+            reward_pot,
         }
     }
 
@@ -359,7 +360,7 @@ impl<'env> SlashRegistry<'env> {
         let txn = if let Some(txn) = txn_option {
             txn
         } else {
-            read_txn = ReadTransaction::new(self.env);
+            read_txn = ReadTransaction::new(&self.env);
             &read_txn
         };
 

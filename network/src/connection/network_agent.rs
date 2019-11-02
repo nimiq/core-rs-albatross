@@ -28,7 +28,7 @@ use crate::network_config::NetworkConfig;
 use crate::Peer;
 use crate::peer_channel::PeerChannel;
 
-pub struct NetworkAgent<B: AbstractBlockchain<'static> + 'static> {
+pub struct NetworkAgent<B: AbstractBlockchain + 'static> {
     blockchain: Arc<B>,
     addresses: Arc<PeerAddressBook>,
     network_config: Arc<NetworkConfig>,
@@ -74,7 +74,7 @@ pub enum NetworkAgentEvent {
     PingPong(Duration),
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> NetworkAgent<B> {
+impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
     const VERSION_ATTEMPTS_MAX: usize = 10;
     const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(4); // 4 seconds
     pub const PING_TIMEOUT: Duration = Duration::from_secs(10); // 10 seconds

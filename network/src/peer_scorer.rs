@@ -28,14 +28,14 @@ use parking_lot::RwLockReadGuard;
 
 pub type Score = f64;
 
-pub struct PeerScorer<B: AbstractBlockchain<'static> + 'static> {
+pub struct PeerScorer<B: AbstractBlockchain + 'static> {
     network_config: Arc<NetworkConfig>,
     addresses: Arc<PeerAddressBook>,
     connections: Arc<ConnectionPool<B>>,
     connection_scores: Vec<(ConnectionId, Score)>,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> PeerScorer<B> {
+impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
     const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 1; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
     const PEER_COUNT_MIN_OUTBOUND: usize = 6; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
 

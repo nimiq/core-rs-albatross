@@ -9,7 +9,7 @@ use utils::iterators::Merge;
 
 use crate::{Blockchain, chain_info::ChainInfo};
 
-impl<'env> Blockchain<'env> {
+impl Blockchain {
     const NIPOPOW_M: u32 = 240;
     const NIPOPOW_K: u32 = 120;
     const NIPOPOW_DELTA: f64 = 0.15;
@@ -30,7 +30,7 @@ impl<'env> Blockchain<'env> {
         let mut prefix = vec![];
         let mut start_height = 1u32;
 
-        let txn = ReadTransaction::new(self.env);
+        let txn = ReadTransaction::new(&self.env);
         let head_info = self.chain_store
             .get_chain_info_at(u32::max(head.header.height.saturating_sub(k), 1), false, Some(&txn))
             .expect("Failed to compute chain proof - prefix head block not found");
@@ -120,7 +120,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn get_block_proof(&self, hash_to_prove: &Blake2bHash, known_hash: &Blake2bHash) -> Option<Vec<Block>> {
-        let txn = ReadTransaction::new(self.env);
+        let txn = ReadTransaction::new(&self.env);
 
         let block_to_prove = self.chain_store
             .get_block(hash_to_prove, false, Some(&txn))?;

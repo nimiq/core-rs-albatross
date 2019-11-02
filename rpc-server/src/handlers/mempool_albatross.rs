@@ -22,14 +22,14 @@ use crate::handlers::mempool::MempoolHandler;
 use crate::handlers::wallet::UnlockedWalletManager;
 
 pub struct MempoolAlbatrossHandler {
-    pub mempool: Arc<Mempool<'static, Blockchain<'static>>>,
+    pub mempool: Arc<Mempool<Blockchain>>,
     pub unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     generic: MempoolHandler<AlbatrossConsensusProtocol>,
 }
 
 impl MempoolAlbatrossHandler {
     pub fn new(
-        mempool: Arc<Mempool<'static, Blockchain<'static>>>,
+        mempool: Arc<Mempool<Blockchain>>,
         unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     ) -> Self {
         Self {

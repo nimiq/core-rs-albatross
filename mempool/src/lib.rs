@@ -12,7 +12,7 @@ extern crate nimiq_utils as utils;
 
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
@@ -23,16 +23,16 @@ use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use transaction::{Transaction, TransactionFlags};
-use utils::observer::Notifier;
+use utils::observer::{Notifier, weak_passthru_listener, weak_listener};
 
 use crate::filter::{MempoolFilter, Rules};
 use primitives::networks::NetworkId;
 
 pub mod filter;
 
-pub struct Mempool<'env, B: AbstractBlockchain<'env> + 'env> {
+pub struct Mempool<B: AbstractBlockchain> {
     blockchain: Arc<B>,
-    pub notifier: RwLock<Notifier<'env, MempoolEvent>>,
+    pub notifier: RwLock<Notifier<'static, MempoolEvent>>,
     state: RwLock<MempoolState>,
     mut_lock: Mutex<()>,
 }
@@ -68,7 +68,7 @@ impl Default for MempoolConfig {
     }
 }
 
-impl<'env, B: AbstractBlockchain<'env> + 'env> Mempool<'env, B> {
+impl<B: AbstractBlockchain + 'static> Mempool<B> {
     pub fn new(blockchain: Arc<B>, config: MempoolConfig) -> Arc<Self> {
         let arc = Arc::new(Self {
             blockchain: blockchain.clone(),
@@ -83,8 +83,12 @@ impl<'env, B: AbstractBlockchain<'env> + 'env> Mempool<'env, B> {
             mut_lock: Mutex::new(()),
         });
 
-        let arc_self = arc.clone();
-        blockchain.register_listener(move |event: &BlockchainEvent<B::Block>| arc_self.on_blockchain_event(event));
+        // register listener to blockchain through weak reference
+        let weak = Arc::downgrade(&arc);
+        blockchain.register_listener(weak_listener(weak, |this: Arc<Self>, event: &BlockchainEvent<B::Block>| {
+            this.on_blockchain_event(event)
+        }));
+
         arc
     }
 

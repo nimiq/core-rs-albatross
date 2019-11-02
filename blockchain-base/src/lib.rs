@@ -33,12 +33,14 @@ use utils::observer::{Listener, ListenerHandle};
 #[cfg(feature = "metrics")]
 pub mod chain_metrics;
 
-pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
+pub trait AbstractBlockchain: Sized + Send + Sync {
+    // TODO: Should this be `Block + 'static`? Our implementations would satisfy this anyway. And
+    // I think all uses of AbstractBlockchain require it to be 'static too.
     type Block: Block;
     //type VerifyResult;
 
     // XXX This signature is most likely too restrictive to accommodate all blockchain types.
-    fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError>;
+    fn new(env: Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError>;
 
 
     #[cfg(feature = "metrics")]
@@ -94,7 +96,7 @@ pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
 
     /* Required by Mempool */
 
-    fn register_listener<T: Listener<BlockchainEvent<Self::Block>> + 'env>(&self, listener: T) -> ListenerHandle;
+    fn register_listener<T: Listener<BlockchainEvent<Self::Block>> + 'static>(&self, listener: T) -> ListenerHandle;
 
     fn lock(&self) -> MutexGuard<()>;
 

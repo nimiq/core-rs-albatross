@@ -3,11 +3,11 @@ use crate::{AsDatabaseBytes, FromDatabaseValue};
 pub(crate) trait RawReadCursor {
     fn first<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue;
 
-    fn first_duplicate<V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(V)> where V: FromDatabaseValue;
+    fn first_duplicate<V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<V> where V: FromDatabaseValue;
 
     fn last<K, V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue;
 
-    fn last_duplicate<V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<(V)> where V: FromDatabaseValue;
+    fn last_duplicate<V>(&mut self, accessor: &lmdb_zero::ConstAccessor) -> Option<V> where V: FromDatabaseValue;
 
     fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized;
 
@@ -39,11 +39,11 @@ pub(crate) trait RawReadCursor {
 pub trait ReadCursor {
     fn first<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue;
 
-    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue;
+    fn first_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue;
 
     fn last<K, V>(&mut self) -> Option<(K, V)> where K: FromDatabaseValue, V: FromDatabaseValue;
 
-    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue;
+    fn last_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue;
 
     fn seek_key_value<K, V>(&mut self, key: &K, value: &V) -> bool where K: AsDatabaseBytes + ?Sized, V: AsDatabaseBytes + ?Sized;
 
@@ -80,7 +80,7 @@ macro_rules! impl_read_cursor_from_raw {
                 self.$raw.first(&access)
             }
 
-            fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+            fn first_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
                 let access = self.$txn.access();
                 self.$raw.first_duplicate(&access)
             }
@@ -90,7 +90,7 @@ macro_rules! impl_read_cursor_from_raw {
                 self.$raw.last(&access)
             }
 
-            fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+            fn last_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
                 let access = self.$txn.access();
                 self.$raw.last_duplicate(&access)
             }

@@ -22,9 +22,9 @@ use utils::mutable_once::MutableOnce;
 
 pub type SerializedChunk = Vec<u8>;
 
-pub struct AccountsChunkCache<B: AbstractBlockchain<'static> + 'static> {
+pub struct AccountsChunkCache<B: AbstractBlockchain + 'static> {
     blockchain: Arc<B>,
-    env: &'static Environment,
+    env: Environment,
     computing_enabled: AtomicBool,
     chunks_by_prefix_by_block: RwLock<HashMap<Blake2bHash, HashMap<String, SerializedChunk>>>,
     tasks_by_block: RwLock<HashMap<Blake2bHash, Vec<Task>>>,
@@ -32,12 +32,12 @@ pub struct AccountsChunkCache<B: AbstractBlockchain<'static> + 'static> {
     weak_self: MutableOnce<Weak<Self>>
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> AccountsChunkCache<B> {
+impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
 
     const MAX_BLOCKS_BACKLOG: usize = 10;
     const CHUNK_SIZE_MAX: usize = 5000;
 
-    pub fn new(env: &'static Environment, blockchain: Arc<B>) -> Arc<Self> {
+    pub fn new(env: Environment, blockchain: Arc<B>) -> Arc<Self> {
         let cache = AccountsChunkCache {
             blockchain,
             env,
@@ -163,20 +163,20 @@ impl<B: AbstractBlockchain<'static> + 'static> AccountsChunkCache<B> {
 }
 
 /// Future given to the requester in order to retrieve accounts tree chunk.
-pub struct GetChunkFuture<B: AbstractBlockchain<'static> + 'static> {
+pub struct GetChunkFuture<B: AbstractBlockchain + 'static> {
     hash: Blake2bHash,
     prefix: String,
     chunk_cache: Arc<AccountsChunkCache<B>>,
     running: bool
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> GetChunkFuture<B> {
+impl<B: AbstractBlockchain> GetChunkFuture<B> {
     pub fn new(hash: Blake2bHash, prefix: String, chunk_cache: Arc<AccountsChunkCache<B>>) -> Self {
         GetChunkFuture { hash, prefix, chunk_cache, running: false }
     }
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> Future for GetChunkFuture<B> {
+impl<B: AbstractBlockchain> Future for GetChunkFuture<B> {
     type Item = Option<SerializedChunk>;
     type Error = ();
 

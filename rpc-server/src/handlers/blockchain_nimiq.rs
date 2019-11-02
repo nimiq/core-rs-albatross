@@ -17,12 +17,12 @@ use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 use crate::rpc_not_implemented;
 
 pub struct BlockchainNimiqHandler {
-    pub blockchain: Arc<Blockchain<'static>>,
-    generic: BlockchainHandler<Blockchain<'static>>,
+    pub blockchain: Arc<Blockchain>,
+    generic: BlockchainHandler<Blockchain>,
 }
 
 impl BlockchainNimiqHandler {
-    pub fn new(blockchain: Arc<Blockchain<'static>>) -> Self {
+    pub fn new(blockchain: Arc<Blockchain>) -> Self {
         Self {
             generic: BlockchainHandler::new(blockchain.clone()),
             blockchain,

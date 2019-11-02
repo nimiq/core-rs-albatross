@@ -24,7 +24,7 @@ lazy_static! {
 /// Builder for consensus and client
 pub struct ClientBuilder {
     protocol: Protocol,
-    environment: &'static Environment,
+    environment: Environment,
     peer_key_store: KeyStore,
     hostname: Option<String>,
     port: Option<u16>,
@@ -40,7 +40,7 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    pub fn new(protocol: Protocol, environment: &'static Environment, peer_key_store: KeyStore) -> Self {
+    pub fn new(protocol: Protocol, environment: Environment, peer_key_store: KeyStore) -> Self {
         ClientBuilder {
             protocol,
             environment,

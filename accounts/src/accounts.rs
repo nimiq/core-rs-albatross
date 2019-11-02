@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt, Receipts};
 use account::inherent::{AccountInherentInteraction, Inherent};
@@ -16,14 +17,15 @@ use crate::tree::AccountsTree;
 type ReceiptsMap<'a> = HashMap<u16, &'a Vec<u8>>;
 
 #[derive(Debug)]
-pub struct Accounts<'env> {
-    env: &'env Environment,
-    tree: AccountsTree<'env>,
+pub struct Accounts {
+    env: Environment,
+    tree: AccountsTree,
 }
 
-impl<'env> Accounts<'env> {
-    pub fn new(env: &'env Environment) -> Self {
-        Accounts { env, tree: AccountsTree::new(env) }
+impl Accounts {
+    pub fn new(env: Environment) -> Self {
+        let tree = AccountsTree::new(env.clone());
+        Accounts { env, tree, }
     }
 
     pub fn init(&self, txn: &mut WriteTransaction, genesis_accounts: Vec<(Address, Account)>) {
@@ -36,14 +38,14 @@ impl<'env> Accounts<'env> {
     pub fn get(&self, address: &Address, txn_option: Option<&db::Transaction>) -> Account {
         match txn_option {
             Some(txn) => self.tree.get(txn, address),
-            None => self.tree.get(&ReadTransaction::new(self.env), address)
+            None => self.tree.get(&ReadTransaction::new(&self.env), address)
         }.unwrap_or(Account::INITIAL)
     }
 
     pub fn get_chunk(&self, prefix: &str, size: usize, txn_option: Option<&db::Transaction>) -> Option<AccountsTreeChunk> {
         match txn_option {
             Some(txn) => self.tree.get_chunk(txn, prefix, size),
-            None => self.tree.get_chunk(&ReadTransaction::new(self.env), prefix, size),
+            None => self.tree.get_chunk(&ReadTransaction::new(&self.env), prefix, size),
         }
     }
 
@@ -54,7 +56,7 @@ impl<'env> Accounts<'env> {
     pub fn hash(&self, txn_option: Option<&db::Transaction>) -> Blake2bHash {
         match txn_option {
             Some(txn) => self.tree.root_hash(txn),
-            None => self.tree.root_hash(&ReadTransaction::new(self.env))
+            None => self.tree.root_hash(&ReadTransaction::new(&self.env))
         }
     }
 

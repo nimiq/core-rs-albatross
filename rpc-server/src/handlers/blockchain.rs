@@ -12,11 +12,11 @@ use nimiq_transaction::TransactionReceipt;
 
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 
-pub struct BlockchainHandler<B: AbstractBlockchain<'static>> {
+pub struct BlockchainHandler<B: AbstractBlockchain + 'static> {
     pub blockchain: Arc<B>,
 }
 
-impl<B: AbstractBlockchain<'static>> BlockchainHandler<B> {
+impl<B: AbstractBlockchain + 'static> BlockchainHandler<B> {
     pub(crate) fn new(blockchain: Arc<B>) -> Self {
         Self {
             blockchain,

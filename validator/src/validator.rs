@@ -64,8 +64,8 @@ struct ValidatorListeners {
 }
 
 pub struct Validator {
-    blockchain: Arc<Blockchain<'static>>,
-    block_producer: BlockProducer<'static>,
+    blockchain: Arc<Blockchain>,
+    block_producer: BlockProducer,
     consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
     validator_network: Arc<ValidatorNetwork>,
     validator_key: KeyPair,

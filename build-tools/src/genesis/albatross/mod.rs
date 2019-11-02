@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::fs::{OpenOptions, read_to_string};
 use std::io::Error as IoError;
 use std::path::Path;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use failure::Fail;
@@ -216,9 +217,9 @@ impl GenesisBuilder {
 
         // state root
         let state_root = {
-            let db = VolatileEnvironment::new(10)?;
-            let accounts = Accounts::new(&db);
-            let mut txn = WriteTransaction::new(&db);
+            let env = VolatileEnvironment::new(10)?;
+            let accounts = Accounts::new(env.clone());
+            let mut txn = WriteTransaction::new(&env);
             // XXX need to clone, since init needs the actual data
             accounts.init(&mut txn, genesis_accounts.clone());
             accounts.hash(Some(&txn))

@@ -70,7 +70,7 @@ fn create_block(transactions: Vec<Transaction>, height: u32) -> Block {
 #[test]
 fn it_can_store_and_remove_transactions() {
     let env = VolatileEnvironment::new(4).unwrap();
-    let store = TransactionStore::new(&env);
+    let store = TransactionStore::new(env.clone());
 
     let (tx1, tx2, tx3) = create_transactions();
 
@@ -121,7 +121,7 @@ fn it_can_store_and_remove_transactions() {
 #[test]
 fn it_can_retrieve_by_sender() {
     let env = VolatileEnvironment::new(4).unwrap();
-    let store = TransactionStore::new(&env);
+    let store = TransactionStore::new(env.clone());
 
     let (tx1, tx2, tx3) = create_transactions();
     // Block (3 txs)
@@ -146,7 +146,7 @@ fn it_can_retrieve_by_sender() {
 #[test]
 fn it_can_retrieve_by_recipient() {
     let env = VolatileEnvironment::new(4).unwrap();
-    let store = TransactionStore::new(&env);
+    let store = TransactionStore::new(env.clone());
 
     let (tx1, tx2, tx3) = create_transactions();
     // Block (3 txs)
@@ -171,7 +171,7 @@ fn it_can_retrieve_by_recipient() {
 #[test]
 fn it_can_retrieve_by_hash() {
     let env = VolatileEnvironment::new(4).unwrap();
-    let store = TransactionStore::new(&env);
+    let store = TransactionStore::new(env.clone());
 
     let (tx1, tx2, tx3) = create_transactions();
     // Block (3 txs)
@@ -191,7 +191,7 @@ fn it_can_retrieve_by_hash() {
 #[test]
 fn it_can_rebranch() {
     let env = VolatileEnvironment::new(4).unwrap();
-    let store = TransactionStore::new(&env);
+    let store = TransactionStore::new(env.clone());
 
     let (tx1, tx2, tx3) = create_transactions();
     // Block (3 txs)

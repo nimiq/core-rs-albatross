@@ -15,7 +15,7 @@ use nimiq_transaction::{SignatureProof, Transaction};
 #[test]
 fn it_can_produce_empty_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
@@ -34,7 +34,7 @@ fn it_can_produce_empty_blocks() {
 #[test]
 fn it_can_produce_nonempty_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();

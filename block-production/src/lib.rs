@@ -15,13 +15,13 @@ use keys::Address;
 use mempool::Mempool;
 use network_primitives::networks::NetworkInfo;
 
-pub struct BlockProducer<'env> {
-    blockchain: Arc<Blockchain<'env>>,
-    mempool: Arc<Mempool<'env, Blockchain<'env>>>,
+pub struct BlockProducer {
+    blockchain: Arc<Blockchain>,
+    mempool: Arc<Mempool<Blockchain>>,
 }
 
-impl<'env> BlockProducer<'env> {
-    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>) -> Self {
+impl BlockProducer {
+    pub fn new(blockchain: Arc<Blockchain>, mempool: Arc<Mempool<Blockchain>>) -> Self {
         BlockProducer { blockchain, mempool }
     }
 

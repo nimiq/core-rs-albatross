@@ -235,12 +235,12 @@ struct InventoryAgentState {
 
 pub struct InventoryAgent<P: ConsensusProtocol + 'static> {
     blockchain: Arc<P::Blockchain>,
-    mempool: Arc<Mempool<'static, P::Blockchain>>,
+    mempool: Arc<Mempool<P::Blockchain>>,
     peer: Arc<Peer>,
     inv_mgr: Arc<RwLock<InventoryManager<P>>>,
     sync_protocol: Arc<P::SyncProtocol>,
     state: RwLock<InventoryAgentState>,
-    pub notifier: RwLock<Notifier<'static, InventoryEvent<<<P::Blockchain as AbstractBlockchain<'static>>::Block as Block>::Error>>>,
+    pub notifier: RwLock<Notifier<'static, InventoryEvent<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>>>,
     self_weak: MutableOnce<Weak<InventoryAgent<P>>>,
     timers: Timers<InventoryAgentTimer>,
     mutex: Mutex<()>,
@@ -277,7 +277,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
     const SUBSCRIPTION_CHANGE_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
-    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<'static, P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, peer: Arc<Peer>, sync_agent: Arc<P::SyncProtocol>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, peer: Arc<Peer>, sync_agent: Arc<P::SyncProtocol>) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
             blockchain,
             mempool,
@@ -513,7 +513,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         }
     }
 
-    fn on_block(&self, mut block: <P::Blockchain as AbstractBlockchain<'static>>::Block) {
+    fn on_block(&self, mut block: <P::Blockchain as AbstractBlockchain>::Block) {
         //let lock = self.mutex.lock();
 
         let hash = block.hash();
@@ -547,7 +547,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         self.on_object_received(&vector);
     }
 
-    fn on_header(&self, header: <<P::Blockchain as AbstractBlockchain<'static>>::Block as Block>::Header) {
+    fn on_header(&self, header: <<P::Blockchain as AbstractBlockchain>::Block as Block>::Header) {
         trace!("[HEADER] #{} {}", header.height(), header.hash());
         warn!("Unsolicited header message received from {}, discarding", self.peer.peer_address());
     }
@@ -962,7 +962,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         self.sync_protocol.on_epoch_transactions(epoch_transactions_message);
     }
 
-    pub fn relay_block(&self, block: &<P::Blockchain as AbstractBlockchain<'static>>::Block) -> bool {
+    pub fn relay_block(&self, block: &<P::Blockchain as AbstractBlockchain>::Block) -> bool {
         // Only relay block if it matches the peer's subscription.
         if !self.state.read().remote_subscription.matches_block() {
             return false;

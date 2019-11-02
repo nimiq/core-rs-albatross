@@ -72,7 +72,7 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
 #[test]
 fn it_can_sync_macro_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(&env, NetworkId::UnitAlbatross).unwrap());
+    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
     let genesis_hash = blockchain.head_hash();
 
     let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
@@ -85,7 +85,7 @@ fn it_can_sync_macro_blocks() {
 
     // Create a second blockchain to push these blocks.
     let env2 = VolatileEnvironment::new(10).unwrap();
-    let blockchain2 = Arc::new(Blockchain::new(&env2, NetworkId::UnitAlbatross).unwrap());
+    let blockchain2 = Arc::new(Blockchain::new(env2.clone(), NetworkId::UnitAlbatross).unwrap());
 
     for block in macro_blocks {
         assert_eq!(blockchain2.push_isolated_macro_block(block, &[]), Ok(PushResult::Extended));

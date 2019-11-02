@@ -36,13 +36,13 @@ pub struct ValidatorAgentState {
 
 pub struct ValidatorAgent {
     pub(crate) peer: Arc<Peer>,
-    pub(crate) blockchain: Arc<Blockchain<'static>>,
+    pub(crate) blockchain: Arc<Blockchain>,
     pub(crate) state: RwLock<ValidatorAgentState>,
     pub notifier: RwLock<PassThroughNotifier<'static, ValidatorAgentEvent>>,
 }
 
 impl ValidatorAgent {
-    pub fn new(peer: Arc<Peer>, blockchain: Arc<Blockchain<'static>>) -> Arc<Self> {
+    pub fn new(peer: Arc<Peer>, blockchain: Arc<Blockchain>) -> Arc<Self> {
         let agent = Arc::new(Self {
             peer,
             blockchain,

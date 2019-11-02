@@ -34,7 +34,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Environment {
     Volatile(volatile::VolatileEnvironment),
     Persistent(lmdb::LmdbEnvironment),
@@ -66,12 +66,12 @@ impl Environment {
 }
 
 #[derive(Debug)]
-pub enum Database<'env> {
-    Volatile(volatile::VolatileDatabase<'env>),
-    Persistent(lmdb::LmdbDatabase<'env>),
+pub enum Database {
+    Volatile(volatile::VolatileDatabase),
+    Persistent(lmdb::LmdbDatabase),
 }
 
-impl<'env> Database<'env> {
+impl Database {
     fn volatile(&self) -> Option<&volatile::VolatileDatabase> {
         if let Database::Volatile(ref db) = self {
             return Some(db);
@@ -105,7 +105,7 @@ impl<'env> Transaction<'env> {
         }
     }
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> Cursor<'txn, 'db> {
+    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn, 'db> {
         match *self {
             Transaction::VolatileRead(ref txn) => { Cursor::VolatileCursor(txn.cursor(db)) }
             Transaction::VolatileWrite(ref txn) => { Cursor::VolatileCursor(txn.cursor(db)) }
@@ -132,7 +132,7 @@ impl<'env> ReadTransaction<'env> {
 
     pub fn close(self) {}
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> Cursor<'txn, 'db> {
+    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn, 'db> {
         self.0.cursor(db)
     }
 }
@@ -209,11 +209,11 @@ impl<'env> WriteTransaction<'env> {
 
     pub fn abort(self) {}
 
-    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> Cursor<'txn, 'db> {
+    pub fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> Cursor<'txn, 'db> {
         self.0.cursor(db)
     }
 
-    pub fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> WriteCursor<'txn, 'db> {
+    pub fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> WriteCursor<'txn, 'db> {
         match self.0 {
             Transaction::VolatileWrite(ref txn) => { WriteCursor::VolatileCursor(txn.write_cursor(db)) }
             Transaction::PersistentWrite(ref txn) => { WriteCursor::PersistentCursor(txn.write_cursor(db)) }
@@ -278,7 +278,7 @@ impl<'txn, 'db> ReadCursor for Cursor<'txn, 'db> {
         gen_cursor_match!(self, first, Cursor)
     }
 
-    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn first_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
         gen_cursor_match!(self, first_duplicate, Cursor)
     }
 
@@ -286,7 +286,7 @@ impl<'txn, 'db> ReadCursor for Cursor<'txn, 'db> {
         gen_cursor_match!(self, last, Cursor)
     }
 
-    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn last_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
         gen_cursor_match!(self, last_duplicate, Cursor)
     }
 
@@ -348,7 +348,7 @@ impl<'txn, 'db> ReadCursor for WriteCursor<'txn, 'db> {
         gen_cursor_match!(self, first, WriteCursor)
     }
 
-    fn first_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn first_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
         gen_cursor_match!(self, first_duplicate, WriteCursor)
     }
 
@@ -356,7 +356,7 @@ impl<'txn, 'db> ReadCursor for WriteCursor<'txn, 'db> {
         gen_cursor_match!(self, last, WriteCursor)
     }
 
-    fn last_duplicate<V>(&mut self) -> Option<(V)> where V: FromDatabaseValue {
+    fn last_duplicate<V>(&mut self) -> Option<V> where V: FromDatabaseValue {
         gen_cursor_match!(self, last_duplicate, WriteCursor)
     }
 

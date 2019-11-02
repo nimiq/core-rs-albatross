@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use block::{MacroBlock, MicroBlock};
 use collections::bitset::BitSet;
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
@@ -6,17 +8,17 @@ use primitives::policy;
 use primitives::validators::Slots;
 use transaction::Transaction as BlockchainTransaction;
 
-pub struct RewardPot<'env> {
-    env: &'env Environment,
-    reward_pot: Database<'env>,
+pub struct RewardPot {
+    env: Environment,
+    reward_pot: Database,
 }
 
-impl<'env> RewardPot<'env> {
+impl RewardPot {
     const REWARD_POT_DB_NAME: &'static str = "RewardPot";
     const CURRENT_EPOCH_KEY: &'static str = "curr";
     const PREVIOUS_EPOCH_KEY: &'static str = "prev";
 
-    pub fn new(env: &'env Environment) -> Self {
+    pub fn new(env: Environment) -> Self {
         let reward_pot = env.open_database(RewardPot::REWARD_POT_DB_NAME.to_string());
 
         Self {
@@ -119,12 +121,12 @@ impl<'env> RewardPot<'env> {
     }
 
     pub fn current_reward_pot(&self) -> Coin {
-        let txn = ReadTransaction::new(self.env);
+        let txn = ReadTransaction::new(&self.env);
         Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY).unwrap_or(0))
     }
 
     pub fn previous_reward_pot(&self) -> Coin {
-        let txn = ReadTransaction::new(self.env);
+        let txn = ReadTransaction::new(&self.env);
         Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY).unwrap_or(0))
     }
 }

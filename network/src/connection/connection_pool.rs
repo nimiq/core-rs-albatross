@@ -45,7 +45,7 @@ macro_rules! update_checked {
 
 pub type ConnectionId = usize;
 
-pub struct ConnectionPoolState<B: AbstractBlockchain<'static> + 'static> {
+pub struct ConnectionPoolState<B: AbstractBlockchain + 'static> {
     connections: SparseVec<ConnectionInfo<B>>,
     connections_by_peer_address: HashMap<Arc<PeerAddress>, ConnectionId>,
     connections_by_net_address: HashMap<NetAddress, HashSet<ConnectionId>>,
@@ -73,7 +73,7 @@ pub struct ConnectionPoolState<B: AbstractBlockchain<'static> + 'static> {
     banned_ips: HashMap<NetAddress, SystemTime>,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> ConnectionPoolState<B> {
+impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
     pub fn connection_iter(&self) -> Vec<&ConnectionInfo<B>> {
         self.connections_by_peer_address.values().map(|connection_id| {
             self.connections.get(*connection_id).expect("Missing connection")
@@ -331,7 +331,7 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionPoolState<B> {
     }
 }
 
-enum Connection<'a, B: AbstractBlockchain<'static> + 'static> {
+enum Connection<'a, B: AbstractBlockchain + 'static> {
     Id(ConnectionId),
     Info(&'a ConnectionInfo<B>),
 }
@@ -341,7 +341,7 @@ enum ConnectionPoolTimer {
     UnbanIps,
 }
 
-pub struct ConnectionPool<B: AbstractBlockchain<'static> + 'static> {
+pub struct ConnectionPool<B: AbstractBlockchain + 'static> {
     blockchain: Arc<B>,
     network_config: Arc<NetworkConfig>,
     addresses: Arc<PeerAddressBook>,
@@ -358,7 +358,7 @@ pub struct ConnectionPool<B: AbstractBlockchain<'static> + 'static> {
     self_weak: MutableOnce<Weak<ConnectionPool<B>>>,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
+impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
     const UNBAN_IPS_INTERVAL: Duration = Duration::from_secs(60); // seconds
 

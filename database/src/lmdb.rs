@@ -1,6 +1,7 @@
 use std::cmp;
 use std::fmt;
 use std::fs;
+use std::sync::Arc;
 
 use fs2;
 use lmdb_zero;
@@ -13,19 +14,33 @@ use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait, RawReadCursor};
 
 use super::*;
 
+// re export the lmdb error
+pub use lmdb_zero::Error as LmdbError;
+
+
+
 #[derive(Debug)]
 pub struct LmdbEnvironment {
-    env: lmdb_zero::Environment,
-    creation_gate: parking_lot::RwLock<()>,
+    env: Arc<lmdb_zero::Environment>,
+    creation_gate: Arc<parking_lot::RwLock<()>>,
+}
+
+impl Clone for LmdbEnvironment {
+    fn clone(&self) -> Self {
+        Self {
+            env: Arc::clone(&self.env),
+            creation_gate: Arc::clone(&self.creation_gate)
+        }
+    }
 }
 
 impl LmdbEnvironment {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Environment, lmdb_zero::Error> {
+    pub fn new(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Environment, LmdbError> {
         Ok(Environment::Persistent(LmdbEnvironment::new_lmdb_environment(path, size, max_dbs, flags)?))
     }
 
-    pub(in super) fn new_lmdb_environment(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Self, lmdb_zero::Error> {
+    pub(in super) fn new_lmdb_environment(path: &str, size: usize, max_dbs: u32, flags: open::Flags) -> Result<Self, LmdbError> {
         fs::create_dir_all(path).unwrap();
 
         let mut env = lmdb_zero::EnvBuilder::new()?;
@@ -43,7 +58,10 @@ impl LmdbEnvironment {
             info!("LMDB memory map size: {}", cur_mapsize);
         }
 
-        let lmdb = LmdbEnvironment { env, creation_gate: parking_lot::RwLock::new(()) };
+        let lmdb = LmdbEnvironment {
+            env: Arc::new(env),
+            creation_gate: Arc::new(parking_lot::RwLock::new(()))
+        };
         if lmdb.need_resize(0) {
             info!("LMDB memory needs to be resized.");
             lmdb.do_resize(0);
@@ -73,7 +91,7 @@ impl LmdbEnvironment {
             db_flags.insert(lmdb_zero::db::INTEGERKEY);
         }
 
-        LmdbDatabase { db: lmdb_zero::Database::open(&self.env, Some(&name), &lmdb_zero::DatabaseOptions::new(db_flags)).unwrap() }
+        LmdbDatabase { db: lmdb_zero::Database::open(Arc::clone(&self.env), Some(&name), &lmdb_zero::DatabaseOptions::new(db_flags)).unwrap() }
     }
 
     pub(in super) fn drop_database(self) -> io::Result<()> {
@@ -150,8 +168,8 @@ impl LmdbEnvironment {
 }
 
 #[derive(Debug)]
-pub struct LmdbDatabase<'env> {
-    db: lmdb_zero::Database<'env>,
+pub struct LmdbDatabase {
+    db: lmdb_zero::Database<'static>,
 }
 
 pub struct LmdbReadTransaction<'env> {
@@ -164,16 +182,16 @@ impl<'env> LmdbReadTransaction<'env> {
     pub(in super) fn new(env: &'env LmdbEnvironment) -> Self {
         // This is an implicit transaction, so take the lock first.
         let guard = env.creation_gate.read();
-        LmdbReadTransaction { txn: lmdb_zero::ReadTransaction::new(&env.env).unwrap(), guard }
+        LmdbReadTransaction { txn: lmdb_zero::ReadTransaction::new(Arc::clone(&env.env)).unwrap(), guard }
     }
 
-    pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
+    pub(in super) fn get<K, V>(&self, db: &LmdbDatabase, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         let access = self.txn.access();
         let result: Option<&[u8]> = access.get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
 
-    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbCursor<'txn, 'db> {
+    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> LmdbCursor<'txn, 'db> {
         let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
         LmdbCursor {
             raw: RawLmdbCursor {
@@ -203,10 +221,10 @@ impl<'env> LmdbWriteTransaction<'env> {
             env.do_resize(0);
         }
         let guard = env.creation_gate.read();
-        LmdbWriteTransaction { txn: lmdb_zero::WriteTransaction::new(&env.env).unwrap(), guard }
+        LmdbWriteTransaction { txn: lmdb_zero::WriteTransaction::new(Arc::clone(&env.env)).unwrap(), guard }
     }
 
-    pub(in super) fn get<K, V>(&self, db: &LmdbDatabase<'env>, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
+    pub(in super) fn get<K, V>(&self, db: &LmdbDatabase, key: &K) -> Option<V> where K: AsDatabaseBytes + ?Sized, V: FromDatabaseValue {
         let access = self.txn.access();
         let result: Option<&[u8]> = access.get(&db.db, AsDatabaseBytes::as_database_bytes(key).as_ref()).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
@@ -243,7 +261,7 @@ impl<'env> LmdbWriteTransaction<'env> {
         self.txn.commit().unwrap();
     }
 
-    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbCursor<'txn, 'db> {
+    pub(in super) fn cursor<'txn, 'db>(&'txn self, db: &'db Database) -> LmdbCursor<'txn, 'db> {
         let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
         LmdbCursor {
             raw: RawLmdbCursor {
@@ -253,7 +271,7 @@ impl<'env> LmdbWriteTransaction<'env> {
         }
     }
 
-    pub(in super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database<'env>) -> LmdbWriteCursor<'txn, 'db> {
+    pub(in super) fn write_cursor<'txn, 'db>(&'txn self, db: &'db Database) -> LmdbWriteCursor<'txn, 'db> {
         let cursor = self.txn.cursor(&db.persistent().unwrap().db).unwrap();
         LmdbWriteCursor {
             raw: RawLmdbCursor {
@@ -281,7 +299,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    fn first_duplicate<V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(V)> where V: FromDatabaseValue {
+    fn first_duplicate<V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<V> where V: FromDatabaseValue {
         let result: Option<&[u8]> = self.cursor.first_dup(&access).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }
@@ -292,7 +310,7 @@ impl<'txn, 'db> RawReadCursor for RawLmdbCursor<'txn, 'db> {
         Some((FromDatabaseValue::copy_from_database(key).unwrap(), FromDatabaseValue::copy_from_database(value).unwrap()))
     }
 
-    fn last_duplicate<V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<(V)> where V: FromDatabaseValue {
+    fn last_duplicate<V>(&mut self, access: &lmdb_zero::ConstAccessor) -> Option<V> where V: FromDatabaseValue {
         let result: Option<&[u8]> = self.cursor.last_dup(&access).to_opt().unwrap();
         Some(FromDatabaseValue::copy_from_database(result?).unwrap())
     }

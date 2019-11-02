@@ -19,12 +19,12 @@ use crate::handlers::Module;
 use crate::handlers::mempool::transaction_to_obj;
 
 pub struct BlockProductionNimiqHandler {
-    pub blockchain: Arc<Blockchain<'static>>,
-    pub mempool: Arc<Mempool<'static, Blockchain<'static>>>,
+    pub blockchain: Arc<Blockchain>,
+    pub mempool: Arc<Mempool<Blockchain>>,
 }
 
 impl BlockProductionNimiqHandler {
-    pub fn new(blockchain: Arc<Blockchain<'static>>, mempool: Arc<Mempool<'static, Blockchain<'static>>>) -> Self {
+    pub fn new(blockchain: Arc<Blockchain>, mempool: Arc<Mempool<Blockchain>>) -> Self {
         BlockProductionNimiqHandler {
             blockchain,
             mempool,

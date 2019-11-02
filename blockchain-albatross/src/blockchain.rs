@@ -87,23 +87,23 @@ impl<T> From<Option<T>> for OptionalCheck<T> {
     }
 }
 
-pub struct Blockchain<'env> {
-    pub(crate) env: &'env Environment,
+pub struct Blockchain {
+    pub(crate) env: Environment,
     pub network_id: NetworkId,
     // TODO network_time: Arc<NetworkTime>,
-    pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
-    pub(crate) chain_store: Arc<ChainStore<'env>>,
-    pub(crate) state: RwLock<BlockchainState<'env>>,
+    pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
+    pub(crate) chain_store: Arc<ChainStore>,
+    pub(crate) state: RwLock<BlockchainState>,
     pub push_lock: Mutex<()>, // TODO: Not very nice to have this public
 
     #[cfg(feature = "metrics")]
     metrics: BlockchainMetrics,
 }
 
-pub struct BlockchainState<'env> {
-    accounts: Accounts<'env>,
+pub struct BlockchainState {
+    accounts: Accounts,
     transaction_cache: TransactionCache,
-    pub(crate) reward_registry: SlashRegistry<'env>,
+    pub(crate) reward_registry: SlashRegistry,
 
     pub(crate) main_chain: ChainInfo,
     head_hash: Blake2bHash,
@@ -117,8 +117,8 @@ pub struct BlockchainState<'env> {
     last_slots: Option<Slots>,
 }
 
-impl<'env> BlockchainState<'env> {
-    pub fn accounts(&self) -> &Accounts<'env> {
+impl BlockchainState {
+    pub fn accounts(&self) -> &Accounts {
         &self.accounts
     }
 
@@ -146,21 +146,21 @@ impl<'env> BlockchainState<'env> {
         self.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1, None)
     }
 
-    pub fn reward_registry(&self) -> &SlashRegistry<'env> {
+    pub fn reward_registry(&self) -> &SlashRegistry {
         &self.reward_registry
     }
 }
 
-impl<'env> Blockchain<'env> {
-    pub fn new(env: &'env Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
-        let chain_store = Arc::new(ChainStore::new(env));
+impl Blockchain {
+    pub fn new(env: Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
+        let chain_store = Arc::new(ChainStore::new(env.clone()));
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(env, network_id, chain_store, head_hash)?,
             None => Blockchain::init(env, network_id, chain_store)?
         })
     }
 
-    fn load(env: &'env Environment, network_id: NetworkId, chain_store: Arc<ChainStore<'env>>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
+    fn load(env: Environment, network_id: NetworkId, chain_store: Arc<ChainStore>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
@@ -174,7 +174,7 @@ impl<'env> Blockchain<'env> {
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
 
         // Check that chain/accounts state is consistent.
-        let accounts = Accounts::new(env);
+        let accounts = Accounts::new(env.clone());
         if main_chain.head.state_root() != &accounts.hash(None) {
             return Err(BlockchainError::InconsistentState);
         }
@@ -199,7 +199,7 @@ impl<'env> Blockchain<'env> {
         assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS.saturating_sub(main_chain.head.block_number() + 1));
 
         // Initialize SlashRegistry.
-        let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
+        let slash_registry = SlashRegistry::new(env.clone(), Arc::clone(&chain_store));
 
         // Current slots and validators
         let (current_slots, current_validators) = Self::slots_and_validators_from_block(&macro_head);
@@ -238,7 +238,7 @@ impl<'env> Blockchain<'env> {
         })
     }
 
-    fn init(env: &'env Environment, network_id: NetworkId, chain_store: Arc<ChainStore<'env>>) -> Result<Self, BlockchainError> {
+    fn init(env: Environment, network_id: NetworkId, chain_store: Arc<ChainStore>) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
@@ -247,8 +247,8 @@ impl<'env> Blockchain<'env> {
         let head_hash = network_info.genesis_hash().clone();
 
         // Initialize accounts.
-        let accounts = Accounts::new(env);
-        let mut txn = WriteTransaction::new(env);
+        let accounts = Accounts::new(env.clone());
+        let mut txn = WriteTransaction::new(&env);
         accounts.init(&mut txn, network_info.genesis_accounts());
 
         // Commit genesis block to accounts.
@@ -263,7 +263,7 @@ impl<'env> Blockchain<'env> {
         let transaction_cache = TransactionCache::new();
 
         // Initialize SlashRegistry.
-        let slash_registry = SlashRegistry::new(env, Arc::clone(&chain_store));
+        let slash_registry = SlashRegistry::new(env.clone(), Arc::clone(&chain_store));
 
         // current slots and validators
         let (current_slots, current_validators) = Self::slots_and_validators_from_block(&genesis_macro_block);
@@ -401,7 +401,7 @@ impl<'env> Blockchain<'env> {
         let _push_lock = self.push_lock.lock();
 
         // XXX We might want to pass this as argument to this method
-        let read_txn = ReadTransaction::new(self.env);
+        let read_txn = ReadTransaction::new(&self.env);
 
         // Check if we already know this block.
         let hash: Blake2bHash = block.hash();
@@ -517,7 +517,7 @@ impl<'env> Blockchain<'env> {
 
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
         debug!("Creating/extending fork with block {}, block number #{}, view number {}", chain_info.head.hash(), chain_info.head.block_number(), chain_info.head.view_number());
-        let mut txn = WriteTransaction::new(self.env);
+        let mut txn = WriteTransaction::new(&self.env);
         self.chain_store.put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
         txn.commit();
 
@@ -525,7 +525,7 @@ impl<'env> Blockchain<'env> {
     }
 
     fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo, create_macro_extrinsics: bool) -> Result<PushResult, PushError> {
-        let mut txn = WriteTransaction::new(self.env);
+        let mut txn = WriteTransaction::new(&self.env);
         let state = self.state.upgradable_read();
 
         // Check transactions against TransactionCache to prevent replay.
@@ -630,7 +630,7 @@ impl<'env> Blockchain<'env> {
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
         // Store the chain along the way.
-        let read_txn = ReadTransaction::new(self.env);
+        let read_txn = ReadTransaction::new(&self.env);
 
         let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
@@ -653,7 +653,7 @@ impl<'env> Blockchain<'env> {
         let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut ancestor = current;
 
-        let mut write_txn = WriteTransaction::new(self.env);
+        let mut write_txn = WriteTransaction::new(&self.env);
         let mut cache_txn;
 
         let state = self.state.upgradable_read();
@@ -720,7 +720,7 @@ impl<'env> Blockchain<'env> {
                         write_txn.abort();
 
                         // Delete invalid fork blocks from store.
-                        let mut write_txn = WriteTransaction::new(self.env);
+                        let mut write_txn = WriteTransaction::new(&self.env);
                         for block in vec![fork_block].into_iter().chain(fork_iter) {
                             self.chain_store.remove_chain_info(&mut write_txn, &block.0, micro_block.header.block_number)
                         }
@@ -863,7 +863,7 @@ impl<'env> Blockchain<'env> {
         let push_lock = self.push_lock.lock();
 
         // XXX We might want to pass this as argument to this method
-        let read_txn = ReadTransaction::new(self.env);
+        let read_txn = ReadTransaction::new(&self.env);
 
         let macro_block = if let Block::Macro(ref block) = block {
             block
@@ -946,7 +946,7 @@ impl<'env> Blockchain<'env> {
     }
 
     fn extend_isolated_macro(&self, block_hash: Blake2bHash, transactions: &[BlockchainTransaction], mut chain_info: ChainInfo, mut prev_info: ChainInfo, push_lock: MutexGuard<()>) -> Result<PushResult, PushError> {
-        let mut txn = WriteTransaction::new(self.env);
+        let mut txn = WriteTransaction::new(&self.env);
         let state = self.state.upgradable_read();
         let block_number = chain_info.head.block_number();
         // We cannot verify the slashed set, so we need to trust it here.
@@ -1173,7 +1173,7 @@ impl<'env> Blockchain<'env> {
             txn
         }
         else {
-            read_txn = ReadTransaction::new(self.env);
+            read_txn = ReadTransaction::new(&self.env);
             &read_txn
         };
 
@@ -1217,7 +1217,7 @@ impl<'env> Blockchain<'env> {
             .and_then(|info| info.slot)
     }
 
-    pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
+    pub fn state(&self) -> RwLockReadGuard<BlockchainState> {
         self.state.read()
     }
 
@@ -1440,14 +1440,14 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn write_transaction(&self) -> WriteTransaction {
-        WriteTransaction::new(self.env)
+        WriteTransaction::new(&self.env)
     }
 }
 
-impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
+impl AbstractBlockchain for Blockchain {
     type Block = Block;
 
-    fn new(env: &'env Environment, network_id: NetworkId, _network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+    fn new(env: Environment, network_id: NetworkId, _network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
         Blockchain::new(env, network_id)
     }
 
@@ -1558,7 +1558,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
         unimplemented!()
     }
 
-    fn register_listener<T: Listener<BlockchainEvent> + 'env>(&self, listener: T) -> ListenerHandle {
+    fn register_listener<T: Listener<BlockchainEvent> + 'static>(&self, listener: T) -> ListenerHandle {
         self.notifier.write().register(listener)
     }
 

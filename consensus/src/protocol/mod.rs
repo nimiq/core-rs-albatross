@@ -7,7 +7,7 @@ pub mod albatross;
 pub mod nimiq;
 
 pub trait ConsensusProtocol {
-    type Blockchain: AbstractBlockchain<'static> + 'static;
-    type MessageAdapter: MessageAdapter<<Self::Blockchain as AbstractBlockchain<'static>>::Block> + 'static;
-    type SyncProtocol: SyncProtocol<'static, Self::Blockchain>;
+    type Blockchain: AbstractBlockchain + 'static;
+    type MessageAdapter: MessageAdapter<<Self::Blockchain as AbstractBlockchain>::Block> + 'static;
+    type SyncProtocol: SyncProtocol<Self::Blockchain> + 'static;
 }

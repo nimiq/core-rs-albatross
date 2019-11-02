@@ -34,7 +34,7 @@ ceiling_div!(u64);
 ceiling_div!(usize);
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::log2;
 
     #[test]

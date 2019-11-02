@@ -31,11 +31,11 @@ pub trait AbstractChainMetrics<P: ConsensusProtocol + 'static> {
 
 
 pub struct NimiqChainMetrics {
-    blockchain: Arc<Blockchain<'static>>,
+    blockchain: Arc<Blockchain>,
 }
 
 impl AbstractChainMetrics<NimiqConsensusProtocol> for NimiqChainMetrics {
-    fn new(blockchain: Arc<Blockchain<'static>>) -> Self {
+    fn new(blockchain: Arc<Blockchain>) -> Self {
         Self { blockchain }
     }
 }
@@ -61,11 +61,11 @@ impl Metrics for NimiqChainMetrics {
 
 
 pub struct AlbatrossChainMetrics {
-    blockchain: Arc<AlbatrossBlockchain<'static>>,
+    blockchain: Arc<AlbatrossBlockchain>,
 }
 
 impl AbstractChainMetrics<AlbatrossConsensusProtocol> for AlbatrossChainMetrics {
-    fn new(blockchain: Arc<AlbatrossBlockchain<'static>>) -> Self {
+    fn new(blockchain: Arc<AlbatrossBlockchain>) -> Self {
         Self { blockchain }
     }
 }

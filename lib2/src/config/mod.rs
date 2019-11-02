@@ -1,7 +1,20 @@
 use std::convert::TryFrom;
 use std::path::PathBuf;
+use std::fmt::Display;
+
+use rand::rngs::OsRng;
 
 use primitives::networks::NetworkId;
+use database::Environment;
+use database::lmdb::{LmdbEnvironment, open as LmdbFlags};
+use database::volatile::VolatileEnvironment;
+use network::network_config::{NetworkConfig, ReverseProxyConfig};
+use mempool::MempoolConfig;
+use mempool::filter::Rules as MempoolRules;
+#[cfg(feature="validator")]
+use bls::bls12_381::KeyPair as BlsKeyPair;
+use utils::key_store::KeyStore;
+use network_primitives::address::NetAddress;
 
 use crate::error::Error;
 use crate::config::user_agent::UserAgent;
@@ -25,7 +38,7 @@ pub const WS_DEFAULT_PORT: u16 = 8443;
 ///
 /// * We'll propably have this enum somewhere in the primitives. So this is a placeholder.
 ///
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Display)]
 pub enum ConsensusConfig {
     Full,
     MacroSync,
@@ -98,23 +111,6 @@ pub enum ProtocolConfig {
     Rtc,
 }
 
-
-#[derive(Debug, Clone)]
-pub enum Feature {
-    // TODO
-    //RpcServer { config: (/*RpcServerConfig*/) },
-    //MetricsServer { config: (/*MetricsServerConfig*/) },
-    Validator /*{ config: ValidatorConfig }*/,
-}
-
-#[derive(Debug, Clone)]
-pub struct ReverseProxyConfig {
-    port: u16,
-    header: String,
-    addresses: Vec<String>,
-    termination: bool,
-}
-
 #[derive(Debug, Clone)]
 pub struct ValidatorConfig {
     // TODO
@@ -144,14 +140,14 @@ pub enum StorageConfig {
     ///
     Path(PathBuf),
 
-    /// This will store the database in the browser using *IndexedDB* under the specified key.
-    /// This is only available when run in the browser.
+    /// This will store the database in the browser using *IndexedDB*. This is only available when
+    /// run in the browser.
     ///
     /// # Notes
     ///
     /// There no support for WebAssembly yet.
     ///
-    IndexedDB(String),
+    IndexedDB,
 }
 
 impl StorageConfig {
@@ -164,6 +160,86 @@ impl StorageConfig {
     /// Stores the database in `/var/lib/nimiq/`
     pub fn system() -> Self {
         Self::Path(paths::system())
+    }
+
+    /// Returns the database environment for that storage backend and the given network ID and
+    /// consensus type.
+    ///
+    /// # Arguments
+    ///
+    /// * `network_id` - The network ID of the database
+    /// * `consensus` - The consensus type
+    ///
+    /// # Return Value
+    ///
+    /// Returns a `Result` which is either a `Environment` or a `Error`.
+    ///
+    pub fn database(&self, network_id: NetworkId, consensus: ConsensusConfig) -> Result<Environment, Error> {
+        let db_name = format!("{}-{}-consensus", network_id, consensus).to_lowercase();
+        info!("Opening database: {}", db_name);
+
+        // TODO: Pass these option as arguments and put them into a `DatabaseConfig`.
+        let flags = LmdbFlags::NOMETASYNC;
+        let size = 0; //1024 * 1024 * 50;
+        let max_dbs = 10;
+
+        Ok(match self {
+            StorageConfig::Volatile => {
+                VolatileEnvironment::new_with_lmdb_flags(max_dbs, flags)?
+            },
+            StorageConfig::Path(path) => {
+                let db_path = path.join(db_name)
+                    .to_str()
+                    .unwrap_or_else(|| panic!("Failed to convert database path to string: {}", path.display()))
+                    .to_string();
+                LmdbEnvironment::new(&db_path, size, max_dbs, flags)?
+            },
+            StorageConfig::IndexedDB => self.no_indexed_db(),
+        })
+    }
+
+    pub(crate) fn init_key_store(&self, network_config: &mut NetworkConfig) -> Result<(), Error> {
+        // TODO: Move this out of here and load keys from database
+        match self {
+            StorageConfig::Volatile => {
+                network_config.init_volatile()
+            },
+            StorageConfig::Path(path) => {
+                let key_path = path.join("peer_key.dat")
+                    .to_str()
+                    .unwrap_or_else(|| panic!("Failed to convert path of peer key to string: {}", path.display()))
+                    .to_string();
+                let key_store = KeyStore::new(key_path);
+                network_config.init_persistent(&key_store)?;
+            }
+            StorageConfig::IndexedDB => self.no_indexed_db(),
+        }
+        Ok(())
+    }
+
+    #[cfg(feature="validator")]
+    pub(crate) fn validator_key(&self) -> Result<BlsKeyPair, Error> {
+        Ok(match self {
+            StorageConfig::Volatile => {
+                // TODO: See [Issue #15](https://github.com/nimiq/core-rs-albatross/issues/15)
+                let mut rng = OsRng::new()
+                    .expect("Failed to get OS random number generator");
+                BlsKeyPair::generate(&mut rng)
+            },
+            StorageConfig::Path(path) => {
+                let key_path = path.join("validator_key.dat")
+                    .to_str()
+                    .unwrap_or_else(|| panic!("Failed to convert path of validator key to string: {}", path.display()))
+                    .to_string();
+                let key_store = KeyStore::new(key_path);
+                key_store.load_key()?
+            }
+            StorageConfig::IndexedDB => self.no_indexed_db(),
+        })
+    }
+
+    fn no_indexed_db(&self) -> ! {
+        panic!("Storage backend not implemented: {:?}", self);
     }
 }
 
@@ -211,25 +287,30 @@ pub struct ClientConfig {
     #[builder(default="NetworkId::DevAlbatross")]
     pub network_id: NetworkId,
 
-    /// Which features to use.
-    ///
-    #[builder(default)]
-    pub features: Vec<Feature>,
-
     /// This configuration is needed if your node runs behind a reverse proxy.
     ///
     #[builder(setter(custom), default)]
-    pub reverse_proxy_config: Option<ReverseProxyConfig>,
+    pub reverse_proxy: Option<ReverseProxyConfig>,
 
     /// Determines where the database is stored.
     ///
     #[builder(default)]
     pub storage: StorageConfig,
+
+    /// The mempool filter rules
+    ///
+    #[builder(default, setter(custom))]
+    pub mempool: MempoolConfig,
+
+    /// The optional validator configuration
+    ///
+    #[builder(default, setter(strip_option))]
+    pub validator: Option<ValidatorConfig>,
 }
 
 impl ClientConfig {
     /// Creates a new builder object for the client configuration.
-    /// 
+    ///
     pub fn builder() -> ClientConfigBuilder {
         ClientConfigBuilder::default()
     }
@@ -252,7 +333,7 @@ impl ClientConfigBuilder {
         // We could also put some validation here.
 
         self.build_internal()
-            .map_err(|s| Error::ConfigError(s))
+            .map_err(|s| Error::Config(s))
     }
 
     /// Short cut to build the config and instantiate the client
@@ -344,15 +425,15 @@ impl ClientConfigBuilder {
     ///
     /// * `port` - Port at which the reverse proxy is listening for incoming connections
     /// * `header` - Name of header which contains the origin IP address
-    /// * `addresses` - Addresses on which the reverse proxy is listening for incoming connections
+    /// * `address` - Address on which the reverse proxy is listening for incoming connections
     /// * `termination` - TODO
     ///
-    pub fn reverse_proxy(&mut self, port: u16, header: String, addresses: Vec<String>, termination: bool) -> &mut Self {
-        self.reverse_proxy_config = Some(Some(ReverseProxyConfig {
+    pub fn reverse_proxy(&mut self, port: u16, header: String, address: NetAddress, with_tls_termination: bool) -> &mut Self {
+        self.reverse_proxy = Some(Some(ReverseProxyConfig {
             port,
             header,
-            addresses,
-            termination,
+            address,
+            with_tls_termination,
         }));
         self
     }
@@ -360,6 +441,12 @@ impl ClientConfigBuilder {
     /// Configure the storage to be volatile. All data will be lost after shutdown of the client.
     pub fn volatile(&mut self) -> &mut Self {
         self.storage = Some(StorageConfig::Volatile);
+        self
+    }
+
+    /// Sets the mempool filter rules
+    pub fn mempool(&mut self, filter_rules: MempoolRules, filter_limit: usize) -> &mut Self {
+        self.mempool = Some(MempoolConfig { filter_rules, filter_limit });
         self
     }
 }

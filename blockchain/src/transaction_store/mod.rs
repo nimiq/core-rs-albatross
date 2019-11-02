@@ -1,5 +1,6 @@
 use std::io;
 use std::os::raw::c_uint;
+use std::sync::Arc;
 
 use beserial::{Deserialize, Serialize};
 use block::Block;
@@ -63,15 +64,15 @@ impl TransactionInfo {
 }
 
 #[derive(Debug)]
-pub struct TransactionStore<'env> {
-    env: &'env Environment,
-    transaction_db: Database<'env>,
-    sender_idx: Database<'env>,
-    recipient_idx: Database<'env>,
-    transaction_hash_idx: Database<'env>,
+pub struct TransactionStore {
+    env: Environment,
+    transaction_db: Database,
+    sender_idx: Database,
+    recipient_idx: Database,
+    transaction_hash_idx: Database,
 }
 
-impl<'env> TransactionStore<'env> {
+impl TransactionStore {
     const TRANSACTION_DB_NAME: &'static str = "TransactionData";
     const SENDER_IDX_NAME: &'static str = "SenderIdx";
     const RECIPIENT_IDX_NAME: &'static str = "RecipientIdx";
@@ -79,7 +80,7 @@ impl<'env> TransactionStore<'env> {
     const HEAD_KEY: c_uint = 0;
     const HEAD_DEFAULT: c_uint = 1;
 
-    pub fn new(env: &'env Environment) -> Self {
+    pub fn new(env: Environment) -> Self {
         let transaction_db = env.open_database_with_flags(
             Self::TRANSACTION_DB_NAME.to_string(),
             DatabaseFlags::UINT_KEYS
@@ -101,7 +102,7 @@ impl<'env> TransactionStore<'env> {
     fn get_head(&self, txn_option: Option<&Transaction>) -> c_uint {
         match txn_option {
             Some(txn) => txn.get(&self.transaction_db, &TransactionStore::HEAD_KEY),
-            None => ReadTransaction::new(self.env).get(&self.transaction_db, &TransactionStore::HEAD_KEY)
+            None => ReadTransaction::new(&self.env).get(&self.transaction_db, &TransactionStore::HEAD_KEY)
         }.unwrap_or(Self::HEAD_DEFAULT)
     }
 
@@ -112,7 +113,7 @@ impl<'env> TransactionStore<'env> {
     fn get_id(&self, transaction_hash: &Blake2bHash, txn_option: Option<&Transaction>) -> Option<c_uint> {
         match txn_option {
             Some(txn) => txn.get(&self.transaction_hash_idx, transaction_hash),
-            None => ReadTransaction::new(self.env).get(&self.transaction_hash_idx, transaction_hash)
+            None => ReadTransaction::new(&self.env).get(&self.transaction_hash_idx, transaction_hash)
         }
     }
 
@@ -121,7 +122,7 @@ impl<'env> TransactionStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -130,7 +131,7 @@ impl<'env> TransactionStore<'env> {
         txn.get(&self.transaction_db, &index)
     }
 
-    fn get_by_address(&self, database: &Database<'env>, address: &Address, limit: usize, txn: &Transaction) -> Vec<TransactionInfo> {
+    fn get_by_address(&self, database: &Database, address: &Address, limit: usize, txn: &Transaction) -> Vec<TransactionInfo> {
         let mut transactions = Vec::new();
 
         // Shortcut for a 0 limit.
@@ -169,7 +170,7 @@ impl<'env> TransactionStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -182,7 +183,7 @@ impl<'env> TransactionStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -190,7 +191,7 @@ impl<'env> TransactionStore<'env> {
         self.get_by_address(&self.recipient_idx, recipient, limit, txn)
     }
 
-    pub fn put(&self, block: &Block, txn: &mut WriteTransaction<'env>) {
+    pub fn put(&self, block: &Block, txn: &mut WriteTransaction) {
         // Insert all transactions.
         let transactions = TransactionInfo::from_block(block);
         let mut current_id = self.get_head(Some(txn));
@@ -204,7 +205,7 @@ impl<'env> TransactionStore<'env> {
         self.set_head(txn, current_id);
     }
 
-    pub fn remove(&self, block: &Block, txn: &mut WriteTransaction<'env>) {
+    pub fn remove(&self, block: &Block, txn: &mut WriteTransaction) {
         if let Some(ref body) = block.body {
             // Remove all transactions.
             for tx in body.transactions.iter() {
@@ -230,7 +231,7 @@ mod tests {
     #[test]
     fn it_can_store_the_head_id() {
         let env = VolatileEnvironment::new(4).unwrap();
-        let store = TransactionStore::new(&env);
+        let store = TransactionStore::new(env.clone());
         assert_eq!(store.get_head(None), TransactionStore::HEAD_DEFAULT);
 
         let head = 5;
@@ -244,7 +245,7 @@ mod tests {
     #[test]
     fn it_can_get_an_id() {
         let env = VolatileEnvironment::new(4).unwrap();
-        let store = TransactionStore::new(&env);
+        let store = TransactionStore::new(env.clone());
 
         let hash = Blake2bHash::default();
         let id = 5;
@@ -258,7 +259,7 @@ mod tests {
     #[test]
     fn it_can_get_by_address() {
         let env = VolatileEnvironment::new(4).unwrap();
-        let store = TransactionStore::new(&env);
+        let store = TransactionStore::new(env.clone());
 
         let id1 = 5;
         let id2 = 8;

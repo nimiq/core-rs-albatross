@@ -29,7 +29,7 @@ use utils::merkle::Blake2bMerkleProof;
 use crate::consensus_agent::ConsensusAgent;
 use crate::ConsensusProtocol;
 
-impl<P: ConsensusProtocol> ConsensusAgent<P> {
+impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     // FIXME
 //    pub(super) fn on_get_chain_proof(&self) {
 //        trace!("[GET-CHAIN-PROOF] from {}", self.peer.peer_address());

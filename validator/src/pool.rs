@@ -13,7 +13,7 @@ use crate::validator_agent::ValidatorAgent;
 
 pub struct ValidatorPool {
     /// Reference to the `ConnectionPool` in order to establish connections
-    network: Arc<Network<Blockchain<'static>>>,
+    network: Arc<Network<Blockchain>>,
 
     /// Blacklist of validators we don't want to connect to
     blacklist: BTreeSet<CompressedPublicKey>,
@@ -38,7 +38,7 @@ pub struct ValidatorPool {
 
 
 impl ValidatorPool {
-    pub fn new(network: Arc<Network<Blockchain<'static>>>) -> Self {
+    pub fn new(network: Arc<Network<Blockchain>>) -> Self {
         ValidatorPool {
             network,
             blacklist: BTreeSet::new(),

@@ -7,7 +7,7 @@ use nimiq_block::{Difficulty, Block};
 #[test]
 fn it_can_store_the_chain_head() {
     let env = VolatileEnvironment::new(3).unwrap();
-    let store = ChainStore::new(&env);
+    let store = ChainStore::new(env.clone());
     assert!(store.get_head(None).is_none());
 
     let mut txn = WriteTransaction::new(&env);
@@ -21,7 +21,7 @@ fn it_can_store_the_chain_head() {
 #[test]
 fn it_can_store_chain_info_with_body() {
     let env = VolatileEnvironment::new(3).unwrap();
-    let store = ChainStore::new(&env);
+    let store = ChainStore::new(env.clone());
     let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let genesis_hash = genesis_block.header.hash();
     let chain_info = ChainInfo::initial(genesis_block);
@@ -42,7 +42,7 @@ fn it_can_store_chain_info_with_body() {
 #[test]
 fn it_can_store_chain_info_without_body() {
     let env = VolatileEnvironment::new(3).unwrap();
-    let store = ChainStore::new(&env);
+    let store = ChainStore::new(env.clone());
     let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let genesis_hash = genesis_block.header.hash();
     let chain_info = ChainInfo::initial(genesis_block);
@@ -62,7 +62,7 @@ fn it_can_store_chain_info_without_body() {
 #[test]
 fn it_can_retrieve_chain_info_by_height() {
     let env = VolatileEnvironment::new(3).unwrap();
-    let store = ChainStore::new(&env);
+    let store = ChainStore::new(env.clone());
 
     let block1 = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let hash1 = block1.header.hash::<Blake2bHash>();
@@ -111,7 +111,7 @@ fn it_can_retrieve_chain_info_by_height() {
 #[test]
 fn it_can_get_blocks_backward() {
     let env = VolatileEnvironment::new(3).unwrap();
-    let store = ChainStore::new(&env);
+    let store = ChainStore::new(env.clone());
 
     let mut txn = WriteTransaction::new(&env);
     let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
@@ -177,7 +177,7 @@ fn it_can_get_blocks_backward() {
 #[test]
 fn it_can_get_blocks_forward() {
     let env = VolatileEnvironment::new(3).unwrap();
-    let store = ChainStore::new(&env);
+    let store = ChainStore::new(env.clone());
 
     let mut txn = WriteTransaction::new(&env);
     let network_info = NetworkInfo::from_network_id(NetworkId::Main);
@@ -254,7 +254,7 @@ fn it_can_get_blocks_forward() {
 #[test]
 fn it_can_remove_chain_info() {
     let env = VolatileEnvironment::new(3).unwrap();
-    let store = ChainStore::new(&env);
+    let store = ChainStore::new(env.clone());
 
     let block1 = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
     let hash1 = block1.header.hash::<Blake2bHash>();

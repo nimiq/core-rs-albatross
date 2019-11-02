@@ -28,18 +28,18 @@ use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
 use primitives::policy;
 
-pub struct BlockProducer<'env> {
-    pub blockchain: Arc<Blockchain<'env>>,
-    pub mempool: Option<Arc<Mempool<'env, Blockchain<'env>>>>,
+pub struct BlockProducer {
+    pub blockchain: Arc<Blockchain>,
+    pub mempool: Option<Arc<Mempool<Blockchain>>>,
     pub validator_key: KeyPair,
 }
 
-impl<'env> BlockProducer<'env> {
-    pub fn new(blockchain: Arc<Blockchain<'env>>, mempool: Arc<Mempool<'env, Blockchain<'env>>>, validator_key: KeyPair) -> Self {
+impl BlockProducer {
+    pub fn new(blockchain: Arc<Blockchain>, mempool: Arc<Mempool<Blockchain>>, validator_key: KeyPair) -> Self {
         BlockProducer { blockchain, mempool: Some(mempool), validator_key }
     }
 
-    pub fn new_without_mempool(blockchain: Arc<Blockchain<'env>>, validator_key: KeyPair) -> Self {
+    pub fn new_without_mempool(blockchain: Arc<Blockchain>, validator_key: KeyPair) -> Self {
         BlockProducer { blockchain, mempool: None, validator_key }
     }
 

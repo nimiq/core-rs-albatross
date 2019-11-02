@@ -126,10 +126,10 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     /// Maximum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
 
-    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<'static, P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
-        let sync_protocol = <P::SyncProtocol as SyncProtocol<'static, P::Blockchain>>::new(blockchain.clone(), peer_arc.clone());
+        let sync_protocol = <P::SyncProtocol as SyncProtocol<P::Blockchain>>::new(blockchain.clone(), peer_arc.clone());
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr, peer_arc.clone(), sync_protocol.clone());
         let this = Arc::new(ConsensusAgent {
             blockchain,
@@ -197,7 +197,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
             |this, msg: GetEpochTransactionsMessage| this.on_get_epoch_transactions(msg)));
     }
 
-    pub fn relay_block(&self, block: &<P::Blockchain as AbstractBlockchain<'static>>::Block) -> bool {
+    pub fn relay_block(&self, block: &<P::Blockchain as AbstractBlockchain>::Block) -> bool {
         // Don't relay block if have not synced with the peer yet.
         if !self.state.read().synced {
             return false;
@@ -331,7 +331,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         let _ = self.state.read().block_proof_limit;
     }
 
-    fn on_inventory_event(&self, event: &InventoryEvent<<<P::Blockchain as AbstractBlockchain<'static>>::Block as Block>::Error>) {
+    fn on_inventory_event(&self, event: &InventoryEvent<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>) {
         match event {
             InventoryEvent::KnownBlockAnnounced(hash) => self.on_known_block_announced(hash),
             InventoryEvent::NoNewObjectsAnnounced => self.on_no_new_objects_announced(),
@@ -363,7 +363,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         }
     }
 
-    fn on_block_processed(&self, hash: &Blake2bHash, result: &Result<PushResult, PushError<<<P::Blockchain as AbstractBlockchain<'static>>::Block as Block>::Error>>) {
+    fn on_block_processed(&self, hash: &Blake2bHash, result: &Result<PushResult, PushError<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>>) {
         match result {
             Ok(PushResult::Extended) | Ok(PushResult::Rebranched) => {
                 let mut state = self.state.write();

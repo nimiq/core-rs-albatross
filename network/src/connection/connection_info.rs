@@ -21,7 +21,7 @@ pub enum ConnectionState {
     Closed = 6
 }
 
-pub struct ConnectionInfo<B: AbstractBlockchain<'static> + 'static> {
+pub struct ConnectionInfo<B: AbstractBlockchain + 'static> {
     peer_address: Option<Arc<PeerAddress>>,
     network_connection: Option<NetworkConnection>,
     peer: Option<Peer>,
@@ -33,7 +33,7 @@ pub struct ConnectionInfo<B: AbstractBlockchain<'static> + 'static> {
     statistics: ConnectionStatistics,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> ConnectionInfo<B> {
+impl<B: AbstractBlockchain + 'static> ConnectionInfo<B> {
     pub fn new() -> Self {
         ConnectionInfo {
             peer_address: None,
@@ -104,21 +104,21 @@ impl<B: AbstractBlockchain<'static> + 'static> ConnectionInfo<B> {
     }
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> Default for ConnectionInfo<B> {
+impl<B: AbstractBlockchain + 'static> Default for ConnectionInfo<B> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> PartialEq for ConnectionInfo<B> {
+impl<B: AbstractBlockchain + 'static> PartialEq for ConnectionInfo<B> {
     fn eq(&self, other: &ConnectionInfo<B>) -> bool {
         self.peer_address == other.peer_address
     }
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> Eq for ConnectionInfo<B> {}
+impl<B: AbstractBlockchain + 'static> Eq for ConnectionInfo<B> {}
 
-impl<B: AbstractBlockchain<'static> + 'static> fmt::Display for ConnectionInfo<B> {
+impl<B: AbstractBlockchain + 'static> fmt::Display for ConnectionInfo<B> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{{ peer_address: {}, state: {:?} }}", match self.peer_address {
             Some(ref peer_address) => peer_address.to_string(),

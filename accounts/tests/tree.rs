@@ -14,7 +14,7 @@ fn it_can_put_and_get_a_balance() {
     let mut account = Account::Basic(BasicAccount { balance: Coin::try_from(20).unwrap() });
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let tree = AccountsTree::new(&env);
+    let tree = AccountsTree::new(env.clone());
     let mut txn = WriteTransaction::new(&env);
 
     // 1. Put account and check.
@@ -56,7 +56,7 @@ fn it_can_put_and_get_multiple_balances() {
     let account3 = Account::Basic(BasicAccount { balance: Coin::try_from(55555555).unwrap() });
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let tree = AccountsTree::new(&env);
+    let tree = AccountsTree::new(env.clone());
     let mut txn = WriteTransaction::new(&env);
 
     // Put accounts and check.
@@ -87,7 +87,7 @@ fn it_is_invariant_to_history() {
     let account2 = Account::Basic(BasicAccount { balance: Coin::try_from(55).unwrap() });
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let tree = AccountsTree::new(&env);
+    let tree = AccountsTree::new(env.clone());
     let mut txn = WriteTransaction::new(&env);
 
     tree.put(&mut txn, &address1, account1.clone());
@@ -116,7 +116,7 @@ fn it_is_invariant_to_insertion_order() {
     let empty_account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let tree = AccountsTree::new(&env);
+    let tree = AccountsTree::new(env.clone());
     let mut txn = WriteTransaction::new(&env);
 
     // Order 1
@@ -201,7 +201,7 @@ fn it_can_merge_nodes_while_pruning() {
     let empty_account = Account::Basic(BasicAccount { balance: Coin::ZERO });
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let tree = AccountsTree::new(&env);
+    let tree = AccountsTree::new(env.clone());
     let mut txn = WriteTransaction::new(&env);
 
     tree.put(&mut txn, &address1, account1.clone());

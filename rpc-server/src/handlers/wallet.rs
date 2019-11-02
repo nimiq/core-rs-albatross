@@ -42,12 +42,12 @@ impl UnlockedWalletManager {
 }
 
 pub struct WalletHandler {
-    wallet_store: WalletStore<'static>,
+    wallet_store: WalletStore,
     pub unlocked_wallets: Arc<RwLock<UnlockedWalletManager>>,
 }
 
 impl WalletHandler {
-    pub fn new(env: &'static Environment) -> Self {
+    pub fn new(env: Environment) -> Self {
         WalletHandler {
             wallet_store: WalletStore::new(env),
             unlocked_wallets: Arc::new(RwLock::new(UnlockedWalletManager::new())),

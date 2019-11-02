@@ -206,7 +206,7 @@ impl PeerMetrics {
     }
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> ConnectionPool<B> {
+impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
     pub fn metrics(&self) -> (MessageMetrics, NetworkMetrics, PeerMetrics) {
         let mut bytes_sent: usize = 0;
         let mut bytes_received: usize = 0;

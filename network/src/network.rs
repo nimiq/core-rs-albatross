@@ -41,7 +41,7 @@ pub enum NetworkEvent {
     PeersChanged,
 }
 
-pub struct Network<B: AbstractBlockchain<'static> + 'static> {
+pub struct Network<B: AbstractBlockchain + 'static> {
     pub network_config: Arc<NetworkConfig>,
     pub network_time: Arc<NetworkTime>,
     auto_connect: Atomic<bool>,
@@ -55,7 +55,7 @@ pub struct Network<B: AbstractBlockchain<'static> + 'static> {
     self_weak: MutableOnce<Weak<Network<B>>>,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> Network<B> {
+impl<B: AbstractBlockchain> Network<B> {
     const PEER_COUNT_MAX: usize = 4000;
     const PEER_COUNT_RECYCLING_ACTIVE: usize = 1000;
     const RECYCLING_PERCENTAGE_MIN: f64 = 0.01;

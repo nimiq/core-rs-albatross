@@ -8,11 +8,11 @@ use network::connection::connection_info::ConnectionState;
 use crate::server;
 use crate::server::SerializationType;
 
-pub struct NetworkMetrics<B: AbstractBlockchain<'static> + 'static> {
+pub struct NetworkMetrics<B: AbstractBlockchain + 'static> {
     network: Arc<Network<B>>,
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> NetworkMetrics<B> {
+impl<B: AbstractBlockchain + 'static> NetworkMetrics<B> {
     pub fn new(network: Arc<Network<B>>) -> Self {
         NetworkMetrics {
             network,
@@ -20,7 +20,7 @@ impl<B: AbstractBlockchain<'static> + 'static> NetworkMetrics<B> {
     }
 }
 
-impl<B: AbstractBlockchain<'static> + 'static> server::Metrics for NetworkMetrics<B> {
+impl<B: AbstractBlockchain + 'static> server::Metrics for NetworkMetrics<B> {
     fn metrics(&self, serializer: &mut server::MetricsSerializer<SerializationType>) -> Result<(), io::Error> {
         let (message_metrics, network_metrics, peer_metrics) = self.network.connections.metrics();
 

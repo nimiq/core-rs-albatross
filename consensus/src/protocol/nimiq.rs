@@ -6,7 +6,7 @@ use crate::protocol::ConsensusProtocol;
 
 pub struct NimiqConsensusProtocol {}
 impl ConsensusProtocol for NimiqConsensusProtocol {
-    type Blockchain = Blockchain<'static>;
+    type Blockchain = Blockchain;
     type MessageAdapter = NimiqMessageAdapter;
-    type SyncProtocol = FullSync<'static, Self::Blockchain>;
+    type SyncProtocol = FullSync<Self::Blockchain>;
 }

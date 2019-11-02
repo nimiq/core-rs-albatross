@@ -16,11 +16,11 @@ impl From<TransactionInfo> for TransactionReceipt {
     }
 }
 
-impl<'env> Blockchain<'env> {
+impl Blockchain {
     pub fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt> {
         let mut receipts;
 
-        let txn = ReadTransaction::new(self.env);
+        let txn = ReadTransaction::new(&self.env);
         receipts = self.transaction_store.get_by_sender(address, sender_limit, Some(&txn));
         receipts.extend(self.transaction_store.get_by_recipient(address, recipient_limit, Some(&txn)));
 

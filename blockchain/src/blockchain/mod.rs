@@ -38,32 +38,32 @@ pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
 pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
 
-pub struct Blockchain<'env> {
-    pub(crate) env: &'env Environment,
+pub struct Blockchain {
+    pub(crate) env: Environment,
     pub network_id: NetworkId,
     network_time: Arc<NetworkTime>,
-    pub notifier: RwLock<Notifier<'env, BlockchainEvent>>,
-    pub(crate) chain_store: ChainStore<'env>,
-    pub(crate) state: RwLock<BlockchainState<'env>>,
+    pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
+    pub(crate) chain_store: ChainStore,
+    pub(crate) state: RwLock<BlockchainState>,
     pub push_lock: Mutex<()>, // TODO: Not very nice to have this public
 
     #[cfg(feature = "metrics")]
     pub metrics: BlockchainMetrics,
 
     #[cfg(feature = "transaction-store")]
-    pub(crate) transaction_store: TransactionStore<'env>,
+    pub(crate) transaction_store: TransactionStore,
 }
 
-pub struct BlockchainState<'env> {
-    accounts: Accounts<'env>,
+pub struct BlockchainState {
+    accounts: Accounts,
     transaction_cache: TransactionCache,
     pub(crate) main_chain: ChainInfo,
     head_hash: Blake2bHash,
     pub(crate) chain_proof: Option<ChainProof>,
 }
 
-impl<'env> BlockchainState<'env> {
-    pub fn accounts(&self) -> &Accounts<'env> {
+impl BlockchainState {
+    pub fn accounts(&self) -> &Accounts {
         &self.accounts
     }
 
@@ -76,16 +76,16 @@ impl<'env> BlockchainState<'env> {
     }
 }
 
-impl<'env> Blockchain<'env> {
-    pub fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
-        let chain_store = ChainStore::new(env);
+impl Blockchain {
+    pub fn new(env: Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+        let chain_store = ChainStore::new(env.clone());
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash)?,
             None => Blockchain::init(env, network_time, network_id, chain_store)?
         })
     }
 
-    fn load(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
+    fn load(env: Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
@@ -100,7 +100,7 @@ impl<'env> Blockchain<'env> {
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
 
         // Check that chain/accounts state is consistent.
-        let accounts = Accounts::new(env);
+        let accounts = Accounts::new(env.clone());
         if main_chain.head.header.accounts_hash != accounts.hash(None) {
             return Err(BlockchainError::InconsistentState);
         }
@@ -113,6 +113,8 @@ impl<'env> Blockchain<'env> {
         }
         transaction_cache.push_block(&main_chain.head);
         assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.header.height));
+
+        let transaction_store = TransactionStore::new(env.clone());
 
         Ok(Blockchain {
             env,
@@ -133,11 +135,11 @@ impl<'env> Blockchain<'env> {
             metrics: BlockchainMetrics::default(),
 
             #[cfg(feature = "transaction-store")]
-            transaction_store: TransactionStore::new(env),
+            transaction_store,
         })
     }
 
-    fn init(env: &'env Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore<'env>) -> Result<Self, BlockchainError> {
+    fn init(env: Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
@@ -145,8 +147,8 @@ impl<'env> Blockchain<'env> {
         let head_hash = network_info.genesis_hash().clone();
 
         // Initialize accounts.
-        let accounts = Accounts::new(env);
-        let mut txn = WriteTransaction::new(env);
+        let accounts = Accounts::new(env.clone());
+        let mut txn = WriteTransaction::new(&env);
         accounts.init(&mut txn, network_info.genesis_accounts());
 
         // Commit genesis block to accounts.
@@ -168,6 +170,8 @@ impl<'env> Blockchain<'env> {
         // Initialize empty TransactionCache.
         let transaction_cache = TransactionCache::new();
 
+        let transaction_store = TransactionStore::new(env.clone());
+
         Ok(Blockchain {
             env,
             network_id,
@@ -187,7 +191,7 @@ impl<'env> Blockchain<'env> {
             metrics: BlockchainMetrics::default(),
 
             #[cfg(feature = "transaction-store")]
-            transaction_store: TransactionStore::new(env),
+            transaction_store,
         })
     }
 
@@ -258,7 +262,7 @@ impl<'env> Blockchain<'env> {
 
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
         debug!("Creating/extending fork with block {}, height #{}, total_difficulty {}", hash, chain_info.head.header.height, chain_info.total_difficulty);
-        let mut txn = WriteTransaction::new(self.env);
+        let mut txn = WriteTransaction::new(&self.env);
         self.chain_store.put_chain_info(&mut txn, &hash, &chain_info, true);
         txn.commit();
 
@@ -268,7 +272,7 @@ impl<'env> Blockchain<'env> {
     }
 
     fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> Result<PushResult, PushError> {
-        let mut txn = WriteTransaction::new(self.env);
+        let mut txn = WriteTransaction::new(&self.env);
         {
             let state = self.state.read();
 
@@ -334,7 +338,7 @@ impl<'env> Blockchain<'env> {
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
         // Store the chain along the way.
-        let read_txn = ReadTransaction::new(self.env);
+        let read_txn = ReadTransaction::new(&self.env);
 
         let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
@@ -354,7 +358,7 @@ impl<'env> Blockchain<'env> {
         let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut ancestor = current;
 
-        let mut write_txn = WriteTransaction::new(self.env);
+        let mut write_txn = WriteTransaction::new(&self.env);
         let mut cache_txn;
         {
             let state = self.state.read();
@@ -407,7 +411,7 @@ impl<'env> Blockchain<'env> {
                     write_txn.abort();
 
                     // Delete invalid fork blocks from store.
-                    let mut write_txn = WriteTransaction::new(self.env);
+                    let mut write_txn = WriteTransaction::new(&self.env);
                     for block in vec![fork_block].into_iter().chain(fork_iter) {
                         self.chain_store.remove_chain_info(&mut write_txn, &block.0, block.1.head.header.height)
                     }
@@ -716,15 +720,15 @@ impl<'env> Blockchain<'env> {
         self.state.read().main_chain.total_work.clone()
     }
 
-    pub fn state(&self) -> RwLockReadGuard<BlockchainState<'env>> {
+    pub fn state(&self) -> RwLockReadGuard<BlockchainState> {
         self.state.read()
     }
 }
 
-impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
+impl AbstractBlockchain for Blockchain {
     type Block = Block;
 
-    fn new(env: &'env Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+    fn new(env: Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
         Blockchain::new(env, network_id, network_time)
     }
 
@@ -785,7 +789,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
         self.get_transaction_receipts_by_address(address, sender_limit, recipient_limit)
     }
 
-    fn register_listener<T: Listener<BlockchainEvent> + 'env>(&self, listener: T) -> ListenerHandle {
+    fn register_listener<T: Listener<BlockchainEvent> + 'static>(&self, listener: T) -> ListenerHandle {
         self.notifier.write().register(listener)
     }
 

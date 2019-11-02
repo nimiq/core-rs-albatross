@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
 use database::cursor::ReadCursor;
 use keys::Address;
@@ -6,25 +8,25 @@ use crate::wallet_account::WalletAccount;
 use nimiq_utils::otp::Locked;
 
 #[derive(Debug)]
-pub struct WalletStore<'env> {
-    env: &'env Environment,
-    wallet_db: Database<'env>,
+pub struct WalletStore {
+    env: Environment,
+    wallet_db: Database,
 }
 
-impl<'env> WalletStore<'env> {
+impl WalletStore {
     const WALLET_DB_NAME: &'static str = "Wallet";
 
+    pub fn new(env: Environment) -> Self {
+        let wallet_db = env.open_database(Self::WALLET_DB_NAME.to_string());
+        WalletStore { env, wallet_db }
+    }
+
     pub fn create_read_transaction(&self) -> ReadTransaction {
-        ReadTransaction::new(self.env)
+        ReadTransaction::new(&self.env)
     }
 
     pub fn create_write_transaction(&self) -> WriteTransaction {
-        WriteTransaction::new(self.env)
-    }
-
-    pub fn new(env: &'env Environment) -> Self {
-        let wallet_db = env.open_database(Self::WALLET_DB_NAME.to_string());
-        WalletStore { env, wallet_db }
+        WriteTransaction::new(&self.env)
     }
 
     pub fn list(&self, txn_option: Option<&Transaction>) -> Vec<Address> {
@@ -32,7 +34,7 @@ impl<'env> WalletStore<'env> {
         let txn = match txn_option {
             Some(txn) => txn,
             None => {
-                read_txn = ReadTransaction::new(self.env);
+                read_txn = ReadTransaction::new(&self.env);
                 &read_txn
             }
         };
@@ -52,7 +54,7 @@ impl<'env> WalletStore<'env> {
     pub fn get(&self, address: &Address, txn_option: Option<&Transaction>) -> Option<Locked<WalletAccount>> {
         match txn_option {
             Some(txn) => txn.get(&self.wallet_db, address),
-            None => ReadTransaction::new(self.env).get(&self.wallet_db, address)
+            None => ReadTransaction::new(&self.env).get(&self.wallet_db, address)
         }
     }
 

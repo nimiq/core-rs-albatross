@@ -37,6 +37,12 @@ impl fmt::Display for UserAgent {
     }
 }
 
+impl From<UserAgent> for String {
+    fn from(user_agent: UserAgent) -> Self {
+        user_agent.0
+    }
+}
+
 impl Default for UserAgent {
     fn default() -> Self {
         format!("core-rs-albatross/{} (native; {} {})", env!("CARGO_PKG_VERSION"), env::consts::OS, env::consts::ARCH).into()
