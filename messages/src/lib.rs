@@ -1127,12 +1127,12 @@ pub struct ViewChangeProofMessage {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetEpochTransactionsMessage {
-    pub macro_hash: Blake2bHash,
+    pub epoch: u32,
 }
 impl GetEpochTransactionsMessage {
-    pub fn new(macro_hash: Blake2bHash) -> Message {
+    pub fn new(epoch: u32) -> Message {
         Message::GetEpochTransactions(Box::new(Self {
-            macro_hash,
+            epoch,
         }))
     }
 }

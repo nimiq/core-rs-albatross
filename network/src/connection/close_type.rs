@@ -43,6 +43,8 @@ pub enum CloseType {
 
     InvalidConnectionState = 40,
 
+    GetEpochTransactionsTimeout = 41,
+
     ManualPeerDisconnect = 90,
 
     // Ban Close Types

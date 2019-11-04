@@ -1062,7 +1062,7 @@ impl<'env> Blockchain<'env> {
         self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
-    pub fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction>) -> Option<Vec<B>> {
+    pub fn get_epoch_transactions<U, F: Fn(&BlockchainTransaction) -> U>(&self, epoch: u32, f: F, txn_option: Option<&Transaction>) -> Option<Vec<U>> {
         let mut transactions = Vec::new();
 
         let first_block = policy::first_block_of(epoch);
@@ -1084,7 +1084,7 @@ impl<'env> Blockchain<'env> {
     }
 
     pub fn get_transactions_root(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
-        let mut hashes = self.get_epoch_transactions(epoch, |tx| tx.hash(), txn_option)?;
+        let mut hashes = self.get_epoch_transactions(epoch, BlockchainTransaction::hash, txn_option)?;
 
         Some(merkle::compute_root_from_hashes::<Blake2bHash>(&hashes))
     }

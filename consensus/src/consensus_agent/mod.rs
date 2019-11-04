@@ -78,6 +78,9 @@ pub struct ConsensusAgentState {
 
     /// Rate limit for AccountsProof messages.
     accounts_proof_limit: RateLimit,
+
+    /// Rate limit for GetEpochTransactions messages.
+    epoch_transactions_limit: RateLimit,
 }
 
 #[derive(Ord, PartialOrd, PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -116,6 +119,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     const TRANSACTION_RECEIPTS_RATE_LIMIT: usize = 30; // per minute
     const TRANSACTIONS_PROOF_RATE_LIMIT: usize = 60; // per minute
     const ACCOUNTS_PROOF_RATE_LIMIT: usize = 60; // per minute
+    const EPOCH_TRANSACTIONS_RATE_LIMIT: usize = 100; // per minute
 
     /// Minimum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MIN: u64 = 2 * 1000; // in ms
@@ -125,7 +129,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<'static, P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
-        let sync_protocol = Arc::new(<P::SyncProtocol as SyncProtocol<'static, P::Blockchain>>::new(blockchain.clone(), peer_arc.clone()));
+        let sync_protocol = <P::SyncProtocol as SyncProtocol<'static, P::Blockchain>>::new(blockchain.clone(), peer_arc.clone());
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr, peer_arc.clone(), sync_protocol.clone());
         let this = Arc::new(ConsensusAgent {
             blockchain,
@@ -149,6 +153,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
                 transaction_receipts_limit: RateLimit::new_per_minute(Self::TRANSACTION_RECEIPTS_RATE_LIMIT),
                 transactions_proof_limit: RateLimit::new_per_minute(Self::TRANSACTIONS_PROOF_RATE_LIMIT),
                 accounts_proof_limit: RateLimit::new_per_minute(Self::ACCOUNTS_PROOF_RATE_LIMIT),
+                epoch_transactions_limit: RateLimit::new_per_minute(Self::EPOCH_TRANSACTIONS_RATE_LIMIT),
             }),
 
             notifier: RwLock::new(Notifier::new()),

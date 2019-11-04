@@ -810,6 +810,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
     }
 
     fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction<'env>>) -> Option<Vec<B>> {
-        None
+        // We just return transactions of block n.
+        self.chain_store.get_chain_info_at(epoch, true, txn_option).and_then( |chain_info| chain_info.head.body.map(|body| body.transactions)).map(|txs| txs.iter().map(f).collect())
     }
 }
