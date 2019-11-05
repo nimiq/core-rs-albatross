@@ -3,7 +3,6 @@ use std::convert::TryFrom;
 use std::fs::{OpenOptions, read_to_string};
 use std::io::Error as IoError;
 use std::path::Path;
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use failure::Fail;

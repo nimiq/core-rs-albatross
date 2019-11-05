@@ -1,6 +1,6 @@
 
 #[cfg(feature = "validator")]
-use validator::validator::Validator;
-use crate::error::Error;
-use crate::config::ClientConfig;
-use crate::client::{Client, Consensus};
+pub use validator::validator::Validator;
+pub use crate::error::Error;
+pub use crate::config::ClientConfig;
+pub use crate::client::{Client, Consensus};

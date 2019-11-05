@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use block::{MacroBlock, MicroBlock};
 use collections::bitset::BitSet;
 use database::{Database, Environment, ReadTransaction, WriteTransaction};

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use account::{Account, AccountError, AccountTransactionInteraction, AccountType, PrunedAccount, Receipt, Receipts};
 use account::inherent::{AccountInherentInteraction, Inherent};

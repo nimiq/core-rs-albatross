@@ -8,17 +8,11 @@ use consensus::{
     AlbatrossConsensusProtocol,
 };
 use database::Environment;
-use database::lmdb::{LmdbEnvironment, LmdbError};
-use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
 use network::NetworkConfig;
 use network_primitives::services::ServiceFlags;
-use utils::key_store::KeyStore;
-use mempool::MempoolConfig;
-#[cfg(feature="validator")]
-use bls::bls12_381::KeyPair as BlsKeyPair;
 
 use crate::error::Error;
-use crate::config::{ClientConfig, ProtocolConfig, StorageConfig};
+use crate::config::{ClientConfig, ProtocolConfig};
 
 
 /// Alias for the Consensus specialized over Albatross
@@ -27,6 +21,10 @@ pub type Consensus = AbstractConsensus<AlbatrossConsensusProtocol>;
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
 /// exposed.
+///
+/// # ToDos
+///
+/// * Add `WalletStore` here.
 struct _Client {
     /// The database environment. This is here to give the consumer access to the DB too. This
     /// reference is also stored in the consensus though.
@@ -72,7 +70,7 @@ impl TryFrom<ClientConfig> for _Client {
         network_config.set_user_agent(config.user_agent.into());
 
         // initialize peer key
-        config.storage.init_key_store(&mut network_config);
+        config.storage.init_key_store(&mut network_config)?;
 
         // load validator key (before we give away ownership of the storage config
         #[cfg(feature="validator")]
@@ -102,7 +100,7 @@ impl TryFrom<ClientConfig> for _Client {
         )?;
 
         #[cfg(feature="validator")]
-        let validator = config.validator.map(|config| {
+        let validator = config.validator.map(|_config| {
             Validator::new(Arc::clone(&consensus), validator_key)
         }).transpose()?;
 
@@ -135,6 +133,13 @@ impl Client {
         self.inner.validator.as_ref().map(|v| Arc::clone(v))
     }
 
+    /// Returns the database environment
+    pub fn environment(&self) -> Environment {
+        self.inner.environment.clone()
+    }
+
+    /// Short-cut to get weak reference to the inner client object.
+    /// TODO: We'll use this to register listeners
     fn weak(&self) -> Weak<_Client> {
         Arc::downgrade(&self.inner)
     }

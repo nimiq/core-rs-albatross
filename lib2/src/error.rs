@@ -1,8 +1,8 @@
 use failure::Fail;
 use std::io::Error as IoError;
 
-use database::lmdb::{LmdbEnvironment, LmdbError};
-use database::volatile::{VolatileEnvironment, VolatileDatabaseError};
+use database::lmdb::LmdbError;
+use database::volatile::VolatileDatabaseError;
 use network::error::Error as NetworkError;
 use utils::key_store::Error as KeyStoreError;
 use consensus::Error as ConsensusError;

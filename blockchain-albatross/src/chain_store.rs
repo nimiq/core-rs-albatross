@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use account::Receipts;
 use block::Block;
 use blockchain_base::Direction;

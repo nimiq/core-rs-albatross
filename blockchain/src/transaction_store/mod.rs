@@ -1,6 +1,5 @@
 use std::io;
 use std::os::raw::c_uint;
-use std::sync::Arc;
 
 use beserial::{Deserialize, Serialize};
 use block::Block;

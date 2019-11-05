@@ -1,5 +1,4 @@
 use std::str::FromStr;
-use std::sync::Arc;
 
 use account::Account;
 use database::{Database, Environment, Transaction, WriteTransaction};

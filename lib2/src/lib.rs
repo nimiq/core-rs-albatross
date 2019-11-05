@@ -20,23 +20,7 @@ extern crate nimiq_validator as validator;
 extern crate nimiq_bls as bls;
 
 
-mod config;
-mod error;
-mod client;
-mod prelude;
-
-
-// Testing only: Remove later and rename to lib.rs
-
-use config::ClientConfig;
-use error::Error;
-
-
-fn main() {
-    let config = ClientConfig::builder()
-        .ws("mercury.devnet", None)
-        .build()
-        .unwrap();
-
-    println!("Config: {:#?}", config);
-}
+pub mod config;
+pub mod error;
+pub mod client;
+pub mod prelude;

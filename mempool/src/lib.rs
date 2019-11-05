@@ -12,7 +12,7 @@ extern crate nimiq_utils as utils;
 
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 
@@ -23,10 +23,10 @@ use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use transaction::{Transaction, TransactionFlags};
-use utils::observer::{Notifier, weak_passthru_listener, weak_listener};
+use utils::observer::{Notifier, weak_listener};
+use primitives::networks::NetworkId;
 
 use crate::filter::{MempoolFilter, Rules};
-use primitives::networks::NetworkId;
 
 pub mod filter;
 

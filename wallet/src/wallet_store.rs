@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use database::{Database, Environment, ReadTransaction, Transaction, WriteTransaction};
 use database::cursor::ReadCursor;
 use keys::Address;

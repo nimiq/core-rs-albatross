@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use block::Block;
 use blockchain_base::Direction;
 use database::{Database, DatabaseFlags, Environment, ReadTransaction, Transaction, WriteTransaction};
