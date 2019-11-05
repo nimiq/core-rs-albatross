@@ -144,8 +144,8 @@ impl WebSocketConnector {
             ProtocolConfig::Ws{port, reverse_proxy_config, ..} => {
                 (*port, None, None, Mode::Plain, reverse_proxy_config.clone())
             },
-            ProtocolConfig::Wss{port, identity_file, identity_password, ..} => {
-                (*port, Some(identity_file.to_string()), Some(identity_password.to_string()), Mode::Tls, None)
+            ProtocolConfig::Wss{port, identity_file, identity_password, reverse_proxy_config, ..} => {
+                (*port, Some(identity_file.to_string()), Some(identity_password.to_string()), Mode::Tls, reverse_proxy_config.clone())
             },
             config => return Err(ServerStartError::UnsupportedProtocol(format!("{:?}", config))),
         };

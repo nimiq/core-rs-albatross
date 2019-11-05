@@ -61,7 +61,7 @@ impl NetworkConfig {
         }
     }
 
-    pub fn new_wss_network_config(host: String, port: u16, instant_inbound: bool, identity_file: String, identity_password: String) -> Self {
+    pub fn new_wss_network_config(host: String, port: u16, instant_inbound: bool, identity_file: String, identity_password: String, reverse_proxy_config: Option<ReverseProxyConfig>) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -72,6 +72,7 @@ impl NetworkConfig {
                 port,
                 identity_file,
                 identity_password,
+                reverse_proxy_config,
             },
             user_agent: None,
             additional_seeds: Vec::new(),
@@ -195,8 +196,15 @@ impl NetworkConfig {
                 ProtocolConfig::Wss {
                     ref host,
                     port,
+                    ref reverse_proxy_config,
                     ..
-                } => PeerAddressType::Wss(host.clone(), port),
+                } => {
+                    if let Some(reverse_proxy_config) = reverse_proxy_config.as_ref() {
+                        PeerAddressType::Wss(host.clone(), reverse_proxy_config.port)
+                    } else {
+                        PeerAddressType::Wss(host.clone(), port)
+                    }
+                },
             },
             services: self.services.provided,
             timestamp: systemtime_to_timestamp(SystemTime::now()),
@@ -240,6 +248,7 @@ pub enum ProtocolConfig {
         port: u16,
         identity_file: String,
         identity_password: String,
+        reverse_proxy_config: Option<ReverseProxyConfig>,
     },
     Rtc,
 }

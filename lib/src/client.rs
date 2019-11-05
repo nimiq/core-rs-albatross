@@ -69,7 +69,7 @@ impl TryFrom<ClientConfig> for ClientInner {
                 let pkcs12_key_file = pkcs12_key_file.to_str()
                     .unwrap_or_else(|| panic!("Failed to convert path to PKCS#12 key file to string: {}", pkcs12_key_file.display()))
                     .to_string();
-                NetworkConfig::new_wss_network_config(host, port, false, pkcs12_key_file, pkcs12_passphrase)
+                NetworkConfig::new_wss_network_config(host, port, false, pkcs12_key_file, pkcs12_passphrase, config.reverse_proxy)
             }
         };
 
