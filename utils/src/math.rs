@@ -10,6 +10,28 @@ pub fn log2(x: usize) -> usize {
     (num_bits::<usize>() as usize) - (x.leading_zeros() as usize) - 1
 }
 
+pub trait CeilingDiv {
+    #[inline]
+    fn ceiling_div(self, rhs: Self) -> Self;
+}
+
+// Fast integer division with ceiling: (x + y - 1) / y
+macro_rules! ceiling_div {
+    ($t: ty) => {
+        impl CeilingDiv for $t {
+            #[inline]
+            fn ceiling_div(self, rhs: Self) -> Self {
+                (self + rhs - 1) / rhs
+            }
+        }
+    };
+}
+
+ceiling_div!(u8);
+ceiling_div!(u16);
+ceiling_div!(u32);
+ceiling_div!(u64);
+ceiling_div!(usize);
 
 #[cfg(test)]
 mod tests{

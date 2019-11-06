@@ -39,5 +39,5 @@ nimiq-messages = { path = "../messages", version = "0.1" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "time"] }
 nimiq-network = { path = "../network", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit", "merkle"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit", "merkle", "math"] }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }

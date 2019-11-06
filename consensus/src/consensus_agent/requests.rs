@@ -23,6 +23,7 @@ use network_messages::{
     TransactionsProofMessage,
 };
 use transaction::{Transaction, TransactionsProof};
+use utils::math::CeilingDiv;
 use utils::merkle::Blake2bMerkleProof;
 
 use crate::consensus_agent::ConsensusAgent;
@@ -128,7 +129,7 @@ impl<P: ConsensusProtocol> ConsensusAgent<P> {
         let hashes: Vec<Blake2bHash> = transactions.iter().map(|tx| tx.hash()).collect();
 
         // Fast integer division ceiling, we want ceil(#txs / MAX_TRANSACTIONS).
-        let num_chunks = (transactions.len() + EpochTransactionsMessage::MAX_TRANSACTIONS - 1) / EpochTransactionsMessage::MAX_TRANSACTIONS;
+        let num_chunks = transactions.len().ceiling_div(EpochTransactionsMessage::MAX_TRANSACTIONS);
         // Divide into chunks.
         for (i, chunk) in transactions.chunks(EpochTransactionsMessage::MAX_TRANSACTIONS).enumerate() {
             let start_index = i * EpochTransactionsMessage::MAX_TRANSACTIONS;

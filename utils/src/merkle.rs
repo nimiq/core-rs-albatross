@@ -9,6 +9,8 @@ use std::ops::Deref;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use nimiq_hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
 
+use crate::math::CeilingDiv;
+
 pub fn compute_root_from_content<D: Hasher, T: SerializeContent>(values: &[T]) -> D::Output {
     compute_root_from_content_slice::<D, T>(values)
 }
@@ -130,7 +132,7 @@ impl<H> MerklePath<H> where H: HashOutput {
     /// Compress "left" field of every node in the MerklePath to a bit vector.
     fn compress(&self) -> Vec<u8> {
         // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them.
-        let num_bytes = (self.nodes.len() + 7) / 8; // Fast integer division with ceiling: (x + y - 1) / y
+        let num_bytes = self.nodes.len().ceiling_div(8);
         let mut left_bits: Vec<u8> = vec![0; num_bytes];
         for (i, node) in self.nodes.iter().enumerate() {
             if node.left {
@@ -373,7 +375,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
     /// Compress vector of MerkleProofOperations in the MerkleProof to a bit vector.
     fn compress(&self) -> Vec<u8> {
         // There are 3 items in the MerkleProofOperation enum, so we need 2 bits to encode them.
-        let num_bytes = (self.operations.len() + 3) / 4; // Fast integer division with ceiling: (x + y - 1) / y
+        let num_bytes = self.operations.len().ceiling_div(4);
         let mut operation_bits: Vec<u8> = vec![0; num_bytes];
         for (i, operation) in self.operations.iter().enumerate() {
             let op = *operation as u8; // By definition, this can only take up to two bits.

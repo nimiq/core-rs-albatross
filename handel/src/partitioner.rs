@@ -1,6 +1,6 @@
 use std::ops::RangeInclusive;
 
-use utils::log2::log2;
+use utils::math::log2;
 
 use crate::multisig::MultiSignature;
 
