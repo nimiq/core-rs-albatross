@@ -110,7 +110,7 @@ pub trait AbstractBlockchain<'env>: Sized + Send + Sync {
     fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk>;
 
     // TODO: Currently, we can implement request responses in the ConsensusAgent only for *both* protocols, which is why AbstractBlockchain needs to support this.
-    fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction<'env>>) -> Option<Vec<B>>;
+    fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

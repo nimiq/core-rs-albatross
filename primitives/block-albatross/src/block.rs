@@ -163,6 +163,10 @@ impl Block {
             Block::Micro(_) => BlockType::Micro,
         }
     }
+
+    pub fn unwrap_transactions(self) -> Vec<Transaction> {
+        self.unwrap_micro().extrinsics.unwrap().transactions
+    }
 }
 
 impl Serialize for Block {

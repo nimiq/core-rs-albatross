@@ -119,7 +119,7 @@ impl<P: ConsensusProtocol> ConsensusAgent<P> {
             return;
         }
 
-        let transactions: Vec<Transaction> = if let Some(txs) = self.blockchain.get_epoch_transactions(get_epoch_transactions_message.epoch, |tx| tx.clone(), None) {
+        let transactions: Vec<Transaction> = if let Some(txs) = self.blockchain.get_epoch_transactions(get_epoch_transactions_message.epoch, None) {
             txs
         } else {
             debug!("[GET-EPOCH-TRANSACTIONS] Could not determine transactions for epoch {:?}", get_epoch_transactions_message.epoch);

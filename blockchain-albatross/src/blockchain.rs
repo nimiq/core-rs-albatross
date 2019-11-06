@@ -2,8 +2,9 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::iter::FromIterator;
+use std::iter::{Chain, Flatten, FromIterator, Map};
 use std::sync::Arc;
+use std::vec::IntoIter;
 
 use parking_lot::{MappedMutexGuard, MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 
@@ -43,6 +44,7 @@ use crate::transaction_cache::TransactionCache;
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
 pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
+pub type TransactionsIterator = Chain<IntoIter<BlockchainTransaction>, Flatten<Map<IntoIter<Block>, fn(Block) -> Vec<BlockchainTransaction>>>>;
 
 pub enum OptionalCheck<T> {
     Some(T),
@@ -1062,29 +1064,30 @@ impl<'env> Blockchain<'env> {
         self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
-    pub fn get_epoch_transactions<U, F: Fn(&BlockchainTransaction) -> U>(&self, epoch: u32, f: F, txn_option: Option<&Transaction>) -> Option<Vec<U>> {
-        let mut transactions = Vec::new();
-
+    pub fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<TransactionsIterator> {
         let first_block = policy::first_block_of(epoch);
         let first_block = self.chain_store.get_block_at(first_block, true, txn_option)?;
-        transactions.extend(first_block.transactions()?.iter().map(&f));
+        let first_hash = first_block.hash();
+        let iter_first = first_block.unwrap_micro()
+            .extrinsics.unwrap()
+            .transactions.into_iter();
 
         // Excludes current block and macro block.
-        let blocks = self.chain_store.get_blocks(&first_block.hash(), policy::EPOCH_LENGTH - 2, true, Direction::Forward, txn_option);
+        let blocks = self.chain_store.get_blocks(&first_hash, policy::EPOCH_LENGTH - 2, true, Direction::Forward, txn_option);
         // We need to make sure that we have all micro blocks.
         if blocks.len() as u32 != policy::EPOCH_LENGTH - 2 {
             return None;
         }
 
-        for block in blocks {
-            transactions.extend(block.transactions()?.iter().map(&f));
-        }
+        // See: https://users.rust-lang.org/t/difference-between-fn-pointer-and-fn-item/32642/3
+        let iter_tail: Flatten<Map<IntoIter<Block>, fn(Block) -> Vec<BlockchainTransaction>>> = blocks.into_iter().map(Block::unwrap_transactions as fn(_) -> _).flatten();
 
-        Some(transactions)
+        Some(iter_first.chain(iter_tail))
     }
 
     pub fn get_transactions_root(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Blake2bHash> {
-        let mut hashes = self.get_epoch_transactions(epoch, BlockchainTransaction::hash, txn_option)?;
+        let hashes: Vec<Blake2bHash> = self.get_epoch_transactions(epoch, txn_option)?
+            .map(|tx| tx.hash()).collect(); // BlockchainTransaction::hash does *not* work here.
 
         Some(merkle::compute_root_from_hashes::<Blake2bHash>(&hashes))
     }
@@ -1580,7 +1583,7 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
         self.state.read().accounts.get_chunk(prefix, size, txn_option)
     }
 
-    fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction>) -> Option<Vec<B>> {
-        Blockchain::get_epoch_transactions(self, epoch, f, txn_option)
+    fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>> {
+        Blockchain::get_epoch_transactions(self, epoch, txn_option).map(Iterator::collect)
     }
 }

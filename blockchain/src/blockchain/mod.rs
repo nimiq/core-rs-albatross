@@ -809,8 +809,8 @@ impl<'env> AbstractBlockchain<'env> for Blockchain<'env> {
         self.state.read().accounts.get_chunk(prefix, size, txn_option)
     }
 
-    fn get_epoch_transactions<B, F: Fn(&BlockchainTransaction) -> B>(&self, epoch: u32, f: F, txn_option: Option<&Transaction<'env>>) -> Option<Vec<B>> {
+    fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>> {
         // We just return transactions of block n.
-        self.chain_store.get_chain_info_at(epoch, true, txn_option).and_then( |chain_info| chain_info.head.body.map(|body| body.transactions)).map(|txs| txs.iter().map(f).collect())
+        self.chain_store.get_chain_info_at(epoch, true, txn_option).and_then( |chain_info| chain_info.head.body.map(|body| body.transactions))
     }
 }
