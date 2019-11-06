@@ -68,12 +68,14 @@ impl<'a> Callback for &'a ReverseProxyCallback {
                     headers: None,
                     body: None,
                 })?;
+                trace!("Headers after parsing them as UTF-8: {:?}", str_value);
                 let str_value = str_value.split(',').next().ok_or(ErrorResponse {
                     error_code: StatusCode::INTERNAL_SERVER_ERROR,
                     headers: None,
                     body: None,
                 })?; // Take first value from list.
                 let str_value = str_value.trim();
+                trace!("Remote peer address (according to headers): {:?}", str_value);
                 let net_address = NetAddress::from_str(str_value)
                     .map_err(|_|
                          ErrorResponse {
@@ -84,6 +86,7 @@ impl<'a> Callback for &'a ReverseProxyCallback {
                     )?;
                 self.remote_address.lock().replace(net_address);
             } else {
+                error!("The reverse proxy 'header' parameter is missing");
                 return Err(ErrorResponse {
                         error_code: StatusCode::INTERNAL_SERVER_ERROR,
                         headers: None,

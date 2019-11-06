@@ -90,6 +90,7 @@ pub fn wrap_stream<S>(socket: S, tls_acceptor: Option<TlsAcceptor>, mode: Mode)
     where
         S: 'static + AsyncRead + AsyncWrite + Send,
 {
+    trace!("The mode of this connection is: {:?}", mode);
     match mode {
         Mode::Plain => Box::new(future::ok(StreamSwitcher::Plain(socket))),
         Mode::Tls => {
@@ -160,6 +161,7 @@ impl WebSocketConnector {
             .sleep_on_error(Self::WAIT_TIME_ON_ERROR)
             .map(move |tcp| {
                 let reverse_proxy_config = reverse_proxy_config.clone();
+                trace!("Reverse proxy config: {:?}", reverse_proxy_config);
 
                 let notifier = Arc::clone(&notifier);
                 let acceptor = tls_acceptor.clone();
@@ -180,7 +182,7 @@ impl WebSocketConnector {
                         }
                     })
                 }).or_else(|err| {
-                    error!("Could not accept connection: {}", err);
+                    error!("Could not accept connection: {:?}", err);
                     // Do not stop the websocket server on inner connection errors!
                     future::ok(())
                 })
