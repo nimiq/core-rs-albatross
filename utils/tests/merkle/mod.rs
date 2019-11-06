@@ -4,6 +4,8 @@ use beserial::{Serialize, Deserialize};
 
 const VALUE: &'static str = "merkletree";
 
+pub mod partial;
+
 #[test]
 fn it_correctly_computes_an_empty_root_hash() {
     let empty_hash = Blake2bHasher::default().digest(&[]);

@@ -11,6 +11,8 @@ use nimiq_hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
 
 use crate::math::CeilingDiv;
 
+pub mod partial;
+
 pub fn compute_root_from_content<D: Hasher, T: SerializeContent>(values: &[T]) -> D::Output {
     compute_root_from_content_slice::<D, T>(values)
 }
