@@ -3,8 +3,10 @@ language: rust
 # See travis-ci/travis-ci#9061
 sudo: required
 
-# Cache cargo symbols for faster build
-cache: cargo
+# Cache cargo for faster build
+cache:
+  directories:
+    - /home/travis/.cargo
 
 # Dependencies of kcov, used by coverage
 addons:
@@ -41,6 +43,11 @@ before_script:
 script:
   - if [ -z ${NO_CLIPPY+x} ]; then cargo clippy --all-features; fi
   - cargo test --verbose --all
+
+# Don't cache registry as it accumulates dead weight as dependencies are updated
+# Also downloading this from crates.io is probably faster as downloading from travis cache
+before_cache:
+  - rm -rf $HOME/.cargo/registry
 
 # temporarily disabled, plan is to move to codecov
 #after_success:
