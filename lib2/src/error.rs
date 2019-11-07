@@ -27,6 +27,18 @@ pub enum Error {
     Validator(#[cause] ValidatorError)
 }
 
+impl Error {
+    /// Constructs a configuration error from an error message.
+    ///
+    /// # Arguments
+    ///
+    /// * msg - The error message
+    ///
+    pub fn config_error<S: AsRef<str>>(msg: S) -> Self {
+        Self::Config(msg.as_ref().to_string())
+    }
+}
+
 impl From<LmdbError> for Error {
     fn from(e: LmdbError) -> Self {
         Self::Lmdb(e)

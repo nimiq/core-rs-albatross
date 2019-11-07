@@ -6,7 +6,10 @@ extern crate failure;
 extern crate enum_display_derive;
 #[macro_use]
 extern crate log;
-extern crate rand;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate structopt;
 
 extern crate nimiq_network as network;
 extern crate nimiq_consensus as consensus;
@@ -18,6 +21,7 @@ extern crate nimiq_utils as utils;
 #[cfg(feature="validator")]
 extern crate nimiq_validator as validator;
 extern crate nimiq_bls as bls;
+extern crate nimiq_keys as keys;
 
 
 pub mod config;

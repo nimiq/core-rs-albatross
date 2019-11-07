@@ -12,7 +12,7 @@ use network::NetworkConfig;
 use network_primitives::services::ServiceFlags;
 
 use crate::error::Error;
-use crate::config::{ClientConfig, ProtocolConfig};
+use crate::config::config::{ClientConfig, ProtocolConfig};
 
 
 /// Alias for the Consensus specialized over Albatross
