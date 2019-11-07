@@ -21,10 +21,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 failure = "0.1"
 log = "0.4"
-# Note: Implemented `builder(setter(custom))` to set custom setters.
-# Pull Request: https://github.com/colin-kiegel/rust-derive-builder/pull/154
-#derive_builder = "0.8"
-derive_builder = { git = "https://github.com/jgraef/rust-derive-builder", branch = "janosch/custom-setter" }
+derive_builder = "0.9"
 directories = "1.0"
 enum-display-derive = "0.1"
 rand = "0.6"
