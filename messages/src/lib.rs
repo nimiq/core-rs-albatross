@@ -46,6 +46,7 @@ use transaction::{Transaction, TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::crc::Crc32Computer;
+use utils::merkle::partial::Blake2bPartialMerkleProof;
 use utils::observer::{PassThroughListener, PassThroughNotifier};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Display)]
@@ -1139,19 +1140,18 @@ impl GetEpochTransactionsMessage {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpochTransactionsMessage {
     pub epoch: u32,
-    pub tx_proof: TransactionsProof,
-    pub start_index: u32,
-    pub last: bool,
+    #[beserial(len_type(u16))]
+    pub transactions: Vec<Transaction>,
+    pub tx_proof: Blake2bPartialMerkleProof,
 }
 impl EpochTransactionsMessage {
     pub const MAX_TRANSACTIONS: usize = 1000;
 
-    pub fn new(epoch: u32, tx_proof: TransactionsProof, start_index: u32, last: bool) -> Message {
+    pub fn new(epoch: u32, transactions: Vec<Transaction>, tx_proof: Blake2bPartialMerkleProof) -> Message {
         Message::EpochTransactions(Box::new(Self {
             epoch,
+            transactions,
             tx_proof,
-            start_index,
-            last,
         }))
     }
 }

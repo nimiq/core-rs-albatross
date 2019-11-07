@@ -5,7 +5,7 @@ use futures::Future;
 use tokio::prelude::*;
 
 use blockchain_base::AbstractBlockchain;
-use hash::{Blake2bHash, Hash};
+use hash::Blake2bHash;
 use network_messages::{
     AccountsProofMessage,
     AccountsTreeChunkData,
@@ -22,9 +22,8 @@ use network_messages::{
     TransactionReceiptsMessage,
     TransactionsProofMessage,
 };
-use transaction::{Transaction, TransactionsProof};
-use utils::math::CeilingDiv;
-use utils::merkle::Blake2bMerkleProof;
+use transaction::Transaction;
+use utils::merkle::partial::PartialMerkleProofBuilder;
 
 use crate::consensus_agent::ConsensusAgent;
 use crate::ConsensusProtocol;
@@ -123,31 +122,24 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         let transactions: Vec<Transaction> = if let Some(txs) = self.blockchain.get_epoch_transactions(get_epoch_transactions_message.epoch, None) {
             txs
         } else {
-            debug!("[GET-EPOCH-TRANSACTIONS] Could not determine transactions for epoch {:?}", get_epoch_transactions_message.epoch);
+            debug!("[GET-EPOCH-TRANSACTIONS] Could not determine transactions for epoch {}", get_epoch_transactions_message.epoch);
             return;
         };
-        let hashes: Vec<Blake2bHash> = transactions.iter().map(|tx| tx.hash()).collect();
 
-        // Fast integer division ceiling, we want ceil(#txs / MAX_TRANSACTIONS).
-        let num_chunks = transactions.len().ceiling_div(EpochTransactionsMessage::MAX_TRANSACTIONS);
-        // Divide into chunks.
-        for (i, chunk) in transactions.chunks(EpochTransactionsMessage::MAX_TRANSACTIONS).enumerate() {
-            let start_index = i * EpochTransactionsMessage::MAX_TRANSACTIONS;
-            // Create proof for each chunk.
-            let proof = Blake2bMerkleProof::new(
-                &hashes,
-                &hashes[start_index..(start_index+EpochTransactionsMessage::MAX_TRANSACTIONS)]
-            );
+        let chunks = match PartialMerkleProofBuilder::from_values(&transactions, EpochTransactionsMessage::MAX_TRANSACTIONS) {
+            Ok(chunks) => chunks,
+            Err(e) => {
+                warn!("[GET-EPOCH-TRANSACTIONS] Could not build chunks for epoch {}: {:?}", get_epoch_transactions_message.epoch, e);
+                return;
+            },
+        };
 
+        for (chunk, tx_proof) in transactions.chunks(EpochTransactionsMessage::MAX_TRANSACTIONS).zip(chunks) {
             // Send individual chunks.
             self.peer.channel.send_or_close(EpochTransactionsMessage::new(
                 get_epoch_transactions_message.epoch,
-                TransactionsProof {
-                    transactions: chunk.to_vec(),
-                    proof,
-                },
-                (EpochTransactionsMessage::MAX_TRANSACTIONS * i) as u32,
-                i + 1 == num_chunks
+                chunk.to_vec(),
+                tx_proof,
             ));
         }
     }

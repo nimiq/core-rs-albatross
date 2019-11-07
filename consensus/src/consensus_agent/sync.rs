@@ -11,13 +11,13 @@ use block_albatross::BlockError as AlbatrossBlockError;
 use block_base::{Block, BlockError};
 use blockchain_albatross::Blockchain as AlbatrossBlockchain;
 use blockchain_base::{AbstractBlockchain, PushError, PushResult};
-use hash::{Blake2bHash, Blake2bHasher};
+use hash::Blake2bHash;
 use network::connection::close_type::CloseType;
 use network::peer::Peer;
 use network_messages::{EpochTransactionsMessage, GetBlocksDirection, GetBlocksMessage, GetEpochTransactionsMessage};
 use primitives::policy;
 use transaction::Transaction;
-use utils::merkle::compute_root_from_content;
+use utils::merkle::partial::PartialMerkleProofResult;
 use utils::mutable_once::MutableOnce;
 use utils::observer::{PassThroughListener, PassThroughNotifier, weak_listener};
 use utils::timers::Timers;
@@ -103,6 +103,8 @@ struct MacroBlockSyncState {
     phase: MacroBlockSyncPhase,
     /// Boolean flag whether we are currently processing an epoch.
     processing_epoch: bool,
+    /// Previous proof's result.
+    previous_result: Option<PartialMerkleProofResult<Blake2bHash>>,
 }
 
 impl Default for MacroBlockSyncState {
@@ -112,6 +114,7 @@ impl Default for MacroBlockSyncState {
             transactions_cache: Vec::new(),
             phase: MacroBlockSyncPhase::Finished,
             processing_epoch: false,
+            previous_result: None,
         }
     }
 }
@@ -249,8 +252,8 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
 
     fn on_epoch_transactions(&self, epoch_transactions: EpochTransactionsMessage) {
         // Validate proof to prevent the peer from spamming us with transactions.
-        let proof = epoch_transactions.tx_proof.proof;
-        let mut transactions = epoch_transactions.tx_proof.transactions;
+        let proof = epoch_transactions.tx_proof;
+        let mut transactions = epoch_transactions.transactions;
 
         let state = self.state.upgradable_read();
 
@@ -273,32 +276,25 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
             _ => unreachable!(),
         }
 
-        match proof.compute_root_from_values(&transactions) {
-            Ok(root) => {
+        match proof.compute_root_from_values(&transactions, state.previous_result.as_ref()) {
+            Ok(result) => {
                 let mut state = RwLockUpgradableReadGuard::upgrade(state);
                 // Check that root corresponds to root for this epoch
-                if root != expected_root {
+                if result.root() != &expected_root {
                     warn!("We received transactions with an invalid proof for epoch {} from {} - discarding and closing the channel", epoch_transactions.epoch, self.peer.peer_address());
                     self.peer.channel.close(CloseType::InvalidEpochTransactions);
                     return;
                 }
 
-                // Append transactions
-                // TODO: Make sure that transactions are in right order by checking whether the proofs match.
+                // Append transactions.
                 state.transactions_cache.append(&mut transactions);
+                state.previous_result = Some(result);
 
-                if epoch_transactions.last {
+                if proof.is_empty() {
                     self.timers.clear_delay(&MacroBlockSyncTimer::EpochTransactions(epoch_transactions.epoch));
 
                     let transactions = mem::replace(&mut state.transactions_cache, Vec::new());
-                    // Check full root
-                    let full_root: Blake2bHash = compute_root_from_content::<Blake2bHasher, _>(&transactions);
-
-                    if full_root != expected_root {
-                        warn!("We received transactions with an invalid hash for epoch {} from {} - discarding and closing the channel", epoch_transactions.epoch, self.peer.peer_address());
-                        self.peer.channel.close(CloseType::InvalidEpochTransactions);
-                        return;
-                    }
+                    state.previous_result = None;
 
                     let block = state.block_cache.pop_front().unwrap();
 
@@ -315,8 +311,8 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
                     }, Self::REQUEST_TIMEOUT);
                 }
             },
-            Err(_e) => {
-                warn!("We received an invalid merkle proof from {} - discarding and closing the channel", self.peer.peer_address());
+            Err(e) => {
+                warn!("We received an invalid merkle proof ({:?}) from {} - discarding and closing the channel", e, self.peer.peer_address());
                 self.peer.channel.close(CloseType::InvalidEpochTransactions);
                 return;
             },
