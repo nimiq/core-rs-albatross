@@ -44,7 +44,7 @@ impl TryFrom<ClientConfig> for _Client {
     type Error = Error;
 
     fn try_from(config: ClientConfig) -> Result<Self, Self::Error> {
-        // create network config
+        // Create network config
         // TODO: `NetworkConfig` could use some refactoring. So we might as well adapt it to the
         // client API.
 
@@ -66,18 +66,18 @@ impl TryFrom<ClientConfig> for _Client {
             }
         };
 
-        // set user agent
+        // Set user agent
         network_config.set_user_agent(config.user_agent.into());
 
-        // initialize peer key
+        // Initialize peer key
         config.storage.init_key_store(&mut network_config)?;
 
-        // load validator key (before we give away ownership of the storage config
+        // Load validator key (before we give away ownership of the storage config
         #[cfg(feature="validator")]
         let validator_key = config.storage.validator_key()
             .expect("Failed to load validator key");
 
-        // add validator service flag, if necessary
+        // Add validator service flag, if necessary
         #[cfg(feature="validator")]
         {
             if config.validator.is_some() {
@@ -88,10 +88,10 @@ impl TryFrom<ClientConfig> for _Client {
             }
         }
 
-        // open database
+        // Open database
         let environment = config.storage.database(config.network_id, config.consensus)?;
 
-        // create Nimiq consensus
+        // Create Nimiq consensus
         let consensus = Consensus::new(
             environment.clone(),
             config.network_id,
@@ -133,7 +133,7 @@ impl Client {
         self.inner.validator.as_ref().map(|v| Arc::clone(v))
     }
 
-    /// Returns the database environment
+    /// Returns the database environment.
     pub fn environment(&self) -> Environment {
         self.inner.environment.clone()
     }
