@@ -4,6 +4,8 @@ use std::ops::Range;
 use beserial::{Deserialize, Serialize};
 use nimiq_hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
 
+use crate::math::CeilingDiv;
+
 /// A PartialMerkleProofBuilder can construct sequentially verifiable merkle proofs for a large list of data.
 /// The data can then be split into chunks and each chunk has its own (small) proof.
 /// Each proof can be verified by taking the previous proof's result into account (to minimise the amount of work required).
@@ -16,7 +18,7 @@ impl PartialMerkleProofBuilder {
         if chunk_size == 0 {
             return Err(PartialMerkleProofError::InvalidChunkSize);
         }
-        let num_chunks = (hashes.len() + chunk_size - 1) / chunk_size; // Fast integer division with ceiling: (x + y - 1) / y
+        let num_chunks = hashes.len().ceiling_div(chunk_size);
         let mut proofs = vec![PartialMerkleProof::empty(hashes.len()); num_chunks];
         PartialMerkleProofBuilder::compute::<H>(hashes, chunk_size, 0..hashes.len(), &mut proofs);
         Ok(proofs)
@@ -40,7 +42,7 @@ impl PartialMerkleProofBuilder {
                 hashes[index].clone()
             }
             len => {
-                let mid = current_range.start + ((len + 1) / 2); // Equivalent to round(len / 2.0)
+                let mid = current_range.start + len.ceiling_div(2);
                 let left_hash = PartialMerkleProofBuilder::compute::<H>(&hashes, chunk_size, current_range.start..mid, proofs);
                 let right_hash = PartialMerkleProofBuilder::compute::<H>(&hashes, chunk_size, mid..current_range.end, proofs);
                 hasher.hash(&left_hash);
@@ -162,7 +164,7 @@ impl<H> PartialMerkleProof<H> where H: HashOutput {
                 Ok((false, hashes[current_range.start - index_offset].clone()))
             }
             len => {
-                let mid = current_range.start + ((len + 1) / 2); // Equivalent to round(len / 2.0)
+                let mid = current_range.start + len.ceiling_div(2);
                 let (proof_node_left, left_hash) = self.compute(&hashes, current_range.start..mid, index_offset, helper_nodes, helper_index, proof_index, helper_output)?;
                 let (proof_node_right, right_hash) = self.compute(&hashes, mid..current_range.end, index_offset, helper_nodes, helper_index, proof_index, helper_output)?;
                 hasher.hash(&left_hash);

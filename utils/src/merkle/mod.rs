@@ -41,7 +41,7 @@ pub fn compute_root_from_slice<T: HashOutput>(values: &[T]) -> Cow<T> {
             return Cow::Borrowed(&values[0]);
         }
         len => {
-            let mid = (len + 1) / 2; // Equivalent to round(len / 2.0)
+            let mid = len.ceiling_div(2);
             let left_hash = compute_root_from_slice::<T>(&values[..mid]);
             let right_hash = compute_root_from_slice::<T>(&values[mid..]);
             hasher.hash(left_hash.deref());
@@ -83,7 +83,7 @@ impl<H> MerklePath<H> where H: HashOutput {
                 return (hash.eq(leaf_hash), hash);
             }
             len => {
-                let mid = (len + 1) / 2; // Equivalent to round(len / 2.0)
+                let mid = len.ceiling_div(2);
                 let (contains_left, left_hash) = MerklePath::<H>::compute::<D, T>(&values[..mid], &leaf_hash, path);
                 let (contains_right, right_hash) = MerklePath::<H>::compute::<D, T>(&values[mid..], &leaf_hash, path);
                 hasher.hash(&left_hash);
@@ -166,7 +166,7 @@ impl<H: HashOutput> Serialize for MerklePath<H> {
 
     fn serialized_size(&self) -> usize {
         let mut size = /*count*/ 1;
-        size += (self.nodes.len() + 7) / 8; // For rounding up: (num + divisor - 1) / divisor
+        size += self.nodes.len().ceiling_div(8);
         size += self.nodes.iter().fold(0, |acc, node| acc + Serialize::serialized_size(&node.hash));
         size
     }
@@ -177,7 +177,7 @@ impl<H: HashOutput> Deserialize for MerklePath<H> {
         let count: u8 = Deserialize::deserialize(reader)?;
         let count = count as usize;
 
-        let left_bits_size = (count + 7) / 8; // For rounding up: (num + divisor - 1) / divisor
+        let left_bits_size = count.ceiling_div(8);
         let mut left_bits: Vec<u8> = vec![0; left_bits_size];
         reader.read_exact(left_bits.as_mut_slice())?;
 
@@ -289,7 +289,7 @@ impl<H> MerkleProof<H> where H: HashOutput {
                 let mut sub_path: Vec<H> = Vec::new();
                 let mut sub_operations: Vec<MerkleProofOperation> = Vec::new();
 
-                let mid = (len + 1) / 2; // Equivalent to round(len / 2.0)
+                let mid = len.ceiling_div(2);
                 let (contains_left, left_hash) = MerkleProof::<H>::compute(&hashes[..mid], &hashes_to_proof, &mut sub_path, &mut sub_operations);
                 let (contains_right, right_hash) = MerkleProof::<H>::compute(&hashes[mid..], &hashes_to_proof, &mut sub_path, &mut sub_operations);
                 hasher.hash(&left_hash);
@@ -412,7 +412,7 @@ impl<H: HashOutput> Serialize for MerkleProof<H> {
 
     fn serialized_size(&self) -> usize {
         let mut size = /*operations*/ 2;
-        size += (self.operations.len() + 3) / 4; // For rounding up: (num + divisor - 1) / divisor
+        size += self.operations.len().ceiling_div(4);
         size += SerializeWithLength::serialized_size::<u16>(&self.nodes);
         size
     }
@@ -423,7 +423,7 @@ impl<H: HashOutput> Deserialize for MerkleProof<H> {
         let count: u16 = Deserialize::deserialize(reader)?;
         let count = count as usize;
 
-        let operations_size = (count + 3) / 4; // For rounding up: (num + divisor - 1) / divisor
+        let operations_size = count.ceiling_div(4);
         let mut operation_bits: Vec<u8> = vec![0; operations_size];
         reader.read_exact(operation_bits.as_mut_slice())?;
         let operations = match MerkleProof::<H>::decompress(count, operation_bits) {
