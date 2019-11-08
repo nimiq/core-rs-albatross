@@ -6,10 +6,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::convert::TryFrom;
 
-use failure::Error;
 use log::LevelFilter;
 use url::Url;
 use hex::FromHex;
+use failure::Fail;
 
 use network_primitives::{address, protocol};
 use network_primitives::address::peer_uri::PeerUriError;
@@ -21,8 +21,14 @@ use mempool::{MempoolConfig};
 use mempool::filter::{Rules as MempoolRules, MempoolFilter};
 
 use crate::config::config_file::serialization::*;
-use crate::config::config;
-use crate::config::consts;
+use crate::config::{config, consts, paths};
+use crate::config::command_line::CommandLine;
+use crate::error::Error;
+
+
+// TODO: We have to make more settings `Option`s, so that they can use the `ConfigBuilder`'s
+// default and don't overwrite a setting even though it's not set in the config file.
+
 
 
 #[derive(Clone, Debug, Deserialize)]
@@ -48,12 +54,62 @@ pub struct ConfigFile {
 }
 
 impl ConfigFile {
+    /// Contents of the default config file as static string
+    ///
+    /// # ToDo:
+    ///
+    /// * Change example config file for Albatross
+    ///
+    const EXAMPLE_CONFIG: &'static str = include_str!("client.example.toml");
+
+    /// Parse config file from string
     pub fn from_str<S: AsRef<str>>(config: S) -> Result<ConfigFile, Error> {
         Ok(toml::from_str(config.as_ref())?)
     }
 
+    /// Parse config file from file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<ConfigFile, Error> {
         Self::from_str(read_to_string(path)?)
+    }
+
+    /// Find config file.
+    ///
+    /// If the config file location was overwritte by the optional command line argument, it will
+    /// try this and possibly fail.
+    ///
+    /// Otherwise it will look into the default location, which is ~/.nimiq
+    ///
+    /// # ToDo
+    ///
+    /// * Add support for environment variable
+    ///
+    pub fn find(command_line_opt: Option<&CommandLine>) -> Result<ConfigFile, Error> {
+        // If the path was set by the command line, only try this path
+        if let Some(command_line) = command_line_opt {
+            if let Some(path) = &command_line.config {
+                return Self::from_file(path)
+            }
+        }
+
+        // if example doesn't exist, create it
+        let path_example = paths::home().join("client.toml.example");
+        if !path_example.exists() {
+            info!("Creating example config at: {}", path_example.display());
+            if let Err(e) = std::fs::write(&path_example, Self::EXAMPLE_CONFIG) {
+                warn!("Failed to create example config file: {}: {}", e, path_example.display());
+            }
+        }
+
+        // check if config exists, otherwise tell user to create one
+        let path = paths::home().join("client.toml");
+        if !path.exists() {
+            let msg = format!("Config file not found. Please create one. An example config file can be found at: {}", path.display());
+            warn!("{}", msg);
+            return Err(Error::config_error(&msg))
+        }
+
+        // load config
+        Self::from_file(&path)
     }
 }
 
@@ -207,14 +263,18 @@ impl Default for ConsensusType {
     }
 }
 
-impl FromStr for ConsensusType {
-    type Err = ();
+#[derive(Debug, Fail)]
+#[fail(display = "Invalid consensus type: {}", _0)]
+pub struct ConsensusTypeParseError(String);
 
-    fn from_str(s: &str) -> Result<Self, ()> {
+impl FromStr for ConsensusType {
+    type Err = ConsensusTypeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s.to_lowercase().as_str() {
             "full" => Self::Full,
             "macro-sync" => Self::MacroSync,
-            _ => return Err(())
+            _ => return Err(ConsensusTypeParseError(s.to_string()))
         })
     }
 }
@@ -230,6 +290,7 @@ impl From<ConsensusType> for config::ConsensusConfig {
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+// TODO: I think we can directly use `NetworkId` here
 pub enum Network {
     Main,
     Test,

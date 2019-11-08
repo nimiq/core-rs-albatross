@@ -6,7 +6,10 @@ use database::volatile::VolatileDatabaseError;
 use network::error::Error as NetworkError;
 use utils::key_store::Error as KeyStoreError;
 use consensus::Error as ConsensusError;
+#[cfg(feature="validator")]
 use validator::error::Error as ValidatorError;
+use toml::de::Error as TomlError;
+
 
 
 #[derive(Debug, Fail)]
@@ -23,8 +26,11 @@ pub enum Error {
     KeyStore(#[cause] KeyStoreError),
     #[fail(display = "Consensus error: {}", _0)]
     Consensus(#[cause] ConsensusError),
+    #[cfg(feature="validator")]
     #[fail(display = "Validator error: {}", _0)]
-    Validator(#[cause] ValidatorError)
+    Validator(#[cause] ValidatorError),
+    #[fail(display = "Config file parsing error: {}", _0)]
+    Toml(#[cause] TomlError),
 }
 
 impl Error {
@@ -78,8 +84,15 @@ impl From<ConsensusError> for Error {
     }
 }
 
+#[cfg(feature="validator")]
 impl From<ValidatorError> for Error {
     fn from(e: ValidatorError) -> Self {
         Self::Validator(e)
+    }
+}
+
+impl From<TomlError> for Error {
+    fn from(e: TomlError) -> Self {
+        Self::Toml(e)
     }
 }

@@ -8,8 +8,10 @@ use consensus::{
     AlbatrossConsensusProtocol,
 };
 use database::Environment;
-use network::NetworkConfig;
+use network::{NetworkConfig, Network as GenericNetwork};
+use mempool::Mempool as GenericMempool;
 use network_primitives::services::ServiceFlags;
+use blockchain::Blockchain;
 
 use crate::error::Error;
 use crate::config::config::{ClientConfig, ProtocolConfig};
@@ -17,6 +19,8 @@ use crate::config::config::{ClientConfig, ProtocolConfig};
 
 /// Alias for the Consensus specialized over Albatross
 pub type Consensus = AbstractConsensus<AlbatrossConsensusProtocol>;
+pub type Mempool = GenericMempool<Blockchain>;
+pub type Network = GenericNetwork<Blockchain>;
 
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
@@ -89,12 +93,15 @@ impl TryFrom<ClientConfig> for _Client {
         }
 
         // Open database
-        let environment = config.storage.database(config.network_id, config.consensus)?;
+        let environment = config.storage.database(config.network, config.consensus)?;
 
         // Create Nimiq consensus
+        if !config.network.is_albatross() {
+            return Err(Error::config_error(&format!("{} is not compatible with Albatross", config.network)));
+        }
         let consensus = Consensus::new(
             environment.clone(),
-            config.network_id,
+            config.network,
             network_config,
             config.mempool,
         )?;
@@ -115,16 +122,60 @@ impl TryFrom<ClientConfig> for _Client {
 
 
 
-/// Entry point for the Nimiq client API
+/// Entry point for the Nimiq client API.
+///
+/// This client object abstracts a complete Nimiq client. Many internal objects are exposed:
+///
+/// * `Consensus` - Contains most other objects, such as blockchain, mempool, etc.
+/// * `Blockchain` - The blockchain. Use this to query blocks or transactions
+/// * `Validator` - If the client runs a validator, this exposes access to the validator state,
+///     such as progress of current signature aggregations.
+/// * `Database` - This can be stored to store arbitrary byte strings along-side the consensus state
+///     (e.g. the chain info). Make sure you don't collide with database names - e.g. by prefixing
+///     them with something.
+/// * ...
+///
+/// # ToDo
+///
+/// * Shortcuts for common tasks, such at `get_block`.
+/// * Register listeners for certain events.
+///
 pub struct Client {
     inner: Arc<_Client>
 }
 
 
 impl Client {
+    /// Initializes the Nimiq network stack.
+    pub fn initialize(&self) -> Result<(), Error> {
+        self.inner.consensus.network.initialize()?;
+        Ok(())
+    }
+
+    /// After calling this the network stack will start connecting to other peers.
+    pub fn connect(&self) -> Result<(), Error> {
+        self.inner.consensus.network.connect()?;
+        Ok(())
+    }
+
     /// Returns a reference to the *Consensus*.
     pub fn consensus(&self) -> Arc<Consensus> {
         Arc::clone(&self.inner.consensus)
+    }
+
+    /// Returns a reference to the *Network* stack
+    pub fn network(&self) -> Arc<Network> {
+        Arc::clone(&self.inner.consensus.network)
+    }
+
+    /// Returns a reference to the blockchain
+    pub fn blockchain(&self) -> Arc<Blockchain> {
+        Arc::clone(&self.inner.consensus.blockchain)
+    }
+
+    /// Returns a reference to the *Mempool*
+    pub fn mempool(&self) -> Arc<Mempool> {
+        Arc::clone(&self.inner.consensus.mempool)
     }
 
     /// Returns a reference to the *Validator* or `None`.

@@ -52,6 +52,9 @@ nimiq-blockchain-albatross = "0.1"
 nimiq-keys = "0.1"
 
 [features]
-default = ["filestorage", "validator"]
-filestorage = []
+default = []
 validator = ["nimiq-validator", "nimiq-bls"]
+deadlock = ["parking_lot"]
+panic = ["log-panics", "human-panic"]
+logging = ["fern", "colored"]
+launcher = []

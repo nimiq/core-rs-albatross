@@ -32,6 +32,7 @@ members = [
     "consensus",
     "network",
     "client",
+    "client2",
     "rpc-server",
     "metrics-server",
     "lib",

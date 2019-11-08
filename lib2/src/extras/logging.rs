@@ -4,8 +4,10 @@ use chrono::Local;
 use colored::Colorize;
 use failure::Fail;
 use fern::colors::{Color, ColoredLevelConfig};
-use fern::Dispatch;
-use log::{Level, LevelFilter};
+use fern::{Dispatch, log_file};
+use log::{Level, LevelFilter, SetLoggerError};
+
+use crate::error::Error;
 
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(20);
 
@@ -142,8 +144,8 @@ macro_rules! force_log {
     })
 }
 
-#[inline]
-pub fn force_log_error_cause_chain(mut fail: &dyn Fail, level: Level) {
+pub fn log_error_cause_chain(mut fail: &dyn Fail) {
+    let level = Level::Error;
     force_log!(level, "{}", fail);
     if fail.cause().is_some() {
         force_log!(level, "  caused by");
@@ -151,5 +153,46 @@ pub fn force_log_error_cause_chain(mut fail: &dyn Fail, level: Level) {
             force_log!(level, "    {}", cause);
             fail = cause;
         }
+    }
+}
+
+
+
+pub fn initialize_logging() -> Result<(), Error> {
+    // TODO: Take from config/commandline that we loaded.
+    // Create a LoggingConfig in logging module that works like the ClientConfig and can
+    // be configure from the ConfigFile and CommandLine structs.
+
+    use crate::config::config_file::LogSettings;
+    let mut config = LogSettings::default();
+    // For now lets just use debug
+    config.level = Some(LevelFilter::Debug);
+
+    let mut dispatch = Dispatch::new()
+        .pretty_logging(config.timestamps)
+        .level(DEFAULT_LEVEL)
+        .level_for_nimiq(config.level
+            .unwrap_or(DEFAULT_LEVEL));
+
+    for (module, level) in &config.tags {
+        dispatch = dispatch.level_for(module.clone(), level.clone());
+    }
+
+    if let Some(ref filename) = config.file {
+        dispatch = dispatch.chain(log_file(filename)?);
+    }
+    else {
+        dispatch = dispatch.chain(std::io::stderr());
+    }
+
+    // TODO: Return LoggingError
+    dispatch.apply()?;
+
+    Ok(())
+}
+
+impl From<SetLoggerError> for Error {
+    fn from(e: SetLoggerError) -> Self {
+        Error::config_error(format!("Failed to set logger: {:?}", e))
     }
 }

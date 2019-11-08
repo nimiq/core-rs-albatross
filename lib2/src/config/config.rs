@@ -229,12 +229,16 @@ impl StorageConfig {
                 network_config.init_volatile()
             },
             StorageConfig::Filesystem(file_storage) => {
-                let key_path = file_storage.peer_key.join("peer_key.dat");
-                let key_path = key_path.to_str()
-                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of peer key to string: {}", key_path.display())))?
+                let key_path = file_storage.peer_key.to_str()
+                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of peer key to string: {}", file_storage.peer_key.display())))?
                     .to_string();
-                let key_store = KeyStore::new(key_path);
-                network_config.init_persistent(&key_store)?;
+                let key_store = KeyStore::new(key_path.clone());
+                network_config.init_persistent(&key_store)
+                    .map_err(|e| {
+                        warn!("Failed to initialize network config: {}", e);
+                        warn!("Does the peer key file exist? {}", key_path);
+                        e
+                    })?;
             }
             _ => return Err(self.not_available()),
         }
@@ -252,8 +256,7 @@ impl StorageConfig {
             },
             StorageConfig::Filesystem(file_storage) => {
                 let key_path = file_storage.validator_key.as_ref()
-                    .ok_or_else(|| Error::config_error("No path for validator key specified"))?
-                    .join("validator_key.dat");
+                    .ok_or_else(|| Error::config_error("No path for validator key specified"))?;
                 let key_path = key_path.to_str()
                     .ok_or_else(|| Error::config_error(format!("Failed to convert path of validator key to string: {}", key_path.display())))?
                     .to_string();
@@ -282,7 +285,12 @@ impl Default for StorageConfig {
 }
 
 
-
+/// Client configuration
+///
+/// # ToDo
+///
+/// * Make this implement `IntoFuture<Item=Client, Err=Error>` so you can just do
+///   `tokio::spawn(config.and_then(|client| [...]));`
 #[derive(Clone, Debug, Builder)]
 #[builder(setter(into), build_fn(private, name="build_internal"))]
 // #[builder(pattern = "owned")]
@@ -317,7 +325,7 @@ pub struct ClientConfig {
     /// Default is `DevAlbatross`
     ///
     #[builder(default="NetworkId::DevAlbatross")]
-    pub network_id: NetworkId,
+    pub network: NetworkId,
 
     /// This configuration is needed if your node runs behind a reverse proxy.
     ///
@@ -378,13 +386,13 @@ impl ClientConfigBuilder {
     /// Sets the network ID to the Albatross DevNet
     ///
     pub fn dev(&mut self) -> &mut Self {
-        self.network_id(NetworkId::DevAlbatross)
+        self.network(NetworkId::DevAlbatross)
     }
 
     /// Sets the network ID to the Albatross TestNet
     ///
     pub fn test(&mut self) -> &mut Self {
-        self.network_id(NetworkId::TestAlbatross)
+        self.network(NetworkId::TestAlbatross)
     }
 
     /// Sets the client to sync the full block chain.
@@ -483,23 +491,25 @@ impl ClientConfigBuilder {
     }
 
     /// Applies settings from a configuration file
-    pub fn config_file(&mut self, config_file: ConfigFile) -> Result<&mut Self, Error> {
+    pub fn config_file(&mut self, config_file: &ConfigFile) -> Result<&mut Self, Error> {
         // Configure protocol
         self.protocol(match config_file.network.protocol {
             config_file::Protocol::Dumb => ProtocolConfig::Dumb,
             config_file::Protocol::Ws => ProtocolConfig::Ws {
-                host: config_file.network.host
-                    .ok_or_else(|| Error::config_error("Hostname not set."))?,
-                port: config_file.network.port
+                host: config_file.network.host.clone()
+                    .ok_or_else(|| Error::config_error("Hostname not set."))?
+                    .clone(),
+                port: config_file.network.port.clone()
                     .unwrap_or(consts::WS_DEFAULT_PORT),
             },
             config_file::Protocol::Wss => {
-                let tls = config_file.network.tls
-                    .ok_or_else(|| Error::config_error("[tls] section missing."))?;
+                let tls = config_file.network.tls.as_ref()
+                    .ok_or_else(|| Error::config_error("[tls] section missing."))?
+                    .clone();
                 ProtocolConfig::Wss {
-                    host: config_file.network.host
+                    host: config_file.network.host.clone()
                         .ok_or_else(|| Error::config_error("Hostname not set."))?,
-                    port: config_file.network.port
+                    port: config_file.network.port.clone()
                         .unwrap_or(consts::WS_DEFAULT_PORT),
                     pkcs12_key_file: PathBuf::from(tls.identity_file),
                     pkcs12_passphrase: tls.identity_password,
@@ -509,35 +519,68 @@ impl ClientConfigBuilder {
         });
 
         // Configure user agent
-        config_file.network.user_agent.map(|user_agent| self.user_agent(user_agent));
+        config_file.network.user_agent.as_ref()
+            .map(|user_agent| self.user_agent(user_agent.clone()));
 
         // Configure consensus
         self.consensus(config_file.consensus.consensus_type);
-        self.network_id(config_file.consensus.network);
+
+        // Configure network
+        self.network(config_file.consensus.network);
 
         // Configure storage config.
         let mut file_storage = FileStorageConfig::default();
-        config_file.database.path.map(|path| {
-            file_storage.database_parent = PathBuf::from(path)
-        });
-        config_file.peer_key_file.map(|path| {
-            file_storage.peer_key = PathBuf::from(path)
-        });
-        config_file.validator.map(|validator_config| {
-            file_storage.validator_key = validator_config.key_file.map(PathBuf::from);
-        });
+        config_file.database.path.as_ref()
+            .map(|path| {
+                file_storage.database_parent = PathBuf::from(path);
+            });
+        config_file.peer_key_file.as_ref()
+            .map(|path| {
+                file_storage.peer_key = PathBuf::from(path);
+            });
+        config_file.validator.as_ref()
+            .map(|ref validator_config| {
+                file_storage.validator_key = validator_config.key_file.as_ref()
+                    .map(PathBuf::from);
+            });
         self.storage = Some(file_storage.into());
 
         // Configure reverse proxy config
-        config_file.reverse_proxy.map(|reverse_proxy| {
-            self.reverse_proxy = Some(Some(reverse_proxy.into()));
-        });
+        config_file.reverse_proxy.as_ref()
+            .map(|reverse_proxy| {
+                self.reverse_proxy = Some(Some(reverse_proxy.clone().into()));
+            });
 
         Ok(self)
     }
 
     /// Applies settings from the command line
-    pub fn command_line(&mut self, _command_line: CommandLine) -> &mut Self {
-        unimplemented!();
+    pub fn command_line(&mut self, command_line: &CommandLine) -> Result<&mut Self, Error> {
+        // Set hostname for Ws or Wss protocol
+        command_line.hostname.clone().map(|hostname| {
+            match &mut self.protocol {
+                Some(ProtocolConfig::Ws { host, .. }) => *host = hostname,
+                Some(ProtocolConfig::Wss { host, .. }) => *host = hostname,
+                _ => {} // just ignore this. or return an error?
+            }
+        });
+
+        // Set port for Ws or Wss protocol
+        command_line.port.map(|new_port| {
+            match &mut self.protocol {
+                Some(ProtocolConfig::Ws { port, .. }) => *port = new_port,
+                Some(ProtocolConfig::Wss { port, .. }) => *port = new_port,
+                _ => {} // just ignore this. or return an error?
+            }
+        });
+
+        // Set consensus type
+        command_line.consensus_type.map(|consensus| self.consensus(consensus));
+
+        // Set network ID
+        command_line.network.map(|network| self.network(network));
+
+        // NOTE: We're always return `Ok(_)`, but we might want to introduce errors later.
+        Ok(self)
     }
 }

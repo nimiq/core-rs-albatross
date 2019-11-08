@@ -40,6 +40,8 @@ pub struct PeerChannel {
 
 impl PeerChannel {
     pub fn new(network_connection: &NetworkConnection) -> Self {
+        trace!("new peer channel: {:?}", network_connection.net_address());
+
         let msg_notifier = Arc::new(MessageNotifier::new());
         let close_notifier = Arc::new(RwLock::new(Notifier::new()));
 

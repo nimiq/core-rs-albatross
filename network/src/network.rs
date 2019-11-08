@@ -182,6 +182,8 @@ impl<B: AbstractBlockchain> Network<B> {
     }
 
     fn check_peer_count(&self) {
+        trace!("check_peer_count: seeded={}, good_peer_set={}", self.addresses.seeded(), self.scorer.read().is_good_peer_set());
+
         if self.auto_connect.load(Ordering::Relaxed)
             && self.addresses.seeded()
             && !self.scorer.read().is_good_peer_set()
@@ -189,6 +191,8 @@ impl<B: AbstractBlockchain> Network<B> {
 
             // Pick a peer address that we are not connected to yet.
             let peer_addr_opt = self.scorer.read().pick_address();
+
+            trace!("Connect to {:?}", peer_addr_opt);
 
             // We can't connect if we don't know any more addresses or only want connections to good peers.
             let only_good_peers = self.scorer.read().needs_good_peers() && !self.scorer.read().needs_more_peers();
@@ -227,9 +231,12 @@ impl<B: AbstractBlockchain> Network<B> {
 
             // Connect to this address.
             if let Some(peer_address) = peer_addr_opt {
+                trace!("Connect outbound: {}", peer_address);
                 if !self.connections.connect_outbound(Arc::clone(&peer_address)) {
+                    trace!("Connect outbound failed");
                     self.addresses.close(None, peer_address, CloseType::ConnectionFailed);
                 }
+                trace!("should be connected now");
             }
         }
         self.backoff.store(Self::CONNECT_BACKOFF_INITIAL, Ordering::Relaxed);
