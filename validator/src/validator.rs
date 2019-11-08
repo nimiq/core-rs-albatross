@@ -567,7 +567,7 @@ impl Validator {
             let public_key = self.validator_key.public.compress();
 
             // FIXME: Inefficient linear scan.
-            contract.active_stake_sorted.iter().any(|stake| stake.validator_key() == &public_key)
+            contract.active_stake_sorted.iter().any(|stake| stake.validator_key == public_key)
         } else {
             panic!("Validator registry has a wrong account type.");
         }

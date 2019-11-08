@@ -26,16 +26,10 @@ use crate::inherent::{AccountInherentInteraction, Inherent, InherentType};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActiveStake {
-    staker_address: Address,
-    balance: Coin,
-    validator_key: BlsPublicKey, // TODO Share validator keys eventually and if required
-    reward_address: Option<Address>,
-}
-
-impl ActiveStake {
-    pub fn validator_key(&self) -> &BlsPublicKey {
-        &self.validator_key
-    }
+    pub staker_address: Address,
+    pub balance: Coin,
+    pub validator_key: BlsPublicKey, // TODO Share validator keys eventually and if required
+    pub reward_address: Option<Address>,
 }
 
 impl PartialEq for ActiveStake {
@@ -63,8 +57,8 @@ impl Ord for ActiveStake {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct InactiveStake {
-    balance: Coin,
-    retire_time: u32,
+    pub balance: Coin,
+    pub retire_time: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
