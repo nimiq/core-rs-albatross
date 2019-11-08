@@ -6,7 +6,7 @@
 
 **[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
 
-This repository is **Work in Progress** and is currently in beta-testing phase. If you need a reliable client implementation to run in a production environment, please use the [JavaScript implementation](https://github.com/nimiq/core-js/) instead. Only use this if you can tolerate bugs and want to help with beta-testing the Nimiq Rust implementation.
+This repository is currently in release-candidate phase. If you need a proven stable release to run in a production environment, please use the [JavaScript implementation](https://github.com/nimiq/core-js/) instead. Only use this if you can tolerate bugs and want to help with testing the Nimiq Rust implementation.
 
 The Nimiq Rust client comes without wallet and can currently not be used to send transactions. As a back-bone node it is more performant than the JavaScript implementation though.
 
@@ -20,9 +20,8 @@ The Nimiq Rust client comes without wallet and can currently not be used to send
 
 ## Background
 
-- [Nimiq White Paper](https://medium.com/nimiq-network/nimiq-a-peer-to-peer-payment-protocol-native-to-the-web-ffd324bb084): High-level introduction of the Nimiq payment protocol.
+- [Nimiq White Paper](https://www.nimiq.com/whitepaper/): General information about the Nimiq project.
 - [Nimiq Developer Reference](https://nimiq-network.github.io/developer-reference/): Details of the protocol architecture.
-- [Testnet](https://nimiq-testnet.com): Demo of the Nimiq ecosystem in a test version of the network.
 
 
 ## Install
@@ -76,6 +75,11 @@ After installing the client you can use it as if you had downloaded it from [cra
 
 ## Usage
 
+After installation, you can run the client directly, like this:
+
+```bash
+nimiq-client
+```
 
 ### Configuration
 
@@ -95,31 +99,6 @@ nimiq-client -c path/to/client.toml
 
 Take a look at [`client/client.example.toml`](client/client.example.toml) for all the configuration options.
 
-### From crates.io
-
-If you installed the client from [crates.io](https://crates.io), you can just run it with:
-
-```bash
-nimiq-client
-```
-
-### From Git
-
-To run the Nimiq Rust Client from the downloaded sources:
-
-```bash
-cd core-rs/client
-cargo run
-```
-
-Dependencies and binaries will be downloaded and compiled automatically by Cargo.
-
-If you want to use the release build:
-
-```bash
-cd core-rs/client
-cargo run --release
-```
 
 ## Contributing
 
