@@ -344,7 +344,7 @@ pub struct ClientConfig {
 
     /// The optional validator configuration
     ///
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(custom))]
     pub validator: Option<ValidatorConfig>,
 }
 
@@ -490,6 +490,11 @@ impl ClientConfigBuilder {
         self
     }
 
+    pub fn validator(&mut self) -> &mut Self {
+        self.validator = Some(Some(ValidatorConfig{}));
+        self
+    }
+
     /// Applies settings from a configuration file
     pub fn config_file(&mut self, config_file: &ConfigFile) -> Result<&mut Self, Error> {
         // Configure protocol
@@ -550,6 +555,11 @@ impl ClientConfigBuilder {
             .map(|reverse_proxy| {
                 self.reverse_proxy = Some(Some(reverse_proxy.clone().into()));
             });
+
+        // Configure validator
+        if config_file.validator.is_some() {
+            self.validator = Some(Some(ValidatorConfig {}));
+        }
 
         Ok(self)
     }
