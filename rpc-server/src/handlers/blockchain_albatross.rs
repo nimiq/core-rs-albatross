@@ -284,6 +284,7 @@ impl BlockchainAlbatrossHandler {
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
         let hash = block.hash().to_hex();
         let height = self.blockchain.height();
+
         match block {
             Block::Macro(ref block) => object! {
                 "type" => "macro",
@@ -300,29 +301,35 @@ impl BlockchainAlbatrossHandler {
                 "slots" => block.clone().try_into().as_ref().map(Self::slots_to_obj).unwrap_or(Null),
                 "slashFine" => block.extrinsics.as_ref().map(|body| JsonValue::from(u64::from(body.slash_fine))).unwrap_or(Null),
             },
-            Block::Micro(ref block) => object! {
-                "type" => "micro",
-                "hash" => hash.clone(),
-                "blockNumber" => block.header.block_number,
-                "viewNumber" => block.header.view_number,
-                "parentHash" => block.header.parent_hash.to_hex(),
-                "stateRoot" => block.header.state_root.to_hex(),
-                "extrinsicsRoot" => block.header.extrinsics_root.to_hex(),
-                "seed" => hex::encode(&block.header.seed),
-                "timestamp" => block.header.timestamp,
-                "extraData" => block.extrinsics.as_ref().map(|body| hex::encode(&body.extra_data).into()).unwrap_or(Null),
-                "forkProofs" => block.extrinsics.as_ref().map(|body| JsonValue::Array(body.fork_proofs.iter().map(Self::fork_proof_to_obj).collect())).unwrap_or(Null),
-                "transactions" => JsonValue::Array(block.extrinsics.as_ref().map(|body| if include_transactions {
-                    body.transactions.iter().enumerate().map(|(i, tx)| transaction_to_obj(tx, Some(&TransactionContext {
-                        block_hash: &hash,
-                        block_number: block.header.block_number,
-                        index: i as u16,
-                        timestamp: block.header.timestamp,
-                    }), Some(height))).collect()
-                } else {
-                    body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
-                }).unwrap_or_else(Vec::new)),
-                "signature" => hex::encode(&block.justification.signature),
+            Block::Micro(ref block) => {
+                let producer = self.blockchain.get_block_producer_at(block.header.block_number, block.header.view_number, None)
+                    .as_ref().map(|slot| Self::indexed_slot_to_obj(slot))
+                    .unwrap_or(JsonValue::Null);
+                object! {
+                    "type" => "micro",
+                    "hash" => hash.clone(),
+                    "blockNumber" => block.header.block_number,
+                    "viewNumber" => block.header.view_number,
+                    "parentHash" => block.header.parent_hash.to_hex(),
+                    "stateRoot" => block.header.state_root.to_hex(),
+                    "extrinsicsRoot" => block.header.extrinsics_root.to_hex(),
+                    "seed" => hex::encode(&block.header.seed),
+                    "timestamp" => block.header.timestamp,
+                    "extraData" => block.extrinsics.as_ref().map(|body| hex::encode(&body.extra_data).into()).unwrap_or(Null),
+                    "forkProofs" => block.extrinsics.as_ref().map(|body| JsonValue::Array(body.fork_proofs.iter().map(Self::fork_proof_to_obj).collect())).unwrap_or(Null),
+                    "transactions" => JsonValue::Array(block.extrinsics.as_ref().map(|body| if include_transactions {
+                        body.transactions.iter().enumerate().map(|(i, tx)| transaction_to_obj(tx, Some(&TransactionContext {
+                            block_hash: &hash,
+                            block_number: block.header.block_number,
+                            index: i as u16,
+                            timestamp: block.header.timestamp,
+                        }), Some(height))).collect()
+                    } else {
+                        body.transactions.iter().map(|tx| tx.hash::<Blake2bHash>().to_hex().into()).collect()
+                    }).unwrap_or_else(Vec::new)),
+                    "signature" => hex::encode(&block.justification.signature),
+                    "producer" => producer,
+                }
             }
         }
     }
