@@ -9,6 +9,7 @@ use database::Environment;
 use database::lmdb::{LmdbEnvironment, open as LmdbFlags};
 use database::volatile::VolatileEnvironment;
 use network::network_config::{NetworkConfig, ReverseProxyConfig};
+use utils::key_store::Error as KeyStoreError;
 use mempool::MempoolConfig;
 use mempool::filter::Rules as MempoolRules;
 #[cfg(feature="validator")]
@@ -124,7 +125,7 @@ pub struct FileStorageConfig {
     peer_key: PathBuf,
 
     /// Path to validator key
-    validator_key: Option<PathBuf>
+    validator_key: Option<PathBuf>,
 }
 
 impl FileStorageConfig {
@@ -261,7 +262,15 @@ impl StorageConfig {
                     .ok_or_else(|| Error::config_error(format!("Failed to convert path of validator key to string: {}", key_path.display())))?
                     .to_string();
                 let key_store = KeyStore::new(key_path);
-                key_store.load_key()?
+                match key_store.load_key() {
+                    Err(KeyStoreError::IoError(_)) => {
+                        let mut csprng = OsRng::new().unwrap();
+                        let validator_key = BlsKeyPair::generate(&mut csprng);
+                        key_store.save_key(&validator_key)?;
+                        Ok(validator_key)
+                    },
+                    res => res,
+                }?
             },
             _ => return Err(self.not_available()),
         })
