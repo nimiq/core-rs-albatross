@@ -22,7 +22,7 @@ bitvec = "0.10"
 byteorder = "1.2"
 hex = "0.3"
 log = "0.4"
-parking_lot = "0.7"
+parking_lot = "0.9"
 rand = "0.6"
 enum-display-derive = "0.1"
 beserial = { path = "../beserial", version = "0.1" }

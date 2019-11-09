@@ -26,15 +26,15 @@ fern = { version = "0.5", features = ["colored"] }
 futures = "0.1"
 tokio = "0.1"
 lazy_static = "1.2"
-parking_lot = { version = "0.7", optional = true, features = ["deadlock_detection"] }
+parking_lot = { version = "0.9", optional = true, features = ["deadlock_detection"] }
 clap = "2.32"
 colored = "1.7"
 chrono = "0.4"
-failure = "0.1"
 url = "1.7"
 hex = "0.3"
 rand = "0.6"
 directories = "1.0"
+failure = "0.1"
 human-panic = { version = "1.0", optional = true }
 log-panics = { version = "2.0", features = ["with-backtrace"] }
 nimiq-database = { path = "../database", version = "0.1" }

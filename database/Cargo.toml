@@ -20,7 +20,7 @@ maintenance = { status = "experimental" }
 log = "0.4"
 lmdb-zero = "0.4"
 fs2 = "0.4"
-parking_lot = "0.7"
+parking_lot = "0.9"
 tempdir = "0.3"
 rand = "0.6"
 bitflags = "1.0"

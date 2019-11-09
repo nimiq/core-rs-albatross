@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 bit-vec = { version = "0.5", optional = true }
 futures = { version = "0.1", optional = true }
-parking_lot = { version = "0.7", optional = true }
+parking_lot = { version = "0.9", optional = true }
 tokio = { version = "0.1", optional = true }
 log = { version = "0.4", optional = true }
 failure = { version = "0.1", optional = true }

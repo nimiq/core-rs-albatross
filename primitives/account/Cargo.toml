@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 log = "0.4"
 failure = "0.1"
-parking_lot = "0.7"
+parking_lot = "0.9"
 lazy_static = "1.3"
 beserial = { path = "../../beserial", version = "0.1" }
 beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
