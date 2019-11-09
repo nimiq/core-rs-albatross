@@ -25,13 +25,13 @@ hex = { version = "0.3", optional = true }
 lazy_static = { version = "1.2", optional = true }
 failure = { version = "0.1", optional = true}
 enum-display-derive = { version = "0.1", optional = true }
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1", optional = true }
-fixed-unsigned = { path = "../fixed-unsigned", version = "0.1", optional = true }
-nimiq-bls = { path = "../bls", features = ["beserial"], optional = true }
-nimiq-keys = { path = "../keys", optional = true }
-nimiq-collections = { path = "../collections", version = "0.1" }
+beserial = { version = "0.1" }
+beserial_derive = { version = "0.1" }
+nimiq-macros = { version = "0.1", optional = true }
+fixed-unsigned = { version = "0.1", optional = true }
+nimiq-bls = { version = "0.1", features = ["beserial"], optional = true }
+nimiq-keys = { version = "0.1", optional = true }
+nimiq-collections = { version = "0.1" }
 
 [dev-dependencies]
 lazy_static = "1.2"

@@ -18,8 +18,8 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 itertools = { version = "0.8", optional = true }
-beserial = { path = "../beserial", optional = true }
-beserial_derive = { path = "../beserial/beserial_derive", optional = true }
+beserial = { version = "0.1", optional = true }
+beserial_derive = { version = "0.1", optional = true }
 num-traits = "0.2"
 
 [dev-dependencies]

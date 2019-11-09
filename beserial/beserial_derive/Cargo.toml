@@ -23,4 +23,4 @@ proc-macro = true
 proc-macro2 = "0.4"
 syn = { version = "0.15", features = ["extra-traits"] }
 quote = "0.6"
-beserial = { path = "..", version = "0.1" }
+beserial = { version = "0.1" }

@@ -7,13 +7,13 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1", features = ["bitset"] }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["math", "mutable-once", "observer", "timers"] }
-nimiq-macros = { path = "../macros", version = "0.1" }
+beserial = { version = "0.1" }
+beserial_derive = { version = "0.1" }
+nimiq-bls = { version = "0.1" }
+nimiq-collections = { version = "0.1", features = ["bitset"] }
+nimiq-hash = { version = "0.1" }
+nimiq-utils = { version = "0.1", features = ["math", "mutable-once", "observer", "timers"] }
+nimiq-macros = { version = "0.1" }
 futures = "0.1"
 futures-cpupool = "0.1"
 stopwatch = "0.0"

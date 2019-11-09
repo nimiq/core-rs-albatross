@@ -21,6 +21,6 @@ blake2-rfc = "0.2"
 hex = "0.3"
 sha2 = "0.8"
 byteorder = "1.2"
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-libargon2-sys = { path = "../libargon2-sys", version = "0.1" }
+beserial = { version = "0.1" }
+nimiq-macros = { version = "0.1" }
+libargon2-sys = { version = "0.1" }

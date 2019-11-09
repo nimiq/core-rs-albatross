@@ -25,24 +25,24 @@ hex = "0.3"
 failure = "0.1"
 parking_lot = "0.9"
 base64 = "0.10"
-beserial = { path = "../beserial", version = "0.1" }
+beserial = { version = "0.1" }
 clear_on_drop = { version = "0.2" }
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-consensus = { path = "../consensus", version = "0.1" }
-nimiq-blockchain = { path = "../blockchain", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-network = { path = "../network", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1" }
-nimiq-block = { path = "../primitives/block", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-block-production = { path = "../block-production", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["merkle", "time", "otp"] }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-wallet = { path = "../wallet", version = "0.1" }
+nimiq-database = { version = "0.1" }
+nimiq-consensus = { version = "0.1" }
+nimiq-blockchain = { version = "0.1" }
+nimiq-blockchain-albatross = { version = "0.1" }
+nimiq-blockchain-base = { version = "0.1" }
+nimiq-bls = { version = "0.1" }
+nimiq-mempool = { version = "0.1" }
+nimiq-network = { version = "0.1" }
+nimiq-hash = { version = "0.1" }
+nimiq-network-primitives = { version = "0.1" }
+nimiq-block = { version = "0.1" }
+nimiq-block-albatross = { version = "0.1" }
+nimiq-block-base = { version = "0.1" }
+nimiq-transaction = { version = "0.1" }
+nimiq-keys = { version = "0.1" }
+nimiq-block-production = { version = "0.1" }
+nimiq-utils = { version = "0.1", features = ["merkle", "time", "otp"] }
+nimiq-primitives = { version = "0.1" }
+nimiq-wallet = { version = "0.1" }

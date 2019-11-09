@@ -21,15 +21,15 @@ futures = "0.1"
 failure = "0.1"
 lazy_static = "1.2"
 log = "0.4"
-nimiq-network = { path = "../network", version = "0.1" }
-nimiq-consensus = { path = "../consensus", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["all"] }
-nimiq-primitives = { path = "../primitives", version = "0.1", features = ["networks"] }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1" }
-nimiq-validator = { path = "../validator", version = "0.1", optional = true }
-nimiq-bls = { path = "../bls", version = "0.1", optional = true }
+nimiq-network = { version = "0.1" }
+nimiq-consensus = { version = "0.1" }
+nimiq-database = { version = "0.1" }
+nimiq-network-primitives = { version = "0.1", features = ["all"] }
+nimiq-primitives = { version = "0.1", features = ["networks"] }
+nimiq-mempool = { version = "0.1" }
+nimiq-utils = { version = "0.1" }
+nimiq-validator = { version = "0.1", optional = true }
+nimiq-bls = { version = "0.1", optional = true }
 
 [features]
 default = ["validator"]

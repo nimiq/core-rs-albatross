@@ -21,21 +21,21 @@ parking_lot = "0.9"
 log = "0.4"
 hex = "0.3"
 failure = "0.1"
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-block = { path = "../primitives/block", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-accounts = { path = "../accounts", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
-nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
-fixed-unsigned = { path = "../fixed-unsigned", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "time"] }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
+beserial = { version = "0.1" }
+beserial_derive = { version = "0.1" }
+nimiq-keys = { version = "0.1" }
+nimiq-primitives = { version = "0.1" }
+nimiq-account = { version = "0.1" }
+nimiq-block = { version = "0.1" }
+nimiq-transaction = { version = "0.1" }
+nimiq-hash = { version = "0.1" }
+nimiq-accounts = { version = "0.1" }
+nimiq-database = { version = "0.1", features = ["full-nimiq"] }
+nimiq-tree-primitives = { version = "0.1" }
+fixed-unsigned = { version = "0.1" }
+nimiq-utils = { version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
+nimiq-network-primitives = { version = "0.1", features = ["networks", "time"] }
+nimiq-blockchain-base = { version = "0.1" }
 
 [dev-dependencies]
 atomic = "0.4"

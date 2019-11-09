@@ -49,3 +49,44 @@ members = [
 [profile.dev.overrides.pairing]
 opt-level = 3
 debug = false
+
+[patch.crates-io]
+beserial = { path = "beserial" }
+beserial_derive = { path = "beserial/beserial_derive" }
+fixed-unsigned = { path = "fixed-unsigned" }
+libargon2-sys = { path = "libargon2-sys" }
+
+nimiq-account = { path = "primitives/account" }
+nimiq-accounts = { path = "accounts" }
+nimiq-block = { path = "primitives/block" }
+nimiq-block-base = { path = "primitives/block-base" }
+nimiq-block-production = { path = "block-production" }
+nimiq-blockchain = { path = "blockchain" }
+nimiq-block-albatross = { path = "primitives/block-albatross" }
+nimiq-block-production-albatross = { path = "block-production-albatross" }
+nimiq-blockchain-albatross = { path = "blockchain-albatross" }
+nimiq-blockchain-base = { path = "blockchain-base" }
+nimiq-bls = { path = "bls" }
+nimiq-build-tools = { path = "build-tools" }
+nimiq-collections = { path = "collections" }
+nimiq-consensus = { path = "consensus" }
+nimiq-database = { path = "database" }
+nimiq-handel = { path = "handel" }
+nimiq-hash = { path = "hash" }
+nimiq-hash_derive = { path = "hash/hash_derive" }
+nimiq-keys = { path = "keys" }
+nimiq-key-derivation = { path = "key-derivation" }
+nimiq-lib = { path = "lib"}
+nimiq-macros = { path = "macros" }
+nimiq-mempool = { path = "mempool" }
+nimiq-messages = { path = "messages"}
+nimiq-metrics-server = { path = "metrics-server" }
+nimiq-network = { path = "network" }
+nimiq-network-primitives = { path = "network-primitives" }
+nimiq-primitives = { path = "primitives" }
+nimiq-rpc-server = { path = "rpc-server" }
+nimiq-transaction = { path = "primitives/transaction" }
+nimiq-tree-primitives = { path = "accounts/tree-primitives" }
+nimiq-utils = { path = "utils" }
+nimiq-validator = { path = "validator" }
+nimiq-wallet = { path = "wallet" }

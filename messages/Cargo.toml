@@ -25,20 +25,20 @@ log = "0.4"
 parking_lot = "0.9"
 rand = "0.6"
 enum-display-derive = "0.1"
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-nimiq-block = { path = "../primitives/block", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
-nimiq-bls = { path = "../bls" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "subscription", "version"] }
-nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }
-nimiq-handel = { path = "../handel", version = "0.1" }
+beserial = { version = "0.1" }
+beserial_derive = { version = "0.1" }
+nimiq-block = { version = "0.1" }
+nimiq-block-albatross = { version = "0.1" }
+nimiq-block-base = { version = "0.1" }
+nimiq-bls = { version = "0.1" }
+nimiq-hash = { version = "0.1" }
+nimiq-keys = { version = "0.1" }
+nimiq-macros = { version = "0.1" }
+nimiq-network-primitives = { version = "0.1", features = ["networks", "subscription", "version"] }
+nimiq-tree-primitives = { version = "0.1" }
+nimiq-transaction = { version = "0.1" }
+nimiq-utils = { version = "0.1", features = ["observer", "crc", "time"] }
+nimiq-handel = { version = "0.1" }
 
 [dev-dependencies]
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time", "iterators"] }
+nimiq-utils = { version = "0.1", features = ["observer", "crc", "time", "iterators"] }

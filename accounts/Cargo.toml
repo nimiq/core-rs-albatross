@@ -18,12 +18,12 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 hex = "0.3"
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "networks", "policy"], version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-block = { path = "../primitives/block", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-database = { path = "../database", features = ["full-nimiq"], version = "0.1" }
-nimiq-tree-primitives = { path = "./tree-primitives", version = "0.1" }
+beserial = { version = "0.1" }
+nimiq-keys = { version = "0.1" }
+nimiq-primitives = { features = ["coin", "networks", "policy"], version = "0.1" }
+nimiq-hash = { version = "0.1" }
+nimiq-account = { version = "0.1" }
+nimiq-block = { version = "0.1" }
+nimiq-transaction = { version = "0.1" }
+nimiq-database = { features = ["full-nimiq"], version = "0.1" }
+nimiq-tree-primitives = { version = "0.1" }

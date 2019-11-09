@@ -13,17 +13,17 @@ name = "nimiq-devnet"
 path = "src/devnet/main.rs"
 
 [dependencies]
-nimiq-bls = { path = "../bls", optional = true }
-nimiq-block = { path = "../primitives/block", optional = true }
-nimiq-block-albatross = { path = "../primitives/block-albatross", optional = true }
-nimiq-collections = { path = "../collections" }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
-nimiq-primitives = { path = "../primitives" }
-nimiq-account = { path = "../primitives/account" }
-nimiq-accounts = { path = "../accounts" }
-nimiq-database = { path = "../database", features = ["account"] }
-beserial = { path = "../beserial" }
+nimiq-bls = { version = "0.1", optional = true }
+nimiq-block = { version = "0.1", optional = true }
+nimiq-block-albatross = { version = "0.1", optional = true }
+nimiq-collections = { version = "0.1" }
+nimiq-hash = { version = "0.1" }
+nimiq-keys = { version = "0.1" }
+nimiq-primitives = { version = "0.1" }
+nimiq-account = { version = "0.1" }
+nimiq-accounts = { version = "0.1" }
+nimiq-database = { version = "0.1", features = ["account"] }
+beserial = { version = "0.1" }
 lazy_static = "1.3"
 rand = "0.6"
 rand04_compat = "0.1"

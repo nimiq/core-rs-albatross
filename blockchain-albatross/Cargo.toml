@@ -19,28 +19,28 @@ failure = "0.1"
 hex = "0.3"
 log = "0.4"
 parking_lot = "0.9"
-beserial = { path = "../beserial", version = "0.1" }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
-fixed-unsigned = { path = "../fixed-unsigned", version = "0.1" }
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-accounts = { path = "../accounts", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1", features = ["beserial"] }
-nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "time"] }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
+beserial = { version = "0.1" }
+beserial_derive = { version = "0.1" }
+fixed-unsigned = { version = "0.1" }
+nimiq-account = { version = "0.1" }
+nimiq-accounts = { version = "0.1" }
+nimiq-block-albatross = { version = "0.1" }
+nimiq-blockchain-base = { version = "0.1" }
+nimiq-collections = { version = "0.1" }
+nimiq-bls = { version = "0.1", features = ["beserial"] }
+nimiq-database = { version = "0.1", features = ["full-nimiq"] }
+nimiq-keys = { version = "0.1" }
+nimiq-hash = { version = "0.1" }
+nimiq-network-primitives = { version = "0.1", features = ["networks", "time"] }
+nimiq-primitives = { version = "0.1" }
+nimiq-transaction = { version = "0.1" }
+nimiq-tree-primitives = { version = "0.1" }
+nimiq-utils = { version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
 
 [dev-dependencies]
 atomic = "0.4"
 rand = "0.6"
-nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1" }
+nimiq-block-production-albatross = { version = "0.1" }
 
 [features]
 default = ["transaction-store"]

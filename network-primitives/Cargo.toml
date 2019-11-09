@@ -24,24 +24,24 @@ lazy_static = "1.2"
 atomic = "0.4"
 url = "1.7"
 failure = "0.1"
-beserial = { path = "../beserial", features = ["net"] }
-beserial_derive = { path = "../beserial/beserial_derive"}
-nimiq-keys = { path = "../keys" }
-nimiq-hash = { path = "../hash" }
-nimiq-hash_derive = { path = "../hash/hash_derive" }
-nimiq-block = { path = "../primitives/block", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
-nimiq-bls = { path = "../bls" }
-nimiq-transaction = { path = "../primitives/transaction" }
-nimiq-primitives = { path = "../primitives", features = ["coin", "networks"] }
-nimiq-account = { path = "../primitives/account" }
-nimiq-utils = { path = "../utils", features = ["observer", "crc", "time"] }
-nimiq-macros = { path = "../macros" }
+beserial = {version = "0.1", features = ["net"] }
+beserial_derive = {version = "0.1"}
+nimiq-keys = {version = "0.1" }
+nimiq-hash = {version = "0.1" }
+nimiq-hash_derive = {version = "0.1" }
+nimiq-block = { version = "0.1" }
+nimiq-block-albatross = {version = "0.1" }
+nimiq-bls = {version = "0.1" }
+nimiq-transaction = {version = "0.1" }
+nimiq-primitives = {version = "0.1", features = ["coin", "networks"] }
+nimiq-account = {version = "0.1" }
+nimiq-utils = {version = "0.1", features = ["observer", "crc", "time"] }
+nimiq-macros = {version = "0.1" }
 
 [build-dependencies]
-nimiq-build-tools = { path = "../build-tools" }
-nimiq-hash = { path = "../hash" }
-nimiq-keys = { path = "../keys" }
+nimiq-build-tools = {version = "0.1" }
+nimiq-hash = {version = "0.1" }
+nimiq-keys = {version = "0.1" }
 human-panic = { version = "1.0" }
 log = "0.4"
 simple_logger = "1.0"

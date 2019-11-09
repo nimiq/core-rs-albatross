@@ -17,23 +17,23 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
-nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
-nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-hash = { path = "../hash", version = "0.1" }
-nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks"] }
-nimiq-primitives = { path = "../primitives", version = "0.1" }
+beserial = { version = "0.1" }
+nimiq-block-albatross = { version = "0.1" }
+nimiq-blockchain-albatross = { version = "0.1" }
+nimiq-blockchain-base = { version = "0.1" }
+nimiq-bls = { version = "0.1" }
+nimiq-collections = { version = "0.1" }
+nimiq-database = { version = "0.1" }
+nimiq-hash = { version = "0.1" }
+nimiq-keys = { version = "0.1" }
+nimiq-mempool = { version = "0.1" }
+nimiq-network-primitives = { version = "0.1", features = ["networks"] }
+nimiq-primitives = { version = "0.1" }
 log = "0.4"
 
 [dev-dependencies]
 hex = "0.3"
-nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1" }
-nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
-nimiq-collections = { path = "../collections", version = "0.1" }
+nimiq-account = { version = "0.1" }
+nimiq-database = { version = "0.1" }
+nimiq-transaction = { version = "0.1" }
+nimiq-collections = { version = "0.1" }

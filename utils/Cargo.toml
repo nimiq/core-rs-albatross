@@ -23,15 +23,15 @@ parking_lot = { version = "0.9", optional = true }
 tokio = { version = "0.1", optional = true }
 log = { version = "0.4", optional = true }
 failure = { version = "0.1", optional = true }
-nimiq-hash = { path = "../hash", version = "0.1", optional = true }
-beserial = { path = "../beserial", version = "0.1", optional = true }
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1", optional = true }
-nimiq-collections = { path = "../collections", version = "0.1", optional = true }
+nimiq-hash = { version = "0.1", optional = true }
+beserial = { version = "0.1", optional = true }
+beserial_derive = { version = "0.1", optional = true }
+nimiq-collections = { version = "0.1", optional = true }
 clear_on_drop = { version = "0.2", optional = true }
 rand = { version = "0.6", optional = true }
 
 [dev-dependencies]
-beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+beserial_derive = { version = "0.1" }
 
 [features]
 crc = []

@@ -20,11 +20,11 @@ maintenance = { status = "experimental" }
 bit-vec = "0.5"
 hex = "0.3"
 unicode-normalization = "0.1"
-nimiq-hash = { path = "../hash", version = "0.1" }
-beserial = { path = "../beserial", version = "0.1" }
-nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["bit-vec", "crc"] }
-nimiq-key-derivation = { path = "../key-derivation", version = "0.1", optional = true }
+nimiq-hash = { version = "0.1" }
+beserial = { version = "0.1" }
+nimiq-macros = { version = "0.1" }
+nimiq-utils = { version = "0.1", features = ["bit-vec", "crc"] }
+nimiq-key-derivation = { version = "0.1", optional = true }
 
 [features]
 default = ["key-derivation"]

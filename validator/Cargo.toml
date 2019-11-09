@@ -13,25 +13,25 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../beserial" }
-nimiq-account = { path = "../primitives/account" }
-nimiq-bls = { path = "../bls" }
-nimiq-consensus = { path = "../consensus" }
-nimiq-collections = { path = "../collections", features = ["bitset"] }
-nimiq-database = { path = "../database", features = ["full-nimiq"] }
-nimiq-macros = { path = "../macros" }
-nimiq-mempool = { path = "../mempool" }
-nimiq-network = { path = "../network" }
-nimiq-network-primitives = { path = "../network-primitives", features = ["networks", "time"] }
-nimiq-utils = { path = "../utils", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
-nimiq-block-albatross = { path = "../primitives/block-albatross" }
-nimiq-messages = { path = "../messages" }
-nimiq-hash = { path = "../hash" }
-nimiq-primitives = { path = "../primitives" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross" }
-nimiq-block-production-albatross = { path = "../block-production-albatross" }
-nimiq-blockchain-base = { path = "../blockchain-base" }
-nimiq-handel = { path = "../handel", version = "0.1" }
+beserial = { version = "0.1" }
+nimiq-account = { version = "0.1" }
+nimiq-bls = { version = "0.1" }
+nimiq-consensus = { version = "0.1" }
+nimiq-collections = { version = "0.1", features = ["bitset"] }
+nimiq-database = { version = "0.1", features = ["full-nimiq"] }
+nimiq-macros = { version = "0.1" }
+nimiq-mempool = { version = "0.1" }
+nimiq-network = { version = "0.1" }
+nimiq-network-primitives = { version = "0.1", features = ["networks", "time"] }
+nimiq-utils = { version = "0.1", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
+nimiq-block-albatross = { version = "0.1" }
+nimiq-messages = { version = "0.1" }
+nimiq-hash = { version = "0.1" }
+nimiq-primitives = { version = "0.1" }
+nimiq-blockchain-albatross = { version = "0.1" }
+nimiq-block-production-albatross = { version = "0.1" }
+nimiq-blockchain-base = { version = "0.1" }
+nimiq-handel = { version = "0.1" }
 hex = { version = "0.3", optional = true }
 failure = "0.1"
 log = "0.4"
