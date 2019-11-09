@@ -1078,7 +1078,12 @@ impl Blockchain {
 
     pub fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<TransactionsIterator> {
         let first_block = policy::first_block_of(epoch);
-        let first_block = self.chain_store.get_block_at(first_block, true, txn_option)?;
+        let first_block = self.chain_store.get_block_at(first_block, true, txn_option)
+            .or_else(|| {
+                debug!("get_block_at didn't return first block of epoch: block_height={}", first_block);
+                None
+            })?;
+
         let first_hash = first_block.hash();
         let iter_first = first_block.unwrap_micro()
             .extrinsics.unwrap()
@@ -1088,6 +1093,10 @@ impl Blockchain {
         let blocks = self.chain_store.get_blocks(&first_hash, policy::EPOCH_LENGTH - 2, true, Direction::Forward, txn_option);
         // We need to make sure that we have all micro blocks.
         if blocks.len() as u32 != policy::EPOCH_LENGTH - 2 {
+            debug!("Exptected {} blocks, but get_blocks returned {}", policy::EPOCH_LENGTH - 2, blocks.len());
+            for block in &blocks {
+                debug!("Returned block {} - {}", block.block_number(), block.hash());
+            }
             return None;
         }
 
