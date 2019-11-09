@@ -415,6 +415,15 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(e));
         }
 
+        let prev_info = if let Some(prev_info) = self.chain_store.get_chain_info(&block.parent_hash(), false, Some(&read_txn)) {
+            prev_info
+        } else {
+            warn!("Rejecting block - unknown predecessor");
+            #[cfg(feature = "metrics")]
+                self.metrics.note_orphan_block();
+            return Err(PushError::Orphan);
+        };
+
         let view_change_proof = match block {
             Block::Macro(_) => OptionalCheck::Skip,
             Block::Micro(ref micro_block) => micro_block.justification.view_change_proof.as_ref().into(),
@@ -497,7 +506,6 @@ impl Blockchain {
             }
         }
 
-        let prev_info = self.chain_store.get_chain_info(&block.parent_hash(), false, Some(&read_txn)).unwrap();
         let chain_info = ChainInfo::new(block, Some(slot));
 
         // Drop read transaction before calling other functions.
