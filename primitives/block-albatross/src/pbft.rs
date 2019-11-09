@@ -147,6 +147,18 @@ pub struct PbftProof {
 }
 
 impl PbftProof {
+    pub fn votes(&self, validators: &GroupedList<LazyPublicKey>) -> u16 {
+        // sum up votes of signers that signed prepare and commit
+        (&self.prepare.signers & &self.commit.signers)
+            .iter()
+            .map(|s|
+                validators.groups().get(s)
+                    .map(|Group (count, _)| *count)
+                    .unwrap_or(0)
+            )
+            .sum()
+    }
+
     pub fn verify(&self, block_hash: Blake2bHash, validators: &GroupedList<LazyPublicKey>, threshold: u16) -> Result<(), AggregateProofError> {
         // XXX if we manually hash the message prefix and the block hash, we don't need to clone
         let prepare = PbftPrepareMessage { block_hash: block_hash.clone() };
@@ -157,15 +169,7 @@ impl PbftProof {
         self.commit.verify(&commit, validators, threshold)
             .map_err(|e| {trace!("commit verify failed"); e})?;
 
-        // sum up votes of signers that signed prepare and commit
-        let votes: u16 = (&self.prepare.signers & &self.commit.signers)
-            .iter()
-            .map(|s|
-                validators.groups().get(s)
-                .map(|Group (count, _)| *count)
-                .unwrap_or(0)
-            )
-            .sum();
+        let votes = self.votes(validators);
         trace!("votes on prepare and commit: {}", votes);
 
         if votes < threshold {
