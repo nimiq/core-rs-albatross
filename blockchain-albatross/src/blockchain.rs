@@ -534,7 +534,7 @@ impl Blockchain {
 
     fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo, create_macro_extrinsics: bool) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(&self.env);
-        let state = self.state.upgradable_read();
+        let state = self.state.read();
 
         // Check transactions against TransactionCache to prevent replay.
         // XXX This is technically unnecessary for macro blocks, but it doesn't hurt either.
@@ -563,6 +563,8 @@ impl Blockchain {
                 self.metrics.note_invalid_block();
             return Err(e);
         }
+
+        drop(state);
 
         // Only now can we check macro extrinsics.
         if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
@@ -596,7 +598,7 @@ impl Blockchain {
         self.chain_store.set_head(&mut txn, &block_hash);
 
         // Acquire write lock & commit changes.
-        let mut state = RwLockUpgradableReadGuard::upgrade(state);
+        let mut state = self.state.write();
         state.transaction_cache.push_block(&chain_info.head);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
@@ -803,13 +805,12 @@ impl Blockchain {
 
     fn commit_accounts(&self, state: &BlockchainState, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
         let accounts = &state.accounts;
-
         match block {
             Block::Macro(ref macro_block) => {
                 let mut inherents = self.finalize_last_epoch(state);
 
                 // Add slashes for view changes.
-                let view_changes = ViewChanges::new(macro_block.header.block_number, self.view_number(), macro_block.header.view_number);
+                let view_changes = ViewChanges::new(macro_block.header.block_number, state.main_chain.head.next_view_number(), macro_block.header.view_number);
                 inherents.append(&mut self.create_slash_inherents(&[], &view_changes, Some(txn)));
 
                 // Commit block to AccountsTree.
@@ -821,7 +822,7 @@ impl Blockchain {
             },
             Block::Micro(ref micro_block) => {
                 let extrinsics = micro_block.extrinsics.as_ref().unwrap();
-                let view_changes = ViewChanges::new(micro_block.header.block_number, self.next_view_number(), micro_block.header.view_number);
+                let view_changes = ViewChanges::new(micro_block.header.block_number, state.main_chain.head.next_view_number(), micro_block.header.view_number);
                 let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes, Some(txn));
 
                 // Commit block to AccountsTree.
@@ -955,8 +956,9 @@ impl Blockchain {
 
     fn extend_isolated_macro(&self, block_hash: Blake2bHash, transactions: &[BlockchainTransaction], mut chain_info: ChainInfo, mut prev_info: ChainInfo, push_lock: MutexGuard<()>) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(&self.env);
-        let state = self.state.upgradable_read();
+        let state = self.state.read();
         let block_number = chain_info.head.block_number();
+
         // We cannot verify the slashed set, so we need to trust it here.
         // Also, we verified that macro extrinsics have been set in the corresponding push,
         // thus we can unwrap here.
@@ -984,6 +986,8 @@ impl Blockchain {
                 self.metrics.note_invalid_block();
             return Err(PushError::AccountsError(e));
         }
+
+        drop(state);
 
         self.chain_store.clear_receipts(&mut txn);
 
@@ -1013,7 +1017,7 @@ impl Blockchain {
         self.chain_store.set_head(&mut txn, &block_hash);
 
         // Acquire write lock & commit changes.
-        let mut state = RwLockUpgradableReadGuard::upgrade(state);
+        let mut state = self.state.write();
         // FIXME: Macro block sync does not preserve transaction replay protection right now.
         // But this is not an issue in the UTXO model.
         //state.transaction_cache.push_block(&chain_info.head);
@@ -1105,15 +1109,15 @@ impl Blockchain {
     }
 
     pub fn block_number(&self) -> u32 {
-        self.state.read().main_chain.head.block_number()
+        self.state.read_recursive().main_chain.head.block_number()
     }
 
     pub fn next_view_number(&self) -> u32 {
-        self.state.read().main_chain.head.next_view_number()
+        self.state.read_recursive().main_chain.head.next_view_number()
     }
 
     pub fn view_number(&self) -> u32 {
-        self.state.read().main_chain.head.view_number()
+        self.state.read_recursive().main_chain.head.view_number()
     }
 
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {
@@ -1174,7 +1178,7 @@ impl Blockchain {
     pub fn get_block_producer_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<IndexedSlot> {
         // Try to get block producer using state
 
-        let state = self.state.read();
+        let state = self.state.read_recursive();
 
         let read_txn;
         let txn = if let Some(txn) = txn_option {
@@ -1285,7 +1289,7 @@ impl Blockchain {
     }
 
     fn slash_fine_at(&self, block_number: u32) -> Coin {
-        let state = self.state();
+        let state = self.state.read_recursive();
         let head_number = state.block_number();
         let current_fine = state.current_slots().map(|s| s.slash_fine());
         let last_fine = state.last_slots().map(|s| s.slash_fine());
