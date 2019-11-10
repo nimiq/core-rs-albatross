@@ -7,7 +7,7 @@ use pairing::Engine;
 
 #[cfg(feature = "beserial")]
 use beserial::Serialize;
-use hash::Hash;
+use hash::{Hash, Blake2bHash};
 
 use super::{
     AggregatePublicKey as GenericAggregatePublicKey,
@@ -143,6 +143,15 @@ impl PublicKey {
 #[derive(Clone)]
 pub struct CompressedPublicKey {
     pub(crate) p_pub: G2Compressed,
+}
+
+impl CompressedPublicKey {
+    pub fn fingerprint(&self) -> String {
+        let mut hash = self.p_pub.as_ref().hash::<Blake2bHash>().to_hex();
+        hash.truncate(8);
+        hash.shrink_to_fit();
+        hash
+    }
 }
 
 impl fmt::Debug for CompressedPublicKey {
