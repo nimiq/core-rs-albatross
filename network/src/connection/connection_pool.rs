@@ -444,9 +444,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
 
     /// Initiates a outbound connection.
     pub fn connect_outbound(&self, peer_address: Arc<PeerAddress>) -> bool {
-        trace!("connect_outbound({})", peer_address);
         let _guard = self.change_lock.lock();
-        trace!("acquired lock");
 
         // All checks in one step.
         if !self.check_outbound_connection_request(peer_address.clone()) {
@@ -464,12 +462,9 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
             },
         };
 
-        trace!("got connection handle");
-
         // Create fresh ConnectionInfo instance.
         let mut state = self.state.write();
         let connection_id = state.add(ConnectionInfo::outbound(peer_address.clone()));
-        trace!("connection_id = {}", connection_id);
         state.connections.get_mut(connection_id).unwrap().set_connection_handle(handle);
 
         state.connecting_count += 1;

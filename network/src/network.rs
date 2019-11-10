@@ -182,8 +182,6 @@ impl<B: AbstractBlockchain> Network<B> {
     }
 
     fn check_peer_count(&self) {
-        trace!("check_peer_count: seeded={}, good_peer_set={}", self.addresses.seeded(), self.scorer.read().is_good_peer_set());
-
         if self.auto_connect.load(Ordering::Relaxed)
             && self.addresses.seeded()
             && !self.scorer.read().is_good_peer_set()
