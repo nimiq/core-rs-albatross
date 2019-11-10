@@ -178,13 +178,13 @@ pub struct ValidatorNetwork {
     blockchain: Arc<Blockchain>,
 
     /// The signed validator info for this node
-    info: SignedValidatorInfo,
+    pub info: SignedValidatorInfo,
 
     /// The validator network state
     state: RwLock<ValidatorNetworkState>,
 
     /// Stores validator contact information and holds references to connected validators
-    validators: Arc<RwLock<ValidatorPool>>,
+    pub validators: Arc<RwLock<ValidatorPool>>,
 
     self_weak: MutableOnce<Weak<ValidatorNetwork>>,
     pub notifier: RwLock<PassThroughNotifier<'static, ValidatorNetworkEvent>>,

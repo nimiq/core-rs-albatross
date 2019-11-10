@@ -67,8 +67,8 @@ pub struct Validator {
     blockchain: Arc<Blockchain>,
     block_producer: BlockProducer,
     consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
-    validator_network: Arc<ValidatorNetwork>,
-    validator_key: KeyPair,
+    pub validator_network: Arc<ValidatorNetwork>,
+    pub validator_key: KeyPair,
 
     timers: Timers<ValidatorTimer>,
 
