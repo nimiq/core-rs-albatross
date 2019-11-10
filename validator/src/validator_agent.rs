@@ -139,6 +139,21 @@ impl ValidatorAgent {
         self.notifier.read().notify(ValidatorAgentEvent::ForkProof(Box::new(fork_proof)));
     }
 
+    fn check_view_change_epoch(&self, view_change: &ViewChange) -> bool {
+        let current_block_number = self.blockchain.block_number() + 1;
+        let current_epoch = policy::epoch_at(current_block_number);
+
+        let view_change_epoch = policy::epoch_at(view_change.block_number);
+
+        if view_change_epoch == current_epoch {
+            true
+        }
+        else {
+            trace!("[VIEW-CHANGE] Ignoring view change message for a different epoch: current=#{}/{}, change_to=#{}/{}", current_block_number, current_epoch, view_change.block_number, view_change_epoch);
+            false
+        }
+    }
+
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
     fn on_view_change_message(&self, update_message: LevelUpdateMessage<ViewChange>) {
         trace!("[VIEW-CHANGE] Received: number={} update={:?} peer={}",
@@ -146,28 +161,17 @@ impl ValidatorAgent {
                update_message.update,
                self.peer.peer_address());
 
-        let block_number = self.blockchain.block_number();
-        let blockchain_epoch = policy::epoch_at(block_number + 1);
-        let view_change_epoch = policy::epoch_at(update_message.tag.block_number);
-        match view_change_epoch.cmp(&blockchain_epoch) {
-            Ordering::Greater => {
-                debug!("[VIEW-CHANGE] Ignoring view change message for a future epoch: current=#{}/{}, change_to=#{}/{}", block_number, blockchain_epoch, update_message.tag.block_number, view_change_epoch);
-                return;
-            },
-            Ordering::Less => {
-                debug!("[VIEW-CHANGE] Ignoring view change message for an old epoch: current=#{}/{}, change_to=#{}/{}", block_number, blockchain_epoch, update_message.tag.block_number, view_change_epoch);
-                return;
-            },
-            Ordering::Equal => (),
-        };
-
-        self.notifier.read().notify(ValidatorAgentEvent::ViewChange(Box::new(update_message)))
+        if self.check_view_change_epoch(&update_message.tag) {
+            self.notifier.read().notify(ValidatorAgentEvent::ViewChange(Box::new(update_message)));
+        }
     }
 
     fn on_view_change_proof(&self, proof: ViewChangeProofMessage) {
         trace!("[VIEW-CHANGE] Received proof: {:?}", proof);
 
-        self.notifier.read().notify(ValidatorAgentEvent::ViewChangeProof(Box::new(proof)))
+        if self.check_view_change_epoch(&proof.view_change) {
+            self.notifier.read().notify(ValidatorAgentEvent::ViewChangeProof(Box::new(proof)));
+        }
     }
 
     /// When a pbft block proposal is received
