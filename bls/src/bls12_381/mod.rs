@@ -1,12 +1,14 @@
 use std::cmp::Ordering;
 use std::fmt;
+use std::str::FromStr;
 
 use group::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError};
 use pairing::bls12_381::{Bls12, G1Compressed, G2Compressed};
 use pairing::Engine;
+use failure::Fail;
 
 #[cfg(feature = "beserial")]
-use beserial::Serialize;
+use beserial::{Serialize, Deserialize};
 use hash::Hash;
 
 use super::{
@@ -19,6 +21,7 @@ use super::{
     SigHash,
     Signature as GenericSignature
 };
+use hex::FromHexError;
 
 #[cfg(feature = "lazy")]
 pub mod lazy;
@@ -180,6 +183,33 @@ impl Ord for CompressedPublicKey {
 impl AsRef<[u8]> for CompressedPublicKey {
     fn as_ref(&self) -> &[u8] {
         self.p_pub.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Fail)]
+pub enum PublicKeyParseError {
+    #[fail(display = "Not valid hexadecimal: {}", _0)]
+    InvalidHex(#[cause] FromHexError),
+    #[fail(display = "Incorrect length: {}", _0)]
+    IncorrectLength(usize),
+}
+
+impl From<FromHexError> for PublicKeyParseError {
+    fn from(e: FromHexError) -> Self {
+        PublicKeyParseError::InvalidHex(e)
+    }
+}
+
+#[cfg(feature = "beserial")]
+impl FromStr for CompressedPublicKey {
+    type Err = PublicKeyParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let raw = hex::decode(s)?;
+        if raw.len() != CompressedPublicKey::SIZE {
+            return Err(PublicKeyParseError::IncorrectLength(raw.len()));
+        }
+        Ok(CompressedPublicKey::deserialize_from_vec(&raw).unwrap())
     }
 }
 

@@ -21,6 +21,7 @@ hashbrown = "0.6"
 beserial = { version = "0.1", optional = true }
 hex = "0.3"
 parking_lot = { version = "0.9", optional = true }
+failure = "0.1"
 
 [dev-dependencies]
 rand_xorshift = "0.1"

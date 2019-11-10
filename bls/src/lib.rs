@@ -2,6 +2,8 @@
 
 extern crate nimiq_hash as hash;
 extern crate hex;
+#[macro_use]
+extern crate failure;
 
 use ff::Field;
 use group::{CurveAffine, CurveProjective};
