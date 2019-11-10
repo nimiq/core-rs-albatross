@@ -17,16 +17,16 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { version = "0.1" }
-nimiq-block = { version = "0.1" }
-nimiq-blockchain = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
-nimiq-mempool = { version = "0.1" }
+beserial = "0.1"
+nimiq-block = "0.1"
+nimiq-blockchain = "0.1"
+nimiq-hash = "0.1"
+nimiq-keys = "0.1"
+nimiq-mempool = "0.1"
 nimiq-network-primitives = { version = "0.1", features = ["networks"] }
 
 [dev-dependencies]
-nimiq-account = { version = "0.1" }
-nimiq-database = { version = "0.1" }
-nimiq-primitives = { version = "0.1" }
-nimiq-transaction = { version = "0.1" }
+nimiq-account = "0.1"
+nimiq-database = "0.1"
+nimiq-primitives = "0.1"
+nimiq-transaction = "0.1"

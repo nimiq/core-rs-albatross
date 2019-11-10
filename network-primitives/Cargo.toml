@@ -29,7 +29,7 @@ beserial_derive = {version = "0.1"}
 nimiq-keys = {version = "0.1" }
 nimiq-hash = {version = "0.1" }
 nimiq-hash_derive = {version = "0.1" }
-nimiq-block = { version = "0.1" }
+nimiq-block = "0.1"
 nimiq-block-albatross = {version = "0.1" }
 nimiq-bls = {version = "0.1" }
 nimiq-transaction = {version = "0.1" }

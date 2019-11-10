@@ -31,7 +31,7 @@ clear_on_drop = { version = "0.2", optional = true }
 rand = { version = "0.6", optional = true }
 
 [dev-dependencies]
-beserial_derive = { version = "0.1" }
+beserial_derive = "0.1"
 
 [features]
 crc = []

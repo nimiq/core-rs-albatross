@@ -13,14 +13,14 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { version = "0.1" }
-beserial_derive = { version = "0.1" }
-nimiq-account = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
-nimiq-key-derivation = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-primitives = { version = "0.1" }
-nimiq-transaction = { version = "0.1" }
+beserial = "0.1"
+beserial_derive = "0.1"
+nimiq-account = "0.1"
+nimiq-keys = "0.1"
+nimiq-key-derivation = "0.1"
+nimiq-hash = "0.1"
+nimiq-primitives = "0.1"
+nimiq-transaction = "0.1"
 nimiq-database = { version = "0.1", features = ["keys"] }
 nimiq-utils = { version = "0.1", features = ["otp"]}
 failure = "0.1"

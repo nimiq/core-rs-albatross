@@ -76,7 +76,8 @@ nimiq-hash = { path = "hash" }
 nimiq-hash_derive = { path = "hash/hash_derive" }
 nimiq-keys = { path = "keys" }
 nimiq-key-derivation = { path = "key-derivation" }
-nimiq-lib = { path = "lib"}
+nimiq-lib = { path = "lib" }
+nimiq-lib2 = { path = "lib2" }
 nimiq-macros = { path = "macros" }
 nimiq-mempool = { path = "mempool" }
 nimiq-messages = { path = "messages"}

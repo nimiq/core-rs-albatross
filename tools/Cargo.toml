@@ -23,13 +23,13 @@ name = "nimiq-signtx"
 path = "src/signtx/main.rs"
 
 [dependencies]
-nimiq-bls = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
-nimiq-build-tools = { version = "0.1" }
-nimiq-transaction = { version = "0.1" }
-nimiq-primitives = { version = "0.1" }
-beserial = { version = "0.1" }
+nimiq-bls = "0.1"
+nimiq-hash = "0.1"
+nimiq-keys = "0.1"
+nimiq-build-tools = "0.1"
+nimiq-transaction = "0.1"
+nimiq-primitives = "0.1"
+beserial = "0.1"
 log = "0.4"
 simple_logger = "1.0"
 hex = "0.3"

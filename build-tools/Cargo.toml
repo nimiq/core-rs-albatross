@@ -16,14 +16,14 @@ path = "src/devnet/main.rs"
 nimiq-bls = { version = "0.1", optional = true }
 nimiq-block = { version = "0.1", optional = true }
 nimiq-block-albatross = { version = "0.1", optional = true }
-nimiq-collections = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
-nimiq-primitives = { version = "0.1" }
-nimiq-account = { version = "0.1" }
-nimiq-accounts = { version = "0.1" }
+nimiq-collections = "0.1"
+nimiq-hash = "0.1"
+nimiq-keys = "0.1"
+nimiq-primitives = "0.1"
+nimiq-account = "0.1"
+nimiq-accounts = "0.1"
 nimiq-database = { version = "0.1", features = ["account"] }
-beserial = { version = "0.1" }
+beserial = "0.1"
 lazy_static = "1.3"
 rand = "0.6"
 rand04_compat = "0.1"

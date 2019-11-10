@@ -18,11 +18,11 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 hex = "0.3"
-beserial = { version = "0.1" }
-beserial_derive = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-account = { version = "0.1" }
+beserial = "0.1"
+beserial_derive = "0.1"
+nimiq-keys = "0.1"
+nimiq-hash = "0.1"
+nimiq-account = "0.1"
 
 [dev-dependencies]
 nimiq-primitives = { version = "0.1", features = ["coin"] }

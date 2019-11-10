@@ -19,9 +19,9 @@ maintenance = { status = "experimental" }
 [dependencies]
 regex = "1"
 byteorder = "1.2"
-beserial = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
+beserial = "0.1"
+nimiq-hash = "0.1"
+nimiq-keys = "0.1"
 
 [dev-dependencies]
 hex = "0.3"

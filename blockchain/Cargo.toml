@@ -21,21 +21,21 @@ parking_lot = "0.9"
 log = "0.4"
 hex = "0.3"
 failure = "0.1"
-beserial = { version = "0.1" }
-beserial_derive = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
-nimiq-primitives = { version = "0.1" }
-nimiq-account = { version = "0.1" }
-nimiq-block = { version = "0.1" }
-nimiq-transaction = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-accounts = { version = "0.1" }
+beserial = "0.1"
+beserial_derive = "0.1"
+nimiq-keys = "0.1"
+nimiq-primitives = "0.1"
+nimiq-account = "0.1"
+nimiq-block = "0.1"
+nimiq-transaction = "0.1"
+nimiq-hash = "0.1"
+nimiq-accounts = "0.1"
 nimiq-database = { version = "0.1", features = ["full-nimiq"] }
-nimiq-tree-primitives = { version = "0.1" }
-fixed-unsigned = { version = "0.1" }
+nimiq-tree-primitives = "0.1"
+fixed-unsigned = "0.1"
 nimiq-utils = { version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
 nimiq-network-primitives = { version = "0.1", features = ["networks", "time"] }
-nimiq-blockchain-base = { version = "0.1" }
+nimiq-blockchain-base = "0.1"
 
 [dev-dependencies]
 atomic = "0.4"

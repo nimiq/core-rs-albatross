@@ -31,14 +31,14 @@ tokio-tls = "0.2"
 tokio-tungstenite = "0.8"
 tk-listen = "0.2.1"
 url = "1.7"
-beserial = { version = "0.1" }
-beserial_derive = { version = "0.1" }
-nimiq-blockchain-base = { version = "0.1" }
-nimiq-collections = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-macros = { version = "0.1" }
-nimiq-messages = { version = "0.1" }
+beserial = "0.1"
+beserial_derive = "0.1"
+nimiq-blockchain-base = "0.1"
+nimiq-collections = "0.1"
+nimiq-keys = "0.1"
+nimiq-hash = "0.1"
+nimiq-macros = "0.1"
+nimiq-messages = "0.1"
 nimiq-network-primitives = { version = "0.1", features = ["all"] }
 nimiq-utils = { version = "0.1", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
 

@@ -17,9 +17,9 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = { path = "../../beserial", version = "0.1" }
-nimiq-hash = { path = "../../hash", version = "0.1" }
-nimiq-transaction = { path = "../transaction", version = "0.1" }
+beserial = "0.1"
+nimiq-hash = "0.1"
+nimiq-transaction = "0.1"
 failure = "0.1"
 
 [dev-dependencies]

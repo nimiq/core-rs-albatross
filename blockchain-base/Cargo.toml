@@ -19,16 +19,16 @@ maintenance = { status = "experimental" }
 [dependencies]
 failure = "0.1"
 parking_lot = "0.9"
-beserial = { version = "0.1" }
-nimiq-account = { version = "0.1" }
-nimiq-block-base = { version = "0.1" }
-nimiq-database = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-keys = { version = "0.1" }
-nimiq-network-primitives = { version = "0.1" }
-nimiq-primitives = { version = "0.1" }
-nimiq-transaction = { version = "0.1" }
-nimiq-tree-primitives = { version = "0.1" }
+beserial = "0.1"
+nimiq-account = "0.1"
+nimiq-block-base = "0.1"
+nimiq-database = "0.1"
+nimiq-hash = "0.1"
+nimiq-keys = "0.1"
+nimiq-network-primitives = "0.1"
+nimiq-primitives = "0.1"
+nimiq-transaction = "0.1"
+nimiq-tree-primitives = "0.1"
 nimiq-utils = { version = "0.1", features = ["observer"] }
 [features]
 metrics = []

@@ -13,7 +13,7 @@ edition = "2018"
 pairing = { git = "https://github.com/paberr/librustzcash" }
 group = { git = "https://github.com/paberr/librustzcash" }
 ff = { git = "https://github.com/paberr/librustzcash" }
-nimiq-hash = { path = "../hash" }
+nimiq-hash = "0.1"
 rand = "0.6"
 rand04_compat = "0.1"
 rand_chacha = "0.1"

@@ -25,9 +25,9 @@ failure = "0.1"
 nimiq-blockchain = { version = "0.1", features = ["metrics"] }
 nimiq-blockchain-base = { version = "0.1", features = ["metrics"] }
 nimiq-blockchain-albatross = { version = "0.1", features = ["metrics"] }
-nimiq-block-albatross = { version = "0.1" }
-nimiq-consensus = { version = "0.1" }
+nimiq-block-albatross = "0.1"
+nimiq-consensus = "0.1"
 nimiq-network = { version = "0.1", features = ["metrics"] }
-nimiq-mempool = { version = "0.1" }
-nimiq-block = { version = "0.1" }
-beserial = { version = "0.1" }
+nimiq-mempool = "0.1"
+nimiq-block = "0.1"
+beserial = "0.1"

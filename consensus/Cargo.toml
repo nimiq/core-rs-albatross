@@ -24,20 +24,20 @@ weak-table = "0.2"
 failure = "0.1"
 futures = "0.1"
 tokio = "0.1"
-beserial = { version = "0.1" }
-nimiq-hash = { version = "0.1" }
-nimiq-macros = { version = "0.1" }
-nimiq-block-base = { version = "0.1" }
+beserial = "0.1"
+nimiq-hash = "0.1"
+nimiq-macros = "0.1"
+nimiq-block-base = "0.1"
 nimiq-blockchain = { version = "0.1", features = ["transaction-store"] }
 nimiq-blockchain-albatross = { version = "0.1", features = ["transaction-store"] }
-nimiq-blockchain-base = { version = "0.1" }
-nimiq-transaction = { version = "0.1" }
-nimiq-mempool = { version = "0.1" }
-nimiq-collections = { version = "0.1" }
+nimiq-blockchain-base = "0.1"
+nimiq-transaction = "0.1"
+nimiq-mempool = "0.1"
+nimiq-collections = "0.1"
 nimiq-primitives = { version = "0.1", features = ["policy"] }
-nimiq-messages = { version = "0.1" }
+nimiq-messages = "0.1"
 nimiq-network-primitives = { version = "0.1", features = ["networks", "time"] }
-nimiq-network = { version = "0.1" }
+nimiq-network = "0.1"
 nimiq-database = { version = "0.1", features = ["full-nimiq"] }
 nimiq-utils = { version = "0.1", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit", "merkle", "math"] }
-nimiq-block-albatross = { version = "0.1" }
+nimiq-block-albatross = "0.1"
