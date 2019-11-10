@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::cmp::Ordering;
 use std::fmt;
 use std::time::Duration;
 

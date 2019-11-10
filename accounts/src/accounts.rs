@@ -12,13 +12,12 @@ use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 
 use crate::tree::AccountsTree;
 
-
 type ReceiptsMap<'a> = HashMap<u16, &'a Vec<u8>>;
 
 #[derive(Debug)]
 pub struct Accounts {
     env: Environment,
-    tree: AccountsTree,
+    tree: AccountsTree<Account>,
 }
 
 impl Accounts {
@@ -41,14 +40,14 @@ impl Accounts {
         }.unwrap_or(Account::INITIAL)
     }
 
-    pub fn get_chunk(&self, prefix: &str, size: usize, txn_option: Option<&db::Transaction>) -> Option<AccountsTreeChunk> {
+    pub fn get_chunk(&self, prefix: &str, size: usize, txn_option: Option<&db::Transaction>) -> Option<AccountsTreeChunk<Account>> {
         match txn_option {
             Some(txn) => self.tree.get_chunk(txn, prefix, size),
             None => self.tree.get_chunk(&ReadTransaction::new(&self.env), prefix, size),
         }
     }
 
-    pub fn get_accounts_proof(&self, txn: &db::Transaction, addresses: &[Address]) -> AccountsProof {
+    pub fn get_accounts_proof(&self, txn: &db::Transaction, addresses: &[Address]) -> AccountsProof<Account> {
         self.tree.get_accounts_proof(txn, addresses)
     }
 

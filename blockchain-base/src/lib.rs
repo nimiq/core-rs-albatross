@@ -87,7 +87,7 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool;
 
 
-    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof>;
+    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof<Account>>;
 
     fn get_transactions_proof(&self, block_hash: &Blake2bHash, addresses: &HashSet<Address>) -> Option<TransactionsProof>;
 
@@ -109,7 +109,7 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
     // TODO Why do we need this? Remove if possible.
     fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash>;
 
-    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk>;
+    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk<Account>>;
 
     // TODO: Currently, we can implement request responses in the ConsensusAgent only for *both* protocols, which is why AbstractBlockchain needs to support this.
     fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>>;

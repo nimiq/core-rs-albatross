@@ -777,7 +777,7 @@ impl AbstractBlockchain for Blockchain {
         self.contains(hash, include_forks)
     }
 
-    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof> {
+    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof<Account>> {
         self.get_accounts_proof(block_hash, addresses)
     }
 
@@ -809,7 +809,7 @@ impl AbstractBlockchain for Blockchain {
         self.head_hash_from_store(txn)
     }
 
-    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk> {
+    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk<Account>> {
         self.state.read().accounts.get_chunk(prefix, size, txn_option)
     }
 

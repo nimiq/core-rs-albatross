@@ -2,7 +2,7 @@ use std::io;
 use std::iter;
 use std::slice;
 
-use account::Account;
+use account::AccountsTreeLeave;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Blake2bHash, Hash, SerializeContent};
 
@@ -24,19 +24,19 @@ pub enum AccountsTreeNodeType {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum AccountsTreeNode {
+pub enum AccountsTreeNode<A: AccountsTreeLeave> {
     BranchNode {
         prefix: AddressNibbles,
         children: Box<[Option<AccountsTreeNodeChild>; 16]>,
     },
     TerminalNode {
         prefix: AddressNibbles,
-        account: Account,
+        account: A,
     }
 }
 
-impl AccountsTreeNode {
-    pub fn new_terminal(prefix: AddressNibbles, account: Account) -> Self {
+impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
+    pub fn new_terminal(prefix: AddressNibbles, account: A) -> Self {
         AccountsTreeNode::TerminalNode { prefix, account }
     }
 
@@ -130,7 +130,7 @@ impl AccountsTreeNode {
         Some(self)
     }
 
-    pub fn with_account(mut self, new_account: Account) -> Option<Self> {
+    pub fn with_account(mut self, new_account: A) -> Option<Self> {
         match &mut self {
             AccountsTreeNode::TerminalNode { ref mut account, .. } => {
                 *account = new_account;
@@ -149,7 +149,7 @@ impl AccountsTreeNode {
     }
 }
 
-impl Serialize for AccountsTreeNode {
+impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size: usize = 0;
         size += Serialize::serialize(&self.node_type(), writer)?;
@@ -195,14 +195,14 @@ impl Serialize for AccountsTreeNode {
     }
 }
 
-impl Deserialize for AccountsTreeNode {
+impl<A: AccountsTreeLeave> Deserialize for AccountsTreeNode<A> {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let node_type: AccountsTreeNodeType = Deserialize::deserialize(reader)?;
         let prefix: AddressNibbles = Deserialize::deserialize(reader)?;
 
         match node_type {
             AccountsTreeNodeType::TerminalNode => {
-                let account: Account = Deserialize::deserialize(reader)?;
+                let account: A = Deserialize::deserialize(reader)?;
                 Ok(AccountsTreeNode::new_terminal(prefix, account))
             },
             AccountsTreeNodeType::BranchNode => {
@@ -222,13 +222,13 @@ impl Deserialize for AccountsTreeNode {
     }
 }
 
-impl SerializeContent for AccountsTreeNode {
+impl<A: AccountsTreeLeave> SerializeContent for AccountsTreeNode<A> {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
 }
 
 // Different hash implementation than std
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for AccountsTreeNode {}
+impl<A: AccountsTreeLeave> Hash for AccountsTreeNode<A> {}
 
 #[allow(clippy::type_complexity)]
 type AccountsTreeNodeIter<'a> = Option<iter::FilterMap<slice::Iter<'a, Option<AccountsTreeNodeChild>>, fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>>>;
@@ -248,7 +248,7 @@ impl<'a> iter::Iterator for Iter<'a> {
     }
 }
 
-impl<'a> iter::IntoIterator for &'a AccountsTreeNode {
+impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a AccountsTreeNode<A> {
     type Item = &'a AccountsTreeNodeChild;
     type IntoIter = Iter<'a>;
 
@@ -277,7 +277,7 @@ impl<'a> iter::Iterator for IterMut<'a> {
     }
 }
 
-impl<'a> iter::IntoIterator for &'a mut AccountsTreeNode {
+impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a mut AccountsTreeNode<A> {
     type Item = &'a mut AccountsTreeNodeChild;
     type IntoIter = IterMut<'a>;
 
@@ -291,6 +291,8 @@ impl<'a> iter::IntoIterator for &'a mut AccountsTreeNode {
 
 #[cfg(test)]
 mod tests {
+    use account::Account;
+
     use super::*;
 
     const EMPTY_ROOT: &str = "000000";
@@ -302,7 +304,7 @@ mod tests {
 
     #[test]
     fn it_can_calculate_hash() {
-        let mut node = AccountsTreeNode::deserialize_from_vec(&hex::decode(EMPTY_ROOT).unwrap()).unwrap();
+        let mut node = AccountsTreeNode::<Account>::deserialize_from_vec(&hex::decode(EMPTY_ROOT).unwrap()).unwrap();
         assert_eq!(node.hash::<Blake2bHash>(), "ab29e6dc16755d0071eba349ebda225d15e4f910cb474549c47e95cb85ecc4d6".into());
 
         node = AccountsTreeNode::deserialize_from_vec(&hex::decode(ROOT).unwrap()).unwrap();

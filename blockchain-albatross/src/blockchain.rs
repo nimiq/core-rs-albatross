@@ -1565,7 +1565,7 @@ impl AbstractBlockchain for Blockchain {
     }
 
     #[allow(unused_variables)]
-    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof> {
+    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof<Account>> {
         unimplemented!()
     }
 
@@ -1600,7 +1600,7 @@ impl AbstractBlockchain for Blockchain {
         unimplemented!()
     }
 
-    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk> {
+    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk<Account>> {
         self.state.read().accounts.get_chunk(prefix, size, txn_option)
     }
 

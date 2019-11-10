@@ -37,6 +37,7 @@ nimiq-macros = "0.1"
 nimiq-network-primitives = { version = "0.1", features = ["networks", "subscription", "version"] }
 nimiq-tree-primitives = "0.1"
 nimiq-transaction = "0.1"
+nimiq-account = "0.1"
 nimiq-utils = { version = "0.1", features = ["observer", "crc", "time"] }
 nimiq-handel = "0.1"
 

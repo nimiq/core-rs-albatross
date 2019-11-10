@@ -7,6 +7,7 @@ extern crate beserial_derive;
 extern crate bitflags;
 #[macro_use]
 extern crate enum_display_derive;
+extern crate nimiq_account as account;
 extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
@@ -29,6 +30,7 @@ use parking_lot::RwLock;
 use rand::Rng;
 use rand::rngs::OsRng;
 
+use account::Account;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
@@ -723,7 +725,7 @@ impl InvVector {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxMessage {
     pub transaction: Transaction,
-    pub accounts_proof: Option<AccountsProof>,
+    pub accounts_proof: Option<AccountsProof<Account>>,
 }
 impl TxMessage {
     pub fn new(transaction: Transaction) -> Message {
@@ -952,11 +954,11 @@ pub struct GetAccountsProofMessage {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountsProofMessage {
     pub block_hash: Blake2bHash,
-    pub proof: Option<AccountsProof>,
+    pub proof: Option<AccountsProof<Account>>,
 }
 
 impl AccountsProofMessage {
-    pub fn new(block_hash: Blake2bHash, proof: Option<AccountsProof>) -> Message {
+    pub fn new(block_hash: Blake2bHash, proof: Option<AccountsProof<Account>>) -> Message {
         Message::AccountsProof(Box::new(AccountsProofMessage {
             block_hash,
             proof,
@@ -976,7 +978,7 @@ pub struct GetAccountsTreeChunkMessage {
 #[derive(Clone, Debug)]
 pub enum AccountsTreeChunkData {
     Serialized(Vec<u8>),
-    Structured(AccountsTreeChunk),
+    Structured(AccountsTreeChunk<Account>),
 }
 
 impl AccountsTreeChunkData {

@@ -68,6 +68,10 @@ macro_rules! invoke_account_instance {
     }
 }
 
+pub trait AccountsTreeLeave: Serialize + Deserialize + Clone {
+    fn is_initial(&self) -> bool;
+}
+
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
 pub enum Account {
     Basic(BasicAccount),
@@ -101,13 +105,6 @@ impl Account {
         }
     }
 
-    pub fn is_initial(&self) -> bool {
-        match *self {
-            Account::Basic(ref account) => account.balance == Coin::ZERO,
-            _ => false
-        }
-    }
-
     pub fn is_to_be_pruned(&self) -> bool {
         match *self {
             Account::Basic(_) | Account::Staking(_) => false,
@@ -131,6 +128,15 @@ impl Account {
             Err(AccountError::InsufficientFunds {balance, needed: value})
         } else {
             Ok(())
+        }
+    }
+}
+
+impl AccountsTreeLeave for Account {
+    fn is_initial(&self) -> bool {
+        match *self {
+            Account::Basic(ref account) => account.balance == Coin::ZERO,
+            _ => false
         }
     }
 }

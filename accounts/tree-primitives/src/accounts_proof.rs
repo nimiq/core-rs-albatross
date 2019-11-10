@@ -1,4 +1,4 @@
-use account::Account;
+use account::AccountsTreeLeave;
 use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
 use hash::Hash;
@@ -8,20 +8,20 @@ use crate::accounts_tree_node::AccountsTreeNode;
 use crate::address_nibbles::AddressNibbles;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsProof {
+pub struct AccountsProof<A: AccountsTreeLeave> {
     #[beserial(len_type(u16))]
-    nodes: Vec<AccountsTreeNode>,
+    nodes: Vec<AccountsTreeNode<A>>,
     #[beserial(skip)]
     verified: bool
 }
 
-impl AccountsProof {
-    pub fn new(nodes : Vec<AccountsTreeNode>) -> AccountsProof {
+impl<A: AccountsTreeLeave> AccountsProof<A> {
+    pub fn new(nodes : Vec<AccountsTreeNode<A>>) -> AccountsProof<A> {
         AccountsProof { nodes, verified: false }
     }
 
     pub fn verify(&mut self) -> bool {
-        let mut children: Vec<AccountsTreeNode> = Vec::new();
+        let mut children: Vec<AccountsTreeNode<A>> = Vec::new();
         for node in &self.nodes {
             // If node is a branch node, validate its children.
             if node.is_branch() {
@@ -46,7 +46,7 @@ impl AccountsProof {
         valid
     }
 
-    pub fn get_account(&self, address: &Address) -> Option<Account> {
+    pub fn get_account(&self, address: &Address) -> Option<A> {
         assert!(self.verified, "AccountsProof must be verified before retrieving accounts. Call verify() first.");
 
         for node in &self.nodes {
@@ -64,14 +64,14 @@ impl AccountsProof {
         (&self.nodes[self.nodes.len() - 1]).hash()
     }
 
-    pub fn nodes(&self) -> &Vec<AccountsTreeNode> { &self.nodes }
+    pub fn nodes(&self) -> &Vec<AccountsTreeNode<A>> { &self.nodes }
 }
 
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
     use crate::accounts_tree_node::AccountsTreeNodeChild;
-    use account::BasicAccount;
+    use account::{Account, BasicAccount};
     use nimiq_primitives::coin::Coin;
 
     use super::*;

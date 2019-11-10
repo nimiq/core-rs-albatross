@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 
+use account::Account;
 use database::ReadTransaction;
 use hash::Blake2bHash;
 use hash::Hash;
 use keys::Address;
-use tree_primitives::accounts_proof::AccountsProof;
 use transaction::TransactionsProof;
+use tree_primitives::accounts_proof::AccountsProof;
 use utils::merkle::Blake2bMerkleProof;
 
 use crate::Blockchain;
@@ -31,7 +32,7 @@ impl Blockchain {
         })
     }
 
-    pub fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof> {
+    pub fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof<Account>> {
         let state = self.state.read();
         // We only support accounts proofs for the head hash.
         if block_hash != &state.head_hash {

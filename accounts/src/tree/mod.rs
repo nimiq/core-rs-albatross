@@ -1,6 +1,7 @@
+use std::marker::PhantomData;
 use std::str::FromStr;
 
-use account::Account;
+use account::AccountsTreeLeave;
 use database::{Database, Environment, Transaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
@@ -10,32 +11,33 @@ use tree_primitives::accounts_tree_node::{AccountsTreeNode, NO_CHILDREN};
 use tree_primitives::address_nibbles::AddressNibbles;
 
 #[derive(Debug)]
-pub struct AccountsTree {
-    db: Database
+pub struct AccountsTree<A: AccountsTreeLeave> {
+    db: Database,
+    _account: PhantomData<A>,
 }
 
-impl AccountsTree {
+impl<A: AccountsTreeLeave> AccountsTree<A> {
     const DB_NAME: &'static str = "accounts";
 
     pub fn new(env: Environment) -> Self {
         let db = env.open_database(Self::DB_NAME.to_string());
-        let tree = AccountsTree { db };
+        let tree = AccountsTree { db, _account: PhantomData };
 
         let mut txn = WriteTransaction::new(&env);
         if tree.get_root(&txn).is_none() {
             let root = AddressNibbles::empty();
-            txn.put_reserve(&tree.db, &root, &AccountsTreeNode::new_branch(root.clone(), NO_CHILDREN));
+            txn.put_reserve(&tree.db, &root, &AccountsTreeNode::<A>::new_branch(root.clone(), NO_CHILDREN));
         }
         txn.commit();
         tree
     }
 
-    pub fn put(&self, txn: &mut WriteTransaction, address: &Address, account: Account) {
+    pub fn put(&self, txn: &mut WriteTransaction, address: &Address, account: A) {
         self.put_batch(txn, address, account);
         self.finalize_batch(txn);
     }
 
-    pub fn put_batch(&self, txn: &mut WriteTransaction, address: &Address, account: Account) {
+    pub fn put_batch(&self, txn: &mut WriteTransaction, address: &Address, account: A) {
         if account.is_initial() && self.get(txn, address).is_none() {
             return;
         }
@@ -45,7 +47,7 @@ impl AccountsTree {
         self.insert_batch(txn,AddressNibbles::empty(), prefix, account, Vec::new());
     }
 
-    fn insert_batch(&self, txn: &mut WriteTransaction, node_prefix: AddressNibbles, prefix: AddressNibbles, account: Account, mut root_path: Vec<AccountsTreeNode>) {
+    fn insert_batch(&self, txn: &mut WriteTransaction, node_prefix: AddressNibbles, prefix: AddressNibbles, account: A, mut root_path: Vec<AccountsTreeNode<A>>) {
         // If the node prefix does not fully match the new address, split the node.
         if !node_prefix.is_prefix_of(&prefix) {
             // Insert the new account node.
@@ -53,7 +55,7 @@ impl AccountsTree {
             txn.put_reserve(&self.db, new_child.prefix(), &new_child);
 
             // Insert the new parent node.
-            let new_parent = AccountsTreeNode::new_branch(node_prefix.common_prefix(&prefix), NO_CHILDREN)
+            let new_parent = AccountsTreeNode::<A>::new_branch(node_prefix.common_prefix(&prefix), NO_CHILDREN)
                 .with_child(&node_prefix, Blake2bHash::default()).unwrap()
                 .with_child(new_child.prefix(), Blake2bHash::default()).unwrap();
             txn.put_reserve(&self.db, new_parent.prefix(), &new_parent);
@@ -75,7 +77,7 @@ impl AccountsTree {
             }
 
             // Update the account.
-            let node: AccountsTreeNode = txn.get(&self.db, &node_prefix).unwrap();
+            let node: AccountsTreeNode<A> = txn.get(&self.db, &node_prefix).unwrap();
             let node = node.with_account(account).unwrap();
             txn.put_reserve(&self.db, node.prefix(), &node);
 
@@ -84,14 +86,14 @@ impl AccountsTree {
 
         // If the node prefix matches and there are address bytes left, descend into
         // the matching child node if one exists.
-        let node: AccountsTreeNode = txn.get(&self.db, &node_prefix).unwrap();
+        let node: AccountsTreeNode<A> = txn.get(&self.db, &node_prefix).unwrap();
         if let Some(child_prefix) = node.get_child_prefix(&prefix) {
             root_path.push(node);
             return self.insert_batch(txn, child_prefix, prefix, account, root_path);
         }
 
         // If no matching child exists, add a new child account node to the current node.
-        let child = AccountsTreeNode::new_terminal(prefix, account);
+        let child = AccountsTreeNode::<A>::new_terminal(prefix, account);
         txn.put_reserve(&self.db, child.prefix(), &child);
         let node = node.with_child(child.prefix(), Blake2bHash::default()).unwrap();
         txn.put_reserve(&self.db, node.prefix(), &node);
@@ -99,7 +101,7 @@ impl AccountsTree {
         self.update_keys_batch(txn, node_prefix, root_path)
     }
 
-    fn prune_batch(&self, txn: &mut WriteTransaction, prefix: AddressNibbles, mut root_path: Vec<AccountsTreeNode>) {
+    fn prune_batch(&self, txn: &mut WriteTransaction, prefix: AddressNibbles, mut root_path: Vec<AccountsTreeNode<A>>) {
         // Walk along the rootPath towards the root node starting with the
         // immediate predecessor of the node specified by 'prefix'.
         let mut tmp_prefix = prefix;
@@ -127,7 +129,7 @@ impl AccountsTree {
         }
     }
 
-    fn update_keys_batch(&self, txn: &mut WriteTransaction, prefix: AddressNibbles, mut root_path: Vec<AccountsTreeNode>) {
+    fn update_keys_batch(&self, txn: &mut WriteTransaction, prefix: AddressNibbles, mut root_path: Vec<AccountsTreeNode<A>>) {
         // Walk along the rootPath towards the root node starting with the
         // immediate predecessor of the node specified by 'prefix'.
         let mut tmp_prefix = &prefix;
@@ -144,7 +146,7 @@ impl AccountsTree {
     }
 
     fn update_hashes(&self, txn: &mut WriteTransaction, node_key: &AddressNibbles) -> Blake2bHash {
-        let mut node: AccountsTreeNode = txn.get(&self.db, node_key).unwrap();
+        let mut node: AccountsTreeNode<A> = txn.get(&self.db, node_key).unwrap();
         if node.is_terminal() {
             return node.hash();
         }
@@ -160,7 +162,7 @@ impl AccountsTree {
         node.hash()
     }
 
-    pub fn get_accounts_proof(&self, txn: &Transaction, addresses: &[Address]) -> AccountsProof {
+    pub fn get_accounts_proof(&self, txn: &Transaction, addresses: &[Address]) -> AccountsProof<A> {
         let mut prefixes = Vec::new();
         for address in addresses {
             prefixes.push(AddressNibbles::from(address));
@@ -173,7 +175,7 @@ impl AccountsTree {
         AccountsProof::new(nodes)
     }
 
-    fn get_accounts_proof_rec(&self, txn: &Transaction, node: &AccountsTreeNode, prefixes: &[AddressNibbles], nodes: &mut Vec<AccountsTreeNode>) -> bool {
+    fn get_accounts_proof_rec(&self, txn: &Transaction, node: &AccountsTreeNode<A>, prefixes: &[AddressNibbles], nodes: &mut Vec<AccountsTreeNode<A>>) -> bool {
         // For each prefix, descend the tree individually.
         let mut include_node = false;
         let mut i = 0;
@@ -190,7 +192,7 @@ impl AccountsTree {
             }
 
             if let Some(child_prefix) = node.get_child_prefix(prefix) {
-                let child_node: AccountsTreeNode = txn.get(&self.db, &child_prefix).unwrap();
+                let child_node: AccountsTreeNode<A> = txn.get(&self.db, &child_prefix).unwrap();
 
                 // Group addresses with same prefix:
                 // Because of our ordering, they have to be located next to the current prefix.
@@ -226,14 +228,14 @@ impl AccountsTree {
         include_node
     }
 
-    pub fn get(&self, txn: &Transaction, address: &Address) -> Option<Account> {
+    pub fn get(&self, txn: &Transaction, address: &Address) -> Option<A> {
         if let AccountsTreeNode::TerminalNode { account, .. } = txn.get(&self.db, &AddressNibbles::from(address))? {
             return Some(account);
         }
         None
     }
 
-    pub(crate) fn get_chunk(&self, txn: &Transaction, start: &str, size: usize) -> Option<AccountsTreeChunk> {
+    pub(crate) fn get_chunk(&self, txn: &Transaction, start: &str, size: usize) -> Option<AccountsTreeChunk<A>> {
         let mut chunk = self.get_terminal_nodes(txn, &AddressNibbles::from_str(start).ok()?, size)?;
         let last_node = chunk.pop();
         let proof = if let Some(node) = last_node {
@@ -244,7 +246,7 @@ impl AccountsTree {
         Some(AccountsTreeChunk::new(chunk, proof))
     }
 
-    pub(crate) fn get_terminal_nodes(&self, txn: &Transaction, start: &AddressNibbles, size: usize) -> Option<Vec<AccountsTreeNode>> {
+    pub(crate) fn get_terminal_nodes(&self, txn: &Transaction, start: &AddressNibbles, size: usize) -> Option<Vec<AccountsTreeNode<A>>> {
         let mut vec = Vec::new();
         let mut stack = Vec::new();
         stack.push(self.get_root(txn)?);
@@ -271,7 +273,7 @@ impl AccountsTree {
         Some(vec)
     }
 
-    fn get_root(&self, txn: &Transaction) -> Option<AccountsTreeNode> {
+    fn get_root(&self, txn: &Transaction) -> Option<AccountsTreeNode<A>> {
         txn.get(&self.db, &AddressNibbles::empty())
     }
 
@@ -284,6 +286,8 @@ impl AccountsTree {
 #[cfg(test)]
 mod tests {
     use std::convert::TryFrom;
+
+    use account::Account;
     use nimiq_primitives::coin::Coin;
 
     use super::*;

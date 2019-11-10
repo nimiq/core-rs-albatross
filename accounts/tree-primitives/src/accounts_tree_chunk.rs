@@ -1,3 +1,4 @@
+use account::AccountsTreeLeave;
 use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
 
@@ -5,14 +6,14 @@ use crate::accounts_proof::AccountsProof;
 use crate::accounts_tree_node::AccountsTreeNode;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AccountsTreeChunk {
+pub struct AccountsTreeChunk<A: AccountsTreeLeave> {
     #[beserial(len_type(u16))]
-    pub nodes: Vec<AccountsTreeNode>,
-    pub proof: AccountsProof,
+    pub nodes: Vec<AccountsTreeNode<A>>,
+    pub proof: AccountsProof<A>,
 }
 
-impl AccountsTreeChunk {
-    pub fn new(nodes: Vec<AccountsTreeNode>, proof: AccountsProof) -> AccountsTreeChunk {
+impl<A: AccountsTreeLeave> AccountsTreeChunk<A> {
+    pub fn new(nodes: Vec<AccountsTreeNode<A>>, proof: AccountsProof<A>) -> AccountsTreeChunk<A> {
         AccountsTreeChunk { nodes, proof }
     }
 
@@ -40,10 +41,10 @@ impl AccountsTreeChunk {
     pub fn is_empty(&self) -> bool { false }
 
     #[inline]
-    pub fn head(&self) -> &AccountsTreeNode { self.nodes.get(0).unwrap_or_else(|| self.tail()) }
+    pub fn head(&self) -> &AccountsTreeNode<A> { self.nodes.get(0).unwrap_or_else(|| self.tail()) }
 
     #[inline]
-    pub fn terminal_nodes(&self) -> Vec<&AccountsTreeNode> {
+    pub fn terminal_nodes(&self) -> Vec<&AccountsTreeNode<A>> {
         let mut vec = Vec::with_capacity(self.len());
         for node in &self.nodes {
             vec.push(node)
@@ -53,7 +54,7 @@ impl AccountsTreeChunk {
     }
 
     #[inline]
-    pub fn tail(&self) -> &AccountsTreeNode { self.proof.nodes().get(0).unwrap() }
+    pub fn tail(&self) -> &AccountsTreeNode<A> { self.proof.nodes().get(0).unwrap() }
 
     pub fn root(&self) -> Blake2bHash { self.proof.root_hash() }
 

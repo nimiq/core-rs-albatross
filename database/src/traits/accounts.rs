@@ -2,9 +2,9 @@ use std::borrow::Cow;
 use std::io;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_account::{AccountsTreeLeave, Receipts};
 use nimiq_tree_primitives::accounts_tree_node::AccountsTreeNode;
 use nimiq_tree_primitives::address_nibbles::AddressNibbles;
-use nimiq_account::Receipts;
 
 use crate::{AsDatabaseBytes, FromDatabaseValue, IntoDatabaseValue};
 
@@ -16,7 +16,7 @@ impl AsDatabaseBytes for AddressNibbles {
     }
 }
 
-impl IntoDatabaseValue for AccountsTreeNode {
+impl<A: AccountsTreeLeave> IntoDatabaseValue for AccountsTreeNode<A> {
     fn database_byte_size(&self) -> usize {
         self.serialized_size()
     }
@@ -26,7 +26,7 @@ impl IntoDatabaseValue for AccountsTreeNode {
     }
 }
 
-impl FromDatabaseValue for AccountsTreeNode {
+impl<A: AccountsTreeLeave> FromDatabaseValue for AccountsTreeNode<A> {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
