@@ -75,6 +75,10 @@ pub enum CloseType {
 
     ManualPeerBan = 190,
 
+    EmptyValidatorInfo = 131,
+    InvalidPublicKeyInValidatorInfo = 132,
+    InvalidSignatureInValidatorInfo = 133,
+
     // Fail Close Types
 
     ClosedByRemote = 200,

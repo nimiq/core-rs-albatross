@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::hash::Hasher;
 
 use beserial::{Serialize, Deserialize};
 use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
@@ -10,7 +11,7 @@ use crate::address::peer_address::PeerAddress;
 
 
 /// Information regarding an (maybe active) validator
-#[derive(Clone, Debug, Serialize, Deserialize, SerializeContent)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, Eq)]
 pub struct ValidatorInfo {
     /// The validator's public key (BLS12-381)
     pub public_key: CompressedPublicKey,

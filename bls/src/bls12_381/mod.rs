@@ -9,7 +9,7 @@ use failure::Fail;
 
 #[cfg(feature = "beserial")]
 use beserial::{Serialize, Deserialize};
-use hash::Hash;
+use hash::{Hash, HashOutput};
 
 use super::{
     AggregatePublicKey as GenericAggregatePublicKey,
@@ -241,7 +241,7 @@ impl fmt::Display for Signature {
 
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CompressedSignature({})", self.compress().to_hex())
+        write!(f, "Signature({})", &::hex::encode(self.compress().as_ref()))
     }
 }
 

@@ -379,7 +379,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
                 }
             }
             Ok(PushResult::Known) => {
-                debug!("Known block {} from {}", hash, self.peer.peer_address());
+                trace!("Known block {} from {}", hash, self.peer.peer_address());
             }
             Err(PushError::Orphan) => {
                 self.on_orphan_block(hash);

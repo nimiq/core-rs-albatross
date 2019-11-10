@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::sync::{Arc, Weak};
 use std::fmt;
 
@@ -28,6 +28,7 @@ use utils::mutable_once::MutableOnce;
 use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
 use handel::aggregation::AggregationEvent;
 use handel::update::LevelUpdateMessage;
+use bls::bls12_381::CompressedPublicKey;
 
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
 use crate::signature_aggregation::view_change::ViewChangeAggregation;
@@ -148,13 +149,14 @@ struct ValidatorNetworkState {
     /// exactly the set of validators. Potential validators should set this flag and then broadcast
     /// a `ValidatorInfo`.
     ///
-    /// NOTE: The mapping from the `PeerId` is needed to efficiently remove agents from this set.
-    /// NOTE: This becomes obsolete once we can actively connect to validators
+    /// TODO: Move to `ValidatorPool`
+    ///
     agents: HashMap<PeerId, Arc<ValidatorAgent>>,
 
-    /// Maps (view-change-number, block-number) to the proof that is being aggregated
-    /// and a flag whether it's finalized. clear after macro block
+    /// Maps (view-change-number, block-number) to the proof that is being aggregated.
     view_changes: HashMap<ViewChange, ViewChangeAggregation>,
+
+    /// Maps (view-change-number, block-number) to completed view change proofs
     complete_view_changes: HashMap<ViewChange, ViewChangeProof>,
 
     /// If we're in pBFT phase, this is the current state of it
@@ -181,9 +183,11 @@ pub struct ValidatorNetwork {
     pub info: SignedValidatorInfo,
 
     /// The validator network state
+    /// NOTE: To avoid circular dead-locks, always acquire this before the validator pool lock.
     state: RwLock<ValidatorNetworkState>,
 
     /// Stores validator contact information and holds references to connected validators
+    /// NOTE: To avoid circular dead-locks, always acquire this after the validator pool lock.
     pub validators: Arc<RwLock<ValidatorPool>>,
 
     self_weak: MutableOnce<Weak<ValidatorNetwork>>,
@@ -191,7 +195,7 @@ pub struct ValidatorNetwork {
 }
 
 impl ValidatorNetwork {
-    const MAX_VALIDATOR_INFOS: usize = 64;
+    const LIMIT_POTENTIAL_VALIDATOR_INFOS: usize = 64;
 
     pub fn new(network: Arc<Network<Blockchain>>, blockchain: Arc<Blockchain>, info: SignedValidatorInfo) -> Arc<Self> {
         let mut pool = ValidatorPool::new(Arc::clone(&network));
@@ -228,17 +232,22 @@ impl ValidatorNetwork {
 
     fn on_peer_joined(&self, peer: &Arc<Peer>) {
         if peer.peer_address().services.is_validator() {
-            let agent = ValidatorAgent::new(Arc::clone(peer), Arc::clone(&self.blockchain));
+            let agent = ValidatorAgent::new(
+                Arc::clone(peer),
+                Arc::clone(&self.blockchain),
+                Arc::downgrade(&self.validators)
+            );
 
             // Insert into set of all agents that have the validator service flag
             self.state.write().agents.insert(agent.peer_id(), Arc::clone(&agent));
 
             // Register for messages received by agent
+            // TODO: Some of those could be directly registered with the peer channel
             agent.notifier.write().register(weak_passthru_listener(Weak::clone(&self.self_weak), |this, event| {
                 match event {
                     ValidatorAgentEvent::ValidatorInfos(infos) => {
                         this.on_validator_infos(infos);
-                    },
+                    }
                     ValidatorAgentEvent::ForkProof(fork_proof) => {
                         this.on_fork_proof(*fork_proof);
                     }
@@ -265,15 +274,7 @@ impl ValidatorNetwork {
                 }
             }));
 
-            // Send known validator infos to peer
-            let mut infos = self.state.read().agents.iter()
-                .filter_map(|(_, agent)| {
-                    agent.state.read().validator_info.clone()
-                })
-                .take(Self::MAX_VALIDATOR_INFOS) // limit the number of validator infos
-                .collect::<Vec<SignedValidatorInfo>>();
-            infos.push(self.info.clone()); // add our infos
-            peer.channel.send_or_close(Message::ValidatorInfo(infos));
+            self.send_validator_infos(vec![&agent]);
         }
     }
 
@@ -286,22 +287,19 @@ impl ValidatorNetwork {
         }
     }
 
-    /// NOTE: assumes that the signature of the validator info was checked by the `ValidatorAgent`
     fn on_validator_infos(&self, infos: Vec<SignedValidatorInfo>) {
-        let mut relay = Vec::new();
+        // The validator infos have been verified by the agent and we only need to set the agent
+
+        let state = self.state.read();
+        let mut validators = self.validators.write();
 
         for info in infos {
-            trace!("Validator info: {:?}", info.message);
-            let agent = self.state.read().agents.get(&info.message.peer_address.peer_id).cloned();
-            let is_new = self.validators.write().on_validator_info(&info, agent);
-            if is_new {
-                relay.push(info);
+            if let Some(agent) = state.agents.get(&info.message.peer_address.peer_id) {
+                validators.connect_to_agent(&info.message.public_key, agent);
             }
-        }
-
-        // relay
-        if !relay.is_empty() {
-            self.broadcast_potential(Message::ValidatorInfo(relay));
+            else {
+                validators.connect_to_peer(&info.message);
+            }
         }
     }
 
@@ -330,6 +328,12 @@ impl ValidatorNetwork {
         // Create mapping from validator ID to agent/peer
         // reset validator pool for new epoch
         self.validators.write().reset_epoch(&self.blockchain.current_validators());
+
+        // Send validator infos
+        let agents = state.agents.iter().map(|(_, agent)| agent)
+            .collect::<Vec<&Arc<ValidatorAgent>>>();
+
+        self.send_validator_infos(agents);
     }
 
     /// Called when a new block is added
@@ -605,7 +609,7 @@ impl ValidatorNetwork {
             drop(state);
             aggregation.push_prepare_level_update(level_update);
             let (prepare_votes, commit_votes) = aggregation.votes();
-            debug!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
+            trace!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
         }
     }
 
@@ -621,7 +625,7 @@ impl ValidatorNetwork {
             drop(state);
             aggregation.push_commit_level_update(level_update);
             let (prepare_votes, commit_votes) = aggregation.votes();
-            debug!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
+            trace!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
         }
     }
 
@@ -705,6 +709,44 @@ impl ValidatorNetwork {
         }
         else {
             Err(ValidatorNetworkError::UnknownProposal)
+        }
+    }
+
+    fn send_validator_infos(&self, agents: Vec<&Arc<ValidatorAgent>>) {
+        let validators = self.validators.read();
+
+        // We first collect into a BTreeMap to avoid duplicates
+        let mut infos: BTreeMap<&CompressedPublicKey, &SignedValidatorInfo> = BTreeMap::new();
+
+        // For now we'll send all infos we have
+        // FIXME We should count the limit in the agent against the infos that we really send out.
+        let mut limit_potential = Self::LIMIT_POTENTIAL_VALIDATOR_INFOS;
+        for info in validators.iter_validator_infos() {
+            // If we reached the limit, abort loop
+            if limit_potential == 0 {
+                break;
+            }
+
+            // Only count non-active validators towards limit
+            if !validators.is_active(&info.message.public_key) {
+                limit_potential -= 1;
+            }
+
+            // Insert validator info into set that we're going to send
+            infos.insert(&info.message.public_key, info);
+        }
+
+        // Include our own validator info
+        infos.insert(&self.info.message.public_key, &self.info);
+
+        // Convert BTreeMap to Vec
+        let infos = infos.into_iter()
+            .map(|(_, info)| info.clone())
+            .collect::<Vec<SignedValidatorInfo>>();
+
+        // Send to all connected agents
+        for agent in &agents {
+            agent.send_validator_infos(&infos);
         }
     }
 

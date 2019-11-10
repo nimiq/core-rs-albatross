@@ -3,14 +3,24 @@ use std::sync::Arc;
 
 use bls::bls12_381::CompressedPublicKey;
 use bls::bls12_381::lazy::LazyPublicKey;
-use network_primitives::validator_info::SignedValidatorInfo;
+use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
 use primitives::validators::Validators;
 use blockchain_albatross::Blockchain;
 use network::Network;
+use hash::{Hash, Blake2bHash};
 
 use crate::validator_agent::ValidatorAgent;
 
 
+pub enum PushResult {
+    OldInfo,
+    InvalidSignature,
+    InvalidPublicKey,
+    Added,
+}
+
+
+// TODO: Arc CompressedPublicKey?
 pub struct ValidatorPool {
     /// Reference to the `ConnectionPool` in order to establish connections
     network: Arc<Network<Blockchain>>,
@@ -74,11 +84,7 @@ impl ValidatorPool {
             }
             else if let Some(info) = self.infos.get(pubkey) {
                 // otherwise we'll try to connect to them, if we have a validator info
-                let peer_address = Arc::new(info.message.peer_address.clone());
-                debug!("Trying to connect to: {}", peer_address);
-                if !self.network.connections.connect_outbound(Arc::clone(&peer_address)) {
-                    warn!("Failed to connect to {}", peer_address);
-                }
+                self.connect_to_peer(&info.message);
             }
             else {
                 warn!("No validator info for: {} ({} votes)", validator_id, validator.0);
@@ -87,35 +93,72 @@ impl ValidatorPool {
     }
 
     /// Called when we receive a validator info. If we are connected to the validator, the agent is
-    /// passed along aswell.
-    /// This returns true if the info is new (and thus the `ValidatorNetwork` should relay it to other validators.
-    pub fn on_validator_info(&mut self, info: &SignedValidatorInfo, agent_opt: Option<Arc<ValidatorAgent>>) -> bool {
+    /// passed along as well.
+    pub fn push_validator_info(&mut self, info: &SignedValidatorInfo) -> PushResult {
         let pubkey = &info.message.public_key;
-
-        // if we were given the agent, we can update `potential_validators` and `active_validators`
-        if let Some(agent) = agent_opt {
-            // add to potential validators
-            self.potential_validators.insert(pubkey.clone(), Arc::clone(&agent));
-
-            // check if validator is active, and if so, add to active validators
-            if let Some(&validator_id) = self.validator_id_by_pubkey.get(pubkey) {
-                self.active_validator_agents.insert(validator_id, Arc::clone(&agent));
-            }
-        }
 
         // check if we have a validator info for the same public key
         if let Some(known_info) = self.infos.get(pubkey) {
             // if the validator info is older that the one we have, abort
             if info.message.valid_from <= known_info.message.valid_from {
                 trace!("Received old validator info (newest valid_from={}): {:?}", known_info.message.valid_from, info);
-                return false;
+                return PushResult::OldInfo;
             }
+        }
+
+        // uncompress public key for signature verification
+        // TODO: We might want to store this, or use LazyPublicKey
+        let pub_key_uncompressed = match pubkey.uncompress() {
+            Ok(pk) => pk,
+            Err(_) => {
+                warn!("Invalid public key in validator info: {:?}", info.message);
+                return PushResult::InvalidPublicKey
+            },
+        };
+
+        // verify the signature of the validator info
+        if !info.verify(&pub_key_uncompressed) {
+            warn!("Invalid signature for validator info: {:?}", info.message);
+            return PushResult::InvalidSignature;
         }
 
         // remember validator info
         self.infos.insert(pubkey.clone(), info.clone());
 
-        true
+        debug!("Added validator info for: {}: {}", pubkey.hash::<Blake2bHash>(), info.message.peer_address);
+
+        PushResult::Added
+    }
+
+    pub fn connect_to_agent(&mut self, pubkey: &CompressedPublicKey, agent: &Arc<ValidatorAgent>) {
+        if self.blacklist.contains(pubkey) {
+            return;
+        }
+
+        debug!("Connecting agent to validator: {}: {}", pubkey.hash::<Blake2bHash>(), agent.peer.peer_address());
+
+        // add to potential validators
+        if self.potential_validators
+            .insert(pubkey.clone(), Arc::clone(agent))
+            .is_none() {
+            // The agent for this validator public key was previously unknown, so we need to check
+            // if they're active and insert them into our active validator map.
+            if let Some(&validator_id) = self.validator_id_by_pubkey.get(pubkey) {
+                self.active_validator_agents.insert(validator_id, Arc::clone(&agent));
+            }
+        }
+    }
+
+    pub fn connect_to_peer(&self, info: &ValidatorInfo) {
+        if self.blacklist.contains(&info.public_key) {
+            return;
+        }
+
+        let peer_address = Arc::new(info.peer_address.clone());
+        debug!("Trying to connect to: {}", peer_address);
+        if !self.network.connections.connect_outbound(Arc::clone(&peer_address)) {
+            warn!("Failed to connect to {}", peer_address);
+        }
     }
 
     /// Called when a connected validator peer disconnects
@@ -163,5 +206,13 @@ impl ValidatorPool {
 
     pub fn active_validator_count(&self) -> usize {
         self.active_validators.num_groups()
+    }
+
+    pub fn iter_validator_infos(&self) -> impl Iterator<Item=&SignedValidatorInfo> {
+        self.infos.iter().map(|(_, info)| info)
+    }
+
+    pub fn is_active(&self, pubkey: &CompressedPublicKey) -> bool {
+        self.validator_id_by_pubkey.contains_key(&pubkey)
     }
 }

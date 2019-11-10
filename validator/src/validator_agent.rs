@@ -1,12 +1,15 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::fmt;
 use std::time::Duration;
+use std::collections::BTreeSet;
+
+use parking_lot::RwLock;
 
 use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
 use network_primitives::address::PeerId;
 use network::Peer;
+use network::connection::close_type::CloseType;
 use utils::observer::{PassThroughNotifier, weak_passthru_listener};
-use parking_lot::RwLock;
 use bls::bls12_381::CompressedPublicKey;
 use block_albatross::{SignedPbftProposal, ForkProof, ViewChange, PbftPrepareMessage,
                       PbftCommitMessage};
@@ -15,7 +18,9 @@ use blockchain_albatross::Blockchain;
 use hash::{Hash, Blake2bHash};
 use handel::update::LevelUpdateMessage;
 use utils::rate_limit::RateLimit;
-use messages::ViewChangeProofMessage;
+use messages::{ViewChangeProofMessage, Message};
+
+use crate::pool::{ValidatorPool, PushResult};
 
 
 pub enum ValidatorAgentEvent {
@@ -31,24 +36,28 @@ pub enum ValidatorAgentEvent {
 pub struct ValidatorAgentState {
     pub(crate) validator_info: Option<SignedValidatorInfo>,
     pbft_proposal_limit: RateLimit,
+    known_validators: BTreeSet<CompressedPublicKey>,
 }
 
 pub struct ValidatorAgent {
     pub(crate) peer: Arc<Peer>,
     pub(crate) blockchain: Arc<Blockchain>,
     pub(crate) state: RwLock<ValidatorAgentState>,
+    validators: Weak<RwLock<ValidatorPool>>,
     pub notifier: RwLock<PassThroughNotifier<'static, ValidatorAgentEvent>>,
 }
 
 impl ValidatorAgent {
-    pub fn new(peer: Arc<Peer>, blockchain: Arc<Blockchain>) -> Arc<Self> {
+    pub fn new(peer: Arc<Peer>, blockchain: Arc<Blockchain>, validators: Weak<RwLock<ValidatorPool>>) -> Arc<Self> {
         let agent = Arc::new(Self {
             peer,
             blockchain,
             state: RwLock::new(ValidatorAgentState {
                 validator_info: None,
                 pbft_proposal_limit: RateLimit::new(5, Duration::from_secs(10)),
+                known_validators: BTreeSet::new(),
             }),
+            validators,
             notifier: RwLock::new(PassThroughNotifier::new()),
         });
 
@@ -87,26 +96,56 @@ impl ValidatorAgent {
     }
 
     /// When a list of validator infos is received, verify the signatures and notify
-    fn on_validator_infos(&self, signed_infos: Vec<SignedValidatorInfo>) {
-        debug!("[VALIDATOR-INFO] contains {} validator infos", signed_infos.len());
+    fn on_validator_infos(&self, infos: Vec<SignedValidatorInfo>) {
+        if infos.is_empty() {
+            // peer send empty validator info set
+            warn!("Received empty validator info message from {}", self.peer.peer_address());
+            self.peer.channel.close(CloseType::EmptyValidatorInfo);
+            return;
+        }
 
-        let mut valid_infos = Vec::new();
-        for signed_info in signed_infos {
-            // TODO: first check if we already know this validator. If so, we don't need to check
-            // the signature of this info.
-            if let Ok(public_key) = signed_info.message.public_key.uncompress() {
-                let signature_okay = signed_info.verify(&public_key);
-                trace!("[VALIDATOR-INFO] {:#?}, signature_okay={}", signed_info.message, signature_okay);
-                if signature_okay {
-                    valid_infos.push(signed_info);
-                }
-            }
-            else {
-                error!("Uncompressing public key failed: {}", signed_info.message.peer_address);
+        let num_infos = infos.len();
+        let mut close_type: Option<CloseType> = None;
+        let mut checked_infos= Vec::with_capacity(infos.len());
+
+        let validators = match Weak::upgrade(&self.validators) {
+            Some(validators) => validators,
+            None => return,
+        };
+        let mut validators = validators.write();
+
+        // TODO: Verify in parallel on a CpuPool
+        for info in infos {
+            trace!("Validator info: {:?}", info.message);
+
+            match validators.push_validator_info(&info) {
+                // Both will ban the peer. The peer should have checked that before relaying. We
+                // ban because checking validator infos is expensive.
+                // Should we abort here? The remaining validator infos could still be valid
+                PushResult::InvalidPublicKey => {
+                    warn!("Invalid public key in validator info from {}", self.peer.peer_address());
+                    close_type = Some(CloseType::InvalidPublicKeyInValidatorInfo)
+                },
+                PushResult::InvalidSignature => {
+                    warn!("Invalid signature in validator info from {}", self.peer.peer_address());
+                    close_type = Some(CloseType::InvalidSignatureInValidatorInfo)
+                },
+                _ => checked_infos.push(info),
             }
         }
 
-        self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfos(valid_infos));
+        drop(validators);
+
+        if let Some(ban_type) = close_type {
+            self.peer.channel.close(ban_type);
+        }
+
+        debug!("Received {} unknown (total {}) validator infos", checked_infos.len(), num_infos);
+
+        // Only notify validator, if there are any valid validator infos
+        if !checked_infos.is_empty() {
+            self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfos(checked_infos));
+        }
     }
 
     /// When a fork proof message is received
@@ -234,6 +273,31 @@ impl ValidatorAgent {
 
     pub fn peer_id(&self) -> PeerId {
         self.peer.peer_address().peer_id.clone()
+    }
+
+    pub fn send_validator_infos(&self, infos: &Vec<SignedValidatorInfo>) {
+        let mut state = self.state.write();
+
+        let num_infos = infos.len(); // DEBUGGING
+
+        let unknown_infos = infos.iter()
+            .filter(|info| !state.known_validators.contains(&info.message.public_key))
+            .map(|info| info.clone())
+            .collect::<Vec<SignedValidatorInfo>>();
+
+        // early return, if there are no unknown
+        if unknown_infos.is_empty() {
+            return;
+        }
+
+        // add unknown validators to known set
+        for info in &unknown_infos {
+            state.known_validators.insert(info.message.public_key.clone());
+        }
+
+        // send unknown infos
+        debug!("Sending {} unknown validator infos (out of {}) to {}", unknown_infos.len(), num_infos, self.peer.peer_address());
+        self.peer.channel.send_or_close(Message::ValidatorInfo(unknown_infos));
     }
 }
 

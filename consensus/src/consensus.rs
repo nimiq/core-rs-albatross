@@ -217,20 +217,21 @@ impl<P: ConsensusProtocol> Consensus<P> {
             },
         }
 
-        // Don't relay blocks if we are not synced yet.
-        if !state.established {
-            let height = self.blockchain.head_height();
-            if height % 100 == 0 {
-                info!("Now at block #{}", height);
-            }
-            return;
-        } else {
-            info!("Now at block #{}", self.blockchain.head_height());
+        // print block height
+        let height = self.blockchain.head_height();
+        if height % 100 == 0 {
+            info!("Now at block #{}", height);
+        }
+        else {
+            debug!("Now at block #{}", height);
         }
 
-        for agent in state.agents.values() {
-            for &block in blocks.iter() {
-                agent.relay_block(block);
+        // Only relay blocks if we are synced up.
+        if state.established {
+            for agent in state.agents.values() {
+                for &block in blocks.iter() {
+                    agent.relay_block(block);
+                }
             }
         }
     }
