@@ -157,6 +157,10 @@ impl ValidatorPool {
             .map(|g| (&g.1, g.0 as usize))
     }
 
+    pub fn get_validator_info(&self, pubkey: &CompressedPublicKey) -> Option<&SignedValidatorInfo> {
+        self.infos.get(pubkey)
+    }
+
     pub fn active_validator_count(&self) -> usize {
         self.active_validators.num_groups()
     }
