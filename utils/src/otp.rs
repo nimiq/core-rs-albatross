@@ -204,9 +204,8 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
     }
 
     fn create(secret: &T, password: &[u8], iterations: u32, salt_length: usize) -> Result<Self, Argon2Error> {
-        let mut csprng: OsRng = OsRng::new().unwrap();
         let mut salt = vec![0; salt_length];
-        csprng.fill_bytes(salt.as_mut_slice());
+        OsRng.fill_bytes(salt.as_mut_slice());
         Self::lock(&secret, password, iterations, salt)
     }
 

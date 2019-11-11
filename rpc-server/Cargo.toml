@@ -18,10 +18,10 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 hyper = "0.12"
-json = "0.11"
+json = "0.12"
 futures = "0.1"
 log = "0.4"
-hex = "0.3"
+hex = "0.4"
 failure = "0.1"
 parking_lot = "0.9"
 base64 = "0.10"

@@ -16,7 +16,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 failure = "0.1"
-hex = "0.3"
+hex = "0.4"
 log = "0.4"
 parking_lot = "0.9"
 beserial = "0.1"
@@ -39,7 +39,7 @@ nimiq-utils = { version = "0.1", features = ["observer", "unique-ptr", "iterator
 
 [dev-dependencies]
 atomic = "0.4"
-rand = "0.6"
+rand = "0.7"
 nimiq-block-production-albatross = "0.1"
 
 [features]

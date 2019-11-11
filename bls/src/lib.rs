@@ -10,7 +10,6 @@ use group::{CurveAffine, CurveProjective};
 use hashbrown::HashSet;
 use pairing::Engine;
 use rand::{Rng, SeedableRng};
-use rand04_compat::RngExt;
 use rand_chacha::ChaChaRng;
 
 use hash::{Hash, Blake2bHash};
@@ -24,7 +23,7 @@ pub type SigHash = Blake2bHash;
 
 /// Map hash to point in G1
 pub(crate) fn hash_to_g1<E: Engine>(h: SigHash) -> E::G1 {
-    ChaChaRng::from_seed(h.into()).gen04()
+    E::G1::random(&mut ChaChaRng::from_seed(h.into()))
 }
 
 #[derive(Clone, Copy)]
@@ -54,7 +53,7 @@ impl<E: Engine> PartialEq for SecretKey<E> {
 impl<E: Engine> SecretKey<E> {
     pub fn generate<R: Rng>(csprng: &mut R) -> Self {
         SecretKey {
-            x: csprng.gen04(),
+            x: E::Fr::random(csprng),
         }
     }
 

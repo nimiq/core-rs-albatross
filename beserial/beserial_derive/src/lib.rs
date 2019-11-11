@@ -2,10 +2,10 @@
 
 extern crate proc_macro;
 
-use proc_macro2::{TokenStream, Span};
-use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Ident, Index, Meta};
+use proc_macro2::{Span, TokenStream};
+use syn::{Data, DeriveInput, Ident, Index, Meta, parse_macro_input, Path};
 
+use quote::quote;
 
 enum FieldAttribute {
     Uvar,
@@ -13,33 +13,42 @@ enum FieldAttribute {
     LenType(syn::Ident)
 }
 
+#[inline]
+fn cmp_ident(path: &Path, ident: &str) -> bool {
+    match path.get_ident() {
+        Some(id) => {
+            id == ident
+        },
+        None => false,
+    }
+}
 
 // This will return a tuple once we have more options
 fn parse_field_attribs(field: &syn::Field) -> Option<FieldAttribute> {
     for attr in &field.attrs {
         if let Meta::List(ref meta_list) = attr.parse_meta().unwrap() {
-            if meta_list.ident == "beserial" {
+            if cmp_ident(&meta_list.path, "beserial") {
                 for nested in meta_list.nested.iter() {
                     if let syn::NestedMeta::Meta(ref item) = nested {
                         match item {
                             Meta::List(ref meta_list) => {
-                                if meta_list.ident == "len_type" {
+                                if cmp_ident(&meta_list.path, "len_type") {
                                     for nested in meta_list.nested.iter() {
                                         if let syn::NestedMeta::Meta(ref item) = nested {
-                                            if let Meta::Word(value) = item {
-                                                if value != "u8" && value != "u16" && value != "u32" {
-                                                    panic!("beserial(len_type) must be one of [u8, u16, u32], but was {}", value);
+                                            if let Meta::Path(value) = item {
+                                                if !cmp_ident(value, "u8") && !cmp_ident(value, "u16") && !cmp_ident(value, "u32") {
+                                                    panic!("beserial(len_type) must be one of [u8, u16, u32], but was {:?}", value);
                                                 }
-                                                return Some(FieldAttribute::LenType(value.clone()));
+                                                return Some(FieldAttribute::LenType(value.get_ident().cloned().unwrap()));
                                             }
                                         }
                                     }
                                 }
-                                if meta_list.ident == "skip" {
+                                if cmp_ident(&meta_list.path, "skip") {
                                     for nested in meta_list.nested.iter() {
                                         if let syn::NestedMeta::Meta(ref item) = nested {
                                             if let Meta::NameValue(meta_name_value) = item {
-                                                if meta_name_value.ident == "default" {
+                                                if cmp_ident(&meta_name_value.path, "default") {
                                                     return Some(FieldAttribute::Skip(Some(meta_name_value.lit.clone())));
                                                 }
                                             }
@@ -48,13 +57,13 @@ fn parse_field_attribs(field: &syn::Field) -> Option<FieldAttribute> {
                                     return Some(FieldAttribute::Skip(None));
                                 }
                             }
-                            Meta::Word(ref attr_ident) => {
-                                if attr_ident == "skip" {
+                            Meta::Path(ref path) => {
+                                if cmp_ident(path, "skip") {
                                     return Some(FieldAttribute::Skip(None));
-                                } else if attr_ident == "uvar" {
+                                } else if cmp_ident(path, "uvar") {
                                     return Some(FieldAttribute::Uvar);
                                 } else {
-                                    panic!("unknown flag for beserial: {}", attr_ident)
+                                    panic!("unknown flag for beserial: {:?}", path)
                                 }
                             }
                             _ => panic!("unknown attribute for beserial: {:?}", item)
@@ -72,18 +81,18 @@ fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
     let mut uvar = false;
     for attr in &ast.attrs {
         if let Meta::List(ref meta_list) = attr.parse_meta().unwrap() {
-            if meta_list.ident == "repr" {
+            if cmp_ident(&meta_list.path, "repr") {
                 enum_type = meta_list.nested.first().and_then( |n| {
-                    if let syn::NestedMeta::Meta(Meta::Word(ref meta_type)) = n.value() { Option::Some(meta_type.clone()) } else { Option::None }
+                    if let syn::NestedMeta::Meta(Meta::Path(ref meta_type)) = n { meta_type.get_ident().cloned() } else { Option::None }
                 })
-            } else if meta_list.ident == "beserial" {
+            } else if cmp_ident(&meta_list.path, "beserial") {
                 for nested in meta_list.nested.iter() {
                     if let syn::NestedMeta::Meta(ref item) = nested {
-                        if let Meta::Word(ref attr_ident) = item {
-                            if attr_ident == "uvar" {
+                        if let Meta::Path(ref attr_ident) = item {
+                            if cmp_ident(attr_ident, "uvar") {
                                 uvar = true;
                             } else {
-                                panic!("unknown flag for beserial: {}", attr_ident)
+                                panic!("unknown flag for beserial: {:?}", attr_ident)
                             }
                         }
                     }
@@ -95,7 +104,7 @@ fn parse_enum_attribs(ast: &syn::DeriveInput) -> (Option<syn::Ident>, bool) {
 }
 
 fn expr_from_value(value: u64) -> syn::Expr {
-    let lit_int = syn::LitInt::new(value, syn::IntSuffix::None, Span::call_site());
+    let lit_int = syn::LitInt::new(&value.to_string(), Span::call_site());
     let expr_lit = syn::ExprLit{ attrs: vec!(), lit: syn::Lit::Int(lit_int)};
     syn::Expr::from(expr_lit)
 }
@@ -218,7 +227,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
                     None => {
                         if let syn::Expr::Lit(ref expr_lit) = num {
                             if let syn::Lit::Int(lit_int) = &expr_lit.lit {
-                                expr_from_value(lit_int.value() + 1)
+                                expr_from_value(lit_int.base10_parse::<u64>().map(|x| x + 1).unwrap())
                             } else {
                                 panic!("non-integer discriminant");
                             }

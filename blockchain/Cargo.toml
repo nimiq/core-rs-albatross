@@ -19,7 +19,7 @@ maintenance = { status = "experimental" }
 [dependencies]
 parking_lot = "0.9"
 log = "0.4"
-hex = "0.3"
+hex = "0.4"
 failure = "0.1"
 beserial = "0.1"
 beserial_derive = "0.1"

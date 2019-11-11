@@ -6,8 +6,7 @@ use beserial::Serialize;
 use bls::bls12_381::{PublicKey, SecretKey};
 
 fn main() {
-    let mut csprng = OsRng::new().expect("OS RNG not available");
-    let secret_key = SecretKey::generate(&mut csprng);
+    let secret_key = SecretKey::generate(&mut OsRng);
     let public_key = PublicKey::from_secret(&secret_key);
 
     println!("# Public Key:");

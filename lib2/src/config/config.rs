@@ -251,9 +251,7 @@ impl StorageConfig {
         Ok(match self {
             StorageConfig::Volatile => {
                 // TODO: See [Issue #15](https://github.com/nimiq/core-rs-albatross/issues/15)
-                let mut rng = OsRng::new()
-                    .expect("Failed to get OS random number generator");
-                BlsKeyPair::generate(&mut rng)
+                BlsKeyPair::generate(&mut OsRng)
             },
             StorageConfig::Filesystem(file_storage) => {
                 let key_path = file_storage.validator_key.as_ref()
@@ -264,8 +262,7 @@ impl StorageConfig {
                 let key_store = KeyStore::new(key_path);
                 match key_store.load_key() {
                     Err(KeyStoreError::IoError(_)) => {
-                        let mut csprng = OsRng::new().unwrap();
-                        let validator_key = BlsKeyPair::generate(&mut csprng);
+                        let validator_key = BlsKeyPair::generate(&mut OsRng);
                         key_store.save_key(&validator_key)?;
                         Ok(validator_key)
                     },

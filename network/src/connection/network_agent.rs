@@ -507,8 +507,7 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
     fn check_connectivity(&mut self) {
         // Generate random nonce.
-        let mut cspring: OsRng = OsRng::new().unwrap();
-        let nonce: u32 = cspring.gen();
+        let nonce: u32 = OsRng.gen();
 
         // Send ping message to peer.
         // If sending the ping message fails, assume the connection has died.

@@ -21,8 +21,7 @@ impl PrivateKey {
     pub const SIZE: usize = 32;
 
     pub fn generate() -> Self {
-        let mut cspring: OsRng = OsRng::new().unwrap();
-        PrivateKey(ed25519_dalek::SecretKey::generate(&mut cspring))
+        PrivateKey(ed25519_dalek::SecretKey::generate(&mut OsRng))
     }
 
     #[inline]

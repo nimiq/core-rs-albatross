@@ -31,5 +31,5 @@ nimiq-bls = "0.1"
 nimiq-collections = "0.1"
 
 [dev-dependencies]
-hex = "0.3"
-rand = "0.6"
+hex = "0.4"
+rand = "0.7"

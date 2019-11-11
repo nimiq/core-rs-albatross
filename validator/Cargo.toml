@@ -32,11 +32,11 @@ nimiq-blockchain-albatross = "0.1"
 nimiq-block-production-albatross = "0.1"
 nimiq-blockchain-base = "0.1"
 nimiq-handel = "0.1"
-hex = { version = "0.3", optional = true }
+hex = { version = "0.4", optional = true }
 failure = "0.1"
 log = "0.4"
 parking_lot = "0.9"
-rand = "0.6"
+rand = "0.7"
 tokio = "0.1"
 futures = "0.1"
 

@@ -431,7 +431,7 @@ fn run() -> Result<!, Error> {
                     let key_store = KeyStore::new(key_store_file.to_str().unwrap().to_string());
                     if !key_store_file.exists() {
                         info!("Generating validator key");
-                        let key_pair = KeyPair::generate(&mut OsRng::new()?);
+                        let key_pair = KeyPair::generate(&mut OsRng);
                         if let Err(ref err) = key_store.save_key(&key_pair) {
                             warn!("Failed to save key: {}", err);
                         }

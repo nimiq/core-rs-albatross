@@ -619,8 +619,7 @@ create_typed_array!(ChallengeNonce, u8, 32);
 impl ChallengeNonce {
     pub fn generate() -> Self {
         let mut nonce = Self::default();
-        let mut cspring: OsRng = OsRng::new().unwrap();
-        cspring.fill(&mut nonce.0);
+        OsRng.fill(&mut nonce.0);
         nonce
     }
 }

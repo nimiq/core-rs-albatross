@@ -14,17 +14,16 @@ pairing = { git = "https://github.com/paberr/librustzcash" }
 group = { git = "https://github.com/paberr/librustzcash" }
 ff = { git = "https://github.com/paberr/librustzcash" }
 nimiq-hash = "0.1"
-rand = "0.6"
-rand04_compat = "0.1"
-rand_chacha = "0.1"
+rand = "0.7"
+rand_chacha = "0.2"
 hashbrown = "0.6"
 beserial = { version = "0.1", optional = true }
-hex = "0.3"
+hex = "0.4"
 parking_lot = { version = "0.9", optional = true }
 failure = "0.1"
 
 [dev-dependencies]
-rand_xorshift = "0.1"
+rand_xorshift = "0.2"
 
 [features]
 default = ["std", "beserial", "lazy"]

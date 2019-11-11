@@ -288,7 +288,7 @@ impl<B: AbstractBlockchain> Network<B> {
 
     fn refresh_addresses(connections: Arc<ConnectionPool<B>>, scorer: Arc<RwLock<PeerScorer<B>>>) {
         let connection_scores = RwLockReadGuard::map(scorer.read(), |scorer| scorer.connection_scores());
-        let mut randrng: OsRng = OsRng::new().unwrap();
+        let mut randrng = OsRng;
         if !connection_scores.is_empty() {
             let state = connections.state();
             let cutoff = cmp::min(

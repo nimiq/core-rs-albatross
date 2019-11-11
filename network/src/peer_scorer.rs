@@ -73,8 +73,7 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
             return None;
         }
         candidates.sort_by(|a, b| { a.1.cmp(&b.1) });
-        let mut randrng: OsRng = OsRng::new().unwrap();
-        let rand_ind = randrng.gen_range(0, usize::min(Self::PICK_SELECTION_SIZE, candidates.len()));
+        let rand_ind = OsRng.gen_range(0, usize::min(Self::PICK_SELECTION_SIZE, candidates.len()));
         match candidates.get(rand_ind) {
             Some((peer_address, _)) => Some(Arc::clone(peer_address)),
             None => None
@@ -87,8 +86,7 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
         let num_addresses = addresses_state.known_addresses_nr_for_protocol_mask(self.network_config.protocol_mask());
 
         let (start_index, end_index) = if num_addresses > num_candidates {
-            let mut randrng: OsRng = OsRng::new().unwrap();
-            let start = randrng.gen_range(0, num_addresses);
+            let start = OsRng.gen_range(0, num_addresses);
             (start, (start + num_candidates) % num_addresses)
         } else {
             (0, num_addresses)

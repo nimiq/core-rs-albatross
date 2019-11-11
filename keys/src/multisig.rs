@@ -98,9 +98,8 @@ impl CommitmentPair {
 
     pub fn generate() -> Result<CommitmentPair, InvalidScalarError> {
         // Create random 32 bytes.
-        let mut cspring: OsRng = OsRng::new().unwrap();
         let mut randomness: [u8; RandomSecret::SIZE] = [0u8; RandomSecret::SIZE];
-        cspring.fill(&mut randomness);
+        OsRng.fill(&mut randomness);
 
         // Decompress the 32 byte cryptographically secure random data to 64 byte.
         let mut h: sha2::Sha512 = sha2::Sha512::default();

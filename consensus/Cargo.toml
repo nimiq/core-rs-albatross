@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 parking_lot = "0.9"
-rand = "0.6"
+rand = "0.7"
 log = "0.4"
 weak-table = "0.2"
 failure = "0.1"

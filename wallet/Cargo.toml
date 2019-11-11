@@ -24,7 +24,7 @@ nimiq-transaction = "0.1"
 nimiq-database = { version = "0.1", features = ["keys"] }
 nimiq-utils = { version = "0.1", features = ["otp"]}
 failure = "0.1"
-hex = "0.3"
+hex = "0.4"
 
 [dev-dependencies]
 lazy_static = "1.3"

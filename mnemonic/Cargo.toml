@@ -17,8 +17,8 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-bit-vec = "0.5"
-hex = "0.3"
+bit-vec = "0.6"
+hex = "0.4"
 unicode-normalization = "0.1"
 nimiq-hash = "0.1"
 beserial = "0.1"

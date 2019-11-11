@@ -13,8 +13,7 @@ pub struct KeyPair {
 
 impl KeyPair {
     pub fn generate() -> Self {
-        let mut cspring: OsRng = OsRng::new().unwrap();
-        let key_pair = ed25519_dalek::Keypair::generate(&mut cspring);
+        let key_pair = ed25519_dalek::Keypair::generate(&mut OsRng);
         let priv_key = PrivateKey(key_pair.secret);
         let pub_key = PublicKey(key_pair.public);
         KeyPair { private: priv_key, public: pub_key }

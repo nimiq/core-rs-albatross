@@ -22,7 +22,7 @@ lmdb-zero = "0.4"
 fs2 = "0.4"
 parking_lot = "0.9"
 tempdir = "0.3"
-rand = "0.6"
+rand = "0.7"
 bitflags = "1.0"
 beserial = "0.1"
 nimiq-hash = { version = "0.1", optional = true }

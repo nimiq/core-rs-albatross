@@ -18,13 +18,18 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 curve25519-dalek = "1.0.2"
-ed25519-dalek = "1.0.0-pre.1"
 data-encoding = "2.1"
 sha2 = "0.8"
-rand = "0.6"
-hex = "0.3"
+rand = "0.7"
+hex = "0.4"
 failure = "0.1"
 beserial = "0.1"
 beserial_derive = "0.1"
 nimiq-hash = "0.1"
 nimiq-macros = "0.1"
+
+[dependencies.ed25519-dalek]
+# version = "1.0.0-pre.2"
+# We need to use the git repo until the next pre-release is made.
+git = "https://github.com/dalek-cryptography/ed25519-dalek"
+branch = "develop"

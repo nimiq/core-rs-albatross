@@ -32,7 +32,7 @@ nimiq-primitives = "0.1"
 log = "0.4"
 
 [dev-dependencies]
-hex = "0.3"
+hex = "0.4"
 nimiq-account = "0.1"
 nimiq-database = "0.1"
 nimiq-transaction = "0.1"

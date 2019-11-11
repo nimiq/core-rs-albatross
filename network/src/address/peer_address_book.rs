@@ -362,8 +362,7 @@ impl PeerAddressBook {
 
         // Pick a random start index if we have a lot of addresses.
         let start_index = if num_addresses > max_addresses {
-            let mut cspring: OsRng = OsRng::new().unwrap();
-            cspring.gen_range(0, num_addresses)
+            OsRng.gen_range(0, num_addresses)
         } else { 0 };
 
         // XXX inefficient linear scan
