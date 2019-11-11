@@ -1289,6 +1289,7 @@ impl Blockchain {
         if let Some(view_changes) = view_changes {
             inherents.append(&mut self.inherents_from_view_changes(view_changes, txn_option));
         }
+
         inherents
     }
 
@@ -1312,10 +1313,14 @@ impl Blockchain {
         (view_changes.first_view_number .. view_changes.last_view_number).map(|view_number| {
             let producer = self.get_block_producer_at(view_changes.block_number, view_number, txn_option)
                 .expect("Failed to create inherent from fork proof - could not get block producer");
+
+            let slash_fine = self.slash_fine_at(view_changes.block_number);
+            debug!("Slash inherent: view change: {} NIM, {}", slash_fine, producer.slot.staker_address.to_user_friendly_address());
+
             Inherent {
                 ty: InherentType::Slash,
                 target: validator_registry.clone(),
-                value: self.slash_fine_at(view_changes.block_number),
+                value: slash_fine,
                 data: producer.slot.staker_address.serialize_to_vec(),
             }
         }).collect::<Vec<Inherent>>()
