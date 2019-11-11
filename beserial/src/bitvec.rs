@@ -1,4 +1,4 @@
-use bitvec::{BitVec, Cursor};
+use bitvec::prelude::{BitVec, Cursor};
 
 use crate::{SerializeWithLength, DeserializeWithLength, Serialize, Deserialize, WriteBytesExt, ReadBytesExt, SerializingError};
 

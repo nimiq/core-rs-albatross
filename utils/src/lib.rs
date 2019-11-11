@@ -43,3 +43,5 @@ pub mod otp;
 pub mod math;
 #[cfg(feature = "key-rng")]
 pub mod key_rng;
+#[cfg(feature = "hash-rng")]
+pub mod hash_rng;

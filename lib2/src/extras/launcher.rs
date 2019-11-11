@@ -12,15 +12,15 @@
 ///
 
 #[cfg(feature = "deadlock")]
-use crate::extras::deadlock::deadlock_detection;
+use crate::extras::deadlock::initialize_deadlock_detection;
 #[cfg(feature = "logging")]
 use crate::extras::logging::initialize_logging;
 use url::Url;
 #[cfg(feature = "panic")]
-extern crate log_panic
+extern crate log_panics;
 
 
-pub fn go() -> NimiqGo {
+pub fn go() -> Launcher {
     Launcher::default()
 }
 
@@ -54,21 +54,21 @@ impl Launcher {
     #[cfg(feature = "deadlock")]
     pub fn deadlock_detection(mut self) -> Self {
         self.deadlock_detection = true;
-        deadlock_detection();
+        initialize_deadlock_detection();
         self
     }
 
     #[cfg(feature = "logging")]
     pub fn logging(mut self) -> Self {
         self.logging = true;
-        initialize_logging();
+        initialize_logging().unwrap();
         self
     }
 
     #[cfg(fature = "panic")]
     pub fn panic_reporting(mut self) -> Self {
         self.panic = PanicMode::default();
-        self.panic.logging.true;
+        self.panic.logging = true;
         initialize_panic_reporting();
     }
 }
