@@ -125,7 +125,13 @@ impl From<PublicKeyAffine> for PublicKey {
 
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "PublicKey({})", &::hex::encode(self.compress().as_ref()))
+        write!(f, "PublicKey({})", self.compress().to_hex())
+    }
+}
+
+impl fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.compress().to_hex())
     }
 }
 
@@ -227,9 +233,15 @@ impl CompressedPublicKey {
     }
 }
 
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.compress().to_hex())
+    }
+}
+
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CompressedSignature({})", &::hex::encode(self.compress().as_ref()))
+        write!(f, "CompressedSignature({})", self.compress().to_hex())
     }
 }
 
@@ -286,16 +298,32 @@ impl CompressedSignature {
             s: self.s.into_affine()?.into_projective()
         })
     }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.s.as_ref())
+    }
+}
+
+impl fmt::Display for AggregateSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(&self.0, f)
+    }
 }
 
 impl fmt::Debug for AggregateSignature {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.0.fmt(f)
+        fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Display for AggregatePublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
 impl fmt::Debug for AggregatePublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.0.fmt(f)
+        fmt::Debug::fmt(&self.0, f)
     }
 }

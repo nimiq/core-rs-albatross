@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use json::{JsonValue, Null};
 
-use block_albatross::{Block, ForkProof};
+use block_albatross::{Block, ForkProof, signed};
 use blockchain_albatross::Blockchain;
 use blockchain_albatross::reward_registry::SlashedSlots;
 use hash::{Blake2bHash, Hash};
@@ -281,25 +281,56 @@ impl BlockchainAlbatrossHandler {
 
     // Helper functions
 
+    fn proof_to_object<M: signed::Message>(proof: &signed::AggregateProof<M>) -> JsonValue {
+        object!{
+            "signature" => format!("{}", proof.signature),
+            "signers" => proof.signers.iter().collect::<Vec<usize>>(),
+        }
+    }
+
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
         let hash = block.hash().to_hex();
         let height = self.blockchain.height();
 
         match block {
-            Block::Macro(ref block) => object! {
-                "type" => "macro",
-                "hash" => hash.clone(),
-                "blockNumber" => block.header.block_number,
-                "viewNumber" => block.header.view_number,
-                "parentMacroHash" => block.header.parent_macro_hash.to_hex(),
-                "parentHash" => block.header.parent_hash.to_hex(),
-                "seed" => hex::encode(&block.header.seed),
-                "stateRoot" => block.header.state_root.to_hex(),
-                "extrinsicsRoot" => block.header.extrinsics_root.to_hex(),
-                "timestamp" => block.header.timestamp / 1000,
-                "timestampMillis" => block.header.timestamp,
-                "slots" => block.clone().try_into().as_ref().map(Self::slots_to_obj).unwrap_or(Null),
-                "slashFine" => block.extrinsics.as_ref().map(|body| JsonValue::from(u64::from(body.slash_fine))).unwrap_or(Null),
+            Block::Macro(ref block) => {
+                let justification = block.justification.as_ref()
+                    .map(|pbft_proof| {
+                        // TODO: A getter for this in `Blockchain` would be nice.
+                        let validators = if policy::epoch_at(block.header.block_number) == policy::epoch_at(height) {
+                            Some(self.blockchain.current_validators())
+                        }
+                        else if policy::epoch_at(block.header.block_number) == policy::epoch_at(height) - 1 {
+                            Some(self.blockchain.last_validators())
+                        }
+                        else { None };
+
+                        object!{
+                            "votes" => validators
+                                .map(|validators| JsonValue::from(pbft_proof.votes(&validators)))
+                                .unwrap_or(JsonValue::Null),
+                            "prepare" => Self::proof_to_object(&pbft_proof.prepare),
+                            "commit" => Self::proof_to_object(&pbft_proof.commit),
+                        }
+                    })
+                    .unwrap_or(JsonValue::Null);
+
+                object! {
+                    "type" => "macro",
+                    "hash" => hash.clone(),
+                    "blockNumber" => block.header.block_number,
+                    "viewNumber" => block.header.view_number,
+                    "parentMacroHash" => block.header.parent_macro_hash.to_hex(),
+                    "parentHash" => block.header.parent_hash.to_hex(),
+                    "seed" => hex::encode(&block.header.seed),
+                    "stateRoot" => block.header.state_root.to_hex(),
+                    "extrinsicsRoot" => block.header.extrinsics_root.to_hex(),
+                    "timestamp" => block.header.timestamp / 1000,
+                    "timestampMillis" => block.header.timestamp,
+                    "slots" => block.clone().try_into().as_ref().map(Self::slots_to_obj).unwrap_or(Null),
+                    "slashFine" => block.extrinsics.as_ref().map(|body| JsonValue::from(u64::from(body.slash_fine))).unwrap_or(Null),
+                    "justification" => justification,
+                }
             },
             Block::Micro(ref block) => {
                 let producer = self.blockchain.get_block_producer_at(block.header.block_number, block.header.view_number, None)
