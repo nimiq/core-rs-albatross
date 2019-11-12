@@ -1,16 +1,19 @@
-use rand::{rngs::OsRng, Rng};
-use sha2::{self, Digest};
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
+use std::borrow::Borrow;
+use std::error;
+use std::fmt;
+use std::iter::Sum;
+use std::ops::Add;
+
 use curve25519_dalek::constants;
+use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
+use curve25519_dalek::scalar::Scalar;
 use curve25519_dalek::traits::Identity;
 use ed25519_dalek::ExpandedSecretKey;
-use std::ops::Add;
-use std::fmt;
-use std::error;
+use sha2::{self, Digest};
+
+use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
+
 use crate::{KeyPair, PublicKey, Signature};
-use std::iter::Sum;
-use std::borrow::Borrow;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct RandomSecret(Scalar);
@@ -96,10 +99,10 @@ impl CommitmentPair {
         CommitmentPair { random_secret: cloned_secret, commitment: cloned_commitment }
     }
 
-    pub fn generate() -> Result<CommitmentPair, InvalidScalarError> {
+    fn generate_internal<R: Rng + CryptoRng>(rng: &mut R) -> Result<CommitmentPair, InvalidScalarError> {
         // Create random 32 bytes.
         let mut randomness: [u8; RandomSecret::SIZE] = [0u8; RandomSecret::SIZE];
-        OsRng.fill(&mut randomness);
+        rng.fill(&mut randomness);
 
         // Decompress the 32 byte cryptographically secure random data to 64 byte.
         let mut h: sha2::Sha512 = sha2::Sha512::default();
@@ -122,6 +125,12 @@ impl CommitmentPair {
     pub fn random_secret(&self) -> &RandomSecret { &self.random_secret }
     #[inline]
     pub fn commitment(&self) -> &Commitment { &self.commitment }
+}
+
+impl SecureGenerate for CommitmentPair {
+    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+        CommitmentPair::generate_internal(rng).expect("Failed to generate CommitmentPair")
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]

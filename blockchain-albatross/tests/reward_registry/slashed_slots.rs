@@ -1,9 +1,10 @@
 use nimiq_blockchain_albatross::reward_registry::SlashedSlots;
 use nimiq_bls::bls12_381::KeyPair;
+use nimiq_bls::SecureGenerate;
 use nimiq_collections::bitset::BitSet;
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::validators::{Slots, Slot};
+use nimiq_primitives::validators::{Slot, Slots};
 
 #[test]
 fn it_can_iterate() {

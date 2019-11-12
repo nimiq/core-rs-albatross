@@ -1,10 +1,9 @@
 extern crate nimiq_keys as keys;
 
-use keys::{Address, PublicKey, PrivateKey};
-
+use keys::{Address, PrivateKey, PublicKey, SecureGenerate};
 
 fn main() {
-    let private_key = PrivateKey::generate();
+    let private_key = PrivateKey::generate_default_csprng();
     let public_key = PublicKey::from(&private_key);
     let address = Address::from(&public_key);
 

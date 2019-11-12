@@ -7,10 +7,10 @@ use std::str::FromStr;
 use ed25519_dalek;
 use hex;
 use hex::FromHex;
-use rand::rngs::OsRng;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
+use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
 
 use crate::PublicKey;
 
@@ -20,10 +20,6 @@ pub struct PrivateKey(pub(in super) ed25519_dalek::SecretKey);
 impl PrivateKey {
     pub const SIZE: usize = 32;
 
-    pub fn generate() -> Self {
-        PrivateKey(ed25519_dalek::SecretKey::generate(&mut OsRng))
-    }
-
     #[inline]
     pub fn as_bytes(&self) -> &[u8; PrivateKey::SIZE] { self.0.as_bytes() }
 
@@ -32,6 +28,12 @@ impl PrivateKey {
 
     #[inline]
     pub fn to_hex(&self) -> String { hex::encode(self.as_bytes()) }
+}
+
+impl SecureGenerate for PrivateKey {
+    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+        PrivateKey(ed25519_dalek::SecretKey::generate(rng))
+    }
 }
 
 impl<'a> From<&'a [u8; PrivateKey::SIZE]> for PrivateKey {

@@ -1,18 +1,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate nimiq_hash as hash;
-extern crate hex;
 #[macro_use]
 extern crate failure;
+extern crate hex;
+extern crate nimiq_hash as hash;
+extern crate nimiq_utils as utils;
 
 use ff::Field;
 use group::{CurveAffine, CurveProjective};
 use hashbrown::HashSet;
 use pairing::Engine;
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 
-use hash::{Hash, Blake2bHash};
+use hash::{Blake2bHash, Hash};
+use utils::key_rng::{CryptoRng, Rng};
+pub use utils::key_rng::{SecureGenerate, SecureRng};
 
 pub mod bls12_381;
 #[cfg(feature = "beserial")]
@@ -51,9 +54,10 @@ impl<E: Engine> PartialEq for SecretKey<E> {
 }
 
 impl<E: Engine> SecretKey<E> {
-    pub fn generate<R: Rng>(csprng: &mut R) -> Self {
+    #[cfg(test)]
+    fn generate_predictable<R: Rng>(rng: &mut R) -> Self {
         SecretKey {
-            x: E::Fr::random(csprng),
+            x: E::Fr::random(rng),
         }
     }
 
@@ -67,6 +71,14 @@ impl<E: Engine> SecretKey<E> {
 
     fn sign_g1<H: Into<E::G1Affine>>(&self, h: H) -> Signature<E> {
         Signature { s: h.into().mul(self.x) }
+    }
+}
+
+impl<E: Engine> SecureGenerate for SecretKey<E> {
+    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+        SecretKey {
+            x: E::Fr::random(rng),
+        }
     }
 }
 
@@ -112,8 +124,9 @@ pub struct KeyPair<E: Engine> {
 }
 
 impl<E: Engine> KeyPair<E> {
-    pub fn generate<R: Rng>(csprng: &mut R) -> Self {
-        let secret = SecretKey::generate(csprng);
+    #[cfg(test)]
+    fn generate_predictable<R: Rng>(rng: &mut R) -> Self {
+        let secret = SecretKey::generate_predictable(rng);
         KeyPair::from(secret)
     }
 
@@ -135,6 +148,13 @@ impl<E: Engine> KeyPair<E> {
 
     pub fn verify_hash(&self, hash: SigHash, signature: &Signature<E>) -> bool {
         self.public.verify_hash(hash, signature)
+    }
+}
+
+impl<E: Engine> SecureGenerate for KeyPair<E> {
+    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+        let secret = SecretKey::generate(rng);
+        KeyPair::from(secret)
     }
 }
 
@@ -285,7 +305,7 @@ mod tests {
         let mut rng = XorShiftRng::from_seed([0x44, 0x6d, 0x4f, 0xbc, 0x6c, 0x27, 0x2f, 0xd6, 0xd0, 0xaf, 0x63, 0xb9, 0x3d, 0x86, 0x55, 0x54]);
 
         for i in 0..500 {
-            let keypair = KeyPair::<Bls12>::generate(&mut rng);
+            let keypair = KeyPair::<Bls12>::generate_predictable(&mut rng);
             let message = format!("Message {}", i);
             let sig = keypair.sign(&message);
             assert_eq!(keypair.verify(&message.as_bytes(), &sig), true);
@@ -300,7 +320,7 @@ mod tests {
         let mut messages = Vec::with_capacity(1000);
         let mut signatures = Vec::with_capacity(1000);
         for i in 0..500 {
-            let keypair = KeyPair::<Bls12>::generate(&mut rng);
+            let keypair = KeyPair::<Bls12>::generate_predictable(&mut rng);
             let message = format!("Message {}", i);
             let signature = keypair.sign(&message);
             public_keys.push(keypair.public);
@@ -326,7 +346,7 @@ mod tests {
         let message = "Same message";
         let mut signatures = Vec::with_capacity(1000);
         for _ in 0..500 {
-            let keypair = KeyPair::<Bls12>::generate(&mut rng);
+            let keypair = KeyPair::<Bls12>::generate_predictable(&mut rng);
             let signature = keypair.sign(&message);
             public_keys.push(keypair.public);
             signatures.push(signature);

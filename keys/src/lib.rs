@@ -1,18 +1,21 @@
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
+extern crate failure;
+#[macro_use]
 extern crate nimiq_hash as hash;
 #[macro_use]
 extern crate nimiq_macros as macros;
-#[macro_use]
-extern crate failure;
+extern crate nimiq_utils as utils;
+
+pub use utils::key_rng::{SecureGenerate, SecureRng};
 
 pub use self::address::*;
+pub use self::errors::*;
 pub use self::key_pair::*;
 pub use self::private_key::*;
 pub use self::public_key::*;
 pub use self::signature::*;
-pub use self::errors::*;
 
 #[macro_export]
 macro_rules! implement_simple_add_sum_traits {

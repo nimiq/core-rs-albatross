@@ -1,7 +1,7 @@
 use ed25519_dalek;
-use rand::rngs::OsRng;
 
 use beserial::{Deserialize, Serialize};
+use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
 
 use crate::{PrivateKey, PublicKey, Signature};
 
@@ -12,16 +12,18 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
-    pub fn generate() -> Self {
-        let key_pair = ed25519_dalek::Keypair::generate(&mut OsRng);
-        let priv_key = PrivateKey(key_pair.secret);
-        let pub_key = PublicKey(key_pair.public);
-        KeyPair { private: priv_key, public: pub_key }
-    }
-
     pub fn sign(&self, data: &[u8]) -> Signature {
         let ext_signature = ed25519_dalek::ExpandedSecretKey::from(&self.private.0).sign(data, &self.public.0);
         Signature(ext_signature)
+    }
+}
+
+impl SecureGenerate for KeyPair {
+    fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+        let key_pair = ed25519_dalek::Keypair::generate(rng);
+        let priv_key = PrivateKey(key_pair.secret);
+        let pub_key = PublicKey(key_pair.public);
+        KeyPair { private: priv_key, public: pub_key }
     }
 }
 

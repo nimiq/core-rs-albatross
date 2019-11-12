@@ -53,3 +53,4 @@ all = ["otp", "bit-vec", "crc", "key-store", "iterators", "locking", "merkle", "
 # Compiles this package with the features needed for the nimiq client.
 full-nimiq = ["crc", "iterators", "key-store", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr"]
 math = []
+key-rng = ["rand"]

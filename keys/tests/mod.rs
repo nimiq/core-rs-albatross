@@ -1,10 +1,10 @@
-mod multisig;
+use nimiq_keys::{Address, KeyPair, PrivateKey, PublicKey, SecureGenerate, Signature};
 
-use nimiq_keys::{PrivateKey,PublicKey,Signature,KeyPair,Address};
+mod multisig;
 
 #[test]
 fn verify_created_signature() {
-    let key_pair = KeyPair::generate();
+    let key_pair = KeyPair::generate_default_csprng();
     let data = b"test";
     let signature = key_pair.sign(data);
     let valid = key_pair.public.verify(&signature, data);
@@ -13,7 +13,7 @@ fn verify_created_signature() {
 
 #[test]
 fn falsify_wrong_signature() {
-    let key_pair = KeyPair::generate();
+    let key_pair = KeyPair::generate_default_csprng();
     let signature = key_pair.sign(b"test");
     let valid = key_pair.public.verify(&signature, b"test2");
     assert_eq!(false, valid);

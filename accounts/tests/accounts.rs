@@ -8,7 +8,7 @@ use nimiq_block::BlockBody;
 use nimiq_database::ReadTransaction;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
-use nimiq_keys::{Address, KeyPair};
+use nimiq_keys::{Address, KeyPair, SecureGenerate};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
@@ -229,7 +229,7 @@ fn it_prevents_spending_of_funds_received_in_the_same_block() {
 fn it_correctly_prunes_account() {
     let env = VolatileEnvironment::new(10).unwrap();
     let accounts = Accounts::new(env.clone());
-    let key_pair = KeyPair::generate();
+    let key_pair = KeyPair::generate_default_csprng();
     let address = Address::from(&key_pair.public);
     let mut body = BlockBody {
         miner: address.clone(),

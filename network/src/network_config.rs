@@ -1,18 +1,17 @@
 use std::time::SystemTime;
 
-use keys::{KeyPair, PublicKey, PrivateKey};
+use keys::{KeyPair, PrivateKey, PublicKey, SecureGenerate};
+use network_primitives::address::PeerUri;
 use network_primitives::address::net_address::NetAddress;
 use network_primitives::address::peer_address::{PeerAddress, PeerAddressType};
 use network_primitives::address::PeerId;
 use network_primitives::address::seed_list::SeedList;
 use network_primitives::protocol::{Protocol, ProtocolFlags};
 use network_primitives::services::Services;
-use utils::time::systemtime_to_timestamp;
 use utils::key_store::{Error as KeyStoreError, KeyStore};
-use network_primitives::address::{PeerUri};
+use utils::time::systemtime_to_timestamp;
 
 use crate::error::Error;
-
 
 // One or multiple seed nodes. Either a peer URI or a http(s) URL to a seed list
 #[derive(Clone, Debug)]
@@ -100,7 +99,7 @@ impl NetworkConfig {
 
         let private_key = match peer_key_store.load_key() {
             Err(KeyStoreError::IoError(_)) => {
-                let private_key = PrivateKey::generate();
+                let private_key = PrivateKey::generate_default_csprng();
                 peer_key_store.save_key(&private_key)?;
                 Ok(private_key)
             },
@@ -114,7 +113,7 @@ impl NetworkConfig {
     }
 
     pub fn init_volatile(&mut self) {
-        let key_pair = KeyPair::generate();
+        let key_pair = KeyPair::generate_default_csprng();
         self.peer_id = Some(PeerId::from(&key_pair.public));
         self.key_pair = Some(key_pair);
     }

@@ -41,3 +41,5 @@ pub mod unique_id;
 pub mod otp;
 #[cfg(feature = "math")]
 pub mod math;
+#[cfg(feature = "key-rng")]
+pub mod key_rng;

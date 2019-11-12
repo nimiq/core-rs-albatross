@@ -176,13 +176,13 @@ impl Eq for CompressedPublicKey {}
 
 impl PartialOrd<CompressedPublicKey> for CompressedPublicKey {
     fn partial_cmp(&self, other: &CompressedPublicKey) -> Option<Ordering> {
-        self.p_pub.as_ref().partial_cmp(&other.p_pub.as_ref())
+        self.p_pub.as_ref().partial_cmp(other.p_pub.as_ref())
     }
 }
 
 impl Ord for CompressedPublicKey {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.p_pub.as_ref().cmp(&other.p_pub.as_ref())
+        self.p_pub.as_ref().cmp(other.p_pub.as_ref())
     }
 }
 
@@ -274,13 +274,13 @@ impl Eq for CompressedSignature {}
 
 impl PartialOrd<CompressedSignature> for CompressedSignature {
     fn partial_cmp(&self, other: &CompressedSignature) -> Option<Ordering> {
-        self.s.as_ref().partial_cmp(&other.s.as_ref())
+        self.s.as_ref().partial_cmp(other.s.as_ref())
     }
 }
 
 impl Ord for CompressedSignature {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.s.as_ref().cmp(&other.s.as_ref())
+        self.s.as_ref().cmp(other.s.as_ref())
     }
 }
 

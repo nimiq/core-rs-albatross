@@ -1,18 +1,16 @@
 #![feature(never_type)]
 
+#[cfg(feature = "human-panic")]
+#[macro_use]
+extern crate human_panic;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-#[cfg(feature = "deadlock-detection")]
-extern crate parking_lot;
-#[macro_use]
-extern crate serde_derive;
-#[cfg(feature = "human-panic")]
-#[macro_use]
-extern crate human_panic;
-
+extern crate nimiq_bls as bls;
+extern crate nimiq_consensus as consensus;
 extern crate nimiq_database as database;
+extern crate nimiq_keys as keys;
 extern crate nimiq_lib as lib;
 extern crate nimiq_mempool as mempool;
 #[cfg(feature = "metrics-server")]
@@ -22,11 +20,66 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
 #[cfg(feature = "rpc-server")]
 extern crate nimiq_rpc_server as rpc_server;
-extern crate nimiq_keys as keys;
 extern crate nimiq_utils as utils;
-extern crate nimiq_consensus as consensus;
-extern crate nimiq_bls as bls;
+#[cfg(feature = "deadlock-detection")]
+extern crate parking_lot;
+#[macro_use]
+extern crate serde_derive;
 
+
+use std::collections::HashSet;
+use std::env;
+use std::io;
+use std::iter::FromIterator;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+
+use failure::{Error, Fail};
+use fern::log_file;
+use futures::{Future, future};
+use log::Level;
+use parking_lot::RwLock;
+
+use bls::SecureGenerate;
+use bls::bls12_381::KeyPair;
+use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusProtocol, NimiqConsensusProtocol};
+use database::lmdb::{LmdbEnvironment, open};
+use lib::block_producer::{BlockProducer, DummyBlockProducer};
+use lib::block_producer::albatross::{AlbatrossBlockProducer, ValidatorConfig};
+use lib::client::{Client, ClientBuilder, ClientInitializeFuture};
+use lib::error::ClientError;
+use mempool::MempoolConfig;
+#[cfg(feature = "metrics-server")]
+use metrics_server::{AbstractChainMetrics, AlbatrossChainMetrics, metrics_server, NimiqChainMetrics};
+use network::network_config::Seed;
+use network_primitives::address::NetAddress;
+use network_primitives::protocol::Protocol;
+use network_primitives::services::ServiceFlags;
+use primitives::networks::NetworkId;
+#[cfg(feature = "rpc-server")]
+use rpc_server::{
+    Credentials,
+    Handler as RpcHandler, handlers::block_production_albatross::BlockProductionAlbatrossHandler, handlers::block_production_nimiq::BlockProductionNimiqHandler,
+    handlers::blockchain_albatross::BlockchainAlbatrossHandler,
+    handlers::blockchain_nimiq::BlockchainNimiqHandler,
+    handlers::consensus::ConsensusHandler,
+    handlers::mempool::MempoolHandler,
+    handlers::mempool_albatross::MempoolAlbatrossHandler,
+    handlers::network::NetworkHandler,
+    handlers::wallet::{UnlockedWalletManager, WalletHandler},
+    JsonRpcConfig,
+    rpc_server,
+};
+use utils::key_store::KeyStore;
+
+use crate::cmdline::Options;
+use crate::files::LazyFileLocations;
+use crate::logging::{DEFAULT_LEVEL, NimiqDispatch};
+use crate::logging::force_log_error_cause_chain;
+use crate::serialization::SeedError;
+use crate::settings as s;
+use crate::settings::{RpcServerSettings, Settings};
 
 mod deadlock;
 mod logging;
@@ -35,61 +88,6 @@ mod cmdline;
 mod serialization;
 mod files;
 
-
-use std::io;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::collections::HashSet;
-use std::iter::FromIterator;
-use std::env;
-use std::path::PathBuf;
-
-use failure::{Error, Fail};
-use fern::log_file;
-use futures::{Future, future};
-use log::Level;
-use rand::rngs::OsRng;
-use parking_lot::RwLock;
-
-use database::lmdb::{LmdbEnvironment, open};
-use mempool::MempoolConfig;
-use network_primitives::protocol::Protocol;
-use network_primitives::address::NetAddress;
-use network::network_config::Seed;
-use utils::key_store::KeyStore;
-use primitives::networks::NetworkId;
-use consensus::{Consensus, ConsensusProtocol, AlbatrossConsensusProtocol, NimiqConsensusProtocol};
-use bls::bls12_381::KeyPair;
-use network_primitives::services::ServiceFlags;
-#[cfg(feature = "metrics-server")]
-use metrics_server::{metrics_server, AlbatrossChainMetrics, NimiqChainMetrics, AbstractChainMetrics};
-#[cfg(feature = "rpc-server")]
-use rpc_server::{
-    rpc_server,
-    Credentials, JsonRpcConfig, Handler as RpcHandler,
-    handlers::blockchain_nimiq::BlockchainNimiqHandler,
-    handlers::blockchain_albatross::BlockchainAlbatrossHandler,
-    handlers::block_production_nimiq::BlockProductionNimiqHandler,
-    handlers::block_production_albatross::BlockProductionAlbatrossHandler,
-    handlers::consensus::ConsensusHandler,
-    handlers::mempool::MempoolHandler,
-    handlers::mempool_albatross::MempoolAlbatrossHandler,
-    handlers::network::NetworkHandler,
-    handlers::wallet::{WalletHandler, UnlockedWalletManager},
-};
-
-use lib::block_producer::{BlockProducer, DummyBlockProducer};
-use lib::block_producer::albatross::{ValidatorConfig, AlbatrossBlockProducer};
-use lib::error::ClientError;
-use lib::client::{Client, ClientBuilder, ClientInitializeFuture};
-
-use crate::cmdline::Options;
-use crate::logging::{DEFAULT_LEVEL, NimiqDispatch};
-use crate::logging::force_log_error_cause_chain;
-use crate::settings as s;
-use crate::settings::{Settings, RpcServerSettings};
-use crate::serialization::SeedError;
-use crate::files::LazyFileLocations;
 
 type OtherFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>;
 
@@ -431,7 +429,7 @@ fn run() -> Result<!, Error> {
                     let key_store = KeyStore::new(key_store_file.to_str().unwrap().to_string());
                     if !key_store_file.exists() {
                         info!("Generating validator key");
-                        let key_pair = KeyPair::generate(&mut OsRng);
+                        let key_pair = KeyPair::generate_default_csprng();
                         if let Err(ref err) = key_store.save_key(&key_pair) {
                             warn!("Failed to save key: {}", err);
                         }

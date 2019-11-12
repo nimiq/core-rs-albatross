@@ -21,6 +21,7 @@ beserial = { version = "0.1", optional = true }
 hex = "0.4"
 parking_lot = { version = "0.9", optional = true }
 failure = "0.1"
+nimiq-utils = { version = "0.1", features = ["key-rng"] }
 
 [dev-dependencies]
 rand_xorshift = "0.2"

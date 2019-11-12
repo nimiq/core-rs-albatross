@@ -1,30 +1,29 @@
 use std::convert::TryFrom;
-use std::path::{PathBuf, Path};
 use std::fmt::Display;
+use std::path::{Path, PathBuf};
 
-use rand::rngs::OsRng;
-
-use primitives::networks::NetworkId;
+use bls::SecureGenerate;
+#[cfg(feature="validator")]
+use bls::bls12_381::KeyPair as BlsKeyPair;
 use database::Environment;
 use database::lmdb::{LmdbEnvironment, open as LmdbFlags};
 use database::volatile::VolatileEnvironment;
-use network::network_config::{NetworkConfig, ReverseProxyConfig};
-use utils::key_store::Error as KeyStoreError;
-use mempool::MempoolConfig;
 use mempool::filter::Rules as MempoolRules;
-#[cfg(feature="validator")]
-use bls::bls12_381::KeyPair as BlsKeyPair;
-use utils::key_store::KeyStore;
+use mempool::MempoolConfig;
+use network::network_config::{NetworkConfig, ReverseProxyConfig};
 use network_primitives::address::NetAddress;
+use primitives::networks::NetworkId;
+use utils::key_store::Error as KeyStoreError;
+use utils::key_store::KeyStore;
 
-use crate::error::Error;
-use crate::config::user_agent::UserAgent;
 use crate::client::Client;
-use crate::config::paths;
-use crate::config::consts;
-use crate::config::config_file::ConfigFile;
-use crate::config::config_file;
 use crate::config::command_line::CommandLine;
+use crate::config::config_file;
+use crate::config::config_file::ConfigFile;
+use crate::config::consts;
+use crate::config::paths;
+use crate::config::user_agent::UserAgent;
+use crate::error::Error;
 
 /// The consensus type
 ///
@@ -250,8 +249,7 @@ impl StorageConfig {
     pub(crate) fn validator_key(&self) -> Result<BlsKeyPair, Error> {
         Ok(match self {
             StorageConfig::Volatile => {
-                // TODO: See [Issue #15](https://github.com/nimiq/core-rs-albatross/issues/15)
-                BlsKeyPair::generate(&mut OsRng)
+                BlsKeyPair::generate_default_csprng()
             },
             StorageConfig::Filesystem(file_storage) => {
                 let key_path = file_storage.validator_key.as_ref()
@@ -262,7 +260,7 @@ impl StorageConfig {
                 let key_store = KeyStore::new(key_path);
                 match key_store.load_key() {
                     Err(KeyStoreError::IoError(_)) => {
-                        let validator_key = BlsKeyPair::generate(&mut OsRng);
+                        let validator_key = BlsKeyPair::generate_default_csprng();
                         key_store.save_key(&validator_key)?;
                         Ok(validator_key)
                     },

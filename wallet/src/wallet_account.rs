@@ -2,7 +2,7 @@ use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
 use database::{FromDatabaseValue, IntoDatabaseValue};
-use keys::{Address, KeyPair, PublicKey, Signature};
+use keys::{Address, KeyPair, PublicKey, SecureGenerate, Signature};
 use nimiq_hash::{Hash, Sha256Hash};
 use nimiq_utils::otp::Verify;
 use primitives::coin::Coin;
@@ -27,7 +27,7 @@ impl Verify for WalletAccount {
 
 impl WalletAccount {
     pub fn generate() -> Self {
-        WalletAccount::from(KeyPair::generate())
+        WalletAccount::from(KeyPair::generate_default_csprng())
     }
 
     pub fn create_transaction(&self, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {

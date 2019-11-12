@@ -1,18 +1,20 @@
 use std::collections::btree_set::BTreeSet;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
+
 use rand::thread_rng;
 
 use beserial::{Deserialize, Serialize};
+use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, StakingContract};
+use nimiq_account::inherent::{AccountInherentInteraction, Inherent, InherentType};
 use nimiq_bls::bls12_381::KeyPair as BlsKeyPair;
+use nimiq_bls::SecureGenerate;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, StakingContract};
 use nimiq_transaction::{SignatureProof, Transaction, TransactionError};
 use nimiq_transaction::account::AccountTransactionVerification;
 use nimiq_transaction::account::staking_contract::StakingTransactionData;
-use nimiq_account::inherent::{AccountInherentInteraction, Inherent, InherentType};
 
 const CONTRACT_1: &str = "00000000000000000000000000000000";
 const CONTRACT_2: &str = "0000000023c34600000000020202020202020202020202020202020202020202000000001ad27480a2f7d485efe6fabad3d780d1ea5ad690bd027a5328f44b612cad1f33347c8df5bde90a340c30877a21861e2173f6cfda0715d35ac2941437bf7e73d7e48fcf6e1901249134532ad1826ad1e396caed2d4d1d11e82d79f93946b21800a00971f000005e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e0000000008f0d180a9edd1613b714ec6107f4ffd532e52727c4f3a2897b3000e9ebccf076e8ffdf4b424f7e798d31dc67bbf9b3776096f101740b3f992ba8a5d0e20860f8d3466b7b58fb6b918eebb3c014bf6bb1cbdcb045c184d673c3db6435f454a1c530b9dfc012a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0000000000";
@@ -164,7 +166,7 @@ fn it_can_apply_staking_transaction() {
 }
 
 fn test_proof_verification<F>(incoming: bool, make_tx: F) where F: Fn() -> Transaction {
-    let key_pair = KeyPair::generate();
+    let key_pair = KeyPair::generate(&mut thread_rng());
     let tx = make_tx();
 
     // No proof
@@ -181,7 +183,7 @@ fn test_proof_verification<F>(incoming: bool, make_tx: F) where F: Fn() -> Trans
 
     // Invalid proof
     let mut tx_3 = tx.clone();
-    let other_pair = KeyPair::generate();
+    let other_pair = KeyPair::generate(&mut thread_rng());
     tx_3.proof = SignatureProof::from(key_pair.public, other_pair.sign(&tx_3.serialize_content())).serialize_to_vec();
     assert_eq!(AccountType::verify_outgoing_transaction(&tx_3), Err(TransactionError::InvalidProof));
     if incoming {
@@ -202,7 +204,7 @@ fn it_can_verify_retire_transaction() {
 
 #[test]
 fn it_can_apply_retiring_transaction() {
-    let key_pair = KeyPair::generate();
+    let key_pair = KeyPair::generate(&mut thread_rng());
     let bls_pair = BlsKeyPair::generate(&mut thread_rng());
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
 
@@ -284,7 +286,7 @@ fn it_can_verify_unstaking_transaction() {
 
 #[test]
 fn it_can_apply_unstaking_transaction() {
-    let key_pair = KeyPair::generate();
+    let key_pair = KeyPair::generate(&mut thread_rng());
     let recipient = Address::from(&key_pair.public);
     let bls_pair = BlsKeyPair::generate(&mut thread_rng());
     let mut contract = make_sample_contract(&key_pair, &bls_pair);

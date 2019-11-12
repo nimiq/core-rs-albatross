@@ -20,13 +20,13 @@ maintenance = { status = "experimental" }
 curve25519-dalek = "1.0.2"
 data-encoding = "2.1"
 sha2 = "0.8"
-rand = "0.7"
 hex = "0.4"
 failure = "0.1"
 beserial = "0.1"
 beserial_derive = "0.1"
 nimiq-hash = "0.1"
 nimiq-macros = "0.1"
+nimiq-utils = { version = "0.1", features = ["key-rng"] }
 
 [dependencies.ed25519-dalek]
 # version = "1.0.0-pre.2"

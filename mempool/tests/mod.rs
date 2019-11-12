@@ -10,8 +10,8 @@ use nimiq_blockchain::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::Hash;
+use nimiq_keys::{KeyPair, SecureGenerate};
 use nimiq_keys::Address;
-use nimiq_keys::KeyPair;
 use nimiq_mempool::{Mempool, MempoolConfig, ReturnCode};
 use nimiq_network_primitives::time::NetworkTime;
 use nimiq_primitives::coin::Coin;
@@ -26,7 +26,7 @@ fn push_same_tx_twice() {
     let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
-    let keypair_a = KeyPair::generate();
+    let keypair_a = KeyPair::generate_default_csprng();
     let address_a = Address::from(&keypair_a.public);
     let address_b = Address::from([2u8; Address::SIZE]);
 
@@ -74,7 +74,7 @@ fn push_and_get_valid_tx() {
     let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
-    let keypair_a = KeyPair::generate();
+    let keypair_a = KeyPair::generate_default_csprng();
     let address_a = Address::from(&keypair_a.public);
     let address_b = Address::from([2u8; Address::SIZE]);
 
@@ -104,7 +104,7 @@ fn push_and_get_two_tx_same_user() {
     let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
-    let keypair_a = KeyPair::generate();
+    let keypair_a = KeyPair::generate_default_csprng();
     let address_a = Address::from(&keypair_a.public);
     let address_b = Address::from([2u8; Address::SIZE]);
 
@@ -140,7 +140,7 @@ fn reject_free_tx_beyond_limit() {
     let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
-    let keypair_a = KeyPair::generate();
+    let keypair_a = KeyPair::generate_default_csprng();
     let address_a = Address::from(&keypair_a.public);
     let address_b = Address::from([2u8; Address::SIZE]);
 
