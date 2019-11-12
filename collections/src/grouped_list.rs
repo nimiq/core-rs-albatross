@@ -2,6 +2,8 @@ use beserial::{Serialize, Deserialize};
 use itertools::Itertools;
 use std::iter::{FromIterator, repeat};
 use crate::compressed_list::CompressedList;
+use crate::bitset::BitSet;
+
 
 // GroupedList compresses a list of items by deduplication,
 // internally represented by a list of length-prefixed distinct items.
@@ -73,6 +75,18 @@ impl<T> GroupedList<T>
 
     pub fn get(&self, i: usize) -> Option<&Group<T>> {
         self.0.get(i)
+    }
+
+    pub fn as_compressed(&self) -> CompressedList<T> {
+        let mut count = 0u16;
+        let mut allocation = BitSet::new();
+        let mut distinct = Vec::with_capacity(self.0.len());
+        for Group(group_count, item) in self.groups().iter() {
+            allocation.insert(count as usize);
+            distinct.push(item.clone());
+            count += *group_count;
+        }
+        CompressedList { count, distinct, allocation }
     }
 }
 

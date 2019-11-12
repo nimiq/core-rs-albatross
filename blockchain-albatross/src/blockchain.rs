@@ -297,9 +297,48 @@ impl Blockchain {
 
     // TODO: Replace by proper conversion traits
     fn slots_and_validators_from_block(block: &MacroBlock) -> (Slots, Validators) {
-        let slots: Slots = block.clone().try_into().unwrap();
-        let validators: Validators = slots.clone().into();
-        (slots, validators)
+        let validators = block.header.validators.clone();
+        let slots = block.clone().try_into().unwrap();
+        (slots, validators.into())
+    }
+
+    pub fn get_slots_for_epoch(&self, epoch: u32) -> Option<Slots> {
+        let state = self.state.read();
+        let current_epoch = policy::epoch_at(state.main_chain.head.block_number());
+        let last_epoch = current_epoch - 1;
+
+        let slots = if epoch == current_epoch {
+            state.current_slots.as_ref()?.clone()
+        }
+        else if epoch == current_epoch - 1 {
+            state.last_slots.as_ref()?.clone()
+        }
+        else {
+            let macro_block = self.get_block_at(policy::macro_block_of(epoch), true)?
+                .unwrap_macro();
+            macro_block.try_into().unwrap()
+        };
+
+        Some(slots)
+    }
+
+    pub fn get_validators_for_epoch(&self, epoch: u32) -> Option<Validators> {
+        let state = self.state.read();
+        let current_epoch = policy::epoch_at(state.main_chain.head.block_number());
+        let last_epoch = current_epoch - 1;
+
+        let validators = if epoch == current_epoch {
+            state.current_validators.as_ref()?.clone()
+        }
+        else if epoch == current_epoch - 1 {
+            state.last_validators.as_ref()?.clone()
+        }
+        else {
+            self.get_block_at(policy::macro_block_of(epoch), true)?
+                .unwrap_macro().header.validators.into()
+        };
+
+        Some(validators)
     }
 
     pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: OptionalCheck<&ViewChangeProof>, intended_slot_owner: &MappedMutexGuard<PublicKey>, txn_opt: Option<&Transaction>) -> Result<(), PushError> {

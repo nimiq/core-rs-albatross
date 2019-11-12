@@ -119,18 +119,11 @@ impl<'a, T> Iterator for CompressedListIterator<'a, T>
     }
 }
 
+#[deprecated] // Is often used with a clone
 impl<T> From<GroupedList<T>> for CompressedList<T>
     where T: Clone + Eq + PartialEq + Serialize + Deserialize
 {
     fn from(grouped: GroupedList<T>) -> Self {
-        let mut count = 0u16;
-        let mut allocation = BitSet::new();
-        let mut distinct = Vec::with_capacity(grouped.0.len());
-        for Group(group_count, item) in grouped.groups().iter() {
-            allocation.insert(count as usize);
-            distinct.push(item.clone());
-            count += group_count;
-        }
-        Self { count, distinct, allocation }
+        grouped.as_compressed()
     }
 }
