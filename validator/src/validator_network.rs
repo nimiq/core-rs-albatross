@@ -399,13 +399,13 @@ impl ValidatorNetwork {
 
         // check if we already completed this view change
         if state.complete_view_changes.contains_key(&update_message.tag) {
-            debug!("View change already complete: {}", update_message.tag);
+            trace!("View change already complete: {}", update_message.tag);
             return;
         }
 
         if let Some(aggregation) = state.view_changes.get(&update_message.tag) {
             aggregation.push_update(update_message);
-            debug!("View change: {}", fmt_vote_progress(aggregation.votes()));
+            trace!("View change progress: {}", fmt_vote_progress(aggregation.votes()));
         }
         else if let Some(node_id) = state.validator_id {
             let view_change = update_message.tag.clone();
