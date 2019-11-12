@@ -12,7 +12,7 @@ extern crate nimiq_block_albatross as block_albatross;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-use futures::{future::Future};
+use futures::{future::Future, IntoFuture};
 use hyper::Server;
 
 use consensus::{Consensus, ConsensusProtocol};
@@ -59,20 +59,44 @@ pub mod server;
 pub mod metrics;
 pub mod error;
 
-pub fn metrics_server<P, CM>(consensus: Arc<Consensus<P>>, ip: IpAddr, port: u16, password: Option<String>) -> Result<Box<dyn Future<Item=(), Error=()> + Send + Sync>, Error>
-    where P: ConsensusProtocol + 'static,
-          CM: AbstractChainMetrics<P> + server::Metrics + 'static
-{
-    Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
-        .serve(move || {
-            server::MetricsServer::new(
-                vec![
-                    Arc::new(CM::new(consensus.blockchain.clone())),
-                    Arc::new(MempoolMetrics::new(consensus.mempool.clone())),
-                    Arc::new(NetworkMetrics::new(consensus.network.clone()))
-                ],
-                attributes!{ "peer" => consensus.network.network_config.peer_address() },
-            password.clone())
+
+pub type MetricsServerFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync>;
+
+pub struct MetricsServer {
+    future: MetricsServerFuture
+}
+
+impl MetricsServer {
+    pub fn new<P, CM>(ip: IpAddr, port: u16, username: Option<String>, password: Option<String>, consensus: Arc<Consensus<P>>) -> Result<MetricsServer, Error>
+        where P: ConsensusProtocol + 'static,
+              CM: AbstractChainMetrics<P> + server::Metrics + 'static
+    {
+        let future = Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
+            .serve(move || {
+                server::MetricsServer::new(
+                    vec![
+                        Arc::new(CM::new(consensus.blockchain.clone())),
+                        Arc::new(MempoolMetrics::new(consensus.mempool.clone())),
+                        Arc::new(NetworkMetrics::new(consensus.network.clone()))
+                    ],
+                    attributes! { "peer" => consensus.network.network_config.peer_address() },
+                    username.clone(),
+                    password.clone())
+            })
+            .map_err(|e| error!("Metrics server failed: {}", e)));
+
+        Ok(MetricsServer {
+            future,
         })
-        .map_err(|e| error!("Metrics server failed: {}", e) ))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
+    }
+}
+
+impl IntoFuture for MetricsServer {
+    type Future = MetricsServerFuture;
+    type Item = ();
+    type Error = ();
+
+    fn into_future(self) -> Self::Future {
+        self.future
+    }
 }

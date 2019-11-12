@@ -68,15 +68,17 @@ impl std::fmt::Display for Never {
 pub struct MetricsServer {
     metrics: Vec<Arc<dyn Metrics>>,
     common_attributes: CachedAttributes,
+    username: Option<String>,
     password: Option<String>,
 }
 
 impl MetricsServer {
     #[inline]
-    pub fn new<A: Into<CachedAttributes>>(metrics: Vec<Arc<dyn Metrics>>, common_attributes: A, password: Option<String>) -> Self{
+    pub fn new<A: Into<CachedAttributes>>(metrics: Vec<Arc<dyn Metrics>>, common_attributes: A, username: Option<String>, password: Option<String>) -> Self {
         MetricsServer {
             metrics,
             common_attributes: common_attributes.into(),
+            username,
             password,
         }
     }
@@ -101,13 +103,13 @@ impl MetricsServer {
     }
 }
 
-fn check_auth(req: &Request<Body>, password: &Option<String>) -> bool {
-    match (password, req.headers().get(AUTHORIZATION).and_then(|header| header.to_str().ok())) {
-        (None, _) => true,
-        (_, None) => false,
-        (Some(ref password), Some(authorization)) => {
-            authorization == format!("Basic {}", encode(&format!("metrics:{}", password)))
+fn check_auth(req: &Request<Body>, username: &Option<String>, password: &Option<String>) -> bool {
+    match (username, password, req.headers().get(AUTHORIZATION).and_then(|header| header.to_str().ok())) {
+        (None, None, _) => true,
+        (Some(ref username), Some(ref password), Some(authorization)) => {
+            authorization == format!("Basic {}", encode(&format!("{}:{}", username, password)))
         },
+        _ => false,
     }
 }
 
@@ -140,7 +142,7 @@ impl hyper::service::Service for MetricsServer {
         }
 
         // Check authentication.
-        if !check_auth(&req, &self.password) {
+        if !check_auth(&req, &self.username, &self.password) {
             return Box::new(future::ok(
                 Response::builder()
                     .status(StatusCode::UNAUTHORIZED)

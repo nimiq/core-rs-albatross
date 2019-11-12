@@ -260,7 +260,13 @@ pub struct CompressedSignature {
 
 impl fmt::Debug for CompressedSignature {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CompressedSignature({})", &::hex::encode(self.s.as_ref()))
+        write!(f, "CompressedSignature({})", self.to_hex())
+    }
+}
+
+impl fmt::Display for CompressedSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_hex())
     }
 }
 

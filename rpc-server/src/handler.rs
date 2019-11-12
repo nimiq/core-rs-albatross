@@ -64,10 +64,18 @@ impl jsonrpc::Handler for Handler {
     }
 
     fn authorize(&self, username: &str, password: &str) -> Result<(), AuthenticationError> {
-        if !self.config.credentials.as_ref().map(|c| c.check(username, password)).unwrap_or(true) {
-            return Err(AuthenticationError::IncorrectCredentials);
+        let ok = match (&self.config.username, &self.config.password) {
+            (Some(u), Some(p)) => u == username && p == password,
+            (None, None) => true,
+            _ => false, // Configuration error
+        };
+
+        if ok {
+            Ok(())
         }
-        Ok(())
+        else {
+            Err(AuthenticationError::IncorrectCredentials)
+        }
     }
 }
 

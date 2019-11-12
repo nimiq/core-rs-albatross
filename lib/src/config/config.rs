@@ -1,6 +1,10 @@
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
+use std::net::{IpAddr, Ipv4Addr};
+use std::collections::HashSet;
+
+use url::Url;
 
 use bls::SecureGenerate;
 #[cfg(feature="validator")]
@@ -10,11 +14,12 @@ use database::lmdb::{LmdbEnvironment, open as LmdbFlags};
 use database::volatile::VolatileEnvironment;
 use mempool::filter::Rules as MempoolRules;
 use mempool::MempoolConfig;
-use network::network_config::{NetworkConfig, ReverseProxyConfig};
-use network_primitives::address::NetAddress;
+use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
+use network_primitives::address::{NetAddress, SeedList, PeerUri};
 use primitives::networks::NetworkId;
 use utils::key_store::Error as KeyStoreError;
 use utils::key_store::KeyStore;
+use keys::PublicKey;
 
 use crate::client::Client;
 use crate::config::command_line::CommandLine;
@@ -24,6 +29,7 @@ use crate::config::consts;
 use crate::config::paths;
 use crate::config::user_agent::UserAgent;
 use crate::error::Error;
+
 
 /// The consensus type
 ///
@@ -108,6 +114,7 @@ pub enum ProtocolConfig {
     Rtc,
 }
 
+#[cfg(feature="validator")]
 #[derive(Debug, Clone)]
 pub struct ValidatorConfig {
     // TODO
@@ -288,6 +295,110 @@ impl Default for StorageConfig {
     }
 }
 
+/// Credentials for JSON RPC server, metrics server or websocket RPC server
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Credentials {
+    /// Username
+    pub username: String,
+    /// Password
+    pub password: String,
+}
+
+impl Credentials {
+    pub fn new<U: AsRef<str>, P: AsRef<str>>(username: U, password: P) -> Self {
+        Self {
+            username: username.as_ref().to_owned(),
+            password: password.as_ref().to_owned(),
+        }
+    }
+
+    pub fn check<U: AsRef<str>, P: AsRef<str>>(&self, username: U, password: P) -> bool {
+        self.username == username.as_ref() && self.password == password.as_ref()
+    }
+}
+
+#[cfg(feature="rpc-server")]
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+pub struct RpcServerConfig {
+    /// Bind the RPC server to the specified IP address.
+    ///
+    /// Default: `127.0.0.1`
+    ///
+    #[builder(setter(strip_option))]
+    pub bind_to: Option<IpAddr>,
+
+    /// Bind the server to the specified port.
+    ///
+    /// Default: `8648`
+    ///
+    #[builder(default="consts::RPC_DEFAULT_PORT")]
+    pub port: u16,
+
+    /// TODO
+    #[builder(setter(strip_option))]
+    pub corsdomain: Option<Vec<String>>,
+
+    /// If specified, only allow connections from these IP addresses
+    ///
+    #[builder(setter(strip_option))]
+    pub allow_ips: Option<Vec<IpAddr>>,
+
+    /// If specified, only allow these RPC methods
+    ///
+    #[builder(setter(strip_option))]
+    pub allowed_methods: Option<Vec<String>>,
+
+    /// If specified, require HTTP basic auth with these credentials
+    #[builder(setter(strip_option))]
+    pub credentials: Option<Credentials>,
+}
+
+#[cfg(feature="wsrpc-server")]
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+pub struct WsRpcServerConfig {
+    /// Bind the server to the specified port.
+    ///
+    /// Default: `8648`
+    ///
+    #[builder(default="consts::WS_RPC_DEFAULT_PORT")]
+    pub port: u16,
+
+    /// If specified, require HTTP basic auth with these credentials
+    #[builder(setter(strip_option))]
+    pub credentials: Option<Credentials>,
+
+    /// Bind the Websocket RPC server to the specified IP address.
+    ///
+    /// Default: `127.0.0.1`
+    ///
+    #[builder(setter(strip_option))]
+    pub bind_to: Option<IpAddr>,
+}
+
+#[cfg(feature="metrics-server")]
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+pub struct MetricsServerConfig {
+    /// Bind the metrics server to the specified IP address.
+    ///
+    /// Default: `127.0.0.1`
+    ///
+    #[builder(setter(strip_option))]
+    pub bind_to: Option<IpAddr>,
+
+    /// Bind the server to the specified port.
+    ///
+    /// Default: `8649`
+    ///
+    #[builder(default="consts::METRICS_DEFAULT_PORT")]
+    pub port: u16,
+
+    /// If specified, require HTTP basic auth with these credentials
+    #[builder(setter(strip_option))]
+    pub credentials: Option<Credentials>,
+}
 
 /// Client configuration
 ///
@@ -297,7 +408,6 @@ impl Default for StorageConfig {
 ///   `tokio::spawn(config.and_then(|client| [...]));`
 #[derive(Clone, Debug, Builder)]
 #[builder(setter(into), build_fn(private, name="build_internal"))]
-// #[builder(pattern = "owned")]
 pub struct ClientConfig {
     /// Determines which consensus protocol to use.
     ///
@@ -346,10 +456,34 @@ pub struct ClientConfig {
     #[builder(default, setter(custom))]
     pub mempool: MempoolConfig,
 
+    /// Custom seeds
+    ///
+    #[builder(setter(custom), default)]
+    pub seeds: Vec<Seed>,
+
     /// The optional validator configuration
     ///
+    #[cfg(feature="validator")]
     #[builder(default, setter(custom))]
     pub validator: Option<ValidatorConfig>,
+
+    /// The optional validator configuration
+    ///
+    #[cfg(feature="rpc-server")]
+    #[builder(default)]
+    pub rpc_server: Option<RpcServerConfig>,
+
+    /// The optional Websocket RPC configuration
+    ///
+    #[cfg(feature="wsrpc-server")]
+    #[builder(default)]
+    pub ws_rpc_server: Option<WsRpcServerConfig>,
+
+    /// The optional metrics server configuration
+    ///
+    #[cfg(feature="metrics-server")]
+    #[builder(default)]
+    pub metrics_server: Option<MetricsServerConfig>,
 }
 
 impl ClientConfig {
@@ -365,8 +499,6 @@ impl ClientConfig {
         Client::try_from(self)
     }
 }
-
-
 
 impl ClientConfigBuilder {
     /// Build a finished config object from the builder
@@ -482,7 +614,7 @@ impl ClientConfigBuilder {
         self
     }
 
-    /// Configure the storage to be volatile. All data will be lost after shutdown of the client.
+    /// Configures the storage to be volatile. All data will be lost after shutdown of the client.
     pub fn volatile(&mut self) -> &mut Self {
         self.storage = Some(StorageConfig::Volatile);
         self
@@ -494,6 +626,25 @@ impl ClientConfigBuilder {
         self
     }
 
+    /// Adds a custom seed node or seed list
+    pub fn seed<S: Into<Seed>>(&mut self, seed: S) -> &mut Self {
+        let mut seeds = self.seeds.get_or_insert_with(Default::default);
+        seeds.push(seed.into());
+        self
+    }
+
+    /// Adds a custom seed node
+    pub fn seed_uri<U: Into<PeerUri>>(&mut self, uri: U) -> &mut Self {
+        self.seed(Seed::new_peer(uri.into()))
+    }
+
+    /// Adds a custom seed url
+    pub fn seed_list(&mut self, url: Url, public_key_opt: Option<PublicKey>) -> &mut Self {
+        self.seed(Seed::new_list(SeedList::new(url, public_key_opt)))
+    }
+
+    /// Sets the validator config. Since there is no configuration for validators (except key file)
+    /// yet, this will just enable the validator.
     pub fn validator(&mut self) -> &mut Self {
         self.validator = Some(Some(ValidatorConfig{}));
         self
@@ -560,6 +711,67 @@ impl ClientConfigBuilder {
                 self.reverse_proxy = Some(Some(reverse_proxy.clone().into()));
             });
 
+        // Configure RPC server
+        #[cfg(feature="rpc-server")] {
+            if let Some(rpc_config) = &config_file.rpc_server {
+                let bind_to = rpc_config.bind.as_ref()
+                    .and_then(|addr| addr.into_ip_address());
+
+                let allow_ips = if rpc_config.allowip.is_empty() {
+                    None
+                }
+                else {
+                    let result = rpc_config.allowip.iter().map(|s| {
+                        s.parse::<IpAddr>().map_err({
+                            |e| Error::config_error(format!("Invalid IP: {}", e))
+                        })
+                    }).collect::<Result<Vec<IpAddr>, Error>>();
+                    Some(result?)
+                };
+
+                let credentials = match (&rpc_config.username, &rpc_config.password) {
+                    (Some(u), Some(p)) => {
+                        Some(Credentials::new(u.clone(), p.clone()))
+                    },
+                    (None, None) => None,
+                    _ => return Err(Error::config_error("Either both username and password have to be set or none."))
+                };
+
+                self.rpc_server = Some(Some(RpcServerConfig {
+                    bind_to,
+                    port: rpc_config.port.unwrap_or(consts::RPC_DEFAULT_PORT),
+                    corsdomain: Some(rpc_config.corsdomain.clone()),
+                    allow_ips,
+                    allowed_methods: Some(rpc_config.methods.clone()),
+                    credentials,
+                }));
+            }
+        }
+
+        // Configure metrics server
+        #[cfg(feature="metrics-server")] {
+            if let Some(metrics_config) = &config_file.metrics_server {
+                let bind_to = metrics_config.bind.as_ref()
+                    .and_then(|addr| addr.into_ip_address());
+
+                let credentials = metrics_config.password.as_ref().map(|password| {
+                    Credentials::new("metrics", password)
+                });
+
+                self.metrics_server = Some(Some(MetricsServerConfig {
+                    bind_to,
+                    port: metrics_config.port.unwrap_or(consts::METRICS_DEFAULT_PORT),
+                    credentials,
+                }));
+            }
+        }
+
+        // Configure custom seeds
+        for seed in &config_file.network.seed_nodes {
+            self.seed(Seed::try_from(seed.clone())
+                .map_err(|e| Error::config_error(format!("Invalid seed: {:?}: {}", seed, e)))?);
+        }
+
         // Configure validator
         if config_file.validator.is_some() {
             self.validator = Some(Some(ValidatorConfig {}));
@@ -584,7 +796,7 @@ impl ClientConfigBuilder {
             match &mut self.protocol {
                 Some(ProtocolConfig::Ws { port, .. }) => *port = new_port,
                 Some(ProtocolConfig::Wss { port, .. }) => *port = new_port,
-                _ => {} // just ignore this. or return an error?
+                _ => () // just ignore this. or return an error?
             }
         });
 

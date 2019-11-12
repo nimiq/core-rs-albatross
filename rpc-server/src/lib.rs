@@ -19,6 +19,8 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
+#[cfg(feature="validator")]
+extern crate nimiq_validator as validator;
 
 use std::collections::HashSet;
 use std::net::{IpAddr, SocketAddr};
@@ -30,6 +32,8 @@ use json::JsonValue;
 
 use crate::error::Error;
 pub use crate::handler::Handler;
+use futures::IntoFuture;
+use crate::handlers::block_production_albatross::BlockProductionAlbatrossHandler;
 
 pub mod jsonrpc;
 pub mod error;
@@ -43,34 +47,45 @@ fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
 
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
-    pub credentials: Option<Credentials>,
+    pub username: Option<String>,
+    pub password: Option<String>,
     pub methods: HashSet<String>,
     pub allowip: (),
     pub corsdomain: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Credentials {
-    username: String,
-    password: String,
+
+pub type RpcServerFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>;
+
+pub struct RpcServer {
+    future: RpcServerFuture,
+    pub handler: Arc<Handler>,
 }
 
-impl Credentials {
-    pub fn new(username: &str, password: &str) -> Credentials {
-        Credentials { username: String::from(username), password: String::from(password) }
-    }
+impl RpcServer {
+    pub fn new(ip: IpAddr, port: u16, config: JsonRpcConfig) -> Result<Self, Error> {
+        let handler = Arc::new(Handler::new(config));
 
-    pub fn check(&self, username: &str, password: &str) -> bool {
-        self.username == username && self.password == password
-    }
-}
+        let handler2 = Arc::clone(&handler);
+        let future = Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
+            .serve(move || {
+                jsonrpc::Service::new(Arc::clone(&handler2))
+            })
+            .map_err(|e| error!("RPC server failed: {}", e)));
 
-type OtherFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>;
-
-pub fn rpc_server(ip: IpAddr, port: u16, handler: Arc<Handler>) -> Result<OtherFuture, Error> {
-    Ok(Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
-        .serve(move || {
-            jsonrpc::Service::new(Arc::clone(&handler))
+        Ok(RpcServer {
+            future,
+            handler,
         })
-        .map_err(|e| error!("RPC server failed: {}", e)))) // as Box<dyn Future<Item=(), Error=()> + Send + Sync>
+    }
+}
+
+impl IntoFuture for RpcServer {
+    type Future = RpcServerFuture;
+    type Item = ();
+    type Error = ();
+
+    fn into_future(self) -> Self::Future {
+        self.future
+    }
 }

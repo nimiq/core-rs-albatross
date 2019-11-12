@@ -8,7 +8,7 @@ use std::env;
 /// Although you can use custom ones, it's recommended to use one provided by default:
 ///
 /// ```
-/// use nimiq_lib2::config::user_agent::UserAgent;
+/// use nimiq_lib::config::user_agent::UserAgent;
 /// let user_agent = UserAgent::default();
 /// ```
 ///
