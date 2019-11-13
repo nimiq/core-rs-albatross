@@ -2,6 +2,7 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate failure;
+#[macro_use]
 extern crate log;
 #[cfg(feature = "lazy_static")]
 #[macro_use]
@@ -20,4 +21,4 @@ pub mod policy;
 #[cfg(feature = "networks")]
 pub mod networks;
 #[cfg(feature = "validators")]
-pub mod validators;
+pub mod slot;

@@ -11,6 +11,7 @@ use primitives::policy::TWO_THIRD_SLOTS;
 use block_albatross::signed;
 use messages::Message;
 use bls::bls12_381::PublicKey;
+use collections::bitset::BitSet;
 
 use handel::protocol::Protocol;
 use handel::multisig::{IndividualSignature, Signature};
@@ -86,13 +87,24 @@ impl ValidatorRegistry {
 
 impl IdentityRegistry for ValidatorRegistry {
     fn public_key(&self, id: usize) -> Option<PublicKey> {
-        self.validators.read().get_public_key(id).and_then(|(pubkey, _)| pubkey.uncompressed())
+        self.validators.read().get_public_key(id)
+            .and_then(|pubkey| pubkey.uncompressed())
     }
 }
 
 impl WeightRegistry for ValidatorRegistry {
     fn weight(&self, id: usize) -> Option<usize> {
-        self.validators.read().get_public_key(id).map(|(_, weight)| weight)
+        self.validators.read().get_num_slots(id)
+    }
+
+    // NOTE: This is implemented by the trait, but we want to lock only once.
+    fn signers_weight(&self, signers: &BitSet) -> Option<usize> {
+        let validators = self.validators.read();
+        let mut votes = 0;
+        for id in signers.iter() {
+            votes += validators.get_num_slots(id)?;
+        }
+        Some(votes)
     }
 }
 

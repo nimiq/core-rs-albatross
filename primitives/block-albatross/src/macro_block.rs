@@ -6,24 +6,16 @@ use failure::Fail;
 
 use beserial::{Deserialize, Serialize};
 use bls::bls12_381::CompressedSignature;
-use bls::bls12_381::lazy::LazyPublicKey;
 use collections::bitset::BitSet;
-use collections::compressed_list::CompressedList;
 use hash::{Blake2bHash, Hash, SerializeContent};
-use keys::Address;
 use primitives::coin::Coin;
-use primitives::policy;
-use primitives::validators::{Slot, Slots};
+use primitives::slot::{Slots, ValidatorSlots, StakeSlots};
 
 use crate::BlockError;
 use crate::pbft::PbftProof;
 use crate::signed;
 
-#[derive(Clone, Debug, Fail)]
-pub enum IntoSlotsError {
-    #[fail(display = "Extrinsics missing in macro block")]
-    MissingExtrinsics,
-}
+
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
@@ -36,8 +28,8 @@ pub struct MacroBlock {
 pub struct MacroHeader {
     pub version: u16,
 
-    /// The list of validator public keys for the next epoch.
-    pub validators: CompressedList<LazyPublicKey>,
+    /// Slots with validator information, i.e. their public key.
+    pub validators: ValidatorSlots,
 
     pub block_number: u32,
     pub view_number: u32,
@@ -56,64 +48,47 @@ pub struct MacroHeader {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroExtrinsics {
-    /// Staker and reward addresses for the next epoch's validators.
-    pub slot_addresses: CompressedList<SlotAddresses>,
+    /// Slots with staker information, i.e. staker address and reward address
+    pub stakers: StakeSlots,
     /// The slash fine for the next epoch.
     pub slash_fine: Coin,
     /// The final list of slashes from the previous epoch.
     pub slashed_set: BitSet,
 }
 
+#[derive(Clone, Debug, Fail)]
+pub enum IntoSlotsError {
+    #[fail(display = "Extrinsics missing in macro block")]
+    MissingExtrinsics,
+}
+
 impl TryInto<Slots> for MacroBlock {
     type Error = IntoSlotsError;
 
     fn try_into(self) -> Result<Slots, Self::Error> {
-        if self.extrinsics.is_none() {
-            return Err(IntoSlotsError::MissingExtrinsics);
-        }
-        let extrinsics = self.extrinsics.unwrap();
+        let extrinsics = self.extrinsics
+            .ok_or(IntoSlotsError::MissingExtrinsics)?;
 
-        let public_keys = self.header.validators.into_iter();
-        let addresses = extrinsics.slot_addresses.into_iter();
+        let validator_slots = self.header.validators;
+        let staker_slots = extrinsics.stakers;
 
-        let slots: Vec<Slot> = public_keys.zip(addresses)
-            .map(|(p, a)| Slot {
-                public_key: p.clone(),
-                staker_address: a.staker_address.clone(),
-                reward_address_opt: if a.reward_address == a.staker_address {
-                    None
-                } else {
-                    Some(a.reward_address.clone())
-                }
-            })
-            .collect();
-        assert_eq!(slots.len(), policy::SLOTS as usize);
-
-        let slash_fine = extrinsics.slash_fine;
-        Ok(Slots::new(slots, slash_fine))
+        Ok(Slots::new(validator_slots, staker_slots))
     }
 }
 
 // CHECKME: Check for performance
 impl MacroExtrinsics {
-    pub fn from(slots: Slots, slashed_set: BitSet) -> Self {
-        let addresses = slots.iter().map(|slot| SlotAddresses {
-            staker_address: slot.staker_address.clone(),
-            reward_address: slot.reward_address_opt.as_ref().unwrap_or(&slot.staker_address).clone(),
-        });
-        let slash_fine = slots.slash_fine();
+    pub fn from_stake_slots_and_slashed_set(stake_slots: StakeSlots, slashed_set: BitSet) -> Self {
+        // TODO: Slash fine will be removed. Instead of patching it into our Slots struct, we'll
+        //       just set the fine to 0.
+        let slash_fine = Coin::ZERO;
+
         MacroExtrinsics {
-            slot_addresses: addresses.collect(),
+            stakers: stake_slots,
             slash_fine,
             slashed_set,
         }
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SlotAddresses {
-    pub staker_address: Address,
-    pub reward_address: Address,
 }
 
 impl signed::Message for MacroHeader {
@@ -124,15 +99,6 @@ impl MacroBlock {
     pub fn verify(&self) -> Result<(), BlockError> {
         if self.header.block_number >= 1 && self.justification.is_none() {
             return Err(BlockError::NoJustification);
-        }
-        if !self.header.validators.verify() || self.header.validators.len() != policy::SLOTS as usize {
-            return Err(BlockError::InvalidValidators);
-        }
-        if let Some(ref extrinsics) = self.extrinsics {
-            let addr = &extrinsics.slot_addresses;
-            if !addr.verify() || addr.len() != policy::SLOTS as usize {
-                return Err(BlockError::InvalidValidators);
-            }
         }
         Ok(())
     }

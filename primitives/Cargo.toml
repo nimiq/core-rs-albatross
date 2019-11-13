@@ -25,13 +25,15 @@ hex = { version = "0.4", optional = true }
 lazy_static = { version = "1.2", optional = true }
 failure = { version = "0.1", optional = true}
 enum-display-derive = { version = "0.1", optional = true }
-beserial = "0.1"
+bitvec = "0.15"
+itertools = { version = "0.8", optional = true }
+beserial = { version = "0.1", features = ["bitvec"] }
 beserial_derive = "0.1"
 nimiq-macros = { version = "0.1", optional = true }
 fixed-unsigned = { version = "0.1", optional = true }
 nimiq-bls = { version = "0.1", features = ["beserial"], optional = true }
 nimiq-keys = { version = "0.1", optional = true }
-nimiq-collections = "0.1"
+nimiq-utils = { version = "0.1", features = ["math"], optional = true}
 
 [dev-dependencies]
 lazy_static = "1.2"
@@ -42,4 +44,4 @@ coin = ["hex", "failure"]
 account = ["hex", "nimiq-macros", "failure", "enum-display-derive"]
 policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static", "fixed-unsigned"]
 networks = []
-validators = ["nimiq-bls", "nimiq-keys"]
+validators = ["nimiq-bls", "nimiq-keys", "nimiq-utils", "beserial/bitvec", "itertools"]

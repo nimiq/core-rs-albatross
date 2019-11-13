@@ -12,7 +12,13 @@ pub struct LazyPublicKey {
 
 impl fmt::Debug for LazyPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "LazyPublicKey({})", &hex::encode(self.compressed.p_pub.as_ref()))
+        write!(f, "LazyPublicKey({})", self.compressed)
+    }
+}
+
+impl fmt::Display for LazyPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(&self.compressed, f)
     }
 }
 

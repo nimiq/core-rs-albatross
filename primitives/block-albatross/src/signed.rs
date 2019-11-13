@@ -3,20 +3,10 @@ use std::marker::PhantomData;
 
 use beserial::{Serialize, Deserialize, WriteBytesExt};
 use bls::bls12_381::{Signature, SecretKey, PublicKey, AggregateSignature, AggregatePublicKey};
-use bls::bls12_381::lazy::LazyPublicKey;
 use bls::SigHash;
 use hash::{Blake2bHasher, SerializeContent, Hasher};
 use collections::bitset::BitSet;
-use collections::grouped_list::{Group, GroupedList};
-
-// TODO: Move this to primitives?
-
-// TODO: To use a binomial swap forest:
-//  * instead of pk_idx use a bitvec
-//  * instead of signature use a AggregateSignature
-//  * (all, not just active) validators are identifiable by ID which has the common prefix metric
-//  * The sender of a SignedValidatorMessage includes it's ID
-//  * Add other messages (authenticated) for: Invite, Later, No
+use primitives::slot::{ValidatorSlots, SlotCollection, SlotIndex, SlotBand};
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -205,23 +195,25 @@ impl<M: Message> AggregateProof<M> {
         }
     }
 
+    pub fn votes(&self, validators: &ValidatorSlots) -> Result<u16, AggregateProofError> {
+        votes_for_signers(validators, &self.signers)
+    }
+
     /// Verify message against aggregate signature and check the required number of signatures.
     /// Expects valid validator public keys.
-    pub fn verify(&self, message: &M, validators: &GroupedList<LazyPublicKey>, threshold: u16) -> Result<(), AggregateProofError> {
+    pub fn verify(&self, message: &M, validators: &ValidatorSlots, threshold: u16) -> Result<(), AggregateProofError> {
         // Aggregate signatures and count votes
         let mut public_key = AggregatePublicKey::new();
-        let mut num_slots = 0;
+        let mut votes = 0;
         for signer_idx in self.signers.iter() {
-            let validator: &Group<LazyPublicKey> = validators
-                .groups().get(signer_idx)
-                .ok_or(AggregateProofError::InvalidSignerIndex)
-                .map_err(|e| { trace!("Invalid signer index"); e })?;
-            public_key.aggregate(&validator.1.uncompress_unchecked());
-            num_slots += validator.0;
+            let validator = validators.get_by_band_number(signer_idx as u16)
+                .ok_or_else(|| AggregateProofError::InvalidSignerIndex(signer_idx as u16))?;
+            public_key.aggregate(&validator.public_key().uncompress_unchecked());
+            votes += validator.num_slots();
         }
 
-        if num_slots < threshold {
-            return Err(AggregateProofError::InsufficientSigners(num_slots, threshold));
+        if votes < threshold {
+            return Err(AggregateProofError::InsufficientSigners(votes, threshold));
         }
 
         if !public_key.verify_hash(message.hash_with_prefix(), &self.signature) {
@@ -233,10 +225,20 @@ impl<M: Message> AggregateProof<M> {
     }
 }
 
+pub fn votes_for_signers(validators: &ValidatorSlots, signers: &BitSet) -> Result<u16, AggregateProofError> {
+    let mut votes = 0;
+    for signer_idx in signers.iter() {
+        votes += validators.get_num_slots(SlotIndex::Band(signer_idx as u16))
+            .ok_or_else(|| AggregateProofError::InvalidSignerIndex(signer_idx as u16))?;
+    }
+    Ok(votes)
+}
+
+
 #[derive(Clone, Debug, PartialEq, Eq, Fail)]
 pub enum AggregateProofError {
-    #[fail(display = "Invalid signer index")]
-    InvalidSignerIndex,
+    #[fail(display = "Invalid signer index: {}", _0)]
+    InvalidSignerIndex(u16),
     #[fail(display = "Invalid signature")]
     InvalidSignature,
     #[fail(display = "Insufficient signers (got {}, want {})", _0, _1)]

@@ -162,19 +162,14 @@ impl ValidatorAgent {
         let block_number = fork_proof.block_number();
         let view_number = fork_proof.view_number();
 
-        let producer = self.blockchain.get_block_producer_at(block_number, view_number, None);
-        if producer.is_none() {
-            debug!("[FORK-PROOF] Unknown block producer for #{}.{}", block_number, view_number);
-            return;
-        }
+        if let Some((slot, _)) = self.blockchain.get_slot_at(block_number, view_number, None) {
+            if let Err(e) = fork_proof.verify(&slot.public_key().uncompress_unchecked()) {
+                debug!("[FORK-PROOF] Invalid signature in fork proof: {:?}", e);
+                return;
+            }
 
-        let slot = producer.unwrap().slot;
-        if let Err(e) = fork_proof.verify(&slot.public_key.uncompress_unchecked()) {
-            debug!("[FORK-PROOF] Invalid signature in fork proof: {:?}", e);
-            return;
+            self.notifier.read().notify(ValidatorAgentEvent::ForkProof(Box::new(fork_proof)));
         }
-
-        self.notifier.read().notify(ValidatorAgentEvent::ForkProof(Box::new(fork_proof)));
     }
 
     fn check_view_change_epoch(&self, view_change: &ViewChange) -> bool {

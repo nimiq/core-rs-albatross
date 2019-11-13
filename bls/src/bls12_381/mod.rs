@@ -9,7 +9,7 @@ use failure::Fail;
 
 #[cfg(feature = "beserial")]
 use beserial::{Serialize, Deserialize};
-use hash::{Hash, HashOutput};
+use hash::Hash;
 
 use super::{
     AggregatePublicKey as GenericAggregatePublicKey,

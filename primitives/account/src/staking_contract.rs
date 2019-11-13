@@ -12,11 +12,8 @@ use bls::bls12_381::CompressedSignature as BlsSignature;
 use collections::SegmentTree;
 use keys::Address;
 use hash::{Blake2bHasher, Hasher};
-use primitives::{
-    policy,
-    coin::Coin,
-    validators::{Slot, Slots},
-};
+use primitives::{policy, coin::Coin};
+use primitives::slot::{Slots, SlotsBuilder};
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::StakingTransactionData;
 
@@ -370,7 +367,7 @@ impl StakingContract {
         let mut min_stake = Coin::ZERO;
         let mut total_stake = Coin::ZERO;
 
-        trace!("Select validators: num_slots = {}, max_considered = {}", num_slots, max_considered);
+        debug!("Select validators: num_slots = {}, max_considered = {}", num_slots, max_considered);
 
         // Build potential validator set and find minimum stake.
         // Iterate from highest balance to lowest.
@@ -412,7 +409,7 @@ impl StakingContract {
         // Build active validator set: Use the VRF to pick validators
         // XXX If we hash both `i` and `counter` and reset `counter` for every slot, this can be
         //     parallelized.
-        let mut validators = Vec::<Slot>::with_capacity(num_slots as usize);
+        let mut slots_builder = SlotsBuilder::default();
         let mut counter: u16 = 0;
         for _ in 0..num_slots {
             let active_stake = loop {
@@ -442,17 +439,14 @@ impl StakingContract {
                 }
             };
 
-            validators.push(Slot {
-                public_key: active_stake.validator_key.clone().into(),
-                reward_address_opt: active_stake.reward_address.clone(),
-                staker_address: active_stake.staker_address.clone(),
-            });
+            slots_builder.push(
+                active_stake.validator_key.clone(),
+                active_stake.staker_address.clone(),
+                active_stake.reward_address.clone()
+            );
         }
 
-        // Sorting by public key allows us to later compress this in the MacroHeader by removing duplicates
-        validators.sort_unstable_by(|a, b| b.public_key.cmp(&a.public_key));
-
-        Slots::new(validators, min_stake)
+        slots_builder.build()
     }
 
     fn get_signer(transaction: &Transaction) -> Result<Address, AccountError> {

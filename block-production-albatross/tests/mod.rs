@@ -8,13 +8,12 @@ use nimiq_blockchain_albatross::blockchain::{Blockchain, PushError, PushResult};
 use nimiq_blockchain_base::AbstractBlockchain;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_bls::bls12_381::lazy::LazyPublicKey;
-use nimiq_collections::grouped_list::{Group, GroupedList};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_primitives::{networks::NetworkId};
 use nimiq_primitives::policy;
-use nimiq_primitives::validators::Validators;
+use nimiq_primitives::slot::{ValidatorSlots, ValidatorSlotBand};
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
@@ -108,7 +107,7 @@ fn sign_view_change(block_number: u32, new_view_number: u32) -> ViewChangeProof 
     assert_eq!(proof_builder.verify(&view_change, policy::TWO_THIRD_SLOTS), Ok(()));
 
     let proof = proof_builder.build();
-    let validators = GroupedList(vec![Group(policy::SLOTS, LazyPublicKey::from(keypair.public))]);
+    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(LazyPublicKey::from(keypair.public), policy::SLOTS)]);
     assert_eq!(proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS), Ok(()));
 
     proof

@@ -26,6 +26,36 @@ impl Coin {
     pub fn from_u64_unchecked(val: u64) -> Coin {
         Coin(val)
     }
+
+    // NOTE: We implement a trait that does this, but we don't always want to have to import
+    // a whole create to check if a coin value is zero.
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+
+    #[inline]
+    pub fn checked_add(self, rhs: Coin) -> Option<Coin> {
+        match self.0.checked_add(rhs.0) {
+            Some(val) => Coin::try_from(val).ok(),
+            None => None,
+        }
+    }
+
+    #[inline]
+    pub fn checked_sub(self, rhs: Coin) -> Option<Coin> {
+        match self.0.checked_sub(rhs.0) {
+            Some(val) => Coin::try_from(val).ok(),
+            None => None,
+        }
+    }
+
+    #[inline]
+    pub fn checked_mul(self, times: u64) -> Option<Coin> {
+        match self.0.checked_mul(times) {
+            Some(val) => Coin::try_from(val).ok(),
+            None => None,
+        }
+    }
 }
 
 impl From<Coin> for u64 {
@@ -145,34 +175,6 @@ impl Serialize for Coin {
         Serialize::serialized_size(&self.0)
     }
 }
-
-
-impl Coin {
-    #[inline]
-    pub fn checked_add(self, rhs: Coin) -> Option<Coin> {
-        match self.0.checked_add(rhs.0) {
-            Some(val) => Coin::try_from(val).ok(),
-            None => None,
-        }
-    }
-
-    #[inline]
-    pub fn checked_sub(self, rhs: Coin) -> Option<Coin> {
-        match self.0.checked_sub(rhs.0) {
-            Some(val) => Coin::try_from(val).ok(),
-            None => None,
-        }
-    }
-
-    #[inline]
-    pub fn checked_mul(self, times: u64) -> Option<Coin> {
-        match self.0.checked_mul(times) {
-            Some(val) => Coin::try_from(val).ok(),
-            None => None,
-        }
-    }
-}
-
 
 #[derive(Debug, Fail)]
 pub enum CoinParseError {

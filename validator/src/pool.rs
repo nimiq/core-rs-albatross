@@ -4,7 +4,7 @@ use std::sync::Arc;
 use bls::bls12_381::CompressedPublicKey;
 use bls::bls12_381::lazy::LazyPublicKey;
 use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
-use primitives::validators::Validators;
+use primitives::slot::{ValidatorSlots, SlotBand, SlotCollection};
 use blockchain_albatross::Blockchain;
 use network::Network;
 use hash::{Hash, Blake2bHash};
@@ -43,7 +43,7 @@ pub struct ValidatorPool {
     active_validator_agents: HashMap<usize, Arc<ValidatorAgent>>,
 
     /// Public keys and weights of active validators
-    active_validators: Validators,
+    active_validators_slots: ValidatorSlots,
 }
 
 
@@ -56,7 +56,7 @@ impl ValidatorPool {
             validator_id_by_pubkey: BTreeMap::new(),
             potential_validators: BTreeMap::new(),
             active_validator_agents: HashMap::new(),
-            active_validators: Validators::empty(),
+            active_validators_slots: ValidatorSlots::default(),
         }
     }
 
@@ -64,15 +64,15 @@ impl ValidatorPool {
         self.blacklist.insert(pubkey);
     }
 
-    pub fn reset_epoch(&mut self, validators: &Validators) {
+    pub fn reset_epoch(&mut self, validators: &ValidatorSlots) {
         // clear data of last epoch
         self.validator_id_by_pubkey.clear();
         self.active_validator_agents.clear();
-        self.active_validators = validators.clone();
+        self.active_validators_slots = validators.clone();
 
-        for (validator_id, validator) in validators.iter_groups().enumerate() {
+        for (validator_id, validator) in validators.iter().enumerate() {
             // create mapping from public key to validator ID
-            let pubkey = validator.1.compressed();
+            let pubkey = validator.public_key().compressed();
             self.validator_id_by_pubkey.insert(pubkey.clone(), validator_id);
 
             if let Some(validator) = self.potential_validators.get(pubkey) {
@@ -87,7 +87,7 @@ impl ValidatorPool {
                 self.connect_to_peer(&info.message);
             }
             else {
-                warn!("No validator info for: {} ({} votes)", validator_id, validator.0);
+                warn!("No validator info for: {} ({} votes)", validator_id, validator.num_slots());
             }
         }
     }
@@ -195,9 +195,14 @@ impl ValidatorPool {
             .map(|(_, agent)| Arc::clone(&agent))
     }
 
-    pub fn get_public_key(&self, validator_id: usize) -> Option<(&LazyPublicKey, usize)> {
-        self.active_validators.get(validator_id)
-            .map(|g| (&g.1, g.0 as usize))
+    pub fn get_public_key(&self, validator_id: usize) -> Option<&LazyPublicKey> {
+        self.active_validators_slots.get_by_band_number(validator_id as u16)
+            .map(|validator| validator.public_key())
+    }
+
+    pub fn get_num_slots(&self, validator_id: usize) -> Option<usize> {
+        self.active_validators_slots.get_by_band_number(validator_id as u16)
+            .map(|validator| validator.num_slots() as usize)
     }
 
     pub fn get_validator_info(&self, pubkey: &CompressedPublicKey) -> Option<&SignedValidatorInfo> {
@@ -205,7 +210,7 @@ impl ValidatorPool {
     }
 
     pub fn active_validator_count(&self) -> usize {
-        self.active_validators.num_groups()
+        self.active_validators_slots.len()
     }
 
     pub fn iter_validator_infos(&self) -> impl Iterator<Item=&SignedValidatorInfo> {

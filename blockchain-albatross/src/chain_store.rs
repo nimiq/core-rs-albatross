@@ -111,20 +111,21 @@ impl ChainStore {
         };
 
         // Iterate until we find the main chain block.
-        let mut chain_info: ChainInfo;
-        while {
-            // Loop condition
-            chain_info = txn
-                .get(&self.chain_db, &block_hash)
+        let mut chain_info = loop {
+            let chain_info: ChainInfo = txn.get(&self.chain_db, &block_hash)
                 .expect("Corrupted store: ChainInfo referenced from index not found");
-            !chain_info.on_main_chain
-        } {
-            // Loop Body
+
+            // If it's on the main chain we can return from loop
+            if chain_info.on_main_chain {
+                break chain_info;
+            }
+
+            // Get next blokc hash
             block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
                 Some((_, hash)) => hash,
                 None => return None
             };
-        }
+        };
 
         if include_body {
             if let Some(block) = txn.get(&self.block_db, &block_hash) {

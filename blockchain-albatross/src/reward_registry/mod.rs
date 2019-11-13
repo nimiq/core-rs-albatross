@@ -1,7 +1,9 @@
+mod reward_pot;
+
+
 use std::borrow::Cow;
 use std::io;
 use std::io::Write;
-use std::iter::FromIterator;
 use std::sync::Arc;
 
 use failure::Fail;
@@ -15,15 +17,12 @@ use database::cursor::{ReadCursor, WriteCursor};
 use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
 use primitives::policy;
-use primitives::validators::{IndexedSlot, Slots};
+use primitives::slot::{Slots, Slot, SlotIndex};
 use transaction::Transaction as BlockchainTransaction;
 
 use crate::chain_store::ChainStore;
 use crate::reward_registry::reward_pot::RewardPot;
-pub use crate::reward_registry::slashed_slots::SlashedSlots;
 
-mod reward_pot;
-mod slashed_slots;
 
 pub struct SlashRegistry {
     env: Environment,
@@ -91,23 +90,23 @@ impl SlashRegistry {
     ///  * `seed`- Seed of previous block
     ///  * `staking_contract` - Contract used to check minimum stakes
     #[inline]
-    pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
+    pub fn commit_block(&self, txn: &mut WriteTransaction, block: &Block, prev_view_number: u32) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(ref macro_block) => {
-                self.reward_pot.commit_macro_block(macro_block, slots, prev_view_number, txn);
-                self.commit_macro_block(txn, macro_block, slots, prev_view_number)?;
+                self.reward_pot.commit_macro_block(macro_block, txn);
+                self.commit_macro_block(txn, macro_block, prev_view_number)?;
                 self.gc(txn, policy::epoch_at(macro_block.header.block_number));
                 Ok(())
             },
             Block::Micro(ref micro_block) => {
-                self.reward_pot.commit_micro_block(micro_block, slots, prev_view_number, txn);
-                self.commit_micro_block(txn, micro_block, slots, prev_view_number)
+                self.reward_pot.commit_micro_block(micro_block, txn);
+                self.commit_micro_block(txn, micro_block, prev_view_number)
             },
         }
     }
 
-    pub fn commit_epoch(&self, txn: &mut WriteTransaction, block_number: u32, transactions: &[BlockchainTransaction], slashed_slots: &BitSet, slots: &Slots) -> Result<(), SlashPushError> {
-        self.reward_pot.commit_epoch(block_number, transactions, slashed_slots, slots, txn);
+    pub fn commit_epoch(&self, txn: &mut WriteTransaction, block_number: u32, transactions: &[BlockchainTransaction], slashed_slots: &BitSet) -> Result<(), SlashPushError> {
+        self.reward_pot.commit_epoch(block_number, transactions, txn);
 
         // Just put the whole epochs slashed set at the macro blocks position.
         // We don't have slash info for the current epoch though.
@@ -155,16 +154,16 @@ impl SlashRegistry {
         BlockDescriptor { prev_epoch_state, epoch_state }
     }
 
-    fn commit_macro_block(&self, txn: &mut WriteTransaction, block: &MacroBlock, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
+    fn commit_macro_block(&self, txn: &mut WriteTransaction, block: &MacroBlock, prev_view_number: u32) -> Result<(), SlashPushError> {
         let mut epoch_diff = BitSet::new();
 
         let BlockDescriptor { prev_epoch_state, mut epoch_state } = self.get_epoch_state(txn, block.header.block_number);
 
         // Mark from view changes, ignoring duplicates.
         for view in prev_view_number..block.header.view_number {
-            let slot_owner = self.slot_owner(block.header.block_number, view, slots, Some(&txn))
-                .expect("Could not determine block producer in the current epoch");
-            epoch_diff.insert(slot_owner.idx as usize);
+            let slot_number = self.get_slot_number_at(block.header.block_number, view, Some(&txn))
+                .unwrap();
+            epoch_diff.insert(slot_number as usize);
         }
 
         // Apply slashes.
@@ -179,7 +178,7 @@ impl SlashRegistry {
         Ok(())
     }
 
-    fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
+    fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock, prev_view_number: u32) -> Result<(), SlashPushError> {
         let block_epoch = policy::epoch_at(block.header.block_number);
         let mut epoch_diff = BitSet::new();
         let mut prev_epoch_diff = BitSet::new();
@@ -189,20 +188,20 @@ impl SlashRegistry {
         for fork_proof in fork_proofs {
             let block_number = fork_proof.header1.block_number;
             let view_number = fork_proof.header1.view_number;
-            let slot_owner = self.slot_owner(block_number, view_number, slots, Some(&txn))
-                .expect("Could not determine block producer in the current epoch");
+            let slot_number = self.get_slot_number_at(block_number, view_number, Some(&txn))
+                .unwrap();
 
             let slash_epoch = policy::epoch_at(block_number);
             if block_epoch == slash_epoch {
-                if epoch_diff.contains(slot_owner.idx as usize) {
+                if epoch_diff.contains(slot_number as usize) {
                     return Err(SlashPushError::DuplicateForkProof);
                 }
-                epoch_diff.insert(slot_owner.idx as usize);
+                epoch_diff.insert(slot_number as usize);
             } else if block_epoch == slash_epoch + 1 {
-                if prev_epoch_diff.contains(slot_owner.idx as usize) {
+                if prev_epoch_diff.contains(slot_number as usize) {
                     return Err(SlashPushError::DuplicateForkProof);
                 }
-                prev_epoch_diff.insert(slot_owner.idx as usize);
+                prev_epoch_diff.insert(slot_number as usize);
             } else {
                 return Err(SlashPushError::InvalidEpochTarget);
             }
@@ -247,9 +246,9 @@ impl SlashRegistry {
 
         // Mark from view changes, ignoring duplicates.
         for view in prev_view_number..block.header.view_number {
-            let slot_owner = self.slot_owner(block.header.block_number, view, slots, Some(&txn))
-                .expect("Could not determine block producer in the current epoch");
-            epoch_diff.insert(slot_owner.idx as usize);
+            let slot_number = self.get_slot_number_at(block.header.block_number, view, Some(&txn))
+                .unwrap();
+            epoch_diff.insert(slot_number as usize);
         }
 
         // Apply slashes.
@@ -286,9 +285,9 @@ impl SlashRegistry {
     }
 
     #[inline]
-    pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block, slots: &Slots, prev_view_number: u32) -> Result<(), SlashPushError> {
+    pub fn revert_block(&self, txn: &mut WriteTransaction, block: &Block) -> Result<(), SlashPushError> {
         if let Block::Micro(ref block) = block {
-            self.reward_pot.revert_micro_block(block, &slots, prev_view_number, txn);
+            self.reward_pot.revert_micro_block(block, txn);
             self.revert_micro_block(txn, block)
         } else {
             unreachable!()
@@ -300,38 +299,53 @@ impl SlashRegistry {
         Ok(())
     }
 
-    // Get slot owner at block and view number
-    pub fn slot_owner(&self, block_number: u32, view_number: u32, slots: &Slots, txn_option: Option<&Transaction>) -> Option<IndexedSlot> {
+    /// Get slot and slot number for a given block and view number
+    pub fn get_slot_at(&self, block_number: u32, view_number: u32, slots: &Slots, txn_option: Option<&Transaction>) -> Option<(Slot, u16)> {
+        let slot_number = self.get_slot_number_at(block_number, view_number, txn_option)?;
+        let slot = slots.get(SlotIndex::Slot(slot_number))
+            .unwrap_or_else(|| panic!("Expected slot {} to exist", slot_number));
+        Some((slot, slot_number))
+    }
+
+    /// TODO: Return an error for this, so we don't have to write the same error message for `expect`s all over the place.
+    pub(crate) fn get_slot_number_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<u16> {
         // Get context
-        if let Some(prev_block) = self.chain_store
-            .get_block_at(block_number - 1, false, txn_option) {
+        let prev_block = self.chain_store.get_block_at(block_number - 1, false, txn_option)?;
 
-            // Get slots of epoch
-            let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number, txn_option).unwrap();
-            let honest_validators = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
+        // TODO: Refactor:
+        // * Use HashRng
+        // * Instead of sampling from the honest "validators" (which are slots really),
+        //   create a list of slot numbers that are still enabled. Then sample from that and
+        //   you'll have the proper slot_number instead of a "honest slot index".
 
-            // Hash seed and index
+        // Get slashed set for epoch
+        let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number, txn_option)
+            .ok()?;
+
+        let mut i: u16 = 0;
+        let slot_number = loop {
+            // Hash seed, view number and a nonce to retry of the returned number is out of range
+            // or the corresponding slot is disabled.
             let mut hash_state = Blake2bHasher::new();
             prev_block.seed().serialize(&mut hash_state).unwrap();
             hash_state.write_all(&view_number.to_be_bytes()).unwrap();
+            hash_state.write_all(&i.to_be_bytes()).unwrap();
+
+            // Get slot number from first 16 bytes
             let hash = hash_state.finish();
+            let mut buf = [0_u8; 2];
+            buf.copy_from_slice(&hash.as_bytes()[0..2]);
+            // FIXME: Use better RNG
+            let slot_number = u16::from_be_bytes(buf) % policy::SLOTS;
 
-            // Get number from first 8 bytes
-            let mut num_bytes = [0u8; 8];
-            num_bytes.copy_from_slice(&hash.as_bytes()[..8]);
-            let num = u64::from_be_bytes(num_bytes);
+            if !slashed_set.contains(slot_number as usize) {
+                break slot_number;
+            }
 
-            // XXX This is not uniform!
-            let index = num % honest_validators.len() as u64;
-            Some(IndexedSlot {
-                idx: index as u16,
-                slot: honest_validators[index as usize].clone()
-            })
-        }
-        else {
-            // XXX No slot owner available for this block. Use an Result?
-            None
-        }
+            i += 1;
+        };
+
+        Some(slot_number)
     }
 
     // Get latest known slash set of epoch

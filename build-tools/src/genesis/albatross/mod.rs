@@ -1,4 +1,3 @@
-use std::collections::btree_map::BTreeMap;
 use std::convert::TryFrom;
 use std::fs::{OpenOptions, read_to_string};
 use std::io::Error as IoError;
@@ -13,21 +12,16 @@ use accounts::Accounts;
 use beserial::{Serialize, SerializingError};
 use block_albatross::{Block, MacroBlock, MacroExtrinsics, MacroHeader};
 use bls::bls12_381::{
-    CompressedPublicKey as CompressedBlsPublicKey,
     PublicKey as BlsPublicKey,
     SecretKey as BlsSecretKey,
-    Signature as BlsSignature,
 };
-use bls::bls12_381::lazy::LazyPublicKey;
 use collections::bitset::BitSet;
-use collections::grouped_list::{Group, GroupedList};
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
 use keys::Address;
 use primitives::coin::Coin;
 use primitives::policy;
-use primitives::validators::Slots;
 
 mod config;
 
@@ -158,30 +152,6 @@ impl GenesisBuilder {
         Ok(self)
     }
 
-    fn select_validators(&self, pre_genesis_hash: &BlsSignature, staking_contract: &StakingContract) -> Result<(Slots, GroupedList<LazyPublicKey>), GenesisBuilderError> {
-        let slot_allocation = staking_contract
-            .select_validators(&pre_genesis_hash.compress(), policy::SLOTS, policy::MAX_CONSIDERED as usize);
-
-        let validators = { // construct validator slot list with slot counts
-            // count slots per public key
-            let mut slot_counts: BTreeMap<&CompressedBlsPublicKey, u16> = BTreeMap::new();
-            for validator in slot_allocation.iter() {
-                slot_counts.entry(validator.public_key.compressed())
-                    .and_modify(|x| *x += 1) // if has value, increment
-                    .or_insert(1); // if no value, insert 1
-            }
-
-            // map to Validators
-            GroupedList(
-                slot_counts.iter()
-                    .map(|(key, num)| Group(*num, (*key).clone().into()))
-                    .collect()
-            )
-        };
-
-        Ok((slot_allocation, validators))
-    }
-
     pub fn generate(&self) -> Result<GenesisInfo, GenesisBuilderError> {
         let timestamp = self.timestamp.unwrap_or_else(Utc::now);
 
@@ -193,25 +163,33 @@ impl GenesisBuilder {
         // pre-genesis seed (used for slot selection)
         let pre_genesis_seed = signing_key
             .sign_hash(Blake2bHasher::new().digest(seed_message.as_bytes()));
+        debug!("Pre genesis seed: {}", pre_genesis_seed);
         // seed of genesis block = VRF(seed_0)
         let seed = signing_key.sign(&pre_genesis_seed);
+        debug!("Genesis seed: {}", pre_genesis_seed);
 
         // generate staking contract
         let staking_contract = self.generate_staking_contract()?;
+        debug!("Staking contract: {:#?}", staking_contract);
 
         // generate slot allocation from staking contract
-        let (slot_allocation, validators) = self.select_validators(&pre_genesis_seed, &staking_contract)?;
+        let slots = staking_contract
+            .select_validators(&pre_genesis_seed.compress(), policy::SLOTS, policy::MAX_CONSIDERED as usize);
+        debug!("Slots: {:#?}", slots);
 
         // extrinsics
-        let extrinsics = MacroExtrinsics::from(slot_allocation, BitSet::new());
+        let extrinsics = MacroExtrinsics::from_stake_slots_and_slashed_set(slots.stake_slots, BitSet::new());
         let extrinsics_root = extrinsics.hash::<Blake2bHash>();
         debug!("Extrinsics root: {}", &extrinsics_root);
 
         // accounts
         let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
         genesis_accounts.push((Address::clone(self.staking_contract_address.as_ref().ok_or(GenesisBuilderError::NoStakingContractAddress)?), Account::Staking(staking_contract)));
-        for account in &self.accounts {
-            genesis_accounts.push((account.address.clone(), Account::Basic(BasicAccount { balance: account.balance })));
+        for genesis_account in &self.accounts {
+            let address =genesis_account.address.clone();
+            let account = Account::Basic(BasicAccount { balance: genesis_account.balance });
+            debug!("Adding genesis account: {}: {:?}", address, account);
+            genesis_accounts.push((address, account));
         }
 
         // state root
@@ -228,7 +206,7 @@ impl GenesisBuilder {
         // the header
         let header = MacroHeader {
             version: 1,
-            validators: validators.iter().collect(),
+            validators: slots.validator_slots,
             block_number: 0,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),

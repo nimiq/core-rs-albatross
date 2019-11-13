@@ -10,11 +10,10 @@ use block_albatross::{ViewChangeProof, ViewChange, ViewChangeProofBuilder, Signe
 use bls::bls12_381::KeyPair;
 use primitives::policy;
 use block_albatross::signed::Message;
-use nimiq_collections::grouped_list::{GroupedList, Group};
 use bls::bls12_381::lazy::LazyPublicKey;
 use beserial::Deserialize;
 use hash::{Blake2bHash, Hash};
-
+use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
@@ -38,7 +37,7 @@ fn test_view_change_single_signature() {
     let view_change_proof = proof_builder.build();
 
     // verify view change proof
-    let validators = GroupedList(vec![Group(policy::SLOTS, LazyPublicKey::from(key_pair.public))]);
+    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(LazyPublicKey::from(key_pair.public), policy::SLOTS)]);
     view_change_proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS);
 }
 

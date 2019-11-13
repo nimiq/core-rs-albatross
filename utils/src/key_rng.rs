@@ -4,7 +4,6 @@ use rand::rngs::OsRng;
 pub type SecureRng = OsRng;
 
 pub trait SecureGenerate: Sized {
-    #[inline]
     fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self;
 
     #[inline]

@@ -65,7 +65,7 @@ fn main_inner() -> Result<(), Error> {
 
                 // Periodically show some info
                 Interval::new_interval(Duration::from_secs(10))
-                    .map_err(|e| panic!("Timer failed"))
+                    .map_err(|e| panic!("Timer failed: {}", e))
                     .for_each(move |_| {
                         let peer_count = client.network().connections.peer_count();
                         let head = client.blockchain().head().clone();

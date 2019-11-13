@@ -42,7 +42,7 @@ use crate::websocket::error::ServerStartError;
 // once as a client and once as the server). This is equivalent to the `abort()`
 // method on the WebSocketConnector on the JavaScript implementation.
 pub struct ConnectionHandle {
-    closing_tx: Mutex<Option<oneshot::Sender<(CloseType)>>>,
+    closing_tx: Mutex<Option<oneshot::Sender<CloseType>>>,
     closed: AtomicBool,
 }
 

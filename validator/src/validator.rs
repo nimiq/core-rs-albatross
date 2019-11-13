@@ -29,12 +29,10 @@ use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use blockchain_base::BlockchainEvent;
 use bls::bls12_381::KeyPair;
-use collections::grouped_list::Group;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
 use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
-use primitives::validators::IndexedSlot;
 use utils::mutable_once::MutableOnce;
 use utils::timers::Timers;
 use utils::observer::ListenerHandle;
@@ -387,12 +385,15 @@ impl Validator {
             },
         };
 
-        // Check if we are the next block producer and act accordingly
-        let IndexedSlot { slot, .. } = self.blockchain.get_next_block_producer(view_number, None);
-        let public_key = self.validator_key.public.compress();
-        trace!("Next block producer: {:?}", slot.public_key.compressed());
+        // Get slot for next block
+        let (slot, slot_number) = self.blockchain.get_slot_for_next_block(view_number, None);
+        trace!("Next block producer: Slot #{}: {}", slot_number, slot.public_key());
 
-        if slot.public_key.compressed() == &public_key {
+        // Get our public key
+        let our_public_key = self.validator_key.public.compress();
+
+        // Check if we're the slot owner
+        if slot.public_key().compressed() == &our_public_key {
             let weak = self.self_weak.clone();
             trace!("Spawning thread to produce next block");
             tokio::spawn(futures::lazy(move || {
@@ -509,11 +510,8 @@ impl Validator {
      }
 
     fn get_pk_idx_and_slots(&self) -> Option<(u16, u16)> {
-        let compressed = self.validator_key.public.compress();
-        let validator_list = self.blockchain.current_validators();
-        let item = validator_list.groups().iter().enumerate()
-            .find(|(_, Group(_, public_key))| public_key.compressed() == &compressed);
-        item.map(|(i, Group(num_slots, _))| (i as u16, *num_slots))
+        self.blockchain.current_validators()
+            .find_idx_and_num_slots_by_public_key(&self.validator_key.public.compress())
     }
 
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {

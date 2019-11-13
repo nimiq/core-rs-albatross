@@ -12,8 +12,7 @@ use nimiq_network_primitives::{networks::NetworkId};
 use nimiq_primitives::policy;
 use nimiq_blockchain_base::AbstractBlockchain;
 use nimiq_block_albatross::signed::SignedMessage;
-use nimiq_primitives::validators::Validators;
-use nimiq_collections::grouped_list::{GroupedList, Group};
+use nimiq_primitives::slot::ValidatorSlots;
 use nimiq_blockchain_base::Direction;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`

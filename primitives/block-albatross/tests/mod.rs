@@ -1,16 +1,15 @@
 use std::convert::{TryFrom, TryInto};
-use std::iter::repeat;
+use std::str::FromStr;
 
 use beserial::Deserialize;
-use nimiq_block_albatross::{MacroBlock, MacroExtrinsics, MacroHeader, SlotAddresses};
+use nimiq_block_albatross::{MacroBlock, MacroExtrinsics, MacroHeader};
 use nimiq_bls::bls12_381::lazy::LazyPublicKey;
-use nimiq_bls::bls12_381::Signature;
+use nimiq_bls::bls12_381::{Signature, CompressedPublicKey};
 use nimiq_collections::bitset::BitSet;
-use nimiq_collections::compressed_list::CompressedList;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::coin::Coin;
-use nimiq_primitives::validators::Slots;
+use nimiq_primitives::slot::{Slots, StakeSlots, StakeSlotBand, ValidatorSlots, ValidatorSlotBand};
 
 #[test]
 fn it_can_convert_macro_block_into_slots() {
@@ -25,16 +24,11 @@ fn it_can_convert_macro_block_into_slots() {
         (126u16, "accc156ac10d2d1cc7fc0c565acea9295e2d258608f280c076b4679c5a465fb9fcd8f22c6f9179cd8f7d63aaa04b9d3a088b1f3764cb93c67dc3a21c94666f5b729fa9f058ad65eb023aeaaaa2c39112bac4c613374d82a0e3407df4595d1535"),
         (130u16, "abdaf5ac13036550362c2d3c5f1848fd6ab1898c75311381bd022d6a2a7909d526ad7a6aaafbaf8f64f11a3af5f220fa0a150b022394ff5da765016b7e6a2525fbe63c65b2e382989de3ecb04038e24c9f782e7965c2b3ec179c7715ecf7f191"),
     ];
-    let validators: CompressedList<LazyPublicKey> = slot_allocation.iter()
-        .map(|(num, entry)| {
-            let vec = hex::decode(entry).unwrap();
-            let key = LazyPublicKey::deserialize(&mut &vec[..]).unwrap();
-            (num, key)
+    let validator_slots: ValidatorSlots = slot_allocation.into_iter()
+        .map(|(num_slots, pubkey_str)| { ;
+            let pubkey = CompressedPublicKey::from_str(pubkey_str).unwrap();
+            ValidatorSlotBand::new(pubkey, num_slots)
         })
-        .flat_map(|(num, key)|
-            repeat(key)
-            .take((*num) as usize)
-        )
         .collect();
 
     let address_allocation = vec![
@@ -43,21 +37,15 @@ fn it_can_convert_macro_block_into_slots() {
         (129u16, "6a15f2277cce1bde7e265c84d2a727653b31884c"),
         (130u16, "31020442803a81db35ac5f67f29d87924a0eaf76"),
     ];
-    let slot_addresses: CompressedList<SlotAddresses> = address_allocation.iter()
-        .flat_map(|(num, address)|
-            repeat(SlotAddresses {
-                reward_address: Address::from(*address),
-                staker_address: Address::from(*address),
-            })
-            .take((*num) as usize)
-        )
+    let stake_slots: StakeSlots = address_allocation.into_iter()
+        .map(|(num, address)| StakeSlotBand::new(Address::from(address), None, num))
         .collect();
 
 
     let macro_block = MacroBlock {
         header: MacroHeader {
             version: 1,
-            validators: validators.clone(),
+            validators: validator_slots.clone(),
             block_number: 42,
             view_number: 0,
             parent_macro_hash: hash.clone(),
@@ -70,20 +58,14 @@ fn it_can_convert_macro_block_into_slots() {
         },
         justification: None,
         extrinsics: Some(MacroExtrinsics {
-            slot_addresses: slot_addresses.clone(),
+            stakers: stake_slots.clone(),
             slash_fine: Coin::try_from(8u64).unwrap(),
             slashed_set: BitSet::new(),
         }),
     };
 
-    let slots: Slots = macro_block.try_into().unwrap();
+    let slots = Slots::new(validator_slots, stake_slots);
+    let slots_from_macro: Slots = macro_block.try_into().unwrap();
 
-    validators.into_iter()
-        .zip(slot_addresses.into_iter())
-        .zip(slots.into_iter())
-        .for_each(|((key, addresses), slot)| {
-            assert_eq!(&slot.public_key, key);
-            assert_eq!(&addresses.staker_address, &slot.staker_address);
-            assert_eq!(&addresses.reward_address, slot.reward_address());
-        });
+    assert_eq!(slots, slots_from_macro);
 }

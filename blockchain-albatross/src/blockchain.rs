@@ -2,9 +2,10 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::iter::{Chain, Flatten, FromIterator, Map};
+use std::iter::{Chain, Flatten, Map};
 use std::sync::Arc;
 use std::vec::IntoIter;
+
 
 use parking_lot::{MappedMutexGuard, MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 
@@ -17,10 +18,7 @@ use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
 use bls::bls12_381::{CompressedSignature, PublicKey};
-use bls::bls12_381::lazy::LazyPublicKey;
 use collections::bitset::BitSet;
-use collections::compressed_list::CompressedList;
-use collections::grouped_list::GroupedList;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
@@ -29,7 +27,7 @@ use network_primitives::time::NetworkTime;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use primitives::validators::{IndexedSlot, Slots, Validator, Validators};
+use primitives::slot::{Slots, Slot, ValidatorSlots, SlotIndex, SlotBand};
 use transaction::{Transaction as BlockchainTransaction, TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
@@ -38,8 +36,9 @@ use utils::observer::{Listener, ListenerHandle, Notifier};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
-use crate::reward_registry::{EpochStateError, SlashedSlots, SlashRegistry};
+use crate::reward_registry::{EpochStateError, SlashRegistry};
 use crate::transaction_cache::TransactionCache;
+
 
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
@@ -111,10 +110,10 @@ pub struct BlockchainState {
     macro_head: MacroBlock,
     macro_head_hash: Blake2bHash,
 
-    current_validators: Option<Validators>,
-    last_validators: Option<Validators>,
+    // TODO: Instead of Option, we could use a Cell here and use replace on it. That way we know
+    // at compile-time that there is always a valid value in there.
     current_slots: Option<Slots>,
-    last_slots: Option<Slots>,
+    previous_slots: Option<Slots>,
 }
 
 impl BlockchainState {
@@ -135,7 +134,15 @@ impl BlockchainState {
     }
 
     pub fn last_slots(&self) -> Option<&Slots> {
-        self.last_slots.as_ref()
+        self.previous_slots.as_ref()
+    }
+
+    pub fn current_validators(&self) -> Option<&ValidatorSlots> {
+        Some(&self.current_slots.as_ref()?.validator_slots)
+    }
+
+    pub fn last_validators(&self) -> Option<&ValidatorSlots> {
+        Some(&self.previous_slots.as_ref()?.validator_slots)
     }
 
     pub fn current_slashed_set(&self) -> BitSet {
@@ -202,13 +209,13 @@ impl Blockchain {
         let slash_registry = SlashRegistry::new(env.clone(), Arc::clone(&chain_store));
 
         // Current slots and validators
-        let (current_slots, current_validators) = Self::slots_and_validators_from_block(&macro_head);
+        let current_slots = Self::slots_from_block(&macro_head);
 
         // Get last slots and validators
         let prev_block = chain_store.get_block(&macro_head.header.parent_macro_hash, true, None);
-        let (last_slots, last_validators) = match prev_block {
-            Some(Block::Macro(prev_macro_block)) => Self::slots_and_validators_from_block(&prev_macro_block),
-            None => (Slots::new(vec![], Coin::ZERO), GroupedList::empty()),
+        let last_slots = match prev_block {
+            Some(Block::Macro(prev_macro_block)) => Self::slots_from_block(&prev_macro_block),
+            None => Slots::default(),
             _ => return Err(BlockchainError::InconsistentState),
         };
 
@@ -227,9 +234,7 @@ impl Blockchain {
                 macro_head,
                 macro_head_hash,
                 current_slots: Some(current_slots),
-                current_validators: Some(current_validators),
-                last_slots: Some(last_slots),
-                last_validators: Some(last_validators),
+                previous_slots: Some(last_slots),
             }),
             push_lock: Mutex::new(()),
 
@@ -266,8 +271,8 @@ impl Blockchain {
         let slash_registry = SlashRegistry::new(env.clone(), Arc::clone(&chain_store));
 
         // current slots and validators
-        let (current_slots, current_validators) = Self::slots_and_validators_from_block(&genesis_macro_block);
-        let (last_slots, last_validators) = (Slots::new(vec![], Coin::ZERO), GroupedList::empty());
+        let current_slots = Self::slots_from_block(&genesis_macro_block);
+        let last_slots = Slots::default();
 
         Ok(Blockchain {
             env,
@@ -284,9 +289,7 @@ impl Blockchain {
                 macro_head: genesis_macro_block.clone(),
                 macro_head_hash: head_hash,
                 current_slots: Some(current_slots.clone()),
-                current_validators: Some(current_validators.clone()),
-                last_slots: Some(last_slots),
-                last_validators: Some(last_validators),
+                previous_slots: Some(last_slots),
             }),
             push_lock: Mutex::new(()),
 
@@ -295,23 +298,19 @@ impl Blockchain {
         })
     }
 
-    // TODO: Replace by proper conversion traits
-    fn slots_and_validators_from_block(block: &MacroBlock) -> (Slots, Validators) {
-        let validators = block.header.validators.clone();
-        let slots = block.clone().try_into().unwrap();
-        (slots, validators.into())
+    fn slots_from_block(block: &MacroBlock) -> Slots {
+        block.clone().try_into().unwrap()
     }
 
     pub fn get_slots_for_epoch(&self, epoch: u32) -> Option<Slots> {
         let state = self.state.read();
         let current_epoch = policy::epoch_at(state.main_chain.head.block_number());
-        let last_epoch = current_epoch - 1;
 
         let slots = if epoch == current_epoch {
             state.current_slots.as_ref()?.clone()
         }
         else if epoch == current_epoch - 1 {
-            state.last_slots.as_ref()?.clone()
+            state.previous_slots.as_ref()?.clone()
         }
         else {
             let macro_block = self.get_block_at(policy::macro_block_of(epoch), true)?
@@ -322,16 +321,15 @@ impl Blockchain {
         Some(slots)
     }
 
-    pub fn get_validators_for_epoch(&self, epoch: u32) -> Option<Validators> {
+    pub fn get_validators_for_epoch(&self, epoch: u32) -> Option<ValidatorSlots> {
         let state = self.state.read();
         let current_epoch = policy::epoch_at(state.main_chain.head.block_number());
-        let last_epoch = current_epoch - 1;
 
         let validators = if epoch == current_epoch {
-            state.current_validators.as_ref()?.clone()
+            state.current_validators()?.clone()
         }
         else if epoch == current_epoch - 1 {
-            state.last_validators.as_ref()?.clone()
+            state.last_validators()?.clone()
         }
         else {
             self.get_block_at(policy::macro_block_of(epoch), true)?
@@ -468,12 +466,11 @@ impl Blockchain {
             Block::Micro(ref micro_block) => micro_block.justification.view_change_proof.as_ref().into(),
         };
 
-        // Public keys are checked when staking, so this should never fail.
-        let slot: IndexedSlot = self.get_block_producer_at(block.block_number(), block.view_number(), Some(&read_txn))
-            .ok_or(PushError::InvalidSuccessor)?;
+        let (slot, _) = self.get_slot_at(block.block_number(), block.view_number(), Some(&read_txn))
+            .unwrap();
 
         {
-            let intended_slot_owner = slot.slot.public_key.uncompress_unchecked();
+            let intended_slot_owner = slot.public_key().uncompress_unchecked();
             // This will also check that the type at this block number is correct.
             if let Err(e) = self.verify_block_header(&block.header(), view_change_proof, &intended_slot_owner, Some(&read_txn)) {
                 warn!("Rejecting block - Bad header / justification");
@@ -490,7 +487,7 @@ impl Blockchain {
                 }
             };
 
-            let intended_slot_owner = slot.slot.public_key.uncompress_unchecked();
+            let intended_slot_owner = slot.public_key().uncompress_unchecked();
             if !intended_slot_owner.verify(&micro_block.header, &justification) {
                 warn!("Rejecting block - invalid justification for intended slot owner");
                 debug!("Block hash: {}", micro_block.header.hash::<Blake2bHash>());
@@ -500,17 +497,13 @@ impl Blockchain {
 
             // Validate slash inherents
             for fork_proof in &micro_block.extrinsics.as_ref().unwrap().fork_proofs {
-                match self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number, Some(&read_txn)) {
-                    None => {
-                        warn!("Rejecting block - Bad fork proof: Unknown block owner");
-                        return Err(PushError::InvalidSuccessor)
-                    },
-                    Some(IndexedSlot { slot, .. }) => {
-                        if fork_proof.verify(&slot.public_key.uncompress_unchecked()).is_err() {
-                            warn!("Rejecting block - Bad fork proof: invalid owner signature");
-                            return Err(PushError::InvalidSuccessor)
-                        }
-                    }
+                // NOTE: if this returns None, that means that at least the previous block doesn't exist, so that fork proof is invalid anyway.
+                let (slot, _) = self.get_slot_at(fork_proof.header1.block_number, fork_proof.header1.view_number, Some(&read_txn))
+                    .ok_or(PushError::InvalidSuccessor)?;
+
+                if fork_proof.verify(&slot.public_key().uncompress_unchecked()).is_err() {
+                    warn!("Rejecting block - Bad fork proof: invalid owner signature");
+                    return Err(PushError::InvalidSuccessor)
                 }
             }
         }
@@ -547,7 +540,7 @@ impl Blockchain {
             }
         }
 
-        let chain_info = ChainInfo::new(block, Some(slot));
+        let chain_info = ChainInfo::new(block);
 
         // Drop read transaction before calling other functions.
         drop(read_txn);
@@ -591,7 +584,7 @@ impl Blockchain {
             slashed_set = Some(state.reward_registry.slashed_set(policy::epoch_at(chain_info.head.block_number()) - 1, Some(&txn)));
         }
 
-        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"), prev_info.head.next_view_number()) {
+        if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, prev_info.head.next_view_number()) {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }
@@ -610,15 +603,14 @@ impl Blockchain {
         // Only now can we check macro extrinsics.
         if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
             let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
-            let computed_validators: Validators = slots.clone().into();
-            let computed_validators: CompressedList<LazyPublicKey> = computed_validators.into();
-            if computed_validators != macro_block.header.validators {
+
+            if slots.validator_slots != macro_block.header.validators {
                 warn!("Rejecting block - Validators don't match real validators");
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
 
             let slashed_set = slashed_set.unwrap();
-            let computed_extrinsics: MacroExtrinsics = MacroExtrinsics::from(slots, slashed_set);
+            let computed_extrinsics = MacroExtrinsics::from_stake_slots_and_slashed_set(slots.stake_slots, slashed_set);
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
@@ -647,13 +639,10 @@ impl Blockchain {
             state.macro_head_hash = block_hash.clone();
 
             let slots = state.current_slots.take().unwrap();
-            let validators = state.current_validators.take().unwrap();
-            state.last_slots.replace(slots);
-            state.last_validators.replace(validators);
+            state.previous_slots.replace(slots);
 
-            let (slot, validators) = Self::slots_and_validators_from_block(&macro_block);
+            let slot = Self::slots_from_block(&macro_block);
             state.current_slots.replace(slot);
-            state.current_validators.replace(validators);
         }
 
         let block_type = chain_info.head.ty();
@@ -723,8 +712,7 @@ impl Blockchain {
 
                     self.revert_accounts(&state.accounts, &mut write_txn, &micro_block, prev_info.head.view_number())?;
 
-                    let slots = state.current_slots.as_ref().expect("Current slots missing while rebranching");
-                    state.reward_registry.revert_block(&mut write_txn, &current.1.head, slots, prev_info.head.view_number()).unwrap();
+                    state.reward_registry.revert_block(&mut write_txn, &current.1.head).unwrap();
 
                     cache_txn.revert_block(&current.1.head);
 
@@ -758,7 +746,7 @@ impl Blockchain {
                 Block::Macro(_) => unreachable!(),
                 Block::Micro(ref micro_block) => {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
-                        state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head, state.current_slots.as_ref().expect("Current slots missing while rebranching"), prev_view_number)
+                        state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head, prev_view_number)
                             .map_err(|_| PushError::InvalidBlock(BlockError::InvalidSlash))
                             .and_then(|_| self.commit_accounts(&state, &mut write_txn, &fork_block.1.head))
 
@@ -990,7 +978,7 @@ impl Blockchain {
         // Drop read transaction before creating the write transaction.
         drop(read_txn);
 
-        let chain_info = ChainInfo::new(block, None);
+        let chain_info = ChainInfo::new(block);
 
         self.extend_isolated_macro(chain_info.head.hash(), transactions,chain_info, prev_info, push_lock)
     }
@@ -1007,15 +995,17 @@ impl Blockchain {
             macro_block.extrinsics.as_ref().unwrap().slashed_set.clone()
         } else { unreachable!() };
 
-        if let Err(e) = state.reward_registry.commit_epoch(&mut txn, block_number, transactions, &slashed_set, state.current_slots.as_ref().expect("Current slots missing while rebranching")) {
+        let result = state.reward_registry
+            .commit_epoch(&mut txn, block_number, transactions, &slashed_set);
+        if let Err(e) = result {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
         }
 
         // We cannot check the accounts hash yet.
         // Apply transactions and inherents to AccountsTree.
-        let slots = state.last_slots.as_ref().expect("Slots for last epoch are missing");
-        let mut inherents = self.inherents_from_slashed_set(&slashed_set, slots, Some(&txn));
+        let slots = state.previous_slots.as_ref().expect("Slots for last epoch are missing");
+        let mut inherents = self.inherents_from_slashed_set(&slashed_set, slots);
         inherents.append(&mut self.finalize_last_epoch(&state));
 
         // Commit epoch to AccountsTree.
@@ -1035,14 +1025,12 @@ impl Blockchain {
         // Only now can we check macro extrinsics.
         if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
             let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
-            let computed_validators: Validators = slots.clone().into();
-            let computed_validators: CompressedList<LazyPublicKey> = computed_validators.into();
-            if computed_validators != macro_block.header.validators {
+            if slots.validator_slots != macro_block.header.validators {
                 warn!("Rejecting block - Validators don't match real validators");
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
 
-            let computed_extrinsics = MacroExtrinsics::from(slots, slashed_set);
+            let computed_extrinsics = MacroExtrinsics::from_stake_slots_and_slashed_set(slots.stake_slots, slashed_set);
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
@@ -1068,13 +1056,10 @@ impl Blockchain {
             state.macro_head_hash = block_hash.clone();
 
             let slots = state.current_slots.take().unwrap();
-            let validators = state.current_validators.take().unwrap();
-            state.last_slots.replace(slots);
-            state.last_validators.replace(validators);
+            state.previous_slots.replace(slots);
 
-            let (slot, validators) = Self::slots_and_validators_from_block(&macro_block);
-            state.current_slots.replace(slot);
-            state.current_validators.replace(validators);
+            let slots = Self::slots_from_block(&macro_block);
+            state.current_slots.replace(slots);
         } else {
             unreachable!("Block is not a macro block");
         }
@@ -1188,10 +1173,9 @@ impl Blockchain {
         self.state.read().macro_head_hash.clone()
     }
 
-    pub fn get_next_block_producer(&self, view_number: u32, txn_option: Option<&Transaction>) -> IndexedSlot {
+    pub fn get_slot_for_next_block(&self, view_number: u32, txn_option: Option<&Transaction>) -> (Slot, u16) {
         let block_number = self.height() + 1;
-        self.get_block_producer_at(block_number, view_number, txn_option)
-            .expect("Can't get block producer for next block")
+        self.get_slot_at(block_number, view_number, txn_option).unwrap()
     }
 
     pub fn next_slots(&self, seed: &CompressedSignature, txn_option: Option<&Transaction>) -> Slots {
@@ -1203,7 +1187,7 @@ impl Blockchain {
         panic!("Account at validator registry address is not the stacking contract!");
     }
 
-    pub fn next_validators(&self, seed: &CompressedSignature, txn: Option<&Transaction>) -> Validators {
+    pub fn next_validators(&self, seed: &CompressedSignature, txn: Option<&Transaction>) -> ValidatorSlots {
         self.next_slots(seed, txn).into()
     }
 
@@ -1221,13 +1205,8 @@ impl Blockchain {
         }
     }
 
-    pub fn get_current_validator_by_idx(&self, validator_idx: u16) -> Option<Validator> {
-        self.current_validators().0.get(validator_idx as usize).map(Validator::clone)
-    }
-
-    pub fn get_block_producer_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<IndexedSlot> {
-        // Try to get block producer using state
-
+    // TODO: Lock my screen. No.
+    pub fn get_slot_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<(Slot, u16)> {
         let state = self.state.read_recursive();
 
         let read_txn;
@@ -1239,44 +1218,26 @@ impl Blockchain {
             &read_txn
         };
 
+        // Gets slots collection from either the cached ones, or from the macro block.
         let slots_owned;
-        let slots;
-        if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) {
-            slots = state.current_slots.as_ref().expect("Missing current epoch's slots");
-        } else if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1 {
-            slots = state.last_slots.as_ref().expect("Missing previous epoch's slots");
-        } else {
+        let slots = if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) {
+            state.current_slots.as_ref().expect("Missing current epoch's slots")
+        }
+        else if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1 {
+            state.previous_slots.as_ref()
+                .unwrap_or_else(|| panic!("Missing previous epoch's slots for block {}.{}", block_number, view_number))
+        }
+        else {
             let macro_block = self.chain_store
-                .get_block_at(policy::macro_block_before(block_number), true, Some(&txn))
-                .or_else(|| {
-                    warn!("Failed to determine slots - preceding macro block not found: block_number={}, view_number={}, state.block_number()={}", block_number, view_number, state.block_number());
-                    None
-                })?
+                .get_block_at(policy::macro_block_before(block_number), true, Some(&txn))?
                 .unwrap_macro();
 
             // Get slots of epoch
             slots_owned = macro_block.try_into().unwrap();
-            slots = &slots_owned;
-        }
+            &slots_owned
+        };
 
-        let idx_slot = state.reward_registry.slot_owner(block_number, view_number, slots, Some(&txn));
-        drop(state);
-
-        if idx_slot.is_some() {
-            return idx_slot;
-        }
-
-        // Try to get block producer from chain store
-        // if outside of range tracked by registry
-
-        let epoch_number = policy::epoch_at(block_number);
-        if block_number >= policy::first_block_of_registry(epoch_number) {
-            return None;
-        }
-
-        self.chain_store.get_chain_info_at(block_number, false, Some(&txn))
-            .filter(|info| view_number == info.head.view_number())
-            .and_then(|info| info.slot)
+        state.reward_registry.get_slot_at(block_number, view_number, slots, Some(&txn))
     }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState> {
@@ -1284,7 +1245,7 @@ impl Blockchain {
     }
 
     pub fn create_slash_inherents(&self, fork_proofs: &[ForkProof], view_changes: &Option<ViewChanges>, txn_option: Option<&Transaction>) -> Vec<Inherent> {
-        let mut inherents = vec![];
+        /*let mut inherents = vec![];
         for fork_proof in fork_proofs {
             inherents.push(self.inherent_from_fork_proof(fork_proof, txn_option));
         }
@@ -1292,19 +1253,20 @@ impl Blockchain {
             inherents.append(&mut self.inherents_from_view_changes(view_changes, txn_option));
         }
 
-        inherents
+        inherents*/
+        vec![]
     }
 
     /// Expects a *verified* proof!
     pub fn inherent_from_fork_proof(&self, fork_proof: &ForkProof, txn_option: Option<&Transaction>) -> Inherent {
-        let producer = self.get_block_producer_at(fork_proof.header1.block_number, fork_proof.header1.view_number, txn_option)
-            .expect("Failed to create inherent from fork proof - could not get block producer");
+        let (producer, _) = self.get_slot_at(fork_proof.header1.block_number, fork_proof.header1.view_number, txn_option)
+            .unwrap();
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         Inherent {
             ty: InherentType::Slash,
             target: validator_registry.clone(),
             value: self.slash_fine_at(fork_proof.header1.block_number),
-            data: producer.slot.staker_address.serialize_to_vec(),
+            data: producer.staker_address().serialize_to_vec(),
         }
     }
 
@@ -1313,53 +1275,40 @@ impl Blockchain {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
 
         (view_changes.first_view_number .. view_changes.last_view_number).map(|view_number| {
-            let producer = self.get_block_producer_at(view_changes.block_number, view_number, txn_option)
-                .expect("Failed to create inherent from fork proof - could not get block producer");
-
+            let (producer, _) = self.get_slot_at(view_changes.block_number, view_number, txn_option)
+                .unwrap();
             let slash_fine = self.slash_fine_at(view_changes.block_number);
-            debug!("Slash inherent: view change: {} NIM, {}", slash_fine, producer.slot.staker_address.to_user_friendly_address());
+            debug!("Slash inherent: view change: {} NIM, {}", slash_fine, producer.staker_address().to_user_friendly_address());
 
             Inherent {
                 ty: InherentType::Slash,
                 target: validator_registry.clone(),
                 value: slash_fine,
-                data: producer.slot.staker_address.serialize_to_vec(),
+                data: producer.staker_address().serialize_to_vec(),
             }
         }).collect::<Vec<Inherent>>()
     }
 
     /// Expects a *verified* proof!
-    pub fn inherents_from_slashed_set(&self, slashed_set: &BitSet, slots: &Slots, txn_option: Option<&Transaction>) -> Vec<Inherent> {
-        let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
+    pub fn inherents_from_slashed_set(&self, slashed_set: &BitSet, slots: &Slots) -> Vec<Inherent> {
+        let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address()
+            .expect("No ValidatorRegistry");
 
-        slashed_set.iter().map(|slot_index| {
-            let producer = slots.get(slot_index);
+        slashed_set.iter().map(|slot_number| {
+            let producer = slots.get(SlotIndex::Slot(slot_number as u16))
+                .unwrap_or_else(|| panic!("Missing slot for slot number: {}", slot_number));
             Inherent {
                 ty: InherentType::Slash,
                 target: validator_registry.clone(),
-                value: slots.slash_fine(),
-                data: producer.staker_address.serialize_to_vec(),
+                value: Coin::ZERO,
+                data: producer.staker_address().serialize_to_vec(),
             }
         }).collect::<Vec<Inherent>>()
     }
 
-    fn slash_fine_at(&self, block_number: u32) -> Coin {
-        let state = self.state.read_recursive();
-        let head_number = state.block_number();
-        let current_fine = state.current_slots().map(|s| s.slash_fine());
-        let last_fine = state.last_slots().map(|s| s.slash_fine());
-        drop(state);
-
-        let current_epoch = policy::epoch_at(head_number + 1);
-        let slash_epoch = policy::epoch_at(block_number);
-        if slash_epoch == current_epoch {
-            current_fine.unwrap_or_else(|| panic!("Tried to retrieve slash fine with unknown current slots"))
-        } else if slash_epoch + 1 == current_epoch {
-            last_fine.unwrap_or_else(|| panic!("Tried to retrieve slash fine with unknown last slots"))
-        } else {
-            // TODO Error handling
-            panic!("Tried to retrieve slash fine outside of reporting window");
-        }
+    #[deprecated]
+    fn slash_fine_at(&self, _block_number: u32) -> Coin {
+        Coin::ZERO
     }
 
     // Get slash set of epoch at specific block number
@@ -1369,19 +1318,17 @@ impl Blockchain {
         s.reward_registry.slashed_set_at(epoch_number, block_number, None)
     }
 
-    pub fn current_validators(&self) -> MappedRwLockReadGuard<Validators> {
+    pub fn current_validators(&self) -> MappedRwLockReadGuard<ValidatorSlots> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.current_validators.as_ref().unwrap())
+        RwLockReadGuard::map(guard, |s| s.current_validators().unwrap())
     }
 
-    pub fn last_validators(&self) -> MappedRwLockReadGuard<Validators> {
+    pub fn last_validators(&self) -> MappedRwLockReadGuard<ValidatorSlots> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| s.last_validators.as_ref().unwrap())
+        RwLockReadGuard::map(guard, |s| s.last_validators().unwrap())
     }
 
     pub fn finalize_last_epoch(&self, state: &BlockchainState) -> Vec<Inherent> {
-        let mut inherents = Vec::new();
-
         // It might be that we don't have any micro blocks, thus we need to look at the next macro block.
         let epoch = policy::epoch_at(policy::macro_block_after(state.main_chain.head.block_number())) - 1;
 
@@ -1400,23 +1347,70 @@ impl Blockchain {
         };
         */
 
-        // Find slots that are eligible for rewards.
-        // TODO: Proper error handling.
-        let slots = state.last_slots.clone().expect("Slots for last epoch are missing");
-        let slashed_set = state.reward_registry.slashed_set(epoch, None);
-        let reward_eligible = Vec::from_iter(SlashedSlots::new(&slots, &slashed_set).enabled().cloned());
-        let reward_pot: Coin = state.reward_registry.previous_reward_pot();
-        let num_eligible = reward_eligible.len() as u64;
+        // Get stake slots
+        // NOTE: Field `last_slots` is expected to be always set.
+        let stake_slots = &state.previous_slots.as_ref()
+            .expect("Slots for last epoch are missing")
+            .stake_slots;
 
-        let initial_reward = reward_pot / num_eligible;
+        // Slashed slots
+        let slashed_set = state.reward_registry.slashed_set(epoch, None);
+
+        // Total reward for this epoch
+        // TODO: Compute reward from the epoch we are in and add the remainder from last epoch
+        let reward_pot: Coin = state.reward_registry.previous_reward_pot();
+
+        // Number of slots that are eligible for a reward. That is the total number minus all
+        // slashed slots
+        let num_eligible = (policy::SLOTS as u64) - (slashed_set.len() as u64);
+
+        // Distribute reward between all slots
+        let slot_reward = reward_pot / num_eligible;
         let mut remainder = reward_pot % num_eligible;
 
-        for slot in reward_eligible.iter() {
-            let reward = initial_reward;
+        // The first slot number of the current stake
+        let mut first_slot_number = 0;
+        // Peekable iterator to collect slashed slots for stake
+        let mut slashed_set_iter = slashed_set.iter().peekable();
+
+        // All accepted inherents.
+        let mut inherents = Vec::new();
+        // Remember the number of eligible slots a stake had (that was able to accept the inherent)
+        let mut num_eligible_slots_for_accepted_inherent = Vec::new();
+        // Total number of slots that were able to accept the inherent
+        let mut total_accepting_slots = 0;
+
+        // Compute inherents
+        for stake_slot in stake_slots.iter() {
+            // The interval of slot numbers for the current slot band is
+            // [first_slot_number, last_slot_number). So it actually doesn't include
+            // `last_slot_number`.
+            let last_slot_number = first_slot_number + stake_slot.num_slots();
+
+            // Compute the number of slashes for this stake slot band.
+            let mut num_eligible_slots = stake_slot.num_slots();
+            while let Some(next_slashed_slot) = slashed_set_iter.peek() {
+                let next_slashed_slot = *next_slashed_slot as u16;
+                assert!(next_slashed_slot > first_slot_number);
+                if next_slashed_slot < last_slot_number {
+                    assert!(num_eligible_slots > 0);
+                    num_eligible_slots -= 1;
+                }
+                else {
+                    break;
+                }
+            }
+
+            // Update first_slot_number for next iteration
+            first_slot_number = last_slot_number;
+
+            // Compute reward from slot reward and number of eligible slots.
+            let reward = slot_reward.checked_mul(num_eligible_slots as u64)
+                .expect("Overflow in reward");
 
             let inherent = Inherent {
                 ty: InherentType::Reward,
-                target: slot.reward_address_opt.as_ref().unwrap_or(&slot.staker_address).clone(),
+                target: stake_slot.reward_address().clone(),
                 value: reward,
                 data: vec![],
             };
@@ -1424,25 +1418,25 @@ impl Blockchain {
             // Test whether account will accept inherent.
             let account = state.accounts.get(&inherent.target, None);
             if account.check_inherent(&inherent).is_err() {
+                debug!("{} can't accept epoch reward {}", inherent.target, inherent.value);
                 remainder += reward;
             } else {
+                num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
+                total_accepting_slots += num_eligible_slots;
                 inherents.push(inherent);
             }
         }
 
-        // Distribute over accepting slots.
-        let accepting_slots = inherents.len() as u64;
-        let reward = remainder / accepting_slots;
-        let remainder = u64::from(remainder % accepting_slots);
+        // Check that number of accepted inherents is equal to length of the map that gives us the
+        // corresponding number of slots for that staker.
+        assert_eq!(inherents.len(), num_eligible_slots_for_accepted_inherent.len());
 
-        for (i, inherent) in inherents.iter_mut().enumerate() {
-            let mut additional_reward = reward;
-            // Distribute remaining reward across the largest stakers.
-            if (i as u64) < remainder {
-                additional_reward += Coin::from_u64_unchecked(1);
-            }
-
-            inherent.value += additional_reward;
+        // TODO: Randomly distribute remainder over accepting slots.
+        // We need to have a stable VRF implementation first.
+        if !remainder.is_zero() {
+            // Distribute the remainder randomly
+            debug!("Distributing remainder of {} NIM over {} accepting reward addresses and {} accepting slots", remainder, inherents.len(), total_accepting_slots);
+            warn!("Unimplemented! Burning remainder: {} NIM", remainder);
         }
 
         inherents

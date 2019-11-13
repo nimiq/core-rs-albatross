@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::hash::Hasher;
 
 use beserial::{Serialize, Deserialize};
 use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};

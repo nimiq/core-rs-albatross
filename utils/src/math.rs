@@ -11,7 +11,6 @@ pub fn log2(x: usize) -> usize {
 }
 
 pub trait CeilingDiv {
-    #[inline]
     fn ceiling_div(self, rhs: Self) -> Self;
 }
 

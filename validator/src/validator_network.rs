@@ -16,14 +16,12 @@ use block_albatross::{
 };
 use block_albatross::signed::AggregateProof;
 use blockchain_albatross::Blockchain;
-use collections::grouped_list::Group;
 use hash::{Blake2bHash, Hash};
 use messages::{Message, ViewChangeProofMessage};
 use network::{Network, NetworkEvent, Peer};
 use network_primitives::validator_info::{SignedValidatorInfo};
 use network_primitives::address::PeerId;
 use primitives::policy::{SLOTS, TWO_THIRD_SLOTS, is_macro_block_at};
-use primitives::validators::IndexedSlot;
 use utils::mutable_once::MutableOnce;
 use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
 use handel::aggregation::AggregationEvent;
@@ -34,6 +32,7 @@ use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
 use crate::signature_aggregation::view_change::ViewChangeAggregation;
 use crate::signature_aggregation::pbft::PbftAggregation;
 use crate::pool::ValidatorPool;
+use primitives::slot::SlotCollection;
 
 
 #[derive(Clone, Debug, Fail)]
@@ -97,42 +96,37 @@ impl PbftState {
         let block_number = self.proposal.message.header.block_number;
         let view_number = self.proposal.message.header.view_number;
 
-        // Can we verify validity of macro block?
-        let IndexedSlot { slot, .. } = chain.get_block_producer_at(block_number, view_number, None)
-            .expect("check_verified() called without enough micro blocks");
+        // Verify that the proposer is actually the slot owner
+        if let Some((slot, slot_number)) = chain.get_slot_at(block_number, view_number, None) {
+            let validator_id_opt = chain.current_validators().get_band_number_by_slot_number(slot_number);
+            if validator_id_opt == Some(self.proposal.signer_idx) {
+                // get validator's public key from slot
+                let public_key = slot.public_key().uncompress_unchecked();
 
-        // Check the signer index
-        if let Some(ref validator) = chain.get_current_validator_by_idx(self.proposal.signer_idx) {
-            let Group(_, validator_key) = validator;
-            // Does the key own the current slot?
-            if validator_key != &slot.public_key {
-                return false;
+                // Check the validity of the block
+                // TODO: We check the view change proof the second time here if previously buffered
+                let result = chain.verify_block_header(
+                    &BlockHeader::Macro(self.proposal.message.header.clone()),
+                    self.proposal.message.view_change.as_ref().into(),
+                    &public_key,
+                    None // TODO Would it make sense to pass a Read transaction?
+                );
+                if let Err(e) = result {
+                    debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
+                    return false;
+                }
+
+                // Check the signature of the proposal
+                if !self.proposal.verify(&public_key) {
+                    debug!("[PBFT-PROPOSAL] Invalid signature");
+                    return false;
+                }
+
+                return true;
             }
-        } else {
-            // No validator at this index
-            return false;
         }
 
-        // Check the validity of the block
-        // TODO: We check the view change proof the second time here if previously buffered
-        if let Err(e) = chain.verify_block_header(
-            &BlockHeader::Macro(self.proposal.message.header.clone()),
-            self.proposal.message.view_change.as_ref().into(),
-            &slot.public_key.uncompress().unwrap(),
-            None // TODO Would it make sense to pass a Read transaction?
-        ) {
-            debug!("[PBFT-PROPOSAL] Invalid macro block header: {:?}", e);
-            return false;
-        }
-
-        // Check the signature of the proposal
-        let public_key = &slot.public_key.uncompress_unchecked();
-        if !self.proposal.verify(&public_key) {
-            debug!("[PBFT-PROPOSAL] Invalid signature");
-            return false;
-        }
-
-        true
+        false
     }
 }
 
@@ -753,14 +747,6 @@ impl ValidatorNetwork {
     // Legacy broadcast methods -------------------------
     //
     // These are still used to relay `ValidatorInfo` and `PbftProposal`
-
-    /// Broadcast to all known validators
-    fn broadcast_potential(&self, msg: Message) {
-        trace!("Broadcast to potential validators: {}", msg.ty());
-        for agent in self.validators.read().iter_potential() {
-            agent.peer.channel.send_or_close(msg.clone());
-        }
-    }
 
     /// Broadcast to all known validators
     fn broadcast_active(&self, msg: Message) {

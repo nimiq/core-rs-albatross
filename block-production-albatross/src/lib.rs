@@ -22,11 +22,11 @@ use block::MicroJustification;
 use blockchain::blockchain::Blockchain;
 use blockchain_base::AbstractBlockchain;
 use bls::bls12_381::{CompressedSignature, KeyPair};
-use collections::compressed_list::CompressedList;
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
 use primitives::policy;
+use primitives::slot::ValidatorSlots;
 
 pub struct BlockProducer {
     pub blockchain: Arc<Blockchain>,
@@ -87,7 +87,7 @@ impl BlockProducer {
         let slashed_set = self.blockchain.state()
             .reward_registry()
             .slashed_set(prev_epoch, None);
-        MacroExtrinsics::from(self.blockchain.next_slots(seed, Some(txn)), slashed_set)
+        MacroExtrinsics::from_stake_slots_and_slashed_set(self.blockchain.next_slots(seed, Some(txn)).stake_slots, slashed_set)
     }
 
     fn next_micro_extrinsics(&self, fork_proofs: Vec<ForkProof>, extra_data: Vec<u8>, view_changes: &Option<ViewChanges>) -> MicroExtrinsics {
@@ -132,7 +132,7 @@ impl BlockProducer {
 
         let mut header = MacroHeader {
             version: Block::VERSION,
-            validators: CompressedList::empty(),
+            validators: ValidatorSlots::default(),
             block_number,
             view_number,
             parent_macro_hash,
@@ -149,7 +149,7 @@ impl BlockProducer {
             header: header.clone(),
             justification: None,
             extrinsics: None,
-        }), state.current_slots().expect("Current slots missing while rebranching"), self.blockchain.view_number())
+        }), self.blockchain.view_number())
             .expect("Failed to commit dummy block to reward registry");
 
         let mut inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
