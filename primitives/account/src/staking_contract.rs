@@ -1,25 +1,26 @@
 use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::collections::btree_set::BTreeSet;
-use std::collections::HashMap;
-use std::io::Write;
+use std::mem;
 use std::sync::Arc;
-use std::convert::TryInto;
-use std::ops::AddAssign;
 
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use rand::distributions::Distribution;
+use rand::distributions::weighted::alias_method::WeightedIndex;
+use rand::SeedableRng;
+
+use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
 use bls::bls12_381::CompressedSignature as BlsSignature;
-use collections::SegmentTree;
+use hash::Blake2bHash;
 use keys::Address;
-use hash::{Blake2bHasher, Hasher};
 use primitives::{policy, coin::Coin};
 use primitives::slot::{Slots, SlotsBuilder};
 use transaction::{SignatureProof, Transaction};
-use transaction::account::staking_contract::StakingTransactionData;
+use transaction::account::staking_contract::{StakingTransactionData, StakingTransactionType};
+use utils::hash_rng::HashRng;
 
 use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
 use crate::inherent::{AccountInherentInteraction, Inherent, InherentType};
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ActiveStake {
@@ -52,6 +53,17 @@ impl Ord for ActiveStake {
     }
 }
 
+impl ActiveStake {
+    pub fn with_balance(&self, balance: Coin) -> Self {
+        ActiveStake {
+            staker_address: self.staker_address.clone(),
+            balance,
+            validator_key: self.validator_key.clone(),
+            reward_address: self.reward_address.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct InactiveStake {
     pub balance: Coin,
@@ -69,11 +81,15 @@ struct InactiveStakeReceipt {
     retire_time: u32,
 }
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
+struct UnparkReceipt {
+    current_epoch: bool,
+    previous_epoch: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 struct SlashReceipt {
-    active: Option<ActiveStakeReceipt>,
-    split: Coin,
-    inactive: Option<InactiveStakeReceipt>,
+    newly_slashed: bool,
 }
 
 /**
@@ -122,6 +138,8 @@ pub struct StakingContract {
     pub active_stake_sorted: BTreeSet<Arc<ActiveStake>>, // A list might be sufficient.
     pub active_stake_by_address: HashMap<Address, Arc<ActiveStake>>,
     pub inactive_stake_by_address: HashMap<Address, InactiveStake>,
+    pub current_epoch_parking: HashSet<Address>,
+    pub previous_epoch_parking: HashSet<Address>,
 }
 
 impl StakingContract {
@@ -200,6 +218,84 @@ impl StakingContract {
             self.active_stake_sorted.remove(active_stake);
             self.active_stake_by_address.remove(staker_address);
         }
+        Ok(())
+    }
+
+    /// Removes a staker from the parking lists.
+    fn unpark_sender(&mut self, staker_address: &Address, total_value: Coin, fee: Coin) -> Result<(), AccountError> {
+        self.balance = Account::balance_sub(self.balance, total_value)?;
+
+        let active_stake = self.active_stake_by_address.remove(staker_address)
+            .ok_or(AccountError::InvalidForSender)?;
+
+        self.active_stake_sorted.remove(&active_stake);
+
+        // Check total value.
+        if active_stake.balance != total_value {
+            return Err(AccountError::InvalidForSender);
+        }
+
+        // Then deduct fee.
+        let new_active_stake = Arc::new(active_stake.with_balance(Account::balance_sub(active_stake.balance, fee)?));
+
+        self.active_stake_sorted.insert(Arc::clone(&new_active_stake));
+        self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
+
+        Ok(())
+    }
+
+    /// Reverts the sender side from an unparking transaction.
+    fn revert_unpark_sender(&mut self, staker_address: &Address, total_value: Coin, fee: Coin) -> Result<(), AccountError> {
+        self.balance = Account::balance_add(self.balance, total_value)?;
+
+        let active_stake = self.active_stake_by_address.remove(staker_address)
+            .ok_or(AccountError::InvalidForSender)?;
+
+        self.active_stake_sorted.remove(&active_stake);
+
+        // Then deduct fee.
+        let new_active_stake = Arc::new(active_stake.with_balance(Account::balance_add(active_stake.balance, fee)?));
+
+        // Check total value.
+        if new_active_stake.balance != total_value {
+            return Err(AccountError::InvalidForSender);
+        }
+
+        self.active_stake_sorted.insert(Arc::clone(&new_active_stake));
+        self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
+
+        Ok(())
+    }
+
+    /// Removes a staker from the unparking lists.
+    fn unpark_recipient(&mut self, staker_address: &Address, value: Coin) -> Result<UnparkReceipt, AccountError> {
+        self.balance = Account::balance_add(self.balance, value)?;
+
+        let current_epoch = self.current_epoch_parking.remove(staker_address);
+        let previous_epoch = self.previous_epoch_parking.remove(staker_address);
+
+        if !current_epoch && !previous_epoch {
+            return Err(AccountError::InvalidForRecipient);
+        }
+
+        Ok(UnparkReceipt {
+            current_epoch,
+            previous_epoch,
+        })
+    }
+
+    /// Reverts the recipient side of an unparking transaction.
+    fn revert_unpark_recipient(&mut self, staker_address: &Address, value: Coin, receipt: UnparkReceipt) -> Result<(), AccountError> {
+        self.balance = Account::balance_sub(self.balance, value)?;
+
+        if receipt.current_epoch {
+            self.current_epoch_parking.insert(staker_address.clone());
+        }
+
+        if receipt.previous_epoch {
+            self.previous_epoch_parking.insert(staker_address.clone());
+        }
+
         Ok(())
     }
 
@@ -360,84 +456,32 @@ impl StakingContract {
         Ok(())
     }
 
-    pub fn select_validators(&self, seed: &BlsSignature, num_slots: u16, max_considered: usize) -> Slots {
-        assert!(max_considered >= num_slots.try_into().expect("Failed to cast u16 to usize"));
+    pub fn select_validators(&self, seed: &BlsSignature) -> Slots {
+        // TODO: Depending on the circumstances and parameters, it might be more efficient to store active stake in an unsorted Vec.
+        // Then, we would not need to create the Vec here. But then, removal of stake is a O(n) operation.
+        // Assuming that validator selection happens less frequently than stake removal, the current implementation might be ok.
+        let mut potential_validators = Vec::with_capacity(self.active_stake_sorted.len());
+        let mut weights: Vec<u64> = Vec::with_capacity(self.active_stake_sorted.len());
 
-        let mut potential_validators = Vec::new();
-        let mut min_stake = Coin::ZERO;
-        let mut total_stake = Coin::ZERO;
+        debug!("Select validators: num_slots = {}", policy::SLOTS);
 
-        debug!("Select validators: num_slots = {}, max_considered = {}", num_slots, max_considered);
-
-        // Build potential validator set and find minimum stake.
-        // Iterate from highest balance to lowest.
-        for validator in self.active_stake_sorted.iter() {
-            trace!("Checking {:?} (min_stake={})", validator, min_stake);
-
-            // This implicitly ensures that no more than max_considered validators end up in the potential_validators list.
-            if validator.balance <= min_stake {
-                break;
-            }
-
-            total_stake += validator.balance;
-            min_stake = total_stake / (max_considered as u64);
+        // FIXME: We only take into account the u32::MAX highest stakes.
+        for validator in self.active_stake_sorted.iter().rev().take(std::u32::MAX as usize) {
             potential_validators.push(Arc::clone(validator));
-
-            trace!("total_stake = {}", total_stake);
-            trace!("min_stake = {}", min_stake);
+            weights.push(validator.balance.into());
         }
 
-        trace!("Potential validators:");
-        for validator in potential_validators.iter() {
-            trace!("  * Staking address: {}", validator.staker_address);
-        }
-
-        // Build lookup tree of all potential validators
-        let mut weights: Vec<(Address, u64)> = potential_validators.iter()
-            .map(|stake| (stake.staker_address.clone(), stake.balance.into()))
-            .collect::<Vec<(Address, u64)>>();
-        weights.sort_by(|(address1, _), (address2, _)| address1.cmp(address2));
-        let lookup = SegmentTree::new(&mut weights);
-
-        // Lookup for how much of the staking balance is not reserved yet
-        let mut balances: HashMap<Address, Coin> = HashMap::new();
-        for stake in potential_validators.iter() {
-            balances.entry(stake.staker_address.clone())
-                .or_insert(Coin::ZERO).add_assign(stake.balance);
-        }
+        // FIXME: This can fail if we have 0 stakers.
+        let lookup = WeightedIndex::new(weights).unwrap();
 
         // Build active validator set: Use the VRF to pick validators
         // XXX If we hash both `i` and `counter` and reset `counter` for every slot, this can be
         //     parallelized.
+        let rng = HashRng::<_, Blake2bHash>::from_seed(seed.clone());
         let mut slots_builder = SlotsBuilder::default();
-        let mut counter: u16 = 0;
-        for _ in 0..num_slots {
-            let active_stake = loop {
-                // Hash seed and index
-                let mut hash_state = Blake2bHasher::new();
-                seed.serialize(&mut hash_state).expect("Failed to hash seed");
-                hash_state.write_all(&counter.to_be_bytes()).expect("Failed to hash index");
-                counter += 1;
-                let hash = hash_state.finish();
 
-                // Get number from first 8 bytes
-                let mut num_bytes = [0u8; 8];
-                num_bytes.copy_from_slice(&hash.as_bytes()[..8]);
-                let num = u64::from_be_bytes(num_bytes);
-
-                // XXX This is not uniform
-                let index = num % lookup.range();
-                let staking_address = lookup.find(index).expect("Expected to find a validator in SegmentTree");
-                let active_stake = &self.active_stake_by_address[&staking_address];
-
-                if let Some(balance) = balances.get_mut(&active_stake.staker_address) {
-                    if *balance >= min_stake {
-                        // Subtract min_stake to ensure that all slots of a validator can be slashed.
-                        *balance -= min_stake;
-                        break active_stake;
-                    }
-                }
-            };
+        for index in lookup.sample_iter(rng).take(policy::SLOTS as usize) {
+            let active_stake = &potential_validators[index];
 
             slots_builder.push(
                 active_stake.validator_key.clone(),
@@ -464,7 +508,19 @@ impl AccountTransactionInteraction for StakingContract {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_incoming_transaction(&self, _: &Transaction, _: u32) -> Result<(), AccountError> {
+    fn check_incoming_transaction(transaction: &Transaction, _: u32) -> Result<(), AccountError> {
+        // Do all static checks here.
+        if transaction.sender != transaction.recipient {
+            // Stake transaction.
+            StakingTransactionData::parse(transaction)?;
+        } else {
+            // For retire & unpark transactions, we need to check a valid flag in the data field.
+            let ty: StakingTransactionType = Deserialize::deserialize(&mut &transaction.data[..])?;
+
+            if transaction.data.len() != ty.serialized_size() {
+                return Err(AccountError::InvalidForTarget);
+            }
+        }
         Ok(())
     }
 
@@ -475,13 +531,22 @@ impl AccountTransactionInteraction for StakingContract {
             Ok(self.stake(&transaction.sender, transaction.value, data.validator_key, data.reward_address)?
                 .map(|receipt| receipt.serialize_to_vec()))
         } else {
-            // Retire transaction
+            let ty: StakingTransactionType = Deserialize::deserialize(&mut &transaction.data[..])?;
             // XXX Get staker address from transaction proof. This violates the model that only the
-            // sender account should evaluate the proof. However, retire is a self transaction, so
+            // sender account should evaluate the proof. However, retire/unpark are self transactions, so
             // this contract is both sender and receiver.
             let staker_address = Self::get_signer(transaction)?;
-            Ok(self.retire_recipient(&staker_address, transaction.value, block_height)?
-                   .map(|receipt| receipt.serialize_to_vec()))
+
+            match ty {
+                StakingTransactionType::Retire => {
+                    // Retire transaction.
+                    Ok(self.retire_recipient(&staker_address, transaction.value, block_height)?
+                           .map(|receipt| receipt.serialize_to_vec()))
+                },
+                StakingTransactionType::Unpark => {
+                    Ok(Some(self.unpark_recipient(&staker_address, transaction.value)?.serialize_to_vec()))
+                },
+            }
         }
     }
 
@@ -494,13 +559,23 @@ impl AccountTransactionInteraction for StakingContract {
             };
             self.revert_stake(&transaction.sender, transaction.value, receipt)
         } else {
-            // Retire transaction
+            let ty: StakingTransactionType = Deserialize::deserialize(&mut &transaction.data[..])?;
             let staker_address = Self::get_signer(transaction)?;
-            let receipt = match receipt {
-                Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
-                _ => None
-            };
-            self.revert_retire_recipient(&staker_address, transaction.value, receipt)
+
+            match ty {
+                StakingTransactionType::Retire => {
+                    // Retire transaction.
+                    let receipt = match receipt {
+                        Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
+                        _ => None
+                    };
+                    self.revert_retire_recipient(&staker_address, transaction.value, receipt)
+                },
+                StakingTransactionType::Unpark => {
+                    let receipt = Deserialize::deserialize_from_vec(receipt.ok_or(AccountError::InvalidReceipt)?)?;
+                    self.revert_unpark_recipient(&staker_address, transaction.value, receipt)
+                },
+            }
         }
     }
 
@@ -518,11 +593,27 @@ impl AccountTransactionInteraction for StakingContract {
 
             Account::balance_sufficient(inactive_stake.balance, transaction.total_value()?)
         } else {
-            // Retire transaction
+            let ty: StakingTransactionType = Deserialize::deserialize(&mut &transaction.data[..])?;
+
             let active_stake = self.active_stake_by_address.get(&staker_address)
                 .ok_or(AccountError::InvalidForSender)?;
 
-            Account::balance_sufficient(active_stake.balance, transaction.total_value()?)
+            match ty {
+                StakingTransactionType::Retire => {
+                    // Retire transaction.
+                    Account::balance_sufficient(active_stake.balance, transaction.total_value()?)
+                },
+                StakingTransactionType::Unpark => {
+                    if active_stake.balance != transaction.total_value()? {
+                        return Err(AccountError::InvalidForSender);
+                    }
+
+                    if !self.current_epoch_parking.contains(&staker_address) && !self.previous_epoch_parking.contains(&staker_address) {
+                        return Err(AccountError::InvalidForSender);
+                    }
+                    Ok(())
+                },
+            }
         }
     }
 
@@ -535,9 +626,19 @@ impl AccountTransactionInteraction for StakingContract {
             Ok(self.unstake(&staker_address, transaction.total_value()?)?
                 .map(|receipt| receipt.serialize_to_vec()))
         } else {
-            // Retire transaction
-            Ok(self.retire_sender(&staker_address, transaction.total_value()?, block_height)?
-                .map(|receipt| receipt.serialize_to_vec()))
+            let ty: StakingTransactionType = Deserialize::deserialize(&mut &transaction.data[..])?;
+
+            match ty {
+                StakingTransactionType::Retire => {
+                    // Retire transaction.
+                    Ok(self.retire_sender(&staker_address, transaction.total_value()?, block_height)?
+                        .map(|receipt| receipt.serialize_to_vec()))
+                },
+                StakingTransactionType::Unpark => {
+                    self.unpark_sender(&staker_address, transaction.total_value()?, transaction.fee)?;
+                    Ok(None)
+                },
+            }
         }
     }
 
@@ -552,19 +653,33 @@ impl AccountTransactionInteraction for StakingContract {
             };
             self.revert_unstake(&staker_address, transaction.total_value()?, receipt)
         } else {
-            // Retire transaction
-            let receipt = match receipt {
-                Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
-                _ => None
-            };
-            self.revert_retire_sender(&staker_address, transaction.total_value()?, receipt)
+            let ty: StakingTransactionType = Deserialize::deserialize(&mut &transaction.data[..])?;
+
+            match ty {
+                StakingTransactionType::Retire => {
+                    // Retire transaction.
+                    let receipt = match receipt {
+                        Some(v) => Some(Deserialize::deserialize_from_vec(v)?),
+                        _ => None
+                    };
+                    self.revert_retire_sender(&staker_address, transaction.total_value()?, receipt)
+                },
+                StakingTransactionType::Unpark => {
+                    self.revert_unpark_sender(&staker_address, transaction.total_value()?, transaction.fee)
+                },
+            }
         }
     }
 }
 
 impl AccountInherentInteraction for StakingContract {
-    fn check_inherent(&self, inherent: &Inherent) -> Result<(), AccountError> {
+    fn check_inherent(&self, inherent: &Inherent, _block_height: u32) -> Result<(), AccountError> {
         trace!("check inherent: {:?}", inherent);
+        // Inherent slashes nothing
+        if inherent.value != Coin::ZERO {
+            return Err(AccountError::InvalidInherent);
+        }
+
         match inherent.ty {
             InherentType::Slash => {
                 // Invalid data length
@@ -572,22 +687,18 @@ impl AccountInherentInteraction for StakingContract {
                     return Err(AccountError::InvalidInherent);
                 }
 
-                // Inherent slashes nothing
-                if inherent.value == Coin::ZERO {
+                // Address doesn't exist in contract
+                let staker_address: Address = Deserialize::deserialize(&mut &inherent.data[..])?;
+                if !self.active_stake_by_address.contains_key(&staker_address) && !self.inactive_stake_by_address.contains_key(&staker_address) {
                     return Err(AccountError::InvalidInherent);
                 }
 
-                // Inherent slashes more than staked in total
-                if inherent.value > self.balance {
-                    trace!("Slashing more than staked in total: {}", self.balance);
-                    return Err(AccountError::InvalidForTarget);
-                }
-
-                // Inherent slashes more than staked by address
-                let staker_address = Deserialize::deserialize(&mut &inherent.data[..])?;
-                if inherent.value > self.get_balance(&staker_address) {
-                    trace!("Slashing more than staked by {}: {}", &staker_address, self.get_balance(&staker_address));
-                    return Err(AccountError::InvalidForTarget)
+                Ok(())
+            },
+            InherentType::FinalizeEpoch => {
+                // Invalid data length
+                if !inherent.data.is_empty() {
+                    return Err(AccountError::InvalidInherent);
                 }
 
                 Ok(())
@@ -596,156 +707,66 @@ impl AccountInherentInteraction for StakingContract {
         }
     }
 
-    fn commit_inherent(&mut self, inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
-        self.check_inherent(inherent)?;
-        self.balance = Account::balance_sub(self.balance, inherent.value)?;
+    fn commit_inherent(&mut self, inherent: &Inherent, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
+        self.check_inherent(inherent, block_height)?;
 
-        let mut receipt: SlashReceipt = Default::default();
-        let mut active_slashed = false;
-
-        let mut to_pay = inherent.value;
-        let staker_address: Address = Deserialize::deserialize(&mut &inherent.data[..])?;
-
-        trace!("commit_inherent: slashing {} with {}", &staker_address.to_user_friendly_address(), to_pay);
-
-        if let Some(active_stake) = self.active_stake_by_address.remove(&staker_address) {
-            self.active_stake_sorted.remove(&active_stake);
-            if to_pay < active_stake.balance {
-                // Slash active stake partially
-                let mut new_active_stake = active_stake.clone();
-                Arc::make_mut(&mut new_active_stake).balance =
-                    Account::balance_sub(new_active_stake.balance, to_pay)?;
-
-                self.active_stake_sorted.insert(new_active_stake.clone());
-                self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
-
-                return Ok(None);
-            } else {
-                // Slash active stake entirely
-                receipt.active = Some(ActiveStakeReceipt {
-                    validator_key: active_stake.validator_key.clone(),
-                    reward_address: active_stake.reward_address.clone(),
-                });
-                to_pay = Account::balance_sub(to_pay, active_stake.balance)?;
-                if to_pay == Coin::ZERO {
-                    // No more slashing needed
-                    return Ok(Some(receipt.serialize_to_vec()));
-                }
-                active_slashed = true;
-            }
-        }
-
-        if let Some(inactive_stake) = self.inactive_stake_by_address.get_mut(&staker_address) {
-            if active_slashed {
-                receipt.split = to_pay;
-            }
-
-            return if to_pay < inactive_stake.balance {
-                // Slash inactive stake partially
-                inactive_stake.balance = Account::balance_sub(inactive_stake.balance, to_pay)?;
-
-                if !active_slashed {
-                    Ok(None)
-                } else {
-                    Ok(Some(receipt.serialize_to_vec()))
-                }
-            } else if to_pay == inactive_stake.balance {
-                // Slash inactive stake entirely
-                receipt.inactive = Some(InactiveStakeReceipt {
-                    retire_time: inactive_stake.retire_time,
-                });
-                self.inactive_stake_by_address.remove(&staker_address);
+        match &inherent.ty {
+            InherentType::Slash => {
+                // Simply add staker address to parking.
+                let staker_address: Address = Deserialize::deserialize(&mut &inherent.data[..])?;
+                // TODO: The inherent might have originated from a fork proof for the previous epoch.
+                // Right now, we don't care and start the parking period in the epoch the proof has been submitted.
+                let newly_slashed = self.current_epoch_parking.insert(staker_address);
+                let receipt = SlashReceipt { newly_slashed };
                 Ok(Some(receipt.serialize_to_vec()))
-            } else {
-                return Err(AccountError::InvalidForTarget);
-            }
-        }
+            },
+            InherentType::FinalizeEpoch => {
+                // Swap lists around.
+                let current_epoch = mem::replace(&mut self.current_epoch_parking, HashSet::new());
+                let old_epoch = mem::replace(&mut self.previous_epoch_parking, current_epoch);
 
-        Err(AccountError::InvalidForTarget)
+                // Remove all parked stakers.
+                for address in old_epoch {
+                    let balance = self.get_active_balance(&address);
+                    // We do not remove stakers from the parking list if they send a retire transaction.
+                    // Instead, we simply skip these here.
+                    // This saves space in the receipts of retire transactions as they happen much more often
+                    // than stakers are added to the parking lists.
+                    if balance > Coin::ZERO {
+                        self.retire_sender(&address, balance, block_height)?;
+                        self.retire_recipient(&address, balance, block_height)?;
+                    }
+                }
+
+                // Since finalized epochs cannot be reverted, we don't need any receipts.
+                Ok(None)
+            },
+            _ => unreachable!(),
+        }
     }
 
-    fn revert_inherent(&mut self, inherent: &Inherent, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
-        let staker_address = Deserialize::deserialize(&mut &inherent.data[..])?;
+    fn revert_inherent(&mut self, inherent: &Inherent, _block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        match &inherent.ty {
+            InherentType::Slash => {
+                let receipt: SlashReceipt = Deserialize::deserialize_from_vec(&receipt.ok_or(AccountError::InvalidReceipt)?)?;
+                let staker_address: Address = Deserialize::deserialize(&mut &inherent.data[..])?;
 
-        if receipt.is_none() {
-            // No receipt: Either inactive or active stake was partially slashed
-
-            if let Some(active_stake) = self.active_stake_by_address.remove(&staker_address) {
-                // Revert partial slash of active stake
-                self.active_stake_sorted.remove(&active_stake);
-                let mut new_active_stake = active_stake.clone();
-                Arc::make_mut(&mut new_active_stake).balance =
-                    Account::balance_add(new_active_stake.balance, inherent.value)?;
-
-                self.active_stake_sorted.insert(new_active_stake.clone());
-                self.active_stake_by_address.insert(staker_address.clone(), new_active_stake);
-                self.balance = Account::balance_add(self.balance, inherent.value)?;
-
-                return Ok(());
-            }
-
-            if let Some(inactive_stake) = self.inactive_stake_by_address.get_mut(&staker_address) {
-                // Revert partial slash of inactive stake
-                inactive_stake.balance = Account::balance_add(inactive_stake.balance, inherent.value)?;
-                self.balance = Account::balance_add(self.balance, inherent.value)?;
-                return Ok(());
-            }
-
-            return Err(AccountError::InvalidReceipt);
+                // Only remove if it was not already slashed.
+                // I kept this in two nested if's for clarity.
+                if receipt.newly_slashed {
+                    let has_been_removed = self.current_epoch_parking.remove(&staker_address);
+                    if !has_been_removed {
+                        return Err(AccountError::InvalidInherent);
+                    }
+                }
+            },
+            InherentType::FinalizeEpoch => {
+                // We should not be able to revert finalized epochs!
+                return Err(AccountError::InvalidForTarget);
+            },
+            _ => unreachable!(),
         }
 
-        let receipt_bytes = receipt.unwrap();
-        let receipt: SlashReceipt = Deserialize::deserialize_from_vec(receipt_bytes)?;
-
-        self.balance = Account::balance_add(self.balance, inherent.value)?;
-
-        if let Some(ref active_receipt) = receipt.active {
-            // Add back entire active stake
-            let active_value = Account::balance_sub(inherent.value, receipt.split)?;
-            if self.active_stake_by_address.get(&staker_address).is_some() {
-                return Err(AccountError::InvalidForTarget);
-            }
-
-            let active_stake = Arc::new(ActiveStake {
-                staker_address: staker_address.clone(),
-                balance: active_value,
-                validator_key: active_receipt.validator_key.clone(),
-                reward_address: active_receipt.reward_address.clone(),
-            });
-
-            self.active_stake_sorted.insert(Arc::clone(&active_stake));
-            self.active_stake_by_address.insert(staker_address.clone(), active_stake);
-
-            // Nothing split, done reverting
-            if receipt.split == Coin::ZERO {
-                return Ok(());
-            }
-        }
-
-        let inactive_balance = if receipt.split == Coin::ZERO {
-            inherent.value
-        } else {
-            receipt.split
-        };
-
-        if let Some(ref inactive_receipt) = receipt.inactive {
-            // Add back entire inactive stake
-            let previous = self.inactive_stake_by_address.insert(staker_address.clone(), InactiveStake {
-                balance: inactive_balance,
-                retire_time: inactive_receipt.retire_time,
-            });
-            if previous.is_some() {
-                return Err(AccountError::InvalidForTarget);
-            }
-        } else {
-            // Add partial inactive stake
-            let inactive_stake = self.inactive_stake_by_address.get_mut(&staker_address);
-            if inactive_stake.is_none() {
-                return Err(AccountError::InvalidForTarget);
-            }
-            let inactive_stake = inactive_stake.unwrap();
-            inactive_stake.balance = Account::balance_add(inactive_stake.balance, inactive_balance)?;
-        }
         Ok(())
     }
 }
@@ -779,6 +800,9 @@ impl Serialize for StakingContract {
             size += Serialize::serialize(inactive_stake, writer)?;
         }
 
+        size += SerializeWithLength::serialize::<u32, _>(&self.current_epoch_parking, writer)?;
+        size += SerializeWithLength::serialize::<u32, _>(&self.previous_epoch_parking, writer)?;
+
         Ok(size)
     }
 
@@ -800,6 +824,9 @@ impl Serialize for StakingContract {
                 size += Serialize::serialized_size(inactive_stake);
             }
         }
+
+        size += SerializeWithLength::serialized_size::<u32>(&self.current_epoch_parking);
+        size += SerializeWithLength::serialized_size::<u32>(&self.previous_epoch_parking);
 
         size
     }
@@ -833,11 +860,16 @@ impl Deserialize for StakingContract {
             inactive_stake_by_address.insert(staker_address, inactive_stake);
         }
 
+        let current_epoch_parking: HashSet<Address> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+        let last_epoch_parking: HashSet<Address> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+
         Ok(StakingContract {
             balance,
             active_stake_sorted,
             active_stake_by_address,
             inactive_stake_by_address,
+            current_epoch_parking,
+            previous_epoch_parking: last_epoch_parking
         })
     }
 }
@@ -870,7 +902,9 @@ impl Default for StakingContract {
             balance: Coin::ZERO,
             active_stake_sorted: BTreeSet::new(),
             active_stake_by_address: HashMap::new(),
-            inactive_stake_by_address: HashMap::new()
+            inactive_stake_by_address: HashMap::new(),
+            current_epoch_parking: HashSet::new(),
+            previous_epoch_parking: HashSet::new(),
         }
     }
 }

@@ -4,9 +4,7 @@ extern crate nimiq_primitives as primitives;
 extern crate beserial;
 extern crate nimiq_hash as hash;
 
-use std::iter::FromIterator;
-
-use block_albatross::{ViewChangeProof, ViewChange, ViewChangeProofBuilder, SignedViewChange, PbftPrepareMessage, SignedPbftCommitMessage, PbftCommitMessage};
+use block_albatross::{ViewChange, ViewChangeProofBuilder, SignedViewChange, PbftPrepareMessage, SignedPbftCommitMessage, PbftCommitMessage};
 use bls::bls12_381::KeyPair;
 use primitives::policy;
 use block_albatross::signed::Message;
@@ -38,7 +36,7 @@ fn test_view_change_single_signature() {
 
     // verify view change proof
     let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(LazyPublicKey::from(key_pair.public), policy::SLOTS)]);
-    view_change_proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS);
+    view_change_proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS).unwrap();
 }
 
 #[test]

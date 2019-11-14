@@ -36,7 +36,7 @@ pub struct SlashRegistry {
 pub enum SlashPushError {
     #[fail(display = "Redundant fork proofs in block")]
     DuplicateForkProof,
-    #[fail(display = "Block contains fork proof targeting a slot that was already slashes")]
+    #[fail(display = "Block contains fork proof targeting a slot that was already slashed")]
     SlotAlreadySlashed,
     #[fail(display = "Block slashes slots in wrong epoch")]
     InvalidEpochTarget,
@@ -154,17 +154,21 @@ impl SlashRegistry {
         BlockDescriptor { prev_epoch_state, epoch_state }
     }
 
+    fn slash_view_changes(&self, epoch_diff: &mut BitSet, txn: &mut WriteTransaction, block_number: u32, view_number: u32, prev_view_number: u32) {
+        // Mark from view changes, ignoring duplicates.
+        for view in prev_view_number..view_number {
+            let slot_number = self.get_slot_number_at(block_number, view, Some(&txn))
+                .unwrap();
+            epoch_diff.insert(slot_number as usize);
+        }
+    }
+
     fn commit_macro_block(&self, txn: &mut WriteTransaction, block: &MacroBlock, prev_view_number: u32) -> Result<(), SlashPushError> {
         let mut epoch_diff = BitSet::new();
 
         let BlockDescriptor { prev_epoch_state, mut epoch_state } = self.get_epoch_state(txn, block.header.block_number);
 
-        // Mark from view changes, ignoring duplicates.
-        for view in prev_view_number..block.header.view_number {
-            let slot_number = self.get_slot_number_at(block.header.block_number, view, Some(&txn))
-                .unwrap();
-            epoch_diff.insert(slot_number as usize);
-        }
+        self.slash_view_changes(&mut epoch_diff, txn, block.header.block_number, block.header.view_number, prev_view_number);
 
         // Apply slashes.
         epoch_state |= epoch_diff;
@@ -207,36 +211,7 @@ impl SlashRegistry {
             }
         }
 
-        // Lookup slash state.
-        let mut cursor = txn.cursor(&self.slash_registry_db);
-        // Move cursor to first entry with a block number >= ours (or end of the database).
-        let _: Option<(u32, BlockDescriptor)> = cursor.seek_range_key(&block.header.block_number);
-        // Then move cursor back by one.
-        let last_change: Option<(u32, BlockDescriptor)> = cursor.prev();
-
-        let mut prev_epoch_state: BitSet;
-        let mut epoch_state: BitSet;
-        if let Some((change_block_number, change)) = last_change {
-            if change_block_number >= policy::first_block_of(block_epoch) {
-                // last_change was in current epoch
-                prev_epoch_state = change.prev_epoch_state;
-                epoch_state = change.epoch_state;
-            } else if block_epoch > 0 && change_block_number >= policy::first_block_of(block_epoch - 1) {
-                // last_change was in previous epoch
-                prev_epoch_state = change.epoch_state;
-                epoch_state = BitSet::new();
-            } else {
-                // no change in the last two epochs
-                prev_epoch_state = BitSet::new();
-                epoch_state = BitSet::new();
-            }
-        } else {
-            // no change at all
-            prev_epoch_state = BitSet::new();
-            epoch_state = BitSet::new();
-        }
-
-        drop(cursor);
+        let BlockDescriptor { mut prev_epoch_state, mut epoch_state } = self.get_epoch_state(txn, block.header.block_number);
 
         // Detect duplicate slashes
         if !(&prev_epoch_state & &prev_epoch_diff).is_empty()
@@ -244,12 +219,7 @@ impl SlashRegistry {
             return Err(SlashPushError::SlotAlreadySlashed);
         }
 
-        // Mark from view changes, ignoring duplicates.
-        for view in prev_view_number..block.header.view_number {
-            let slot_number = self.get_slot_number_at(block.header.block_number, view, Some(&txn))
-                .unwrap();
-            epoch_diff.insert(slot_number as usize);
-        }
+        self.slash_view_changes(&mut epoch_diff, txn, block.header.block_number, block.header.view_number, prev_view_number);
 
         // Apply slashes.
         prev_epoch_state |= prev_epoch_diff;

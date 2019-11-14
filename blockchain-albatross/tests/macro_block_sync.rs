@@ -2,17 +2,14 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_bls::{KeyPair, SecretKey};
-use nimiq_bls::bls12_381::lazy::LazyPublicKey;
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_block_albatross::{Block, ForkProof, MacroBlock, MacroExtrinsics, PbftProposal, PbftProofBuilder, PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage, ViewChange, ViewChangeProof, ViewChangeProofBuilder, SignedViewChange};
+use nimiq_block_albatross::{Block, MacroBlock, PbftProposal, PbftProofBuilder, PbftPrepareMessage, PbftCommitMessage, SignedPbftPrepareMessage, SignedPbftCommitMessage};
 use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_network_primitives::{networks::NetworkId};
 use nimiq_primitives::policy;
 use nimiq_blockchain_base::AbstractBlockchain;
-use nimiq_block_albatross::signed::SignedMessage;
-use nimiq_primitives::slot::ValidatorSlots;
 use nimiq_blockchain_base::Direction;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
@@ -61,7 +58,7 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
         fill_micro_blocks(producer, blockchain);
 
         let next_block_height = blockchain.head_height() + 1;
-        let (proposal, extrinsics) = producer.next_macro_block_proposal(1565713920000 + next_block_height as u64 * 2000, 0u32, None);
+        let (proposal, _extrinsics) = producer.next_macro_block_proposal(1565713920000 + next_block_height as u64 * 2000, 0u32, None);
 
         let block = sign_macro_block(proposal);
         assert_eq!(blockchain.push_block(Block::Macro(block), true), Ok(PushResult::Extended));

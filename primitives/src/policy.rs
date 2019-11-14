@@ -114,9 +114,6 @@ pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.
 /// Number of available slots
 pub const SLOTS: u16 = 512;
 
-/// Maximum number of stakes considered for validator selection
-pub const MAX_CONSIDERED: u32 = 10_000;
-
 /// ceil(2/3) of active validators
 // (2 * n + 3) / 3 = ceil(2f + 1) where n = 3f + 1
 pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3) / 3;

@@ -146,7 +146,7 @@ fn it_does_not_support_incoming_transactions() {
     let mut tx = Transaction::new_basic(Address::from([1u8; 20]), Address::from([2u8; 20]), 1.try_into().unwrap(), 1000.try_into().unwrap(), 1, NetworkId::Dummy);
     tx.recipient_type = AccountType::HTLC;
 
-    assert_eq!(contract.check_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
+    assert_eq!(HashedTimeLockedContract::check_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
     assert_eq!(contract.commit_incoming_transaction(&tx, 2), Err(AccountError::InvalidForRecipient));
     assert_eq!(contract.revert_incoming_transaction(&tx, 2, None), Err(AccountError::InvalidForRecipient));
 }

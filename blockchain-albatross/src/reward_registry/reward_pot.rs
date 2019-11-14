@@ -56,7 +56,7 @@ impl RewardPot {
     }
 
     pub(super) fn commit_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
-        // The total reward of a block is composed of the block reward, transaction fees and slashes.
+        // The total reward of a block is composed of the block reward and transaction fees.
         let mut reward = RewardPot::reward_for_micro_block(block);
 
         // Add to current reward pot of epoch.
@@ -65,7 +65,7 @@ impl RewardPot {
     }
 
     pub(super) fn revert_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
-        // The total reward of a block is composed of the block reward, transaction fees and slashes.
+        // The total reward of a block is composed of the block reward and transaction fees.
         let mut reward = Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY).unwrap_or(0));
 
         // Add to current reward pot of epoch.

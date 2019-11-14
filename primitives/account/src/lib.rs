@@ -4,7 +4,7 @@ extern crate beserial_derive;
 extern crate log;
 extern crate lazy_static;
 extern crate nimiq_bls as bls;
-extern crate nimiq_collections as collections;
+extern crate nimiq_utils as utils;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
@@ -43,13 +43,15 @@ pub trait AccountTransactionInteraction: Sized {
     fn create(balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
 
 
-    fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError>;
+    /// Incoming transaction checks must not depend on the account itself and may only be static on the transaction.
+    fn check_incoming_transaction(transaction: &Transaction, block_height: u32) -> Result<(), AccountError>;
 
     fn commit_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError>;
 
     fn revert_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError>;
 
 
+    /// Outgoing transaction checks are usually called from `commit_outgoint_transaction` and may depend on the account's state.
     fn check_outgoing_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError>;
 
     fn commit_outgoing_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError>;
@@ -130,6 +132,15 @@ impl Account {
             Ok(())
         }
     }
+
+    pub fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
+        match self {
+            Account::Basic(_) => BasicAccount::check_incoming_transaction(transaction, block_height),
+            Account::Vesting(_) => VestingContract::check_incoming_transaction(transaction, block_height),
+            Account::HTLC(_) => HashedTimeLockedContract::check_incoming_transaction(transaction, block_height),
+            Account::Staking(_) => StakingContract::check_incoming_transaction(transaction, block_height),
+        }
+    }
 }
 
 impl AccountsTreeLeave for Account {
@@ -155,8 +166,9 @@ impl AccountTransactionInteraction for Account {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_incoming_transaction(&self, transaction: &Transaction, block_height: u32) -> Result<(), AccountError> {
-        invoke_account_instance!(self, check_incoming_transaction, transaction, block_height)
+    fn check_incoming_transaction(_transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
+        // This method must be called on specific types instead.
+        Err(AccountError::InvalidForRecipient)
     }
 
     fn commit_incoming_transaction(&mut self, transaction: &Transaction, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
@@ -182,16 +194,16 @@ impl AccountTransactionInteraction for Account {
 }
 
 impl AccountInherentInteraction for Account {
-    fn check_inherent(&self, inherent: &Inherent) -> Result<(), AccountError> {
-        invoke_account_instance!(self, check_inherent, inherent)
+    fn check_inherent(&self, inherent: &Inherent, block_height: u32) -> Result<(), AccountError> {
+        invoke_account_instance!(self, check_inherent, inherent, block_height)
     }
 
-    fn commit_inherent(&mut self, inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
-        invoke_account_instance!(self, commit_inherent, inherent)
+    fn commit_inherent(&mut self, inherent: &Inherent, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
+        invoke_account_instance!(self, commit_inherent, inherent, block_height)
     }
 
-    fn revert_inherent(&mut self, inherent: &Inherent, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
-        invoke_account_instance!(self, revert_inherent, inherent, receipt)
+    fn revert_inherent(&mut self, inherent: &Inherent, block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+        invoke_account_instance!(self, revert_inherent, inherent, block_height, receipt)
     }
 }
 
@@ -284,6 +296,7 @@ pub enum Receipt {
     Inherent {
         index: u16,
         data: Vec<u8>,
+        pre_transactions: bool,
     },
 }
 
@@ -307,9 +320,10 @@ impl Serialize for Receipt {
                 size += sender.serialize(writer)?;
                 size += SerializeWithLength::serialize::<u16, W>(data, writer)?;
             },
-            Receipt::Inherent { index, data } => {
+            Receipt::Inherent { index, data, pre_transactions } => {
                 size += index.serialize(writer)?;
                 size += SerializeWithLength::serialize::<u16, W>(data, writer)?;
+                size += pre_transactions.serialize(writer)?;
             },
         }
         Ok(size)
@@ -324,9 +338,10 @@ impl Serialize for Receipt {
                 size += sender.serialized_size();
                 size += SerializeWithLength::serialized_size::<u16>(data);
             },
-            Receipt::Inherent { index, data } => {
+            Receipt::Inherent { index, data, pre_transactions } => {
                 size += index.serialized_size();
                 size += SerializeWithLength::serialized_size::<u16>(data);
+                size += pre_transactions.serialized_size();
             },
         }
         size
@@ -346,6 +361,7 @@ impl Deserialize for Receipt {
             ReceiptType::Inherent => Ok(Receipt::Inherent {
                 index: Deserialize::deserialize(reader)?,
                 data: DeserializeWithLength::deserialize::<u16, R>(reader)?,
+                pre_transactions: Deserialize::deserialize(reader)?,
             }),
         }
     }
@@ -374,8 +390,9 @@ impl Ord for Receipt {
                     .then_with(|| index_a.cmp(index_b))
                     .then_with(|| data_a.cmp(data_b))
             },
-            (Receipt::Inherent { index: index_a, data: data_a }, Receipt::Inherent { index: index_b, data: data_b }) => {
-                index_a.cmp(index_b)
+            (Receipt::Inherent { index: index_a, data: data_a, pre_transactions: pre_transactions_a }, Receipt::Inherent { index: index_b, data: data_b, pre_transactions: pre_transactions_b }) => {
+                pre_transactions_a.cmp(pre_transactions_b).reverse()
+                    .then_with(|| index_a.cmp(index_b))
                     .then_with(|| data_a.cmp(data_b))
             }
             (a, b) => a.receipt_type().cmp(&b.receipt_type())

@@ -290,6 +290,20 @@ impl AsRef<[u8]> for CompressedSignature {
     }
 }
 
+impl AsMut<[u8]> for CompressedSignature {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.s.as_mut()
+    }
+}
+
+impl Default for CompressedSignature {
+    fn default() -> Self {
+        CompressedSignature {
+            s: G1Compressed::empty(),
+        }
+    }
+}
+
 impl CompressedSignature {
     pub const SIZE: usize = 48;
 

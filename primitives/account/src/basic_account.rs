@@ -19,7 +19,7 @@ impl AccountTransactionInteraction for BasicAccount {
         Err(AccountError::InvalidForRecipient)
     }
 
-    fn check_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
+    fn check_incoming_transaction(_transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
         Ok(())
     }
 
@@ -57,25 +57,25 @@ impl AccountTransactionInteraction for BasicAccount {
 }
 
 impl AccountInherentInteraction for BasicAccount {
-    fn check_inherent(&self, inherent: &Inherent) -> Result<(), AccountError> {
+    fn check_inherent(&self, inherent: &Inherent, _block_height: u32) -> Result<(), AccountError> {
         match inherent.ty {
             InherentType::Reward => Ok(()),
-            InherentType::Slash => Err(AccountError::InvalidInherent),
+            _ => Err(AccountError::InvalidInherent),
         }
     }
 
-    fn commit_inherent(&mut self, inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
-        self.check_inherent(inherent)?;
+    fn commit_inherent(&mut self, inherent: &Inherent, block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
+        self.check_inherent(inherent, block_height)?;
         self.balance = Account::balance_add(self.balance, inherent.value)?;
         Ok(None)
     }
 
-    fn revert_inherent(&mut self, inherent: &Inherent, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+    fn revert_inherent(&mut self, inherent: &Inherent, block_height: u32, receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         if receipt.is_some() {
             return Err(AccountError::InvalidReceipt);
         }
 
-        self.check_inherent(inherent)?;
+        self.check_inherent(inherent, block_height)?;
         self.balance = Account::balance_sub(self.balance, inherent.value)?;
         Ok(())
     }

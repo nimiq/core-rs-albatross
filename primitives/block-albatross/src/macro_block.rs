@@ -8,7 +8,6 @@ use beserial::{Deserialize, Serialize};
 use bls::bls12_381::CompressedSignature;
 use collections::bitset::BitSet;
 use hash::{Blake2bHash, Hash, SerializeContent};
-use primitives::coin::Coin;
 use primitives::slot::{Slots, ValidatorSlots, StakeSlots};
 
 use crate::BlockError;
@@ -50,8 +49,6 @@ pub struct MacroHeader {
 pub struct MacroExtrinsics {
     /// Slots with staker information, i.e. staker address and reward address
     pub stakers: StakeSlots,
-    /// The slash fine for the next epoch.
-    pub slash_fine: Coin,
     /// The final list of slashes from the previous epoch.
     pub slashed_set: BitSet,
 }
@@ -79,13 +76,8 @@ impl TryInto<Slots> for MacroBlock {
 // CHECKME: Check for performance
 impl MacroExtrinsics {
     pub fn from_stake_slots_and_slashed_set(stake_slots: StakeSlots, slashed_set: BitSet) -> Self {
-        // TODO: Slash fine will be removed. Instead of patching it into our Slots struct, we'll
-        //       just set the fine to 0.
-        let slash_fine = Coin::ZERO;
-
         MacroExtrinsics {
             stakers: stake_slots,
-            slash_fine,
             slashed_set,
         }
     }

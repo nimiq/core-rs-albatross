@@ -1182,7 +1182,7 @@ impl Blockchain {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         let staking_account = self.state.read().accounts().get(validator_registry, txn_option);
         if let Account::Staking(ref staking_contract) = staking_account {
-            return staking_contract.select_validators(seed, policy::SLOTS, policy::MAX_CONSIDERED as usize);
+            return staking_contract.select_validators(seed);
         }
         panic!("Account at validator registry address is not the stacking contract!");
     }
@@ -1245,7 +1245,7 @@ impl Blockchain {
     }
 
     pub fn create_slash_inherents(&self, fork_proofs: &[ForkProof], view_changes: &Option<ViewChanges>, txn_option: Option<&Transaction>) -> Vec<Inherent> {
-        /*let mut inherents = vec![];
+        let mut inherents = vec![];
         for fork_proof in fork_proofs {
             inherents.push(self.inherent_from_fork_proof(fork_proof, txn_option));
         }
@@ -1253,8 +1253,7 @@ impl Blockchain {
             inherents.append(&mut self.inherents_from_view_changes(view_changes, txn_option));
         }
 
-        inherents*/
-        vec![]
+        inherents
     }
 
     /// Expects a *verified* proof!
@@ -1265,7 +1264,7 @@ impl Blockchain {
         Inherent {
             ty: InherentType::Slash,
             target: validator_registry.clone(),
-            value: self.slash_fine_at(fork_proof.header1.block_number),
+            value: Coin::ZERO,
             data: producer.staker_address().serialize_to_vec(),
         }
     }
@@ -1277,13 +1276,12 @@ impl Blockchain {
         (view_changes.first_view_number .. view_changes.last_view_number).map(|view_number| {
             let (producer, _) = self.get_slot_at(view_changes.block_number, view_number, txn_option)
                 .unwrap();
-            let slash_fine = self.slash_fine_at(view_changes.block_number);
-            debug!("Slash inherent: view change: {} NIM, {}", slash_fine, producer.staker_address().to_user_friendly_address());
+            debug!("Slash inherent: view change: {}", producer.staker_address().to_user_friendly_address());
 
             Inherent {
                 ty: InherentType::Slash,
                 target: validator_registry.clone(),
-                value: slash_fine,
+                value: Coin::ZERO,
                 data: producer.staker_address().serialize_to_vec(),
             }
         }).collect::<Vec<Inherent>>()
@@ -1304,11 +1302,6 @@ impl Blockchain {
                 data: producer.staker_address().serialize_to_vec(),
             }
         }).collect::<Vec<Inherent>>()
-    }
-
-    #[deprecated]
-    fn slash_fine_at(&self, _block_number: u32) -> Coin {
-        Coin::ZERO
     }
 
     // Get slash set of epoch at specific block number
@@ -1417,7 +1410,7 @@ impl Blockchain {
 
             // Test whether account will accept inherent.
             let account = state.accounts.get(&inherent.target, None);
-            if account.check_inherent(&inherent).is_err() {
+            if account.check_inherent(&inherent, state.main_chain.head.block_number()).is_err() {
                 debug!("{} can't accept epoch reward {}", inherent.target, inherent.value);
                 remainder += reward;
             } else {
@@ -1438,6 +1431,15 @@ impl Blockchain {
             debug!("Distributing remainder of {} NIM over {} accepting reward addresses and {} accepting slots", remainder, inherents.len(), total_accepting_slots);
             warn!("Unimplemented! Burning remainder: {} NIM", remainder);
         }
+
+        // Push finalize epoch inherent for automatically retiring inactive/malicious validators.
+        let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
+        inherents.push(Inherent {
+            ty: InherentType::FinalizeEpoch,
+            target: validator_registry.clone(),
+            value: Coin::ZERO,
+            data: Vec::new(),
+        });
 
         inherents
     }

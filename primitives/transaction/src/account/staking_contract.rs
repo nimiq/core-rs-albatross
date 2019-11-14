@@ -47,6 +47,13 @@ impl AccountTransactionVerification for StakingContractVerifier {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum StakingTransactionType {
+    Retire = 0,
+    Unpark = 1,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StakingTransactionData {
     pub validator_key: BlsPublicKey,

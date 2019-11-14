@@ -60,7 +60,7 @@ impl AccountTransactionInteraction for VestingContract {
         Ok(VestingContract::new(balance, data.owner, data.start, data.step_blocks, data.step_amount, data.total_amount))
     }
 
-    fn check_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
+    fn check_incoming_transaction(_transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -106,15 +106,15 @@ impl AccountTransactionInteraction for VestingContract {
 }
 
 impl AccountInherentInteraction for VestingContract {
-    fn check_inherent(&self, _inherent: &Inherent) -> Result<(), AccountError> {
+    fn check_inherent(&self, _inherent: &Inherent, _block_height: u32) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
-    fn commit_inherent(&mut self, _inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_inherent(&mut self, _inherent: &Inherent, _block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
-    fn revert_inherent(&mut self, _inherent: &Inherent, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+    fn revert_inherent(&mut self, _inherent: &Inherent, _block_height: u32, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 }

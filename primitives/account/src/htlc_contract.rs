@@ -55,7 +55,7 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
         Ok(HashedTimeLockedContract::new(balance, data.sender, data.recipient, data.hash_algorithm, data.hash_root, data.hash_count, data.timeout, transaction.value))
     }
 
-    fn check_incoming_transaction(&self, _transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
+    fn check_incoming_transaction(_transaction: &Transaction, _block_height: u32) -> Result<(), AccountError> {
         Err(AccountError::InvalidForRecipient)
     }
 
@@ -148,15 +148,15 @@ impl AccountTransactionInteraction for HashedTimeLockedContract {
 }
 
 impl AccountInherentInteraction for HashedTimeLockedContract {
-    fn check_inherent(&self, _inherent: &Inherent) -> Result<(), AccountError> {
+    fn check_inherent(&self, _inherent: &Inherent, _block_height: u32) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
-    fn commit_inherent(&mut self, _inherent: &Inherent) -> Result<Option<Vec<u8>>, AccountError> {
+    fn commit_inherent(&mut self, _inherent: &Inherent, _block_height: u32) -> Result<Option<Vec<u8>>, AccountError> {
         Err(AccountError::InvalidInherent)
     }
 
-    fn revert_inherent(&mut self, _inherent: &Inherent, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
+    fn revert_inherent(&mut self, _inherent: &Inherent, _block_height: u32, _receipt: Option<&Vec<u8>>) -> Result<(), AccountError> {
         Err(AccountError::InvalidInherent)
     }
 }

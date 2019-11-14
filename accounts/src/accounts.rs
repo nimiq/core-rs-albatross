@@ -89,6 +89,9 @@ impl Accounts {
     fn commit_nonfinal(&self, txn: &mut WriteTransaction, transactions: &[Transaction], inherents: &[Inherent], block_height: u32) -> Result<Receipts, AccountError> {
         let mut receipts = Vec::new();
 
+        receipts.append(&mut self.process_inherents(txn, inherents.iter().filter(|i| i.is_pre_transactions()), HashMap::new(),
+                                                    |account, inherent, _| account.commit_inherent(inherent, block_height))?);
+
         receipts.append(&mut self.process_senders(txn, transactions, block_height, HashMap::new(),
                                                   |account, transaction, block_height, _| account.commit_outgoing_transaction(transaction, block_height))?);
 
@@ -101,17 +104,17 @@ impl Accounts {
         // However, v1 awards the block reward after pruning, so we keep this behavior for now.
         receipts.append(&mut self.prune_accounts(txn, transactions)?);
 
-        receipts.append(&mut self.process_inherents(txn, inherents, HashMap::new(),
-                                                    |account, inherent, _| account.commit_inherent(inherent))?);
+        receipts.append(&mut self.process_inherents(txn, inherents.iter().filter(|i| !i.is_pre_transactions()), HashMap::new(),
+                                                    |account, inherent, _| account.commit_inherent(inherent, block_height))?);
 
         Ok(Receipts::from(receipts))
     }
 
     fn revert_nonfinal(&self, txn: &mut WriteTransaction, transactions: &[Transaction], inherents: &[Inherent], block_height: u32, receipts: &Receipts) -> Result<(), AccountError> {
-        let (sender_receipts, recipient_receipts, inherent_receipts, pruned_accounts) = Self::prepare_receipts(receipts);
+        let (sender_receipts, recipient_receipts, pre_tx_inherent_receipts, post_tx_inherent_receipts, pruned_accounts) = Self::prepare_receipts(receipts);
 
-        self.process_inherents(txn, inherents, inherent_receipts,
-                               |account, inherent, receipt| account.revert_inherent(inherent, receipt).map(|_| None))?;
+        self.process_inherents(txn, inherents.iter().filter(|i| !i.is_pre_transactions()), post_tx_inherent_receipts,
+                               |account, inherent, receipt| account.revert_inherent(inherent, block_height, receipt).map(|_| None))?;
 
         self.restore_accounts(txn, pruned_accounts)?;
 
@@ -122,6 +125,9 @@ impl Accounts {
 
         self.process_senders(txn, transactions, block_height, sender_receipts,
                              |account, transaction, block_height, receipt| account.revert_outgoing_transaction(transaction, block_height, receipt).map(|_| None))?;
+
+        self.process_inherents(txn, inherents.iter().filter(|i| i.is_pre_transactions()), pre_tx_inherent_receipts,
+                               |account, inherent, receipt| account.revert_inherent(inherent, block_height, receipt).map(|_| None))?;
 
         Ok(())
     }
@@ -252,13 +258,15 @@ impl Accounts {
         Ok(())
     }
 
-    fn process_inherents<F>(&self, txn: &mut WriteTransaction, inherents: &[Inherent], mut receipts: HashMap<u16, &Vec<u8>>, account_op: F) -> Result<Vec<Receipt>, AccountError>
-        where F: Fn(&mut Account, &Inherent, Option<&Vec<u8>>) -> Result<Option<Vec<u8>>, AccountError> {
+    fn process_inherents<'a, F, I>(&self, txn: &mut WriteTransaction, inherents: I, mut receipts: HashMap<u16, &Vec<u8>>, account_op: F) -> Result<Vec<Receipt>, AccountError>
+        where F: Fn(&mut Account, &Inherent, Option<&Vec<u8>>) -> Result<Option<Vec<u8>>, AccountError>,
+            I: Iterator<Item=&'a Inherent> {
 
         let mut new_receipts = Vec::new();
-        for (index, inherent) in inherents.iter().enumerate() {
+        for (index, inherent) in inherents.enumerate() {
             if let Some(data) = self.process_inherent(txn, inherent, receipts.remove(&(index as u16)), &account_op)? {
                 new_receipts.push(Receipt::Inherent {
+                    pre_transactions: inherent.is_pre_transactions(),
                     index: index as u16,
                     data,
                 });
@@ -282,10 +290,11 @@ impl Accounts {
         Ok(receipt)
     }
 
-    fn prepare_receipts(receipts: &Receipts) -> (ReceiptsMap, ReceiptsMap, ReceiptsMap, Vec<&PrunedAccount>) {
+    fn prepare_receipts(receipts: &Receipts) -> (ReceiptsMap, ReceiptsMap, ReceiptsMap, ReceiptsMap, Vec<&PrunedAccount>) {
         let mut sender_receipts = HashMap::new();
         let mut recipient_receipts = HashMap::new();
-        let mut inherent_receipts = HashMap::new();
+        let mut pre_tx_inherent_receipts = HashMap::new();
+        let mut post_tx_inherent_receipts = HashMap::new();
         let mut pruned_accounts = Vec::new();
         for receipt in &receipts.receipts {
             match receipt {
@@ -296,14 +305,18 @@ impl Accounts {
                         recipient_receipts.insert(*index, data);
                     }
                 },
-                Receipt::Inherent { index, data } => {
-                    inherent_receipts.insert(*index, data);
+                Receipt::Inherent { index, data, pre_transactions } => {
+                    if *pre_transactions {
+                        pre_tx_inherent_receipts.insert(*index, data);
+                    } else {
+                        post_tx_inherent_receipts.insert(*index, data);
+                    }
                 },
                 Receipt::PrunedAccount(ref account) => {
                     pruned_accounts.push(account);
                 },
             }
         }
-        (sender_receipts, recipient_receipts, inherent_receipts, pruned_accounts)
+        (sender_receipts, recipient_receipts, pre_tx_inherent_receipts, post_tx_inherent_receipts, pruned_accounts)
     }
 }

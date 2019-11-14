@@ -28,8 +28,8 @@ nimiq-keys = "0.1"
 nimiq-transaction = "0.1"
 nimiq-primitives = { version = "0.1", features = ["coin", "policy", "validators"] }
 nimiq-bls = "0.1"
-nimiq-collections = "0.1"
+nimiq-utils = { version = "0.1", features = ["hash-rng"] }
+rand = "0.7"
 
 [dev-dependencies]
 hex = "0.4"
-rand = "0.7"

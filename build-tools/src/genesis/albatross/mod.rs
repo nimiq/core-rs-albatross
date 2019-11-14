@@ -21,7 +21,6 @@ use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
 use keys::Address;
 use primitives::coin::Coin;
-use primitives::policy;
 
 mod config;
 
@@ -174,7 +173,7 @@ impl GenesisBuilder {
 
         // generate slot allocation from staking contract
         let slots = staking_contract
-            .select_validators(&pre_genesis_seed.compress(), policy::SLOTS, policy::MAX_CONSIDERED as usize);
+            .select_validators(&pre_genesis_seed.compress());
         debug!("Slots: {:#?}", slots);
 
         // extrinsics

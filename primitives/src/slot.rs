@@ -59,7 +59,6 @@ use bls::bls12_381::lazy::LazyPublicKey;
 use bls::bls12_381::CompressedPublicKey;
 use keys::Address;
 
-use crate::coin::Coin;
 use crate::policy::SLOTS;
 
 
@@ -128,11 +127,6 @@ impl Slots {
             validator_slot: self.validator_slots.get(idx)?.clone(),
             stake_slot: self.stake_slots.get(idx)?.clone(),
         })
-    }
-
-    #[deprecated]
-    pub fn slash_fine(&self) -> Coin {
-        Coin::ZERO
     }
 
     /// Returns stake slots with first slot number and the corresponding public key of the

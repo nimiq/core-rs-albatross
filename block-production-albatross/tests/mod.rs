@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
 use beserial::Deserialize;
-use nimiq_block_albatross::{Block, BlockError, ForkProof, MacroBlock, MacroExtrinsics, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder};
-use nimiq_block_albatross::signed::SignedMessage;
+use nimiq_block_albatross::{Block, ForkProof, MacroBlock, MacroExtrinsics, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder};
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::blockchain::{Blockchain, PushError, PushResult};
+use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult};
 use nimiq_blockchain_base::AbstractBlockchain;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_bls::bls12_381::lazy::LazyPublicKey;
