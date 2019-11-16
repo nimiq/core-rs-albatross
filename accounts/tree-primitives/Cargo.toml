@@ -5,7 +5,7 @@ authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 description = "Accounts tree primitives for Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
@@ -18,11 +18,12 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 hex = "0.4"
-beserial = "0.1"
-beserial_derive = "0.1"
-nimiq-keys = "0.1"
-nimiq-hash = "0.1"
-nimiq-account = "0.1"
+
+beserial = { path = "../../beserial", version = "0.1" }
+beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
+nimiq-account = { path = "../../primitives/account", version = "0.1" }
+nimiq-hash = { path = "../../hash", version = "0.1" }
+nimiq-keys = { path = "../../keys", version = "0.1" }
 
 [dev-dependencies]
-nimiq-primitives = { version = "0.1", features = ["coin"] }
+nimiq-primitives = { path = "../../primitives", version = "0.1", features = ["coin"] }

@@ -5,7 +5,7 @@ authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@n
 edition = "2018"
 description = "A LMDB database wrapper with support for volatile storage"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
@@ -17,21 +17,22 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-log = "0.4"
-lmdb-zero = "0.4"
-fs2 = "0.4"
-parking_lot = "0.9"
-tempdir = "0.3"
-rand = "0.7"
 bitflags = "1.0"
-beserial = "0.1"
-nimiq-hash = { version = "0.1", optional = true }
-nimiq-keys = { version = "0.1", optional = true }
-nimiq-utils = { version = "0.1", features = ["otp"], optional = true }
-nimiq-block = { version = "0.1", optional = true }
-nimiq-block-albatross = { version = "0.1", optional = true }
-nimiq-tree-primitives = { version = "0.1", optional = true }
-nimiq-account = { version = "0.1", optional = true }
+fs2 = "0.4"
+lmdb-zero = "0.4"
+log = "0.4"
+parking_lot = "0.9"
+rand = "0.7"
+tempdir = "0.3"
+
+beserial = { path = "../beserial", version = "0.1" }
+nimiq-account = { path = "../primitives/account", version = "0.1", optional = true }
+nimiq-block = { path = "../primitives/block", version = "0.1", optional = true }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1", optional = true }
+nimiq-hash = { path = "../hash", version = "0.1", optional = true }
+nimiq-keys = { path = "../keys", version = "0.1", optional = true }
+nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1", optional = true }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["otp"], optional = true }
 
 [features]
 # Compiles this package with all features needed for the nimiq client.

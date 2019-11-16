@@ -5,7 +5,7 @@ authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 description = "Nimiq's Rust library"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
@@ -17,19 +17,20 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-futures = "0.1"
 failure = "0.1"
+futures = "0.1"
 lazy_static = "1.2"
 log = "0.4"
-nimiq-network = "0.1"
-nimiq-consensus = "0.1"
-nimiq-database = "0.1"
-nimiq-network-primitives = { version = "0.1", features = ["all"] }
-nimiq-primitives = { version = "0.1", features = ["networks"] }
-nimiq-mempool = "0.1"
-nimiq-utils = "0.1"
-nimiq-validator = { version = "0.1", optional = true }
-nimiq-bls = { version = "0.1", optional = true }
+
+nimiq-bls = { path = "../bls", version = "0.1", optional = true }
+nimiq-consensus = { path = "../consensus", version = "0.1" }
+nimiq-database = { path = "../database", version = "0.1" }
+nimiq-mempool = { path = "../mempool", version = "0.1" }
+nimiq-network = { path = "../network", version = "0.1" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["all"] }
+nimiq-primitives = { path = "../primitives", version = "0.1", features = ["networks"] }
+nimiq-utils = { path = "../utils", version = "0.1" }
+nimiq-validator = { path = "../validator", version = "0.1", optional = true }
 
 [features]
 default = ["validator"]

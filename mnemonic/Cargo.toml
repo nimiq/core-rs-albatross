@@ -5,7 +5,7 @@ authors = ["Pascal B <git@paberr.net>", "The Nimiq Core Development Team <info@n
 edition = "2018"
 description = "Mnemonic helper library for Nimiq"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
@@ -20,11 +20,12 @@ maintenance = { status = "experimental" }
 bit-vec = "0.6"
 hex = "0.4"
 unicode-normalization = "0.1"
-nimiq-hash = "0.1"
-beserial = "0.1"
-nimiq-macros = "0.1"
-nimiq-utils = { version = "0.1", features = ["bit-vec", "crc"] }
-nimiq-key-derivation = { version = "0.1", optional = true }
+
+beserial = { path = "../beserial", version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-key-derivation = { path = "../key-derivation", version = "0.1", optional = true }
+nimiq-macros = { path = "../macros", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["bit-vec", "crc"] }
 
 [features]
 default = ["key-derivation"]

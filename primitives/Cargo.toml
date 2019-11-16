@@ -5,7 +5,7 @@ authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 description = "Primitives (e.g., block, account, transaction) to be used in Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
@@ -17,23 +17,24 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
+bitvec = "0.15"
+enum-display-derive = { version = "0.1", optional = true }
+failure = { version = "0.1", optional = true}
+hex = { version = "0.4", optional = true }
+itertools = { version = "0.8", optional = true }
+lazy_static = { version = "1.2", optional = true }
 log = "0.4"
 num-bigint = { version = "0.2", optional = true }
 num-traits = { version = "0.2", optional = true }
 parking_lot = { version = "0.9", optional = true }
-hex = { version = "0.4", optional = true }
-lazy_static = { version = "1.2", optional = true }
-failure = { version = "0.1", optional = true}
-enum-display-derive = { version = "0.1", optional = true }
-bitvec = "0.15"
-itertools = { version = "0.8", optional = true }
-beserial = { version = "0.1", features = ["bitvec"] }
-beserial_derive = "0.1"
-nimiq-macros = { version = "0.1", optional = true }
-fixed-unsigned = { version = "0.1", optional = true }
-nimiq-bls = { version = "0.1", features = ["beserial"], optional = true }
-nimiq-keys = { version = "0.1", optional = true }
-nimiq-utils = { version = "0.1", features = ["math"], optional = true}
+
+beserial = { path = "../beserial", version = "0.1" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+fixed-unsigned = { path = "../fixed-unsigned", version = "0.1", optional = true }
+nimiq-bls = { path = "../bls", version = "0.1", features = ["beserial"], optional = true }
+nimiq-keys = { path = "../keys", version = "0.1", optional = true }
+nimiq-macros = { path = "../macros", version = "0.1", optional = true }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["math"], optional = true}
 
 [dev-dependencies]
 lazy_static = "1.2"

@@ -48,7 +48,7 @@ The binary will be installed in your Cargo directory, which is usually at `$HOME
 Compiling the project is achieved through [`cargo`](https://doc.rust-lang.org/cargo/):
 
 ```bash
-git clone https://github.com/nimiq/core-rs
+git clone https://github.com/nimiq/core-rs-albatross
 cd core-rs
 cargo +nightly build
 ```
@@ -68,7 +68,7 @@ cargo +nightly install --path client/
 Alternatively you can install directly from git:
 
 ```bash
-cargo +nightly install --git https://github.com/nimiq/core-rs.git
+cargo +nightly install --git https://github.com/nimiq/core-rs-albatross.git
 ```
 
 

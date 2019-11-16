@@ -3,8 +3,6 @@
 #![feature(specialization)]
 
 extern crate beserial;
-#[macro_use]
-extern crate beserial_derive;
 
 pub mod linked_list;
 pub mod unique_linked_list;

@@ -5,7 +5,7 @@ authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 description = "Wallet logic for Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 
 [badges]
@@ -13,18 +13,19 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-beserial = "0.1"
-beserial_derive = "0.1"
-nimiq-account = "0.1"
-nimiq-keys = "0.1"
-nimiq-key-derivation = "0.1"
-nimiq-hash = "0.1"
-nimiq-primitives = "0.1"
-nimiq-transaction = "0.1"
-nimiq-database = { version = "0.1", features = ["keys"] }
-nimiq-utils = { version = "0.1", features = ["otp"]}
 failure = "0.1"
 hex = "0.4"
+
+beserial = { path = "../beserial", version = "0.1" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+nimiq-account = { path = "../primitives/account", version = "0.1" }
+nimiq-database = { path = "../database", version = "0.1", features = ["keys"] }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-key-derivation = { path = "../key-derivation", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-primitives = { path = "../primitives", version = "0.1" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["otp"]}
 
 [dev-dependencies]
 lazy_static = "1.3"

@@ -5,7 +5,7 @@ authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 description = "Account primitives to be used in Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 categories = ["cryptography::cryptocurrencies"]
 keywords = ["nimiq", "cryptocurrency", "blockchain"]
@@ -17,19 +17,20 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-log = "0.4"
 failure = "0.1"
-parking_lot = "0.9"
 lazy_static = "1.3"
-beserial = "0.1"
-beserial_derive = "0.1"
-nimiq-hash = "0.1"
-nimiq-keys = "0.1"
-nimiq-transaction = "0.1"
-nimiq-primitives = { version = "0.1", features = ["coin", "policy", "validators"] }
-nimiq-bls = "0.1"
-nimiq-utils = { version = "0.1", features = ["hash-rng"] }
+log = "0.4"
+parking_lot = "0.9"
 rand = "0.7"
+
+beserial = { path = "../../beserial", version = "0.1" }
+beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
+nimiq-bls = { path = "../../bls", version = "0.1" }
+nimiq-hash = { path = "../../hash", version = "0.1" }
+nimiq-keys = { path = "../../keys", version = "0.1" }
+nimiq-primitives = { path = "..", version = "0.1", features = ["coin", "policy", "validators"] }
+nimiq-transaction = { path = "../transaction", version = "0.1" }
+nimiq-utils = { path = "../../utils", version = "0.1", features = ["hash-rng"] }
 
 [dev-dependencies]
 hex = "0.4"

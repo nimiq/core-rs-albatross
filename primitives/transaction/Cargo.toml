@@ -5,7 +5,7 @@ authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 description = "Transaction primitive to be used in Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 
 [badges]
@@ -13,18 +13,19 @@ travis-ci = { repository = "nimiq/core-rs", branch = "master" }
 
 [dependencies]
 bitflags = "1.0"
+enum-display-derive = "0.1"
+failure = "0.1"
 hex = "0.4"
 log = "0.4"
-failure = "0.1"
-enum-display-derive = "0.1"
-beserial = "0.1"
-beserial_derive = "0.1"
-nimiq-hash = "0.1"
-nimiq-keys = "0.1"
-nimiq-utils = { version = "0.1", features = ["merkle"] }
-nimiq-primitives = { version = "0.1", features = ["policy", "networks", "account", "coin"] }
-nimiq-bls = { version = "0.1", features = ["beserial"] }
-nimiq-macros = "0.1"
+
+beserial = { path = "../../beserial", version = "0.1" }
+beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
+nimiq-bls = { path = "../../bls", version = "0.1", features = ["beserial"] }
+nimiq-hash = { path = "../../hash", version = "0.1" }
+nimiq-keys = { path = "../../keys", version = "0.1" }
+nimiq-macros = { path = "../../macros", version = "0.1" }
+nimiq-primitives = { path = "..", version = "0.1", features = ["policy", "networks", "account", "coin"] }
+nimiq-utils = { path = "../../utils", version = "0.1", features = ["merkle"] }
 
 [dev-dependencies]
 hex = "0.4"

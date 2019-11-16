@@ -5,7 +5,7 @@ authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
 description = "Persistent block storage for Nimiq's Rust implementation"
 homepage = "https://nimiq.com"
-repository = "https://github.com/nimiq/core-rs"
+repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
 
 [badges]
@@ -20,27 +20,29 @@ hex = "0.4"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
-beserial = "0.1"
-beserial_derive = "0.1"
-fixed-unsigned = "0.1"
-nimiq-account = "0.1"
-nimiq-accounts = "0.1"
-nimiq-block-albatross = "0.1"
-nimiq-blockchain-base = "0.1"
-nimiq-collections = "0.1"
-nimiq-bls = { version = "0.1", features = ["beserial"] }
-nimiq-database = { version = "0.1", features = ["full-nimiq"] }
-nimiq-keys = "0.1"
-nimiq-hash = "0.1"
-nimiq-network-primitives = { version = "0.1", features = ["networks", "time"] }
-nimiq-primitives = "0.1"
-nimiq-transaction = "0.1"
-nimiq-tree-primitives = "0.1"
-nimiq-utils = { version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
+
+beserial = { path = "../beserial", version = "0.1" }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+fixed-unsigned = { path = "../fixed-unsigned", version = "0.1" }
+nimiq-account = { path = "../primitives/account", version = "0.1" }
+nimiq-accounts = { path = "../accounts", version = "0.1" }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
+nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
+nimiq-bls = { path = "../bls", version = "0.1", features = ["beserial"] }
+nimiq-collections = { path = "../collections", version = "0.1" }
+nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "time"] }
+nimiq-primitives = { path = "../primitives", version = "0.1" }
+nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
 
 [dev-dependencies]
 atomic = "0.4"
-nimiq-block-production-albatross = "0.1"
+
+nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1" }
 
 [features]
 default = ["transaction-store"]
