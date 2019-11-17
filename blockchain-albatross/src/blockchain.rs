@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::vec::IntoIter;
 
 
-use parking_lot::{MappedMutexGuard, MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
+use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 
 use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
@@ -339,7 +339,7 @@ impl Blockchain {
         Some(validators)
     }
 
-    pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: OptionalCheck<&ViewChangeProof>, intended_slot_owner: &MappedMutexGuard<PublicKey>, txn_opt: Option<&Transaction>) -> Result<(), PushError> {
+    pub fn verify_block_header(&self, header: &BlockHeader, view_change_proof: OptionalCheck<&ViewChangeProof>, intended_slot_owner: &MappedRwLockReadGuard<PublicKey>, txn_opt: Option<&Transaction>) -> Result<(), PushError> {
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info_opt = self.chain_store.get_chain_info(&header.parent_hash(), false, txn_opt);
         if prev_info_opt.is_none() {

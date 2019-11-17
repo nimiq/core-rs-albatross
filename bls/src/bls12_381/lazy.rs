@@ -1,13 +1,13 @@
 use std::fmt;
 
-use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
+use parking_lot::{RwLock, RwLockReadGuard, MappedRwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 use super::*;
 
 
 pub struct LazyPublicKey {
     pub(crate) compressed: CompressedPublicKey,
-    pub(crate) cache: Mutex<Option<PublicKey>>,
+    pub(crate) cache: RwLock<Option<PublicKey>>,
 }
 
 impl fmt::Debug for LazyPublicKey {
@@ -26,7 +26,7 @@ impl Clone for LazyPublicKey {
     fn clone(&self) -> Self {
         LazyPublicKey {
             compressed: self.compressed.clone(),
-            cache: Mutex::new(self.cache.lock().clone()),
+            cache: RwLock::new(self.cache.read().clone()),
         }
     }
 }
@@ -61,35 +61,36 @@ impl LazyPublicKey {
     pub fn from_compressed(compressed: &CompressedPublicKey) -> Self {
         LazyPublicKey {
             compressed: compressed.clone(),
-            cache: Mutex::new(None),
+            cache: RwLock::new(None),
         }
     }
 
-    pub fn uncompress(&self) -> Option<MappedMutexGuard<PublicKey>> {
-        let mut cached = self.cache.lock();
-        if cached.is_none() {
-            *cached = Some(match self.compressed.uncompress() {
+    pub fn uncompress(&self) -> Option<MappedRwLockReadGuard<PublicKey>> {
+        let read_guard: RwLockReadGuard<Option<PublicKey>>;
+
+        let upgradable = self.cache.upgradable_read();
+        if upgradable.is_some() {
+            // Fast path, downgrade and return
+            read_guard = RwLockUpgradableReadGuard::downgrade(upgradable);
+        } else {
+            // Slow path, upgrade, write, downgrade and return
+            let mut upgraded = RwLockUpgradableReadGuard::upgrade(upgradable);
+            *upgraded = Some(match self.compressed.uncompress() {
                 Ok(p) => p,
                 _ => return None,
             });
+            read_guard = RwLockWriteGuard::downgrade(upgraded);
         }
 
-        Some(MutexGuard::map(cached, |opt| opt.as_mut().unwrap()))
+        Some(RwLockReadGuard::map(read_guard, |opt| opt.as_ref().unwrap()))
     }
 
-    pub fn uncompress_unchecked(&self) -> MappedMutexGuard<PublicKey> {
+    pub fn uncompress_unchecked(&self) -> MappedRwLockReadGuard<PublicKey> {
         self.uncompress().expect("Invalid public key")
     }
 
     pub fn compressed(&self) -> &CompressedPublicKey {
         &self.compressed
-    }
-
-    pub fn uncompressed(&self) -> Option<PublicKey> {
-        // NOTE: We can't use Option::cloned here, as clippy suggests, since MappedMutexGuard
-        //       doesn't really implement Clone. But `guard.clone` calls the underlying clone method
-        #[allow(clippy::map_clone)]
-        self.uncompress().map(|guard| guard.clone())
     }
 
     pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
@@ -113,7 +114,7 @@ impl From<PublicKey> for LazyPublicKey {
     fn from(key: PublicKey) -> Self {
         LazyPublicKey {
             compressed: key.compress(),
-            cache: Mutex::new(Some(key)),
+            cache: RwLock::new(Some(key)),
         }
     }
 }
