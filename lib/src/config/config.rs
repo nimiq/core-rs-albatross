@@ -702,9 +702,9 @@ impl ClientConfigBuilder {
                 file_storage.peer_key = PathBuf::from(path);
             });
         config_file.validator.as_ref()
-            .map(|ref validator_config| {
-                file_storage.validator_key = validator_config.key_file.as_ref()
-                    .map(PathBuf::from);
+            .map(|validator_config| {
+                validator_config.key_file.as_ref()
+                    .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path)));
             });
         self.storage = Some(file_storage.into());
 
