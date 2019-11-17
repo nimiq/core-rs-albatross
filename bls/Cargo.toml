@@ -29,6 +29,5 @@ nimiq-utils = { path = "../utils", version = "0.1", features = ["key-rng"] }
 rand_xorshift = "0.2"
 
 [features]
-default = ["std", "beserial", "lazy"]
-std = []
+default = ["beserial", "lazy"]
 lazy = ["parking_lot"]

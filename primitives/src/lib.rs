@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate beserial_derive;
+#[cfg(feature = "failure")]
 #[macro_use]
 extern crate failure;
 #[macro_use]
@@ -9,6 +10,7 @@ extern crate log;
 extern crate lazy_static;
 #[cfg(feature = "nimiq-macros")]
 extern crate nimiq_macros;
+#[cfg(feature = "enum-display-derive")]
 #[macro_use]
 extern crate enum_display_derive;
 

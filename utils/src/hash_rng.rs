@@ -1,7 +1,7 @@
 use std::default::Default;
 use std::io::Write;
+use std::marker::PhantomData;
 
-use failure::_core::marker::PhantomData;
 use rand_core::{Error, impls, RngCore, SeedableRng};
 
 use nimiq_hash::{Hasher, HashOutput};

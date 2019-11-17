@@ -33,8 +33,8 @@ nimiq-block = { path = "../primitives/block", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
 nimiq-block-production = { path = "../block-production", version = "0.1" }
-nimiq-blockchain = { path = "../blockchain", version = "0.1" }
-nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
+nimiq-blockchain = { path = "../blockchain", version = "0.1", features = ["metrics"] }
+nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1", features = ["metrics"] }
 nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-consensus = { path = "../consensus", version = "0.1" }
@@ -42,7 +42,7 @@ nimiq-database = { path = "../database", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-network = { path = "../network", version = "0.1" }
+nimiq-network = { path = "../network", version = "0.1", features = ["metrics"] }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }

@@ -114,6 +114,7 @@ impl Blockchain {
         transaction_cache.push_block(&main_chain.head);
         assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.header.height));
 
+        #[cfg(feature = "transaction-store")]
         let transaction_store = TransactionStore::new(env.clone());
 
         Ok(Blockchain {
@@ -170,6 +171,7 @@ impl Blockchain {
         // Initialize empty TransactionCache.
         let transaction_cache = TransactionCache::new();
 
+        #[cfg(feature = "transaction-store")]
         let transaction_store = TransactionStore::new(env.clone());
 
         Ok(Blockchain {
@@ -786,7 +788,10 @@ impl AbstractBlockchain for Blockchain {
     }
 
     fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt> {
-        self.get_transaction_receipts_by_address(address, sender_limit, recipient_limit)
+        #[cfg(feature = "transaction-store")]
+        return self.get_transaction_receipts_by_address(address, sender_limit, recipient_limit);
+        #[cfg(not(feature = "transaction-store"))]
+        Vec::new()
     }
 
     fn register_listener<T: Listener<BlockchainEvent> + 'static>(&self, listener: T) -> ListenerHandle {

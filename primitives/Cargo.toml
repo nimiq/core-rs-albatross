@@ -41,8 +41,8 @@ lazy_static = "1.2"
 
 [features]
 all = ["coin", "account", "policy", "networks", "validators"]
-coin = ["hex", "failure"]
+coin = ["hex", "failure", "num-traits"]
 account = ["hex", "nimiq-macros", "failure", "enum-display-derive"]
 policy = ["num-bigint", "num-traits", "parking_lot", "lazy_static", "fixed-unsigned"]
-networks = []
-validators = ["nimiq-bls", "nimiq-keys", "nimiq-utils", "beserial/bitvec", "itertools"]
+networks = ["failure"]
+validators = ["nimiq-bls", "nimiq-keys", "nimiq-utils", "beserial/bitvec", "itertools", "policy"]

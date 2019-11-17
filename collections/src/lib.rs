@@ -2,6 +2,7 @@
 #![feature(box_into_raw_non_null)]
 #![feature(specialization)]
 
+#[cfg(feature = "bitset")]
 extern crate beserial;
 
 pub mod linked_list;

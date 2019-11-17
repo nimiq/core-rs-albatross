@@ -34,8 +34,8 @@ beserial = { path = "../beserial", version = "0.1" }
 nimiq-account = { path = "../primitives/account", version = "0.1" }
 nimiq-accounts = { path = "../accounts", version = "0.1" }
 nimiq-block = { path = "../primitives/block", version = "0.1", optional = true }
-nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1", optional = true }
-nimiq-bls = { path = "../bls", version = "0.1", optional = true }
+nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
+nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-collections = { path = "../collections", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1", features = ["account"] }
 nimiq-hash = { path = "../hash", version = "0.1" }
@@ -43,6 +43,5 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 
 [features]
-default = ["albatross", "powchain"]
-albatross = ["nimiq-bls", "nimiq-block-albatross"]
+default = ["powchain"]
 powchain = ["nimiq-block"]

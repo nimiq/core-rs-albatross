@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate json;
-//#[macro_use]
-//extern crate lazy_static;
+
 #[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
@@ -33,6 +32,7 @@ use json::JsonValue;
 use crate::error::Error;
 pub use crate::handler::Handler;
 use futures::IntoFuture;
+#[cfg(feature="validator")]
 use crate::handlers::block_production_albatross::BlockProductionAlbatrossHandler;
 
 pub mod jsonrpc;

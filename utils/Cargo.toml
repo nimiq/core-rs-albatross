@@ -38,7 +38,7 @@ beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 [features]
 crc = []
 otp = ["beserial", "clear_on_drop", "nimiq-hash", "rand"]
-key-store = ["failure"]
+key-store = ["failure", "beserial"]
 iterators = []
 locking = ["futures", "parking_lot"]
 merkle = ["beserial", "beserial_derive", "nimiq-hash", "bit-vec", "math"]

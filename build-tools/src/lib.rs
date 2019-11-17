@@ -5,6 +5,7 @@ extern crate serde_derive;
 
 extern crate nimiq_bls as bls;
 extern crate nimiq_block_albatross as block_albatross;
+#[cfg(feature = "powchain")]
 extern crate nimiq_block as block_powchain;
 extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;

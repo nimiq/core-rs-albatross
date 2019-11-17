@@ -19,7 +19,7 @@ hex = "0.4"
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-database = { path = "../database", version = "0.1", features = ["keys"] }
+nimiq-database = { path = "../database", version = "0.1", features = ["keys", "otp"] }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-key-derivation = { path = "../key-derivation", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }

@@ -1,3 +1,4 @@
+
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -6,6 +7,7 @@ use std::collections::HashSet;
 
 use url::Url;
 
+#[cfg(feature="validator")]
 use bls::SecureGenerate;
 #[cfg(feature="validator")]
 use bls::bls12_381::KeyPair as BlsKeyPair;
@@ -645,8 +647,9 @@ impl ClientConfigBuilder {
 
     /// Sets the validator config. Since there is no configuration for validators (except key file)
     /// yet, this will just enable the validator.
+    #[cfg(feature="validator")]
     pub fn validator(&mut self) -> &mut Self {
-        self.validator = Some(Some(ValidatorConfig{}));
+        self.validator = Some(Some(ValidatorConfig {}));
         self
     }
 
@@ -773,8 +776,10 @@ impl ClientConfigBuilder {
         }
 
         // Configure validator
-        if config_file.validator.is_some() {
-            self.validator = Some(Some(ValidatorConfig {}));
+        #[cfg(feature="validator")] {
+            if config_file.validator.is_some() {
+                self.validator = Some(Some(ValidatorConfig {}));
+            }
         }
 
         Ok(self)
