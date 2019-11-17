@@ -47,6 +47,19 @@ stages:
     - rustup component add clippy
     - cargo clippy --all
 
+check-features:
+  stage: test
+  only:
+    - schedules
+  image: 'rustlang/rust:nightly'
+  script:
+    - apt update -yq
+    - apt install -y python3-pip
+    - pip3 install toml
+    - rustc --version
+    - cargo --version
+    - scripts/test_features.py --workspace
+
 build-nightly:
   extends: .build
   image: 'rustlang/rust:nightly'
