@@ -44,7 +44,7 @@ use crate::slash::ForkProofPool;
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
 
 #[derive(Clone, Debug)]
-pub enum SlotChange  {
+pub enum SlotChange {
     NextBlock,
     ViewChange(ViewChange, ViewChangeProof),
 }
@@ -165,7 +165,7 @@ impl Validator {
             // But except for rebranching, this is only the type of the event and a hash, so not
             // very expensive to clone anyway.
             let e = e.clone();
-            tokio::spawn(futures::future::lazy(move|| {
+            tokio::spawn(futures::future::lazy(move || {
                 this.on_blockchain_event(&e);
                 Ok(())
             }));
@@ -180,11 +180,7 @@ impl Validator {
 
         // Set up the view change timer in case there's a block timeout
         // Note: In start_view_change() we check so that it's only executed if we are an active validator
-        let weak = Arc::downgrade(this);
-        this.timers.set_interval(ValidatorTimer::ViewChange, move || {
-            let this = upgrade_weak!(weak);
-            this.on_block_timeout();
-        }, Self::BLOCK_TIMEOUT);
+        this.set_view_change_interval(Self::BLOCK_TIMEOUT);
 
         // remember listeners for when we drop this validator
         let listeners = ValidatorListeners {
@@ -217,8 +213,16 @@ impl Validator {
         state.status = ValidatorStatus::None;
     }
 
+    fn set_view_change_interval(&self, timeout: Duration) {
+        let weak = Weak::clone(&self.self_weak);
+        self.timers.set_interval(ValidatorTimer::ViewChange, move || {
+            let this = upgrade_weak!(weak);
+            this.on_block_timeout();
+        }, timeout);
+    }
+
     fn reset_view_change_interval(&self, timeout: Duration) {
-        let weak = self.self_weak.clone();
+        let weak = Weak::clone(&self.self_weak);
         self.timers.reset_interval(ValidatorTimer::ViewChange, move || {
             let this = upgrade_weak!(weak);
             this.on_block_timeout();
@@ -322,7 +326,7 @@ impl Validator {
         {
             let state = self.state.write();
 
-            // Validator network events are only intersting to active validators
+            // Validator network events are only interesting to active validators
             if state.status != ValidatorStatus::Active {
                 return;
             }
@@ -416,7 +420,11 @@ impl Validator {
     pub fn on_pbft_proposal(&self, hash: &Blake2bHash) {
         let state = self.state.write();
         trace!("Received proposal: {}", hash);
-        // View change messages should only be sent by active validators.
+
+        // Once a valid proposal is received, we no longer emit view changes
+        self.timers.clear_interval(&ValidatorTimer::ViewChange);
+
+        // Signed proposal messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
             return;
         }
@@ -463,6 +471,9 @@ impl Validator {
 
     pub fn on_pbft_commit_complete(&self, hash: &Blake2bHash, proposal: &PbftProposal, proof: &PbftProof) {
         let mut state = self.state.write();
+
+        // Once we finish the PBFT process for the macro block, view change emission can be reactivated
+        self.set_view_change_interval(Self::BLOCK_TIMEOUT);
 
         if let Some(extrinsics) = state.proposed_extrinsics.remove(hash) {
             assert_eq!(proposal.header.extrinsics_root, extrinsics.hash());
