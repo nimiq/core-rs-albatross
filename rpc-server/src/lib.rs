@@ -32,8 +32,6 @@ use json::JsonValue;
 use crate::error::Error;
 pub use crate::handler::Handler;
 use futures::IntoFuture;
-#[cfg(feature="validator")]
-use crate::handlers::block_production_albatross::BlockProductionAlbatrossHandler;
 
 pub mod jsonrpc;
 pub mod error;

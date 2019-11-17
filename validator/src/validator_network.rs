@@ -23,7 +23,7 @@ use network_primitives::validator_info::{SignedValidatorInfo};
 use network_primitives::address::PeerId;
 use primitives::policy::{SLOTS, TWO_THIRD_SLOTS, is_macro_block_at};
 use utils::mutable_once::MutableOnce;
-use utils::observer::{PassThroughNotifier, weak_listener, weak_passthru_listener};
+use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
 use handel::aggregation::AggregationEvent;
 use handel::update::LevelUpdateMessage;
 use bls::bls12_381::CompressedPublicKey;
@@ -49,22 +49,52 @@ pub enum ValidatorNetworkError {
 }
 
 #[derive(Clone, Debug)]
+pub struct ViewChangeUpdateEvent {
+    pub view_change: ViewChange,
+    pub votes: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct ViewChangeCompleteEvent {
+    pub view_change: ViewChange,
+    pub proof: ViewChangeProof,
+}
+
+#[derive(Clone, Debug)]
+pub struct PbftUpdateEvent {
+    pub hash: Blake2bHash,
+    pub prepare_votes: usize,
+    pub commit_votes: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct PbftCompleteEvent {
+    pub hash: Blake2bHash,
+    pub proposal: PbftProposal,
+    pub proof: PbftProof,
+}
+
+#[derive(Clone, Debug)]
 pub enum ValidatorNetworkEvent {
     /// When a fork proof was given
     ForkProof(Box<ForkProof>),
 
+    ViewChangeUpdate(Box<ViewChangeUpdateEvent>),
+
     /// When a valid view change was completed
-    ViewChangeComplete(Box<(ViewChange, ViewChangeProof)>),
+    ViewChangeComplete(Box<ViewChangeCompleteEvent>),
 
     /// When a valid macro block is proposed by the correct pBFT-leader. This can happen multiple
     /// times during an epoch - i.e. when a proposal with a higher view number is received.
-    PbftProposal(Box<(Blake2bHash, PbftProposal)>),
+    PbftProposal(Box<PbftProposal>),
+
+    PbftUpdate(Box<PbftUpdateEvent>),
 
     /// When enough prepare signatures are collected for a proposed macro block
-    PbftPrepareComplete(Box<(Blake2bHash, PbftProposal)>),
+    PbftPrepareComplete(Box<Blake2bHash>),
 
     /// When the pBFT proof is complete
-    PbftComplete(Box<(Blake2bHash, PbftProposal, PbftProof)>),
+    PbftComplete(Box<PbftCompleteEvent>),
 }
 
 
@@ -185,14 +215,14 @@ pub struct ValidatorNetwork {
     pub validators: Arc<RwLock<ValidatorPool>>,
 
     self_weak: MutableOnce<Weak<ValidatorNetwork>>,
-    pub notifier: RwLock<PassThroughNotifier<'static, ValidatorNetworkEvent>>,
+    pub notifier: RwLock<Notifier<'static, ValidatorNetworkEvent>>,
 }
 
 impl ValidatorNetwork {
     const LIMIT_POTENTIAL_VALIDATOR_INFOS: usize = 64;
 
     pub fn new(network: Arc<Network<Blockchain>>, blockchain: Arc<Blockchain>, info: SignedValidatorInfo) -> Arc<Self> {
-        let mut pool = ValidatorPool::new(Arc::clone(&network));
+        let pool = ValidatorPool::new(Arc::clone(&network));
 
         // blacklist ourself
         pool.blacklist(info.message.public_key.clone());
@@ -203,7 +233,7 @@ impl ValidatorNetwork {
             state: RwLock::new(ValidatorNetworkState::default()),
             validators: Arc::new(RwLock::new(pool)),
             self_weak: MutableOnce::new(Weak::new()),
-            notifier: RwLock::new(PassThroughNotifier::new()),
+            notifier: RwLock::new(Notifier::new()),
         });
 
         Self::init_listeners(&this, network);
@@ -319,8 +349,7 @@ impl ValidatorNetwork {
         // Set validator ID
         state.validator_id = validator_id;
 
-        // Create mapping from validator ID to agent/peer
-        // reset validator pool for new epoch
+        // Reset validator pool for new epoch
         self.validators.write().reset_epoch(&self.blockchain.current_validators());
 
         // Send validator infos
@@ -383,8 +412,7 @@ impl ValidatorNetwork {
         drop(state);
 
         // Notify Validator (and send prepare message)
-        let block_hash = best_pbft.proposal.message.header.hash::<Blake2bHash>();
-        self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(Box::new((block_hash, best_pbft.proposal.message))));
+        self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(Box::new(best_pbft.proposal.message)));
     }
 
     /// Pushes the update to the signature aggregation for this view-change
@@ -398,26 +426,45 @@ impl ValidatorNetwork {
         }
 
         if let Some(aggregation) = state.view_changes.get(&update_message.tag) {
+            let votes_before = aggregation.votes();
+            let view_change = update_message.tag.clone();
+
             aggregation.push_update(update_message);
-            trace!("View change progress: {}", fmt_vote_progress(aggregation.votes()));
+
+            let votes = aggregation.votes();
+
+            if votes > votes_before {
+                debug!("View change progress: {}", fmt_vote_progress(aggregation.votes()));
+                self.notifier.read().notify(ValidatorNetworkEvent::ViewChangeUpdate(Box::new(ViewChangeUpdateEvent {
+                    view_change,
+                    votes
+                })));
+            }
         }
         else if let Some(node_id) = state.validator_id {
             let view_change = update_message.tag.clone();
 
-            // create view change
+            // Create view change
             let aggregation = self.new_view_change(view_change.clone(), node_id);
 
-            // add update
+            // Add update
             aggregation.push_update(update_message);
 
+            let votes = aggregation.votes();
+
+            // Insert into view change map
             let mut state = RwLockUpgradableReadGuard::upgrade(state);
-            state.view_changes.insert(view_change, aggregation);
+            state.view_changes.insert(view_change.clone(), aggregation);
+
+            self.notifier.read().notify(ValidatorNetworkEvent::ViewChangeUpdate(Box::new(ViewChangeUpdateEvent {
+                view_change,
+                votes
+            })));
         }
     }
 
     /// When we receive a complete view change proof
     fn on_view_change_proof(&self, view_change: ViewChange, proof: ViewChangeProof) {
-        // pub fn verify(&self, message: &M, validators: &GroupedList<LazyPublicKey>, threshold: u16) -> Result<(), AggregateProofError>
         if let Err(e) = proof.verify(&view_change, &self.blockchain.current_validators(), TWO_THIRD_SLOTS) {
             // TODO: Make this use Display instead, once the implementation for it is merged.
             debug!("Invalid view change proof: {:?}", e);
@@ -431,13 +478,13 @@ impl ValidatorNetwork {
         info!("Received view change proof for: {}", view_change);
         let mut state = RwLockUpgradableReadGuard::upgrade(state);
 
-        // put into complete view changes
+        // Put into complete view changes
         state.complete_view_changes.insert(view_change.clone(), proof.clone());
 
-        // remove active view change
+        // Remove active view change
         state.view_changes.remove(&view_change);
 
-        // remove all active view changes that are now obsolete
+        // Remove all active view changes that are now obsolete
         // this was meant to also kill old view changes from older blocks even, do we need this?
         /*let cancel_view_changes = state.view_changes.keys()
             .filter(|vc| vc.new_view_number <= view_change.new_view_number)
@@ -450,9 +497,12 @@ impl ValidatorNetwork {
 
         drop(state);
 
-        // notify validator
+        // Notify validator
         self.notifier.read()
-            .notify(ValidatorNetworkEvent::ViewChangeComplete(Box::new((view_change.clone(), proof.clone()))));
+            .notify(ValidatorNetworkEvent::ViewChangeComplete(Box::new(ViewChangeCompleteEvent {
+                view_change: view_change.clone(),
+                proof: proof.clone(),
+            })));
 
         // broadcast
         self.broadcast_view_change_proof(view_change, proof);
@@ -523,7 +573,7 @@ impl ValidatorNetwork {
                             trace!("Prepare complete. Signers: {}", best.signers);
 
                             // Return the event
-                            Some(ValidatorNetworkEvent::PbftPrepareComplete(Box::new((pbft.block_hash.clone(), pbft.proposal.message.clone()))))
+                            Some(ValidatorNetworkEvent::PbftPrepareComplete(Box::new(pbft.block_hash.clone())))
                         } else {
                             error!("No pBFT state");
                             None
@@ -557,7 +607,11 @@ impl ValidatorNetwork {
                             let pbft_proof = PbftProof { prepare: prepare_proof, commit: commit_proof };
 
                             // Return the event
-                            Some(ValidatorNetworkEvent::PbftComplete(Box::new((pbft.block_hash.clone(), pbft.proposal.message.clone(), pbft_proof))))
+                            Some(ValidatorNetworkEvent::PbftComplete(Box::new(PbftCompleteEvent {
+                                hash: pbft.block_hash.clone(),
+                                proposal: pbft.proposal.message.clone(),
+                                proof: pbft_proof,
+                            })))
                         } else {
                             error!("No pBFT state");
                             None
@@ -583,7 +637,7 @@ impl ValidatorNetwork {
 
         // Notify Validator (and send prepare message)
         if !buffered {
-            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(Box::new((block_hash.clone(), signed_proposal.message.clone()))));
+            self.notifier.read().notify(ValidatorNetworkEvent::PbftProposal(Box::new(signed_proposal.message.clone())));
         }
 
         // Broadcast to other validators
@@ -601,9 +655,23 @@ impl ValidatorNetwork {
             let aggregation = Arc::clone(&pbft.aggregation);
             let aggregation = aggregation.read();
             drop(state);
+
+            let (prepare_votes_before, _) = aggregation.votes();
+            let hash = level_update.tag.block_hash.clone();
+
             aggregation.push_prepare_level_update(level_update);
+
             let (prepare_votes, commit_votes) = aggregation.votes();
-            trace!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
+
+            if prepare_votes > prepare_votes_before {
+                debug!("pBFT for {}: Prepare: {}, Commit: {}", hash, fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
+
+                self.notifier.read().notify(ValidatorNetworkEvent::PbftUpdate(Box::new(PbftUpdateEvent {
+                    hash,
+                    prepare_votes,
+                    commit_votes,
+                })));
+            }
         }
     }
 
@@ -617,9 +685,22 @@ impl ValidatorNetwork {
             let aggregation = Arc::clone(&pbft.aggregation);
             let aggregation = aggregation.read();
             drop(state);
+
+            let (_, commit_votes_before) = aggregation.votes();
+            let hash = level_update.tag.block_hash.clone();
+
             aggregation.push_commit_level_update(level_update);
+
             let (prepare_votes, commit_votes) = aggregation.votes();
-            trace!("pBFT: Prepare: {}, Commit: {}", fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
+            if commit_votes > commit_votes_before {
+                debug!("pBFT for {}: Prepare: {}, Commit: {}", hash, fmt_vote_progress(prepare_votes), fmt_vote_progress(commit_votes));
+
+                self.notifier.read().notify(ValidatorNetworkEvent::PbftUpdate(Box::new(PbftUpdateEvent {
+                    hash,
+                    prepare_votes,
+                    commit_votes,
+                })));
+            }
         }
     }
 

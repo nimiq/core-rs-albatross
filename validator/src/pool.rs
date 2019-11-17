@@ -1,6 +1,8 @@
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use parking_lot::RwLock;
+
 use bls::bls12_381::CompressedPublicKey;
 use bls::bls12_381::lazy::LazyPublicKey;
 use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
@@ -26,7 +28,7 @@ pub struct ValidatorPool {
     network: Arc<Network<Blockchain>>,
 
     /// Blacklist of validators we don't want to connect to
-    blacklist: BTreeSet<CompressedPublicKey>,
+    blacklist: RwLock<BTreeSet<CompressedPublicKey>>,
 
     /// The signed validator infos we received for other validators.
     /// This will be sent to newly connected validators
@@ -51,7 +53,7 @@ impl ValidatorPool {
     pub fn new(network: Arc<Network<Blockchain>>) -> Self {
         ValidatorPool {
             network,
-            blacklist: BTreeSet::new(),
+            blacklist: RwLock::new(BTreeSet::new()),
             infos: BTreeMap::new(),
             validator_id_by_pubkey: BTreeMap::new(),
             potential_validators: BTreeMap::new(),
@@ -60,8 +62,8 @@ impl ValidatorPool {
         }
     }
 
-    pub fn blacklist(&mut self, pubkey: CompressedPublicKey) {
-        self.blacklist.insert(pubkey);
+    pub fn blacklist(&self, pubkey: CompressedPublicKey) {
+        self.blacklist.write().insert(pubkey);
     }
 
     pub fn reset_epoch(&mut self, validators: &ValidatorSlots) {
@@ -79,7 +81,7 @@ impl ValidatorPool {
                 // if we already know the validator as potential validator, put into active validators
                 self.active_validator_agents.insert(validator_id, Arc::clone(validator));
             }
-            else if self.blacklist.contains(pubkey) {
+            else if self.blacklist.read().contains(pubkey) {
                 // ignore
             }
             else if let Some(info) = self.infos.get(pubkey) {
@@ -131,7 +133,7 @@ impl ValidatorPool {
     }
 
     pub fn connect_to_agent(&mut self, pubkey: &CompressedPublicKey, agent: &Arc<ValidatorAgent>) {
-        if self.blacklist.contains(pubkey) {
+        if self.blacklist.read().contains(pubkey) {
             return;
         }
 
@@ -150,14 +152,17 @@ impl ValidatorPool {
     }
 
     pub fn connect_to_peer(&self, info: &ValidatorInfo) {
-        if self.blacklist.contains(&info.public_key) {
+        if self.blacklist.read().contains(&info.public_key) {
             return;
         }
 
         let peer_address = Arc::new(info.peer_address.clone());
         debug!("Trying to connect to: {}", peer_address);
         if !self.network.connections.connect_outbound(Arc::clone(&peer_address)) {
-            warn!("Failed to connect to {}", peer_address);
+            //warn!("Failed to connect to {}. Blacklist them for now (TODO).", peer_address);
+            // TODO: Ideally the connection pool should handle this. Just don't try to reconnect to
+            // them for a while
+            //self.blacklist.write().insert(info.public_key.clone());
         }
     }
 

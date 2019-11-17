@@ -8,14 +8,18 @@ use crate::config::consts::default_bind;
 
 
 pub fn initialize_metrics_server(client: &Client, config: MetricsServerConfig) -> Result<MetricsServer, Error> {
+    let ip = config.bind_to.unwrap_or_else(default_bind);
+    info!("Initializing metrics server: {}:{}", ip, config.port);
+
     let (username, password) = if let Some(credentials) = config.credentials {
         (Some(credentials.username), Some(credentials.password))
     } else {
+        warn!("No password set for metrics server!");
         (None, None)
     };
 
      Ok(MetricsServer::new::<_, AlbatrossChainMetrics>(
-        config.bind_to.unwrap_or_else(default_bind),
+        ip,
         config.port,
         username,
         password,

@@ -11,7 +11,7 @@ pub const REVERSE_PROXY_DEFAULT_PORT: u16 = 8444;
 pub const RPC_DEFAULT_PORT: u16 = 8648;
 
 /// The default port for the WebSocket server
-pub const WSRPC_DEFAULT_PORT: u16 = 8650;
+pub const WS_RPC_DEFAULT_PORT: u16 = 8650;
 
 /// The default port for the metrics server
 pub const METRICS_DEFAULT_PORT: u16 = 8649;

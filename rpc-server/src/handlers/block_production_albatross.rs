@@ -6,7 +6,6 @@ use std::string::ToString;
 
 use json::JsonValue;
 
-use bls::bls12_381::{CompressedPublicKey, CompressedSignature};
 use validator::validator::Validator;
 
 use crate::handler::Method;

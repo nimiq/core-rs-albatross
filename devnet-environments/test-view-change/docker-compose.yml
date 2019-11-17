@@ -17,7 +17,9 @@ services:
     env_file:
      - validator.env
     ports:
-     - "8649:8648"
+     - "8648:8648"
+     - "8649:8649"
+     - "8650:8650"
     restart: unless-stopped
     networks:
       default:

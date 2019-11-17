@@ -48,7 +48,7 @@ fn main_inner() -> Result<(), Error> {
             // Clone those now, because we pass ownership of config to Client
             let rpc_config = config.rpc_server.clone();
             let metrics_config = config.metrics_server.clone();
-            //let ws_rpc_config = config.ws_rpc_server.clone();
+            let ws_rpc_config = config.ws_rpc_server.clone();
 
             // Create client from config
             info!("Initializing client");
@@ -66,7 +66,18 @@ fn main_inner() -> Result<(), Error> {
             // Initialize metrics server
             if let Some(metrics_config) = metrics_config {
                 use nimiq::extras::metrics_server::initialize_metrics_server;
-                initialize_metrics_server(&client, metrics_config);
+                let metrics_server = initialize_metrics_server(&client, metrics_config)
+                    .expect("Failed to initialize metrics server");
+                tokio::spawn(metrics_server.into_future());
+            }
+
+            // Initialize Websocket RPC server
+            // TODO: Configuration
+            if let Some(ws_rpc_config) = ws_rpc_config {
+                use nimiq::extras::ws_rpc_server::initialize_ws_rcp_server;
+                let ws_rpc_server = initialize_ws_rcp_server(&client, ws_rpc_config)
+                    .expect("Failed to initialize websocket RPC server");
+                tokio::spawn(ws_rpc_server.into_future());
             }
 
             // Initialize network stack and connect

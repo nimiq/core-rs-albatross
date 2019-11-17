@@ -1,9 +1,6 @@
 use std::collections::HashSet;
-use std::net::IpAddr;
 use std::sync::Arc;
 use std::iter::FromIterator;
-
-use parking_lot::RwLock;
 
 use rpc_server::{RpcServer, JsonRpcConfig};
 use rpc_server::handlers::*;
@@ -15,12 +12,15 @@ use crate::config::consts::default_bind;
 
 
 pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result<RpcServer, Error> {
-    // Configure RPC server
+    let ip = config.bind_to.unwrap_or_else(default_bind);
+    info!("Initializing RPC server: {}:{}", ip, config.port);
 
+    // Configure RPC server
     let (username, password) = if let Some(credentials) = config.credentials {
         (Some(credentials.username), Some(credentials.password))
     }
     else {
+        warn!("No password set for RPC server!");
         (None, None)
     };
 
@@ -38,11 +38,8 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
         corsdomain,
     };
 
-    let ip = config.bind_to.unwrap_or_else(default_bind);
-    let port = config.port;
-
     // Initialize RPC server
-    let rpc_server = RpcServer::new(ip, port, json_rpc_config)?;
+    let rpc_server = RpcServer::new(ip, config.port, json_rpc_config)?;
     let handler = Arc::clone(&rpc_server.handler);
 
     // Install RPC modules

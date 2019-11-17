@@ -2,8 +2,7 @@
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
-use std::net::{IpAddr, Ipv4Addr};
-use std::collections::HashSet;
+use std::net::IpAddr;
 
 use url::Url;
 
@@ -356,10 +355,17 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
-#[cfg(feature="wsrpc-server")]
+#[cfg(feature="ws-rpc-server")]
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
 pub struct WsRpcServerConfig {
+    /// Bind the Websocket RPC server to the specified IP address.
+    ///
+    /// Default: `127.0.0.1`
+    ///
+    #[builder(setter(strip_option))]
+    pub bind_to: Option<IpAddr>,
+
     /// Bind the server to the specified port.
     ///
     /// Default: `8648`
@@ -370,13 +376,6 @@ pub struct WsRpcServerConfig {
     /// If specified, require HTTP basic auth with these credentials
     #[builder(setter(strip_option))]
     pub credentials: Option<Credentials>,
-
-    /// Bind the Websocket RPC server to the specified IP address.
-    ///
-    /// Default: `127.0.0.1`
-    ///
-    #[builder(setter(strip_option))]
-    pub bind_to: Option<IpAddr>,
 }
 
 #[cfg(feature="metrics-server")]
@@ -477,7 +476,7 @@ pub struct ClientConfig {
 
     /// The optional Websocket RPC configuration
     ///
-    #[cfg(feature="wsrpc-server")]
+    #[cfg(feature="ws-rpc-server")]
     #[builder(default)]
     pub ws_rpc_server: Option<WsRpcServerConfig>,
 
@@ -630,7 +629,7 @@ impl ClientConfigBuilder {
 
     /// Adds a custom seed node or seed list
     pub fn seed<S: Into<Seed>>(&mut self, seed: S) -> &mut Self {
-        let mut seeds = self.seeds.get_or_insert_with(Default::default);
+        let seeds = self.seeds.get_or_insert_with(Default::default);
         seeds.push(seed.into());
         self
     }
@@ -746,6 +745,28 @@ impl ClientConfigBuilder {
                     corsdomain: Some(rpc_config.corsdomain.clone()),
                     allow_ips,
                     allowed_methods: Some(rpc_config.methods.clone()),
+                    credentials,
+                }));
+            }
+        }
+
+        // Configure Websocket RPC server
+        #[cfg(feature="ws-rpc-server")] {
+            if let Some(ws_rpc_config) = &config_file.ws_rpc_server {
+                let bind_to = ws_rpc_config.bind.as_ref()
+                    .and_then(|addr| addr.into_ip_address());
+
+                let credentials = match (&ws_rpc_config.username, &ws_rpc_config.password) {
+                    (Some(u), Some(p)) => {
+                        Some(Credentials::new(u.clone(), p.clone()))
+                    },
+                    (None, None) => None,
+                    _ => return Err(Error::config_error("Either both username and password have to be set or none."))
+                };
+
+                self.ws_rpc_server = Some(Some(WsRpcServerConfig {
+                    bind_to,
+                    port: ws_rpc_config.port.unwrap_or(consts::WS_RPC_DEFAULT_PORT),
                     credentials,
                 }));
             }

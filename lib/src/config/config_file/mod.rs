@@ -40,6 +40,7 @@ pub struct ConfigFile {
     #[serde(default)]
     pub consensus: ConsensusSettings,
     pub rpc_server: Option<RpcServerSettings>,
+    pub ws_rpc_server: Option<WsRpcServerSettings>,
     pub metrics_server: Option<MetricsServerSettings>,
     pub reverse_proxy: Option<ReverseProxySettings>,
     #[serde(default)]
@@ -349,6 +350,19 @@ pub struct RpcServerSettings {
     pub username: Option<String>,
     pub password: Option<String>,
 }
+
+
+#[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct WsRpcServerSettings {
+    #[serde(deserialize_with = "deserialize_string_option")]
+    #[serde(default)]
+    pub bind: Option<address::NetAddress>,
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
 
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]

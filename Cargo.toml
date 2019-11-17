@@ -42,7 +42,8 @@ members = [
     "tools",
     "build-tools",
     "wallet",
-    "handel"
+    "handel",
+    "ws-rpc-server"
 ]
 
 [profile.dev.package.pairing]

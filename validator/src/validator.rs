@@ -59,6 +59,7 @@ pub enum ValidatorStatus {
 struct ValidatorListeners {
     consensus: ListenerHandle,
     blockchain: ListenerHandle,
+    validator_network: ListenerHandle,
 }
 
 pub struct Validator {
@@ -171,7 +172,7 @@ impl Validator {
 
         // Set up event handlers for validator network events
         let weak = Arc::downgrade(this);
-        this.validator_network.notifier.write().register(move |e: ValidatorNetworkEvent| {
+        let validator_network = this.validator_network.notifier.write().register(move |e: &ValidatorNetworkEvent| {
             let this = upgrade_weak!(weak);
             this.on_validator_network_event(e);
         });
@@ -188,6 +189,7 @@ impl Validator {
         let listeners = ValidatorListeners {
             consensus,
             blockchain,
+            validator_network,
         };
         unsafe { this.listeners.replace(Some(listeners)); }
     }
@@ -315,7 +317,7 @@ impl Validator {
         }
     }
 
-    fn on_validator_network_event(&self, event: ValidatorNetworkEvent) {
+    fn on_validator_network_event(&self, event: &ValidatorNetworkEvent) {
         {
             let state = self.state.write();
 
@@ -327,28 +329,29 @@ impl Validator {
 
         match event {
             ValidatorNetworkEvent::ViewChangeComplete(event) => {
-                let (view_change, view_change_proof) = *event;
-                debug!("Completed view change to {}", view_change);
-                self.on_slot_change(SlotChange::ViewChange(view_change, view_change_proof));
+                debug!("Completed view change to {}", event.view_change);
+                let slot_change = SlotChange::ViewChange(event.view_change.clone(), event.proof.clone());
+                self.on_slot_change(slot_change);
             },
-            ValidatorNetworkEvent::PbftProposal(event) => {
-                let (hash, proposal) = *event;
-                self.on_pbft_proposal(hash, proposal)
+            ValidatorNetworkEvent::PbftProposal(proposal) => {
+                let hash: Blake2bHash = proposal.header.hash();
+                self.on_pbft_proposal(&hash);
             },
-            ValidatorNetworkEvent::PbftPrepareComplete(event) => {
-                let (hash, _) = *event;
-                self.on_pbft_prepare_complete(hash)
+            ValidatorNetworkEvent::PbftPrepareComplete(hash) => {
+                self.on_pbft_prepare_complete(hash);
             },
             ValidatorNetworkEvent::PbftComplete(event) => {
-                let (hash, proposal, proof) = *event;
-                self.on_pbft_commit_complete(hash, proposal, proof)
+                self.on_pbft_commit_complete(&event.hash, &event.proposal, &event.proof);
             },
-            ValidatorNetworkEvent::ForkProof(event) => self.on_fork_proof(*event),
+            ValidatorNetworkEvent::ForkProof(fork_proof) => {
+                self.on_fork_proof(fork_proof);
+            },
+            _ => {}
         }
     }
 
-    fn on_fork_proof(&self, fork_proof: ForkProof) {
-        self.state.write().fork_proof_pool.insert(fork_proof);
+    fn on_fork_proof(&self, fork_proof: &ForkProof) {
+        self.state.write().fork_proof_pool.insert(fork_proof.clone());
     }
 
     pub fn on_slot_change(&self, slot_change: SlotChange) {
@@ -409,7 +412,7 @@ impl Validator {
         }
     }
 
-    pub fn on_pbft_proposal(&self, hash: Blake2bHash, _proposal: PbftProposal) {
+    pub fn on_pbft_proposal(&self, hash: &Blake2bHash) {
         let state = self.state.write();
         trace!("Received proposal: {}", hash);
         // View change messages should only be sent by active validators.
@@ -433,7 +436,7 @@ impl Validator {
             .unwrap_or_else(|e| debug!("Failed to push pBFT prepare: {}", e));
     }
 
-    pub fn on_pbft_prepare_complete(&self, hash: Blake2bHash) {
+    pub fn on_pbft_prepare_complete(&self, hash: &Blake2bHash) {
         trace!("Complete prepare for: {}", hash);
         let state = self.state.read();
         // View change messages should only be sent by active validators.
@@ -448,7 +451,7 @@ impl Validator {
 
         trace!("Signing commit message: pk_idx={}", pk_idx);
         let commit_message = SignedPbftCommitMessage::from_message(
-            PbftCommitMessage { block_hash: hash },
+            PbftCommitMessage { block_hash: hash.clone() },
             &self.validator_key.secret,
             pk_idx
         );
@@ -457,16 +460,16 @@ impl Validator {
             .unwrap_or_else(|e| debug!("Failed to push pBFT commit: {}", e));
     }
 
-    pub fn on_pbft_commit_complete(&self, hash: Blake2bHash, proposal: PbftProposal, proof: PbftProof) {
+    pub fn on_pbft_commit_complete(&self, hash: &Blake2bHash, proposal: &PbftProposal, proof: &PbftProof) {
         let mut state = self.state.write();
 
-        if let Some(extrinsics) = state.proposed_extrinsics.remove(&hash) {
+        if let Some(extrinsics) = state.proposed_extrinsics.remove(hash) {
             assert_eq!(proposal.header.extrinsics_root, extrinsics.hash());
 
             // Note: we're not verifying the justification as the validator network already did that
             let block = Block::Macro(MacroBlock {
-                header: proposal.header,
-                justification: Some(proof),
+                header: proposal.header.clone(),
+                justification: Some(proof.clone()),
                 extrinsics: Some(extrinsics)
             });
 
@@ -578,7 +581,7 @@ impl Drop for Validator {
         if let Some(listeners) = self.listeners.as_ref() {
             self.consensus.notifier.write().deregister(listeners.consensus);
             self.blockchain.notifier.write().deregister(listeners.blockchain);
-            self.validator_network.notifier.write().deregister();
+            self.validator_network.notifier.write().deregister(listeners.validator_network);
         }
     }
 }

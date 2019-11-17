@@ -9,6 +9,8 @@ pub mod panic;
 pub mod rpc_server;
 #[cfg(feature = "metrics-server")]
 pub mod metrics_server;
+#[cfg(feature = "ws-rpc-server")]
+pub mod ws_rpc_server;
 
 #[cfg(feature = "launcher")]
 pub mod launcher;

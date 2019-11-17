@@ -223,7 +223,7 @@ impl<P: ConsensusProtocol> Consensus<P> {
             info!("Now at block #{}", height);
         }
         else {
-            debug!("Now at block #{}", height);
+            trace!("Now at block #{}", height);
         }
 
         // Only relay blocks if we are synced up.
