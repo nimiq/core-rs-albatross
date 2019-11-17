@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+use std::ops::Mul;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use std::collections::HashMap;
 
 use parking_lot::RwLock;
 
@@ -34,13 +35,12 @@ use hash::{Blake2bHash, Hash};
 use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
 use utils::mutable_once::MutableOnce;
-use utils::timers::Timers;
 use utils::observer::ListenerHandle;
+use utils::timers::Timers;
 
 use crate::error::Error;
 use crate::slash::ForkProofPool;
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
-
 
 #[derive(Clone, Debug)]
 pub enum SlotChange  {
@@ -369,8 +369,9 @@ impl Validator {
 
                 // check if this view change is still relevant
                 if state.view_number < view_change.new_view_number {
-                    // Reset view change interval again.
-                    self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
+                    // Reset view change interval again and increase the timeout linearly.
+                    let num_view_changes = view_change.new_view_number - self.blockchain.next_view_number();
+                    self.reset_view_change_interval(Self::BLOCK_TIMEOUT.mul(num_view_changes + 1));
 
                     // update our view number
                     state.view_number = view_change.new_view_number;
