@@ -1041,7 +1041,6 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let num_vectors = vectors.len();
         if num_vectors > 0 {
             self.peer.channel.send_or_close(Message::Inv(vectors));
-            debug!("Sent {} InvVectors to {}", num_vectors, self.peer.peer_address());
         }
     }
 
@@ -1062,7 +1061,6 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let num_vectors = vectors.len();
         if num_vectors > 0 {
             self.peer.channel.send_or_close(Message::Inv(vectors));
-            debug!("Sent {} InvVectors to {}", num_vectors, self.peer.peer_address());
         }
     }
 
