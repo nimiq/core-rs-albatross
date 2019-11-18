@@ -24,8 +24,18 @@ impl BlockProductionAlbatrossHandler {
     }
 
     fn validator_key(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        let key_pair = &self.validator.validator_key;
+
+        // Compute proof of knowledge.
+        // TODO: Do we need this at all? This is only needed to sign staking transactions, and
+        // that can be done with the mempool module.
+        let proof_of_knowledge = key_pair
+            .sign(&key_pair.public)
+            .compress();
+
         Ok(object! {
-            "publicKey" => self.validator.validator_key.public.to_string(),
+            "validatorKey" => self.validator.validator_key.public.to_string(),
+            "proofOfKnowledge" => proof_of_knowledge.to_string(),
         })
     }
 
