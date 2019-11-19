@@ -52,7 +52,7 @@ pub struct MicroExtrinsics {
 }
 
 impl MicroBlock {
-    pub const MAX_SIZE: usize = 100_000; // 100 kb
+    pub const MAX_SIZE: usize = 1000_000; // 1 MB
 
     pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
         if let Some(ref extrinsics) = self.extrinsics {
