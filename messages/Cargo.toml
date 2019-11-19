@@ -20,7 +20,6 @@ maintenance = { status = "experimental" }
 bitflags = "1.0"
 bitvec = "0.15"
 byteorder = "1.2"
-enum-display-derive = "0.1"
 hex = "0.4"
 log = "0.4"
 parking_lot = "0.9"
