@@ -48,8 +48,14 @@ impl NetworkMetrics {
 }
 
 #[derive(Default)]
+pub struct MessageStatistics {
+    occurrences: AtomicUsize,
+    processing_time: AtomicUsize,
+}
+
+#[derive(Default)]
 pub struct MessageMetrics {
-    messages: HashMap<MessageType, AtomicUsize>,
+    messages: HashMap<MessageType, MessageStatistics>,
 }
 
 impl MessageMetrics {
@@ -107,29 +113,32 @@ impl MessageMetrics {
 
         // We prefill our datastructure here.
         for &ty in Self::MESSAGE_TYPES.iter() {
-            metrics.messages.insert(ty, AtomicUsize::default());
+            metrics.messages.insert(ty, MessageStatistics::default());
         }
 
         metrics
     }
 
-    pub fn from_map(map: HashMap<MessageType, usize>) -> Self {
+    pub fn from_map(map: HashMap<MessageType, (usize, usize)>) -> Self {
         let mut metrics = MessageMetrics {
             messages: HashMap::new(),
         };
 
         // We prefill our datastructure here.
         for (&k, &v) in map.iter() {
-            metrics.messages.insert(k, AtomicUsize::new(v));
+            let occurrences = AtomicUsize::new(v.0);
+            let processing_time = AtomicUsize::new(v.1);
+            metrics.messages.insert(k, MessageStatistics{occurrences, processing_time});
         }
 
         metrics
     }
 
     #[inline]
-    pub fn note_message(&self, ty: MessageType) {
-        if let Some(occurences) = self.messages.get(&ty) {
-            occurences.fetch_add(1, Ordering::Release);
+    pub fn note_message(&self, ty: MessageType, time: usize) {
+        if let Some(msg_stats) = self.messages.get(&ty) {
+            msg_stats.occurrences.fetch_add(1, Ordering::Release);
+            msg_stats.processing_time.fetch_add(time, Ordering::Release);
         } else {
             warn!("Message type {:?} is not implemented in metrics!", ty);
         }
@@ -141,9 +150,15 @@ impl MessageMetrics {
     }
 
     #[inline]
-    pub fn message_occurences(&self, ty: MessageType) -> Option<usize> {
-        let occurences = self.messages.get(&ty)?;
-        Some(occurences.load(Ordering::Acquire))
+    pub fn message_occurrences(&self, ty: MessageType) -> Option<usize> {
+        let occurrences = &self.messages.get(&ty)?.occurrences;
+        Some(occurrences.load(Ordering::Acquire))
+    }
+
+    #[inline]
+    pub fn message_processing_time(&self, ty: MessageType) -> Option<usize> {
+        let processing_time = &self.messages.get(&ty)?.processing_time;
+        Some(processing_time.load(Ordering::Acquire))
     }
 }
 
@@ -213,7 +228,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
         let mut peer_metrics = PeerMetrics::default();
         // We count the message metrics afterwards to minimize time of locking state.
         let mut message_metrics: Vec<Arc<MessageMetrics>> = Vec::new();
-        let mut messages: HashMap<MessageType, usize> = HashMap::new();
+        let mut messages: HashMap<MessageType, (usize, usize)> = HashMap::new();
 
         // Connection pool state lock.
         {
@@ -240,8 +255,9 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
         // Construct message metrics.
         for m in message_metrics.iter() {
             for &ty in m.message_types() {
-                *messages.entry(ty)
-                    .or_insert(0) += m.message_occurences(ty).unwrap_or(0);
+                let entry = messages.entry(ty).or_insert((0,0));
+                entry.0 += m.message_occurrences(ty).unwrap_or(0);
+                entry.1 += m.message_processing_time(ty).unwrap_or(0);
             }
         }
 

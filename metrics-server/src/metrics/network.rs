@@ -81,8 +81,13 @@ impl<B: AbstractBlockchain + 'static> server::Metrics for NetworkMetrics<B> {
         for &ty in message_metrics.message_types() {
             serializer.metric_with_attributes(
                 "message_rx_count",
-                message_metrics.message_occurences(ty).unwrap_or(0),
-                attributes!{"type" => format!("{}", ty)} // TODO: implement Display for it.
+                message_metrics.message_occurrences(ty).unwrap_or(0),
+                attributes!{"type" => format!("{}", ty)}
+            )?;
+            serializer.metric_with_attributes(
+                "message_rx_processing_time",
+                message_metrics.message_processing_time(ty).unwrap_or(0) / 1000, // Processing time is recorded in microseconds but should be reported in milliseconds
+                attributes!{"type" => format!("{}", ty)}
             )?;
         }
 

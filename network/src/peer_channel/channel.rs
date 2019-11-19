@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -61,9 +62,15 @@ impl PeerChannel {
             match e {
                 PeerStreamEvent::Message(msg) => {
                     #[cfg(feature = "metrics")]
-                    message_metrics1.note_message(msg.ty());
+                    let start = Instant::now();
                     last_message_received1.store(Instant::now(), Ordering::Relaxed);
-                    msg_notifier1.notify(msg)
+                    let msg_type = msg.ty();
+                    msg_notifier1.notify(msg);
+                    #[cfg(feature = "metrics")] {
+                        let time: usize = usize::try_from(start.elapsed().as_micros()).expect("Fatal error while converting processing time to usize");
+                        trace!("Microseconds elapsed while processing this message: {:?}", time);
+                        message_metrics1.note_message(msg_type, time);
+                    }
                 },
                 PeerStreamEvent::Close(ty) => {
                     // Only send close event once, i.e., if close_event_sent was false.
