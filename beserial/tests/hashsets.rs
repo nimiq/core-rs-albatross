@@ -4,7 +4,7 @@ use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLengt
 #[test]
 fn it_correctly_serializes_and_deserializes_hashsets() {
     fn reserialize<T>(s: HashSet<T>) -> HashSet<T>
-    where T: Serialize + Deserialize + std::cmp::Eq + std::hash::Hash
+        where T: Serialize + Deserialize + std::cmp::Eq + std::hash::Hash + std::cmp::Ord
     {
         let mut v = Vec::with_capacity(64);
         SerializeWithLength::serialize::<u16, Vec<u8>>(&s, &mut v).unwrap();

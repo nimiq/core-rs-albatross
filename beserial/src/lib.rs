@@ -310,12 +310,16 @@ impl<T, H> DeserializeWithLength for HashSet<T, H>
 }
 
 impl<T, H> SerializeWithLength for HashSet<T, H>
-    where T: Serialize + std::cmp::Eq + std::hash::Hash,
+    where T: Serialize + std::cmp::Eq + std::hash::Hash + std::cmp::Ord,
           H: BuildHasher
 {
     fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
-        for t in self {
+
+        let mut v = self.iter().collect::<Vec<&T>>();
+        v.sort_unstable();
+
+        for t in v {
             size += t.serialize(writer)?;
         }
         Ok(size)
