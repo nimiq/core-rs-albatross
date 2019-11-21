@@ -7,7 +7,7 @@ use crate::client::Client;
 use crate::config::consts::default_bind;
 
 
-pub fn initialize_metrics_server(client: &Client, config: MetricsServerConfig) -> Result<MetricsServer, Error> {
+pub fn initialize_metrics_server(client: &Client, config: MetricsServerConfig, pkcs12_key_file: &str, pkcs12_passphrase: &str) -> Result<MetricsServer, Error> {
     let ip = config.bind_to.unwrap_or_else(default_bind);
     info!("Initializing metrics server: {}:{}", ip, config.port);
 
@@ -23,6 +23,8 @@ pub fn initialize_metrics_server(client: &Client, config: MetricsServerConfig) -
         config.port,
         username,
         password,
+        pkcs12_key_file,
+        pkcs12_passphrase,
         client.consensus()
     )?)
 }

@@ -46,6 +46,7 @@ fn main_inner() -> Result<(), Error> {
             // TODO: This is the initialization future
 
             // Clone those now, because we pass ownership of config to Client
+            let protocol_config = config.protocol.clone();
             let rpc_config = config.rpc_server.clone();
             let metrics_config = config.metrics_server.clone();
             let ws_rpc_config = config.ws_rpc_server.clone();
@@ -65,10 +66,17 @@ fn main_inner() -> Result<(), Error> {
 
             // Initialize metrics server
             if let Some(metrics_config) = metrics_config {
+                use nimiq::config::config::ProtocolConfig;
                 use nimiq::extras::metrics_server::initialize_metrics_server;
-                let metrics_server = initialize_metrics_server(&client, metrics_config)
-                    .expect("Failed to initialize metrics server");
-                tokio::spawn(metrics_server.into_future());
+                if let ProtocolConfig::Wss{pkcs12_key_file, pkcs12_passphrase, .. } = protocol_config {
+                    let pkcs12_key_file = pkcs12_key_file.to_str()
+                        .unwrap_or_else(|| panic!("Failed to convert path to PKCS#12 key file to string: {}", pkcs12_key_file.display()));
+                    let metrics_server = initialize_metrics_server(&client, metrics_config, pkcs12_key_file, &pkcs12_passphrase)
+                        .expect("Failed to initialize metrics server");
+                    tokio::spawn(metrics_server.into_future());
+                } else {
+                    error!("Cannot provide metrics when running without a certificate");
+                }
             }
 
             // Initialize Websocket RPC server

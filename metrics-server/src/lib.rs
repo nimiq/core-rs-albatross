@@ -9,11 +9,18 @@ extern crate nimiq_network as network;
 extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 
+use std::io;
+use std::io::Read;
+use std::fs::File;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use futures::{future::Future, IntoFuture};
-use hyper::Server;
+use futures::stream::Stream;
+use hyper::server::conn::Http;
+use native_tls::{Identity, TlsAcceptor as NativeTlsAcceptor};
+use tokio::net::TcpListener;
+use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
 
 use consensus::{Consensus, ConsensusProtocol};
 
@@ -67,23 +74,59 @@ pub struct MetricsServer {
 }
 
 impl MetricsServer {
-    pub fn new<P, CM>(ip: IpAddr, port: u16, username: Option<String>, password: Option<String>, consensus: Arc<Consensus<P>>) -> Result<MetricsServer, Error>
+    pub fn new<P, CM>(ip: IpAddr, port: u16, username: Option<String>, password: Option<String>, pkcs12_key_file: &str, pkcs12_passphrase: &str, consensus: Arc<Consensus<P>>) -> Result<MetricsServer, Error>
         where P: ConsensusProtocol + 'static,
               CM: AbstractChainMetrics<P> + server::Metrics + 'static
     {
-        let future = Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
-            .serve(move || {
-                server::MetricsServer::new(
-                    vec![
-                        Arc::new(CM::new(consensus.blockchain.clone())),
-                        Arc::new(MempoolMetrics::new(consensus.mempool.clone())),
-                        Arc::new(NetworkMetrics::new(consensus.network.clone()))
-                    ],
-                    attributes! { "peer" => consensus.network.network_config.peer_address() },
-                    username.clone(),
-                    password.clone())
+        let mut file = File::open(pkcs12_key_file)?;
+        let mut pkcs12 = vec![];
+        file.read_to_end(&mut pkcs12)?;
+        let pkcs12 = Identity::from_pkcs12(&pkcs12, pkcs12_passphrase)?;
+
+        let tls_cx = NativeTlsAcceptor::builder(pkcs12).build()?;
+        let tls_cx = TokioTlsAcceptor::from(tls_cx);
+
+        let srv = TcpListener::bind(&SocketAddr::new(ip, port))?;
+
+        let future = Box::new(Http::new()
+            .serve_incoming(
+                srv.incoming().and_then(move |socket| {
+                    tls_cx
+                        .accept(socket)
+                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+                }),
+                move || {
+                    server::MetricsServer::new(
+                        vec![
+                            Arc::new(CM::new(consensus.blockchain.clone())),
+                            Arc::new(MempoolMetrics::new(consensus.mempool.clone())),
+                            Arc::new(NetworkMetrics::new(consensus.network.clone()))
+                        ],
+                        attributes! { "peer" => consensus.network.network_config.peer_address() },
+                        username.clone(),
+                        password.clone())
+                }
+            )
+            .then(|res| {
+                match res {
+                    Ok(conn) => Ok(Some(conn)),
+                    Err(e) => {
+                        error!("Metrics server failed: {}", e);
+                        Ok(None)
+                    },
+                }
             })
-            .map_err(|e| error!("Metrics server failed: {}", e)));
+            .for_each(|conn_opt| {
+                if let Some(conn) = conn_opt {
+                    hyper::rt::spawn(
+                        conn.and_then(|c| c.map_err(|e| panic!("Metrics server unrecoverable error {}", e)))
+                            .map_err(|e| error!("Metrics server connection error: {}", e)),
+                    );
+                }
+
+                Ok(())
+            })
+        );
 
         Ok(MetricsServer {
             future,

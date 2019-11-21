@@ -1,14 +1,23 @@
 use failure::Fail;
-use hyper::Error as HyperError;
+use std::io::Error as IoError;
+use native_tls::Error as NativeTlsError;
 
 #[derive(Fail, Debug)]
 pub enum Error {
     #[fail(display = "{}", _0)]
-    HyperError(#[cause] HyperError),
+    IoError(#[cause] IoError),
+    #[fail(display = "{}", _0)]
+    NativeTlsError(#[cause] NativeTlsError),
 }
 
-impl From<HyperError> for Error {
-    fn from(e: HyperError) -> Self {
-        Error::HyperError(e)
+impl From<IoError> for Error {
+    fn from(e: IoError) -> Self {
+        Error::IoError(e)
+    }
+}
+
+impl From<NativeTlsError> for Error {
+    fn from(e: NativeTlsError) -> Self {
+        Error::NativeTlsError(e)
     }
 }
