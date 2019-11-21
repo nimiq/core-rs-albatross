@@ -3,8 +3,7 @@ Description=Nimiq's Rust client
 After=syslog.target network.target remote-fs.target nss-lookup.target
 
 [Service]
-Type=forking
-PIDFile=/run/nimiq-client.pid
+Type=exec
 ExecStartPre=$(which nimiq-client)
 ExecStart=$(which nimiq-client)
 ExecReload=/bin/kill -s HUP $MAINPID
