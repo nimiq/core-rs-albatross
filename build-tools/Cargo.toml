@@ -41,6 +41,7 @@ nimiq-database = { path = "../database", version = "0.1", features = ["account"]
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
+nimiq-vrf = { path = "../vrf", version = "0.1" }
 
 [features]
 default = ["powchain"]

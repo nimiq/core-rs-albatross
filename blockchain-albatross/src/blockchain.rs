@@ -6,14 +6,14 @@ use std::iter::{Chain, Flatten, Map};
 use std::sync::Arc;
 use std::vec::IntoIter;
 
-
 use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
+use vose_alias_int::LookupTable;
 
 use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
 use accounts::Accounts;
 use beserial::Serialize;
-use block::{Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroExtrinsics, MicroBlock, ViewChange, ViewChangeProof, ViewChanges};
+use block::{Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroExtrinsics, MicroBlock, ViewChange, ViewChangeProof, ViewChanges, MacroHeader};
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -33,6 +33,7 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::merkle;
 use utils::observer::{Listener, ListenerHandle, Notifier};
+use vrf::{VrfSeed, VrfUseCase};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
@@ -396,18 +397,9 @@ impl Blockchain {
         }
 
         // Check if the block was produced (and signed) by the intended producer
-        match header.seed().uncompress() {
-            Ok(ref signature) => {
-                // NOTE: the seed is the BLS signature of the previous seed (CompressedSignature)
-                if !intended_slot_owner.verify(prev_info.head.seed(), signature) { // todo nicer
-                    warn!("Rejecting block - bad seed");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                }
-            },
-            Err(_) => {
-                warn!("Rejecting block - invalid seed");
-                return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-            }
+        if let Err(_) = header.seed().verify(prev_info.head.seed(), intended_slot_owner) {
+            warn!("Rejecting block - invalid seed");
+            return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
         if let BlockHeader::Macro(ref header) = header {
@@ -836,7 +828,7 @@ impl Blockchain {
         let accounts = &state.accounts;
         match block {
             Block::Macro(ref macro_block) => {
-                let mut inherents = self.finalize_last_epoch(state);
+                let mut inherents = self.finalize_last_epoch(state, &macro_block.header);
 
                 // Add slashes for view changes.
                 let view_changes = ViewChanges::new(macro_block.header.block_number, state.main_chain.head.next_view_number(), macro_block.header.view_number);
@@ -988,12 +980,12 @@ impl Blockchain {
         let state = self.state.read();
         let block_number = chain_info.head.block_number();
 
+        let macro_block = chain_info.head.unwrap_macro_ref();
+
         // We cannot verify the slashed set, so we need to trust it here.
         // Also, we verified that macro extrinsics have been set in the corresponding push,
         // thus we can unwrap here.
-        let slashed_set = if let Block::Macro(ref macro_block) = chain_info.head {
-            macro_block.extrinsics.as_ref().unwrap().slashed_set.clone()
-        } else { unreachable!() };
+        let slashed_set = macro_block.extrinsics.as_ref().unwrap().slashed_set.clone();
 
         let result = state.reward_registry
             .commit_epoch(&mut txn, block_number, transactions, &slashed_set);
@@ -1006,10 +998,10 @@ impl Blockchain {
         // Apply transactions and inherents to AccountsTree.
         let slots = state.previous_slots.as_ref().expect("Slots for last epoch are missing");
         let mut inherents = self.inherents_from_slashed_set(&slashed_set, slots);
-        inherents.append(&mut self.finalize_last_epoch(&state));
+        inherents.append(&mut self.finalize_last_epoch(&state, &macro_block.header));
 
         // Commit epoch to AccountsTree.
-        let receipts = state.accounts.commit(&mut txn, transactions, &inherents, chain_info.head.block_number());
+        let receipts = state.accounts.commit(&mut txn, transactions, &inherents, macro_block.header.block_number);
         if let Err(e) = receipts {
             warn!("Rejecting block - commit failed: {:?}", e);
             txn.abort();
@@ -1178,7 +1170,7 @@ impl Blockchain {
         self.get_slot_at(block_number, view_number, txn_option).unwrap()
     }
 
-    pub fn next_slots(&self, seed: &CompressedSignature, txn_option: Option<&Transaction>) -> Slots {
+    pub fn next_slots(&self, seed: &VrfSeed, txn_option: Option<&Transaction>) -> Slots {
         let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
         let staking_account = self.state.read().accounts().get(validator_registry, txn_option);
         if let Account::Staking(ref staking_contract) = staking_account {
@@ -1187,7 +1179,7 @@ impl Blockchain {
         panic!("Account at validator registry address is not the stacking contract!");
     }
 
-    pub fn next_validators(&self, seed: &CompressedSignature, txn: Option<&Transaction>) -> ValidatorSlots {
+    pub fn next_validators(&self, seed: &VrfSeed, txn: Option<&Transaction>) -> ValidatorSlots {
         self.next_slots(seed, txn).into()
     }
 
@@ -1321,24 +1313,14 @@ impl Blockchain {
         RwLockReadGuard::map(guard, |s| s.last_validators().unwrap())
     }
 
-    pub fn finalize_last_epoch(&self, state: &BlockchainState) -> Vec<Inherent> {
+    pub fn finalize_last_epoch(&self, state: &BlockchainState, macro_header: &MacroHeader) -> Vec<Inherent> {
         // It might be that we don't have any micro blocks, thus we need to look at the next macro block.
-        let epoch = policy::epoch_at(policy::macro_block_after(state.main_chain.head.block_number())) - 1;
+        let epoch = policy::epoch_at(macro_header.block_number) - 1;
 
         // Special case for first epoch: Epoch 0 is finalized by definition.
         if epoch == 0 {
             return vec![];
         }
-
-        /*
-        let block = self.get_block_at(policy::macro_block_of(epoch), true);
-        let macro_block= if let Some(Block::Macro(block)) = block {
-            block
-        } else {
-            // TODO: Proper error handling.
-            panic!("Macro block to finalize is missing");
-        };
-        */
 
         // Get stake slots
         // NOTE: Field `last_slots` is expected to be always set.
@@ -1410,7 +1392,7 @@ impl Blockchain {
 
             // Test whether account will accept inherent.
             let account = state.accounts.get(&inherent.target, None);
-            if account.check_inherent(&inherent, state.main_chain.head.block_number()).is_err() {
+            if account.check_inherent(&inherent, macro_header.block_number).is_err() {
                 debug!("{} can't accept epoch reward {}", inherent.target, inherent.value);
                 remainder += reward;
             } else {
@@ -1424,16 +1406,24 @@ impl Blockchain {
         // corresponding number of slots for that staker.
         assert_eq!(inherents.len(), num_eligible_slots_for_accepted_inherent.len());
 
-        // TODO: Randomly distribute remainder over accepting slots.
-        // We need to have a stable VRF implementation first.
-        if !remainder.is_zero() {
-            // Distribute the remainder randomly
-            debug!("Distributing remainder of {} NIM over {} accepting reward addresses and {} accepting slots", remainder, inherents.len(), total_accepting_slots);
-            warn!("Unimplemented! Burning remainder: {} NIM", remainder);
+        // Get RNG from last block's seed and build lookup table based on number of eligible slots
+        let mut rng = macro_header.seed
+            .rng(VrfUseCase::RewardDistribution);
+        let lookup = LookupTable::new(num_eligible_slots_for_accepted_inherent);
+
+        // Randomly distribute remainder over accepting slots.
+        while !remainder.is_zero() {
+            let x = rng.next_u64_max(lookup.len() as u64) as usize;
+            let y = rng.next_u64_max(lookup.total() as u64) as u16;
+            let index = lookup.sample(x, y);
+            inherents[index].value += Coin::from_u64_unchecked(1);
+            remainder -= Coin::from_u64_unchecked(1);
         }
 
         // Push finalize epoch inherent for automatically retiring inactive/malicious validators.
-        let validator_registry = NetworkInfo::from_network_id(self.network_id).validator_registry_address().expect("No ValidatorRegistry");
+        let validator_registry = NetworkInfo::from_network_id(self.network_id)
+            .validator_registry_address()
+            .expect("No ValidatorRegistry");
         inherents.push(Inherent {
             ty: InherentType::FinalizeEpoch,
             target: validator_registry.clone(),

@@ -21,6 +21,7 @@ use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
 use keys::Address;
 use primitives::coin::Coin;
+use vrf::VrfSeed;
 
 mod config;
 
@@ -160,20 +161,21 @@ impl GenesisBuilder {
         let seed_message = self.seed_message.clone()
             .unwrap_or_else(|| "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".to_string());
         // pre-genesis seed (used for slot selection)
-        let pre_genesis_seed = signing_key
-            .sign_hash(Blake2bHasher::new().digest(seed_message.as_bytes()));
+        let pre_genesis_seed: VrfSeed = signing_key
+            .sign_hash(Blake2bHasher::new().digest(seed_message.as_bytes()))
+            .compress()
+            .into();
         debug!("Pre genesis seed: {}", pre_genesis_seed);
         // seed of genesis block = VRF(seed_0)
-        let seed = signing_key.sign(&pre_genesis_seed);
-        debug!("Genesis seed: {}", pre_genesis_seed);
+        let seed = pre_genesis_seed.sign_next(&signing_key);
+        debug!("Genesis seed: {}", seed);
 
         // generate staking contract
         let staking_contract = self.generate_staking_contract()?;
         debug!("Staking contract: {:#?}", staking_contract);
 
         // generate slot allocation from staking contract
-        let slots = staking_contract
-            .select_validators(&pre_genesis_seed.compress());
+        let slots = staking_contract.select_validators(&seed);
         debug!("Slots: {:#?}", slots);
 
         // extrinsics
@@ -185,7 +187,7 @@ impl GenesisBuilder {
         let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
         genesis_accounts.push((Address::clone(self.staking_contract_address.as_ref().ok_or(GenesisBuilderError::NoStakingContractAddress)?), Account::Staking(staking_contract)));
         for genesis_account in &self.accounts {
-            let address =genesis_account.address.clone();
+            let address = genesis_account.address.clone();
             let account = Account::Basic(BasicAccount { balance: genesis_account.balance });
             debug!("Adding genesis account: {}: {:?}", address, account);
             genesis_accounts.push((address, account));
@@ -209,7 +211,7 @@ impl GenesisBuilder {
             block_number: 0,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),
-            seed: seed.compress(),
+            seed,
             parent_hash: [0u8; 32].into(),
             state_root,
             extrinsics_root,

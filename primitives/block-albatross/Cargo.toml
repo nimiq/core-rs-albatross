@@ -32,6 +32,7 @@ nimiq-macros = { path = "../../macros", version = "0.1" }
 nimiq-primitives = { path = "..", version = "0.1", features = ["policy", "networks"] }
 nimiq-transaction = { path = "../transaction", version = "0.1" }
 nimiq-utils = { path = "../../utils", version = "0.1", features = ["merkle"] }
+nimiq-vrf = { path = "../../vrf", version = "0.1" }
 
 [dev-dependencies]
 num-traits = "0.2"

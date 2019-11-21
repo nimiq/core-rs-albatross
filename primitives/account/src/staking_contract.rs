@@ -4,9 +4,7 @@ use std::collections::btree_set::BTreeSet;
 use std::mem;
 use std::sync::Arc;
 
-use rand::distributions::Distribution;
-use rand::distributions::weighted::alias_method::WeightedIndex;
-use rand::SeedableRng;
+use vose_alias_int::LookupTable;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
@@ -18,6 +16,7 @@ use primitives::slot::{Slots, SlotsBuilder};
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::{StakingTransactionData, StakingTransactionType};
 use utils::hash_rng::HashRng;
+use vrf::{VrfSeed, VrfUseCase};
 
 use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
 use crate::inherent::{AccountInherentInteraction, Inherent, InherentType};
@@ -456,7 +455,7 @@ impl StakingContract {
         Ok(())
     }
 
-    pub fn select_validators(&self, seed: &BlsSignature) -> Slots {
+    pub fn select_validators(&self, seed: &VrfSeed) -> Slots {
         // TODO: Depending on the circumstances and parameters, it might be more efficient to store active stake in an unsorted Vec.
         // Then, we would not need to create the Vec here. But then, removal of stake is a O(n) operation.
         // Assuming that validator selection happens less frequently than stake removal, the current implementation might be ok.
@@ -465,22 +464,22 @@ impl StakingContract {
 
         debug!("Select validators: num_slots = {}", policy::SLOTS);
 
-        // FIXME: We only take into account the u32::MAX highest stakes.
-        for validator in self.active_stake_sorted.iter().rev().take(std::u32::MAX as usize) {
+        // NOTE: `active_stake_sorted` is sorted from highest to lowest stake. `LookupTable`
+        // expects the reverse ordering.
+        for validator in self.active_stake_sorted.iter() {
             potential_validators.push(Arc::clone(validator));
             weights.push(validator.balance.into());
         }
 
-        // FIXME: This can fail if we have 0 stakers.
-        let lookup = WeightedIndex::new(weights).unwrap();
-
-        // Build active validator set: Use the VRF to pick validators
-        // XXX If we hash both `i` and `counter` and reset `counter` for every slot, this can be
-        //     parallelized.
-        let rng = HashRng::<_, Blake2bHash>::from_seed(seed.clone());
         let mut slots_builder = SlotsBuilder::default();
+        let lookup = LookupTable::new(weights);
+        let mut rng = seed.rng(VrfUseCase::ValidatorSelection);
 
-        for index in lookup.sample_iter(rng).take(policy::SLOTS as usize) {
+        for _ in 0 .. policy::SLOTS {
+            let x = rng.next_u64_max(lookup.len() as u64) as usize;
+            let y = rng.next_u64_max(lookup.total());
+            let index = lookup.sample(x, y);
+
             let active_stake = &potential_validators[index];
 
             slots_builder.push(

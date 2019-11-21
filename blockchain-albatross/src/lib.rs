@@ -17,6 +17,7 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
+extern crate nimiq_vrf as vrf;
 
 pub mod blockchain;
 pub mod chain_info;

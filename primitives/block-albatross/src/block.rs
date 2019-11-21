@@ -3,9 +3,9 @@ use std::fmt;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use block_base;
 use hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_bls::bls12_381::CompressedSignature;
 use primitives::networks::NetworkId;
 use transaction::Transaction;
+use vrf::VrfSeed;
 
 use crate::BlockError;
 use crate::macro_block::{MacroBlock, MacroHeader};
@@ -82,7 +82,7 @@ impl Block {
         }
     }
 
-    pub fn seed(&self) -> &CompressedSignature {
+    pub fn seed(&self) -> &VrfSeed {
         match self {
             Block::Macro(ref block) => &block.header.seed,
             Block::Micro(ref block) => &block.header.seed,
@@ -237,7 +237,7 @@ impl BlockHeader {
         }
     }
 
-    pub fn seed(&self) -> &CompressedSignature {
+    pub fn seed(&self) -> &VrfSeed {
         match self {
             BlockHeader::Macro(ref header) => &header.seed,
             BlockHeader::Micro(ref header) => &header.seed,

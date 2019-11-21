@@ -12,6 +12,7 @@ extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_vrf as vrf;
 
 use std::sync::Arc;
 
@@ -27,6 +28,7 @@ use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
 use primitives::policy;
 use primitives::slot::ValidatorSlots;
+use vrf::VrfSeed;
 
 pub struct BlockProducer {
     pub blockchain: Arc<Blockchain>,
@@ -47,10 +49,10 @@ impl BlockProducer {
         //  Lock blockchain/mempool while constructing the block.
         let _lock = self.blockchain.lock();
 
-        let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();
+        let seed = self.blockchain.head().seed().sign_next(&self.validator_key.secret);
         let mut txn = self.blockchain.write_transaction();
 
-        let mut header = self.next_macro_header(&mut txn, timestamp, view_number, seed);
+        let mut header = self.next_macro_header(&mut txn, timestamp, view_number, &seed);
         let extrinsics = self.next_macro_extrinsics(&mut txn, &seed);
         header.extrinsics_root = extrinsics.hash();
 
@@ -81,7 +83,7 @@ impl BlockProducer {
         }
     }
 
-    pub fn next_macro_extrinsics(&self, txn: &mut WriteTransaction, seed: &CompressedSignature) -> MacroExtrinsics {
+    pub fn next_macro_extrinsics(&self, txn: &mut WriteTransaction, seed: &VrfSeed) -> MacroExtrinsics {
         // Determine slashed set without txn, so that it is not garbage collected yet.
         let prev_epoch = policy::epoch_at(self.blockchain.height() + 1) - 1;
         let slashed_set = self.blockchain.state()
@@ -123,7 +125,7 @@ impl BlockProducer {
         }
     }
 
-    pub fn next_macro_header(&self, txn: &mut WriteTransaction, timestamp: u64, view_number: u32, seed: CompressedSignature) -> MacroHeader {
+    pub fn next_macro_header(&self, txn: &mut WriteTransaction, timestamp: u64, view_number: u32, seed: &VrfSeed) -> MacroHeader {
         let block_number = self.blockchain.height() + 1;
         let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
 
@@ -136,7 +138,7 @@ impl BlockProducer {
             block_number,
             view_number,
             parent_macro_hash,
-            seed,
+            seed: seed.clone(),
             parent_hash,
             state_root: Blake2bHash::default(),
             extrinsics_root: Blake2bHash::default(),
@@ -152,7 +154,7 @@ impl BlockProducer {
         }), self.blockchain.view_number())
             .expect("Failed to commit dummy block to reward registry");
 
-        let mut inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state());
+        let mut inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state(), &header);
 
         // Add slashes for view changes.
         let view_changes = ViewChanges::new(header.block_number, self.blockchain.view_number(), header.view_number);
@@ -167,7 +169,7 @@ impl BlockProducer {
         let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number), Some(txn))
             .expect("Failed to compute transactions root, micro blocks missing");
 
-        let validators = self.blockchain.next_validators(&seed, Some(txn));
+        let validators = self.blockchain.next_validators(seed, Some(txn));
 
         header.validators = validators.into();
         header.state_root = state_root;
@@ -189,7 +191,7 @@ impl BlockProducer {
             .hash_with(&extrinsics.transactions, &inherents, block_number)
             .expect("Failed to compute accounts hash during block production");
 
-        let seed = self.validator_key.sign(self.blockchain.head().seed()).compress();
+        let seed = self.blockchain.head().seed().sign_next(&self.validator_key.secret);
 
         MicroHeader {
             version: Block::VERSION,

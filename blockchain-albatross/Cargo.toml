@@ -20,6 +20,7 @@ hex = "0.4"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
+vose-alias-int = { git = "https://github.com/jgraef/vose-alias-int" }
 
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
@@ -38,6 +39,7 @@ nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
+nimiq-vrf = { path = "../vrf", version = "0.1" }
 
 [dev-dependencies]
 atomic = "0.4"

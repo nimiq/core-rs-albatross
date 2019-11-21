@@ -22,6 +22,7 @@ lazy_static = "1.3"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
+vose-alias-int = { git = "https://github.com/jgraef/vose-alias-int" }
 
 beserial = { path = "../../beserial", version = "0.1" }
 beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
@@ -31,6 +32,7 @@ nimiq-keys = { path = "../../keys", version = "0.1" }
 nimiq-primitives = { path = "..", version = "0.1", features = ["coin", "policy", "validators"] }
 nimiq-transaction = { path = "../transaction", version = "0.1" }
 nimiq-utils = { path = "../../utils", version = "0.1", features = ["hash-rng"] }
+nimiq-vrf = { path = "../../vrf", version = "0.1" }
 
 [dev-dependencies]
 hex = "0.4"

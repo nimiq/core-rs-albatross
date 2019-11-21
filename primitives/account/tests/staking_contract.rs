@@ -1004,7 +1004,7 @@ fn it_can_build_a_validator_set() {
     contract.commit_incoming_transaction(&stake(12,      0xFF), 2).unwrap();
 
     // Test potential validator selection by stake
-    let slots = contract.select_validators(&seed.compress());
+    let slots = contract.select_validators(&seed.compress().into());
     assert_eq!(slots.stake_slots.len(), 2);
     assert_eq!(slots.get(SlotIndex::Slot(0)).unwrap().staker_address().as_bytes()[0], 0x00);
 
@@ -1015,7 +1015,7 @@ fn it_can_build_a_validator_set() {
     contract.commit_incoming_transaction(&stake(100_000_000, 0x04), 2).unwrap();
 
     // Test potential validator selection by secondary index
-    let slots = contract.select_validators(&seed.compress());
+    let slots = contract.select_validators(&seed.compress().into());
     assert_eq!(slots.stake_slots.len(), 3);
     assert_eq!(slots.get(SlotIndex::Slot(0)).unwrap().staker_address().as_bytes()[0], 0x03);
 

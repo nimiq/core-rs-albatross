@@ -47,7 +47,7 @@ fn it_can_convert_macro_block_into_slots() {
             block_number: 42,
             view_number: 0,
             parent_macro_hash: hash.clone(),
-            seed: signature.compress(),
+            seed: signature.compress().into(),
             parent_hash: hash.clone(),
             state_root: hash.clone(),
             extrinsics_root: hash.clone(),

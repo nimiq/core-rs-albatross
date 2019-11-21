@@ -9,6 +9,7 @@ use bls::bls12_381::CompressedSignature;
 use collections::bitset::BitSet;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::slot::{Slots, ValidatorSlots, StakeSlots};
+use vrf::VrfSeed;
 
 use crate::BlockError;
 use crate::pbft::PbftProof;
@@ -34,7 +35,7 @@ pub struct MacroHeader {
     pub view_number: u32,
     pub parent_macro_hash: Blake2bHash,
 
-    pub seed: CompressedSignature,
+    pub seed: VrfSeed,
     pub parent_hash: Blake2bHash,
     pub state_root: Blake2bHash,
     pub extrinsics_root: Blake2bHash,

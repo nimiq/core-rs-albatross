@@ -14,5 +14,6 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_account as account;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_database as database;
+extern crate nimiq_vrf as vrf;
 
 pub mod genesis;

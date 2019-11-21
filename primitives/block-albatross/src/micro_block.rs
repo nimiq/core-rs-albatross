@@ -1,13 +1,16 @@
 use std::fmt;
+use std::cmp::Ordering;
 
 use beserial::{Deserialize, Serialize};
-use crate::{BlockError, ViewChangeProof};
-use crate::fork_proof::ForkProof;
 use hash::{Hash, Blake2bHash, SerializeContent};
 use primitives::networks::NetworkId;
-use nimiq_bls::bls12_381::CompressedSignature;
-use std::cmp::Ordering;
+use bls::bls12_381::CompressedSignature;
 use transaction::Transaction;
+use vrf::VrfSeed;
+
+use crate::{BlockError, ViewChangeProof};
+use crate::fork_proof::ForkProof;
+
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroBlock {
@@ -28,7 +31,7 @@ pub struct MicroHeader {
     pub extrinsics_root: Blake2bHash,
     pub state_root: Blake2bHash,
 
-    pub seed: CompressedSignature,
+    pub seed: VrfSeed,
     pub timestamp: u64,
 }
 
