@@ -252,7 +252,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
     /// Maximum time to wait after sending out get-data or receiving the last object for this request.
     const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
     /// Number of InvVectors in invToRequest pool to automatically trigger a get-data request.
-    const REQUEST_THRESHOLD: usize = 50;
+    const REQUEST_THRESHOLD: usize = 0;
     const REQUEST_VECTORS_MAX: usize = 1000;
     const GET_BLOCKS_VECTORS_MAX: u32 = 500;
     const KNOWN_OBJECTS_COUNT_MAX: usize = 40000;
