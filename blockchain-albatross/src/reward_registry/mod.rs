@@ -19,9 +19,11 @@ use primitives::coin::Coin;
 use primitives::policy;
 use primitives::slot::{Slots, Slot, SlotIndex};
 use transaction::Transaction as BlockchainTransaction;
+use vrf::{VrfRng, VrfUseCase};
 
 use crate::chain_store::ChainStore;
 use crate::reward_registry::reward_pot::RewardPot;
+use vrf::rng::Rng;
 
 
 pub struct SlashRegistry {
@@ -292,27 +294,16 @@ impl SlashRegistry {
         let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number, txn_option)
             .ok()?;
 
-        let mut i: u16 = 0;
+        // RNG for slot selection
+        let mut rng = prev_block.seed().rng(VrfUseCase::SlotSelection);
+
         let slot_number = loop {
-            // Hash seed, view number and a nonce to retry of the returned number is out of range
-            // or the corresponding slot is disabled.
-            let mut hash_state = Blake2bHasher::new();
-            prev_block.seed().serialize(&mut hash_state).unwrap();
-            hash_state.write_all(&view_number.to_be_bytes()).unwrap();
-            hash_state.write_all(&i.to_be_bytes()).unwrap();
+            let slot_number = rng.next_u64_max(policy::SLOTS as u64) as u16;
 
-            // Get slot number from first 16 bytes
-            let hash = hash_state.finish();
-            let mut buf = [0_u8; 2];
-            buf.copy_from_slice(&hash.as_bytes()[0..2]);
-            // FIXME: Use better RNG
-            let slot_number = u16::from_be_bytes(buf) % policy::SLOTS;
-
+            // Sample until we find a slot that is not slashed
             if !slashed_set.contains(slot_number as usize) {
                 break slot_number;
             }
-
-            i += 1;
         };
 
         Some(slot_number)

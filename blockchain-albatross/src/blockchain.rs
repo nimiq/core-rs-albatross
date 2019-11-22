@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::vec::IntoIter;
 
 use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
-use vose_alias_int::LookupTable;
 
 use account::{Account, Inherent, InherentType};
 use account::inherent::AccountInherentInteraction;
@@ -33,7 +32,7 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::merkle;
 use utils::observer::{Listener, ListenerHandle, Notifier};
-use vrf::{VrfSeed, VrfUseCase};
+use vrf::{VrfSeed, VrfUseCase, AliasMethod};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
@@ -1409,13 +1408,11 @@ impl Blockchain {
         // Get RNG from last block's seed and build lookup table based on number of eligible slots
         let mut rng = macro_header.seed
             .rng(VrfUseCase::RewardDistribution);
-        let lookup = LookupTable::new(num_eligible_slots_for_accepted_inherent);
+        let lookup = AliasMethod::new(num_eligible_slots_for_accepted_inherent);
 
         // Randomly distribute remainder over accepting slots.
         while !remainder.is_zero() {
-            let x = rng.next_u64_max(lookup.len() as u64) as usize;
-            let y = rng.next_u64_max(lookup.total() as u64) as u16;
-            let index = lookup.sample(x, y);
+            let index = lookup.sample(&mut rng);
             inherents[index].value += Coin::from_u64_unchecked(1);
             remainder -= Coin::from_u64_unchecked(1);
         }

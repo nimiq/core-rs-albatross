@@ -22,7 +22,6 @@ lazy_static = "1.3"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
-vose-alias-int = { git = "https://github.com/jgraef/vose-alias-int" }
 
 beserial = { path = "../../beserial", version = "0.1" }
 beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }

@@ -4,8 +4,6 @@ use std::collections::btree_set::BTreeSet;
 use std::mem;
 use std::sync::Arc;
 
-use vose_alias_int::LookupTable;
-
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
 use bls::bls12_381::CompressedSignature as BlsSignature;
@@ -16,7 +14,7 @@ use primitives::slot::{Slots, SlotsBuilder};
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::{StakingTransactionData, StakingTransactionType};
 use utils::hash_rng::HashRng;
-use vrf::{VrfSeed, VrfUseCase};
+use vrf::{VrfSeed, VrfUseCase, AliasMethod};
 
 use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};
 use crate::inherent::{AccountInherentInteraction, Inherent, InherentType};
@@ -472,13 +470,11 @@ impl StakingContract {
         }
 
         let mut slots_builder = SlotsBuilder::default();
-        let lookup = LookupTable::new(weights);
+        let lookup = AliasMethod::new(weights);
         let mut rng = seed.rng(VrfUseCase::ValidatorSelection);
 
         for _ in 0 .. policy::SLOTS {
-            let x = rng.next_u64_max(lookup.len() as u64) as usize;
-            let y = rng.next_u64_max(lookup.total());
-            let index = lookup.sample(x, y);
+            let index = lookup.sample(&mut rng);
 
             let active_stake = &potential_validators[index];
 
