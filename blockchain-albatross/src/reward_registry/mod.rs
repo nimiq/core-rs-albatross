@@ -295,7 +295,7 @@ impl SlashRegistry {
             .ok()?;
 
         // RNG for slot selection
-        let mut rng = prev_block.seed().rng(VrfUseCase::SlotSelection);
+        let mut rng = prev_block.seed().rng(VrfUseCase::SlotSelection, view_number);
 
         let slot_number = loop {
             let slot_number = rng.next_u64_max(policy::SLOTS as u64) as u16;

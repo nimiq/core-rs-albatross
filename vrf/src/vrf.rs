@@ -62,8 +62,8 @@ impl VrfSeed {
         }
     }
 
-    pub fn rng(&self, use_case: VrfUseCase) -> VrfRng {
-        VrfRng::new(&self.signature, use_case)
+    pub fn rng(&self, use_case: VrfUseCase, round: u32) -> VrfRng {
+        VrfRng::new(&self.signature, use_case, round)
     }
 }
 
@@ -84,22 +84,25 @@ impl fmt::Display for VrfSeed {
 pub struct VrfRng<'s> {
     signature: &'s CompressedSignature,
     use_case: VrfUseCase,
+    round: u32,
     counter: u64,
 }
 
 impl<'s> VrfRng<'s> {
-    fn new(signature: &'s CompressedSignature, use_case: VrfUseCase) -> Self {
+    fn new(signature: &'s CompressedSignature, use_case: VrfUseCase, round: u32) -> Self {
         Self {
             signature,
             use_case,
+            round,
             counter: 0,
         }
     }
 
     pub fn next_hash(&mut self) -> Blake2bHash {
-        // Hash use-case prefix, counter and signature
+        // Hash use-case prefix, round, counter and signature
         let mut hasher = Blake2bHasher::new();
         hasher.write_u8(self.use_case as u8).unwrap();
+        hasher.write_u32::<BigEndian>(self.round).unwrap();
         hasher.write_u64::<BigEndian>(self.counter).unwrap();
         hasher.write_all(self.signature.as_ref()).unwrap();
 

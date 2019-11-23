@@ -471,7 +471,7 @@ impl StakingContract {
 
         let mut slots_builder = SlotsBuilder::default();
         let lookup = AliasMethod::new(weights);
-        let mut rng = seed.rng(VrfUseCase::ValidatorSelection);
+        let mut rng = seed.rng(VrfUseCase::ValidatorSelection, 0);
 
         for _ in 0 .. policy::SLOTS {
             let index = lookup.sample(&mut rng);
