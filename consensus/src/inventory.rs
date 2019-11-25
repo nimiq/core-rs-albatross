@@ -1029,15 +1029,14 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let mut state = self.state.write();
 
         let mut vectors = Vec::new();
-        let mut size: usize = 0;
-        while vectors.len() <= InvVector::VECTORS_MAX_COUNT && size < Self::FREE_TRANSACTION_SIZE_PER_INTERVAL {
-            if let Some(tx) = state.waiting_free_tx_inv_vectors.dequeue() {
-                vectors.push(tx.vector);
-                size += tx.serialized_size;
+        while vectors.len() <= InvVector::VECTORS_MAX_COUNT {
+            if let Some(vector) = state.waiting_tx_inv_vectors.dequeue() {
+                vectors.push(vector);
             } else {
                 break;
             }
         }
+
         let num_vectors = vectors.len();
         if num_vectors > 0 {
             self.peer.channel.send_or_close(Message::Inv(vectors));
@@ -1049,7 +1048,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
         let mut size: usize = 0;
         let mut vectors = Vec::new();
-        while vectors.len() <= InvVector::VECTORS_MAX_COUNT && size < Self::FREE_TRANSACTIONS_PER_SECOND {
+        while vectors.len() <= InvVector::VECTORS_MAX_COUNT && size < Self::FREE_TRANSACTION_SIZE_PER_INTERVAL {
             if let Some(vector) = state.waiting_free_tx_inv_vectors.dequeue() {
                 size += vector.serialized_size;
                 vectors.push(InvVector::from(vector));
