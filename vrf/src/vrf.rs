@@ -39,7 +39,7 @@ impl VrfSeed {
         // Hash use-case prefix and signature
         let mut hasher = Blake2bHasher::new();
         hasher.write_u8(VrfUseCase::Seed as u8).unwrap();
-        hasher.write(prev_seed.signature.as_ref()).unwrap();
+        hasher.write_all(prev_seed.signature.as_ref()).unwrap();
 
         if !public_key.verify_hash(hasher.finish(), &signature) {
             return Err(VrfError::Forged);
@@ -51,7 +51,7 @@ impl VrfSeed {
         // Hash use-case prefix and signature
         let mut hasher = Blake2bHasher::new();
         hasher.write_u8(VrfUseCase::Seed as u8).unwrap();
-        hasher.write(self.signature.as_ref()).unwrap();
+        hasher.write_all(self.signature.as_ref()).unwrap();
 
         // Sign that hash and contruct new VrfSeed from it
         let signature = secret_key
@@ -101,7 +101,7 @@ impl<'s> VrfRng<'s> {
         let mut hasher = Blake2bHasher::new();
         hasher.write_u8(self.use_case as u8).unwrap();
         hasher.write_u64::<BigEndian>(self.counter).unwrap();
-        hasher.write(self.signature.as_ref()).unwrap();
+        hasher.write_all(self.signature.as_ref()).unwrap();
 
         // Increase counter
         self.counter += 1;
