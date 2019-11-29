@@ -490,13 +490,10 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             if state.bypass_mgr {
                 self.queue_vectors(&mut *state, unknown_blocks, unknown_txs);
             } else {
-                // TODO optimize
-                let inv_mgr_arc = self.inv_mgr.clone();
-                let mut inv_mgr = inv_mgr_arc.write();
-
                 // Give up write lock before notifying.
                 drop(state);
 
+                let mut inv_mgr = self.inv_mgr.write();
                 for vector in unknown_blocks {
                     inv_mgr.ask_to_request_vector(self, &vector);
                 }
@@ -619,18 +616,22 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
     fn on_not_found(&self, vectors: Vec<InvVector>) {
         trace!("[NOTFOUND] {} vectors", vectors.len());
 
-        // Remove unknown objects from in-flight list.
-        let agent = &*self.self_weak;
-        for vector in vectors {
-            if !self.state.read().objects_in_flight.contains(&vector) {
-                continue;
-            }
+        // Only consider vectors that we requested.
+        let state = self.state.read();
+        let expected_vectors = vectors.iter()
+            .filter(|vector| state.objects_in_flight.contains(*vector))
+            .collect::<Vec<&InvVector>>();
+        drop(state);
 
-            self.inv_mgr.write().note_vector_not_received(agent, &vector);
-
-            // Mark object as received.
-            self.on_object_received(&vector);
+        // Report objects as not received.
+        let mut inv_mgr = self.inv_mgr.write();
+        for vector in &expected_vectors {
+            inv_mgr.note_vector_not_received(&*self.self_weak, *vector);
         }
+        drop(inv_mgr);
+
+        // Remove objects from in-flight list.
+        self.on_objects_received(expected_vectors);
     }
 
     fn on_close(&self) {
@@ -712,13 +713,18 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
     fn on_object_received(&self, vector: &InvVector) {
         self.inv_mgr.write().note_vector_received(vector);
+        self.on_objects_received(vec![vector]);
+    }
 
+    fn on_objects_received(&self, vectors: Vec<&InvVector>) {
         let mut state = self.state.write();
         if state.objects_in_flight.is_empty() {
             return;
         }
 
-        state.objects_in_flight.remove(vector);
+        for vector in vectors {
+            state.objects_in_flight.remove(vector);
+        }
 
         // Reset request timeout if we expect more objects.
         if !state.objects_in_flight.is_empty() {
@@ -738,27 +744,29 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         self.timers.clear_delay(&InventoryAgentTimer::GetData);
 
         let mut state = self.state.write();
-
-        // TODO optimize
-        let inv_mgr_arc = self.inv_mgr.clone();
-        let mut inv_mgr = inv_mgr_arc.write();
-        let agent = &*self.self_weak;
         let mut vectors = Vec::new();
         for vector in state.objects_in_flight.drain() {
-            inv_mgr.note_vector_not_received(agent, &vector);
             vectors.push(vector);
         }
+        // TODO Optimize
+        for vector in &vectors {
+            state.objects_that_flew.insert(vector.clone());
+        }
+        drop(state);
 
-        for vector in vectors {
-            state.objects_that_flew.insert(vector);
+        let mut inv_mgr = self.inv_mgr.write();
+        for vector in &vectors {
+            inv_mgr.note_vector_not_received(&*self.self_weak, vector);
         }
 
         // If there are more objects to request, request them.
+        let mut state = self.state.write();
         if !state.blocks_to_request.is_empty() || state.txs_to_request.check_available() {
             self.request_vectors(&mut *state);
         } else {
             // Give up write lock before notifying.
             drop(state);
+
             self.sync_protocol.on_all_objects_received();
             self.notifier.read().notify(InventoryEvent::AllObjectsReceived);
         }
