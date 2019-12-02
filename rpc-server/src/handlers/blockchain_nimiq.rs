@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use json::{JsonValue, Null};
+use json::{JsonValue, Null, object};
 
 use beserial::{Deserialize, Serialize};
 use block::Block;

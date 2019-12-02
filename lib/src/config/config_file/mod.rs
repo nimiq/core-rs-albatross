@@ -10,6 +10,7 @@ use log::LevelFilter;
 use url::Url;
 use hex::FromHex;
 use failure::Fail;
+use serde_derive::Deserialize;
 
 use network_primitives::{address, protocol};
 use network_primitives::address::peer_uri::PeerUriError;

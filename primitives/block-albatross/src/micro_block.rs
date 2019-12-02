@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 
 use beserial::{Deserialize, Serialize};
 use hash::{Hash, Blake2bHash, SerializeContent};
+use hash_derive::SerializeContent;
 use primitives::networks::NetworkId;
 use bls::bls12_381::CompressedSignature;
 use transaction::Transaction;

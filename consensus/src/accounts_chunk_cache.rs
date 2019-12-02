@@ -18,6 +18,7 @@ use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use database::Environment;
 use database::ReadTransaction;
 use hash::Blake2bHash;
+use macros::upgrade_weak;
 use utils::mutable_once::MutableOnce;
 
 pub type SerializedChunk = Vec<u8>;

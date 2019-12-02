@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use json::{Array, JsonValue, Null};
+use json::{Array, JsonValue, Null, object};
 
 use block_base::{Block, BlockHeader};
 use blockchain_base::AbstractBlockchain;

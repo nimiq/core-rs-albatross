@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use json::{JsonValue, Null};
+use json::{JsonValue, Null, object};
 
 use block_albatross::{Block, ForkProof, signed};
 use account::Account;
@@ -120,7 +120,7 @@ impl BlockchainAlbatrossHandler {
     pub(crate) fn get_slot_at(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // Parse block number argument
         let block_number = params.get(0)
-            .ok_or_else(||object!{"message" => "First argument must be block number"})
+            .ok_or_else(|| object!{"message" => "First argument must be block number"})
             .and_then(|n| self.generic.parse_block_number(n))?;
 
         // Check if it's not a macro block

@@ -15,8 +15,6 @@ extern crate log;
 extern crate tokio;
 extern crate rand;
 extern crate parking_lot;
-#[macro_use]
-extern crate lazy_static;
 
 extern crate beserial;
 #[macro_use]
@@ -25,7 +23,6 @@ extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;
 extern crate nimiq_utils as utils;
-#[macro_use]
 extern crate nimiq_macros as macros;
 
 

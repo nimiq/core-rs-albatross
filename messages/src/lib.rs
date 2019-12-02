@@ -3,8 +3,6 @@
 
 #[macro_use]
 extern crate beserial_derive;
-#[macro_use]
-extern crate bitflags;
 extern crate nimiq_account as account;
 extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
@@ -13,7 +11,6 @@ extern crate nimiq_bls as bls;
 extern crate nimiq_handel as handel;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
-#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_transaction as transaction;
@@ -30,12 +27,14 @@ use rand::rngs::OsRng;
 
 use account::Account;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
+use bitflags::bitflags;
 use block::{Block, BlockHeader};
 use block::proof::ChainProof;
 use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, PbftCommitMessage, PbftPrepareMessage, SignedPbftProposal, ViewChange, ViewChangeProof};
 use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
+use macros::create_typed_array;
 use network_primitives::address::{PeerAddress, PeerId};
 use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;

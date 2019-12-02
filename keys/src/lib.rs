@@ -2,9 +2,7 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate failure;
-#[macro_use]
 extern crate nimiq_hash as hash;
-#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_utils as utils;
 

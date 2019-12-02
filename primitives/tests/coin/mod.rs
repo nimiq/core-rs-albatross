@@ -1,4 +1,5 @@
 use beserial::{Serialize, Deserialize, SerializingError};
+use lazy_static::lazy_static;
 use primitives::coin::{Coin, CoinParseError};
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;

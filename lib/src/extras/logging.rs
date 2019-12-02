@@ -5,6 +5,7 @@ use colored::Colorize;
 use failure::Fail;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::{Dispatch, log_file};
+use lazy_static::lazy_static;
 use log::{Level, LevelFilter, SetLoggerError};
 
 use crate::error::Error;

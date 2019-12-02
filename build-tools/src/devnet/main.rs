@@ -1,12 +1,7 @@
-extern crate structopt;
-extern crate paw;
 #[macro_use]
 extern crate log;
 #[macro_use]
-extern crate shellfn;
-#[macro_use]
 extern crate failure;
-extern crate ctrlc;
 
 mod docker;
 
@@ -16,11 +11,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::fs::{canonicalize, remove_file};
 
+use docker::Docker;
+use failure::Error;
 use log::Level;
 use structopt::StructOpt;
-use failure::Error;
-
-use docker::Docker;
 
 
 #[derive(Debug, StructOpt)]
@@ -32,7 +26,7 @@ struct Args {
 }
 
 
-#[shell]
+#[shellfn::shell]
 // NOTE: env_dir needs to be absolute
 fn build_client<S: ToString>(env_dir: S) -> Result<impl Iterator<Item=Result<String, Error>>, Error> { r#"
     mkdir -p $ENV_DIR/build/

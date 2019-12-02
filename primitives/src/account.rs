@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use beserial::{Deserialize, Serialize};
+use enum_display_derive::Display;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
 #[repr(u8)]

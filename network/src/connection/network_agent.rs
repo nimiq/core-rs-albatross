@@ -10,6 +10,7 @@ use rand::{Rng, rngs::OsRng};
 
 use beserial::Serialize;
 use blockchain_base::AbstractBlockchain;
+use macros::upgrade_weak;
 use network_messages::*;
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::address::PeerId;

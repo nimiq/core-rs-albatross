@@ -3,7 +3,6 @@ extern crate log;
 
 #[macro_use]
 extern crate beserial_derive;
-#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_messages as network_messages;
 extern crate nimiq_network_primitives as network_primitives;

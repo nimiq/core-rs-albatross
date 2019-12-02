@@ -1,15 +1,7 @@
 #[macro_use]
-extern crate derive_builder;
-#[macro_use]
 extern crate failure;
 #[macro_use]
-extern crate enum_display_derive;
-#[macro_use]
 extern crate log;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate lazy_static;
 
 extern crate nimiq_network as network;
 extern crate nimiq_consensus as consensus;

@@ -1,5 +1,4 @@
 extern crate nimiq_hash as hash;
-#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_utils as utils;
 
@@ -13,6 +12,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use hash::{Hasher, Sha256Hasher};
 use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
+use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use utils::bit_vec::IntoChunkedBitVecIterator;
 use utils::crc::Crc8Computer;
 

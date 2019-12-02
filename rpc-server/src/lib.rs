@@ -1,7 +1,4 @@
 #[macro_use]
-extern crate json;
-
-#[macro_use]
 extern crate log;
 extern crate nimiq_account as account;
 extern crate nimiq_block as block;
@@ -27,7 +24,7 @@ use std::sync::Arc;
 
 use futures::future::Future;
 use hyper::Server;
-use json::JsonValue;
+use json::{JsonValue, object};
 
 use crate::error::Error;
 pub use crate::handler::Handler;

@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate log;
-
 extern crate nimiq_block_albatross as block;
 extern crate nimiq_blockchain_albatross as blockchain;
 extern crate nimiq_blockchain_base as blockchain_base;
@@ -22,7 +19,7 @@ use block::ForkProof;
 use block::MicroJustification;
 use blockchain::blockchain::Blockchain;
 use blockchain_base::AbstractBlockchain;
-use bls::bls12_381::{CompressedSignature, KeyPair};
+use bls::bls12_381::KeyPair;
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use mempool::Mempool;

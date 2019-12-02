@@ -1,6 +1,7 @@
 use beserial::{Deserialize, Serialize};
 use bls::bls12_381::PublicKey;
 use hash::{Blake2bHash, SerializeContent};
+use hash_derive::SerializeContent;
 use primitives::slot::ValidatorSlots;
 
 use crate::ViewChangeProof;

@@ -10,6 +10,7 @@ use beserial::Serialize;
 use block_base::Block;
 use blockchain_base::{AbstractBlockchain, PushError, PushResult};
 use hash::Blake2bHash;
+use macros::upgrade_weak;
 use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;

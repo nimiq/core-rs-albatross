@@ -1,7 +1,5 @@
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate json;
 
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_utils as utils;
@@ -23,7 +21,7 @@ use tokio::net::{TcpListener};
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::{Message, Error as WsError};
 use parking_lot::RwLock;
-use json::JsonValue;
+use json::{JsonValue, object};
 
 use utils::unique_id::UniqueId;
 use consensus::{Consensus, AlbatrossConsensusProtocol};

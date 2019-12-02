@@ -6,6 +6,7 @@ use num_bigint::BigUint;
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use fixed_unsigned::types::FixedUnsigned10;
 use hash::Argon2dHash;
+use macros::create_typed_array;
 use primitives::policy;
 
 /// Compact Target (represented internally as `u32`)

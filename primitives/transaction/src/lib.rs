@@ -1,16 +1,10 @@
-extern crate beserial;
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
-extern crate bitflags;
-#[macro_use]
 extern crate log;
-#[macro_use]
-extern crate enum_display_derive;
 extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
-#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_utils as utils;
@@ -19,6 +13,7 @@ use std::cmp::{Ord, Ordering};
 use std::io;
 use std::sync::Arc;
 
+use bitflags::bitflags;
 use failure::Fail;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};

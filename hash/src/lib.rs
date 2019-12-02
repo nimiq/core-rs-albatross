@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate nimiq_macros as macros;
-
 pub mod hmac;
 pub mod pbkdf2;
 pub mod sha512;
@@ -11,6 +8,7 @@ use libargon2_sys::argon2d_hash;
 use sha2::{Sha256, Sha512, Digest};
 use beserial::{Serialize, Deserialize};
 use hex::FromHex;
+use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
 
 use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};

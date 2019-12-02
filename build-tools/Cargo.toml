@@ -23,8 +23,7 @@ paw = "1.0"
 rand = "0.7"
 rand04_compat = "0.1"
 rand_chacha = "0.2"
-serde = "1.0"
-serde_derive = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 shellfn = "0.1"
 simple_logger = "1.0"
 structopt = { version = "0.3", features = ["paw"] }

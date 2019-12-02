@@ -1,8 +1,3 @@
-#[macro_use]
-extern crate clap;
-extern crate failure;
-extern crate hex;
-extern crate beserial;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
@@ -11,7 +6,7 @@ use std::io::stdin;
 use std::process::exit;
 use std::str::FromStr;
 use failure::Fail;
-use clap::{App, Arg};
+use clap::{App, Arg, crate_version, crate_authors, crate_description};
 use keys::{PrivateKey, KeyPair, Address};
 use transaction::Transaction;
 use beserial::{Serialize, Deserialize};

@@ -4,6 +4,7 @@ use beserial::{Serialize, Deserialize};
 use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
 use bls::bls12_381::CompressedPublicKey;
 use hash::SerializeContent;
+use hash_derive::SerializeContent;
 
 use crate::address::peer_address::PeerAddress;
 

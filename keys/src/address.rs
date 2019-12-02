@@ -1,5 +1,6 @@
 use crate::PublicKey;
-use crate::hash::{Blake2bHash, Blake2bHasher, Hasher};
+use hash::{Blake2bHash, Blake2bHasher, Hasher, hash_typed_array};
+use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use std::convert::From;
 use std::char;
 use std::io;

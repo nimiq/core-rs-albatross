@@ -1,6 +1,7 @@
 use std::sync::{Arc, Weak};
 use std::fmt;
 
+use macros::upgrade_weak;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use futures::{future, Future};
 

@@ -5,7 +5,6 @@ use std::io;
 use failure::Fail;
 
 use beserial::{Deserialize, Serialize};
-use bls::bls12_381::CompressedSignature;
 use collections::bitset::BitSet;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::slot::{Slots, ValidatorSlots, StakeSlots};

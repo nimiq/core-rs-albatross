@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 
+use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use num_traits::pow;
 use parking_lot::RwLock;

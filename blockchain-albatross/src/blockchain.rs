@@ -16,7 +16,7 @@ use block::{Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, Ma
 use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
-use bls::bls12_381::{CompressedSignature, PublicKey};
+use bls::bls12_381::PublicKey;
 use collections::bitset::BitSet;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};

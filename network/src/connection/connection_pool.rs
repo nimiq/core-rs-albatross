@@ -8,6 +8,7 @@ use parking_lot::{ReentrantMutex, RwLock, RwLockReadGuard};
 
 use blockchain_base::AbstractBlockchain;
 use collections::SparseVec;
+use macros::upgrade_weak;
 use network_messages::SignalMessage;
 use network_primitives::address::net_address::{NetAddress, NetAddressType};
 use network_primitives::address::peer_address::PeerAddress;

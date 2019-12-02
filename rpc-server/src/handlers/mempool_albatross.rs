@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use beserial::{Deserialize, Serialize};
-use json::{JsonValue, Null};
+use json::{JsonValue, Null, object};
 use parking_lot::RwLock;
 
 use blockchain_albatross::Blockchain;

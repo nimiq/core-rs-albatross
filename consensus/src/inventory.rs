@@ -12,6 +12,7 @@ use blockchain_base::{AbstractBlockchain, Direction, PushError, PushResult};
 use collections::{LimitHashSet, UniqueLinkedList};
 use collections::queue::Queue;
 use hash::{Blake2bHash, Hash};
+use macros::upgrade_weak;
 use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;

@@ -32,6 +32,7 @@ use blockchain_base::BlockchainEvent;
 use bls::bls12_381::KeyPair;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
+use macros::upgrade_weak;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
 use utils::mutable_once::MutableOnce;

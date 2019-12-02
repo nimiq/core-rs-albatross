@@ -3,7 +3,7 @@ use std::fmt;
 
 use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
 
-use hash::{Blake2bHash, Blake2bHasher, Hasher, HashOutput};
+use hash::{Blake2bHash, Blake2bHasher, Hasher};
 use beserial::{Serialize, Deserialize};
 use bls::bls12_381::{CompressedSignature, PublicKey, SecretKey};
 

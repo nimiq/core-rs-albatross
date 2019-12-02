@@ -3,7 +3,6 @@ mod reward_pot;
 
 use std::borrow::Cow;
 use std::io;
-use std::io::Write;
 use std::sync::Arc;
 
 use failure::Fail;
@@ -14,12 +13,11 @@ use collections::bitset::BitSet;
 use database::{AsDatabaseBytes, Database, DatabaseFlags, Environment, FromDatabaseValue,
                ReadTransaction, Transaction, WriteTransaction};
 use database::cursor::{ReadCursor, WriteCursor};
-use hash::{Blake2bHasher, Hasher};
 use primitives::coin::Coin;
 use primitives::policy;
 use primitives::slot::{Slots, Slot, SlotIndex};
 use transaction::Transaction as BlockchainTransaction;
-use vrf::{VrfRng, VrfUseCase};
+use vrf::VrfUseCase;
 
 use crate::chain_store::ChainStore;
 use crate::reward_registry::reward_pot::RewardPot;

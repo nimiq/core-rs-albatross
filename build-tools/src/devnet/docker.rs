@@ -39,22 +39,22 @@ impl Docker {
 mod docker_cmd {
     use failure::Error;
 
-    #[shell]
+    #[shellfn::shell]
     pub fn build<P: ToString>(env_dir: P) -> Result<(), Error> { r#"
         docker-compose -f $ENV_DIR/docker-compose.yml build
     "# }
 
-    #[shell]
+    #[shellfn::shell]
     pub fn up<P: ToString>(env_dir: P) -> Result<impl Iterator<Item=Result<String, Error>>, Error> {
         "docker-compose -f $ENV_DIR/docker-compose.yml up | tee $ENV_DIR/build/validators.log"
     }
 
-    #[shell]
+    #[shellfn::shell]
     pub fn down<P: ToString>(env_dir: P) -> Result<(), Error> {
         "docker-compose -f $ENV_DIR/docker-compose.yml down"
     }
 
-    #[shell]
+    #[shellfn::shell]
     pub fn prune() -> Result<(), Error> {
         "docker image prune -f"
     }

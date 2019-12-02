@@ -11,6 +11,7 @@ use rand::thread_rng;
 
 use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use database::Environment;
+use macros::upgrade_weak;
 use mempool::{Mempool, MempoolEvent, MempoolConfig};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
 use network_primitives::networks::NetworkId;

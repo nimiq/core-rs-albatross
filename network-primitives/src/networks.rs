@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use keys::PublicKey;
 use hex::FromHex;
 use account::AccountsList;
+use lazy_static::lazy_static;
 
 
 #[derive(Clone, Debug)]

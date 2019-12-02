@@ -3,6 +3,7 @@ use std::fmt;
 use beserial::{Deserialize, Serialize};
 
 use hash::SerializeContent;
+use hash_derive::SerializeContent;
 use super::signed;
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent, Hash)]

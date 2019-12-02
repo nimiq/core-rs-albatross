@@ -8,7 +8,6 @@ extern crate nimiq_account as account;
 extern crate nimiq_block_base as block_base;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
-#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;

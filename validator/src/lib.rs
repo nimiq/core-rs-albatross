@@ -2,7 +2,6 @@
 
 #[macro_use]
 extern crate log;
-#[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_handel as handel;
 

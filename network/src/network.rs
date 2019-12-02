@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use atomic::Atomic;
 use atomic::Ordering;
+use macros::upgrade_weak;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
 use rand::Rng;

@@ -6,14 +6,11 @@ use std::sync::Arc;
 
 use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
 use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
-use bls::bls12_381::CompressedSignature as BlsSignature;
-use hash::Blake2bHash;
 use keys::Address;
 use primitives::{policy, coin::Coin};
 use primitives::slot::{Slots, SlotsBuilder};
 use transaction::{SignatureProof, Transaction};
 use transaction::account::staking_contract::{StakingTransactionData, StakingTransactionType};
-use utils::hash_rng::HashRng;
 use vrf::{VrfSeed, VrfUseCase, AliasMethod};
 
 use crate::{Account, AccountError, AccountTransactionInteraction, AccountType};

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use json::{JsonValue, Null};
+use json::{JsonValue, Null, object};
 
 use beserial::{Deserialize, Serialize};
 use block::{Block, BlockHeader};

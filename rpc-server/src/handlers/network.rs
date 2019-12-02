@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use json::{Array, JsonValue, Null};
+use json::{Array, JsonValue, Null, object};
 
 use blockchain_base::AbstractBlockchain;
 use consensus::{ConsensusProtocol, Consensus};

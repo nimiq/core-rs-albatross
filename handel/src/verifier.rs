@@ -3,6 +3,7 @@ use std::sync::Arc;
 use futures::{future, Future};
 use futures::future::FutureResult;
 use futures_cpupool::{CpuPool, CpuFuture};
+use lazy_static::lazy_static;
 
 use hash::Blake2bHash;
 use bls::bls12_381::AggregatePublicKey;

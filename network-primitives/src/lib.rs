@@ -15,10 +15,7 @@ extern crate nimiq_hash as hash;
 extern crate nimiq_bls as bls;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_account as account;
-#[macro_use]
-extern crate nimiq_hash_derive;
-#[macro_use]
-extern crate lazy_static;
+extern crate nimiq_hash_derive as hash_derive;
 
 #[cfg(feature = "address")]
 pub mod address;

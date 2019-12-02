@@ -1,5 +1,4 @@
-#[macro_use]
-extern crate lazy_static;
+use lazy_static::lazy_static;
 
 extern crate beserial;
 extern crate nimiq_wallet as wallet;

@@ -12,6 +12,7 @@ use block_base::{Block, BlockError};
 use blockchain_albatross::Blockchain as AlbatrossBlockchain;
 use blockchain_base::{AbstractBlockchain, PushError, PushResult};
 use hash::Blake2bHash;
+use macros::upgrade_weak;
 use network::connection::close_type::CloseType;
 use network::peer::Peer;
 use network_messages::{EpochTransactionsMessage, GetBlocksDirection, GetBlocksMessage, GetEpochTransactionsMessage};

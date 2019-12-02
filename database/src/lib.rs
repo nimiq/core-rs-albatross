@@ -1,12 +1,11 @@
 #[macro_use]
-extern crate bitflags;
-#[macro_use]
 extern crate log;
 
 use std::borrow::Cow;
 use std::io;
 use std::ops::Deref;
 
+use bitflags::bitflags;
 use lmdb_zero;
 
 use crate::cursor::{ReadCursor, WriteCursor as WriteCursorTrait};

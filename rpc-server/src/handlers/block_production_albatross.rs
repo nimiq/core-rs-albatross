@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::string::ToString;
 
-use json::JsonValue;
+use json::{JsonValue, object};
 
 use validator::validator::Validator;
 

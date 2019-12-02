@@ -3,7 +3,7 @@ use std::sync::Arc;
 use futures::{future, Future, IntoFuture, stream::Stream};
 use hyper::{Body, Method, Request, Response, StatusCode};
 use hyper::header::HeaderValue;
-use json::{Array, JsonValue, Null};
+use json::{Array, JsonValue, Null, array, object};
 
 use crate::error::AuthenticationError;
 
