@@ -184,6 +184,14 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
             "tx" => network_connection.map(|conn| conn.metrics().bytes_sent().into()).unwrap_or(Null)
         }
     }
+
+    /// Returns the peer state for a single peer.
+    /// Parameters: None
+    ///
+    /// The return value is a string, the peer public key.
+    pub(crate) fn peer_public_key(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        Ok(self.network.network_config.key_pair().public.to_hex().into())
+    }
 }
 
 impl<P: ConsensusProtocol + 'static> Module for NetworkHandler<P> {
@@ -192,5 +200,6 @@ impl<P: ConsensusProtocol + 'static> Module for NetworkHandler<P> {
         "syncing" => syncing,
         "peerList" => peer_list,
         "peerState" => peer_state,
+        "peerPublicKey" => peer_public_key,
     }
 }
