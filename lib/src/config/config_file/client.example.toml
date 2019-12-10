@@ -76,7 +76,6 @@ host = "my.domain"
 # Consensus specific configuration
 #
 ##############################################################################
-
 [consensus]
 
 # Specify the type of node to run.
@@ -88,6 +87,31 @@ host = "my.domain"
 # Possible values: "main", "test", "dev"
 # Default: "main"
 #network = "main"
+
+##############################################################################
+#
+# Database specific configuration
+#
+##############################################################################
+#[database]
+
+# Path to database
+# Default: ~/.nimiq
+#path=""
+
+# Size of mapped memory (in bytes)
+# Default: 10 MB
+#size=0
+
+# Max number of databases
+# Default: 10
+#max_dbs=10
+
+# Don't sync to disk after each database transaction
+# Default: false
+# WARNING: This can potentially corrupt the database if the program is not
+# properly terminated
+#no_lmdb_sync=true
 
 
 

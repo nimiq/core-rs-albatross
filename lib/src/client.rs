@@ -99,7 +99,7 @@ impl TryFrom<ClientConfig> for ClientInner {
         }
 
         // Open database
-        let environment = config.storage.database(config.network, config.consensus)?;
+        let environment = config.storage.database(config.network, config.consensus, config.database)?;
 
         // Create Nimiq consensus
         if !config.network.is_albatross() {

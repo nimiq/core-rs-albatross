@@ -166,6 +166,50 @@ impl Default for FileStorageConfig {
     }
 }
 
+/// Configuration options for the database
+#[derive(Debug, Clone, Builder)]
+#[builder(setter(into))]
+pub struct DatabaseConfig {
+    /// Initial database size. Default: 50 MB
+    #[builder(default="50 * 1024 * 1024")]
+    size: usize,
+
+    /// Max number of DBs. Recommended: 10
+    #[builder(default="10")]
+    max_dbs: u32,
+
+    /// Additional LMDB flags
+    #[builder(default="LmdbFlags::NOMETASYNC")]
+    flags: LmdbFlags::Flags
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        Self {
+            size: 50 * 1024 * 1024,
+            max_dbs: 10,
+            flags: LmdbFlags::NOMETASYNC,
+        }
+    }
+}
+
+impl From<config_file::DatabaseSettings> for DatabaseConfig {
+    fn from(db_settings: config_file::DatabaseSettings) -> Self {
+        let default = DatabaseConfig::default();
+
+        let mut flags = LmdbFlags::NOMETASYNC;
+        if db_settings.no_lmdb_sync.unwrap_or_default() {
+            flags |= LmdbFlags::NOSYNC;
+        }
+
+        Self {
+            size: db_settings.size.unwrap_or(default.size),
+            max_dbs: db_settings.max_dbs.unwrap_or(default.max_dbs),
+            flags,
+        }
+    }
+}
+
 /// Determines where the database will be stored.
 ///
 /// # ToDo
@@ -207,25 +251,20 @@ impl StorageConfig {
     ///
     /// Returns a `Result` which is either a `Environment` or a `Error`.
     ///
-    pub fn database(&self, network_id: NetworkId, consensus: ConsensusConfig) -> Result<Environment, Error> {
+    pub fn database(&self, network_id: NetworkId, consensus: ConsensusConfig, db_config: DatabaseConfig) -> Result<Environment, Error> {
         let db_name = format!("{}-{}-consensus", network_id, consensus).to_lowercase();
         info!("Opening database: {}", db_name);
 
-        // TODO: Pass these option as arguments and put them into a `DatabaseConfig`.
-        let flags = LmdbFlags::NOMETASYNC;
-        let size = 0; //1024 * 1024 * 50;
-        let max_dbs = 10;
-
         Ok(match self {
             StorageConfig::Volatile => {
-                VolatileEnvironment::new_with_lmdb_flags(max_dbs, flags)?
+                VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.flags)?
             },
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);
                 let db_path = db_path.to_str()
                     .ok_or_else(|| Error::config_error(format!("Failed to convert database path to string: {}", db_path.display())))?
                     .to_string();
-                LmdbEnvironment::new(&db_path, size, max_dbs, flags)?
+                LmdbEnvironment::new(&db_path, db_config.size, db_config.max_dbs, db_config.flags)?
             },
             _ => return Err(self.not_available()),
         })
@@ -452,6 +491,11 @@ pub struct ClientConfig {
     ///
     #[builder(default)]
     pub storage: StorageConfig,
+
+    /// Database-specific configuration
+    ///
+    #[builder(default)]
+    pub database: DatabaseConfig,
 
     /// The mempool filter rules
     ///
@@ -707,6 +751,9 @@ impl ClientConfigBuilder {
                     .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path)));
             });
         self.storage = Some(file_storage.into());
+
+        // Configure database
+        self.database(config_file.database.clone());
 
         // Configure reverse proxy config
         config_file.reverse_proxy.as_ref()
