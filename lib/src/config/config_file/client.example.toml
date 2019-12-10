@@ -84,8 +84,8 @@ host = "my.domain"
 #type = "full"
 
 # Specify the network to connect to.
-# Possible values: "main", "test", "dev"
-# Default: "main"
+# Possible values: "main", "test", "dev", "test-albatross", "dev-albatross"
+# Default: "dev-albatross"
 #network = "main"
 
 ##############################################################################

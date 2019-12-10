@@ -303,7 +303,7 @@ pub enum Network {
 
 impl Default for Network {
     fn default() -> Self {
-        Network::Main
+        Network::DevAlbatross
     }
 }
 
