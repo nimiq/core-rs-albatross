@@ -18,7 +18,7 @@ use nimiq::extras::panic::initialize_panic_reporting;
 
 
 fn main_inner() -> Result<(), Error> {
-    initialize_logging()?;
+    // Initialize deadlock detection
     initialize_deadlock_detection();
 
     // Parse command line.
@@ -28,6 +28,9 @@ fn main_inner() -> Result<(), Error> {
     // Parse config file - this will obey the `--config` command line option.
     let config_file = ConfigFile::find(Some(&command_line))?;
     trace!("Config file: {:#?}", config_file);
+
+    // Initialize logging with config values
+    initialize_logging(Some(&command_line), Some(&config_file.log))?;
 
     // Initialize panic hook
     initialize_panic_reporting();
@@ -102,17 +105,26 @@ fn main_inner() -> Result<(), Error> {
             // TODO: RPC server and metrics server need to be instantiated here
             Ok(client)
         })
-            .and_then(|client| {
-                // TODO: This is the "monitor" future, which keeps the Client object alive.
-                //  This should be chosen by the consumer
+            .and_then(move |client| {
+                // NOTE: This is the "monitor" future, which keeps the Client object alive.
 
-                // Periodically show some info
-                Interval::new_interval(Duration::from_secs(10))
+                let mut statistics_interval = config_file.log.statistics;
+                let mut show_statistics = true;
+                if statistics_interval == 0 {
+                    statistics_interval = 10;
+                    show_statistics = false;
+                }
+
+                // Run this periodically and optionally show some info
+                Interval::new_interval(Duration::from_secs(statistics_interval))
                     .map_err(|e| panic!("Timer failed: {}", e))
                     .for_each(move |_| {
-                        let peer_count = client.network().connections.peer_count();
-                        let head = client.blockchain().head().clone();
-                        info!("Head: #{} - {}, Peers: {}", head.block_number(), head.hash(), peer_count);
+
+                        if show_statistics {
+                            let peer_count = client.network().connections.peer_count();
+                            let head = client.blockchain().head().clone();
+                            info!("Head: #{} - {}, Peers: {}", head.block_number(), head.hash(), peer_count);
+                        }
 
                         future::ok::<(), Error>(())
                     })

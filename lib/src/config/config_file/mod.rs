@@ -398,7 +398,7 @@ impl From<ReverseProxySettings> for ReverseProxyConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Default)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LogSettings {
     #[serde(deserialize_with = "deserialize_string_option")]
@@ -409,10 +409,28 @@ pub struct LogSettings {
     #[serde(default)]
     #[serde(deserialize_with = "deserialize_tags")]
     pub tags: HashMap<String, LevelFilter>,
-    #[serde(default)]
+    #[serde(default="LogSettings::default_statistics_interval")]
     pub statistics: u64,
     #[serde(default)]
     pub file: Option<String>,
+}
+
+impl LogSettings {
+    pub fn default_statistics_interval() -> u64 {
+        10
+    }
+}
+
+impl Default for LogSettings {
+    fn default() -> Self {
+        Self {
+            level: None,
+            timestamps: true,
+            tags: HashMap::new(),
+            statistics: Self::default_statistics_interval(),
+            file: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

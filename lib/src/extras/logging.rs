@@ -6,9 +6,11 @@ use failure::Fail;
 use fern::colors::{Color, ColoredLevelConfig};
 use fern::{Dispatch, log_file};
 use lazy_static::lazy_static;
-use log::{Level, LevelFilter, SetLoggerError};
+use log::{Level, LevelFilter};
 
 use crate::error::Error;
+use crate::config::command_line::CommandLine;
+use crate::config::config_file::LogSettings;
 
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(20);
 
@@ -157,41 +159,40 @@ pub fn log_error_cause_chain(mut fail: &dyn Fail) {
 
 
 
-pub fn initialize_logging() -> Result<(), Error> {
-    // TODO: Take from config/commandline that we loaded.
-    // Create a LoggingConfig in logging module that works like the ClientConfig and can
-    // be configure from the ConfigFile and CommandLine structs.
+pub fn initialize_logging(command_line_opt: Option<&CommandLine>, settings_opt: Option<&LogSettings>) -> Result<(), Error> {
+    // Get config from config file
+    let mut settings = settings_opt.cloned()
+        .unwrap_or_default();
 
-    use crate::config::config_file::LogSettings;
-    let mut config = LogSettings::default();
-    // For now lets just use debug
-    config.level = Some(LevelFilter::Debug);
+    // Override config from command line
+    if let Some(command_line) = command_line_opt {
+        if let Some(log_level) = command_line.log_level {
+            settings.level = Some(log_level);
+        }
+        if let Some(log_tags) = &command_line.log_tags {
+            settings.tags.extend(log_tags.clone());
+        }
+    }
 
+    // Set logging level for Nimiq and all other modules
     let mut dispatch = Dispatch::new()
-        .pretty_logging(config.timestamps)
+        .pretty_logging(settings.timestamps)
         .level(DEFAULT_LEVEL)
-        .level_for_nimiq(config.level
-            .unwrap_or(DEFAULT_LEVEL));
+        .level_for_nimiq(settings.level.unwrap_or(DEFAULT_LEVEL));
 
-    for (module, level) in &config.tags {
+    // Set logging level for specific selected modules
+    for (module, level) in &settings.tags {
         dispatch = dispatch.level_for(module.clone(), level.clone());
     }
 
-    if let Some(ref filename) = config.file {
+    // Log into file or to stderr
+    if let Some(ref filename) = settings.file {
         dispatch = dispatch.chain(log_file(filename)?);
     }
     else {
         dispatch = dispatch.chain(std::io::stderr());
     }
 
-    // TODO: Return LoggingError
     dispatch.apply()?;
-
     Ok(())
-}
-
-impl From<SetLoggerError> for Error {
-    fn from(e: SetLoggerError) -> Self {
-        Error::config_error(format!("Failed to set logger: {:?}", e))
-    }
 }

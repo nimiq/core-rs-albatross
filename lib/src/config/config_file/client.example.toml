@@ -203,7 +203,7 @@ host = "my.domain"
 
 [log]
 # Configure global log level.
-# Possible values: "trace", "debug", "info", "warning", "error"
+# Possible values: "trace", "debug", "info", "warn", "error"
 # Default: "info"
 level = "debug"
 
@@ -212,8 +212,8 @@ level = "debug"
 #tags = { BaseConsensus = "debug" }
 
 # Specify whether timestamps should be included for log statements.
-# Default: false
-#timestamps = true
+# Default: true
+#timestamps = false
 
 # Save log output to a file.
 # If not specified, log to stdout.

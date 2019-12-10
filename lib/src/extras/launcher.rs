@@ -61,7 +61,7 @@ impl Launcher {
     #[cfg(feature = "logging")]
     pub fn logging(mut self) -> Self {
         self.logging = true;
-        initialize_logging().unwrap();
+        initialize_logging(None, None).unwrap();
         self
     }
 

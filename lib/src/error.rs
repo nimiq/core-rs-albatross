@@ -2,6 +2,7 @@ use std::io::Error as IoError;
 
 use toml::de::Error as TomlError;
 use failure::Fail;
+use log::SetLoggerError;
 
 use database::lmdb::LmdbError;
 use database::volatile::VolatileDatabaseError;
@@ -44,6 +45,9 @@ pub enum Error {
     #[cfg(feature="rpc-server")]
     #[fail(display = "RPC server error: {}", _0)]
     RpcServer(#[cause] RpcServerError),
+
+    #[fail(display = "Logger error: {}", _0)]
+    Logging(#[cause] SetLoggerError)
 }
 
 impl Error {
@@ -114,5 +118,11 @@ impl From<ValidatorError> for Error {
 impl From<RpcServerError> for Error {
     fn from(e: RpcServerError) -> Self {
         Self::RpcServer(e)
+    }
+}
+
+impl From<SetLoggerError> for Error {
+    fn from(e: SetLoggerError) -> Self {
+        Self::Logging(e)
     }
 }
