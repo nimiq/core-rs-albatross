@@ -23,6 +23,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --hostname seed1.nimiq.dev`
     ///
+    #[structopt(long)]
     pub hostname: Option<String>,
 
     /// Port to listen on for connections
@@ -31,6 +32,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --port 8000`
     ///
+    #[structopt(long)]
     pub port: Option<u16>,
 
     /// Use a custom configuration file.
@@ -39,6 +41,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --config ~/.nimiq/client-albatross.toml`
     ///
+    #[structopt(long, short="c")]
     pub config: Option<PathBuf>,
 
     /// Configure global log level.
@@ -47,6 +50,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --log-level trace`
     ///
+    #[structopt(long)]
     pub log_level: Option<LevelFilter>,
 
     /// Configure log level for specific tag.
@@ -65,6 +69,7 @@ pub struct CommandLine {
     /// * This is currently not implemented.
     /// * This might be removed in the future.
     ///
+    #[structopt(long)]
     pub passive: bool,
 
     /// Configure consensus type, one of full (default), or macro-sync
@@ -73,15 +78,16 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --type macro-sync`
     ///
-    #[structopt(long="type", parse(try_from_str))]
+    #[structopt(long = "type", parse(try_from_str))]
     pub consensus_type: Option<ConsensusType>,
 
     /// Configure the network to connect to, one of test-albatross, dev-albatross (default)
     ///
     /// # Examples
     ///
-    /// * `nimiq-client --type test-albatross
+    /// * `nimiq-client --network test-albatross
     ///
+    #[structopt(long)]
     pub network: Option<NetworkId>,
 }
 
