@@ -18,6 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 curve25519-dalek = "1.0.2"
+ed25519-dalek = "1.0.0-pre.3"
 data-encoding = "2.1"
 failure = "0.1"
 hex = "0.4"
@@ -28,9 +29,3 @@ beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["key-rng"] }
-
-[dependencies.ed25519-dalek]
-# version = "1.0.0-pre.2"
-# We need to use the git repo until the next pre-release is made.
-git = "https://github.com/dalek-cryptography/ed25519-dalek"
-branch = "develop"
