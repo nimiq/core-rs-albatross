@@ -100,7 +100,7 @@ pub struct ValidatorState {
 }
 
 impl Validator {
-    const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
+    const BLOCK_TIMEOUT: Duration = Duration::from_secs(1);
     //const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
@@ -222,14 +222,6 @@ impl Validator {
 
     fn set_view_change_interval(&self, timeout: Duration) {
         let weak = Weak::clone(&self.self_weak);
-        self.timers.set_interval(ValidatorTimer::ViewChange, move || {
-            let this = upgrade_weak!(weak);
-            this.on_block_timeout();
-        }, timeout);
-    }
-
-    fn reset_view_change_interval(&self, timeout: Duration) {
-        let weak = Weak::clone(&self.self_weak);
         self.timers.reset_interval(ValidatorTimer::ViewChange, move || {
             let this = upgrade_weak!(weak);
             this.on_block_timeout();
@@ -269,7 +261,7 @@ impl Validator {
         if state.status == ValidatorStatus::Potential || state.status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
             // NOTE: This doesn't take the state lock, so we don't need to drop it
-            self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
+            self.set_view_change_interval(Self::BLOCK_TIMEOUT);
             state.active_view_change = None;
 
         }
@@ -391,7 +383,7 @@ impl Validator {
                     if num_view_changes.is_none() {
                         warn!("view_change.new_view_number={}, but blockchain.next_view_number()={}", view_change.new_view_number, next_view_number);
                     }
-                    self.reset_view_change_interval(Self::BLOCK_TIMEOUT.mul(num_view_changes.unwrap_or_default() + 1));
+                    self.set_view_change_interval(Self::BLOCK_TIMEOUT.mul(num_view_changes.unwrap_or_default() + 1));
 
                     // update our view number
                     state.view_number = view_change.new_view_number;
