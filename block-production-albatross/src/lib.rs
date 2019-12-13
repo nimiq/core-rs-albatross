@@ -122,6 +122,35 @@ impl BlockProducer {
         }
     }
 
+    pub fn prepare_macro_block(&self, txn: &mut WriteTransaction, header: &MacroHeader, seed: &VrfSeed) -> (ValidatorSlots, Blake2bHash, Blake2bHash) {
+        let state = self.blockchain.state();
+        state.reward_registry().commit_block(txn, &Block::Macro(MacroBlock {
+            header: header.clone(),
+            justification: None,
+            extrinsics: None,
+        }), self.blockchain.view_number())
+            .expect("Failed to commit dummy block to reward registry");
+
+        let mut inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state(), &header);
+
+        // Add slashes for view changes.
+        let view_changes = ViewChanges::new(header.block_number, self.blockchain.view_number(), header.view_number);
+        inherents.append(&mut self.blockchain.create_slash_inherents(&[], &view_changes, Some(txn)));
+
+        // Rewards are distributed with delay.
+        state.accounts().commit(txn, &[], &inherents, header.block_number)
+            .expect("Failed to compute accounts hash during block production");
+
+        let state_root = state.accounts().hash(Some(txn));
+
+        let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(header.block_number), Some(txn))
+            .expect("Failed to compute transactions root, micro blocks missing");
+
+        let validators = self.blockchain.next_validators(seed, Some(txn));
+
+        (validators, state_root, transactions_root)
+    }
+
     pub fn next_macro_header(&self, txn: &mut WriteTransaction, timestamp: u64, view_number: u32, seed: &VrfSeed) -> MacroHeader {
         let block_number = self.blockchain.height() + 1;
         let timestamp = u64::max(timestamp, self.blockchain.head().timestamp() + 1);
@@ -143,30 +172,7 @@ impl BlockProducer {
             transactions_root: Blake2bHash::default(),
         };
 
-        let state = self.blockchain.state();
-        state.reward_registry().commit_block(txn, &Block::Macro(MacroBlock {
-            header: header.clone(),
-            justification: None,
-            extrinsics: None,
-        }), self.blockchain.view_number())
-            .expect("Failed to commit dummy block to reward registry");
-
-        let mut inherents = self.blockchain.finalize_last_epoch(&self.blockchain.state(), &header);
-
-        // Add slashes for view changes.
-        let view_changes = ViewChanges::new(header.block_number, self.blockchain.view_number(), header.view_number);
-        inherents.append(&mut self.blockchain.create_slash_inherents(&[], &view_changes, Some(txn)));
-
-        // Rewards are distributed with delay.
-        state.accounts().commit(txn, &[], &inherents, block_number)
-            .expect("Failed to compute accounts hash during block production");
-
-        let state_root = state.accounts().hash(Some(txn));
-
-        let transactions_root = self.blockchain.get_transactions_root(policy::epoch_at(block_number), Some(txn))
-            .expect("Failed to compute transactions root, micro blocks missing");
-
-        let validators = self.blockchain.next_validators(seed, Some(txn));
+        let (validators, state_root, transactions_root) = self.prepare_macro_block(txn, &header, seed);
 
         header.validators = validators.into();
         header.state_root = state_root;

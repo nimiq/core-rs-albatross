@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ops::Mul;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -90,7 +89,14 @@ pub struct ValidatorState {
     fork_proof_pool: ForkProofPool,
     view_number: u32,
     active_view_change: Option<ViewChange>,
-    proposed_extrinsics: HashMap<Blake2bHash, MacroExtrinsics>,
+
+    /// This stores the proposal hash and proposed extrinsics for the current view.
+    ///
+    /// This is cleared when there is a slot change (or the blockchain was extended).
+    proposal: Option<(Blake2bHash, MacroExtrinsics)>,
+
+    /// Whether we already committed to the proposal
+    committed: bool,
 }
 
 impl Validator {
@@ -127,7 +133,8 @@ impl Validator {
                 fork_proof_pool: ForkProofPool::new(),
                 view_number,
                 active_view_change: None,
-                proposed_extrinsics: HashMap::new(),
+                proposal: None,
+                committed: false,
             }),
 
             self_weak: MutableOnce::new(Weak::new()),
@@ -257,7 +264,7 @@ impl Validator {
         state.view_number = self.blockchain.next_view_number();
 
         // clear out proposed extrinsics
-        state.proposed_extrinsics.clear();
+        state.proposal = None;
 
         if state.status == ValidatorStatus::Potential || state.status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
@@ -278,6 +285,8 @@ impl Validator {
     fn init_epoch(&self) {
         let mut state = self.state.write();
         state.view_number = 0;
+        state.committed = false;
+        state.proposal = None;
 
         match self.get_pk_idx_and_slots() {
             Some((pk_idx, slots)) => {
@@ -339,8 +348,7 @@ impl Validator {
                 self.on_slot_change(slot_change);
             },
             ValidatorNetworkEvent::PbftProposal(proposal) => {
-                let hash: Blake2bHash = proposal.header.hash();
-                self.on_pbft_proposal(&hash);
+                self.on_pbft_proposal(proposal);
             },
             ValidatorNetworkEvent::PbftPrepareComplete(hash) => {
                 self.on_pbft_prepare_complete(hash);
@@ -388,6 +396,9 @@ impl Validator {
                     // update our view number
                     state.view_number = view_change.new_view_number;
 
+                    // clear out proposal
+                    state.proposal = None;
+
                     // we're at the new view number and need a view change proof for it
                     (view_change.new_view_number, Some(view_change_proof))
                 }
@@ -421,22 +432,104 @@ impl Validator {
         }
     }
 
-    pub fn on_pbft_proposal(&self, hash: &Blake2bHash) {
-        let state = self.state.write();
+    pub fn on_pbft_proposal(&self, proposal: &PbftProposal) {
+        // NOTE: Upto this point only the header was checked
+
+        let hash: Blake2bHash = proposal.header.hash();
         trace!("Received proposal: {}", hash);
 
-        // Once a valid proposal is received, we no longer emit view changes
-        self.timers.clear_interval(&ValidatorTimer::ViewChange);
+        let mut state = self.state.write();
 
-        // Signed proposal messages should only be sent by active validators.
+        // Signed proposal messages should only be sent to active validators.
         if state.status != ValidatorStatus::Active {
             return;
+        }
+
+        // Check if the proposal is for the current view change. Note that the ValidatorNetwork
+        // checks that the proposal is valid upto the last block we know, but can't check against
+        // the view number that the validator tracks.
+        if proposal.header.view_number < state.view_number {
+            return;
+        }
+
+        // Check if we're already committed to the proposal
+        if state.committed {
+            debug!("Proposal, but already committed: {}", hash);
+            return;
+        }
+
+        // Check if this proposal is "better"
+        if let Some((current_proposal_hash, _)) = &state.proposal {
+            if *current_proposal_hash == hash {
+                // We either produced this block, or already started pBFT. Actually if we're not the
+                // producer this should never be called multiple times for the same hash.
+                warn!("Proposal already known: {}", hash);
+                return;
+            }
+            else {
+                // We already know of another proposal, so check which one we should keep.
+                // We just define that we'll always use the one with the lower hash
+                if *current_proposal_hash < hash {
+                    // The current proposal is "better", so do nothing
+                    info!("Received proposal with greater hash: {}", hash);;
+                    return;
+                }
+            }
         }
 
         // Note: we don't verify this hash as the network validator already did.
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
 
+        let mut txn = self.blockchain.write_transaction();
+        let (validator_slots, state_root, transactions_root) = self.block_producer.prepare_macro_block(&mut txn, &proposal.header, &proposal.header.seed);
+        let extrinsics = self.block_producer.next_macro_extrinsics(&mut txn, &proposal.header.seed);
+        txn.abort();
+
+        // Check validator slots
+        if validator_slots != proposal.header.validators {
+            warn!("Proposal with incorrect validator slots:");
+            warn!(" - Proposed validator slots: {:#?}", proposal.header.validators);
+            warn!(" - Computed validator slots: {:#?}", validator_slots);
+            return;
+        }
+
+        // Verify that state root is correct
+        if state_root != proposal.header.state_root {
+            warn!("Proposal with incorrect state root:");
+            warn!(" - Proposed state root: {}", proposal.header.state_root);
+            warn!(" - Computed state root: {}", state_root);
+            return;
+        }
+
+        // Verify that transactions root is correct
+        if transactions_root != proposal.header.transactions_root {
+            warn!("Proposal with incorrect transactions root:");
+            warn!(" - Proposed transactions root: {}", proposal.header.transactions_root);
+            warn!(" - Computed transactions root: {}", transactions_root);
+            return;
+        }
+
+        // Check extrinsics hash
+        let our_extrinsics_root: Blake2bHash = extrinsics.hash();
+        if our_extrinsics_root != proposal.header.extrinsics_root {
+            warn!("Proposal with incorrect extrinsics root:");
+            warn!(" - Proposal header hash: {}", hash);
+            warn!(" - Proposal extrinsics root: {}", proposal.header.extrinsics_root);
+            warn!(" - Our extrinsics root: {}", our_extrinsics_root);
+            warn!(" - Our extrinsics: {:#?}", extrinsics);
+            return;
+        }
+        else {
+            debug!("Macro extrinsics match: {}", our_extrinsics_root);
+        }
+
+        // Store extrinsics
+        state.proposal = Some((hash.clone(), extrinsics));
+
         drop(state);
+
+        // Once a valid proposal is received, we no longer emit view changes
+        self.timers.clear_interval(&ValidatorTimer::ViewChange);
 
         trace!("Signing prepare: pk_idx={}", pk_idx);
         let prepare_message = SignedPbftPrepareMessage::from_message(
@@ -451,11 +544,29 @@ impl Validator {
 
     pub fn on_pbft_prepare_complete(&self, hash: &Blake2bHash) {
         trace!("Complete prepare for: {}", hash);
-        let state = self.state.read();
+        let mut state = self.state.write();
+
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
             return;
         }
+
+        // Make sure we only commit to one proposal
+        if state.committed {
+            debug!("Prepare complete, but already committed: {}", hash);
+            return;
+        }
+
+        // Check that this is currently the best proposal
+        if let Some((current_proposal_hash, _)) = &state.proposal {
+            if current_proposal_hash != hash {
+                debug!("Prepare complete for not-best proposal: {} (best={})", hash, current_proposal_hash);
+                return;
+            }
+        }
+
+        // Commit to this proposal
+        state.committed = true;
 
         // Note: we don't verify this hash as the network validator already did
         let pk_idx = state.pk_idx.expect("Already checked that we are an active validator before calling this function");
@@ -479,7 +590,9 @@ impl Validator {
         // Once we finish the PBFT process for the macro block, view change emission can be reactivated
         self.set_view_change_interval(Self::BLOCK_TIMEOUT);
 
-        if let Some(extrinsics) = state.proposed_extrinsics.remove(hash) {
+        if state.proposal.as_ref().map(|(h, _)| h == hash).unwrap_or_default() {
+            let (_, extrinsics) = state.proposal.take().unwrap();
+
             assert_eq!(proposal.header.extrinsics_root, extrinsics.hash());
 
             // Note: we're not verifying the justification as the validator network already did that
@@ -496,6 +609,9 @@ impl Validator {
             self.blockchain.push_block(block, false)
                 .unwrap_or_else(|e| panic!("Pushing macro block to blockchain failed: {:?}", e));
         }
+        else {
+            warn!("No extrinsics for proposal: {}", hash);
+        }
     }
 
     fn start_view_change(&self) {
@@ -503,6 +619,18 @@ impl Validator {
 
         // View change messages should only be sent by active validators.
         if state.status != ValidatorStatus::Active {
+            return;
+        }
+
+        // Check that we're not committed
+        if state.committed {
+            return;
+        }
+
+        // If we already have a proposal, we don't do view-changes
+        // This should be covered, because we disable the timer, but a call to the timer might
+        // have been already issued
+        if state.proposal.is_some() {
             return;
         }
 
@@ -540,15 +668,25 @@ impl Validator {
         // FIXME: Don't use network time
         let timestamp = self.consensus.network.network_time.now();
         let (pbft_proposal, proposed_extrinsics) = self.block_producer.next_macro_block_proposal(timestamp, state.view_number, view_change);
-        state.proposed_extrinsics.insert(pbft_proposal.header.hash(), proposed_extrinsics);
+        let block_hash = pbft_proposal.header.hash();
+        state.proposal = Some((pbft_proposal.header.hash(), proposed_extrinsics));
         let pk_idx = state.pk_idx.expect("Checked that we are an active validator before entering this function");
 
         drop(state);
 
+        trace!("Signing proposal: pk_idx={}", pk_idx);
         let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
         self.validator_network.start_pbft(signed_proposal)
             .unwrap_or_else(|e| error!("Failed to start pBFT proposal: {}", e));
 
+        trace!("Signing prepare: pk_idx={}", pk_idx);
+        let prepare_message = SignedPbftPrepareMessage::from_message(
+            PbftPrepareMessage { block_hash },
+            &self.validator_key.secret,
+            pk_idx
+        );
+        self.validator_network.push_prepare(prepare_message)
+            .unwrap_or_else(|e| debug!("Failed to push pBFT prepare: {}", e));
     }
 
     fn produce_micro_block(&self, view_change_proof: Option<ViewChangeProof>) {
