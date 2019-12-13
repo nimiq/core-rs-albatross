@@ -378,8 +378,12 @@ impl Validator {
                 // check if this view change is still relevant
                 if state.view_number < view_change.new_view_number {
                     // Reset view change interval again and increase the timeout linearly.
-                    let num_view_changes = view_change.new_view_number - self.blockchain.next_view_number();
-                    self.reset_view_change_interval(Self::BLOCK_TIMEOUT.mul(num_view_changes + 1));
+                    let next_view_number = self.blockchain.next_view_number();
+                    let num_view_changes = view_change.new_view_number.checked_sub(next_view_number);
+                    if num_view_changes.is_none() {
+                        warn!("view_change.new_view_number={}, but blockchain.next_view_number()={}", view_change.new_view_number, next_view_number);
+                    }
+                    self.reset_view_change_interval(Self::BLOCK_TIMEOUT.mul(num_view_changes.unwrap_or_default() + 1));
 
                     // update our view number
                     state.view_number = view_change.new_view_number;
