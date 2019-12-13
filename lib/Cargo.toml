@@ -31,7 +31,7 @@ human-panic = { version = "1.0", optional = true }
 lazy_static = "1.4"
 log = "0.4"
 log-panics = { version = "2.0", features = ["with-backtrace"], optional = true }
-parking_lot = { version = "0.7", features = ["deadlock_detection"], optional = true }
+parking_lot = { version = "0.9", features = ["deadlock_detection"], optional = true }
 paw = "1.0"
 rand = "0.7"
 rand04_compat = "0.1"
