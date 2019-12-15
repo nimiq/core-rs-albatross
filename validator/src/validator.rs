@@ -68,6 +68,7 @@ pub struct Validator {
     consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
     pub validator_network: Arc<ValidatorNetwork>,
     pub validator_key: KeyPair,
+    pub block_timeout: Duration,
 
     timers: Timers<ValidatorTimer>,
 
@@ -100,10 +101,7 @@ pub struct ValidatorState {
 }
 
 impl Validator {
-    const BLOCK_TIMEOUT: Duration = Duration::from_secs(1);
-    //const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
-
-    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
+    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair, block_timeout: Duration) -> Result<Arc<Self>, Error> {
         let compressed_public_key = validator_key.public.compress();
         let info = ValidatorInfo {
             public_key: compressed_public_key,
@@ -124,6 +122,7 @@ impl Validator {
             validator_network,
 
             validator_key,
+            block_timeout,
             timers: Timers::new(),
 
             state: RwLock::new(ValidatorState {
@@ -187,7 +186,7 @@ impl Validator {
 
         // Set up the view change timer in case there's a block timeout
         // Note: In start_view_change() we check so that it's only executed if we are an active validator
-        this.set_view_change_interval(Self::BLOCK_TIMEOUT);
+        this.set_view_change_interval(this.block_timeout);
 
         // remember listeners for when we drop this validator
         let listeners = ValidatorListeners {
@@ -261,7 +260,7 @@ impl Validator {
         if state.status == ValidatorStatus::Potential || state.status == ValidatorStatus::Active {
             // Reset the view change timeout because we received a valid block.
             // NOTE: This doesn't take the state lock, so we don't need to drop it
-            self.set_view_change_interval(Self::BLOCK_TIMEOUT);
+            self.set_view_change_interval(self.block_timeout);
             state.active_view_change = None;
 
         }
@@ -383,7 +382,7 @@ impl Validator {
                     if num_view_changes.is_none() {
                         warn!("view_change.new_view_number={}, but blockchain.next_view_number()={}", view_change.new_view_number, next_view_number);
                     }
-                    self.set_view_change_interval(Self::BLOCK_TIMEOUT.mul(num_view_changes.unwrap_or_default() + 1));
+                    self.set_view_change_interval(self.block_timeout.mul(num_view_changes.unwrap_or_default() + 1));
 
                     // update our view number
                     state.view_number = view_change.new_view_number;
@@ -580,7 +579,7 @@ impl Validator {
         let mut state = self.state.write();
 
         // Once we finish the PBFT process for the macro block, view change emission can be reactivated
-        self.set_view_change_interval(Self::BLOCK_TIMEOUT);
+        self.set_view_change_interval(self.block_timeout);
 
         if state.proposal.as_ref().map(|(h, _)| h == hash).unwrap_or_default() {
             let (_, extrinsics) = state.proposal.take().unwrap();

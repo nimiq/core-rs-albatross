@@ -113,8 +113,8 @@ impl TryFrom<ClientConfig> for ClientInner {
         )?;
 
         #[cfg(feature="validator")]
-        let validator = config.validator.map(|_config| {
-            Validator::new(Arc::clone(&consensus), validator_key)
+        let validator = config.validator.map(|config| {
+            Validator::new(Arc::clone(&consensus), validator_key, config.block_timeout)
         }).transpose()?;
 
         Ok(ClientInner {

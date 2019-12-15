@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::net::IpAddr;
+use std::time::Duration;
 
 use derive_builder::Builder;
 use enum_display_derive::Display;
@@ -119,7 +120,9 @@ pub enum ProtocolConfig {
 #[cfg(feature="validator")]
 #[derive(Debug, Clone)]
 pub struct ValidatorConfig {
-    // TODO
+    /// Time after which a view change is started. Subsequent view changes will have linearly increasing
+    /// timeouts.
+    pub block_timeout: Duration
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -648,8 +651,10 @@ impl ClientConfigBuilder {
     /// Sets the validator config. Since there is no configuration for validators (except key file)
     /// yet, this will just enable the validator.
     #[cfg(feature="validator")]
-    pub fn validator(&mut self) -> &mut Self {
-        self.validator = Some(Some(ValidatorConfig {}));
+    pub fn validator(&mut self, block_timeout: Duration) -> &mut Self {
+        self.validator = Some(Some(ValidatorConfig {
+            block_timeout,
+        }));
         self
     }
 
@@ -799,8 +804,12 @@ impl ClientConfigBuilder {
 
         // Configure validator
         #[cfg(feature="validator")] {
-            if config_file.validator.is_some() {
-                self.validator = Some(Some(ValidatorConfig {}));
+            if let Some(validator_config) = &config_file.validator {
+                // TODO: Update existing validator config
+                self.validator = Some(Some(ValidatorConfig {
+                    block_timeout: Duration::from_millis(validator_config
+                        .block_timeout.unwrap_or(10000)),
+                }));
             }
         }
 

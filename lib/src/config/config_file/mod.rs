@@ -516,4 +516,6 @@ impl From<MempoolFilterSettings> for MempoolRules {
 #[serde(deny_unknown_fields)]
 pub struct ValidatorSettings {
     pub key_file: Option<String>,
+    /// Block timeout in microseconds
+    pub block_timeout: Option<u64>,
 }
