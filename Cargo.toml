@@ -2,7 +2,6 @@ cargo-features = ["profile-overrides"]
 
 [workspace]
 members = [
-    "libargon2-sys",
     "beserial",
     "beserial/beserial_derive",
     "collections",

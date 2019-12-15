@@ -4,7 +4,6 @@ pub mod sha512;
 pub mod argon2kdf;
 
 use blake2_rfc::blake2b::Blake2b;
-use libargon2_sys::argon2d_hash;
 use sha2::{Sha256, Sha512, Digest};
 use beserial::{Serialize, Deserialize};
 use hex::FromHex;
@@ -148,9 +147,7 @@ create_typed_array!(Argon2dHash, u8, ARGON2D_LENGTH);
 add_hex_io_fns_typed_arr!(Argon2dHash, ARGON2D_LENGTH);
 pub struct Argon2dHasher {
     buf: Vec<u8>,
-    passes: u32,
-    lanes: u32,
-    kib: u32
+    config: argon2::Config<'static>,
 }
 impl HashOutput for Argon2dHash {
     type Builder = Argon2dHasher;
@@ -163,13 +160,23 @@ impl HashOutput for Argon2dHash {
 
 impl Argon2dHasher {
     pub fn new(passes: u32, lanes: u32, kib: u32) -> Self {
-        Argon2dHasher { buf: Vec::new(), passes, lanes, kib }
+        let mut config = argon2::Config::default();
+        config.time_cost = passes;
+        config.lanes = lanes;
+        config.mem_cost = kib;
+        config.hash_length = 32;
+        config.variant = argon2::Variant::Argon2d;
+        Argon2dHasher {
+            buf: Vec::new(),
+            config
+        }
     }
 
     fn hash_bytes(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {
+        let hash = argon2::hash_raw(bytes, salt, &self.config)
+            .expect("Argon2 hashing failed");
         let mut out = [0u8; ARGON2D_LENGTH];
-        let result = argon2d_hash(self.passes, self.kib, self.lanes,bytes, salt, &mut out, 0);
-        assert!(result.is_ok());
+        out.copy_from_slice(&hash);
         Argon2dHash::from(out)
     }
 }

@@ -1,7 +1,9 @@
 mod hmac;
 mod pbkdf2;
-use nimiq_hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash,Sha512Hasher,Sha512Hash};
+
 use std::io::Write;
+
+use nimiq_hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash,Sha512Hasher,Sha512Hash, argon2kdf};
 
 #[test]
 fn it_can_compute_sha256() {
@@ -47,4 +49,13 @@ fn it_can_compute_sha512() {
     h.write(b"te").unwrap();
     h.write(b"st").unwrap();
     assert_eq!(h.finish(), Sha512Hash::from("ee26b0dd4af7e749aa1a8ee3c10ae9923f618980772e473f8819a5d4940e0db27ac185f8a0e1d5f84f88bc887fd67b143732c304cc5fa9ad8e6f57f50028a8ff"));
+}
+
+#[test]
+fn it_can_compute_argon2_kdf() {
+    let password = "test";
+    let salt = "nimiqrocks!";
+
+    let res = argon2kdf::compute_argon2_kdf(password.as_bytes(), salt.as_bytes(), 1, 32);
+    assert_eq!(res.unwrap(), hex::decode("8c259fdcc2ad6799df728c11e895a3369e9dbae6a3166ebc3b353399fc565524").unwrap())
 }
