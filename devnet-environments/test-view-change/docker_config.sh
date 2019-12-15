@@ -55,6 +55,7 @@ optional file NIMIQ_LOG_FILE string
 
 echo '[validator]'
 optional key_file VALIDATOR_KEY_FILE string
+optional block_timeout NIMIQ_BLOCK_TIMEOUT number
 
 if [[ "$RPC_ENABLED" == "true" ]]; then
     echo '[rpc-server]'

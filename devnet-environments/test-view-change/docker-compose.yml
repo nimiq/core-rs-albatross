@@ -14,6 +14,7 @@ services:
      - EVENTS_EXCHANGE=validator-00
      - VALIDATOR_KEY=49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f
      - NIMIQ_PEER_KEY=8fc065dd2aa0f77753dd8ae86c6ed939881114f43319e6abf42b2ac4759cb46462a1985e85ed3452428d7d29623c1a55d8edc054945b3ed7d512f8487fd88063
+     - NIMIQ_BLOCK_TIMEOUT=1000
     env_file:
      - validator.env
     ports:
@@ -30,6 +31,7 @@ services:
      - NIMIQ_HOST=validator-01.devnet
      - EVENTS_EXCHANGE=validator-01
      - VALIDATOR_KEY=564813ca030ab5bc8a1cc3e0c0fe30063dce352426dbd7d61558cc8a7363def8
+     - NIMIQ_BLOCK_TIMEOUT=2000
     env_file:
      - validator.env
     networks:
