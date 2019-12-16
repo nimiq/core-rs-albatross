@@ -459,6 +459,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
 
     fn out_of_sync(&self) {
         self.timers.clear_delay(&ConsensusAgentTimer::ResyncThrottle);
+        self.timers.clear_delay(&ConsensusAgentTimer::Mempool);
 
         self.state.write().synced = false;
 
