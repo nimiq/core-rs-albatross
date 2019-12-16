@@ -14,6 +14,7 @@ use tokio::timer::Interval;
 use nimiq::prelude::*;
 use nimiq::extras::logging::{initialize_logging, log_error_cause_chain};
 use nimiq::extras::deadlock::initialize_deadlock_detection;
+use nimiq::extras::panic::initialize_panic_reporting;
 
 
 fn main_inner() -> Result<(), Error> {
@@ -27,6 +28,9 @@ fn main_inner() -> Result<(), Error> {
     // Parse config file - this will obey the `--config` command line option.
     let config_file = ConfigFile::find(Some(&command_line))?;
     trace!("Config file: {:#?}", config_file);
+
+    // Initialize panic hook
+    initialize_panic_reporting();
 
     // Create config builder and apply command line and config file
     // You usually want the command line to override config settings, so the order is important
