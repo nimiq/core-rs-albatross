@@ -574,6 +574,10 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             warn!("We're not subscribed to this transaction from {} - discarding and closing the channel", self.peer.peer_address());
             self.peer.channel.close(CloseType::ReceivedTransactionNotMatchingOurSubscription);
         }
+        else {
+            // Give up read lock.
+            drop(state);
+        }
 
         // Mark object as received.
         self.on_object_received(&vector);
