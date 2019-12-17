@@ -423,15 +423,14 @@ impl Validator {
 
             let weak = self.self_weak.clone();
             trace!("Spawning thread to produce next block");
-            tokio::spawn(futures::lazy(move || {
+            tokio::spawn(async move {
                 if let Some(this) = Weak::upgrade(&weak) {
                     match block_type {
                         BlockType::Macro => { this.produce_macro_block(next_block_number, view_number, view_change_proof) },
                         BlockType::Micro => { this.produce_micro_block(next_block_number, view_number, view_change_proof) },
                     }
                 }
-                Ok(())
-            }));
+            });
         }
     }
 

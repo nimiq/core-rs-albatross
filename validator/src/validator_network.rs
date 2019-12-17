@@ -5,7 +5,6 @@ use std::fmt;
 use failure::Fail;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use tokio;
-use futures::future;
 
 use block_albatross::{
     BlockHeader,
@@ -280,10 +279,7 @@ impl ValidatorNetwork {
                     },
                     ValidatorAgentEvent::ViewChangeProof(view_change_proof) => {
                         let ViewChangeProofMessage { view_change, proof } = *view_change_proof;
-                        tokio::spawn(future::lazy(move || {
-                            this.on_view_change_proof(view_change, proof);
-                            Ok(())
-                        }));
+                        tokio::spawn(async move { this.on_view_change_proof(view_change, proof); });
                     },
                     ValidatorAgentEvent::PbftProposal(proposal) => {
                         this.on_pbft_proposal(*proposal)
@@ -739,11 +735,10 @@ impl ValidatorNetwork {
             match event {
                 AggregationEvent::Complete { best } => {
                     let view_change = view_change.clone();
-                    tokio::spawn(future::lazy(move || {
+                    tokio::spawn(async move {
                         let proof = ViewChangeProof::new(best.signature, best.signers);
                         this.on_view_change_proof(view_change, proof);
-                        Ok(())
-                    }));
+                    });
                 }
             }
         }));
