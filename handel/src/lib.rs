@@ -7,7 +7,6 @@
 
 extern crate futures;
 extern crate futures_cpupool;
-extern crate stopwatch;
 #[macro_use]
 extern crate failure;
 #[macro_use]
@@ -24,9 +23,8 @@ extern crate nimiq_collections as collections;
 extern crate nimiq_hash as hash;
 extern crate nimiq_utils as utils;
 extern crate nimiq_macros as macros;
+extern crate nimiq_handel_primitives as handel_primitives;
 
-
-pub mod multisig;
 pub mod verifier;
 pub mod store;
 pub mod evaluator;
@@ -36,7 +34,9 @@ pub mod timeout;
 pub mod config;
 pub mod level;
 pub mod protocol;
-pub mod update;
 pub mod aggregation;
 pub mod sender;
 mod todo;
+
+pub use handel_primitives::update;
+pub use handel_primitives::multisig;

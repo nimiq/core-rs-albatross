@@ -8,19 +8,19 @@ use crate::multisig::{MultiSignature, IndividualSignature};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LevelUpdate {
     /// The updated multi-signature for this level
-    pub(crate) multisig: MultiSignature,
+    pub multisig: MultiSignature,
 
     /// The individual signature of the sender, or `None`
-    pub(crate) individual: Option<IndividualSignature>,
+    pub individual: Option<IndividualSignature>,
 
     /// The level to which this multi-signature belongs to
-    pub(crate) level: u8,
+    pub level: u8,
 
     /// The validator ID of the sender (a.k.a. `pk_idx`)
     ///
     /// NOTE: It's save to just send your own validator ID, since everything critical is authenticated
     /// by signatures anyway.
-    pub(crate) origin: u16,
+    pub origin: u16,
 }
 
 impl LevelUpdate {
