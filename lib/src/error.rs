@@ -13,6 +13,8 @@ use consensus::Error as ConsensusError;
 use validator::error::Error as ValidatorError;
 #[cfg(feature="rpc-server")]
 use rpc_server::error::Error as RpcServerError;
+#[cfg(feature="metrics-server")]
+use metrics_server::error::Error as MetricsServerError;
 
 
 #[derive(Debug, Fail)]
@@ -46,8 +48,12 @@ pub enum Error {
     #[fail(display = "RPC server error: {}", _0)]
     RpcServer(#[cause] RpcServerError),
 
+    #[cfg(feature="metrics-server")]
+    #[fail(display = "Metrics server error: {}", _0)]
+    MetricsServer(#[cause] MetricsServerError),
+
     #[fail(display = "Logger error: {}", _0)]
-    Logging(#[cause] SetLoggerError)
+    Logging(#[cause] SetLoggerError),
 }
 
 impl Error {
@@ -118,6 +124,13 @@ impl From<ValidatorError> for Error {
 impl From<RpcServerError> for Error {
     fn from(e: RpcServerError) -> Self {
         Self::RpcServer(e)
+    }
+}
+
+#[cfg(feature="metrics-server")]
+impl From<MetricsServerError> for Error {
+    fn from(e: MetricsServerError) -> Self {
+        Self::MetricsServer(e)
     }
 }
 

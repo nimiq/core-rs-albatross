@@ -12,6 +12,7 @@ use tokio;
 use tokio::timer::Interval;
 
 use nimiq::prelude::*;
+use nimiq::config::config::ProtocolConfig;
 use nimiq::extras::logging::{initialize_logging, log_error_cause_chain};
 use nimiq::extras::deadlock::initialize_deadlock_detection;
 use nimiq::extras::panic::initialize_panic_reporting;
@@ -72,18 +73,17 @@ fn main_inner() -> Result<(), Error> {
             }
 
             // Initialize metrics server
-            if let Some(metrics_config) = metrics_config {
-                use nimiq::config::config::ProtocolConfig;
-                use nimiq::extras::metrics_server::initialize_metrics_server;
-                if let ProtocolConfig::Wss{pkcs12_key_file, pkcs12_passphrase, .. } = protocol_config {
-                    let pkcs12_key_file = pkcs12_key_file.to_str()
-                        .unwrap_or_else(|| panic!("Failed to convert path to PKCS#12 key file to string: {}", pkcs12_key_file.display()));
-                    let metrics_server = initialize_metrics_server(&client, metrics_config, pkcs12_key_file, &pkcs12_passphrase)
-                        .expect("Failed to initialize metrics server");
-                    tokio::spawn(metrics_server.into_future());
-                } else {
-                    error!("Cannot provide metrics when running without a certificate");
+            if let Some(mut metrics_config) = metrics_config {
+                // FIXME: Use network TLS settings here
+                if metrics_config.tls_credentials.is_none() {
+                    if let ProtocolConfig::Wss{ tls_credentials, .. } = protocol_config {
+                        metrics_config.tls_credentials = Some(tls_credentials);
+                    }
                 }
+
+                // FIXME
+                unimplemented!("Can't run std::future::Future with the Tokio we currently use here");
+                //tokio::spawn(client.metrics_server(metrics_config));
             }
 
             // Initialize Websocket RPC server

@@ -19,12 +19,12 @@ maintenance = { status = "experimental" }
 [dependencies]
 base64 = "0.10"
 failure = "0.1"
-futures = "0.1"
-hyper = "0.12"
+futures = "0.3"
+hyper = "0.13"
 log = "0.4"
 native-tls = "0.2"
-tokio = "0.1"
-tokio-tls = "0.2"
+tokio = { version = "0.2", features = ["tcp"] }
+tokio-tls = "0.3"
 
 beserial = { path = "../beserial", version = "0.1" }
 nimiq-block = { path = "../primitives/block", version = "0.1" }

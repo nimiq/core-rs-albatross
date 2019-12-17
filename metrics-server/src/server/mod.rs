@@ -1,26 +1,30 @@
 use std::fmt::Display;
 use std::io;
 use std::sync::Arc;
+use std::pin::Pin;
+use std::task::{Poll, Context};
+use std::future::Future;
 
-use futures::{future, Future, stream, stream::Stream};
+use futures::{future, stream};
+use futures::stream::StreamExt;
 use hyper::{Body, Request, Response, StatusCode};
-use hyper::Chunk;
+use hyper::body::Bytes;
+use hyper::service::Service;
 use hyper::header::{AUTHORIZATION, WWW_AUTHENTICATE, LOCATION};
 use base64::encode;
 
 use crate::server::attributes::{CachedAttributes, VecAttributes};
-use futures::IntoFuture;
 
 pub mod attributes;
 
 pub type SerializationType = Vec<u8>;
 
-pub struct MetricsSerializer<W: io::Write + Into<Chunk>> {
+pub struct MetricsSerializer<W: io::Write + Into<Bytes>> {
     common_attributes: CachedAttributes,
     writer: W,
 }
 
-impl<W: io::Write + Into<Chunk>> MetricsSerializer<W> {
+impl<W: io::Write + Into<Bytes>> MetricsSerializer<W> {
     #[inline]
     pub fn new<A: Into<CachedAttributes>>(common_attributes: A, writer: W) -> Self {
         MetricsSerializer {
@@ -40,7 +44,7 @@ impl<W: io::Write + Into<Chunk>> MetricsSerializer<W> {
     }
 }
 
-impl<W: io::Write + Into<Chunk>> From<MetricsSerializer<W>> for Chunk {
+impl<W: io::Write + Into<Bytes>> From<MetricsSerializer<W>> for Bytes {
     fn from(serializer: MetricsSerializer<W>) -> Self {
         serializer.writer.into()
     }
@@ -86,17 +90,14 @@ impl MetricsServer {
     pub fn serve(&self) -> Body {
         let metrics = self.metrics.clone();
         let attributes = self.common_attributes.clone();
-        let stream = stream::iter_ok::<_, io::Error>(metrics)
+        let stream = stream::iter(metrics)
             .map(move |metrics| {
                 let mut serializer = MetricsSerializer::new(attributes.clone(), Vec::new());
                 match metrics.metrics(&mut serializer) {
-                    Ok(()) => Chunk::from(serializer),
-                    Err(e) => {
-                        // TODO: Properly handle errors.
-                        warn!("Metrics error: {}", e);
-                        Chunk::default()
-                    }
+                    Ok(()) => Ok(Bytes::from(serializer)),
+                    Err(e) => Err(e),
                 }
+
             });
 
         Body::wrap_stream(stream)
@@ -113,45 +114,36 @@ fn check_auth(req: &Request<Body>, username: &Option<String>, password: &Option<
     }
 }
 
-impl IntoFuture for MetricsServer {
-    type Future = future::FutureResult<Self::Item, Self::Error>;
-    type Item = Self;
-    type Error = Never;
-
-    fn into_future(self) -> Self::Future {
-        future::ok(self)
-    }
-}
-
-impl hyper::service::Service for MetricsServer {
-    type ReqBody = Body;
-    type ResBody = Body;
+impl Service<Request<Body>> for MetricsServer {
+    type Response = Response<Body>;
     type Error = hyper::Error;
-    type Future = Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>;
+    type Future = Pin<Box<dyn Future<Output=Result<Response<Body>, hyper::Error>> + Send>>;
 
-    fn call(&mut self, req: Request<<Self as hyper::service::Service>::ReqBody>) -> <Self as hyper::service::Service>::Future {
+    fn poll_ready(&mut self, _cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: Request<Body>) -> <Self as Service<Request<Body>>>::Future {
         // Check URI.
-        if req.uri() != "/metrics" {
-            return Box::new(future::ok(
-                Response::builder()
-                    .status(StatusCode::MOVED_PERMANENTLY)
-                    .header(LOCATION, "/metrics")
-                    .body(Body::empty())
-                    .unwrap()
-            ));
+        let response = if req.uri() != "/metrics" {
+            Response::builder()
+                .status(StatusCode::MOVED_PERMANENTLY)
+                .header(LOCATION, "/metrics")
+                .body(Body::empty())
+                .unwrap()
         }
-
         // Check authentication.
-        if !check_auth(&req, &self.username, &self.password) {
-            return Box::new(future::ok(
-                Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .header(WWW_AUTHENTICATE, "Basic realm=\"Use username metrics and user-defined password to access metrics.\" charset=\"UTF-8\"")
-                    .body(Body::empty())
-                    .unwrap()
-            ));
+        else if !check_auth(&req, &self.username, &self.password) {
+            Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .header(WWW_AUTHENTICATE, "Basic realm=\"Use username metrics and user-defined password to access metrics.\" charset=\"UTF-8\"")
+                .body(Body::empty())
+                .unwrap()
         }
+        else {
+            Response::new(self.serve())
+        };
 
-        Box::new(future::ok(Response::new(self.serve())))
+        Box::pin(future::ok(response))
     }
 }
