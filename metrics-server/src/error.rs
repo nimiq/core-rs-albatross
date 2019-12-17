@@ -8,6 +8,8 @@ pub enum Error {
     IoError(#[cause] IoError),
     #[fail(display = "{}", _0)]
     NativeTlsError(#[cause] NativeTlsError),
+    #[fail(display = "{}", _0)]
+    HyperError(#[cause] hyper::Error),
 }
 
 impl From<IoError> for Error {
@@ -19,5 +21,11 @@ impl From<IoError> for Error {
 impl From<NativeTlsError> for Error {
     fn from(e: NativeTlsError) -> Self {
         Error::NativeTlsError(e)
+    }
+}
+
+impl From<hyper::Error> for Error {
+    fn from(e: hyper::Error) -> Self {
+        Error::HyperError(e)
     }
 }
