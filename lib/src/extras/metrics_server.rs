@@ -9,7 +9,9 @@ use metrics_server::metrics::AlbatrossChainMetrics;
 
 
 impl Client {
-    pub async fn metrics_server(&self, config: MetricsServerConfig) -> Result<(), Error> {
+    pub async fn metrics_server(self, config: MetricsServerConfig) -> Result<(), Error> {
+        let consensus = self.consensus();
+
         let tls = config.tls_credentials
             .ok_or_else(|| Error::config_error("TLS credentials for metrics server missing."))?;
         let key_file = tls.key_file.to_str()
@@ -29,7 +31,7 @@ impl Client {
             password,
             key_file,
             &tls.passphrase,
-            self.consensus()
+            consensus,
         ).await?;
 
         Ok(())
