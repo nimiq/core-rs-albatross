@@ -218,8 +218,9 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     // Helper functions
 
     pub(crate) fn push_transaction(&self, transaction: Transaction) -> Result<JsonValue, JsonValue> {
+        let txid = transaction.hash::<Blake2bHash>();
         match self.mempool.push_transaction(transaction) {
-            ReturnCode::Accepted | ReturnCode::Known => Ok(object! {"message" => "Ok"}),
+            ReturnCode::Accepted | ReturnCode::Known => Ok(txid.to_hex().into()),
             code => Err(object! {"message" => format!("Rejected: {:?}", code)})
         }
     }
