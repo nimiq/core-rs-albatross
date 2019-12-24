@@ -546,7 +546,7 @@ impl Serialize for StakeSlots {
         for slot_address in self.iter() {
             size += Serialize::serialize(&slot_address.staker_address, writer)?;
             if let Some(reward_address) = &slot_address.reward_address_opt {
-                assert_eq!(reward_address, &slot_address.staker_address);
+                assert_ne!(reward_address, &slot_address.staker_address);
                 size += Serialize::serialize(reward_address, writer)?;
             }
         }
