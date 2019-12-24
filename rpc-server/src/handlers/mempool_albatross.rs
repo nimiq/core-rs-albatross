@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
 
 use beserial::{Deserialize, Serialize};
@@ -53,6 +53,7 @@ impl MempoolAlbatrossHandler {
     /// - staker_address: NIM address used to stake
     /// - amount: Amount in Luna to stake
     /// - reward_address: NIM address to send rewards to (optional)
+    /// - fee: Fee for transaction in Luna
     pub(crate) fn stake(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let validator_key = params.get(0)
             .and_then(JsonValue::as_str)
@@ -77,9 +78,14 @@ impl MempoolAlbatrossHandler {
         let reward_address = if let Some(value) = params.get(4) {
             Some(Self::parse_address(value, "reward")?)
         } else { None };
+        let fee = params.get(5)
+            .and_then(JsonValue::as_u64)
+            .unwrap_or(0)
+            .try_into()
+            .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
         let network_id = self.mempool.network_id();
-        let genesis_account = NetworkInfo::from_network_id(network_id)
+        let staking_contract = NetworkInfo::from_network_id(network_id)
             .validator_registry_address().unwrap();
         let staking_data = StakingTransactionData {
             validator_key,
@@ -89,12 +95,14 @@ impl MempoolAlbatrossHandler {
 
         let mut tx = Transaction::new_extended(
             staker_address, AccountType::Basic,    // sender
-            genesis_account.clone(), AccountType::Staking, // recipient
-            amount, Coin::try_from(0).unwrap(),    // amount, fee
+            staking_contract.clone(), AccountType::Staking, // recipient
+            amount, fee,    // amount, fee
             staking_data.serialize_to_vec(),       // data
             self.mempool.current_height(),         // validity_start_height
             network_id,                            // network_id
         );
+
+        debug!("Transaction data: {:#?}", staking_data);
 
         let unlocked_wallets = self.unlocked_wallets.as_ref()
             .ok_or_else(|| object! {"message" => "No wallets"})?;
@@ -154,11 +162,11 @@ impl MempoolAlbatrossHandler {
                 .map_err(|e| object! {"message" => format!("Invalid amount: {}", e)}))?;
 
         let network_id = self.mempool.network_id();
-        let genesis_account = NetworkInfo::from_network_id(network_id)
+        let staking_contract = NetworkInfo::from_network_id(network_id)
             .validator_registry_address().unwrap();
 
         let mut tx = Transaction::new_extended(
-            genesis_account.clone(), AccountType::Staking, // sender
+            staking_contract.clone(), AccountType::Staking, // sender
             staker_address, AccountType::Basic, // recipient
             amount, Coin::try_from(0).unwrap(), // amount, fee
             vec![],                             // data
