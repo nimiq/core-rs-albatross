@@ -321,7 +321,7 @@ impl BlockchainAlbatrossHandler {
             .collect();
         Ok(object! {
             "activeStakes" => active_stakes,
-            "inactive_stakes" => inactive_stakes,
+            "inactiveStakes" => inactive_stakes,
         })
     }
 
