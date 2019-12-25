@@ -105,22 +105,26 @@ impl WalletHandler {
     /// Parameters:
     /// - passphrase (optional, string): The passphrase to lock the key with.
     /// Returns the user friendly address corresponding to the private key.
-    pub(crate) fn new_account(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn create_account(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // FIXME: We're not clearing the passphrase right now.
         let passphrase = params.get(0).map(|s: &JsonValue| s.as_str()
                 .ok_or_else(|| object!{"message" => "Passphrase must be a string"})
             ).unwrap_or_else(|| Ok(""))?;
 
-        let wallet_account = WalletAccount::generate();
-        let address = wallet_account.address.clone();
-        let wallet_account = Locked::with_defaults(wallet_account, passphrase.as_bytes())
+        let account = WalletAccount::generate();
+        let address = account.address.clone();
+        let locked_account = Locked::with_defaults(account.clone(), passphrase.as_bytes())
             .map_err(|e| object!{"message" => format!("Error while importing: {:?}", e)})?;
 
         let mut txn = self.wallet_store.create_write_transaction();
-        self.wallet_store.put(&address, &wallet_account, &mut txn);
+        self.wallet_store.put(&address, &locked_account, &mut txn);
         txn.commit();
 
-        Ok(JsonValue::String(address.to_user_friendly_address()))
+        Ok(object!{
+            "address" => address.to_user_friendly_address(),
+            "publicKey" => account.key_pair.public.to_hex(),
+            "privateKey" => account.key_pair.private.to_hex(),
+        })
     }
 
     /// Unlocks a wallet account in memory.
@@ -274,7 +278,7 @@ impl Module for WalletHandler {
         "importRawKey" => import_raw_key,
         "listAccounts" => list_accounts,
         "lockAccount" => lock_account,
-        "newAccount" => new_account,
+        "createAccount" => create_account,
         "unlockAccount" => unlock_account,
 //        "sendTransaction" => send_transaction,
         "sign" => sign,
