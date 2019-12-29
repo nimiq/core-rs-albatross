@@ -55,7 +55,8 @@ optional no_lmdb_sync NIMIQ_NO_LMDB_SYNC boolean
 
 echo '[log]'
 optional level NIMIQ_LOG_LEVEL string
-entry timestamps false boolean
+optional timestamps NIMIQ_LOG_TIMESTAMPS boolean
+optional tags NIMIQ_LOG_TAGS object
 entry file /root/nimiq.log.pipe string
 optional statistics NIMIQ_LOG_STATISTICS number
 optional file NIMIQ_LOG_FILE string
