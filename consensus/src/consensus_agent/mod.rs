@@ -23,6 +23,7 @@ use network_messages::{
     RejectMessageCode,
 };
 use network_primitives::subscription::Subscription;
+use primitives::coin::Coin;
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
@@ -113,7 +114,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     const SYNC_ATTEMPTS_MAX: u32 = 25;
     const GET_BLOCKS_TIMEOUT: Duration = Duration::from_secs(10);
     const GET_BLOCKS_MAX_RESULTS: u16 = 500;
-    const RESYNC_THROTTLE: Duration = Duration::from_secs(3);
+    const RESYNC_THROTTLE: Duration = Duration::from_millis(10);
 
     const CHAIN_PROOF_RATE_LIMIT: usize = 3; // per minute
     const BLOCK_PROOF_RATE_LIMIT: usize = 60; // per minute
@@ -334,6 +335,7 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
 
     fn on_inventory_event(&self, event: &InventoryEvent<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>) {
         match event {
+            InventoryEvent::NewBlockAnnounced(hash, head_candidate) => self.on_new_block_announced(hash, *head_candidate),
             InventoryEvent::KnownBlockAnnounced(hash) => self.on_known_block_announced(hash),
             InventoryEvent::NoNewObjectsAnnounced => self.on_no_new_objects_announced(),
             InventoryEvent::AllObjectsReceived => self.on_all_objects_received(),
@@ -341,6 +343,13 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
             InventoryEvent::TransactionProcessed(hash, result) => self.on_tx_processed(hash, result),
             InventoryEvent::GetBlocksTimeout => self.on_get_blocks_timeout(),
             _ => {}
+        }
+    }
+
+    fn on_new_block_announced(&self, hash: &Blake2bHash, head_candidate: bool) {
+        let mut state = self.state.write();
+        if !state.synced && head_candidate {
+            state.sync_target = hash.clone();
         }
     }
 
@@ -430,22 +439,22 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     }
 
     fn on_orphan_block(&self, hash: &Blake2bHash) {
+        // Set the orphaned block as the new sync target.
+        self.state.write().sync_target = hash.clone();
+
         // Ignore orphan blocks if we're not synced yet. This shouldn't happen.
         if !self.state.read().synced {
-            warn!("Received orphan block {} from {} before/while syncing", hash, self.peer.peer_address());
+            debug!("Received orphan block {} from {} before/while syncing", hash, self.peer.peer_address());
             return;
         }
 
         // The peer has announced an orphaned block after the initial sync. We're probably out of sync.
         debug!("Received orphan block {} from {}", hash, self.peer.peer_address());
 
-        // Disable announcements from the peer once.
+        // Disable transaction announcements from the peer once.
         if !self.timers.delay_exists(&ConsensusAgentTimer::ResyncThrottle) {
-            self.inv_agent.subscribe(Subscription::None);
+            self.inv_agent.subscribe(Subscription::MinFee(Coin::from_u64_unchecked(Coin::MAX_SAFE_VALUE)));
         }
-
-        // Set the orphaned block as the new sync target.
-        self.state.write().sync_target = hash.clone();
 
         // Wait a short time for:
         // - our (un-)subscribe message to be sent

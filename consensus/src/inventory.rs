@@ -145,7 +145,7 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InventoryEvent<BE: BlockError> {
-    NewBlockAnnounced,
+    NewBlockAnnounced(Blake2bHash, bool),
     KnownBlockAnnounced(Blake2bHash),
     NewTransactionAnnounced,
     KnownTransactionAnnounced,
@@ -269,7 +269,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
     const FREE_TRANSACTION_SIZE_PER_INTERVAL: usize = 15000; // ~100 legacy transactions
     const TRANSACTION_THROTTLE: Duration = Duration::from_millis(1000);
     const REQUEST_TRANSACTIONS_WAITING_MAX: usize = 5000;
-    const GET_BLOCKS_RATE_LIMIT: usize = 30; // per minute
+    const GET_BLOCKS_RATE_LIMIT: usize = 300; // per minute
     /// Time {ms} to wait between sending full inv vectors of transactions during Mempool request
     const MEMPOOL_THROTTLE: Duration = Duration::from_millis(1000); // 1 second
     const MEMPOOL_ENTRIES_MAX: usize = 10_000;
@@ -447,9 +447,6 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             state.waiting_free_tx_inv_vectors.remove(&FreeTransactionVector::from_vector(vector, 0));
         }
 
-        // XXX Clear get_blocks timeout.
-        self.timers.clear_delay(&InventoryAgentTimer::GetBlocks);
-
         // Check which of the advertised objects we know.
         // Request unknown objects, ignore known ones.
         let num_vectors = vectors.len();
@@ -458,28 +455,41 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let vectors: Vec<InvVector> = vectors.into_iter().filter(|vector| {
             !state.objects_in_flight.contains(&vector) && self.should_request_data(&vector)
         }).collect();
+
         // Give up state write lock.
         drop(state);
+
+        let head_candidate = !self.timers.delay_exists(&InventoryAgentTimer::GetBlocks)
+            && vectors.len() == 1
+            && vectors.first().unwrap().ty == InvVectorType::Block;
+
+        let mut has_block = false;
         for vector in vectors {
             match vector.ty {
                 InvVectorType::Block => {
                     if !self.blockchain.contains(&vector.hash, true) {
+                        self.notifier.read().notify(InventoryEvent::NewBlockAnnounced(vector.hash.clone(), head_candidate));
                         unknown_blocks.push(vector);
-                        self.notifier.read().notify(InventoryEvent::NewBlockAnnounced);
                     } else {
                         self.notifier.read().notify(InventoryEvent::KnownBlockAnnounced(vector.hash.clone()));
                     }
+                    has_block = true;
                 }
                 InvVectorType::Transaction => {
                     if !self.mempool.contains(&vector.hash) {
-                        unknown_txs.push(vector);
                         self.notifier.read().notify(InventoryEvent::NewTransactionAnnounced);
+                        unknown_txs.push(vector);
                     } else {
                         self.notifier.read().notify(InventoryEvent::KnownTransactionAnnounced);
                     }
                 }
                 InvVectorType::Error => () // XXX Why do we have this??
             }
+        }
+
+        // Clear get_blocks timeout.
+        if has_block {
+            self.timers.clear_delay(&InventoryAgentTimer::GetBlocks);
         }
 
         trace!("[INV] {} vectors, {} new blocks, {} new txs from {}",
@@ -489,7 +499,10 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let mut state = self.state.write();
         if !unknown_blocks.is_empty() || !unknown_txs.is_empty() {
             if state.bypass_mgr {
-                self.queue_vectors(&mut *state, unknown_blocks, unknown_txs);
+                // XXX Don't request the block if it is a head candidate and we're still syncing.
+                if !head_candidate {
+                    self.queue_vectors(&mut *state, unknown_blocks, unknown_txs);
+                }
             } else {
                 // Give up write lock before notifying.
                 drop(state);
