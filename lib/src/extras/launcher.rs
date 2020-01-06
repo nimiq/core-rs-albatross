@@ -12,10 +12,11 @@
 ///
 
 #[cfg(feature = "deadlock")]
-use crate::extras::deadlock::initialize_deadlock_detection;
+use crate::extras::deadlock::DeadlockDetector;
 #[cfg(feature = "logging")]
 use crate::extras::logging::initialize_logging;
 use url::Url;
+use lazy_static::lazy_static;
 #[cfg(feature = "panic")]
 extern crate log_panics;
 
@@ -50,11 +51,16 @@ pub struct Launcher {
     panic: PanicMode,
 }
 
+// TODO Unused and ugly
+lazy_static! {
+    static ref GLOBAL_DEADLOCK_DETECTOR: Mutex<Option<DeadlockDetector>> = Mutex::new(None);
+}
+
 impl Launcher {
     #[cfg(feature = "deadlock")]
     pub fn deadlock_detection(mut self) -> Self {
         self.deadlock_detection = true;
-        initialize_deadlock_detection();
+        *GLOBAL_DEADLOCK_DETECTOR.lock() = DeadlockDetector::new();
         self
     }
 

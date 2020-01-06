@@ -14,13 +14,13 @@ use tokio;
 use nimiq::prelude::*;
 use nimiq::config::config::ProtocolConfig;
 use nimiq::extras::logging::{initialize_logging, log_error_cause_chain};
-use nimiq::extras::deadlock::initialize_deadlock_detection;
+use nimiq::extras::deadlock::DeadlockDetector;
 use nimiq::extras::panic::initialize_panic_reporting;
 
 
 fn main_inner() -> Result<(), Error> {
     // Initialize deadlock detection
-    initialize_deadlock_detection();
+    let deadlock_detector = DeadlockDetector::new();
 
     // Parse command line.
     let command_line = CommandLine::from_args();
@@ -118,6 +118,8 @@ fn main_inner() -> Result<(), Error> {
             log_error_cause_chain(&e);
         }
     }));
+
+    drop(deadlock_detector);
 
     Ok(())
 }
