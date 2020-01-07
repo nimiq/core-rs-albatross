@@ -164,6 +164,11 @@ impl Client {
         Ok(())
     }
 
+    /// Causes the network stack to terminate all connections.
+    pub fn disconnect(&self) {
+        self.inner.consensus.network.disconnect();
+    }
+
     /// Returns a reference to the *Consensus*.
     pub fn consensus(&self) -> Arc<Consensus> {
         Arc::clone(&self.inner.consensus)
