@@ -27,8 +27,9 @@ pub struct DeadlockDetector {
 }
 
 struct DeadlockDetectorState {
-    lock: Mutex<bool>,
-    cond: Condvar,
+    thread: Mutex<bool>,
+    spawn: Condvar, // detector => main: tell main that detector started
+    stop: Condvar,  // main => detector: tell detector to shutdown
     alive: AtomicBool,
 }
 
@@ -37,8 +38,9 @@ impl DeadlockDetector {
     #[must_use]
     pub fn new() -> Self {
         let state = Arc::new(DeadlockDetectorState {
-            lock: Mutex::new(false),
-            cond: Condvar::new(),
+            thread: Mutex::new(false),
+            spawn: Condvar::new(),
+            stop: Condvar::new(),
             alive: AtomicBool::new(true),
         });
         let state2 = Arc::clone(&state);
@@ -51,11 +53,13 @@ impl DeadlockDetector {
 
     // Run until the shutdown condition is triggered
     fn run(this: Arc<DeadlockDetectorState>) {
-        let mut guard = this.lock.lock().unwrap();
+        let mut guard = this.thread.lock().unwrap();
         *guard = true; // mark thread as started
+        this.spawn.notify_one();
         trace!("Starting Deadlock Detection");
         loop {
-            let lock_result = this.cond.wait_timeout(guard, Duration::from_secs(10));
+            // Sleep for 10s, interrupt sleep if stop condition triggers.
+            let lock_result = this.stop.wait_timeout(guard, Duration::from_secs(10));
             match lock_result {
                 Ok((next_guard, timeout)) => {
                     guard = next_guard;
@@ -67,7 +71,7 @@ impl DeadlockDetector {
                     // continue scanning for deadlocks.
                 },
                 Err(_) => {
-                    warn!("Deadlock detection shutdown lock poisoned");
+                    warn!("Deadlock detection stop lock poisoned");
                     break;
                 },
             }
@@ -91,9 +95,16 @@ impl DeadlockDetector {
     }
 
     fn stop(&mut self) {
-        // Spin until thread starts
-        while !*self.inner.lock.lock().unwrap() {}
-        self.inner.cond.notify_one();
+        // Wait until thread starts
+        let mut thread = self.inner.thread.lock()
+            .expect("Deadlock Detector panicked");
+        while !*thread {
+            thread = self.inner.spawn.wait(thread)
+                .expect("Deadlock Detector panicked");
+        }
+        drop(thread);
+        // Tell thread to stop
+        self.inner.stop.notify_one();
     }
 }
 

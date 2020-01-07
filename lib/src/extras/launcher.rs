@@ -16,6 +16,7 @@ use crate::extras::deadlock::DeadlockDetector;
 #[cfg(feature = "logging")]
 use crate::extras::logging::initialize_logging;
 use url::Url;
+use std::sync::Mutex;
 use lazy_static::lazy_static;
 #[cfg(feature = "panic")]
 extern crate log_panics;
@@ -60,7 +61,7 @@ impl Launcher {
     #[cfg(feature = "deadlock")]
     pub fn deadlock_detection(mut self) -> Self {
         self.deadlock_detection = true;
-        *GLOBAL_DEADLOCK_DETECTOR.lock() = DeadlockDetector::new();
+        *GLOBAL_DEADLOCK_DETECTOR.lock().unwrap() = Some(DeadlockDetector::new());
         self
     }
 

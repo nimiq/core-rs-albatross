@@ -6,7 +6,7 @@ use nimiq_lib::config::config_file::{ConfigFile, Network};
 use nimiq_lib::config::config::ClientConfig;
 use nimiq_lib::client::Client;
 use std::thread;
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 /// Spawns the supplied closure in a thread and panics
