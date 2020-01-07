@@ -29,13 +29,20 @@ optional peer-key-file PEER_KEY_FILE string
 echo '[network]'
 required host NIMIQ_HOST string
 entry port 8443 number
-echo 'seed_nodes = ['
+optional instant_inbound NIMIQ_INSTANT_INBOUND boolean
+
 nodes_arr=($NIMIQ_SEED_NODES)
 for node in "${nodes_arr[@]}"; do
-    echo "{ uri = \"$node\" },"
+    echo "[[network.seed_nodes]]"
+    echo "uri = \"$node\""
 done
-echo ']'
-optional instant_inbound NIMIQ_INSTANT_INBOUND boolean
+if [[ ! -z "$NIMIQ_SEED_LIST" ]]; then
+    echo "[[network.seed_nodes]]"
+    echo "list = \"$NIMIQ_SEED_LIST\""
+    if [[ ! -z "$NIMIQ_SEED_LIST_PUBKEY" ]]; then
+        echo "public_key = \"$NIMIQ_SEED_LIST_PUBKEY\""
+    fi
+fi
 
 echo '[consensus]'
 required network NIMIQ_NETWORK string
