@@ -299,6 +299,7 @@ pub enum Network {
     Dev,
     TestAlbatross,
     DevAlbatross,
+    UnitAlbatross,
 }
 
 impl Default for Network {
@@ -317,6 +318,7 @@ impl FromStr for Network {
             "dev" => Network::Dev,
             "test-albatross" => Network::TestAlbatross,
             "dev-albatross" => Network::DevAlbatross,
+            // "unit-albatross" is not user-facing
             _ => return Err(())
         })
     }
@@ -330,6 +332,7 @@ impl From<Network> for NetworkId {
             Network::Dev => NetworkId::Dev,
             Network::TestAlbatross => NetworkId::TestAlbatross,
             Network::DevAlbatross => NetworkId::DevAlbatross,
+            Network::UnitAlbatross => NetworkId::UnitAlbatross,
         }
     }
 }
