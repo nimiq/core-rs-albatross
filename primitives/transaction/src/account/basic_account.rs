@@ -1,6 +1,5 @@
 use beserial::Deserialize;
 use primitives::account::AccountType;
-use primitives::coin::Coin;
 
 use crate::{Transaction, TransactionError, TransactionFlags};
 use crate::account::AccountTransactionVerification;

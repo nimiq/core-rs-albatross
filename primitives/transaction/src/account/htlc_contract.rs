@@ -8,7 +8,6 @@ use hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use keys::Address;
 use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use primitives::account::AccountType;
-use primitives::coin::Coin;
 
 use crate::{Transaction, TransactionError, TransactionFlags};
 use crate::account::AccountTransactionVerification;
@@ -76,7 +75,8 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                         },
                         HashAlgorithm::Sha256 => {
                             pre_image = Sha256Hasher::default().digest(&pre_image[..]).into();
-                        }
+                        },
+                        _ => return Err(TransactionError::InvalidProof),
                     }
                 }
 
@@ -126,7 +126,15 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
 #[repr(u8)]
 pub enum HashAlgorithm {
     Blake2b = 1,
-    Sha256 = 3
+    Argon2d = 2,
+    Sha256 = 3,
+    Sha512 = 4,
+}
+
+impl Default for HashAlgorithm {
+    fn default() -> Self {
+        HashAlgorithm::Blake2b
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
@@ -140,7 +148,7 @@ pub enum ProofType {
 create_typed_array!(AnyHash, u8, 32);
 add_hex_io_fns_typed_arr!(AnyHash, AnyHash::SIZE);
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct CreationTransactionData {
     pub sender: Address,
     pub recipient: Address,
@@ -156,6 +164,14 @@ impl CreationTransactionData {
     }
 
     pub fn verify(&self) -> Result<(), TransactionError> {
+        match self.hash_algorithm {
+            HashAlgorithm::Argon2d => {
+                warn!("Invalid creation data: hash_algorithm may not be Argon2d");
+                return Err(TransactionError::InvalidData);
+            },
+            _ => {},
+        }
+
         if self.hash_count == 0 {
             warn!("Invalid creation data: hash_count may not be zero");
             return Err(TransactionError::InvalidData);

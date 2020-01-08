@@ -80,7 +80,7 @@ fn it_can_verify_creation_transaction() {
     // Hash algorithm argon2d
     transaction.data[40] = 2;
     transaction.recipient = transaction.contract_creation_address();
-    assert_eq!(AccountType::verify_incoming_transaction(&transaction), Err(TransactionError::InvalidSerialization(SerializingError::InvalidValue)));
+    assert_eq!(AccountType::verify_incoming_transaction(&transaction), Err(TransactionError::InvalidData));
 
     // Invalid hash algorithm
     transaction.data[40] = 200;

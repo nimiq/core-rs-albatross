@@ -1,4 +1,4 @@
-use beserial::Deserialize;
+use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt};
 use keys::Address;
 use primitives::account::AccountType;
 use primitives::coin::Coin;
@@ -55,7 +55,7 @@ impl AccountTransactionVerification for VestingContractVerifier {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct CreationTransactionData {
     pub owner: Address,
     pub start: u32,
@@ -105,6 +105,42 @@ impl CreationTransactionData {
             })
         } else {
             Err(TransactionError::InvalidData)
+        }
+    }
+}
+
+impl Serialize for CreationTransactionData {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        size += self.owner.serialize(writer)?;
+
+        if self.step_amount == self.total_amount {
+            if self.start == 0 {
+                size += self.step_blocks.serialize(writer)?;
+            } else {
+                size += self.start.serialize(writer)?;
+                size += self.step_blocks.serialize(writer)?;
+                size += self.step_amount.serialize(writer)?;
+            }
+        } else {
+            size += self.start.serialize(writer)?;
+            size += self.step_blocks.serialize(writer)?;
+            size += self.step_amount.serialize(writer)?;
+            size += self.total_amount.serialize(writer)?;
+        }
+
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        if self.step_amount == self.total_amount {
+            if self.start == 0 {
+                Address::SIZE + 4
+            } else {
+                Address::SIZE + 16
+            }
+        } else {
+            Address::SIZE + 24
         }
     }
 }
