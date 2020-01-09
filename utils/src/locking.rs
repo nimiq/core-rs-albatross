@@ -1,7 +1,10 @@
-use std::sync::Arc;
-use parking_lot::{Mutex, MutexGuard};
-use futures::{Async, Future, Poll};
+use std::future::Future;
 use std::mem;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
+
+use parking_lot::{Mutex, MutexGuard};
 
 #[derive(Debug)]
 pub struct MultiLock<T> {
@@ -32,10 +35,10 @@ impl<T> MultiLock<T> {
     /// `Async::NotReady`. In this case the current task will also be scheduled
     /// to receive a notification when the lock would otherwise become
     /// available.
-    pub fn poll_lock(&self) -> Async<MutexGuard<T>> {
+    pub fn poll_lock(&self) -> Poll<MutexGuard<T>> {
         match self.inner.try_lock() {
-            None => Async::NotReady,
-            Some(lock) => Async::Ready(lock),
+            None => Poll::Pending,
+            Some(lock) => Poll::Ready(lock),
         }
     }
 
@@ -76,17 +79,14 @@ pub struct MultiLockAcquire<T> {
 }
 
 impl<T> Future for MultiLockAcquire<T> {
-    type Item = MultiLockAcquired<T>;
-    type Error = ();
+    type Output = MultiLockAcquired<T>;
 
-    fn poll(&mut self) -> Poll<MultiLockAcquired<T>, ()> {
+    fn poll(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.inner.as_ref().expect("cannot poll after Ready").poll_lock() {
-            Async::Ready(r) => {
-                mem::forget(r);
-            },
-            Async::NotReady => return Ok(Async::NotReady),
+            Poll::Ready(r) => { mem::forget(r); },
+            Poll::Pending => return Poll::Pending,
         }
-        Ok(Async::Ready(MultiLockAcquired { inner: self.inner.take() }))
+        Poll::Ready(MultiLockAcquired { inner: self.inner.take() })
     }
 }
 

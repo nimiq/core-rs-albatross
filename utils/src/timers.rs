@@ -3,12 +3,11 @@ use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::time::Duration;
-use std::time::Instant;
 
-use futures::prelude::*;
-use futures::sync::oneshot;
+use futures::{select, FutureExt};
+use futures::channel::oneshot;
 use parking_lot::{Mutex, MutexGuard};
-use tokio::timer::{Delay, Interval};
+use tokio::time::{delay_for, interval};
 
 #[derive(Default)]
 pub struct Timers<K: Eq + Hash + Debug> {
@@ -107,17 +106,18 @@ impl<K: Eq + Hash + Debug> Timers<K> {
             return;
         }
 
-        let task = Delay::new(Instant::now() + delay)
-            .and_then(move |_| {
-                func();
-                Ok(())
-            }).map_err(|_| ());
         let (tx, rx) = oneshot::channel();
-        let task = task.select(rx.map_err(|_| ()))
-            .map(|_| ()).map_err(|_| ());
-
         delays.insert(key, tx);
-        tokio::spawn(task);
+        tokio::spawn(async move {
+            let task = async move {
+                delay_for(delay).await;
+                func();
+            };
+            select! {
+                _ = task.fuse() => (),
+                _ = rx.fuse() => (),
+            }
+        });
     }
 
     pub fn set_interval_guarded<F: Send + Sync + 'static>(&self, key: K, func: F, duration: Duration, intervals: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>)
@@ -127,17 +127,21 @@ impl<K: Eq + Hash + Debug> Timers<K> {
             return;
         }
 
-        let task = Interval::new_interval(duration)
-            .for_each(move |_| {
-                func();
-                Ok(())
-            }).map_err(|_| ());
         let (tx, rx) = oneshot::channel();
-        let task = task.select(rx.map_err(|_| ()))
-            .map(|_| ()).map_err(|_| ());
-
         intervals.insert(key, tx);
-        tokio::spawn(task);
+        tokio::spawn(async move {
+            let interval_fut = async move {
+                let mut stream = interval(duration);
+                loop {
+                    stream.tick().await;
+                    func();
+                }
+            };
+            select! {
+                _ = interval_fut.fuse() => (),
+                _ = rx.fuse() => (),
+            }
+        });
     }
 
     fn clear_timer_guarded(&self, key: &K, guard: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>) {

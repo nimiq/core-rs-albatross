@@ -20,12 +20,12 @@ maintenance = { status = "experimental" }
 bit-vec = { version = "0.6", optional = true }
 clear_on_drop = { version = "0.2", optional = true }
 failure = { version = "0.1", optional = true }
-futures = { version = "0.1", optional = true }
+futures = { version = "0.3", optional = true }
 log = { version = "0.4", optional = true }
 parking_lot = { version = "0.9", optional = true }
 rand = { version = "0.7", optional = true }
 rand_core = { version = "0.5", optional = true }
-tokio = { version = "0.1", optional = true }
+tokio = { version = "0.2", optional = true, features = ["time"]}
 
 beserial = { path = "../beserial", version = "0.1", optional = true }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1", optional = true }
@@ -49,6 +49,7 @@ timers = ["futures", "parking_lot", "tokio", "log"]
 unique-ptr = []
 throttled-queue = ["nimiq-collections"]
 rate-limit = []
+sleep-on-error = ["futures", "tokio"]
 unique-id = []
 # Compiles this package with all features.
 all = ["otp", "bit-vec", "crc", "key-store", "iterators", "locking", "merkle", "mutable-once", "observer", "time", "timers", "unique-ptr", "throttled-queue", "rate-limit", "unique-id", "math"]
