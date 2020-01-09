@@ -3,7 +3,7 @@ use std::fmt;
 
 use macros::upgrade_weak;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use futures::{future, Future};
+use futures::{future, FutureExt};
 
 use utils::observer::PassThroughNotifier;
 use utils::mutable_once::MutableOnce;
@@ -312,7 +312,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         let individual_fut = if let Some(individual) = individual {
             let sig = Signature::Individual(individual);
             let weak = self.self_weak.clone();
-            future::Either::A(self.protocol
+            future::Either::Left(self.protocol
                 .verify(&sig)
                 .map(move |result| {
                     if result.is_ok() {
@@ -325,7 +325,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
                 }))
         }
         else {
-            future::Either::B(future::ok::<(), ()>(()))
+            future::Either::Right(async {})
         };
 
         // Future that verifies the multi-signature and puts it into the TODO list
@@ -351,8 +351,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         //       that processes the whole TODO list until completion.
         let process_fut = {
             let weak = Weak::clone(&self.self_weak);
-            individual_fut
-                .join(multisig_fut)
+            future::join(individual_fut, multisig_fut)
                 .map(move |_| {
                     // continuously put best todo into store, until there is no good one anymore
                     let this = upgrade_weak!(weak);
@@ -372,11 +371,6 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
                         this.check_completed_level(&signature, level);
                         this.check_final_signature();
                     }
-                })
-                .map_err(|e| {
-                    // Technically nothing here can fail, but we need to handle that case anyway
-                    warn!("The signature processing future somehow failed: {:?}", e);
-                    e
                 })
         };
 

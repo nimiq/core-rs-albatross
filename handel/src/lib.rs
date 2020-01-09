@@ -6,7 +6,6 @@
 /// [1] [Handel: Practical Multi-Signature Aggregation for Large Byzantine Committees](https://arxiv.org/abs/1906.05132)
 
 extern crate futures;
-extern crate futures_cpupool;
 extern crate stopwatch;
 #[macro_use]
 extern crate failure;

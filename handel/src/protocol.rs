@@ -3,7 +3,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use crate::identity::IdentityRegistry;
-use crate::verifier::Verifier;
+use crate::verifier::{Verifier, VerificationFuture};
 use crate::store::SignatureStore;
 use crate::evaluator::Evaluator;
 use crate::partitioner::Partitioner;
@@ -33,7 +33,7 @@ pub trait Protocol: Send + Sync + 'static {
     //fn send_to(&self, to: usize, update: LevelUpdate) -> Result<(), IoError>;
     fn node_id(&self) -> usize;
 
-    fn verify(&self, signature: &Signature) -> <Self::Verifier as Verifier>::Output {
+    fn verify(&self, signature: &Signature) -> VerificationFuture {
         self.verifier().verify(signature)
     }
 }

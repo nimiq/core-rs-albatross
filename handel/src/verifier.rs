@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use futures::{future, Future};
-use futures::future::FutureResult;
-use futures_cpupool::{CpuPool, CpuFuture};
+use futures::FutureExt;
+use futures::future::BoxFuture;
+use futures::channel::oneshot::channel;
+use futures::executor::ThreadPool;
 use lazy_static::lazy_static;
 
 use hash::Blake2bHash;
@@ -15,7 +16,11 @@ use crate::identity::IdentityRegistry;
 
 lazy_static! {
     /// CPU pool that is shared between all Handel instances (that use it)
-    static ref SHARED_CPU_POOL: Arc<CpuPool> = Arc::new(CpuPool::new_num_cpus());
+    static ref SHARED_CPU_POOL: Arc<ThreadPool> = {
+        let pool = ThreadPool::new()
+            .expect("Failed to create Handel thread pool");
+        Arc::new(pool)
+    };
 }
 
 
@@ -32,12 +37,11 @@ impl VerificationResult {
     }
 }
 
+pub type VerificationFuture = BoxFuture<'static, VerificationResult>;
 
 /// Trait for a signature verification backend
 pub trait Verifier {
-    type Output: Future<Item=VerificationResult, Error=()> + Send + Sync + 'static;
-
-    fn verify(&self, signature: &Signature) -> Self::Output;
+    fn verify(&self, signature: &Signature) -> VerificationFuture;
 }
 
 
@@ -45,10 +49,8 @@ pub trait Verifier {
 pub struct DummyVerifier();
 
 impl Verifier for DummyVerifier {
-    type Output = FutureResult<VerificationResult, ()>;
-
-    fn verify(&self, _signature: &Signature) -> Self::Output {
-        future::ok(VerificationResult::Ok)
+    fn verify(&self, _signature: &Signature) -> VerificationFuture {
+        async { VerificationResult::Ok }.boxed()
     }
 }
 
@@ -57,11 +59,11 @@ impl Verifier for DummyVerifier {
 pub struct MultithreadedVerifier<I: IdentityRegistry> {
     message_hash: Blake2bHash,
     identity_registry: Arc<I>,
-    cpu_pool: Arc<CpuPool>,
+    cpu_pool: Arc<ThreadPool>,
 }
 
 impl<I: IdentityRegistry> MultithreadedVerifier<I> {
-    pub fn new(message_hash: Blake2bHash, identity_registry: Arc<I>, cpu_pool: Arc<CpuPool>) -> Self {
+    pub fn new(message_hash: Blake2bHash, identity_registry: Arc<I>, cpu_pool: Arc<ThreadPool>) -> Self {
         Self {
             message_hash,
             identity_registry,
@@ -108,15 +110,14 @@ impl<I: IdentityRegistry> MultithreadedVerifier<I> {
 }
 
 impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVerifier<I> {
-    type Output = CpuFuture<VerificationResult, ()>;
-
-    fn verify(&self, signature: &Signature) -> Self::Output {
+    fn verify(&self, signature: &Signature) -> VerificationFuture {
         // We clone it so that we can move it into the closure
         let signature = signature.clone();
         let message_hash = self.message_hash.clone();
         let identity_registry = Arc::clone(&self.identity_registry);
 
-        self.cpu_pool.spawn_fn(move || {
+        let (tx, rx) = channel();
+        self.cpu_pool.spawn_ok(async move {
             let res = match &signature {
                 Signature::Individual(individual) => {
                     Self::verify_individual(identity_registry, message_hash, individual)
@@ -125,7 +126,12 @@ impl<I: IdentityRegistry + Sync + Send + 'static> Verifier for MultithreadedVeri
                     Self::verify_multisig(identity_registry, message_hash, multisig)
                 }
             };
-            Ok(res)
-        })
+            tx.send(res)
+                .expect("Failed to send verification result");
+        });
+        async {
+            rx.await
+                .expect("Failed to receive verification result")
+        }.boxed()
     }
 }
