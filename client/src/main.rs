@@ -8,7 +8,8 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use nimiq::prelude::*;
-use nimiq::extras::logging::{initialize_logging, log_error_cause_chain};
+use nimiq::config::config::ProtocolConfig;
+use nimiq::extras::logging::initialize_logging;
 use nimiq::extras::deadlock::initialize_deadlock_detection;
 use nimiq::extras::panic::initialize_panic_reporting;
 
@@ -45,16 +46,28 @@ async fn main() -> Result<(), Error> {
     // a lazy future for it.
     // Clone those now, because we pass ownership of config to Client
     let protocol_config = config.protocol.clone();
+    let metrics_config = config.metrics_server.clone();
 
     // Create client from config
     info!("Initializing client");
     let client: Client = Client::try_from(config)?;
     client.initialize().await?;
 
+    // TODO Initialize RPC servers
+
+    // Initialize metrics server
+    if let Some(mut metrics_config) = metrics_config {
+        // FIXME: Use network TLS settings here
+        if metrics_config.tls_credentials.is_none() {
+            if let ProtocolConfig::Wss { tls_credentials, .. } = protocol_config {
+                metrics_config.tls_credentials = Some(tls_credentials);
+            }
+        }
+        tokio::spawn(client.clone().metrics_server(metrics_config));
+    }
+
     // Initialize network stack and connect
     info!("Connecting to network");
-
-    // TODO Spawn modules
 
     client.connect()?;
 

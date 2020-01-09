@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use futures::channel::oneshot;
-use futures::{select, FutureExt, SinkExt, StreamExt};
+use futures::{select, FutureExt, SinkExt};
 use native_tls::{Identity, TlsAcceptor};
 use parking_lot::{Mutex, RwLock};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -201,7 +201,7 @@ impl WebSocketConnector {
         let conn_count = Arc::new(Mutex::new(0usize));
         let wg = WaitGroup::new();
         let (status_tx, status_rx) = watch::channel(ConnectionStatusTarget::Open);
-        let mut kill_timeout = Duration::from_secs(0);
+        let kill_timeout;
         loop {
             // Skip if we cannot accept a new connection
             {
@@ -271,7 +271,7 @@ impl WebSocketConnector {
             });
         }
         // Tell all connection handlers to close connection.
-        if let Err(err) = status_tx.broadcast(ConnectionStatusTarget::Close) {
+        if status_tx.broadcast(ConnectionStatusTarget::Close).is_err() {
             panic!("Failed to broadcast close signal to connection handlers")
         }
         // Wait for connection handlers to close connection or send kill signal on timeout.
@@ -280,7 +280,7 @@ impl WebSocketConnector {
             _ = finish_fut => (),
             _ = delay_for(kill_timeout).fuse() => {
                 // Send kill signal and continue to wait
-                if let Err(err) = status_tx.broadcast(ConnectionStatusTarget::Kill) {
+                if status_tx.broadcast(ConnectionStatusTarget::Kill).is_err() {
                     panic!("Failed to broadcast kill signal to connection handlers")
                 }
                 finish_fut.await;
@@ -301,7 +301,7 @@ impl WebSocketConnector {
         if status.recv().await != Some(ConnectionStatusTarget::Open) {
             trace!("Server closing before handshake with {} could complete", addr);
             if let Err(err) = tcp.shutdown(Shutdown::Both) {
-                warn!("Failed to shutdown connection to {}", addr);
+                warn!("Failed to shutdown connection to {}: {}", addr, err);
             }
             return Ok(())
         }
