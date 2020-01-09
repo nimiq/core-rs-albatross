@@ -1,19 +1,19 @@
 use std::fs::File;
 use std::io::Read;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, SocketAddr, Shutdown};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use futures::channel::oneshot;
-use futures::{select, SinkExt};
-use futures::future::FutureExt;
+use futures::{select, FutureExt, SinkExt, StreamExt};
 use native_tls::{Identity, TlsAcceptor};
 use parking_lot::{Mutex, RwLock};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpStream, TcpListener};
-use futures::StreamExt;
-use tokio::time::timeout;
+use tokio::time::{delay_for, timeout};
+use tokio::io::ErrorKind as IOErrorKind;
+use tokio::sync::watch;
 use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
 use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::stream::Stream as StreamSwitcher;
@@ -23,6 +23,7 @@ use url::Url;
 use network_primitives::address::PeerAddress;
 use network_primitives::address::net_address::NetAddress;
 use network_primitives::protocol::ProtocolFlags;
+use utils::futures_sync::WaitGroup;
 use utils::observer::PassThroughNotifier;
 
 use crate::connection::{AddressInfo, NetworkConnection};
@@ -36,9 +37,7 @@ use crate::websocket::{
     reverse_proxy::ToCallback,
     SharedNimiqMessageStream,
 };
-use crate::websocket::error::ConnectError;
-use crate::websocket::error::ServerStartError;
-use utils::sleep_on_error::SleepOnErrorExt;
+use crate::websocket::error::{ConnectError, ServerStartError, ServerStopError};
 
 // This handle allows the ConnectionPool in the upper layer to signal if this
 // connection should be aborted (f.e. if we are connecting to the same peer,
@@ -47,6 +46,13 @@ use utils::sleep_on_error::SleepOnErrorExt;
 pub struct ConnectionHandle {
     closing_tx: Mutex<Option<oneshot::Sender<CloseType>>>,
     closed: AtomicBool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ConnectionStatusTarget {
+    Open,  // Normal operation
+    Close, // Send close message and gracefully disconnect
+    Kill,  // Abort connection instantly
 }
 
 impl ConnectionHandle {
@@ -129,6 +135,7 @@ pub struct WebSocketConnector {
     mode: Mode,
     reverse_proxy_config: Option<ReverseProxyConfig>,
     tls_acceptor: Option<TlsAcceptor>,
+    close_signal: Mutex<Option<oneshot::Sender<Duration>>>,
 }
 
 impl WebSocketConnector {
@@ -156,58 +163,162 @@ impl WebSocketConnector {
             network_config,
             port, mode, reverse_proxy_config,
             tls_acceptor,
+            close_signal: Mutex::new(None),
         }))
     }
 
+    // Starts accepting and handling WebSocket connections over Tokio TCP.
     pub async fn start(self: &Arc<WebSocketConnector>) -> Result<(), ServerStartError> {
         // TODO Allow binding to IP
         let addr = SocketAddr::new("::".parse().unwrap(), self.port);
         let socket = TcpListener::bind(&addr)
             .await
             .map_err(ServerStartError::IoError)?;
-        tokio::spawn(Self::accept_tcp_streams(Arc::clone(&self), socket));
+        let (tx, rx) = oneshot::channel();
+        *self.close_signal.lock() = Some(tx);
+        tokio::spawn(Self::accept_tcp_streams(Arc::clone(&self), socket, rx));
         Ok(())
     }
 
-    async fn accept_tcp_streams(self: Arc<WebSocketConnector>, mut socket: TcpListener) {
-        let this = Arc::clone(&self);
-        socket.incoming()
-            // TODO Loop instead
-            .sleep_on_error(Self::WAIT_TIME_ON_ERROR)
-            // Filter TCP errors
-            .filter_map(|tcp_res| async move {
-                match tcp_res {
-                    Ok(tcp) => Some(tcp),
-                    Err(err) => {
-                        // Transport error, throttle the server.
-                        error!("Could not accept TCP connection: {}", err);
-                        None
-                    }
-                }
-            })
-            // Process connections in parallel
-            // TODO Spawn tasks instead
-            .for_each_concurrent(Self::CONNECTIONS_MAX, |tcp| async {
-                let addr_str = tcp.peer_addr().unwrap().to_string();
-                trace!("Accepted TCP {}", &addr_str);
-                if let Err(err) = this.handle_tcp_stream(tcp).await {
-                    error!("Could not accept connection: {}", err);
-                }
-                trace!("Finished TCP {}", &addr_str);
-            })
-            .await;
+    // Tries to gracefully close all connections.
+    // After timeout, the remaining connections are killed.
+    pub fn stop(self: &Arc<WebSocketConnector>, timeout: Duration) -> Result<(), ServerStopError> {
+        match self.close_signal.lock().take() {
+            Some(closer) => closer.send(timeout).expect("Failed to close server"),
+            None => return Err(ServerStopError::AlreadyStopped),
+        };
+        Ok(())
     }
 
-    async fn handle_tcp_stream(self: &Arc<WebSocketConnector>, tcp: TcpStream) -> Result<(), Error> {
-        let peer_addr = tcp.peer_addr()?.ip();
+    // Accepts incoming connections and spawns connection handlers.
+    // The shutdown signal makes the server stop accepting conns
+    // and tells the handlers to close their connections gracefully.
+    // After the duration sent in shutdown passes,
+    // handlers will force-exit by dropping the TCP sessions.
+    // Finally, the future completes when all connection handlers exit.
+    async fn accept_tcp_streams(self: Arc<WebSocketConnector>, mut socket: TcpListener, shutdown: oneshot::Receiver<Duration>) {
+        let mut shutdown = shutdown.fuse();
+        let conn_count = Arc::new(Mutex::new(0usize));
+        let wg = WaitGroup::new();
+        let (status_tx, status_rx) = watch::channel(ConnectionStatusTarget::Open);
+        let mut kill_timeout = Duration::from_secs(0);
+        loop {
+            // Skip if we cannot accept a new connection
+            {
+                let mut conns = conn_count.lock();
+                if *conns >= Self::CONNECTIONS_MAX {
+                    continue;
+                }
+                *conns += 1;
+            }
+            // Try to accept next connection
+            let conn_res = select! {
+                res = shutdown => {
+                    if let Ok(dur) = res {
+                        kill_timeout = dur;
+                    } else {
+                        // Sender died, implicit kill
+                        return;
+                    }
+                    break;
+                },
+                res = socket.accept().fuse() => res,
+            };
+            // Handle accept errors like tk-listen.
+            // Connection errors should be ignored because they have no effect on the server.
+            // Ignoring socket errors can cause the server to spin though,
+            // we pause the server for a short time to allow the kernel to recover.
+            let (tcp, addr) = match conn_res {
+                Ok(conn) => conn,
+                Err(err) => {
+                    match err.kind() {
+                        IOErrorKind::ConnectionRefused
+                        | IOErrorKind::ConnectionAborted
+                        | IOErrorKind::ConnectionReset => {
+                            warn!("Cannot accept broken connection: {}", err);
+                        },
+                        _ => {
+                            error!("Failed to accept TCP connection, throttling: {}", err);
+                            delay_for(Self::WAIT_TIME_ON_ERROR).await;
+                        }
+                    }
+                    continue;
+                }
+            };
+            let this = Arc::clone(&self);
+            let mut on_close = status_rx.clone();
+            let wg2 = wg.clone();
+            let conn_count2 = Arc::clone(&conn_count);
+            tokio::spawn(async move {
+                let on_close2 = on_close.clone();
+                let mut on_kill = async move {
+                    while let Some(status) = on_close.recv().await {
+                        if status == ConnectionStatusTarget::Kill {
+                            break;
+                        }
+                    }
+                }.boxed().fuse();
+                let stream_result = select! {
+                    res = this.handle_tcp_stream(tcp, addr, on_close2).fuse() => res,
+                    _ = on_kill => return, // Drop the TcpStream
+                };
+                if let Err(err) = stream_result {
+                    error!("Could not accept connection: {}", err);
+                }
+                *conn_count2.lock() -= 1;
+                // Capture the WaitGroup handle and drop it when the connection handler exits.
+                drop(wg2);
+            });
+        }
+        // Tell all connection handlers to close connection.
+        if let Err(err) = status_tx.broadcast(ConnectionStatusTarget::Close) {
+            panic!("Failed to broadcast close signal to connection handlers")
+        }
+        // Wait for connection handlers to close connection or send kill signal on timeout.
+        let mut finish_fut = wg.wait().boxed().fuse();
+        select! {
+            _ = finish_fut => (),
+            _ = delay_for(kill_timeout).fuse() => {
+                // Send kill signal and continue to wait
+                if let Err(err) = status_tx.broadcast(ConnectionStatusTarget::Kill) {
+                    panic!("Failed to broadcast kill signal to connection handlers")
+                }
+                finish_fut.await;
+            }
+        }
+    }
+
+    // Handles a single WebSocket connection over tokio-tcp.
+    // As soon as is_open changes to "false", the connection is closed.
+    // Only the first value received by is_open may be Open.
+    async fn handle_tcp_stream(
+        self: &Arc<WebSocketConnector>,
+        tcp: TcpStream,
+        addr: SocketAddr,
+        mut status: watch::Receiver<ConnectionStatusTarget>
+    ) -> Result<(), Error> {
+        // Before doing anything, check whether channel is open.
+        if status.recv().await != Some(ConnectionStatusTarget::Open) {
+            trace!("Server closing before handshake with {} could complete", addr);
+            if let Err(err) = tcp.shutdown(Shutdown::Both) {
+                warn!("Failed to shutdown connection to {}", addr);
+            }
+            return Ok(())
+        }
+
+        let peer_addr = addr.ip();
         let net_addr = match peer_addr {
             IpAddr::V4(v) => NetAddress::IPv4(v),
             IpAddr::V6(v) => NetAddress::IPv6(v),
         };
         let notifier = Arc::clone(&self.notifier);
         let acceptor = self.tls_acceptor.clone();
+
+        // Do TLS handshake if required
         let wrapped = wrap_stream(tcp, acceptor, self.mode)
             .await?;
+
+        // Do Nimiq handshake and start relaying messages
         let callback = ReverseProxyCallback::new(self.reverse_proxy_config.clone());
         let msg_stream = nimiq_accept_async(wrapped, net_addr, callback.clone().to_callback())
             .await?;

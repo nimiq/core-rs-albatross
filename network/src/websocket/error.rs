@@ -115,3 +115,9 @@ impl From<TlsError> for ServerStartError {
         ServerStartError::TlsError(e)
     }
 }
+
+#[derive(Fail, Debug)]
+pub enum ServerStopError {
+    #[fail(display = "The server is already stopped")]
+    AlreadyStopped,
+}

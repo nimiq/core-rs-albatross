@@ -28,7 +28,7 @@ native-tls = "0.2"
 parking_lot = "0.9"
 rand = "0.7"
 reqwest = "0.10"
-tokio = { version = "0.2", features = ["stream", "time", "tcp"] }
+tokio = { version = "0.2", features = ["stream", "sync", "time", "tcp"] }
 tokio-tls = "0.3"
 tokio-tungstenite = { git = "https://github.com/snapview/tokio-tungstenite", features = ["tls"] }
 tungstenite = { version = "0.9", default-features = false }
@@ -43,7 +43,23 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-messages = { path = "../messages", version = "0.1" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["all"] }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "sleep-on-error", "unique-id"] }
+
+[dependencies.nimiq-utils]
+path = "../utils"
+version = "0.1"
+features = [
+    "futures-sync",
+    "timers",
+    "key-store",
+    "observer",
+    "mutable-once",
+    "time",
+    "unique-ptr",
+    "iterators",
+    "locking",
+    "rate-limit",
+    "unique-id",
+]
 
 [features]
 metrics = []

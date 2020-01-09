@@ -11,6 +11,8 @@ extern crate beserial_derive;
 
 #[cfg(feature = "crc")]
 pub mod crc;
+#[cfg(feature = "futures-sync")]
+pub mod futures_sync;
 #[cfg(feature = "key-store")]
 pub mod key_store;
 #[cfg(feature = "merkle")]
@@ -35,8 +37,6 @@ pub mod time;
 pub mod throttled_queue;
 #[cfg(feature = "rate-limit")]
 pub mod rate_limit;
-#[cfg(feature = "sleep-on-error")]
-pub mod sleep_on_error;
 #[cfg(feature = "unique-id")]
 pub mod unique_id;
 #[cfg(feature = "otp")]
