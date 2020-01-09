@@ -12,11 +12,10 @@ extern crate nimiq_validator as validator;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::collections::HashMap;
-use std::io::{Error as IoError, ErrorKind};
+use std::io::Error as IoError;
 
-use futures::{Future, Stream, IntoFuture};
-use futures::sink::Sink;
-use futures::sync::mpsc::{channel, Sender};
+use futures::{select, FutureExt, StreamExt};
+use futures::channel::mpsc::{channel, Sender};
 use tokio::net::{TcpListener};
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::{Message, Error as WsError};
@@ -32,8 +31,7 @@ use hash::{Hash, Blake2bHash};
 use validator::validator_network::ValidatorNetworkEvent;
 #[cfg(feature="validator")]
 use validator::validator::Validator;
-
-pub type WsRpcServerFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>;
+use futures::future::BoxFuture;
 
 type WsRpcConnections = Arc<RwLock<HashMap<UniqueId, WsRpcConnection>>>;
 
@@ -43,106 +41,112 @@ struct WsRpcConnection {
 }
 
 pub struct WsRpcServer {
-    future: WsRpcServerFuture,
+    pub future: BoxFuture<'static, ()>,
     connections: WsRpcConnections,
 }
 
 impl WsRpcServer {
     const QUEUE_SIZE: usize = 64;
 
-    pub fn new(ip: IpAddr, port: u16) -> Result<Self, IoError>
+    pub async fn new(ip: IpAddr, port: u16) -> Result<Self, IoError>
     {
-        let socket = TcpListener::bind(&SocketAddr::new(ip, port))?;
+        let mut socket = TcpListener::bind(&SocketAddr::new(ip, port)).await?;
 
         let connections = Arc::new(RwLock::new(HashMap::new()));
         let connections_tcp = Arc::clone(&connections);
 
         // Listen for incoming connections, do websocket handshake and put them in connections.
-        let future = socket.incoming()
-            .for_each(move |stream| {
-                let address = stream.peer_addr().unwrap();
-                let connection_id = UniqueId::new();
-                // TODO: IP filter here
-                info!("Client connected: {}, id={}", address, connection_id);
-
+        // TODO Use Hyper and upgrade https://github.com/nimiq/core-rs-albatross/issues/119
+        let future = async move {
+            loop {
                 let connections_stream = Arc::clone(&connections_tcp);
                 let connections_err = Arc::clone(&connections_tcp);
 
-                accept_async(stream)
-                    .and_then(move |ws_stream| {
-                        // Split stream
-                        let (sink, stream) = ws_stream.split();
+                let conn_res = socket.accept().await;
+                let (stream, address) = match conn_res {
+                    Ok(conn) => conn,
+                    Err(err) => {
+                        error!("Failed to accept connection {}", err);
+                        continue;
+                    }
+                };
+                let connection_id = UniqueId::new();
+                // TODO: IP filter here
+                info!("Client connected: {}, id={}", address, connection_id);
+                // XXX Sequential client handshakes
+                let ws_stream = match accept_async(stream).await {
+                    Ok(ws) => ws,
+                    Err(err) => {
+                        error!("Connection error: {}", err);
+                        continue;
+                    }
+                };
+                // Split stream
+                let (sink, mut stream) = ws_stream.split();
+                // Create MPSC channel
+                let (tx, rx) = channel::<Message>(Self::QUEUE_SIZE);
+                let try_rx = rx.map(|x| Ok::<_, WsError>(x));
+                // Send everything from the MSPC channel
+                let send_future = try_rx.forward(sink);
+                // Receive messages (and ignore them)
+                let connection_id_recv = connection_id;
+                let connections_recv = Arc::clone(&connections_stream);
+                let recv_future = async move {
+                    while let Some(message_res) = stream.next().await {
+                        let message = message_res?;
 
-                        // Create MPSC channel
-                        let (tx, rx) = channel::<Message>(Self::QUEUE_SIZE);
+                        // Received message. We ignore those. But we could use this for
+                        // authentication and just set a flag in the connection to enable
+                        // streaming events.
+                        //
+                        // TODO: We'll also receive close frames, which let's us close the
+                        // connection gracefully.
 
-                        // Send everything from the MSPC channel
-                        let send_future = sink.send_all(rx.map_err(|_| WsError::ConnectionClosed));
+                        // Log message
+                        debug!("Received message from #{}: {}", connection_id_recv, message);
 
-                        // Receive messages (and ignore them)
-                        let connection_id_recv = connection_id;
-                        let connections_recv = Arc::clone(&connections_stream);
-                        let recv_future = stream
-                            .for_each(move |message: Message| {
-                                // Received message. We ignore those. But we could use this for
-                                // authentication and just set a flag in the connection to enable
-                                // streaming events.
-                                //
-                                // TODO: We'll also receive close frames, which let's us close the
-                                // connection gracefully.
+                        // Handle message
+                        match message {
+                            Message::Close(_close_frame_opt) => {
+                                // Remove connection from connections map
+                                let _connection = connections_recv.write().remove(&connection_id_recv)
+                                    .ok_or(WsError::AlreadyClosed)?;
+                            },
+                            Message::Text(_message) => {
+                                // TODO: Handle authentication
+                            },
+                            _ => {
+                                // Abort connection for everything else
+                                return Err(WsError::ConnectionClosed);
+                            }
+                        }
+                    }
+                    Ok(())
+                };
+                // Put sink into connections
+                connections_stream.write()
+                    .insert(connection_id.clone(), WsRpcConnection {
+                        address,
+                        tx,
+                    });
 
-                                // Log message
-                                debug!("Received message from #{}: {}", connection_id_recv, message);
-
-                                // Handle message
-                                match message {
-                                    Message::Close(_close_frame_opt) => {
-                                        // Remove connection from connections map
-                                        let _connection = connections_recv.write().remove(&connection_id_recv)
-                                            .ok_or(WsError::AlreadyClosed)?;
-
-                                        Ok(())
-                                    },
-                                    Message::Text(_message) => {
-                                        // TODO: Handle authentication
-                                        Ok(())
-                                    },
-                                    _ => {
-                                        // Abort connection for everything else
-                                        Err(WsError::ConnectionClosed)
-                                    }
-                                }
-                            });
-
-                        // Put sink into connections
-                        connections_stream.write()
-                            .insert(connection_id.clone(), WsRpcConnection {
-                                address,
-                                tx,
-                            });
-
-                        let connection_future = send_future
-                            .join(recv_future)
-                            .map(|_|())
-                            .map_err(move |e| {
-                                // Handle errors here. We'll just log it and close the connection.
-                                warn!("Connection error: #{}: {}", connection_id, e);
-
-                                // Close connection
-                                connections_err.write().remove(&connection_id);
-                            });
-
-                        tokio::spawn(connection_future);
-                        Ok(())
-                    })
-                    .map_err(|e| IoError::new(ErrorKind::BrokenPipe, format!("Connection error: {}", e)))
-            })
-            .map_err(|e| {
-                error!("Server socket failed: {}", e);
-            });
+                tokio::spawn(async move {
+                    let res: Result<(), _> = select! {
+                        res = send_future.fuse() => res,
+                        res = recv_future.fuse() => res,
+                    };
+                    if let Err(e) = res {
+                        // Handle errors here. We'll just log it and close the connection.
+                        warn!("Connection error: #{}: {}", connection_id, e);
+                        // Close connection
+                        connections_err.write().remove(&connection_id);
+                    }
+                });
+            }
+        }.boxed();
 
         Ok(Self {
-            future: Box::new(future),
+            future,
             connections,
         })
     }
@@ -241,15 +245,5 @@ impl WsRpcServer {
                 warn!("Unable to send event to {}: {}", connection.address, e);
             }
         }
-    }
-}
-
-impl IntoFuture for WsRpcServer {
-    type Future = WsRpcServerFuture;
-    type Item = ();
-    type Error = ();
-
-    fn into_future(self) -> Self::Future {
-        self.future
     }
 }

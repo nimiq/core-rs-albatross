@@ -48,6 +48,7 @@ async fn main() -> Result<(), Error> {
     let protocol_config = config.protocol.clone();
     let rpc_config = config.rpc_server.clone();
     let metrics_config = config.metrics_server.clone();
+    let ws_rpc_config = config.ws_rpc_server.clone();
 
     // Create client from config
     info!("Initializing client");
@@ -73,6 +74,16 @@ async fn main() -> Result<(), Error> {
             }
         }
         tokio::spawn(client.clone().metrics_server(metrics_config));
+    }
+
+    // Initialize Websocket RPC server
+    // TODO: Configuration
+    if let Some(ws_rpc_config) = ws_rpc_config {
+        use nimiq::extras::ws_rpc_server::initialize_ws_rpc_server;
+        let ws_rpc_server = initialize_ws_rpc_server(&client, ws_rpc_config)
+            .await
+            .expect("Failed to initialize websocket RPC server");
+        tokio::spawn(ws_rpc_server.future);
     }
 
     // Initialize network stack and connect

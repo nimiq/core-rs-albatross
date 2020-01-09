@@ -29,6 +29,7 @@ features = [
     "validator",
     "rpc-server",
     "metrics-server",
+    "ws-rpc-server",
     "deadlock",
     "logging",
     "panic"

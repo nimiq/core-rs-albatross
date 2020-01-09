@@ -18,12 +18,12 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 failure = "0.1"
-futures = "0.1"
+futures = "0.3"
 json = "0.12"
 log = "0.4"
 parking_lot = "0.9"
-tokio = "0.1"
-tokio-tungstenite = "0.8"
+tokio = "0.2"
+tokio-tungstenite = { git = "https://github.com/snapview/tokio-tungstenite" }
 
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1" }
