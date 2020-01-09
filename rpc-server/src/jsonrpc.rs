@@ -1,11 +1,14 @@
+use std::str::from_utf8;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 
-use futures::{future, Future, IntoFuture, stream::Stream};
+use futures::{FutureExt, stream::Stream, StreamExt};
 use hyper::{Body, Method, Request, Response, StatusCode};
 use hyper::header::HeaderValue;
 use json::{Array, JsonValue, Null, array, object};
 
 use crate::error::AuthenticationError;
+use futures::future::BoxFuture;
 
 pub trait Handler: Send + Sync {
     fn call_method(&self, name: &str, params: Array) -> Option<Result<JsonValue, JsonValue>>;
@@ -43,8 +46,8 @@ impl std::fmt::Display for Never {
 }
 
 fn handle_request<H>(handler: Arc<H>, str_o: Result<&str, std::str::Utf8Error>) -> Response<Body> where H: Handler {
-    let mut builder = Response::builder();
-    builder.header("Content-Type", "application/json");
+    let builder = Response::builder()
+        .header("Content-Type", "application/json");
     if str_o.is_err() {
         return builder
             .status(StatusCode::BAD_REQUEST)
@@ -170,39 +173,46 @@ fn check_authentication<H: Handler>(handler: Arc<H>, authorization: Option<&Head
     }
 }
 
-impl<H> IntoFuture for Service<H> where H: Handler {
-    type Future = future::FutureResult<Self::Item, Self::Error>;
-    type Item = Self;
-    type Error = Never;
-
-    fn into_future(self) -> Self::Future {
-        future::ok(self)
-    }
-}
-
-impl<H> hyper::service::Service for Service<H> where H: Handler + 'static {
-    type ReqBody = Body;
-    type ResBody = Body;
+impl<H> hyper::service::Service<Request<Body>> for Service<H> where H: Handler + 'static {
+    type Response = Response<Body>;
     type Error = hyper::Error;
-    type Future = Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn call(&mut self, req: Request<<Self as hyper::service::Service>::ReqBody>) -> <Self as hyper::service::Service>::Future {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
         let handler = Arc::clone(&self.handler);
         match *req.method() {
-            Method::GET => Box::new(future::ok(Response::new(Body::from("Nimiq JSON-RPC Server")))),
+            Method::GET => async move {
+                Ok(Response::new(Body::from("Nimiq JSON-RPC Server")))
+            }.boxed(),
             Method::POST => {
                 if let Err(e) = check_authentication(Arc::clone(&handler), req.headers().get("Authorization")) {
                     info!("Authentication failed: {}", e);
-                    //return Box::new(future::ok(Response::new(Body::from(json::stringify(e)))));
-                    return Box::new(future::ok(Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .body(Body::from(""))
-                        .unwrap()));
+                    return async move {
+                        Ok(Response::builder()
+                            .status(StatusCode::UNAUTHORIZED)
+                            .body(Body::from(""))
+                            .unwrap())
+                    }.boxed();
                 }
-                Box::new(req.into_body().concat2()
-                    .map(|b| handle_request(handler, std::str::from_utf8(&b))))
+                async move {
+                    let mut stream = req.into_body();
+                    let size_hint = stream.size_hint();
+                    let size_guess = size_hint.1.unwrap_or(size_hint.0);
+                    let mut buf = Vec::<u8>::with_capacity(size_guess);
+                    while let Some(chunk_res) = stream.next().await {
+                        let chunk = chunk_res?;
+                        buf.extend(chunk.to_vec());
+                    }
+                    Ok(handle_request(handler, from_utf8(&buf)))
+                }.boxed()
             },
-            _ => Box::new(future::ok(Response::new(Body::from(""))))
+            _ => async move {
+                Ok(Response::new(Body::from("")))
+            }.boxed()
         }
     }
 }

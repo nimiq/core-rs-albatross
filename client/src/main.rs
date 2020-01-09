@@ -46,6 +46,7 @@ async fn main() -> Result<(), Error> {
     // a lazy future for it.
     // Clone those now, because we pass ownership of config to Client
     let protocol_config = config.protocol.clone();
+    let rpc_config = config.rpc_server.clone();
     let metrics_config = config.metrics_server.clone();
 
     // Create client from config
@@ -54,6 +55,14 @@ async fn main() -> Result<(), Error> {
     client.initialize().await?;
 
     // TODO Initialize RPC servers
+
+    // Initialize RPC server
+    if let Some(rpc_config) = rpc_config {
+        use nimiq::extras::rpc_server::initialize_rpc_server;
+        let rpc_server = initialize_rpc_server(&client, rpc_config)
+            .expect("Failed to initialize RPC server");
+        tokio::spawn(rpc_server.future);
+    }
 
     // Initialize metrics server
     if let Some(mut metrics_config) = metrics_config {

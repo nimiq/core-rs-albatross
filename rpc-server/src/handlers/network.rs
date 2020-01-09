@@ -189,7 +189,7 @@ impl<P: ConsensusProtocol + 'static> NetworkHandler<P> {
     /// Parameters: None
     ///
     /// The return value is a string, the peer public key.
-    pub(crate) fn peer_public_key(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn peer_public_key(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         Ok(self.network.network_config.key_pair().public.to_hex().into())
     }
 }

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::iter::FromIterator;
 
-use rpc_server::{RpcServer, JsonRpcConfig};
+use rpc_server::{Server as RpcServer, JsonRpcConfig};
 use rpc_server::handlers::*;
 
 use crate::client::Client;

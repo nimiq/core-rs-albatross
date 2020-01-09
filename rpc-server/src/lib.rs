@@ -19,16 +19,17 @@ extern crate nimiq_utils as utils;
 extern crate nimiq_validator as validator;
 
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-use futures::future::Future;
-use hyper::Server;
+use futures::{future::BoxFuture, FutureExt, TryFutureExt};
+use hyper::Server as HyperServer;
+use hyper::service::make_service_fn;
 use json::{JsonValue, object};
 
 use crate::error::Error;
 pub use crate::handler::Handler;
-use futures::IntoFuture;
 
 pub mod jsonrpc;
 pub mod error;
@@ -49,38 +50,27 @@ pub struct JsonRpcConfig {
     pub corsdomain: Vec<String>,
 }
 
-
-pub type RpcServerFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>;
-
-pub struct RpcServer {
-    future: RpcServerFuture,
+pub struct Server {
+    pub future: BoxFuture<'static, Result<(), Error>>,
     pub handler: Arc<Handler>,
 }
 
-impl RpcServer {
+impl Server {
     pub fn new(ip: IpAddr, port: u16, config: JsonRpcConfig) -> Result<Self, Error> {
         let handler = Arc::new(Handler::new(config));
-
         let handler2 = Arc::clone(&handler);
-        let future = Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
-            .serve(move || {
-                jsonrpc::Service::new(Arc::clone(&handler2))
-            })
-            .map_err(|e| error!("RPC server failed: {}", e)));
-
-        Ok(RpcServer {
+        let future = HyperServer::try_bind(&SocketAddr::new(ip, port))?
+            .serve(make_service_fn(move |_conn| {
+                let handler = Arc::clone(&handler2);
+                async move {
+                    Ok::<_, Infallible>(jsonrpc::Service::new(handler))
+                }
+            }))
+            .map_err(|err| err.into())
+            .boxed();
+        Ok(Self {
             future,
-            handler,
+            handler: Arc::clone(&handler),
         })
-    }
-}
-
-impl IntoFuture for RpcServer {
-    type Future = RpcServerFuture;
-    type Item = ();
-    type Error = ();
-
-    fn into_future(self) -> Self::Future {
-        self.future
     }
 }

@@ -58,7 +58,7 @@ nimiq-ws-rpc-server = { path = "../ws-rpc-server", version = "0.1", optional = t
 
 [features]
 default = []
-validator = ["nimiq-validator", "nimiq-bls"]
+validator = ["nimiq-validator", "nimiq-bls", "nimiq-rpc-server/validator"]
 deadlock = ["parking_lot"]
 panic = ["log-panics", "human-panic"]
 logging = ["fern", "colored"]
