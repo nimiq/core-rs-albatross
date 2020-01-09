@@ -153,8 +153,8 @@ pub struct Client {
 
 impl Client {
     /// Initializes the Nimiq network stack.
-    pub fn initialize(&self) -> Result<(), Error> {
-        self.inner.consensus.network.initialize()?;
+    pub async fn initialize(&self) -> Result<(), Error> {
+        self.inner.consensus.network.initialize().await?;
         Ok(())
     }
 

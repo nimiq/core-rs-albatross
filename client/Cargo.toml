@@ -19,20 +19,14 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 futures = "0.3"
-futures_1 = { version = "0.1", package = "futures" }
 log = "0.4"
-tokio = { version = "0.2", features = ["time"] }
-tokio_1 = { version = "0.1", package = "tokio" }
-tokio-compat = "0.1"
+tokio = { version = "0.2", features = ["full"] }
 
 [dependencies.nimiq-lib]
 path = "../lib"
 version = "0.1"
 features = [
     "validator",
-    "rpc-server",
-    "metrics-server",
-    "ws-rpc-server",
     "deadlock",
     "logging",
     "panic"

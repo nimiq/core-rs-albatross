@@ -23,7 +23,7 @@ bitflags = "1.0"
 failure = "0.1"
 hex = "0.4"
 lazy_static = "1.2"
-url = "1.7"
+url = "2.1"
 
 beserial = { path = "../beserial", version = "0.1", features = ["net"] }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
