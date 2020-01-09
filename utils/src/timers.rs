@@ -7,7 +7,7 @@ use std::time::Duration;
 use futures::{select, FutureExt};
 use futures::channel::oneshot;
 use parking_lot::{Mutex, MutexGuard};
-use tokio::time::{delay_for, interval};
+use tokio::time::{delay_for, interval_at, Instant};
 
 #[derive(Default)]
 pub struct Timers<K: Eq + Hash + Debug> {
@@ -73,6 +73,7 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     /// The key must be unique to all intervals and the caller is expected to clear the timeout
     /// (even after successful completion) if the key is going to be used multiple times
     /// or to prevent memory leaks.
+    /// The first interval tick does not happen immediately.
     pub fn set_interval<F: Send + Sync + 'static>(&self, key: K, func: F, duration: Duration)
         where F: Fn() {
         let mut intervals = self.intervals.lock();
@@ -131,7 +132,7 @@ impl<K: Eq + Hash + Debug> Timers<K> {
         intervals.insert(key, tx);
         tokio::spawn(async move {
             let interval_fut = async move {
-                let mut stream = interval(duration);
+                let mut stream = interval_at(Instant::now() + duration, duration);
                 loop {
                     stream.tick().await;
                     func();

@@ -248,7 +248,6 @@ impl Validator {
             // NOTE: This doesn't take the state lock, so we don't need to drop it
             self.reset_view_change_interval(Self::BLOCK_TIMEOUT);
             state.active_view_change = None;
-
         }
 
         // If we're an active validator, we need to check if we're the next block producer.
