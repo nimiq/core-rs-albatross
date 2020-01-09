@@ -1,16 +1,14 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::task::{Context, Poll, Waker};
 use std::thread;
 use std::time::Instant;
 
-use futures::future::Future;
-use futures::Poll;
-use futures::prelude::*;
-use futures::task;
-use futures::task::Task;
 use parking_lot::RwLock;
 
 use beserial::Serialize;
@@ -28,7 +26,7 @@ pub struct AccountsChunkCache<B: AbstractBlockchain + 'static> {
     env: Environment,
     computing_enabled: AtomicBool,
     chunks_by_prefix_by_block: RwLock<HashMap<Blake2bHash, HashMap<String, SerializedChunk>>>,
-    tasks_by_block: RwLock<HashMap<Blake2bHash, Vec<Task>>>,
+    wakers_by_block: RwLock<HashMap<Blake2bHash, Vec<Waker>>>,
     block_history_order: RwLock<VecDeque<Blake2bHash>>,
     weak_self: MutableOnce<Weak<Self>>
 }
@@ -44,7 +42,7 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
             env,
             computing_enabled: AtomicBool::new(false),
             chunks_by_prefix_by_block: RwLock::new(HashMap::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
-            tasks_by_block: RwLock::new(HashMap::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
+            wakers_by_block: RwLock::new(HashMap::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
             block_history_order: RwLock::new(VecDeque::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
             weak_self: MutableOnce::new(Weak::new()),
         };
@@ -95,7 +93,7 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
 
             // Check that this hash is not yet worked on.
             {
-                let mut guard = this.tasks_by_block.write();
+                let mut guard = this.wakers_by_block.write();
                 if guard.contains_key(&hash) {
                     return;
                 }
@@ -123,11 +121,11 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
                 } else {
                     break;
                 }
-                this.notify_tasks_for_block(&hash);
+                this.notify_wakers_for_block(&hash);
             }
-            this.notify_tasks_for_block(&hash);
+            this.notify_wakers_for_block(&hash);
             // The chunks are cached, so newly created requests will not need to enter them into the list of tasks.
-            this.tasks_by_block.write().remove(&hash.clone());
+            this.wakers_by_block.write().remove(&hash.clone());
 
             let num_chunks = this.chunks_by_prefix_by_block.read().get(&hash).map_or(0, HashMap::len);
             trace!("Computing {} chunks for block {} tree took {:?}", num_chunks, hash, chunk_start.elapsed());
@@ -143,9 +141,9 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
                     this.chunks_by_prefix_by_block.write().remove(&block_hash);
 
                     // Then remove the tasks (if present) and notify those that there won't be an update.
-                    if let Some(tasks) = this.tasks_by_block.write().remove(&block_hash) {
-                        for task in tasks {
-                            task.notify();
+                    if let Some(wakers) = this.wakers_by_block.write().remove(&block_hash) {
+                        for waker in wakers {
+                            waker.wake();
                         }
                     }
                 }
@@ -153,11 +151,11 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
         });
     }
 
-    /// Notifies tasks that something changed.
-    fn notify_tasks_for_block(&self, hash: &Blake2bHash) {
-        if let Some(tasks) = self.tasks_by_block.read().get(&hash) {
-            for task in tasks {
-                task.notify();
+    /// Notifies wakers that something changed.
+    fn notify_wakers_for_block(&self, hash: &Blake2bHash) {
+        if let Some(wakers) = self.wakers_by_block.read().get(&hash) {
+            for waker in wakers {
+                waker.clone().wake();
             }
         }
     }
@@ -178,28 +176,28 @@ impl<B: AbstractBlockchain> GetChunkFuture<B> {
 }
 
 impl<B: AbstractBlockchain> Future for GetChunkFuture<B> {
-    type Item = Option<SerializedChunk>;
-    type Error = ();
+    type Output = Option<SerializedChunk>;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = &mut *self;
         // If chunk is available, deliver it to the client.
-        if let Some(chunks_by_prefix) = self.chunk_cache.chunks_by_prefix_by_block.read().get(&self.hash) {
-            if let Some(chunk) = chunks_by_prefix.get(&self.prefix) {
-                return Ok(Async::Ready(Some(chunk.clone())));
+        if let Some(chunks_by_prefix) = this.chunk_cache.chunks_by_prefix_by_block.read().get(&this.hash) {
+            if let Some(chunk) = chunks_by_prefix.get(&this.prefix) {
+                return Poll::Ready(Some(chunk.clone()));
             }
         }
         // Otherwise check if the task is (still) filed.
-        if let Some(tasks) = self.chunk_cache.tasks_by_block.write().get_mut(&self.hash) {
+        if let Some(wakers) = this.chunk_cache.wakers_by_block.write().get_mut(&this.hash) {
             // If yes, "subscribe" to updates.
-            if !self.running {
-                tasks.push(task::current());
-                self.running = true;
+            if !this.running {
+                wakers.push(cx.waker().clone());
+                this.running = true;
             }
-            Ok(Async::NotReady)
+            Poll::Pending
         } else {
             // Else, the block is unknown, too far in the past or something else.
             // Return None in these cases.
-            Ok(Async::Ready(None))
+            Poll::Ready(None)
         }
     }
 }

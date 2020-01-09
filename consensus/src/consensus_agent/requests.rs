@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
-use futures::Future;
-use tokio::prelude::*;
-
 use blockchain_base::AbstractBlockchain;
 use hash::Blake2bHash;
 use network_messages::{
@@ -103,12 +100,11 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         trace!("[GET-ACCOUNTS-TREE-CHUNK] from {}", self.peer.peer_address());
         let get_chunk_future = self.accounts_chunk_cache.get_chunk(&msg.block_hash, &msg.start_prefix);
         let peer = self.peer.clone();
-        let future = get_chunk_future.then(move |chunk_res| {
-            let chunk_opt = chunk_res.unwrap_or(None).map(AccountsTreeChunkData::Serialized);
+        tokio::spawn(async move {
+            let chunk_opt = get_chunk_future.await
+                .map(AccountsTreeChunkData::Serialized);
             peer.channel.send_or_close(Message::AccountsTreeChunk(Box::new(AccountsTreeChunkMessage { block_hash: msg.block_hash, chunk: chunk_opt })));
-            future::ok::<(), ()>(())
         });
-        tokio::spawn(future);
     }
 
     pub(super) fn on_get_epoch_transactions(&self, get_epoch_transactions_message: GetEpochTransactionsMessage) {

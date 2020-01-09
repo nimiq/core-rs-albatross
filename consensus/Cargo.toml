@@ -18,11 +18,10 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 failure = "0.1"
-futures = "0.1"
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
-tokio = "0.1"
+tokio = "0.2"
 weak-table = "0.2"
 
 beserial = { path = "../beserial", version = "0.1" }
