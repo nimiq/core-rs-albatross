@@ -20,11 +20,9 @@ pub mod shared_stream;
 /// This enum encapsulates the two types of messages we send over the channel:
 /// - Nimiq messages
 /// - Close frames
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Message {
     Message(NimiqMessage), // TODO: Box?
     Close(Option<CloseFrame<'static>>),
-    #[doc(hidden)]
-    Resume(Vec<u8>, Option<u8>),
 }
 

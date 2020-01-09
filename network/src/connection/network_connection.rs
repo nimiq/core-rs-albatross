@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use futures::select;
 use futures::prelude::*;
-use futures::stream::Forward;
-use futures::sync::mpsc::*;
+use futures::channel::mpsc::*;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -18,7 +18,7 @@ use crate::network_metrics::NetworkMetrics;
 use crate::peer_channel::PeerSink;
 use crate::peer_channel::PeerStream;
 use crate::peer_channel::PeerStreamEvent;
-use crate::websocket::{Message, SharedNimiqMessageStream};
+use crate::websocket::{Message as WebSocketMessage, SharedNimiqMessageStream};
 use std::fmt;
 
 #[derive(Debug, Clone, Default)]
@@ -66,16 +66,31 @@ pub struct NetworkConnection {
 }
 
 impl NetworkConnection {
-    pub fn new_connection_setup(stream: SharedNimiqMessageStream, address_info: AddressInfo) -> (Self, ProcessConnectionFuture) {
+    pub fn new_connection_setup(stream: SharedNimiqMessageStream, address_info: AddressInfo) -> (Self, impl Future<Output=()>) {
         let id = UniqueId::new();
         let closed_flag = ClosedFlag::new();
-        let (tx, rx) = unbounded(); // TODO: use bounded channel?
-
-        let forward_future = rx.forward(stream.clone());
+        let (tx, rx) = unbounded::<WebSocketMessage>(); // TODO: use bounded channel?
 
         let notifier = Arc::new(RwLock::new(PassThroughNotifier::new()));
         let peer_stream = PeerStream::new(stream.clone(), notifier.clone(), closed_flag.clone());
-        let process_connection = ProcessConnectionFuture::new(peer_stream, forward_future, id);
+
+        let stream2 = stream.clone();
+        let process_connection = async move {
+            // Either our unbounded message queue or the peer_stream closes.
+            let res = select! {
+                // Send all generated messages out to peer_stream.
+                // We map rx to a TryStream, which is required by forward/send_all.
+                // Also: `stream` is actually a Sink in this case.
+                // Pipeline looks like this:
+                //   n*[...] => tx => rx => stream
+                res = rx.map(|msg| Ok(msg)).forward(stream2).fuse() => res,
+                // Send all received messages from peer_stream in to notifier.
+                res = peer_stream.process_stream().fuse() => res,
+            };
+            if let Err(err) = res {
+                warn!("Error relaying messages: {}", err);
+            }
+        };
 
         let peer_sink = PeerSink::new(tx, id, closed_flag.clone());
 
@@ -128,33 +143,6 @@ impl NetworkConnection {
     #[cfg(feature = "metrics")]
     pub fn metrics(&self) -> &Arc<NetworkMetrics> {
         self.stream.network_metrics()
-    }
-}
-
-pub struct ProcessConnectionFuture {
-    inner: Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>,
-}
-
-impl ProcessConnectionFuture {
-    pub fn new(peer_stream: PeerStream, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>, _id: UniqueId) -> Self {
-        // `select` required Item/Error to be the same, that's why we need to map them both to ().
-        // TODO We're discarding any errors here, especially those coming from the forward future.
-        // Results by the peer_stream have been processes already.
-        let connection = forward_future.map(|_| ()).map_err(|_| ()).select(peer_stream.process_stream().map_err(|_| ()));
-        let connection = connection.map(|_| ()).map_err(|_| ());
-
-        Self {
-            inner: Box::new(connection)
-        }
-    }
-}
-
-impl Future for ProcessConnectionFuture {
-    type Item = ();
-    type Error = ();
-
-    fn poll(&mut self) -> Result<Async<<Self as Future>::Item>, <Self as Future>::Error> {
-        self.inner.poll()
     }
 }
 

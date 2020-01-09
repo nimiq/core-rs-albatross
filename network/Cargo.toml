@@ -18,19 +18,21 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 atomic = "0.4"
+bytes = "0.5"
 failure = "0.1"
-futures = "0.1"
+futures = { version = "0.3" }
 hex = "0.4"
+http = "0.1" # required because of version http version mismatch reqwest vs tungstenite
 log = "0.4"
 native-tls = "0.2"
 parking_lot = "0.9"
 rand = "0.7"
-reqwest = "0.9"
-tk-listen = "0.2.1"
-tokio = "0.1"
-tokio-tls = "0.2"
-tokio-tungstenite = "0.8"
-url = "1.7"
+reqwest = "0.10"
+tokio = { version = "0.2", features = ["stream", "time", "tcp"] }
+tokio-tls = "0.3"
+tokio-tungstenite = { git = "https://github.com/snapview/tokio-tungstenite", features = ["tls"] }
+tungstenite = { version = "0.9", default-features = false }
+url = "2.1"
 
 beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
@@ -41,11 +43,7 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-messages = { path = "../messages", version = "0.1" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["all"] }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
-
-[dependencies.tungstenite]
-version = "0.8"
-default-features = false
+nimiq-utils = { path = "../utils", version = "0.1", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "sleep-on-error", "unique-id"] }
 
 [features]
 metrics = []

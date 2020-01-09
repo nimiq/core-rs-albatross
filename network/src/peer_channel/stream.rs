@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use futures::prelude::*;
 use parking_lot::RwLock;
-use tokio::prelude::Stream;
 use tungstenite::error::Error as WsError;
 
 use network_messages::Message;
@@ -15,7 +14,6 @@ use crate::connection::close_type::CloseType;
 use crate::connection::network_connection::ClosedFlag;
 use crate::websocket::{Error, SharedNimiqMessageStream};
 use crate::websocket::Message as WebSocketMessage;
-use futures::future;
 
 pub enum PeerStreamEvent {
     Message(Message),
@@ -38,54 +36,51 @@ impl PeerStream {
         }
     }
 
-    pub fn process_stream(self) -> impl Future<Item=(), Error=Error> + 'static {
-        let stream = self.stream;
+    // process_stream forwards all messages to the notifier,
+    // or closes the connection if a close frame is received.
+    pub async fn process_stream(mut self) -> Result<(), Error> {
         let msg_notifier = self.notifier.clone();
         let error_notifier = self.notifier;
         let msg_closed_flag = self.closed_flag.clone();
         let error_closed_flag = self.closed_flag;
 
-        stream.for_each(move |msg| {
-            match msg {
-                WebSocketMessage::Message(msg) => {
-                    // Ignore messages from peer if connection has been closed by us, but await close frame.
-                    if !msg_closed_flag.is_closed() {
-                        msg_notifier.read().notify(PeerStreamEvent::Message(msg));
-                    }
-                },
-                WebSocketMessage::Close(_frame) => {
-                    msg_closed_flag.set_closed(true);
-                    let ty = msg_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
-                    msg_notifier.read().notify(PeerStreamEvent::Close(ty));
-                },
-                // We have a type WebSocketMessage::Resume that is only used in the Sink and will never be returned here.
-                _ => unreachable!(),
-            }
-            Ok(())
-        }).then(move |result| {
+        while let Some(result) = self.stream.next().await {
             match result {
+                Ok(msg) => match msg {
+                    WebSocketMessage::Message(msg) => {
+                        // Ignore messages from peer if connection has been closed by us, but await close frame.
+                        if !msg_closed_flag.is_closed() {
+                            msg_notifier.read().notify(PeerStreamEvent::Message(msg));
+                        }
+                    },
+                    WebSocketMessage::Close(_frame) => {
+                        msg_closed_flag.set_closed(true);
+                        let ty = msg_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
+                        msg_notifier.read().notify(PeerStreamEvent::Close(ty));
+                    },
+                },
                 Err(error) => {
                     match &error {
                         Error::WebSocketError(WsError::ConnectionClosed) => {
                             error_closed_flag.set_closed(true);
                             let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
                             error_notifier.read().notify(PeerStreamEvent::Close(ty));
+
                         },
                         error => {
                             error_notifier.read().notify(PeerStreamEvent::Error(UniquePtr::new(error)));
-                        },
+                        }
                     }
-                    future::err(error)
+                    return Err(error);
                 },
-                Ok(_) => {
-                    // If the stream was closed without any error or close frame (just in case), call close notifier as well.
-                    error_closed_flag.set_closed(true);
-                    let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
-                    error_notifier.read().notify(PeerStreamEvent::Close(ty));
-                    future::ok(())
-                }
             }
-        })
+        }
+
+        // If the stream was closed without any error or close frame (just in case), call close notifier as well.
+        error_closed_flag.set_closed(true);
+        let ty = error_closed_flag.close_type().unwrap_or(CloseType::ClosedByRemote);
+        error_notifier.read().notify(PeerStreamEvent::Close(ty));
+        Ok(())
     }
 }
 

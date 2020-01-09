@@ -347,7 +347,7 @@ pub struct ConnectionPool<B: AbstractBlockchain + 'static> {
     network_config: Arc<NetworkConfig>,
     addresses: Arc<PeerAddressBook>,
 
-    websocket_connector: WebSocketConnector,
+    websocket_connector: Arc<WebSocketConnector>,
 
     signal_processor: SignalProcessor,
 
@@ -374,7 +374,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
             network_config: network_config.clone(),
             addresses: peer_address_book.clone(),
 
-            websocket_connector: WebSocketConnector::new(network_config.clone()),
+            websocket_connector: WebSocketConnector::new(network_config.clone())?,
 
             signal_processor: SignalProcessor::new(peer_address_book, network_config),
 
@@ -431,9 +431,9 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
     }
 
     /// Initialises necessary threads.
-    pub fn initialize(&self) -> Result<(), Error> {
+    pub async fn initialize(&self) -> Result<(), Error> {
         // Start accepting incoming connections.
-        self.websocket_connector.start()?;
+        self.websocket_connector.start().await?;
 
         let weak = self.self_weak.clone();
         self.timers.set_interval(ConnectionPoolTimer::UnbanIps, move || {

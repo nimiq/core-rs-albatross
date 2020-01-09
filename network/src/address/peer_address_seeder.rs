@@ -2,11 +2,11 @@ use std::io::{BufRead, Error as IoError};
 use std::str::FromStr;
 use std::sync::Arc;
 
+use bytes::Bytes;
 use hex::FromHex;
 use failure::Fail;
-use futures::{future::*, Future, Stream};
+use futures::future::*;
 use parking_lot::Mutex;
-use reqwest::r#async::{Chunk, Client, Response};
 use url::Url;
 
 use keys::Signature;
@@ -157,23 +157,17 @@ impl PeerAddressSeeder {
         self.notifier.lock().notify(PeerAddressSeederEvent::End);
     }
 
-    // Asynchronously fetches a seed list from a remote location
-    fn fetch(url: Url) -> impl Future<Item=Chunk, Error=PeerAddressSeederError> {
-        Client::new().get(url).send()
-        .map_err(PeerAddressSeederError::from)
-        .and_then(Self::fetch_callback)
-    }
-
-    // Note: this is a standalone function to help the compiler because as a closure in the fetch() function
-    // it would fail to infer the types correctly
-    fn fetch_callback(res: Response) -> Box<dyn Future<Item=Chunk, Error=PeerAddressSeederError> + Send> {
-        let status = res.status();
-
-        if status == 200 {
-            Box::new(res.into_body().concat2().map_err(PeerAddressSeederError::from))
-        } else {
-            Box::new(err(PeerAddressSeederError::UnexpectedHttpStatus(status)))
+    // Fetches a seed list from a remote location.
+    // Use rarely, currently each call creates a new HTTP connection.
+    async fn fetch(url: Url) -> Result<Bytes, PeerAddressSeederError> {
+        let resp = reqwest::get(url).await
+            .map_err(PeerAddressSeederError::from)?;
+        let status = resp.status();
+        if status != 200 {
+            return Err(PeerAddressSeederError::UnexpectedHttpStatus(status));
         }
+        resp.bytes().await
+            .map_err(PeerAddressSeederError::from)
     }
 }
 

@@ -6,7 +6,7 @@ use std::hash::Hasher;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use futures::sync::mpsc::*;
+use futures::channel::mpsc::*;
 use parking_lot::RwLock;
 
 use network_messages::{Message, MessageNotifier};
@@ -102,7 +102,7 @@ impl PeerChannel {
         }
     }
 
-    pub fn send(&self, msg: Message) -> Result<(), SendError<WebSocketMessage>> {
+    pub fn send(&self, msg: Message) -> Result<(), TrySendError<WebSocketMessage>> {
         self.peer_sink.send(msg)
     }
 
@@ -120,13 +120,12 @@ impl PeerChannel {
         self.peer_sink.close(ty, None);
         let notifier = self.close_notifier.clone();
         let close_event_sent = self.close_event_sent.clone();
-        tokio::spawn(futures::lazy(move || {
+        tokio::spawn(async move {
             // Only send close event once, i.e., if close_event_sent was false.
             if !close_event_sent.swap(true, Ordering::AcqRel) {
                 notifier.read().notify(ty);
             }
-            futures::future::ok(())
-        }));
+        });
     }
 }
 

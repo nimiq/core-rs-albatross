@@ -115,9 +115,9 @@ impl<B: AbstractBlockchain> Network<B> {
         Ok(this)
     }
 
-    pub fn initialize(&self) -> Result<(), Error> {
+    pub async fn initialize(&self) -> Result<(), Error> {
         PeerAddressBook::initialize(&self.addresses)?;
-        self.connections.initialize()?;
+        self.connections.initialize().await?;
         Ok(())
     }
 

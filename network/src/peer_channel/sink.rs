@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use futures::sync::mpsc::*;
+use futures::channel::mpsc::*;
 
 use network_messages::Message;
 use utils::unique_id::UniqueId;
@@ -28,7 +28,7 @@ impl PeerSink {
         }
     }
 
-    pub fn send(&self, msg: Message) -> Result<(), SendError<WebSocketMessage>> {
+    pub fn send(&self, msg: Message) -> Result<(), TrySendError<WebSocketMessage>> {
         // Do not send messages over already closed connections.
         // Stop sending silently until connection is really closed.
         if self.closed_flag.is_closed() {

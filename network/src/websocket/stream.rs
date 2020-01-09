@@ -1,21 +1,21 @@
 use std::collections::vec_deque::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
-use std::net;
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
-use futures::prelude::*;
+use futures::{Sink, Stream};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tokio_tungstenite::stream::PeerAddr;
 use tungstenite::error::Error as WebSocketError;
 use tungstenite::protocol::CloseFrame;
 use tungstenite::protocol::Message as WebSocketMessage;
 
 use beserial::{Deserialize, Serialize};
-use network_messages::Message as NimiqMessage;
 use network_primitives::address::net_address::NetAddress;
+use network_messages::Message as NimiqMessage;
 
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
@@ -54,37 +54,43 @@ impl WebSocketState {
 const MAX_CHUNK_SIZE: usize = 1024 * 16; // 16 kb
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 10; // 10 mb
 
-/// This struct encapsulates the underlying WebSocket layer
+pub type NimiqMessageStream = MessageStream<WebSocketLayer>;
+
+/// This struct encapsulates the transport layer
 /// and instead sends/receives our own Message type encapsulating Nimiq messages.
-pub struct NimiqMessageStream {
+// TODO Better name
+// TODO Decouple from WebSocketMessage, make it some generic enum { Vec<u8>; CloseType }
+pub struct MessageStream<S>
+    where S: Stream + Sink<WebSocketMessage>
+{
     // Internal state.
-    inner: WebSocketLayer,
+    inner: S,
     receiving_tag: u8,
     sending_tag: u8,
-    ws_queue: VecDeque<WebSocketMessage>,
-    msg_buf: Option<Vec<u8>>,
+    recv_queue: VecDeque<WebSocketMessage>,
+    recv_buf: Option<Vec<u8>>,
+    send_queue: VecDeque<Vec<u8>>,
     state: WebSocketState,
 
     // Public state.
     pub(crate) public_state: PublicStreamInfo,
 }
 
-impl NimiqMessageStream {
-    pub(super) fn new(ws_socket: WebSocketLayer, outbound: bool) -> Result<Self, Error> {
-        let peer_addr = ws_socket.peer_addr().map_err(Error::NetAddressMissing)?;
-        Ok(NimiqMessageStream {
-            inner: ws_socket,
+impl<S> MessageStream<S>
+    where S: Stream + Sink<WebSocketMessage>
+{
+    pub(super) fn new(transport: S, net_address: NetAddress, outbound: bool) -> Self {
+        Self {
+            inner: transport,
             receiving_tag: 254,
             sending_tag: 0,
-            ws_queue: VecDeque::new(),
-            msg_buf: None,
+            recv_queue: VecDeque::new(),
+            recv_buf: None,
+            send_queue: VecDeque::new(),
             state: WebSocketState::Active,
 
-            public_state: PublicStreamInfo::new(match peer_addr.ip() {
-                net::IpAddr::V4(ip4) => NetAddress::IPv4(ip4),
-                net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
-            }, outbound),
-        })
+            public_state: PublicStreamInfo::new(net_address, outbound),
+        }
     }
 
     pub fn state(&self) -> &PublicStreamInfo {
@@ -107,51 +113,66 @@ impl NimiqMessageStream {
     pub fn network_metrics(&self) -> &Arc<NetworkMetrics> {
         &self.public_state.network_metrics
     }
+
+    fn is_ready(poll: &Poll<Result<(), Error>>) -> bool {
+        match poll {
+            &Poll::Ready(Ok(())) => true,
+            _ => false,
+        }
+    }
 }
 
-impl Sink for NimiqMessageStream {
-    type SinkItem = Message;
-    type SinkError = Error;
+impl Sink<Message> for NimiqMessageStream {
+    type Error = Error;
 
-    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        loop {
+            match Sink::poll_ready(Pin::new(&mut self.inner), cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Err(err)) =>
+                    return Poll::Ready(Err(Error::WebSocketError(err))),
+                Poll::Ready(Ok(())) => (),
+            };
+            // Send all queued chunks before reporting to be ready.
+            // TODO Allow pipelining?
+            if let Some(buf) = self.send_queue.pop_back() {
+                #[cfg(feature = "metrics")]
+                    let buffer_len = buf.len();
+                Sink::start_send(Pin::new(&mut self.inner), WebSocketMessage::binary(buf))
+                    .map_err(Error::WebSocketError)?;
+                #[cfg(feature = "metrics")]
+                    self.public_state.network_metrics.note_bytes_sent(buffer_len);
+            } else {
+                return Poll::Ready(Ok(()));
+            }
+        }
+    }
+
+    fn start_send(mut self: Pin<&mut Self>, item: Message) -> Result<(), Self::Error> {
+        // Begin a new message
         let (serialized_msg, tag) = match item {
             // A message needs to be serialized and send with a new tag.
             Message::Message(msg) => {
                 let serialized_msg = msg.serialize_to_vec();
                 (serialized_msg, self.next_tag())
             },
-            // If sending of a message was interrupted due to a full queue
-            // we resume sending with the previous tag (if given).
-            Message::Resume(serialized_msg, sending_tag) => {
-                let tag = match sending_tag {
-                    Some(tag) => tag,
-                    None => self.next_tag(),
-                };
-                (serialized_msg, tag)
-            },
             // Close frames need to be handled differently.
             Message::Close(frame) => {
                 self.state = WebSocketState::ClosedByUs;
-
-                return match self.inner.start_send(WebSocketMessage::Close(frame)) {
-                    Ok(state) => match state {
-                        AsyncSink::Ready => Ok(AsyncSink::Ready),
-                        AsyncSink::NotReady(WebSocketMessage::Close(frame)) => Ok(AsyncSink::NotReady(Message::Close(frame))),
-                        AsyncSink::NotReady(_) => {
-                            error!("Expected to get NotReady of a Close message, but got something else.");
-                            Err(Error::InvalidClosingState)
-                        },
-                    },
-                    Err(err) => Err(Error::WebSocketError(err)),
-                }
+                return Sink::start_send(Pin::new(&mut self.inner), WebSocketMessage::Close(frame))
+                    .map_err(Error::WebSocketError);
             },
         };
+        if !self.send_queue.is_empty() {
+            panic!("Previous message not flushed but trying to send another one (did you check poll_ready?)");
+        }
 
         // Send chunks to underlying layer.
         let mut remaining = serialized_msg.len();
-        let mut chunk;
         while remaining > 0 {
+            // Build next chunk
             let mut buffer;
+            let chunk;
             let start = serialized_msg.len() - remaining;
             if remaining + /*tag*/ 1 >= MAX_CHUNK_SIZE {
                 buffer = Vec::with_capacity(MAX_CHUNK_SIZE + /*tag*/ 1);
@@ -162,42 +183,31 @@ impl Sink for NimiqMessageStream {
                 buffer.push(tag);
                 chunk = &serialized_msg[start..];
             }
-
             buffer.extend(chunk);
-
-            #[cfg(feature = "metrics")]
-            let buffer_len = buffer.len();
-            match self.inner.start_send(WebSocketMessage::binary(buffer)) {
-                Ok(state) => match state {
-                    AsyncSink::Ready => {
-                        #[cfg(feature = "metrics")]
-                        self.public_state.network_metrics.note_bytes_sent(buffer_len);
-                    },
-                    // We started to send some chunks, but now the queue is full:
-                    // If this happens, we will try sending the rest of the message at a later point with the same tag.
-                    AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(Message::Resume(serialized_msg[start..].to_vec(), Some(tag)))),
-                },
-                Err(error) => return Err(Error::WebSocketError(error)),
-            };
-
+            self.send_queue.push_back(buffer);
             remaining -= chunk.len();
         }
-        // We didn't exit previously, so everything worked out.
-        Ok(AsyncSink::Ready)
+
+        Ok(())
     }
 
-    fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-        match self.inner.poll_complete() {
-            Ok(r_async) => Ok(r_async),
-            Err(error) => Err(Error::WebSocketError(error)),
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        let ready_poll = Sink::poll_ready(Pin::new(&mut *self), cx);
+        if Self::is_ready(&ready_poll) {
+            return ready_poll;
         }
+        Sink::poll_flush(Pin::new(&mut self.inner), cx)
+            .map(|res| res.map_err(Error::WebSocketError))
     }
 
-    fn close(&mut self) -> Poll<(), Self::SinkError> {
-        match self.inner.close() {
-            Ok(r_async) => Ok(r_async),
-            Err(error) => Err(Error::WebSocketError(error)),
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        let ready_poll = Sink::poll_ready(Pin::new(&mut *self), cx);
+        if Self::is_ready(&ready_poll) {
+            return ready_poll;
         }
+        // TODO Send close frame?
+        Sink::poll_close(Pin::new(&mut self.inner), cx)
+            .map(|res| res.map_err(Error::WebSocketError))
     }
 }
 
@@ -205,11 +215,11 @@ impl NimiqMessageStream {
     fn try_read_message(&mut self) -> Result<Option<Message>, Error> {
         // If there are no web socket messages in the buffer, signal that we don't have anything yet
         // (i.e. we would need to block waiting, which is a no no in an async function)
-        if self.ws_queue.is_empty() {
+        if self.recv_queue.is_empty() {
             return Ok(None);
         }
 
-        while let Some(ws_msg) = self.ws_queue.pop_front() {
+        while let Some(ws_msg) = self.recv_queue.pop_front() {
             let raw_msg = ws_msg.into_data();
             // We need at least the tag.
             if raw_msg.is_empty() {
@@ -220,14 +230,14 @@ impl NimiqMessageStream {
             let chunk = &raw_msg[1..];
 
             // Detect if this is a new message.
-            if self.msg_buf.is_none() {
+            if self.recv_buf.is_none() {
 
                 if let Ok(msg_size) = NimiqMessage::peek_length(chunk) {
                     if msg_size > MAX_MESSAGE_SIZE {
                         error!("Max message size exceeded ({} > {})", msg_size, MAX_MESSAGE_SIZE);
                         return Err(Error::MessageSizeExceeded);
                     }
-                    self.msg_buf = Some(Vec::with_capacity(msg_size));
+                    self.recv_buf = Some(Vec::with_capacity(msg_size));
                 } else {
                     return Err(Error::InvalidMessageFormat);
                 }
@@ -241,7 +251,7 @@ impl NimiqMessageStream {
                 return Err(Error::TagMismatch);
             }
 
-            let msg_buf = self.msg_buf.as_mut().unwrap();
+            let msg_buf = self.recv_buf.as_mut().unwrap();
             let mut remaining = msg_buf.capacity() - msg_buf.len();
 
             let chunk_size = raw_msg.len() - 1;
@@ -258,7 +268,7 @@ impl NimiqMessageStream {
                 let msg = Deserialize::deserialize(&mut &msg_buf[..]);
 
                 // Reset message buffer.
-                self.msg_buf = None;
+                self.recv_buf = None;
 
                 match msg {
                     Err(e) => {
@@ -275,64 +285,65 @@ impl NimiqMessageStream {
 }
 
 impl Stream for NimiqMessageStream {
-    type Item = Message;
-    type Error = Error;
+    type Item = Result<Message, Error>;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.state.is_closed() {
-            return Ok(Async::Ready(None));
+            return Poll::Ready(None);
         }
 
         // First, lets get as many WebSocket messages as available and store them in the buffer.
         loop {
-            match self.inner.poll() {
+            match Stream::poll_next(Pin::new(&mut self.inner), cx) {
                 // Handle close frames first.
-                Ok(Async::Ready(Some(WebSocketMessage::Close(frame)))) => {
+                Poll::Ready(Some(Ok(WebSocketMessage::Close(frame)))) => {
                     // If we haven't closed the connection, note as closed by peer.
                     if !self.state.is_closed() {
                         self.state = WebSocketState::ClosedByPeer(frame.clone());
                     }
 
-                    return Ok(Async::Ready(Some(Message::Close(frame))))
+                    return Poll::Ready(Some(Ok(Message::Close(frame))))
                 },
-                Ok(Async::Ready(Some(m))) => {
+                Poll::Ready(Some(Ok(m))) => {
                     #[cfg(feature = "metrics")]
-                    self.public_state.network_metrics.note_bytes_received(m.len());
+                        self.public_state.network_metrics.note_bytes_received(m.len());
 
                     // Check max chunk size.
                     if m.len() > MAX_CHUNK_SIZE {
                         error!("Max chunk size exceeded ({} > {})", m.len(), MAX_CHUNK_SIZE);
-                        return Err(Error::ChunkSizeExceeded);
+                        return Poll::Ready(Some(Err(Error::ChunkSizeExceeded)));
+                        // TODO Behavior of subsequent polls
                     }
-                    self.ws_queue.push_back(m);
+                    self.recv_queue.push_back(m);
 
                     if let Some(msg) = self.try_read_message()? {
-                        return Ok(Async::Ready(Some(msg)));
+                        return Poll::Ready(Some(Ok(msg)));
                     }
                 },
-                Ok(Async::Ready(None)) => {
-                    // Try to read a message from our buffer, but return early if it fails.
-                    return match self.try_read_message()? {
-                        Some(msg) => Ok(Async::Ready(Some(msg))),
-                        None => Ok(Async::Ready(None)),
-                    };
-                },
-                Ok(Async::NotReady) => {
-                    break
-                },
-                Err(e) => {
+                Poll::Ready(Some(Err(e))) => {
                     if let WebSocketError::ConnectionClosed = e {
                         // If we haven't closed the connection, note as closed by peer.
                         if !self.state.is_closed() {
                             self.state = WebSocketState::ClosedByPeer(None);
                         }
                     }
-                    return Err(e.into())
-                }
+                    return Poll::Ready(Some(Err(e.into())))
+                    // TODO Behavior of subsequent polls
+                },
+                Poll::Ready(None) => {
+                    // Try to read a message from our buffer, but return early if it fails.
+                    return match self.try_read_message()? {
+                        Some(msg) => Poll::Ready(Some(Ok(msg))),
+                        None => Poll::Ready(None),
+                    };
+                },
+                Poll::Pending => {
+                    break
+                },
             }
         }
 
-        Ok(Async::NotReady)
+        Poll::Pending
     }
 }
 

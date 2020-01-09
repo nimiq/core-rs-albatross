@@ -1,7 +1,7 @@
 use failure::Fail;
 use native_tls::Error as TlsError;
 use tokio::io::Error as IoError;
-use tokio::timer::Error as TimerError;
+use tokio::time::Error as TimerError;
 use tungstenite::error::Error as WsError;
 use url::ParseError;
 

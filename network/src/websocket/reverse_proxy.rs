@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use reqwest::StatusCode;
+use http::status::StatusCode;
 use tungstenite::handshake::server::{Callback, ErrorResponse, Request};
 
 use network_primitives::address::NetAddress;
