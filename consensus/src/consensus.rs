@@ -22,7 +22,7 @@ use utils::observer::Notifier;
 use utils::timers::Timers;
 
 use crate::accounts_chunk_cache::AccountsChunkCache;
-use crate::consensus_agent::{ConsensusAgent, ConsensusAgentEvent};
+use crate::consensus_agent::{ConsensusAgent, ConsensusAgentEvent, sync::BlockQueue};
 use crate::error::Error;
 use crate::inventory::InventoryManager;
 use crate::protocol::ConsensusProtocol;
@@ -34,6 +34,7 @@ pub struct Consensus<P: ConsensusProtocol + 'static> {
     pub env: Environment,
 
     inv_mgr: Arc<RwLock<InventoryManager<P>>>,
+    block_queue: Arc<RwLock<BlockQueue<P::Blockchain>>>,
     timers: Timers<ConsensusTimer>,
     accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>,
 
@@ -76,6 +77,7 @@ impl<P: ConsensusProtocol> Consensus<P> {
         let mempool = Mempool::new(Arc::clone(&blockchain), mempool_config);
         let network = Network::new(Arc::clone(&blockchain), network_config, network_time, network_id)?;
         let accounts_chunk_cache = AccountsChunkCache::new(env.clone(), Arc::clone(&blockchain));
+        let block_queue = BlockQueue::new(Arc::clone(&blockchain));
 
         let this = Arc::new(Consensus {
             blockchain,
@@ -84,6 +86,7 @@ impl<P: ConsensusProtocol> Consensus<P> {
             env,
 
             inv_mgr: InventoryManager::new(),
+            block_queue: Arc::new(RwLock::new(block_queue)),
             timers: Timers::new(),
             accounts_chunk_cache,
 
@@ -138,14 +141,15 @@ impl<P: ConsensusProtocol> Consensus<P> {
     fn on_peer_joined(&self, peer: Arc<Peer>) {
         info!("Connected to {}", peer.peer_address());
         let agent = ConsensusAgent::new(
-            self.blockchain.clone(),
-            self.mempool.clone(),
-            self.inv_mgr.clone(),
-            self.accounts_chunk_cache.clone(),
-            peer.clone());
+            Arc::clone(&self.blockchain),
+            Arc::clone(&self.mempool),
+            Arc::clone(&self.inv_mgr),
+            Arc::clone(&self.accounts_chunk_cache),
+            Arc::clone(&self.block_queue),
+            Arc::clone(&peer));
 
-        let weak = self.self_weak.clone();
-        let peer_arc_moved = peer.clone();
+        let weak = Weak::clone(&self.self_weak);
+        let peer_arc_moved = Arc::clone(&peer);
         agent.notifier.write().register(move |e: &ConsensusAgentEvent| {
             let this = upgrade_weak!(weak);
             match e {
@@ -155,7 +159,7 @@ impl<P: ConsensusProtocol> Consensus<P> {
         });
 
         // If no more peers connect within the specified timeout, start syncing.
-        let weak = self.self_weak.clone();
+        let weak = Weak::clone(&self.self_weak);
         self.timers.reset_delay(ConsensusTimer::Sync, move || {
             let this = upgrade_weak!(weak);
             this.sync_blockchain();

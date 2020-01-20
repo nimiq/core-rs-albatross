@@ -25,7 +25,7 @@ use utils::observer::{PassThroughListener, PassThroughNotifier, weak_listener};
 use utils::timers::Timers;
 
 pub trait SyncProtocol<B: AbstractBlockchain>: Send + Sync {
-    fn new(blockchain: Arc<B>, peer: Arc<Peer>) -> Arc<Self>;
+    fn new(blockchain: Arc<B>, block_queue: Arc<RwLock<BlockQueue<B>>>, peer: Arc<Peer>) -> Arc<Self>;
     fn initiate_sync(&self) {}
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash>;
     fn request_blocks(&self, locators: Vec<Blake2bHash>, max_results: u16);
@@ -35,6 +35,7 @@ pub trait SyncProtocol<B: AbstractBlockchain>: Send + Sync {
     fn on_all_objects_received(&self) {}
     fn register_listener<L: PassThroughListener<SyncEvent<<B::Block as Block>::Error>> + 'static>(&self, listener: L);
     fn deregister_listener(&self);
+    fn notify(&self, event: SyncEvent<<B::Block as Block>::Error>);
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -44,25 +45,29 @@ pub enum SyncEvent<BE: BlockError> {
 
 pub struct FullSync<B: AbstractBlockchain> {
     blockchain: Arc<B>,
+    block_queue: Arc<RwLock<BlockQueue<B>>>,
     peer: Arc<Peer>,
     notifier: RwLock<PassThroughNotifier<'static, SyncEvent<<B::Block as Block>::Error>>>,
-
-    /// Inferior chain block hashes.
-    ignored_blocks: RwLock<LimitHashSet<Blake2bHash>>,
-}
-
-impl<B: AbstractBlockchain> FullSync<B> {
-    const IGNORED_BLOCKS_COUNT_MAX: usize = 40000;
+    self_weak: MutableOnce<Weak<Self>>,
 }
 
 impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
-    fn new(blockchain: Arc<B>, peer: Arc<Peer>) -> Arc<Self> {
-        Arc::new(Self {
+    fn new(blockchain: Arc<B>, block_queue: Arc<RwLock<BlockQueue<B>>>, peer: Arc<Peer>) -> Arc<Self> {
+        let this = Arc::new(Self {
             blockchain,
+            block_queue,
             peer,
             notifier: RwLock::new(PassThroughNotifier::new()),
-            ignored_blocks: RwLock::new(LimitHashSet::new(Self::IGNORED_BLOCKS_COUNT_MAX)),
-        })
+            self_weak: MutableOnce::new(Weak::new()),
+        });
+
+        // Update the self weak reference.
+        unsafe {
+            let weak = Arc::downgrade(&this);
+            this.self_weak.replace(weak);
+        }
+
+        this
     }
 
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
@@ -78,22 +83,7 @@ impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
     }
 
     fn on_block(&self, block: B::Block) {
-        // TODO: Move this to a better location to avoid requesting of these blocks at all.
-        // If the block builds on an ignored block, ignore this one as well and return.
-        let mut ignored_blocks = self.ignored_blocks.write();
-        if ignored_blocks.contains(block.prev_hash()) {
-            ignored_blocks.insert(block.hash());
-            info!("Ignoring block on inferior chain #{}", block.height());
-            return;
-        }
-        drop(ignored_blocks);
-
-        let hash = block.hash();
-        let result = self.blockchain.push(block);
-        if let Ok(PushResult::Ignored) = result {
-            self.ignored_blocks.write().insert(hash.clone());
-        }
-        self.notifier.read().notify(SyncEvent::BlockProcessed(hash, result));
+        self.block_queue.write().push(block, Weak::clone(&self.self_weak));
     }
 
     fn on_epoch_transactions(&self, _epoch_transactions: EpochTransactionsMessage) {
@@ -107,6 +97,10 @@ impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
 
     fn deregister_listener(&self) {
         self.notifier.write().deregister()
+    }
+
+    fn notify(&self, event: SyncEvent<<B::Block as Block>::Error>) {
+        self.notifier.read().notify(event)
     }
 }
 
@@ -159,7 +153,7 @@ pub struct MacroBlockSync {
     peer: Arc<Peer>,
     notifier: RwLock<PassThroughNotifier<'static, SyncEvent<AlbatrossBlockError>>>,
     timers: Timers<MacroBlockSyncTimer>,
-    self_weak: MutableOnce<Weak<MacroBlockSync>>,
+    self_weak: MutableOnce<Weak<Self>>,
 }
 
 impl MacroBlockSync {
@@ -203,7 +197,7 @@ impl MacroBlockSync {
 }
 
 impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
-    fn new(blockchain: Arc<AlbatrossBlockchain>, peer: Arc<Peer>) -> Arc<Self> {
+    fn new(blockchain: Arc<AlbatrossBlockchain>, _: Arc<RwLock<BlockQueue<AlbatrossBlockchain>>>, peer: Arc<Peer>) -> Arc<Self> {
         let this = Arc::new(Self {
             peer,
             blockchain,
@@ -362,5 +356,102 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
     fn deregister_listener(&self) {
         self.notifier.write().deregister()
     }
+
+    fn notify(&self, event: SyncEvent<<AlbatrossBlock as Block>::Error>) {
+        self.notifier.read().notify(event)
+    }
 }
 
+
+pub struct BlockQueue<B: AbstractBlockchain> {
+    blockchain: Arc<B>,
+    buffer: VecDeque<(B::Block, Weak<FullSync<B>>)>,
+
+    /// Inferior chain block hashes.
+    ignored_blocks: RwLock<LimitHashSet<Blake2bHash>>,
+}
+
+impl<B: AbstractBlockchain> BlockQueue<B> {
+    const BUFFER_MAX: usize = 64;
+    const WINDOW_MAX: u32 = 16;
+    const IGNORED_BLOCKS_COUNT_MAX: usize = 40000;
+
+    pub fn new(blockchain: Arc<B>) -> Self {
+        BlockQueue {
+            blockchain,
+            buffer: VecDeque::new(),
+            ignored_blocks: RwLock::new(LimitHashSet::new(Self::IGNORED_BLOCKS_COUNT_MAX)),
+        }
+    }
+
+    fn push(&mut self, block: B::Block, agent: Weak<FullSync<B>>) {
+        let block_height = block.height();
+        let head_height = self.blockchain.head_height();
+
+        if block_height <= head_height {
+            // Fork block
+            self.push_block(block, agent);
+        } else if block_height == head_height + 1 {
+            // New head block
+            self.push_block(block, agent);
+            self.push_buffered();
+        } else if block_height > head_height + Self::WINDOW_MAX {
+            // Block outside of buffer window
+            warn!("Discarding block #{} outside of buffer window (max {})", block_height, head_height + Self::WINDOW_MAX);
+            let agent = upgrade_weak!(agent);
+            agent.notify(SyncEvent::BlockProcessed(block.hash(), Err(PushError::Orphan)));
+        } else if self.buffer.len() >= Self::BUFFER_MAX {
+            // Block inside buffer window, but buffer is full
+            warn!("Discarding block #{}, buffer full (max {})", block_height, self.buffer.len());
+            let agent = upgrade_weak!(agent);
+            agent.notify(SyncEvent::BlockProcessed(block.hash(), Err(PushError::Orphan)));
+        } else {
+            // Block inside buffer window
+            self.insert_into_buffer(block, agent);
+        }
+    }
+
+    fn push_block(&mut self, block: B::Block, agent: Weak<FullSync<B>>) {
+        // TODO: Move this to a better location to avoid requesting of these blocks at all.
+        // If the block builds on an ignored block, ignore this one as well and return.
+        let mut ignored_blocks = self.ignored_blocks.write();
+        if ignored_blocks.contains(block.prev_hash()) {
+            ignored_blocks.insert(block.hash());
+            info!("Ignoring block on inferior chain #{}", block.height());
+            return;
+        }
+        drop(ignored_blocks);
+
+        let hash = block.hash();
+        let result = self.blockchain.push(block);
+        if let Ok(PushResult::Ignored) = result {
+            self.ignored_blocks.write().insert(hash.clone());
+        }
+        let agent = upgrade_weak!(agent);
+        agent.notify(SyncEvent::BlockProcessed(hash, result));
+    }
+
+    fn push_buffered(&mut self) {
+        while self.buffer.front().map_or(false, |entry| entry.0.height() <= self.blockchain.head_height() + 1) {
+            let entry = self.buffer.pop_front().unwrap();
+            trace!("Pushing buffered block #{} (currently at #{}, {} blocks left)", entry.0.height(), self.blockchain.head_height(), self.buffer.len());
+            self.push_block(entry.0, entry.1);
+        }
+    }
+
+    fn insert_into_buffer(&mut self, block: B::Block, agent: Weak<FullSync<B>>) {
+        let hash = block.hash();
+        let mut index = 0;
+        for entry in self.buffer.iter() {
+            if entry.0.height() > block.height() {
+                break;
+            }
+            if entry.0.hash() == hash {
+                return;
+            }
+            index += 1;
+        }
+        trace!("Buffering block #{} at index {} (currently at #{}) ", block.height(), index, self.blockchain.head_height());
+        self.buffer.insert(index, (block, agent));
+    }
+}

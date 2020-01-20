@@ -9,7 +9,7 @@ use beserial::{Deserialize, Serialize};
 use hash::Blake2bHash;
 use transaction::Transaction;
 
-pub trait Block: Serialize + Deserialize {
+pub trait Block: Serialize + Deserialize + Send + Sync {
     type Header: BlockHeader;
     type Error: BlockError;
 

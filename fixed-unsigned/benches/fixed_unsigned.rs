@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 
 use std::str::FromStr;
-use criterion::{Criterion, Benchmark};
+use criterion::{Criterion, Benchmark, criterion_group, criterion_main};
 use fixed_unsigned::types::FixedUnsigned10;
 use bigdecimal::BigDecimal;
 

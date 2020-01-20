@@ -31,7 +31,7 @@ use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
 
 use crate::accounts_chunk_cache::AccountsChunkCache;
-use crate::consensus_agent::sync::SyncProtocol;
+use crate::consensus_agent::sync::{SyncProtocol, BlockQueue};
 use crate::ConsensusProtocol;
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
 
@@ -128,10 +128,10 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     /// Maximum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
 
-    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>, block_queue: Arc<RwLock<BlockQueue<P::Blockchain>>>, peer: Arc<Peer>) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
-        let sync_protocol = <P::SyncProtocol as SyncProtocol<P::Blockchain>>::new(blockchain.clone(), peer_arc.clone());
+        let sync_protocol = <P::SyncProtocol as SyncProtocol<P::Blockchain>>::new(blockchain.clone(), block_queue, peer_arc.clone());
         let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr, peer_arc.clone(), sync_protocol.clone());
         let this = Arc::new(ConsensusAgent {
             blockchain,
