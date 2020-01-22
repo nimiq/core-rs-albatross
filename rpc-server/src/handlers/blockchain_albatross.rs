@@ -4,22 +4,24 @@ use std::sync::Arc;
 
 use json::{JsonValue, Null, object};
 
-use block_albatross::{Block, ForkProof, signed};
 use account::Account;
-use account::staking_contract::{ActiveStake, InactiveStake};
-use blockchain_base::AbstractBlockchain;
+use account::staking_contract::{InactiveStake, InactiveValidator, Validator};
+use block_albatross::{Block, ForkProof, signed};
 use blockchain_albatross::Blockchain;
+use blockchain_base::AbstractBlockchain;
+use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use primitives::policy;
-use primitives::slot::{Slot, Slots, SlotBand};
+use primitives::slot::{Slot, SlotBand, Slots};
 
 use crate::handler::Method;
-use crate::handlers::Module;
 use crate::handlers::blockchain::BlockchainHandler;
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
+use crate::handlers::Module;
 use crate::rpc_not_implemented;
+use json::object::Object;
 
 pub struct BlockchainAlbatrossHandler {
     pub blockchain: Arc<Blockchain>,
@@ -311,16 +313,21 @@ impl BlockchainAlbatrossHandler {
             Account::Staking(c) => c,
             _ => return Err("No contract at staking contract address".into()),
         };
-        let active_stakes: Vec<JsonValue> = contract.active_stake_by_address
+        let active_validators: Vec<JsonValue> = contract.active_validators_by_key
             .values()
-            .map(|stake| BlockchainAlbatrossHandler::active_stake_to_obj(stake.borrow()))
+            .map(|validator| BlockchainAlbatrossHandler::active_validator_to_obj(validator.borrow()))
+            .collect();
+        let inactive_validators: Vec<JsonValue> = contract.inactive_validators_by_key
+            .iter()
+            .map(|(key, validator)| BlockchainAlbatrossHandler::inactive_validator_to_obj(key, validator))
             .collect();
         let inactive_stakes: Vec<JsonValue> = contract.inactive_stake_by_address
             .iter()
             .map(|(address, stake)| BlockchainAlbatrossHandler::inactive_stake_to_obj(address, stake))
             .collect();
         Ok(object! {
-            "activeStakes" => active_stakes,
+            "activeValidators" => active_validators,
+            "inactiveValidators" => inactive_validators,
             "inactiveStakes" => inactive_stakes,
         })
     }
@@ -424,9 +431,8 @@ impl BlockchainAlbatrossHandler {
             .map(|(slot, first_slot_number)| {
                 object! {
                     "firstSlotNumber" => first_slot_number,
-                    "numSlots" => slot.stake_slot.num_slots(),
+                    "numSlots" => slot.validator_slot.num_slots(),
                     "publicKey" => slot.public_key().to_string(),
-                    "stakerAddress" => slot.staker_address().to_user_friendly_address(),
                     "rewardAddress" => slot.reward_address().to_user_friendly_address(),
                 }
             }).collect())
@@ -448,21 +454,29 @@ impl BlockchainAlbatrossHandler {
         object! {
             "index" => slot_number,
             "publicKey" => slot.public_key().to_string(),
-            "stakerAddress" => slot.staker_address().to_user_friendly_address(),
             "rewardAddress" => slot.reward_address().to_user_friendly_address(),
         }
     }
 
-    fn active_stake_to_obj(stake: &ActiveStake) -> JsonValue {
-        let reward_address = match stake.reward_address {
-            Some(ref a) => a,
-            None => &stake.staker_address,
-        }.to_user_friendly_address();
+    fn active_validator_to_obj(validator: &Arc<Validator>) -> JsonValue {
+        let mut stakes = Object::new();
+
+        for (address, &stake) in validator.active_stake_by_address.read().iter() {
+            stakes.insert(&address.to_user_friendly_address(), u64::from(stake).into());
+        }
+
         object! {
-            "stakerAddress" => stake.staker_address.to_user_friendly_address(),
-            "balance" => u64::from(stake.balance),
-            "publicKey" => hex::encode(&stake.validator_key),
-            "rewardAddress" => reward_address,
+            "publicKey" => hex::encode(&validator.validator_key),
+            "balance" => u64::from(validator.balance),
+            "rewardAddress" => validator.reward_address.to_user_friendly_address(),
+            "stakes" => JsonValue::Object(stakes),
+        }
+    }
+
+    fn inactive_validator_to_obj(_key: &BlsPublicKey, validator: &InactiveValidator) -> JsonValue {
+        object! {
+            "validator" => Self::active_validator_to_obj(&validator.validator),
+            "retireTime" => validator.retire_time,
         }
     }
 

@@ -7,7 +7,7 @@ use failure::Fail;
 use beserial::{Deserialize, Serialize};
 use collections::bitset::BitSet;
 use hash::{Blake2bHash, Hash, SerializeContent};
-use primitives::slot::{Slots, ValidatorSlots, StakeSlots};
+use primitives::slot::{Slots, ValidatorSlots};
 use vrf::VrfSeed;
 
 use crate::BlockError;
@@ -27,7 +27,7 @@ pub struct MacroBlock {
 pub struct MacroHeader {
     pub version: u16,
 
-    /// Slots with validator information, i.e. their public key.
+    /// Slots with validator information, i.e. their public key & reward address.
     pub validators: ValidatorSlots,
 
     pub block_number: u32,
@@ -47,8 +47,6 @@ pub struct MacroHeader {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroExtrinsics {
-    /// Slots with staker information, i.e. staker address and reward address
-    pub stakers: StakeSlots,
     /// The final list of slashes from the previous epoch.
     pub slashed_set: BitSet,
 }
@@ -63,21 +61,16 @@ impl TryInto<Slots> for MacroBlock {
     type Error = IntoSlotsError;
 
     fn try_into(self) -> Result<Slots, Self::Error> {
-        let extrinsics = self.extrinsics
-            .ok_or(IntoSlotsError::MissingExtrinsics)?;
-
         let validator_slots = self.header.validators;
-        let staker_slots = extrinsics.stakers;
 
-        Ok(Slots::new(validator_slots, staker_slots))
+        Ok(Slots::new(validator_slots))
     }
 }
 
 // CHECKME: Check for performance
 impl MacroExtrinsics {
-    pub fn from_stake_slots_and_slashed_set(stake_slots: StakeSlots, slashed_set: BitSet) -> Self {
+    pub fn from_slashed_set(slashed_set: BitSet) -> Self {
         MacroExtrinsics {
-            stakers: stake_slots,
             slashed_set,
         }
     }

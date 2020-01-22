@@ -37,9 +37,13 @@ impl WalletAccount {
     }
 
     pub fn sign_transaction(&self, transaction: &mut Transaction) {
-        let signature = self.key_pair.sign(transaction.serialize_content().as_slice());
-        let proof = SignatureProof::from(self.key_pair.public, signature);
+        let proof = self.create_signature_proof(transaction);
         transaction.proof = proof.serialize_to_vec();
+    }
+
+    pub fn create_signature_proof(&self, transaction: &Transaction) -> SignatureProof {
+        let signature = self.key_pair.sign(transaction.serialize_content().as_slice());
+        SignatureProof::from(self.key_pair.public, signature)
     }
 
     fn prepare_message_for_signature(message: &[u8]) -> Sha256Hash {

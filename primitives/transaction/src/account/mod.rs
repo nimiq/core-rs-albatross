@@ -11,6 +11,9 @@ pub mod vesting_contract;
 pub mod htlc_contract;
 pub mod staking_contract;
 
+/// Verifies a transaction only using the static data available in the transaction.
+/// This is used, for example, to check signatures etc.
+/// This particularly does not require an account to exist.
 pub trait AccountTransactionVerification: Sized {
     fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError>;
     fn verify_outgoing_transaction(transaction: &Transaction) -> Result<(), TransactionError>;

@@ -2,6 +2,7 @@ extern crate beserial;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
+extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 
 use beserial::Deserialize;
@@ -10,6 +11,7 @@ use block_albatross::signed::Message;
 use bls::bls12_381::KeyPair;
 use bls::bls12_381::lazy::LazyPublicKey;
 use hash::{Blake2bHash, Hash};
+use keys::Address;
 use nimiq_vrf::VrfSeed;
 use primitives::policy;
 use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
@@ -37,7 +39,7 @@ fn test_view_change_single_signature() {
     let view_change_proof = proof_builder.build();
 
     // verify view change proof
-    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(LazyPublicKey::from(key_pair.public), policy::SLOTS)]);
+    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(LazyPublicKey::from(key_pair.public), Address::default(), policy::SLOTS)]);
     view_change_proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS).unwrap();
 }
 

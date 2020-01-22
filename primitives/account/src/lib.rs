@@ -38,6 +38,8 @@ pub mod htlc_contract;
 pub mod vesting_contract;
 pub mod staking_contract;
 
+/// Given the actual sender/receiver account (types), this checks and changes the accounts' states.
+/// TODO: `check_incoming_transaction` is not allowed to depend on the account's state.
 pub trait AccountTransactionInteraction: Sized {
     fn new_contract(account_type: AccountType, balance: Coin, transaction: &Transaction, block_height: u32) -> Result<Self, AccountError>;
 

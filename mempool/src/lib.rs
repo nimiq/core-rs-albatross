@@ -316,8 +316,49 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
         let mut txs = Vec::new();
         let mut size = 0;
 
+        let mut validator_registry = None;
+        let block_height = self.blockchain.head_height() + 1;
+
         let state = self.state.read();
         for tx in state.transactions_sorted_fee.iter() {
+            // Check validity of transactions concerning the staking contract.
+            // We only do it for the staking contract, since this is the only place
+            // where the transaction validity depends on the recipient's state.
+            if let Some(validator_registry_address) = self.blockchain.validator_registry_address() {
+                // First apply the sender side to the staking contract if necessary.
+                // This could for example drop a validator and make subsequent update transactions invalid.
+                let mut outgoing_receipt = None;
+                if &tx.sender == validator_registry_address {
+                    // Get copy of staking contract if required.
+                    if validator_registry.is_none() {
+                        validator_registry = Some(self.blockchain.get_account(validator_registry_address));
+                    }
+
+                    let sender_account = validator_registry.as_mut().unwrap();
+                    match sender_account.commit_outgoing_transaction(&tx, block_height) {
+                        Err(_) => continue, // Ignore transaction.
+                        Ok(receipt) => outgoing_receipt = receipt,
+                    }
+                }
+
+                // Then apply the recipient side to the staking contract.
+                if &tx.recipient == validator_registry_address {
+                    // Get copy of staking contract if required.
+                    if validator_registry.is_none() {
+                        validator_registry = Some(self.blockchain.get_account(validator_registry_address));
+                    }
+
+                    let recipient_account = validator_registry.as_mut().unwrap();
+                    if recipient_account.commit_incoming_transaction(&tx, block_height).is_err() {
+                        // Potentially revert sender side and ignore transaction.
+                        if &tx.sender == validator_registry_address {
+                            recipient_account.revert_outgoing_transaction(&tx, block_height, outgoing_receipt.as_ref()).unwrap();
+                        }
+                        continue;
+                    }
+                }
+            }
+
             let tx_size = tx.serialized_size();
             if size + tx_size <= max_size {
                 txs.push(Transaction::clone(tx));

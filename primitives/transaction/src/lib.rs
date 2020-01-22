@@ -66,7 +66,7 @@ impl Deserialize for TransactionFlags {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignatureProof {
     pub public_key: PublicKey,
     pub merkle_path: Blake2bMerklePath,
@@ -237,9 +237,8 @@ impl Transaction {
         // Check moved to AccountType::verify_incoming_transaction()
 
         // Check that value > 0.
-        if self.value == Coin::ZERO {
-            return Err(TransactionError::ZeroValue);
-        }
+        // This is no longer true for validator signalling transactions.
+        // Check moved to AccountType::verify_incoming_transaction()
 
         // Check that value + fee doesn't overflow.
         match self.value.checked_add(self.fee) {

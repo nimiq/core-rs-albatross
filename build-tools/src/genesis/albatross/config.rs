@@ -23,6 +23,9 @@ pub struct GenesisConfig {
     pub timestamp: Option<DateTime<Utc>>,
 
     #[serde(default)]
+    pub validators: Vec<GenesisValidator>,
+
+    #[serde(default)]
     pub stakes: Vec<GenesisStake>,
 
     #[serde(default)]
@@ -34,13 +37,21 @@ pub struct GenesisConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct GenesisValidator {
+    #[serde(deserialize_with = "deserialize_nimiq_address")]
+    pub reward_address: Address,
+
+    #[serde(deserialize_with = "deserialize_coin")]
+    pub balance: Coin,
+
+    #[serde(deserialize_with = "deserialize_bls_public_key")]
+    pub validator_key: BlsPublicKey
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct GenesisStake {
     #[serde(deserialize_with = "deserialize_nimiq_address")]
     pub staker_address: Address,
-
-    #[serde(default)]
-    #[serde(deserialize_with = "deserialize_nimiq_address_opt")]
-    pub reward_address: Option<Address>,
 
     #[serde(deserialize_with = "deserialize_coin")]
     pub balance: Coin,

@@ -113,6 +113,8 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
 
     // TODO: Currently, we can implement request responses in the ConsensusAgent only for *both* protocols, which is why AbstractBlockchain needs to support this.
     fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>>;
+
+    fn validator_registry_address(&self) -> Option<&Address>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

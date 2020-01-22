@@ -707,7 +707,7 @@ impl Blockchain {
             }
 
             let slashed_set = slashed_set.unwrap();
-            let computed_extrinsics = MacroExtrinsics::from_stake_slots_and_slashed_set(slots.stake_slots, slashed_set);
+            let computed_extrinsics = MacroExtrinsics::from_slashed_set(slashed_set);
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
@@ -1129,7 +1129,7 @@ impl Blockchain {
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
 
-            let computed_extrinsics = MacroExtrinsics::from_stake_slots_and_slashed_set(slots.stake_slots, slashed_set);
+            let computed_extrinsics = MacroExtrinsics::from_slashed_set(slashed_set);
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
@@ -1363,7 +1363,7 @@ impl Blockchain {
             ty: InherentType::Slash,
             target: validator_registry.clone(),
             value: Coin::ZERO,
-            data: producer.staker_address().serialize_to_vec(),
+            data: producer.public_key().serialize_to_vec(),
         }
     }
 
@@ -1374,13 +1374,13 @@ impl Blockchain {
         (view_changes.first_view_number .. view_changes.last_view_number).map(|view_number| {
             let (producer, _) = self.get_slot_at(view_changes.block_number, view_number, txn_option)
                 .unwrap();
-            debug!("Slash inherent: view change: {}", producer.staker_address().to_user_friendly_address());
+            debug!("Slash inherent: view change: {}", producer.public_key());
 
             Inherent {
                 ty: InherentType::Slash,
                 target: validator_registry.clone(),
                 value: Coin::ZERO,
-                data: producer.staker_address().serialize_to_vec(),
+                data: producer.public_key().serialize_to_vec(),
             }
         }).collect::<Vec<Inherent>>()
     }
@@ -1397,7 +1397,7 @@ impl Blockchain {
                 ty: InherentType::Slash,
                 target: validator_registry.clone(),
                 value: Coin::ZERO,
-                data: producer.staker_address().serialize_to_vec(),
+                data: producer.public_key().serialize_to_vec(),
             }
         }).collect::<Vec<Inherent>>()
     }
@@ -1430,9 +1430,9 @@ impl Blockchain {
 
         // Get stake slots
         // NOTE: Field `last_slots` is expected to be always set.
-        let stake_slots = &state.previous_slots.as_ref()
+        let validator_slots = &state.previous_slots.as_ref()
             .expect("Slots for last epoch are missing")
-            .stake_slots;
+            .validator_slots;
 
         // Slashed slots (including fork proofs)
         let slashed_set = state.reward_registry.slashed_set(epoch, SlashedSetSelector::All, None);
@@ -1458,18 +1458,16 @@ impl Blockchain {
         let mut inherents = Vec::new();
         // Remember the number of eligible slots a stake had (that was able to accept the inherent)
         let mut num_eligible_slots_for_accepted_inherent = Vec::new();
-        // Total number of slots that were able to accept the inherent
-        let mut total_accepting_slots = 0;
 
         // Compute inherents
-        for stake_slot in stake_slots.iter() {
+        for validator_slot in validator_slots.iter() {
             // The interval of slot numbers for the current slot band is
             // [first_slot_number, last_slot_number). So it actually doesn't include
             // `last_slot_number`.
-            let last_slot_number = first_slot_number + stake_slot.num_slots();
+            let last_slot_number = first_slot_number + validator_slot.num_slots();
 
             // Compute the number of slashes for this stake slot band.
-            let mut num_eligible_slots = stake_slot.num_slots();
+            let mut num_eligible_slots = validator_slot.num_slots();
             while let Some(next_slashed_slot) = slashed_set_iter.peek() {
                 let next_slashed_slot = *next_slashed_slot as u16;
                 assert!(next_slashed_slot > first_slot_number);
@@ -1491,7 +1489,7 @@ impl Blockchain {
 
             let inherent = Inherent {
                 ty: InherentType::Reward,
-                target: stake_slot.reward_address().clone(),
+                target: validator_slot.reward_address().clone(),
                 value: reward,
                 data: vec![],
             };
@@ -1503,7 +1501,6 @@ impl Blockchain {
                 remainder += reward;
             } else {
                 num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
-                total_accepting_slots += num_eligible_slots;
                 inherents.push(inherent);
             }
         }
@@ -1742,5 +1739,9 @@ impl AbstractBlockchain for Blockchain {
 
     fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>> {
         Blockchain::get_epoch_transactions(self, epoch, txn_option).map(Iterator::collect)
+    }
+
+    fn validator_registry_address(&self) -> Option<&Address> {
+        NetworkInfo::from_network_id(self.network_id).validator_registry_address()
     }
 }

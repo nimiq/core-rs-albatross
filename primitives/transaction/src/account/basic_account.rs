@@ -1,5 +1,6 @@
 use beserial::Deserialize;
 use primitives::account::AccountType;
+use primitives::coin::Coin;
 
 use crate::{Transaction, TransactionError, TransactionFlags};
 use crate::account::AccountTransactionVerification;
@@ -13,6 +14,11 @@ impl AccountTransactionVerification for BasicAccountVerifier {
 
         if transaction.sender == transaction.recipient {
             return Err(TransactionError::SenderEqualsRecipient);
+        }
+
+        // Check that value > 0.
+        if transaction.value == Coin::ZERO {
+            return Err(TransactionError::ZeroValue);
         }
 
         if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {

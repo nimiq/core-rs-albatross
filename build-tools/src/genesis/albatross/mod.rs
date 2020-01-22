@@ -88,6 +88,7 @@ pub struct GenesisBuilder {
     pub signing_key: Option<BlsSecretKey>,
     pub seed_message: Option<String>,
     pub timestamp: Option<DateTime<Utc>>,
+    pub validators: Vec<config::GenesisValidator>,
     pub stakes: Vec<config::GenesisStake>,
     pub accounts: Vec<config::GenesisAccount>,
     pub staking_contract_address: Option<Address>,
@@ -114,10 +115,18 @@ impl GenesisBuilder {
         self
     }
 
-    pub fn with_genesis_stake(&mut self, staker_address: Address, reward_address: Option<Address>, validator_key: BlsPublicKey, balance: Coin) -> &mut Self {
+    pub fn with_genesis_validator(&mut self, validator_key: BlsPublicKey, reward_address: Address, balance: Coin) -> &mut Self {
+        self.validators.push(config::GenesisValidator {
+            validator_key,
+            reward_address,
+            balance
+        });
+        self
+    }
+
+    pub fn with_genesis_stake(&mut self, staker_address: Address, validator_key: BlsPublicKey, balance: Coin) -> &mut Self {
         self.stakes.push(config::GenesisStake {
             staker_address,
-            reward_address,
             validator_key,
             balance
         });
@@ -137,6 +146,7 @@ impl GenesisBuilder {
             signing_key,
             seed_message,
             timestamp,
+            mut validators,
             mut stakes,
             mut accounts,
             staking_contract,
@@ -146,6 +156,7 @@ impl GenesisBuilder {
         seed_message.map(|msg| self.with_seed_message(msg));
         timestamp.map(|t| self.with_timestamp(t));
         staking_contract.map(|address| self.with_staking_contract_address(address));
+        self.validators.append(&mut validators);
         self.stakes.append(&mut stakes);
         self.accounts.append(&mut accounts);
 
@@ -179,7 +190,7 @@ impl GenesisBuilder {
         debug!("Slots: {:#?}", slots);
 
         // extrinsics
-        let extrinsics = MacroExtrinsics::from_stake_slots_and_slashed_set(slots.stake_slots, BitSet::new());
+        let extrinsics = MacroExtrinsics::from_slashed_set(BitSet::new());
         let extrinsics_root = extrinsics.hash::<Blake2bHash>();
         debug!("Extrinsics root: {}", &extrinsics_root);
 
@@ -237,8 +248,12 @@ impl GenesisBuilder {
     fn generate_staking_contract(&self) -> Result<StakingContract, GenesisBuilderError> {
         let mut contract = StakingContract::default();
 
+        for validator in self.validators.iter() {
+            contract.create_validator(validator.validator_key.compress(), validator.reward_address.clone(), validator.balance)?;
+        }
+
         for stake in self.stakes.iter() {
-            contract.stake(&stake.staker_address, stake.balance, stake.validator_key.compress(), stake.reward_address.clone())?;
+            contract.stake(stake.staker_address.clone(), stake.balance, &stake.validator_key.compress())?;
         }
 
         Ok(contract)

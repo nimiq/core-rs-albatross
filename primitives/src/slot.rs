@@ -1,20 +1,15 @@
 ///! # Slot allocation primitives
 ///!
-///! This module contains data structures describing the allocation of slots between stakes and
-///! validators.
+///! This module contains data structures describing the allocation of slots.
 ///!
-///! The graphic below shows how slots relate to stakes and validators. In the example we have two
-///! validators that produce blocks for 5 stakes distributed over a total of 16 slots. Validator #0
-///! produces blocks for staker #0 (slots 0 - 2) and staker #1 (slots 3 to 9). Validator #2 works
-///! similarly.
+///! The graphic below shows how slots relate to validators. In the example we have two
+///! validators that produce blocks distributed over a total of 16 slots. Validator #0
+///! produces blocks for slots 0 - 9). Validator #2 works similarly.
 ///!
 ///! ```plain
 ///!                      +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
 ///!              Slots   | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | A | B | C | D | E | F |
-///!                      +---+---+-------+---+---+---+---+---+-----------+---+---+-------+
-///!         StakeSlots   | Staker #0 |        Staker #1          | 3 |   Staker #4   | 5 |
-///!        (addresses)   | SlotBand  |        SlotBand           |   |   SlotBand    |   |
-///!                      +-----------+---------------------------+-------------------+---+
+///!                      +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
 ///!     ValidatorSlots   |             Validator #0                  |    Validator #1   |
 ///!          (pubkeys)   |             SlotBand                      |    SlotBand       |
 ///!                      +-------------------------------------------+-------------------+
@@ -24,17 +19,6 @@
 ///!
 ///! * We use *Stake* and *Staker* interchangably here, since they're always identified by the
 ///! * staker address.
-///!
-///! # ToDo
-///!
-///! * Rename module to `slots`.
-///! * Generic `SlotBand<T> { inner: T, num_slots }` ?
-///! * `SlotIndex` that maps a `slot_number` to the `SlotBand`.
-///! * Rename structs:
-///!   * `Validator` -> `ValidatorSlotBand`
-///!   * `Validators` -> `ValidatorSlots`
-///!   * `SlotAddress` -> `StakerSlotBand`
-///!   * `SlotAddresses` -> `StakerSlots`
 ///!
 
 
@@ -54,7 +38,7 @@ use bitvec::prelude::BitVec;
 use bitvec::order::Msb0;
 use itertools::Itertools;
 
-use beserial::{Deserialize, Serialize, ReadBytesExt, WriteBytesExt, SerializingError, SerializeWithLength, DeserializeWithLength, uvar};
+use beserial::{Deserialize, Serialize, ReadBytesExt, WriteBytesExt, SerializingError};
 use bls::bls12_381::lazy::LazyPublicKey;
 use bls::bls12_381::CompressedPublicKey;
 use keys::Address;
@@ -65,8 +49,7 @@ use crate::policy::SLOTS;
 /// Enum to index a slot.
 ///
 /// You can either address a slot directly by its slot number, or by it's band number. The band
-/// number than corresponds to either the nth [StakeBand] or [ValidatorBand], depending on which
-/// collection it is applied.
+/// number than corresponds to the nth [ValidatorBand].
 ///
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SlotIndex {
@@ -75,7 +58,7 @@ pub enum SlotIndex {
 }
 
 
-/// A slot that contains the corresponding validator and stake information.
+/// A slot that contains the corresponding validator information.
 ///
 /// # ToDo
 ///
@@ -84,7 +67,6 @@ pub enum SlotIndex {
 #[derive(Clone, Debug)]
 pub struct Slot {
     pub validator_slot: ValidatorSlotBand,
-    pub stake_slot: StakeSlotBand,
 }
 
 impl Slot {
@@ -92,12 +74,8 @@ impl Slot {
         self.validator_slot.public_key()
     }
 
-    pub fn staker_address(&self) -> &Address {
-        self.stake_slot.staker_address()
-    }
-
     pub fn reward_address(&self) -> &Address {
-        self.stake_slot.reward_address()
+        self.validator_slot.reward_address()
     }
 }
 
@@ -105,56 +83,40 @@ impl Slot {
 ///
 /// # ToDo
 ///
-/// * Can we use references to the [ValidatorSlots] and [StakeSlots]? If so, we can just reference
+/// * Can we use references to the [ValidatorSlots]? If so, we can just reference
 ///   them right from the block. Maybe something like *SuperCow* works here?
 ///
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Slots {
     pub validator_slots: ValidatorSlots,
-    pub stake_slots: StakeSlots,
 }
 
 impl Slots {
-    pub fn new(validator_slots: ValidatorSlots, stake_slots: StakeSlots) -> Self {
+    pub fn new(validator_slots: ValidatorSlots) -> Self {
         Slots {
             validator_slots,
-            stake_slots,
         }
     }
 
     pub fn get(&self, idx: SlotIndex) -> Option<Slot> {
         Some(Slot {
             validator_slot: self.validator_slots.get(idx)?.clone(),
-            stake_slot: self.stake_slots.get(idx)?.clone(),
         })
     }
 
-    /// Returns stake slots with first slot number and the corresponding public key of the
+    /// Returns validator slots with first slot number and the corresponding public key of the
     /// validator slot.
     pub fn combined(&self) -> Vec<(Slot, u16)> {
         let mut combined = Vec::new();
-        let mut validator_slots_iter = self.validator_slots.iter().peekable();
-        let mut start_stake_slot_number = 0;
         let mut start_validator_slot_number = 0;
 
-        for stake_slot in self.stake_slots.iter() {
-            let validator_slot = *validator_slots_iter.peek()
-                .expect("Expected validator slot");
-
+        for validator_slot in self.validator_slots.iter() {
             let slot = Slot {
                 validator_slot: validator_slot.clone(),
-                stake_slot: stake_slot.clone(),
             };
-            combined.push((slot, start_stake_slot_number));
+            combined.push((slot, start_validator_slot_number));
 
-            let end_stake_slot_number = start_stake_slot_number + stake_slot.num_slots();
-            let end_validator_slot_number = start_validator_slot_number + validator_slot.num_slots();
-
-            if end_stake_slot_number == end_validator_slot_number {
-                validator_slots_iter.next();
-                start_validator_slot_number = end_validator_slot_number;
-            }
-            start_stake_slot_number = end_stake_slot_number;
+            start_validator_slot_number += validator_slot.num_slots();
         }
 
         combined
@@ -167,14 +129,6 @@ impl Slots {
 impl From<Slots> for ValidatorSlots {
     fn from(slots: Slots) -> Self {
         slots.validator_slots
-    }
-}
-
-// Deprecated. Check where we really want this conversion
-#[deprecated]
-impl From<Slots> for StakeSlots {
-    fn from(slots: Slots) -> Self {
-        slots.stake_slots
     }
 }
 
@@ -227,50 +181,35 @@ pub trait SlotCollection {
 ///
 #[derive(Clone, Debug, Default)]
 pub struct SlotsBuilder {
-    /// Maps validator key -> ((staker address, reward address) -> number of slots))
-    validators: BTreeMap<LazyPublicKey, BTreeMap<(Address, Option<Address>), u16>>,
+    /// Maps validator key -> (reward address, number of slots)
+    validators: BTreeMap<LazyPublicKey, (Address, u16)>,
 }
 
 impl SlotsBuilder {
-    /// Push a new validator slot. This will add one slot to the validator and stake.
+    /// Push a new validator slot. This will add one slot to the validator.
     ///
     /// # Arguments
     ///
     /// * `public_key` - Public key of validator
-    /// * `staker_address` - Address of staker
     /// * `reward_address` - Address where reward will be sent to
     ///
-    pub fn push<PK: Into<LazyPublicKey>>(&mut self, public_key: PK, staker_address: Address, reward_address_opt: Option<Address>) {
-        let stake_slots = self.validators.entry(public_key.into())
-            .or_default();
-        let num_slots = stake_slots.entry((staker_address, reward_address_opt))
-            .or_default();
+    pub fn push<PK: Into<LazyPublicKey>>(&mut self, public_key: PK, reward_address: &Address) {
+        let (_, num_slots) = self.validators.entry(public_key.into())
+            .or_insert_with(|| (reward_address.clone(), 0));
         *num_slots += 1;
     }
 
     pub fn build(self) -> Slots {
         let mut validator_slots = Vec::new();
-        let mut stake_slots = Vec::new();
 
-        for (public_key, stakes) in self.validators {
-            let mut validator_num_slots = 0;
-
-            for ((staker_address, reward_address_opt), stake_num_slots) in stakes {
-                // add stake slot band
-                stake_slots.push(StakeSlotBand::new(staker_address, reward_address_opt, stake_num_slots));
-
-                // this stake and the corresponding slots belong to the validator in the outer loop
-                validator_num_slots += stake_num_slots;
-            }
-
-            // add validator slots
-            validator_slots.push(ValidatorSlotBand::new(public_key, validator_num_slots))
+        for (public_key, (reward_address, num_slots)) in self.validators {
+            // Add validator slots.
+            validator_slots.push(ValidatorSlotBand::new(public_key, reward_address, num_slots));
         }
 
         let validator_slots = ValidatorSlots::new(validator_slots);
-        let stake_slots = StakeSlots::new(stake_slots);
 
-        Slots::new(validator_slots, stake_slots)
+        Slots::new(validator_slots)
     }
 }
 
@@ -279,19 +218,24 @@ impl SlotsBuilder {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ValidatorSlotBand {
     public_key: LazyPublicKey,
+    reward_address: Address,
     num_slots: u16,
 }
 
 impl ValidatorSlotBand {
-    pub fn new<PK: Into<LazyPublicKey>>(public_key: PK, num_slots: u16) -> Self {
+    pub fn new<PK: Into<LazyPublicKey>>(public_key: PK, reward_address: Address, num_slots: u16) -> Self {
         Self {
             public_key: public_key.into(),
+            reward_address,
             num_slots
         }
     }
 
     pub fn public_key(&self) -> &LazyPublicKey {
         &self.public_key
+    }
+    pub fn reward_address(&self) -> &Address {
+        &self.reward_address
     }
 }
 
@@ -385,13 +329,14 @@ impl Serialize for ValidatorSlots {
         // serialize collection
         for validator in self.iter() {
             size += Serialize::serialize(&validator.public_key, writer)?;
+            size += Serialize::serialize(&validator.reward_address, writer)?;
         }
 
         Ok(size)
     }
 
     fn serialized_size(&self) -> usize {
-        CompressedPublicKey::SIZE * self.bands.len() + SlotAllocation::SIZE
+        (CompressedPublicKey::SIZE + Address::SIZE) * self.bands.len() + SlotAllocation::SIZE
     }
 }
 
@@ -404,212 +349,14 @@ impl Deserialize for ValidatorSlots {
         let mut validators = Vec::with_capacity(num_validators);
         for num_slots in allocation {
             let public_key: CompressedPublicKey = Deserialize::deserialize(reader)?;
-            validators.push(ValidatorSlotBand::new(public_key, num_slots));
+            let reward_address: Address = Deserialize::deserialize(reader)?;
+            validators.push(ValidatorSlotBand::new(public_key, reward_address, num_slots));
         }
 
         // This invariant should always hold if SlotAllocation is implemented correctly
         assert_eq!(validators.len(), num_validators);
 
         Ok(Self::from_iter(validators))
-    }
-}
-
-
-/// Occupation of a certain number of slots by an staker address (and reward address)
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct StakeSlotBand {
-    pub staker_address: Address,
-    pub reward_address_opt: Option<Address>,
-    pub num_slots: u16,
-}
-
-impl StakeSlotBand {
-    pub fn new(staker_address: Address, mut reward_address_opt: Option<Address>, num_slots: u16) -> Self {
-        // Create canonical representation
-        if Some(&staker_address) == reward_address_opt.as_ref() {
-            reward_address_opt = None;
-        }
-
-        Self {
-            staker_address,
-            reward_address_opt,
-            num_slots
-        }
-    }
-
-    pub fn staker_address(&self) -> &Address {
-        &self.staker_address
-    }
-
-    pub fn reward_address(&self) -> &Address {
-        self.reward_address_opt.as_ref()
-            .unwrap_or(&self.staker_address)
-    }
-}
-
-impl SlotBand for StakeSlotBand {
-    fn num_slots(&self) -> u16 {
-        self.num_slots
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct StakeSlots {
-    bands: Vec<StakeSlotBand>,
-    index: SlotIndexTable,
-}
-
-impl StakeSlots {
-    pub fn new(slots: Vec<StakeSlotBand>) -> Self {
-        let index = SlotIndexTable::new(&slots);
-        Self {
-            bands: slots,
-            index
-        }
-    }
-
-    pub fn get_staker_address(&self, idx: SlotIndex) -> Option<&Address> {
-        Some(&self.get(idx)?.staker_address())
-    }
-
-    pub fn get_reward_address(&self, idx: SlotIndex) -> Option<&Address> {
-        Some(self.get(idx)?.reward_address())
-    }
-
-    pub fn iter(&self) -> Iter<StakeSlotBand> {
-        self.bands.iter()
-    }
-}
-
-impl SlotCollection for StakeSlots {
-    type SlotBand = StakeSlotBand;
-    const TOTAL_SLOTS: u16 = SLOTS;
-
-    fn get_band_number_by_slot_number(&self, slot_number: u16) -> Option<u16> {
-        self.index.get(slot_number)
-    }
-
-    fn get_by_band_number(&self, band_number: u16) -> Option<&Self::SlotBand> {
-        self.bands.get(band_number as usize)
-    }
-
-    fn len(&self) -> usize {
-        self.bands.len()
-    }
-}
-
-impl FromIterator<StakeSlotBand> for StakeSlots {
-    fn from_iter<T: IntoIterator<Item = StakeSlotBand>>(iter: T) -> Self {
-        Self::new(iter.into_iter().collect())
-    }
-}
-
-impl IntoIterator for StakeSlots {
-    type Item = StakeSlotBand;
-    type IntoIter = IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.bands.into_iter()
-    }
-}
-
-impl PartialEq for StakeSlots {
-    fn eq(&self, other: &Self) -> bool {
-        // Equality on only the slot bands, not the index
-        self.bands.eq(&other.bands)
-    }
-}
-
-impl Eq for StakeSlots {}
-
-impl Serialize for StakeSlots {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size = 0;
-
-        // Get slot allocation from collection
-        let allocation = SlotAllocation::from_iter(self.iter()
-            .map(|item| item.num_slots))?;
-        size += Serialize::serialize(&allocation, writer)?;
-
-        // BitVec enconding which reward addresses are set
-        //
-        // This is more efficient than serializing the `Option<Address>` for every stake, since
-        // that takes 1 byte to encode the presence or absense of that key. Instead we encode
-        // it as as BitVec, so it only uses 1/8th of that.
-        //
-        // TODO: Replace with fixed-size BitVec
-        let reward_addresses: BitVec<Msb0, u8> = BitVec::from_iter(self.iter()
-            .map(|item| item.reward_address_opt.is_some()));
-        SerializeWithLength::serialize::<uvar, W>(&reward_addresses, writer)?;
-
-        // Serialize collection
-        for slot_address in self.iter() {
-            size += Serialize::serialize(&slot_address.staker_address, writer)?;
-            if let Some(reward_address) = &slot_address.reward_address_opt {
-                assert_ne!(reward_address, &slot_address.staker_address);
-                size += Serialize::serialize(reward_address, writer)?;
-            }
-        }
-
-        Ok(size)
-    }
-
-    fn serialized_size(&self) -> usize {
-        // Size of slot allocation
-        let mut size = SlotAllocation::SIZE;
-
-        // Size of BitVec that encodes which reward addresses are custom
-        // TODO: Replace with fixed-size BitVec
-        let reward_addresses: BitVec<Msb0, u8> = BitVec::from_iter(self.iter()
-            .map(|item| item.reward_address_opt.is_some()));
-        size += SerializeWithLength::serialized_size::<uvar>(&reward_addresses);
-
-        for slot_address in self.iter() {
-            size += Serialize::serialized_size(&slot_address.staker_address);
-            slot_address.reward_address_opt.as_ref().map(|reward_address| {
-                size += Serialize::serialized_size(&reward_address);
-            });
-        }
-
-        size
-    }
-}
-
-impl Deserialize for StakeSlots {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        // Deserialize the slot allocation
-        let allocation: SlotAllocation = Deserialize::deserialize(reader)?;
-        let num_slot_addresses = allocation.num_items();
-        let allocation = allocation.as_vec();
-
-        // Deserialize which reward addresses are set
-        let reward_addresses: BitVec<Msb0, u8> = DeserializeWithLength::deserialize::<uvar, R>(reader)?;
-
-        // Deserialize addresses
-        let mut slot_addresses = Vec::with_capacity(num_slot_addresses);
-
-        for (i, num_slots) in allocation.into_iter().enumerate() {
-            let staker_address: Address = Deserialize::deserialize(reader)?;
-
-            let reward_address: Option<Address> = if reward_addresses.get(i).copied().unwrap_or_default() {
-                let address = Deserialize::deserialize(reader)?;
-                if address == staker_address {
-                    // This is an invalid encoding, as it needlessly bloats the block chain
-                    return Err(SerializingError::InvalidEncoding)
-                }
-                Some(address)
-            }
-            else {
-                None
-            };
-
-            slot_addresses.push(StakeSlotBand::new(staker_address, reward_address, num_slots));
-        }
-
-        // This invariant should always hold if SlotAllocation is implemented correctly
-        assert_eq!(slot_addresses.len(), num_slot_addresses);
-
-        Ok(Self::from_iter(slot_addresses))
     }
 }
 

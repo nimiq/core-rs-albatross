@@ -9,10 +9,11 @@ use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_bls::bls12_381::lazy::LazyPublicKey;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
+use nimiq_keys::Address;
 use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_primitives::{networks::NetworkId};
 use nimiq_primitives::policy;
-use nimiq_primitives::slot::{ValidatorSlots, ValidatorSlotBand};
+use nimiq_primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
@@ -112,7 +113,7 @@ fn sign_view_change(prev_seed: VrfSeed, block_number: u32, new_view_number: u32)
     assert_eq!(proof_builder.verify(&view_change, policy::TWO_THIRD_SLOTS), Ok(()));
 
     let proof = proof_builder.build();
-    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(LazyPublicKey::from(keypair.public), policy::SLOTS)]);
+    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(LazyPublicKey::from(keypair.public), Address::default(), policy::SLOTS)]);
     assert_eq!(proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS), Ok(()));
 
     proof

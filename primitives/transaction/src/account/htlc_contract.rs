@@ -1,12 +1,14 @@
 use std::fmt::Display;
 
-use beserial::{Deserialize, Serialize};
 use enum_display_derive::Display;
-use hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use hex::FromHex;
+
+use beserial::{Deserialize, Serialize};
+use hash::{Blake2bHasher, Hasher, Sha256Hasher};
 use keys::Address;
 use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use primitives::account::AccountType;
+use primitives::coin::Coin;
 
 use crate::{Transaction, TransactionError, TransactionFlags};
 use crate::account::AccountTransactionVerification;
@@ -20,6 +22,11 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
 
         if transaction.sender == transaction.recipient {
             return Err(TransactionError::SenderEqualsRecipient);
+        }
+
+        // Check that value > 0.
+        if transaction.value == Coin::ZERO {
+            return Err(TransactionError::ZeroValue);
         }
 
         if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {

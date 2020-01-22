@@ -84,7 +84,7 @@ impl BlockProducer {
         let slashed_set = self.blockchain.state()
             .reward_registry()
             .slashed_set(prev_epoch, SlashedSetSelector::All, None);
-        MacroExtrinsics::from_stake_slots_and_slashed_set(self.blockchain.next_slots(seed, Some(txn)).stake_slots, slashed_set)
+        MacroExtrinsics::from_slashed_set(slashed_set)
     }
 
     fn next_micro_extrinsics(&self, fork_proofs: Vec<ForkProof>, extra_data: Vec<u8>, view_changes: &Option<ViewChanges>) -> MicroExtrinsics {

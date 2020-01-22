@@ -822,4 +822,8 @@ impl AbstractBlockchain for Blockchain {
         // We just return transactions of block n.
         self.chain_store.get_chain_info_at(epoch, true, txn_option).and_then( |chain_info| chain_info.head.body.map(|body| body.transactions))
     }
+
+    fn validator_registry_address(&self) -> Option<&Address> {
+        None
+    }
 }

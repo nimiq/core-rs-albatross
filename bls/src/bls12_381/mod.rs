@@ -1,14 +1,16 @@
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::{Hash as StdHash, Hasher};
 use std::str::FromStr;
 
+use failure::Fail;
 use group::{CurveAffine, CurveProjective, EncodedPoint, GroupDecodingError};
+use hex::FromHexError;
 use pairing::bls12_381::{Bls12, G1Compressed, G2Compressed};
 use pairing::Engine;
-use failure::Fail;
 
 #[cfg(feature = "beserial")]
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 use hash::Hash;
 
 use super::{
@@ -21,7 +23,6 @@ use super::{
     SigHash,
     Signature as GenericSignature
 };
-use hex::FromHexError;
 
 #[cfg(feature = "lazy")]
 pub mod lazy;
@@ -169,6 +170,12 @@ impl fmt::Display for CompressedPublicKey {
 impl PartialEq for CompressedPublicKey {
     fn eq(&self, other: &CompressedPublicKey) -> bool {
         self.p_pub.as_ref() == other.p_pub.as_ref()
+    }
+}
+
+impl StdHash for CompressedPublicKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        StdHash::hash(self.p_pub.as_ref(), state)
     }
 }
 
