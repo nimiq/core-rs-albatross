@@ -157,9 +157,9 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
     const GET_BLOCKS_VECTORS_MAX: u32 = 500;
     const KNOWN_OBJECTS_COUNT_MAX: usize = 40000;
     /// Time interval to wait between sending out transactions.
-    const TRANSACTION_RELAY_INTERVAL: Duration = Duration::from_millis(5000);
-    const TRANSACTIONS_AT_ONCE: usize = 100;
-    const TRANSACTIONS_PER_SECOND: usize = 10;
+    const TRANSACTION_RELAY_INTERVAL: Duration = Duration::from_millis(1000);
+    const TRANSACTIONS_AT_ONCE: usize = 5000;
+    const TRANSACTIONS_PER_SECOND: usize = 3000;
     /// Time interval to wait between sending out "free" transactions.
     const FREE_TRANSACTION_RELAY_INTERVAL: Duration = Duration::from_millis(6000);
     const FREE_TRANSACTIONS_AT_ONCE: usize = 10;
@@ -375,7 +375,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
                     has_block = true;
                 }
                 InvVectorType::Transaction => {
-                    if !self.mempool.contains(&vector.hash) {
+                    if !self.mempool.contains(&vector.hash) && !self.blockchain.contains_tx_in_validity_window(&vector.hash) {
                         self.notifier.read().notify(InventoryEvent::NewTransactionAnnounced);
                         unknown_txs.push(vector);
                     } else {
