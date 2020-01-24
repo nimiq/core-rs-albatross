@@ -24,9 +24,6 @@ extern crate nimiq_rpc_server as rpc_server;
 #[cfg(feature="metrics-server")]
 extern crate nimiq_metrics_server as metrics_server;
 
-#[cfg(feature="ws-rpc-server")]
-extern crate nimiq_ws_rpc_server as ws_rpc_server;
-
 
 pub mod config;
 pub mod error;

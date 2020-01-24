@@ -12,7 +12,7 @@ ENV NIMIQ_HOST=localhost.localdomain \
     NIMIQ_LOG_LEVEL=debug \
     NIMIQ_VALIDATOR=none \
     VALIDATOR_BLOCK_DELAY=250 \
-    RPC_ENABLED=false
+    RPC_ENABLED=true
 
 EXPOSE 8443/tcp 8648/tcp
 

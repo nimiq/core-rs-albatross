@@ -68,12 +68,6 @@ if [[ "$RPC_ENABLED" == "true" ]]; then
     entry bind 0.0.0.0 string
     optional username RPC_USERNAME string
     optional password RPC_PASSWORD string
-
-    echo '[ws-rpc-server]'
-    entry bind 0.0.0.0 string
-    entry port 8650 number
-    optional username RPC_USERNAME string
-    optional password RPC_PASSWORD string
 fi
 
 if [[ "$METRICS_ENABLED" == "true" ]]; then

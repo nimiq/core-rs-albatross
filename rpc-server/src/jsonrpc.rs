@@ -3,12 +3,14 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::{FutureExt, stream::Stream, StreamExt};
+use futures::future::BoxFuture;
+use headers::HeaderMapExt;
 use hyper::{Body, Method, Request, Response, StatusCode};
-use hyper::header::HeaderValue;
+use hyper::header::{HeaderName, HeaderMap, HeaderValue};
 use json::{Array, JsonValue, Null, array, object};
 
 use crate::error::AuthenticationError;
-use futures::future::BoxFuture;
+use crate::websocket::WsRpcServer;
 
 pub trait Handler: Send + Sync {
     fn call_method(&self, name: &str, params: Array) -> Option<Result<JsonValue, JsonValue>>;
@@ -18,30 +20,50 @@ pub trait Handler: Send + Sync {
 }
 
 pub struct Service<H> where H: Handler {
-    handler: Arc<H>
+    handler: Arc<H>,
+    ws_handler: Arc<WsRpcServer>,
 }
 
 impl<H> Service<H> where H: Handler {
-    pub fn new(handler: Arc<H>) -> Self {
+    pub fn new(handler: Arc<H>, ws_handler: Arc<WsRpcServer>) -> Self {
         Service {
             handler,
+            ws_handler,
         }
     }
-}
 
-
-#[derive(Debug)]
-pub enum Never {}
-
-impl std::error::Error for Never {
-    fn description(&self) -> &str {
-        match *self {}
+    // Compute the Sec-WebSocket-Accept header.
+    // Returns None if client wishes to keep a HTTP connections.
+    // Returns an error if neither HTTP or WS is wanted.
+    pub(crate) fn get_ws_upgrade(headers: &HeaderMap) -> Option<Result<headers::SecWebsocketKey, ()>> {
+        if !Self::has_header_value(headers, hyper::header::CONNECTION, "Upgrade") {
+            return None;
+        }
+        if !Self::has_header_value(headers, hyper::header::UPGRADE, "WebSocket") {
+            return Some(Err(()));
+        }
+        Some(headers.typed_get().ok_or(()))
     }
-}
 
-impl std::fmt::Display for Never {
-    fn fmt(&self, _: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {}
+    fn has_header_value(headers: &HeaderMap<HeaderValue>, key: HeaderName, expected: &str) -> bool {
+        match headers.get(key) {
+            None => false,
+            Some(actual) => {
+                // Only accept ASCII
+                let actual_bytes = actual.as_bytes();
+                for byte in actual_bytes {
+                    if *byte < 0x20 || *byte >= 0x80 {
+                        return false;
+                    }
+                }
+                let actual_str = if let Ok(str) = std::str::from_utf8(actual.as_bytes()) {
+                    str
+                } else {
+                    return false;
+                };
+                actual_str.to_ascii_lowercase() == expected.to_ascii_lowercase()
+            },
+        }
     }
 }
 
@@ -184,10 +206,48 @@ impl<H> hyper::service::Service<Request<Body>> for Service<H> where H: Handler +
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let handler = Arc::clone(&self.handler);
+
+        let headers = req.headers();
+        if let Some(ws_key_res) = Self::get_ws_upgrade(headers) {
+            let ws_key = match ws_key_res {
+                Err(_) => return ok_response_fut(
+                    Response::builder()
+                        .status(StatusCode::BAD_REQUEST)
+                        .body(Body::from("Only WS or HTTP supported"))
+                        .unwrap()
+                ),
+                Ok(ws_key) => ws_key,
+            };
+            let ws_server = Arc::clone(&self.ws_handler);
+            tokio::spawn(async move {
+                let upgrade = req.into_body().on_upgrade().await;
+                let conn = match upgrade {
+                    Err(e) => {
+                        warn!("Upgrade failed: {}", e);
+                        return;
+                    },
+                    Ok(conn) => conn,
+                };
+                let ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
+                    conn,
+                    tokio_tungstenite::tungstenite::protocol::Role::Server,
+                    None,
+                ).await;
+                ws_server.handle(ws_stream).await;
+            });
+            let mut upgrade_response = Response::builder()
+                .status(StatusCode::SWITCHING_PROTOCOLS)
+                .body(Body::empty())
+                .unwrap();
+            let headers = upgrade_response.headers_mut();
+            headers.typed_insert(headers::Connection::upgrade());
+            headers.typed_insert(headers::Upgrade::websocket());
+            headers.typed_insert(headers::SecWebsocketAccept::from(ws_key));
+            return ok_response_fut(upgrade_response);
+        }
+
         match *req.method() {
-            Method::GET => async move {
-                Ok(Response::new(Body::from("Nimiq JSON-RPC Server")))
-            }.boxed(),
+            Method::GET => ok_response_fut(Response::new(Body::from("Nimiq JSON-RPC Server"))),
             Method::POST => {
                 if let Err(e) = check_authentication(Arc::clone(&handler), req.headers().get("Authorization")) {
                     info!("Authentication failed: {}", e);
@@ -210,9 +270,11 @@ impl<H> hyper::service::Service<Request<Body>> for Service<H> where H: Handler +
                     Ok(handle_request(handler, from_utf8(&buf)))
                 }.boxed()
             },
-            _ => async move {
-                Ok(Response::new(Body::from("")))
-            }.boxed()
+            _ => ok_response_fut(Response::new(Body::from(""))),
         }
     }
+}
+
+fn ok_response_fut(res: Response<Body>) -> BoxFuture<'static, Result<Response<Body>, hyper::Error>> {
+    async move { Ok(res) }.boxed()
 }

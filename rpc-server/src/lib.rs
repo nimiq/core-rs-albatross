@@ -30,11 +30,13 @@ use json::{JsonValue, object};
 
 use crate::error::Error;
 pub use crate::handler::Handler;
+use crate::websocket::WsRpcServer;
 
 pub mod jsonrpc;
 pub mod error;
 pub mod handler;
 pub mod handlers;
+pub mod websocket;
 
 fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
     Err(object!{"message" => "Not implemented"})
@@ -53,17 +55,21 @@ pub struct JsonRpcConfig {
 pub struct Server {
     pub future: BoxFuture<'static, Result<(), Error>>,
     pub handler: Arc<Handler>,
+    pub ws_handler: Arc<WsRpcServer>,
 }
 
 impl Server {
     pub fn new(ip: IpAddr, port: u16, config: JsonRpcConfig) -> Result<Self, Error> {
         let handler = Arc::new(Handler::new(config));
         let handler2 = Arc::clone(&handler);
+        let wsrpc = WsRpcServer::new();
+        let wsrpc2 = Arc::clone(&wsrpc);
         let future = HyperServer::try_bind(&SocketAddr::new(ip, port))?
             .serve(make_service_fn(move |_conn| {
                 let handler = Arc::clone(&handler2);
+                let wsrpc2 = Arc::clone(&wsrpc);
                 async move {
-                    Ok::<_, Infallible>(jsonrpc::Service::new(handler))
+                    Ok::<_, Infallible>(jsonrpc::Service::new(handler, wsrpc2))
                 }
             }))
             .map_err(|err| err.into())
@@ -71,6 +77,7 @@ impl Server {
         Ok(Self {
             future,
             handler: Arc::clone(&handler),
+            ws_handler: wsrpc2,
         })
     }
 }

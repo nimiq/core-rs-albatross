@@ -54,15 +54,13 @@ nimiq-primitives = { path = "../primitives", version = "0.1", features = ["netwo
 nimiq-rpc-server = { path = "../rpc-server", version = "0.1", optional = true }
 nimiq-utils = { path = "../utils", version = "0.1" }
 nimiq-validator = { path = "../validator", version = "0.1", optional = true }
-nimiq-ws-rpc-server = { path = "../ws-rpc-server", version = "0.1", optional = true }
 
 [features]
 default = []
-validator = ["nimiq-validator", "nimiq-bls", "nimiq-rpc-server/validator", "nimiq-ws-rpc-server/validator"]
+validator = ["nimiq-validator", "nimiq-bls", "nimiq-rpc-server/validator"]
 deadlock = ["parking_lot"]
 panic = ["log-panics", "human-panic"]
 logging = ["fern", "colored"]
 launcher = []
 rpc-server = ["nimiq-rpc-server", "parking_lot"]
 metrics-server = ["nimiq-metrics-server"]
-ws-rpc-server = ["nimiq-ws-rpc-server"]

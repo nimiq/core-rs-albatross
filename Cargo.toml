@@ -42,7 +42,6 @@ members = [
     "build-tools",
     "wallet",
     "handel",
-    "ws-rpc-server",
     "vrf",
 ]
 

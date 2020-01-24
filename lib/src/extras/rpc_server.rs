@@ -45,11 +45,13 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
     // Install RPC modules
     #[cfg(feature="validator")] {
         if let Some(validator) = client.validator() {
+            rpc_server.ws_handler.register_validator(Arc::clone(&validator));
             let block_production_handler = BlockProductionAlbatrossHandler::new(validator);
             handler.add_module(block_production_handler);
         }
     }
 
+    rpc_server.ws_handler.register_blockchain(client.consensus());
     let blockchain_handler = BlockchainAlbatrossHandler::new(client.blockchain());
     handler.add_module(blockchain_handler);
 

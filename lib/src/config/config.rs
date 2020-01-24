@@ -402,29 +402,6 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
-#[cfg(feature="ws-rpc-server")]
-#[derive(Debug, Clone, Builder)]
-#[builder(setter(into))]
-pub struct WsRpcServerConfig {
-    /// Bind the Websocket RPC server to the specified IP address.
-    ///
-    /// Default: `127.0.0.1`
-    ///
-    #[builder(setter(strip_option))]
-    pub bind_to: Option<IpAddr>,
-
-    /// Bind the server to the specified port.
-    ///
-    /// Default: `8648`
-    ///
-    #[builder(default="consts::WS_RPC_DEFAULT_PORT")]
-    pub port: u16,
-
-    /// If specified, require HTTP basic auth with these credentials
-    #[builder(setter(strip_option))]
-    pub credentials: Option<Credentials>,
-}
-
 #[cfg(feature="metrics-server")]
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
@@ -528,12 +505,6 @@ pub struct ClientConfig {
     #[cfg(feature="rpc-server")]
     #[builder(default)]
     pub rpc_server: Option<RpcServerConfig>,
-
-    /// The optional Websocket RPC configuration
-    ///
-    #[cfg(feature="ws-rpc-server")]
-    #[builder(default)]
-    pub ws_rpc_server: Option<WsRpcServerConfig>,
 
     /// The optional metrics server configuration
     ///
@@ -807,28 +778,6 @@ impl ClientConfigBuilder {
                     corsdomain: Some(rpc_config.corsdomain.clone()),
                     allow_ips,
                     allowed_methods: Some(rpc_config.methods.clone()),
-                    credentials,
-                }));
-            }
-        }
-
-        // Configure Websocket RPC server
-        #[cfg(feature="ws-rpc-server")] {
-            if let Some(ws_rpc_config) = &config_file.ws_rpc_server {
-                let bind_to = ws_rpc_config.bind.as_ref()
-                    .and_then(|addr| addr.into_ip_address());
-
-                let credentials = match (&ws_rpc_config.username, &ws_rpc_config.password) {
-                    (Some(u), Some(p)) => {
-                        Some(Credentials::new(u.clone(), p.clone()))
-                    },
-                    (None, None) => None,
-                    _ => return Err(Error::config_error("Either both username and password have to be set or none."))
-                };
-
-                self.ws_rpc_server = Some(Some(WsRpcServerConfig {
-                    bind_to,
-                    port: ws_rpc_config.port.unwrap_or(consts::WS_RPC_DEFAULT_PORT),
                     credentials,
                 }));
             }
