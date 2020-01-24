@@ -50,8 +50,7 @@ use std::iter::FromIterator;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use bitvec::prelude::BitVec;
-use bitvec::cursor::BigEndian;
+use bitvec::prelude::{BitVec, Msb0};
 use itertools::Itertools;
 
 use beserial::{Deserialize, Serialize, ReadBytesExt, WriteBytesExt, SerializingError, SerializeWithLength, DeserializeWithLength, uvar};
@@ -538,7 +537,7 @@ impl Serialize for StakeSlots {
         // it as as BitVec, so it only uses 1/8th of that.
         //
         // TODO: Replace with fixed-size BitVec
-        let reward_addresses: BitVec<BigEndian, u8> = BitVec::from_iter(self.iter()
+        let reward_addresses: BitVec<Msb0, u8> = BitVec::from_iter(self.iter()
             .map(|item| item.reward_address_opt.is_some()));
         SerializeWithLength::serialize::<uvar, W>(&reward_addresses, writer)?;
 
@@ -560,7 +559,7 @@ impl Serialize for StakeSlots {
 
         // Size of BitVec that encodes which reward addresses are custom
         // TODO: Replace with fixed-size BitVec
-        let reward_addresses: BitVec<BigEndian, u8> = BitVec::from_iter(self.iter()
+        let reward_addresses: BitVec<Msb0, u8> = BitVec::from_iter(self.iter()
             .map(|item| item.reward_address_opt.is_some()));
         size += SerializeWithLength::serialized_size::<uvar>(&reward_addresses);
 
@@ -583,7 +582,7 @@ impl Deserialize for StakeSlots {
         let allocation = allocation.as_vec();
 
         // Deserialize which reward addresses are set
-        let reward_addresses: BitVec = DeserializeWithLength::deserialize::<uvar, R>(reader)?;
+        let reward_addresses: BitVec<Msb0, u8> = DeserializeWithLength::deserialize::<uvar, R>(reader)?;
 
         // Deserialize addresses
         let mut slot_addresses = Vec::with_capacity(num_slot_addresses);
@@ -591,7 +590,7 @@ impl Deserialize for StakeSlots {
         for (i, num_slots) in allocation.into_iter().enumerate() {
             let staker_address: Address = Deserialize::deserialize(reader)?;
 
-            let reward_address: Option<Address> = if reward_addresses.get(i).unwrap_or_default() {
+            let reward_address: Option<Address> = if reward_addresses.get(i).cloned().unwrap_or_default() {
                 let address = Deserialize::deserialize(reader)?;
                 if address == staker_address {
                     // This is an invalid encoding, as it needlessly bloats the block chain
@@ -668,7 +667,7 @@ impl fmt::Debug for SlotIndexTable {
 /// A compressed representation of repeated objects. This is used to encode the slot allocation
 /// of something that is a `NumSlotsCollection`
 struct SlotAllocation {
-    bits: BitVec<BigEndian, u8>,
+    bits: BitVec<Msb0, u8>,
 }
 
 impl SlotAllocation {
@@ -706,7 +705,7 @@ impl SlotAllocation {
         let mut total = 0;
 
         for b in &self.bits {
-            if b && count > 0 {
+            if *b && count > 0 {
                 num_slots.push(count);
                 total += count;
                 count = 1;
