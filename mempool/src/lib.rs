@@ -161,7 +161,7 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
 
             // Retrieve recipient account and check account type.
             // TODO Eliminate copy
-            let recipient_account = self.blockchain.get_account(&transaction.recipient);
+            let mut recipient_account = self.blockchain.get_account(&transaction.recipient);
             let is_contract_creation = transaction.flags.contains(TransactionFlags::CONTRACT_CREATION);
             let is_type_change = recipient_account.account_type() != transaction.recipient_type;
             if is_contract_creation != is_type_change {
@@ -169,20 +169,22 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
             }
 
             // Test incoming transaction.
-            match recipient_account.check_incoming_transaction(&transaction, block_height) {
+            let old_balance = recipient_account.balance();
+            match recipient_account.commit_incoming_transaction(&transaction, block_height) {
                 Err(_) => return ReturnCode::Invalid,
                 Ok(_) => {
                     // Check recipient account against filter rules.
-                    // FIXME This boldly assumes that the account balance after the incoming transaction is old_balance + transaction.value.
-                    let old_balance = recipient_account.balance();
-                    let new_balance = match old_balance.checked_add(transaction.value) {
-                        Some(balance) => balance,
-                        None => return ReturnCode::Invalid
-                    };
+                    let new_balance = recipient_account.balance();
                     if !state.filter.accepts_recipient_balance(&transaction, old_balance, new_balance) {
                         self.state.write().filter.blacklist(hash);
                         return ReturnCode::Filtered;
                     }
+                }
+            }
+            // Also check contract creation.
+            if is_contract_creation {
+                if Account::new_contract(transaction.recipient_type, recipient_account.balance(), &transaction, block_height).is_err() {
+                    return ReturnCode::Invalid;
                 }
             }
 
@@ -402,10 +404,17 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
 
                     // Check if transaction is still valid for recipient.
                     // TODO Eliminate copy
-                    let recipient_account = self.blockchain.get_account(&tx.recipient);
-                    if recipient_account.check_incoming_transaction(&tx, block_height).is_err() {
+                    let mut recipient_account = self.blockchain.get_account(&tx.recipient);
+                    if recipient_account.commit_incoming_transaction(&tx, block_height).is_err() {
                         txs_evicted.push(tx.clone());
                         continue;
+                    }
+                    // Also check contract creation.
+                    if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                        if Account::new_contract(tx.recipient_type, recipient_account.balance(), &tx, block_height).is_err() {
+                            txs_evicted.push(tx.clone());
+                            continue;
+                        }
                     }
 
                     // Check if transaction is still valid for sender.
@@ -469,11 +478,19 @@ impl<B: AbstractBlockchain + 'static> Mempool<B> {
                 }
 
                 // TODO Eliminate copy
-                let recipient_account = self.blockchain.get_account(&tx.recipient);
-                if recipient_account.check_incoming_transaction(&tx, block_height).is_err() {
+                let mut recipient_account = self.blockchain.get_account(&tx.recipient);
+                if recipient_account.commit_incoming_transaction(&tx, block_height).is_err() {
                     // This transaction cannot be accepted by the recipient anymore.
                     // XXX The transaction is lost!
                     continue;
+                }
+                // Also check contract creation.
+                if tx.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+                    if Account::new_contract(tx.recipient_type, recipient_account.balance(), &tx, block_height).is_err() {
+                        // This transaction cannot be accepted by the recipient anymore.
+                        // XXX The transaction is lost!
+                        continue;
+                    }
                 }
 
                 let txs = txs_by_sender
