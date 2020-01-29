@@ -35,6 +35,9 @@ use crate::websocket::websocket_connector::{WebSocketConnector, WebSocketConnect
 use super::close_type::CloseType;
 use super::connection_info::{ConnectionInfo, ConnectionState};
 
+#[cfg(feature = "metrics")]
+use crate::network_metrics::NetworkMetrics;
+
 macro_rules! update_checked {
     ($peer_count: expr, $update: expr) => {
         $peer_count = match $update {
@@ -51,6 +54,10 @@ pub struct ConnectionPoolState<B: AbstractBlockchain + 'static> {
     connections_by_peer_address: HashMap<Arc<PeerAddress>, ConnectionId>,
     connections_by_net_address: HashMap<NetAddress, HashSet<ConnectionId>>,
     connections_by_subnet: HashMap<NetAddress, HashSet<ConnectionId>>,
+
+    // Total bytes sent/received on past connections.
+    #[cfg(feature = "metrics")]
+    past_conn_metrics: NetworkMetrics,
 
     pub peer_count_ws: usize,
     pub peer_count_wss: usize,
@@ -330,6 +337,19 @@ impl<B: AbstractBlockchain + 'static> ConnectionPoolState<B> {
             }
         }
     }
+
+    #[cfg(feature = "metrics")]
+    pub fn get_past_conn_metrics(&self) -> &NetworkMetrics {
+        &self.past_conn_metrics
+    }
+
+    #[cfg(feature = "metrics")]
+    // Update the metrics on past connections when a peer leaves.
+    fn update_past_conn_metrics(&mut self, metrics: &NetworkMetrics) {
+        self.past_conn_metrics.note_bytes_received(metrics.bytes_received());
+
+        self.past_conn_metrics.note_bytes_sent(metrics.bytes_sent());
+    }
 }
 
 enum Connection<'a, B: AbstractBlockchain + 'static> {
@@ -383,6 +403,8 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
                 connections_by_peer_address: HashMap::new(),
                 connections_by_net_address: HashMap::new(),
                 connections_by_subnet: HashMap::new(),
+
+                past_conn_metrics: NetworkMetrics::default(),
 
                 peer_count_ws: 0,
                 peer_count_wss: 0,
@@ -854,6 +876,11 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
             {
                 let mut state = self.state.write();
                 info = state.remove(connection_id).unwrap_or_else(|| panic!("Missing connection #{}", connection_id));
+
+                // This unwrap will always succeed because the handler we're in (on_close) is setup after the network_connection
+                // has already been set (in the on_connection handler) and before the network_connection is removed with info.close().
+                #[cfg(feature = "metrics")]
+                state.update_past_conn_metrics(info.network_connection().unwrap().metrics());
 
                 // Check if the handshake with this peer has completed.
                 if info.state() == ConnectionState::Established {

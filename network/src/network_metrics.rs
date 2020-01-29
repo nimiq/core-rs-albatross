@@ -223,8 +223,8 @@ impl PeerMetrics {
 
 impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
     pub fn metrics(&self) -> (MessageMetrics, NetworkMetrics, PeerMetrics) {
-        let mut bytes_sent: usize = 0;
-        let mut bytes_received: usize = 0;
+        let mut bytes_sent: usize;
+        let mut bytes_received: usize;
         let mut peer_metrics = PeerMetrics::default();
         // We count the message metrics afterwards to minimize time of locking state.
         let mut message_metrics: Vec<Arc<MessageMetrics>> = Vec::new();
@@ -233,6 +233,11 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
         // Connection pool state lock.
         {
             let state = self.state();
+            let past_conn_metrics = state.get_past_conn_metrics();
+
+            bytes_sent = past_conn_metrics.bytes_sent();
+            bytes_received = past_conn_metrics.bytes_received();
+
             for connection in state.connection_iter() {
                 // Copy over message metrics.
                 if let Some(channel) = connection.peer_channel() {
