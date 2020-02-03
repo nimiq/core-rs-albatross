@@ -961,7 +961,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let mut state = self.state.write();
 
         let mut vectors = Vec::new();
-        while vectors.len() <= InvVector::VECTORS_MAX_COUNT {
+        while vectors.len() < InvVector::VECTORS_MAX_COUNT {
             if let Some(vector) = state.waiting_tx_inv_vectors.dequeue() {
                 vectors.push(vector);
             } else {
@@ -980,7 +980,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
         let mut size: usize = 0;
         let mut vectors = Vec::new();
-        while vectors.len() <= InvVector::VECTORS_MAX_COUNT && size < Self::FREE_TRANSACTION_SIZE_PER_INTERVAL {
+        while vectors.len() < InvVector::VECTORS_MAX_COUNT && size < Self::FREE_TRANSACTION_SIZE_PER_INTERVAL {
             if let Some(vector) = state.waiting_free_tx_inv_vectors.dequeue() {
                 size += vector.serialized_size;
                 vectors.push(InvVector::from(vector));
