@@ -85,6 +85,7 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
                 }
             }
 
+            self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
             record.0 = agent.self_weak.clone();
             self.request_vector(agent, vector);
         } else {
@@ -113,6 +114,7 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
 
     pub(crate) fn note_vector_not_received(&mut self, agent_weak: &Weak<InventoryAgent<P>>, vector: &InvVector) {
         self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
+
         let record_opt = self.vectors_to_request.get_mut(vector);
         if record_opt.is_none() {
             return;
@@ -120,15 +122,12 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
 
         let record = record_opt.unwrap();
         let current_opt = record.0.upgrade();
-        let agent_opt = agent_weak.upgrade();
-        if let Some(ref current) = current_opt {
-            if agent_opt.is_none() {
-                return;
-            }
+        let caller = agent_weak.upgrade().expect("Caller not present");
 
-            let agent = agent_opt.unwrap();
-            if !Arc::ptr_eq(&agent, current) {
-                record.1.remove(&agent);
+        record.1.remove(&caller);
+
+        if let Some(ref current) = current_opt {
+            if !current.peer.channel.closed() && !Arc::ptr_eq(&caller, current) {
                 return;
             }
         }
@@ -143,7 +142,9 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
         record.1.remove(&next_agent);
         record.0 = Arc::downgrade(&next_agent);
 
-        debug!("Active agent {:p} didn't find {:?} {}, trying {:p} ({} agents left)", current_opt.unwrap(), vector.ty, vector.hash, next_agent, record.1.len());
+        debug!("Active agent {:?} didn't find {:?} {}, trying {:p} ({} agents left)",
+               current_opt.map_or_else(|| "null".to_string(), |c| format!("{:p}", c)),
+               vector.ty, vector.hash, next_agent, record.1.len());
 
         self.request_vector(&next_agent, vector);
     }

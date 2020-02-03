@@ -561,6 +561,12 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
     fn on_close(&self) {
         self.timers.clear_all();
+
+        let state = self.state.read();
+        let mut inv_mgr = self.inv_mgr.write();
+        for vector in &state.objects_in_flight {
+            inv_mgr.note_vector_not_received(&*self.self_weak, vector);
+        }
     }
 
     pub(crate) fn queue_vector(&self, vector: InvVector) {
