@@ -55,6 +55,7 @@ bitflags! {
     #[derive(Default, Serialize)]
     pub struct TransactionFlags: u8 {
         const CONTRACT_CREATION = 0b1;
+        const SIGNALLING = 0b10;
     }
 }
 
@@ -151,6 +152,23 @@ impl Transaction {
         }
     }
 
+    pub fn new_signalling(sender: Address, sender_type: AccountType, recipient: Address, recipient_type: AccountType, value: Coin, fee: Coin, data: Vec<u8>, validity_start_height: u32, network_id: NetworkId) -> Self {
+        Self {
+            data,
+            sender,
+            sender_type,
+            recipient,
+            recipient_type,
+            value,
+            fee,
+            validity_start_height,
+            network_id,
+            flags: TransactionFlags::SIGNALLING,
+            proof: Vec::new(),
+            valid: false
+        }
+    }
+
     pub fn new_contract_creation(data: Vec<u8>, sender: Address, sender_type: AccountType, recipient_type: AccountType, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
         let mut tx = Self {
             data,
@@ -236,9 +254,16 @@ impl Transaction {
         // This is no longer true for stake retire transactions.
         // Check moved to AccountType::verify_incoming_transaction()
 
-        // Check that value > 0.
-        // This is no longer true for validator signalling transactions.
-        // Check moved to AccountType::verify_incoming_transaction()
+        // Check that value > 0 except if it is a signalling transaction..
+        if self.flags.contains(TransactionFlags::SIGNALLING) {
+            if self.value != Coin::ZERO {
+                return Err(TransactionError::InvalidForRecipient);
+            }
+        } else {
+            if self.value == Coin::ZERO {
+                return Err(TransactionError::ZeroValue);
+            }
+        }
 
         // Check that value + fee doesn't overflow.
         match self.value.checked_add(self.fee) {

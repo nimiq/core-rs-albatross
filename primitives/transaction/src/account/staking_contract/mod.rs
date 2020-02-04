@@ -31,6 +31,11 @@ impl AccountTransactionVerification for StakingContractVerifier {
             let data = IncomingStakingTransactionData::parse(transaction)?;
             data.verify(transaction)?;
 
+            if data.is_signalling() != transaction.flags.contains(TransactionFlags::SIGNALLING) {
+                warn!("Signalling must be set for signalling transactions");
+                return Err(TransactionError::InvalidForRecipient);
+            }
+
             // For staking transactions, check minimum stake.
             match data {
                 IncomingStakingTransactionData::Stake { .. } => {
@@ -42,24 +47,18 @@ impl AccountTransactionVerification for StakingContractVerifier {
                         return Err(TransactionError::InvalidForRecipient);
                     }
                 },
-                IncomingStakingTransactionData::CreateValidator { .. } => {
-                    // Implicitly checks that value > 0.
+                IncomingStakingTransactionData::CreateValidator { .. } => {// Implicitly checks that value > 0.
                     if transaction.value < Coin::from_u64_unchecked(policy::MIN_VALIDATOR_STAKE) {
                         warn!("Validator stake value below minimum");
                         return Err(TransactionError::InvalidForRecipient);
                     }
                 },
-                _ => {
-                    // Check that value == 0.
-                    if transaction.value != Coin::ZERO {
-                        return Err(TransactionError::InvalidForRecipient);
-                    }
-                },
+                _ => {},
             }
         } else {
-            // Check that value > 0.
-            if transaction.value == Coin::ZERO {
-                return Err(TransactionError::ZeroValue);
+            if transaction.flags.contains(TransactionFlags::SIGNALLING) {
+                warn!("Signalling not allowed for self transactions");
+                return Err(TransactionError::InvalidForRecipient);
             }
 
             let data = SelfStakingTransactionData::parse(transaction)?;

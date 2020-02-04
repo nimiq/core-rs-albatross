@@ -16,13 +16,9 @@ impl AccountTransactionVerification for BasicAccountVerifier {
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
-        // Check that value > 0.
-        if transaction.value == Coin::ZERO {
-            return Err(TransactionError::ZeroValue);
-        }
-
-        if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
-            warn!("Contract creation not allowed");
+        if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION)
+            || transaction.flags.contains(TransactionFlags::SIGNALLING) {
+            warn!("Contract creation and signalling not allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
 

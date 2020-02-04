@@ -648,7 +648,7 @@ fn it_can_apply_slashes_after_retire() {
             signature: Default::default(),
         }, 100, &bls_pair
     );
-    assert_eq!(AccountType::verify_incoming_transaction(&tx_1), Err(TransactionError::InvalidForRecipient));
+    assert_eq!(tx_1.verify(NetworkId::Dummy), Err(TransactionError::InvalidForRecipient));
 
     // Check that signature is verified
     tx_1.value = Coin::from_u64_unchecked(0);
@@ -729,7 +729,7 @@ fn it_can_apply_unpark_transactions() {
         validator_key: validator_key.clone(),
         signature: Default::default()
     }, 100, &bls_pair);
-    assert_eq!(AccountType::verify_incoming_transaction(&unpark), Err(TransactionError::InvalidForRecipient));
+    assert_eq!(unpark.verify(NetworkId::Dummy), Err(TransactionError::InvalidForRecipient));
 
     // Unpark with invalid proof
     let priv_key: BlsSecretKey = Deserialize::deserialize(&mut &hex::decode("12434643b255b86c780670ede72500a84de5ce633f674c799e27b09187d5a414").unwrap()[..]).unwrap();
@@ -738,7 +738,7 @@ fn it_can_apply_unpark_transactions() {
         validator_key: validator_key.clone(),
         signature: Default::default()
     }, 0, &bls_pair2);
-    assert_eq!(AccountType::verify_incoming_transaction(&unpark), Err(TransactionError::InvalidProof));
+    assert_eq!(unpark.verify(NetworkId::Dummy), Err(TransactionError::InvalidProof));
 
     // Invalid type
     let mut unpark = make_signed_incoming_transaction(IncomingStakingTransactionData::UnparkValidator {
@@ -757,7 +757,7 @@ fn it_can_apply_unpark_transactions() {
         validator_key: bls_pair2.public.compress(),
         signature: Default::default()
     }, 0, &bls_pair2);
-    assert_eq!(AccountType::verify_incoming_transaction(&unpark), Ok(()));
+    assert_eq!(unpark.verify(NetworkId::Dummy), Ok(()));
     assert_eq!(StakingContract::check_incoming_transaction(&unpark, 2), Ok(()));
     assert_eq!(contract.commit_incoming_transaction(&unpark, 2), Err(AccountError::InvalidForRecipient));
 
@@ -766,7 +766,7 @@ fn it_can_apply_unpark_transactions() {
         validator_key: validator_key.clone(),
         signature: Default::default()
     }, 0, &bls_pair);
-    assert_eq!(AccountType::verify_incoming_transaction(&unpark), Ok(()));
+    assert_eq!(unpark.verify(NetworkId::Dummy), Ok(()));
     assert_eq!(StakingContract::check_incoming_transaction(&unpark, 2), Ok(()));
     assert_eq!(contract.commit_incoming_transaction(&unpark, 2), Err(AccountError::InvalidForRecipient));
 
@@ -2271,16 +2271,33 @@ fn make_sample_contract(key_pair: &KeyPair, bls_pair: &BlsKeyPair) -> StakingCon
 }
 
 fn make_incoming_transaction(data: IncomingStakingTransactionData, value: u64) -> Transaction {
-    Transaction::new_extended(
-        Address::from_any_str(STAKER_ADDRESS).unwrap(),
-        AccountType::Basic,
-        Address::from([1u8; 20]),
-        AccountType::Staking,
-        value.try_into().unwrap(),
-        100.try_into().unwrap(),
-        data.serialize_to_vec(),
-        1, NetworkId::Dummy,
-    )
+    match data {
+        IncomingStakingTransactionData::Stake { .. }
+        | IncomingStakingTransactionData::CreateValidator { .. } => {
+            Transaction::new_extended(
+                Address::from_any_str(STAKER_ADDRESS).unwrap(),
+                AccountType::Basic,
+                Address::from([1u8; 20]),
+                AccountType::Staking,
+                value.try_into().unwrap(),
+                100.try_into().unwrap(),
+                data.serialize_to_vec(),
+                1, NetworkId::Dummy,
+            )
+        },
+        _ => {
+            Transaction::new_signalling(
+                Address::from_any_str(STAKER_ADDRESS).unwrap(),
+                AccountType::Basic,
+                Address::from([1u8; 20]),
+                AccountType::Staking,
+                value.try_into().unwrap(),
+                100.try_into().unwrap(),
+                data.serialize_to_vec(),
+                1, NetworkId::Dummy,
+            )
+        },
+    }
 }
 
 fn make_signed_incoming_transaction(data: IncomingStakingTransactionData, value: u64, bls_pair: &BlsKeyPair) -> Transaction {
@@ -2288,6 +2305,14 @@ fn make_signed_incoming_transaction(data: IncomingStakingTransactionData, value:
     tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(
         &tx.data, bls_pair.sign(&tx.serialize_content()).compress()
     ).unwrap();
+
+    let private_key = PrivateKey::deserialize_from_vec(
+        &hex::decode(STAKER_PRIVATE_KEY).unwrap()
+    ).unwrap();
+    let key_pair = KeyPair::from(private_key);
+    tx.proof = SignatureProof::from(key_pair.public.clone(),
+                                    key_pair.sign(&tx.serialize_content()))
+        .serialize_to_vec();
     tx
 }
 

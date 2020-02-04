@@ -24,13 +24,13 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
-        // Check that value > 0.
-        if transaction.value == Coin::ZERO {
-            return Err(TransactionError::ZeroValue);
-        }
-
         if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
             warn!("Only contract creation is allowed");
+            return Err(TransactionError::InvalidForRecipient);
+        }
+
+        if transaction.flags.contains(TransactionFlags::SIGNALLING) {
+            warn!("Signalling not allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
 

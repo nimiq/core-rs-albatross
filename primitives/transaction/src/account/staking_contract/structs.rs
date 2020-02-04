@@ -40,6 +40,15 @@ pub enum IncomingStakingTransactionType {
     Stake = 5,
 }
 
+impl IncomingStakingTransactionType {
+    pub fn is_signalling(&self) -> bool {
+        match self {
+            IncomingStakingTransactionType::Stake | IncomingStakingTransactionType::CreateValidator => false,
+            _ => true,
+        }
+    }
+}
+
 /// It is important to note that all `signature` fields contain the signature
 /// over the complete transaction with the `signature` field set to `Default::default()`.
 /// The field is populated only after computing the signature.
@@ -77,6 +86,14 @@ pub enum IncomingStakingTransactionData {
 }
 
 impl IncomingStakingTransactionData {
+    pub fn is_signalling(&self) -> bool {
+        match self {
+            IncomingStakingTransactionData::Stake { .. }
+                | IncomingStakingTransactionData::CreateValidator { .. } => false,
+            _ => true
+        }
+    }
+
     pub fn parse(transaction: &Transaction) -> Result<Self, TransactionError> {
         full_parse(&transaction.data[..])
     }
