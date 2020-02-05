@@ -17,9 +17,7 @@ parking_lot = { version = "0.9", optional = true }
 rand = "0.7"
 rand_chacha = "0.2"
 
-ff = { git = "https://github.com/paberr/librustzcash" }
-group = { git = "https://github.com/paberr/librustzcash" }
-pairing = { git = "https://github.com/paberr/librustzcash" }
+algebra = { path = "algebra"}
 
 beserial = { path = "../beserial", version = "0.1", optional = true }
 nimiq-hash = { path = "../hash", version = "0.1" }
