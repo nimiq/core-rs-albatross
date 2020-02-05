@@ -31,35 +31,36 @@ pub use utils::key_rng::{SecureGenerate, SecureRng};
 /// Hash used for signatures
 pub type SigHash = Blake2bHash;
 
-/// Map hash to point in G1
-// pub(crate) fn hash_to_g1<E: Engine>(h: SigHash) -> E::G1 {
-//     E::G1::random(&mut ChaChaRng::from_seed(h.into()))
+/// Map hash to point in G1Projective
+// pub(crate) fn hash_to_g1(h: SigHash) -> G1Projective {
+//     G1Projective::random(&mut ChaChaRng::from_seed(h.into()))
 // }
 
 #[derive(Clone, Copy)]
 pub struct Signature {
     // The projective form is the longer one, with 3 coordinates. It is meant only for quick calculation.
-    pub(crate) s: G1Projective,
+    // We can't use the affine form since the Algebra library doesn't support arithmetic with it.
+    pub(crate) signature: G1Projective,
 }
 
 impl Eq for Signature {}
 
 impl PartialEq for Signature {
     fn eq(&self, other: &Self) -> bool {
-        self.s.eq(&other.s)
+        self.signature.eq(&other.signature)
     }
 }
 
 #[derive(Clone, Copy)]
 pub struct SecretKey {
-    pub(crate) x: Fr,
+    pub(crate) secret_key: Fr,
 }
 
 impl Eq for SecretKey {}
 
 impl PartialEq for SecretKey {
     fn eq(&self, other: &Self) -> bool {
-        self.x.eq(&other.x)
+        self.secret_key.eq(&other.secret_key)
     }
 }
 
@@ -76,12 +77,12 @@ impl SecretKey {
     }
 
     pub fn sign_hash(&self, hash: SigHash) -> Signature {
-        self.sign_g1(hash_to_g1::<E>(hash))
+        self.sign_g1(hash_to_g1(hash))
     }
 
-    fn sign_g1<H: Into<E::G1Affine>>(&self, h: H) -> Signature {
+    fn sign_g1(&self, hash_curve: G1Projective) -> Signature {
         Signature {
-            s: h.into().mul(self.x),
+            signature: &self * hash_curve,
         }
     }
 }
@@ -89,77 +90,80 @@ impl SecretKey {
 impl SecureGenerate for SecretKey {
     fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         SecretKey {
-            x: E::Fr::random(rng),
+            secret_key: Fr::random(rng),
         }
     }
 }
 
 #[derive(Clone, Copy)]
 pub struct PublicKey {
-    pub(crate) p_pub: G2Projective,
+    pub(crate) public_key: G2Projective,
 }
 
 impl Eq for PublicKey {}
 
 impl PartialEq for PublicKey {
     fn eq(&self, other: &Self) -> bool {
-        self.p_pub.eq(&other.p_pub)
+        self.public_key.eq(&other.public_key)
     }
 }
 
 impl PublicKey {
-    pub fn from_secret(secret: &SecretKey) -> Self {
+    pub fn from_secret(x: &SecretKey) -> Self {
         PublicKey {
-            p_pub: E::G2Affine::one().mul(secret.x),
+            public_key: G2Projective::prime_subgroup_generator() * x.secret_key,
         }
     }
 
-    pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature<E>) -> bool {
+    pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
         self.verify_hash(msg.hash(), signature)
     }
 
-    pub fn verify_hash(&self, hash: SigHash, signature: &Signature<E>) -> bool {
-        self.verify_g1(hash_to_g1::<E>(hash), signature)
+    pub fn verify_hash(&self, hash: SigHash, signature: &Signature) -> bool {
+        self.verify_g1(hash_to_g1(hash), signature)
     }
 
-    fn verify_g1<H: Into<E::G1Affine>>(&self, h: H, signature: &Signature<E>) -> bool {
-        let lhs = E::pairing(signature.s, E::G2Affine::one());
-        let rhs = E::pairing(h.into(), self.p_pub);
+    fn verify_g1(&self, hash_curve: G1Projective, signature: &Signature) -> bool {
+        let lhs = Bls12_377::pairing(
+            signature.signature,
+            G2Projective::prime_subgroup_generator(),
+        );
+        let rhs = Bls12_377::pairing(hash_curve, self.public_key);
         lhs == rhs
     }
 }
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct KeyPair {
-    pub secret: SecretKey,
-    pub public: PublicKey,
+    pub secret_key: SecretKey,
+    pub public_key: PublicKey,
 }
 
 impl KeyPair {
-    #[cfg(test)]
-    fn generate_predictable<R: Rng>(rng: &mut R) -> Self {
-        let secret = SecretKey::generate_predictable(rng);
-        KeyPair::from(secret)
-    }
+    // #[cfg(test)]
+    // fn generate_predictable<R: Rng>(rng: &mut R) -> Self {
+    //     let secret = SecretKey::generate_predictable(rng);
+    //     KeyPair::from(secret)
+    // }
 
     pub fn from_secret(secret: &SecretKey) -> Self {
         KeyPair::from(secret.clone())
     }
 
     pub fn sign<M: Hash>(&self, msg: &M) -> Signature {
-        self.secret.sign::<M>(msg)
+        self.secret_key.sign::<M>(msg)
     }
 
     pub fn sign_hash(&self, hash: SigHash) -> Signature {
-        self.secret.sign_hash(hash)
+        self.secret_key.sign_hash(hash)
     }
 
     pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
-        self.public.verify::<M>(msg, signature)
+        self.public_key.verify::<M>(msg, signature)
     }
 
     pub fn verify_hash(&self, hash: SigHash, signature: &Signature) -> bool {
-        self.public.verify_hash(hash, signature)
+        self.public_key.verify_hash(hash, signature)
     }
 }
 
@@ -183,7 +187,7 @@ pub struct AggregatePublicKey(pub(crate) PublicKey);
 impl AggregatePublicKey {
     pub fn new() -> Self {
         AggregatePublicKey(PublicKey {
-            p_pub: E::G2::zero(),
+            public_key: E::G2::zero(),
         })
     }
 
@@ -202,11 +206,11 @@ impl AggregatePublicKey {
     /// of the secret key for each public key.
     /// Otherwise, an adversary can submit a public key to cancel out other public keys.
     pub fn aggregate(&mut self, key: &PublicKey) {
-        self.0.p_pub.add_assign(&key.p_pub);
+        self.0.public_key.add_assign(&key.public_key);
     }
 
     pub fn merge_into(&mut self, other: &Self) {
-        self.0.p_pub.add_assign(&other.0.p_pub);
+        self.0.public_key.add_assign(&other.0.public_key);
     }
 
     /// Verify an aggregate signature over the same message.
@@ -282,7 +286,7 @@ impl AggregateSignature {
             // garantueed to be available, since we check that there are as many messages/hashes
             // as public_keys.
             let h = hashes.pop().unwrap();
-            rhs.mul_assign(&E::pairing(hash_to_g1::<E>(h), public_key.p_pub));
+            rhs.mul_assign(&E::pairing(hash_to_g1::<E>(h), public_key.public_key));
         }
         lhs == rhs
     }
@@ -304,11 +308,8 @@ impl Default for AggregateSignature {
 
 #[cfg(test)]
 mod tests {
-    use std::vec::Vec;
-
-    use pairing::bls12_381::Bls12;
-    use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
+    use std::vec::Vec;
 
     use super::*;
 
