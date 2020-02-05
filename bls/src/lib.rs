@@ -4,17 +4,22 @@ extern crate hex;
 extern crate nimiq_hash as hash;
 extern crate nimiq_utils as utils;
 
+// imports main types needed for EC algebra
 use algebra::{
     curves::{
         bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective},
         AffineCurve, PairingEngine, ProjectiveCurve,
     },
     fields::{
-        bls12_377::{Fq, Fr},
+        bls12_377::{Fq, Fqk, Fr},
         Field, FpParameters,
     },
     CanonicalSerialize,
 };
+
+// Zero is for used for getting the point at infinity from a curve.
+// One is used to get the identity element from a finite field.
+use num_traits::{One, Zero};
 
 use hashbrown::HashSet;
 use rand::SeedableRng;
@@ -185,32 +190,37 @@ impl From<SecretKey> for KeyPair {
 pub struct AggregatePublicKey(pub(crate) PublicKey);
 
 impl AggregatePublicKey {
+    // Returns the point at infinity.
     pub fn new() -> Self {
         AggregatePublicKey(PublicKey {
-            public_key: E::G2::zero(),
+            public_key: G2Projective::zero(),
         })
     }
 
     /// When using this method, it is essential that there exist proofs of knowledge
     /// of the secret key for each public key.
     /// Otherwise, an adversary can submit a public key to cancel out other public keys.
-    pub fn from_public_keys(keys: &[PublicKey]) -> Self {
-        let mut pkey = Self::new();
-        for key in keys {
-            pkey.aggregate(key);
+    /// This is called a "rogue key attack".
+    pub fn from_public_keys(public_keys: &[PublicKey]) -> Self {
+        let mut agg_key = G2Projective::zero();
+        for x in public_keys {
+            agg_key += &x.public_key;
         }
-        pkey
+        return AggregatePublicKey(PublicKey {
+            public_key: agg_key,
+        });
     }
 
     /// When using this method, it is essential that there exist proofs of knowledge
     /// of the secret key for each public key.
     /// Otherwise, an adversary can submit a public key to cancel out other public keys.
+    /// This is called a "rogue key attack".
     pub fn aggregate(&mut self, key: &PublicKey) {
-        self.0.public_key.add_assign(&key.public_key);
+        self.0.public_key += &key.public_key;
     }
 
     pub fn merge_into(&mut self, other: &Self) {
-        self.0.public_key.add_assign(&other.0.public_key);
+        self.0.public_key += &other.0.public_key;
     }
 
     /// Verify an aggregate signature over the same message.
@@ -242,23 +252,25 @@ pub struct AggregateSignature(pub Signature);
 
 impl AggregateSignature {
     pub fn new() -> Self {
-        AggregateSignature(Signature { s: E::G1::zero() })
+        AggregateSignature(Signature {
+            signature: G1Projective::zero(),
+        })
     }
 
     pub fn from_signatures(sigs: &[Signature]) -> Self {
-        let mut s = Self::new();
-        for sig in sigs {
-            s.aggregate(sig);
+        let mut agg_sig = G1Projective::zero();
+        for x in sigs {
+            agg_sig += &x.signature;
         }
-        s
+        return AggregateSignature(Signature { signature: agg_sig });
     }
 
     pub fn aggregate(&mut self, sig: &Signature) {
-        self.0.s.add_assign(&sig.s);
+        self.0.signature += &sig.signature;
     }
 
     pub fn merge_into(&mut self, other: &Self) {
-        self.0.s.add_assign(&other.0.s);
+        self.0.signature += &other.0.signature;
     }
 
     pub fn verify<M: Hash>(&self, public_keys: &[PublicKey], msgs: &[M]) -> bool {
@@ -280,13 +292,16 @@ impl AggregateSignature {
         }
 
         // Check pairings.
-        let lhs = E::pairing(self.0.s, E::G2Affine::one());
-        let mut rhs = E::Fqk::one();
-        for public_key in public_keys {
-            // garantueed to be available, since we check that there are as many messages/hashes
+        let lhs = Bls12_377::pairing(self.0.signature, G2Projective::prime_subgroup_generator());
+        let mut rhs = Fqk::one();
+        for x in public_keys {
+            // guaranteed to be available, since we check that there are as many messages/hashes
             // as public_keys.
             let h = hashes.pop().unwrap();
-            rhs.mul_assign(&E::pairing(hash_to_g1::<E>(h), public_key.public_key));
+            rhs.mul_assign(&Bls12_377::pairing(
+                hash_to_g1::<E>(h),
+                public_key.public_key,
+            ));
         }
         lhs == rhs
     }

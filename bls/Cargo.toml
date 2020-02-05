@@ -18,6 +18,7 @@ rand = "0.7"
 rand_chacha = "0.2"
 
 algebra = { path = "algebra"}
+num-traits = { version = "0.2", default-features = false }
 
 beserial = { path = "../beserial", version = "0.1", optional = true }
 nimiq-hash = { path = "../hash", version = "0.1" }
