@@ -1,6 +1,5 @@
 use super::*;
 
-// Is this even used?
 #[derive(Clone, PartialEq, Eq)]
 pub struct KeyPair {
     pub secret_key: SecretKey,

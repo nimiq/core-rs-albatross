@@ -11,7 +11,7 @@ impl SecretKey {
     }
 
     pub fn sign_hash(&self, hash: SigHash) -> Signature {
-        self.sign_g1(hash_to_g1(hash))
+        self.sign_g1(Signature::hash_to_g1(hash))
     }
 
     fn sign_g1(&self, hash_curve: G1Projective) -> Signature {

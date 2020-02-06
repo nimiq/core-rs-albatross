@@ -30,11 +30,11 @@ use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
     Hash(bound = "P: Parameters")
 )]
 pub struct GroupAffine<P: Parameters> {
-    pub x:        P::BaseField,
-    pub y:        P::BaseField,
+    pub x: P::BaseField,
+    pub y: P::BaseField,
     pub infinity: bool,
     #[derivative(Debug = "ignore")]
-    _params:      PhantomData<P>,
+    _params: PhantomData<P>,
 }
 
 impl<P: Parameters> Display for GroupAffine<P> {
@@ -81,7 +81,7 @@ impl<P: Parameters> GroupAffine<P> {
     /// If and only if `greatest` is set will the lexicographically
     /// largest y-coordinate be selected.
     #[allow(dead_code)]
-    pub(crate) fn get_point_from_x(x: P::BaseField, greatest: bool) -> Option<Self> {
+    pub fn get_point_from_x(x: P::BaseField, greatest: bool) -> Option<Self> {
         // Compute x^3 + ax + b
         let x3b = P::add_b(&((x.square() * &x) + &P::mul_by_a(&x)));
 
@@ -218,9 +218,9 @@ impl<P: Parameters> Default for GroupAffine<P> {
     Hash(bound = "P: Parameters")
 )]
 pub struct GroupProjective<P: Parameters> {
-    pub x:   P::BaseField,
-    pub y:   P::BaseField,
-    pub z:   P::BaseField,
+    pub x: P::BaseField,
+    pub y: P::BaseField,
+    pub z: P::BaseField,
     _params: PhantomData<P>,
 }
 
@@ -337,7 +337,8 @@ impl<P: Parameters> ProjectiveCurve for GroupProjective<P> {
         // First pass: compute [a, ab, abc, ...]
         let mut prod = Vec::with_capacity(v.len());
         let mut tmp = P::BaseField::one();
-        for g in v.iter_mut()
+        for g in v
+            .iter_mut()
             // Ignore normalized elements
             .filter(|g| !g.is_normalized())
         {
@@ -349,13 +350,19 @@ impl<P: Parameters> ProjectiveCurve for GroupProjective<P> {
         tmp = tmp.inverse().unwrap(); // Guaranteed to be nonzero.
 
         // Second pass: iterate backwards to compute inverses
-        for (g, s) in v.iter_mut()
+        for (g, s) in v
+            .iter_mut()
             // Backwards
             .rev()
-                // Ignore normalized elements
-                .filter(|g| !g.is_normalized())
-                // Backwards, skip last element, fill in one for last term.
-                .zip(prod.into_iter().rev().skip(1).chain(Some(P::BaseField::one())))
+            // Ignore normalized elements
+            .filter(|g| !g.is_normalized())
+            // Backwards, skip last element, fill in one for last term.
+            .zip(
+                prod.into_iter()
+                    .rev()
+                    .skip(1)
+                    .chain(Some(P::BaseField::one())),
+            )
         {
             // tmp := tmp * g.z; g.z := tmp * s = 1/z
             let newtmp = tmp * &g.z;

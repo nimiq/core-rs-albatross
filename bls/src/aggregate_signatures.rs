@@ -44,7 +44,7 @@ impl AggregateSignature {
             // guaranteed to be available, since we check that there are as many messages/hashes
             // as public_keys.
             let h = hashes.pop().unwrap();
-            rhs *= &Bls12_377::pairing(hash_to_g1(h), x.public_key);
+            rhs *= &Bls12_377::pairing(Signature::hash_to_g1(h), x.public_key);
         }
         lhs == rhs
     }

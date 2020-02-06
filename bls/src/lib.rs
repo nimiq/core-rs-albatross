@@ -1,6 +1,8 @@
 // The projective form is the longer one, with 3 coordinates. It is meant only for quick calculation.
 // We can't use the affine form since the Algebra library doesn't support arithmetic with it.
 
+// Add some note about rogue key attacks and proofs of knowledge.
+
 #[macro_use]
 extern crate failure;
 extern crate hex;

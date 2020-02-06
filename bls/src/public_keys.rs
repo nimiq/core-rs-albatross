@@ -17,7 +17,7 @@ impl PublicKey {
     }
 
     pub fn verify_hash(&self, hash: SigHash, signature: &Signature) -> bool {
-        self.verify_g1(hash_to_g1(hash), signature)
+        self.verify_g1(Signature::hash_to_g1(hash), signature)
     }
 
     fn verify_g1(&self, hash_curve: G1Projective, signature: &Signature) -> bool {
