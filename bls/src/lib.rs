@@ -19,6 +19,7 @@ use algebra::{
         bls12_377::{Fq, Fq12, Fr},
         Field, FpParameters,
     },
+    rand::UniformRand,
     CanonicalSerialize,
 };
 
@@ -26,7 +27,6 @@ use algebra::{
 // One is used to get the identity element from a finite field.
 use num_traits::{One, Zero};
 
-use algebra::rand::UniformRand;
 use hashbrown::HashSet;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;

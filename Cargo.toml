@@ -47,6 +47,6 @@ members = [
     "transaction-builder",
 ]
 
-[profile.dev.package.pairing]
+[profile.dev.package.nimiq-bls]
 opt-level = 3
 debug = false

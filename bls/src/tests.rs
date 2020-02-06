@@ -3,18 +3,14 @@ use super::*;
 use rand_xorshift::XorShiftRng;
 use std::vec::Vec;
 
-// #[cfg(test)]
-// fn generate_predictable<R: Rng>(rng: &mut R) -> Self {
-//     SecretKey {
-//         x: E::Fr::random(rng),
-//     }
-// }
-
-// #[cfg(test)]
-// fn generate_predictable<R: Rng>(rng: &mut R) -> Self {
-//     let secret = SecretKey::generate_predictable(rng);
-//     KeyPair::from(secret)
-// }
+// fast but not secure keypair generation
+#[cfg(test)]
+fn generate_predictable<R: Rng>(rng: &mut R) -> KeyPair {
+    let secret = SecretKey {
+        secret_key: Fr::rand(rng),
+    };
+    return KeyPair::from_secret(&secret);
+}
 
 #[test]
 fn sign_verify() {
@@ -23,8 +19,8 @@ fn sign_verify() {
         0x54,
     ]);
 
-    for i in 0..500 {
-        let keypair = KeyPair::<Bls12>::generate_predictable(&mut rng);
+    for i in 0..100 {
+        let keypair = generate_predictable(&mut rng);
         let message = format!("Message {}", i);
         let sig = keypair.sign(&message);
         assert_eq!(keypair.verify(&message.as_bytes(), &sig), true);
@@ -41,11 +37,11 @@ fn aggregate_signatures() {
     let mut public_keys = Vec::with_capacity(1000);
     let mut messages = Vec::with_capacity(1000);
     let mut signatures = Vec::with_capacity(1000);
-    for i in 0..500 {
-        let keypair = KeyPair::<Bls12>::generate_predictable(&mut rng);
+    for i in 0..100 {
+        let keypair = generate_predictable(&mut rng);
         let message = format!("Message {}", i);
         let signature = keypair.sign(&message);
-        public_keys.push(keypair.public);
+        public_keys.push(keypair.public_key);
         messages.push(message);
         signatures.push(signature);
 
@@ -67,10 +63,10 @@ fn aggregate_signatures_same_messages() {
     let mut public_keys = Vec::with_capacity(1000);
     let message = "Same message";
     let mut signatures = Vec::with_capacity(1000);
-    for _ in 0..500 {
-        let keypair = KeyPair::<Bls12>::generate_predictable(&mut rng);
+    for _ in 0..100 {
+        let keypair = generate_predictable(&mut rng);
         let signature = keypair.sign(&message);
-        public_keys.push(keypair.public);
+        public_keys.push(keypair.public_key);
         signatures.push(signature);
     }
 
