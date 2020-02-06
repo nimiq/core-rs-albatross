@@ -47,6 +47,6 @@ members = [
     "transaction-builder",
 ]
 
-[profile.dev.package.nimiq-bls]
+[profile.dev.package.algebra]
 opt-level = 3
 debug = false

@@ -16,7 +16,7 @@ hex = "0.4"
 parking_lot = { version = "0.9", optional = true }
 rand = "0.7"
 rand_chacha = "0.2"
-algebra = { path = "algebra"}
+algebra = { git = "https://github.com/nimiq/zexe"}
 num-traits = { version = "0.2", default-features = false }
 beserial = { path = "../beserial", version = "0.1", optional = true }
 nimiq-hash = { path = "../hash", version = "0.1" }
