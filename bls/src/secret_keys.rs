@@ -24,7 +24,7 @@ impl SecretKey {
 impl SecureGenerate for SecretKey {
     fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         SecretKey {
-            secret_key: Fr::random(rng),
+            secret_key: Fr::rand(rng),
         }
     }
 }

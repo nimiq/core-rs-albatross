@@ -26,6 +26,7 @@ use algebra::{
 // One is used to get the identity element from a finite field.
 use num_traits::{One, Zero};
 
+use algebra::rand::UniformRand;
 use hashbrown::HashSet;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
