@@ -1,5 +1,6 @@
 use super::*;
 
+// The serialized compressed form of a signature. This form consists of the x-coordinate of the point (in the affine form), one bit indicating the sign of the y-coordinate, one bit indicating if it is the "point-at-infinity" and one bit indicating that this is the compressed form.
 #[derive(Clone, Copy)]
 pub struct CompressedSignature {
     pub(crate) signature: [u8; 48],
@@ -8,6 +9,7 @@ pub struct CompressedSignature {
 impl CompressedSignature {
     pub const SIZE: usize = 48;
 
+    // Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<Signature, SerializationError> {
         let affine_point = G1Affine::deserialize(&self.signature, &mut [])?;
         Ok(Signature {
@@ -15,6 +17,7 @@ impl CompressedSignature {
         })
     }
 
+    // Formats the compressed form into a hexadecimal string.
     pub fn to_hex(&self) -> String {
         hex::encode(self.as_ref())
     }

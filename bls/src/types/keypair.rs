@@ -1,5 +1,6 @@
 use super::*;
 
+// Simply a struct combining the secret key and the public key types.
 #[derive(Clone, PartialEq, Eq)]
 pub struct KeyPair {
     pub secret_key: SecretKey,
@@ -45,9 +46,9 @@ impl From<SecretKey> for KeyPair {
     }
 }
 
-// #[cfg(feature = "beserial")]
-// impl fmt::Debug for KeyPair {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-//         f.write_str(&::hex::encode(self.serialize_to_vec()))
-//     }
-// }
+#[cfg(feature = "beserial")]
+impl fmt::Debug for KeyPair {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&::hex::encode(self.serialize_to_vec()))
+    }
+}

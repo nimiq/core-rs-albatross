@@ -1,59 +1,57 @@
 # bls
 
-This is a Rust crate for making BLS (Boneh-Lynn-Shacham) signatures. It currently supports the [BLS12-381](https://z.cash/blog/new-snark-curve.html) (Barreto-Lynn-Scott) (yes, I know) construction.
+This is a Rust crate for making Boneh-Lynn-Shacham signatures. It only supports the BLS12-377 curve. This curve was chosen to allow the creation of SNARKs of statements about these BLS signatures. These SNARKs can be created using [ZEXE](https://github.com/scipr-lab/zexe).
 
-## Documentation
+It mainly uses the Algebra crate in [ZEXE](https://github.com/scipr-lab/zexe) for its elliptic curve arithmetic.
 
-Bring the `bls` crate into your project just as you normally would.
+## Usage
+
+Bring the `nimiq-bls` crate into your project just as you normally would.
+
+### Simple signatures
 
 ```rust
-use bls::Keypair;
-use pairing::bls12_381::Bls12;
-
-let keypair = Keypair::<Bls12>::generate(&mut rng);
+let keypair = KeyPair::generate(&mut rng);
 let message = "Some message";
 let sig = keypair.sign(&message.as_bytes());
-assert_eq!(keypair.verify(&message.as_bytes(), &sig), true);
+assert!(keypair.verify(&message.as_bytes(), &sig));
 ```
 
 ### Aggregate signatures
 
 ```rust
-use bls::{AggregateSignature, Keypair};
-use pairing::bls12_381::Bls12;
-
 let mut inputs = Vec::new();
-let mut asig = AggregateSignature::new();
+let mut agg_sig = AggregateSignature::new();
 
-let keypair1 = Keypair::<Bls12>::generate(&mut rng);
-let message1 = "Some unique message";
+let keypair1 = Keypair::generate(&mut rng);
+let message1 = "Some message";
 let sig1 = keypair1.sign(&message1.as_bytes());
 inputs.push((keypair1.public, message1));
-asig.aggregate(&sig1);
+agg_sig.aggregate(&sig1);
 
-let keypair2 = Keypair::<Bls12>::generate(&mut rng);
-let message2 = "Some other unique message";
+let keypair2 = Keypair::generate(&mut rng);
+let message2 = "Another message";
 let sig2 = keypair2.sign(&message2.as_bytes());
 inputs.push((keypair2.public, message2));
-asig.aggregate(&sig2);
+agg_sig.aggregate(&sig2);
 
-assert_eq!(
-    asig.verify(&inputs.iter()
+assert!(
+    agg_sig.verify(&inputs.iter()
         .map(|&(ref pk, ref m)| (pk, m.as_bytes()))
-        .collect()),
-    true
+        .collect())
 );
 ```
-
-**Important:** When aggregating signatures of the same message, please do read Section 3.2 of [this paper](https://crypto.stanford.edu/~dabo/pubs/papers/aggreg.pdf).
-An adversary that is able to choose arbitrary keys can forge signatures by publishing public keys it does not know the secret key for.
-Thus, one countermeasure is to require the adversary to prove knowledge of the discrete logarithms (to base G2) of his published public keys.
-Alternatively, the signer implicitly prepends his/her public key to the message and hence creates distinct messages.
-Aggregating distinct messages only suffices to prevent the mentioned attack.
 
 ## Security Warnings
 
 This library does not make any guarantees about constant-time operations, memory access patterns, or resistance to side-channel attacks.
+
+**Important Note:** When aggregating signatures of the same message, please do read Section 3.2 of [this paper](https://crypto.stanford.edu/~dabo/pubs/papers/aggreg.pdf).
+An adversary that is able to choose arbitrary keys can forge signatures by publishing public keys it does not know the secret key for. This is known as a "Rogue Key Attack".
+
+Thus, one countermeasure is to require the adversary to prove knowledge of the secret key. This can be done by, for example, publishing a signature of his/her own public key.
+
+The aggregation of signatures of distinct messages is not vulnerable to the above mentioned attack. So, another countermeasure is for the signer to implicitly append his/her public key to the message, hence creating distinct messages. However, this library does not implement the aggregation of signatures for different messages.
 
 ## License
 
@@ -70,4 +68,3 @@ Unless you explicitly state otherwise, any contribution intentionally
 submitted for inclusion in the work by you, as defined in the Apache-2.0
 license, shall be dual licensed as above, without any additional terms or
 conditions.
-
