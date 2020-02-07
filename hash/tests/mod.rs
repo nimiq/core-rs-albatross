@@ -1,9 +1,9 @@
-mod hmac;
-mod pbkdf2;
-
 use std::io::Write;
 
-use nimiq_hash::{Hasher,Argon2dHasher,Argon2dHash,Sha256Hasher,Sha256Hash,Blake2bHasher,Blake2bHash,Sha512Hasher,Sha512Hash, argon2kdf};
+use nimiq_hash::{Argon2dHash, Argon2dHasher, argon2kdf, Blake2bHash, Blake2bHasher, Blake2sHash, Blake2sHasher, Hasher, Sha256Hash, Sha256Hasher, Sha512Hash, Sha512Hasher};
+
+mod hmac;
+mod pbkdf2;
 
 #[test]
 fn it_can_compute_sha256() {
@@ -38,6 +38,17 @@ fn it_can_compute_blake2b() {
     h.write(b"te").unwrap();
     h.write(b"st").unwrap();
     assert_eq!(h.finish(), Blake2bHash::from("928b20366943e2afd11ebc0eae2e53a93bf177a4fcf35bcc64d503704e65e202"));
+}
+
+#[test]
+fn it_can_compute_blake2s() {
+    // blake2s('test') = 'f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e'
+
+    assert_eq!(Blake2sHasher::default().digest(b"test"), Blake2sHash::from("f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e"));
+    let mut h = Blake2sHasher::default();
+    h.write(b"te").unwrap();
+    h.write(b"st").unwrap();
+    assert_eq!(h.finish(), Blake2sHash::from("f308fc02ce9172ad02a7d75800ecfc027109bc67987ea32aba9b8dcc7b10150e"));
 }
 
 #[test]

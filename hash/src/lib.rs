@@ -1,20 +1,22 @@
-pub mod argon2kdf;
-pub mod hmac;
-pub mod pbkdf2;
-pub mod sha512;
-
-use beserial::{Deserialize, Serialize};
-use blake2_rfc::blake2b::Blake2b;
-use hex::FromHex;
-use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
-use sha2::{Digest, Sha256, Sha512};
-
 use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
 use std::io;
 use std::str;
 
+use blake2_rfc::blake2b::Blake2b;
+use blake2_rfc::blake2s::Blake2s;
+use hex::FromHex;
+use sha2::{Digest, Sha256, Sha512};
+
+use beserial::{Deserialize, Serialize};
+use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+
 pub use self::sha512::*;
+
+pub mod argon2kdf;
+pub mod hmac;
+pub mod pbkdf2;
+pub mod sha512;
 
 #[macro_export]
 macro_rules! add_hash_trait_arr {
@@ -149,6 +151,55 @@ impl Hasher for Blake2bHasher {
     fn finish(self) -> Blake2bHash {
         let result = self.0.finalize();
         Blake2bHash::from(result.as_bytes())
+    }
+}
+
+// Blake2s
+
+const BLAKE2S_LENGTH: usize = 32;
+create_typed_array!(Blake2sHash, u8, BLAKE2S_LENGTH);
+add_hex_io_fns_typed_arr!(Blake2sHash, BLAKE2S_LENGTH);
+pub struct Blake2sHasher(Blake2s);
+impl HashOutput for Blake2sHash {
+    type Builder = Blake2sHasher;
+
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+    fn len() -> usize {
+        BLAKE2S_LENGTH
+    }
+}
+
+impl Blake2sHasher {
+    pub fn new() -> Self {
+        Blake2sHasher(Blake2s::new(BLAKE2S_LENGTH))
+    }
+}
+
+impl Default for Blake2sHasher {
+    fn default() -> Self {
+        Blake2sHasher::new()
+    }
+}
+
+impl io::Write for Blake2sHasher {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Hasher for Blake2sHasher {
+    type Output = Blake2sHash;
+
+    fn finish(self) -> Blake2sHash {
+        let result = self.0.finalize();
+        Blake2sHash::from(result.as_bytes())
     }
 }
 
