@@ -2,6 +2,7 @@
 // We can't use the affine form since the Algebra library doesn't support arithmetic with it.
 
 // Add some note about rogue key attacks and proofs of knowledge.
+#![allow(dead_code)]
 
 #[macro_use]
 extern crate failure;
@@ -20,41 +21,35 @@ use algebra::{
         Field, FpParameters,
     },
     rand::UniformRand,
-    CanonicalSerialize,
+    serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError},
 };
 
 // Zero is for used for getting the point at infinity from a curve.
 // One is used to get the identity element from a finite field.
 use num_traits::{One, Zero};
 
-use hashbrown::HashSet;
+// used for rng
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-
-use hash::{Blake2bHash, Hash};
 use utils::key_rng::{CryptoRng, Rng};
 pub use utils::key_rng::{SecureGenerate, SecureRng};
 
+use hash::{Blake2bHash, Hash};
+use std::{cmp::Ordering, fmt, str::FromStr};
+
+#[cfg(feature = "beserial")]
+use beserial::{Deserialize, Serialize};
+
+use failure::Fail;
+use hex::FromHexError;
+
 // pub mod bls12_381;
-// #[cfg(feature = "beserial")]
-// pub mod serialization;
 
 /// Hash used for signatures
 pub type SigHash = Blake2bHash;
 
-mod aggregate_public_keys;
-mod aggregate_signatures;
-mod keypairs;
-mod public_keys;
-mod secret_keys;
-mod signatures;
-
-use aggregate_public_keys::*;
-use aggregate_signatures::*;
-use keypairs::*;
-use public_keys::*;
-use secret_keys::*;
-use signatures::*;
+mod types;
+use types::*;
 
 #[cfg(test)]
 mod tests;

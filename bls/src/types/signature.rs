@@ -20,6 +20,12 @@ impl Signature {
             }
         }
     }
+
+    pub fn compress(&self) -> CompressedSignature {
+        let mut buffer = [0u8; 48];
+        self.signature.into_affine().serialize(&[], &mut buffer);
+        CompressedSignature { signature: buffer }
+    }
 }
 
 impl Eq for Signature {}
@@ -27,5 +33,17 @@ impl Eq for Signature {}
 impl PartialEq for Signature {
     fn eq(&self, other: &Self) -> bool {
         self.signature.eq(&other.signature)
+    }
+}
+
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.compress().to_hex())
+    }
+}
+
+impl fmt::Debug for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Signature({})", &::hex::encode(self.compress().as_ref()))
     }
 }

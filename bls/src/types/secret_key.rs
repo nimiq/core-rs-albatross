@@ -6,6 +6,7 @@ pub struct SecretKey {
 }
 
 impl SecretKey {
+    pub const SIZE: usize = 32;
     pub fn sign<M: Hash>(&self, msg: &M) -> Signature {
         self.sign_hash(msg.hash())
     }
@@ -34,5 +35,12 @@ impl Eq for SecretKey {}
 impl PartialEq for SecretKey {
     fn eq(&self, other: &Self) -> bool {
         self.secret_key.eq(&other.secret_key)
+    }
+}
+
+#[cfg(feature = "beserial")]
+impl fmt::Debug for SecretKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&::hex::encode(self.serialize_to_vec()))
     }
 }

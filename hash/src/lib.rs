@@ -1,13 +1,13 @@
+pub mod argon2kdf;
 pub mod hmac;
 pub mod pbkdf2;
 pub mod sha512;
-pub mod argon2kdf;
 
+use beserial::{Deserialize, Serialize};
 use blake2_rfc::blake2b::Blake2b;
-use sha2::{Sha256, Sha512, Digest};
-use beserial::{Serialize, Deserialize};
 use hex::FromHex;
 use nimiq_macros::{add_hex_io_fns_typed_arr, create_typed_array};
+use sha2::{Digest, Sha256, Sha512};
 
 use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
@@ -69,31 +69,43 @@ pub trait SerializeContent {
 }
 
 pub trait Hash: SerializeContent {
-    fn hash<H: HashOutput>(&self) -> H  {
+    fn hash<H: HashOutput>(&self) -> H {
         let mut h = H::Builder::default();
         self.serialize_content(&mut h).unwrap();
         h.finish()
     }
 }
 
-pub trait HashOutput: PartialEq + Eq + Clone + Serialize + Deserialize + Sized + SerializeContent + Debug + std::hash::Hash {
-    type Builder: Hasher<Output=Self>;
+pub trait HashOutput:
+    PartialEq
+    + Eq
+    + Clone
+    + Serialize
+    + Deserialize
+    + Sized
+    + SerializeContent
+    + Debug
+    + std::hash::Hash
+{
+    type Builder: Hasher<Output = Self>;
 
     fn as_bytes(&self) -> &[u8];
     fn len() -> usize;
 }
 
-impl<H> SerializeContent for H where H: HashOutput {
+impl<H> SerializeContent for H
+where
+    H: HashOutput,
+{
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
         writer.write_all(self.as_bytes())?;
         Ok(Self::len())
     }
 }
 
-
 // Blake2b
 
-const BLAKE2B_LENGTH : usize = 32;
+const BLAKE2B_LENGTH: usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2bHash, BLAKE2B_LENGTH);
 pub struct Blake2bHasher(Blake2b);
@@ -103,7 +115,9 @@ impl HashOutput for Blake2bHash {
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
-    fn len() -> usize { BLAKE2B_LENGTH }
+    fn len() -> usize {
+        BLAKE2B_LENGTH
+    }
 }
 
 impl Blake2bHasher {
@@ -140,9 +154,9 @@ impl Hasher for Blake2bHasher {
 
 // Argon2d
 
-const ARGON2D_LENGTH : usize = 32;
+const ARGON2D_LENGTH: usize = 32;
 const NIMIQ_ARGON2_SALT: &str = "nimiqrocks!";
-const DEFAULT_ARGON2_COST : u32 = 512;
+const DEFAULT_ARGON2_COST: u32 = 512;
 create_typed_array!(Argon2dHash, u8, ARGON2D_LENGTH);
 add_hex_io_fns_typed_arr!(Argon2dHash, ARGON2D_LENGTH);
 pub struct Argon2dHasher {
@@ -155,7 +169,9 @@ impl HashOutput for Argon2dHash {
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
-    fn len() -> usize { ARGON2D_LENGTH }
+    fn len() -> usize {
+        ARGON2D_LENGTH
+    }
 }
 
 impl Argon2dHasher {
@@ -168,13 +184,12 @@ impl Argon2dHasher {
         config.variant = argon2::Variant::Argon2d;
         Argon2dHasher {
             buf: Vec::new(),
-            config
+            config,
         }
     }
 
     fn hash_bytes(&self, bytes: &[u8], salt: &[u8]) -> Argon2dHash {
-        let hash = argon2::hash_raw(bytes, salt, &self.config)
-            .expect("Argon2 hashing failed");
+        let hash = argon2::hash_raw(bytes, salt, &self.config).expect("Argon2 hashing failed");
         let mut out = [0u8; ARGON2D_LENGTH];
         out.copy_from_slice(&hash);
         Argon2dHash::from(out)
@@ -206,10 +221,9 @@ impl Hasher for Argon2dHasher {
     }
 }
 
-
 // SHA256
 
-const SHA256_LENGTH : usize = 32;
+const SHA256_LENGTH: usize = 32;
 create_typed_array!(Sha256Hash, u8, SHA256_LENGTH);
 add_hex_io_fns_typed_arr!(Sha256Hash, SHA256_LENGTH);
 pub struct Sha256Hasher(Sha256);
@@ -219,7 +233,9 @@ impl HashOutput for Sha256Hash {
     fn as_bytes(&self) -> &[u8] {
         &self.0
     }
-    fn len() -> usize { SHA256_LENGTH }
+    fn len() -> usize {
+        SHA256_LENGTH
+    }
 }
 
 impl Sha256Hasher {

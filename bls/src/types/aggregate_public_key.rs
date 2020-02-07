@@ -60,3 +60,15 @@ impl Default for AggregatePublicKey {
         Self::new()
     }
 }
+
+impl fmt::Display for AggregatePublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for AggregatePublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}

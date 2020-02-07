@@ -63,3 +63,15 @@ impl Default for AggregateSignature {
         Self::new()
     }
 }
+
+impl fmt::Display for AggregateSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl fmt::Debug for AggregateSignature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Debug::fmt(&self.0, f)
+    }
+}

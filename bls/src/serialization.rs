@@ -1,13 +1,8 @@
-use std::io;
-
-use ff::{PrimeField, PrimeFieldRepr};
-use group::EncodedPoint;
-use pairing::bls12_381::{Fr, FrRepr, G1Compressed, G2Compressed};
+use super::*;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
-
-use crate::bls12_381::*;
+use std::io;
 
 use super::{
     AggregatePublicKey as GenericAggregatePublicKey,
@@ -27,10 +22,12 @@ impl Serialize for CompressedPublicKey {
 }
 
 impl SerializeContent for CompressedPublicKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
-impl Hash for CompressedPublicKey { }
+impl Hash for CompressedPublicKey {}
 
 impl Deserialize for CompressedPublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
@@ -39,9 +36,7 @@ impl Deserialize for CompressedPublicKey {
 
         let mut point = G2Compressed::empty();
         point.as_mut().copy_from_slice(&bytes);
-        Ok(CompressedPublicKey {
-            p_pub: point,
-        })
+        Ok(CompressedPublicKey { p_pub: point })
     }
 }
 
@@ -58,10 +53,12 @@ impl Serialize for CompressedSignature {
 }
 
 impl SerializeContent for CompressedSignature {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
-impl Hash for CompressedSignature { }
+impl Hash for CompressedSignature {}
 
 impl Deserialize for CompressedSignature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
@@ -70,9 +67,7 @@ impl Deserialize for CompressedSignature {
 
         let mut point = G1Compressed::empty();
         point.as_mut().copy_from_slice(&bytes);
-        Ok(CompressedSignature {
-            s: point,
-        })
+        Ok(CompressedSignature { s: point })
     }
 }
 
@@ -87,15 +82,19 @@ impl Serialize for PublicKey {
 }
 
 impl SerializeContent for PublicKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
-impl Hash for PublicKey { }
+impl Hash for PublicKey {}
 
 impl Deserialize for PublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let public_key: CompressedPublicKey = Deserialize::deserialize(reader)?;
-        public_key.uncompress().map_err(|_| SerializingError::InvalidValue)
+        public_key
+            .uncompress()
+            .map_err(|_| SerializingError::InvalidValue)
     }
 }
 
@@ -110,15 +109,19 @@ impl Serialize for Signature {
 }
 
 impl SerializeContent for Signature {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
-impl Hash for Signature { }
+impl Hash for Signature {}
 
 impl Deserialize for Signature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let signature: CompressedSignature = Deserialize::deserialize(reader)?;
-        signature.uncompress().map_err(|_| SerializingError::InvalidValue)
+        signature
+            .uncompress()
+            .map_err(|_| SerializingError::InvalidValue)
     }
 }
 
