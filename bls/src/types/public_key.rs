@@ -46,9 +46,7 @@ impl PartialEq for PublicKey {
 
 impl PartialOrd<PublicKey> for PublicKey {
     fn partial_cmp(&self, other: &PublicKey) -> Option<Ordering> {
-        self.public_key
-            .into_affine()
-            .partial_cmp(&other.public_key.into_affine())
+        Some(self.cmp(other))
     }
 }
 
@@ -56,7 +54,7 @@ impl Ord for PublicKey {
     fn cmp(&self, other: &Self) -> Ordering {
         self.public_key
             .into_affine()
-            .cmp(&other.public_key.into_affine())
+            .lexicographic_cmp(&other.public_key.into_affine())
     }
 }
 

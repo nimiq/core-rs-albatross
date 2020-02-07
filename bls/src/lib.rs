@@ -12,13 +12,14 @@ extern crate nimiq_utils as utils;
 
 // imports main types needed for EC algebra
 use algebra::{
+    bytes::{FromBytes, ToBytes},
     curves::{
         bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective},
         AffineCurve, PairingEngine, ProjectiveCurve,
     },
     fields::{
         bls12_377::{Fq, Fq12, Fr},
-        Field, FpParameters,
+        Field, FpParameters, PrimeField,
     },
     rand::UniformRand,
     serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError},
@@ -40,12 +41,18 @@ use std::{cmp::Ordering, fmt, str::FromStr};
 #[cfg(feature = "beserial")]
 use beserial::{Deserialize, Serialize};
 
+#[cfg(feature = "lazy")]
+pub mod lazy;
+use lazy::*;
+
 use failure::Fail;
 use hex::FromHexError;
 
-// pub mod bls12_381;
+#[cfg(feature = "beserial")]
+pub mod serialization;
+use serialization::*;
 
-/// Hash used for signatures
+// Hash used for signatures
 pub type SigHash = Blake2bHash;
 
 mod types;

@@ -1,9 +1,8 @@
-use std::fmt;
-
-use parking_lot::{RwLock, RwLockReadGuard, MappedRwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard};
-
 use super::*;
 
+use parking_lot::{
+    MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
+};
 
 pub struct LazyPublicKey {
     pub(crate) compressed: CompressedPublicKey,
@@ -82,7 +81,9 @@ impl LazyPublicKey {
             read_guard = RwLockWriteGuard::downgrade(upgraded);
         }
 
-        Some(RwLockReadGuard::map(read_guard, |opt| opt.as_ref().unwrap()))
+        Some(RwLockReadGuard::map(read_guard, |opt| {
+            opt.as_ref().unwrap()
+        }))
     }
 
     pub fn uncompress_unchecked(&self) -> MappedRwLockReadGuard<PublicKey> {
@@ -149,7 +150,9 @@ mod serialization {
 
     impl Deserialize for LazyPublicKey {
         fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-            Ok(LazyPublicKey::from_compressed(&Deserialize::deserialize(reader)?))
+            Ok(LazyPublicKey::from_compressed(&Deserialize::deserialize(
+                reader,
+            )?))
         }
     }
 }

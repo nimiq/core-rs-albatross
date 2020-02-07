@@ -4,15 +4,10 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use hash::{Hash, SerializeContent};
 use std::io;
 
-use super::{
-    AggregatePublicKey as GenericAggregatePublicKey,
-    AggregateSignature as GenericAggregateSignature,
-};
-
 impl Serialize for CompressedPublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        assert_eq!(self.p_pub.as_ref().len(), CompressedPublicKey::SIZE);
-        writer.write_all(self.p_pub.as_ref())?;
+        assert_eq!(self.public_key.as_ref().len(), CompressedPublicKey::SIZE);
+        writer.write_all(self.public_key.as_ref())?;
         Ok(CompressedPublicKey::SIZE)
     }
 
@@ -34,16 +29,14 @@ impl Deserialize for CompressedPublicKey {
         let mut bytes = [0u8; CompressedPublicKey::SIZE];
         reader.read_exact(&mut bytes)?;
 
-        let mut point = G2Compressed::empty();
-        point.as_mut().copy_from_slice(&bytes);
-        Ok(CompressedPublicKey { p_pub: point })
+        Ok(CompressedPublicKey { public_key: bytes })
     }
 }
 
 impl Serialize for CompressedSignature {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        assert_eq!(self.s.as_ref().len(), CompressedSignature::SIZE);
-        writer.write_all(self.s.as_ref())?;
+        assert_eq!(self.signature.as_ref().len(), CompressedSignature::SIZE);
+        writer.write_all(self.signature.as_ref())?;
         Ok(CompressedSignature::SIZE)
     }
 
@@ -65,9 +58,7 @@ impl Deserialize for CompressedSignature {
         let mut bytes = [0u8; CompressedSignature::SIZE];
         reader.read_exact(&mut bytes)?;
 
-        let mut point = G1Compressed::empty();
-        point.as_mut().copy_from_slice(&bytes);
-        Ok(CompressedSignature { s: point })
+        Ok(CompressedSignature { signature: bytes })
     }
 }
 
@@ -125,27 +116,9 @@ impl Deserialize for Signature {
     }
 }
 
-impl Serialize for PublicKeyAffine {
-    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        self.as_projective().serialize(writer)
-    }
-
-    fn serialized_size(&self) -> usize {
-        CompressedPublicKey::SIZE
-    }
-}
-
-impl Deserialize for PublicKeyAffine {
-    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let public_key: PublicKey = Deserialize::deserialize(reader)?;
-        Ok(public_key.as_affine())
-    }
-}
-
 impl Serialize for SecretKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let repr = self.x.into_repr();
-        repr.write_be(writer)?;
+        self.secret_key.write(writer)?;
         Ok(SecretKey::SIZE)
     }
 
@@ -156,11 +129,8 @@ impl Serialize for SecretKey {
 
 impl Deserialize for SecretKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        let mut element = FrRepr::default();
-        element.read_be(reader)?;
-
         Ok(SecretKey {
-            x: Fr::from_repr(element).map_err(|_| SerializingError::InvalidValue)?,
+            secret_key: Fr::read(reader).map_err(|_| SerializingError::InvalidValue)?,
         })
     }
 }
@@ -177,7 +147,7 @@ impl Serialize for AggregatePublicKey {
 
 impl Deserialize for AggregatePublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        Ok(GenericAggregatePublicKey(Deserialize::deserialize(reader)?))
+        Ok(AggregatePublicKey(Deserialize::deserialize(reader)?))
     }
 }
 
@@ -193,17 +163,17 @@ impl Serialize for AggregateSignature {
 
 impl Deserialize for AggregateSignature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        Ok(GenericAggregateSignature(Deserialize::deserialize(reader)?))
+        Ok(AggregateSignature(Deserialize::deserialize(reader)?))
     }
 }
 
 impl Serialize for KeyPair {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        self.secret.serialize(writer)
+        self.secret_key.serialize(writer)
     }
 
     fn serialized_size(&self) -> usize {
-        self.secret.serialized_size()
+        self.secret_key.serialized_size()
     }
 }
 
