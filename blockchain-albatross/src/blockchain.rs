@@ -540,11 +540,23 @@ impl Blockchain {
             return self.extend(chain_info.head.hash(), chain_info, prev_info, create_macro_extrinsics);
         }
 
-        let is_better_chain = Ordering::Equal
-            .then_with(|| chain_info.head.view_number().cmp(&self.next_view_number()))
-            .then_with(|| chain_info.head.block_number().cmp(&self.block_number()))
-            .eq(&Ordering::Greater);
-        if is_better_chain {
+        // To compare two blocks, we need to compare the view number at that height.
+        let current_block_number = self.block_number();
+        let view_number = if chain_info.head.block_number() == current_block_number {
+            self.view_number()
+        } else if chain_info.head.block_number() == current_block_number + 1 {
+            self.next_view_number()
+        } else {
+            let block = self.get_block_at(chain_info.head.block_number(), false);
+            if let Some(block) = block {
+                block.view_number()
+            } else {
+                error!("Rejecting block - Could not compare view number");
+                return Err(PushError::BlockchainError(BlockchainError::FailedLoadingMainChain));
+            }
+        };
+
+        if chain_info.head.view_number() > view_number {
             return self.rebranch(chain_info.head.hash(), chain_info);
         }
 

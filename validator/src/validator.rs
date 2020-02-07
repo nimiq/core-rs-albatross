@@ -28,7 +28,7 @@ use block_albatross::{
 };
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
-use blockchain_base::{BlockchainEvent, AbstractBlockchain};
+use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use bls::bls12_381::KeyPair;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
@@ -344,13 +344,20 @@ impl Validator {
     }
 
     pub fn on_slot_change(&self, slot_change: SlotChange) {
-        let (view_number, view_change_proof) = match slot_change {
+        let (block_number, view_number, view_change_proof) = match slot_change {
             SlotChange::NextBlock => {
-                // a new block will just use the current view number and no view change proof
-                (self.blockchain.next_view_number(), None)
+                // A new block will just use the current view number and no view change proof.
+                // Since this is called from the blockchain event, the blockchain should still
+                // own the relevant push_lock.
+                (self.blockchain.height() + 1, self.blockchain.next_view_number(), None)
             },
             SlotChange::ViewChange(view_change, view_change_proof) => {
+                // We need to lock the blockchain and prevent new blocks to be pushed
+                // while gathering information.
+                let _lock = self.blockchain.lock();
                 let mut state = self.state.write();
+
+                let current_block_number = self.blockchain.height();
 
                 // If we have an active view change with this view number, clear it.
                 if let Some(vc) = &state.active_view_change {
@@ -359,27 +366,49 @@ impl Validator {
                     }
                 }
 
-                // check if this view change is still relevant
-                if state.view_number < view_change.new_view_number {
-                    // Reset view change interval again and increase the timeout linearly.
-                    let num_view_changes = view_change.new_view_number - self.blockchain.next_view_number();
-                    self.reset_view_change_interval(Self::BLOCK_TIMEOUT.mul(num_view_changes + 1));
+                // Check if this view change is still relevant.
+                // Check if view change concerns an old block.
+                if view_change.block_number < current_block_number + 1 {
+                    // We can ignore old view changes during block production.
+                    // However, when the blockchain receives a block with this view change proof,
+                    // it might need to rebranch.
+                    trace!("Got view change proof for an old block at {} (current block {}).", view_change.block_number, current_block_number);
+                    return;
+                } else if view_change.block_number == current_block_number + 1 { // Else, compare it with our current state.
+                    if state.view_number < view_change.new_view_number {
+                        // Reset view change interval again and increase the timeout linearly.
+                        let num_view_changes = view_change.new_view_number - self.blockchain.next_view_number();
+                        self.reset_view_change_interval(Self::BLOCK_TIMEOUT.mul(num_view_changes + 1));
 
-                    // update our view number
-                    state.view_number = view_change.new_view_number;
+                        // Update our view number.
+                        state.view_number = view_change.new_view_number;
+                    }
+                    else {
+                        // We're already at a better view number.
+                        // In this case, we should not attempt to produce a block as we do not have the proof.
+                        // Also the block production should have been triggered before, when we got the proof
+                        // or the new block.
+                        return;
+                    }
+                } else {
+                    // View change from the future.
+                    error!("Got view change proof for a future block at {} (current block {}).", view_change.block_number, current_block_number);
+                    return;
+                };
 
-                    // we're at the new view number and need a view change proof for it
-                    (view_change.new_view_number, Some(view_change_proof))
-                }
-                else {
-                    // we're already at a better view number
-                    (state.view_number, None)
-                }
+                (view_change.block_number, view_change.new_view_number, Some(view_change_proof))
             },
         };
 
-        // Get slot for next block
-        let (slot, slot_number) = self.blockchain.get_slot_for_next_block(view_number, None);
+        // Get slot for relevant block.
+        let (slot, slot_number) = match self.blockchain.get_slot_at(block_number, view_number, None) {
+            Some(slot) => slot,
+            None => {
+                // Perhaps a view change from way back?
+                error!("Got view change proof for a block at {}, but could not determine slot.", block_number);
+                return;
+            },
+        };
         trace!("Next block producer: Slot #{}: {}", slot_number, slot.public_key());
 
         // Get our public key
@@ -387,13 +416,15 @@ impl Validator {
 
         // Check if we're the slot owner
         if slot.public_key().compressed() == &our_public_key {
+            let block_type = self.blockchain.get_next_block_type(Some(block_number - 1));
+
             let weak = self.self_weak.clone();
             trace!("Spawning thread to produce next block");
             tokio::spawn(futures::lazy(move || {
                 if let Some(this) = Weak::upgrade(&weak) {
-                    match this.blockchain.get_next_block_type(None) {
-                        BlockType::Macro => { this.produce_macro_block(view_change_proof) },
-                        BlockType::Micro => { this.produce_micro_block(view_change_proof) },
+                    match block_type {
+                        BlockType::Macro => { this.produce_macro_block(block_number, view_number, view_change_proof) },
+                        BlockType::Micro => { this.produce_micro_block(block_number, view_number, view_change_proof) },
                     }
                 }
                 Ok(())
@@ -507,13 +538,20 @@ impl Validator {
             .find_idx_and_num_slots_by_public_key(&self.validator_key.public.compress())
     }
 
-    fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {
+    fn produce_macro_block(&self, block_number: u32, view_number: u32, view_change: Option<ViewChangeProof>) {
         let lock = self.blockchain.lock();
         let mut state = self.state.write();
 
+        // If we are not at the head of the chain, ignore this.
+        // This may happen if a new block has been produced due to the async call.
+        if self.blockchain.height() + 1 != block_number {
+            trace!("Validator was too slow producing the next block.");
+            return;
+        }
+
         // FIXME: Don't use network time
         let timestamp = self.consensus.network.network_time.now();
-        let (pbft_proposal, proposed_extrinsics) = self.block_producer.next_macro_block_proposal(timestamp, state.view_number, view_change);
+        let (pbft_proposal, proposed_extrinsics) = self.block_producer.next_macro_block_proposal(timestamp, view_number, view_change);
         state.proposed_extrinsics.insert(pbft_proposal.header.hash(), proposed_extrinsics);
         let pk_idx = state.pk_idx.expect("Checked that we are an active validator before entering this function");
 
@@ -526,9 +564,16 @@ impl Validator {
 
     }
 
-    fn produce_micro_block(&self, view_change_proof: Option<ViewChangeProof>) {
+    fn produce_micro_block(&self, block_number: u32, view_number: u32, view_change_proof: Option<ViewChangeProof>) {
         let lock = self.blockchain.lock();
         let start = Instant::now();
+
+        // If we are not at the head of the chain, ignore this.
+        // This may happen if a new block has been produced due to the async call.
+        if self.blockchain.height() + 1 != block_number {
+            trace!("Validator was too slow producing the next block.");
+            return;
+        }
 
         let max_size = MicroBlock::MAX_SIZE
             - MicroHeader::SIZE
@@ -537,7 +582,6 @@ impl Validator {
         let state = self.state.read();
         let fork_proofs = state.fork_proof_pool.get_fork_proofs_for_block(max_size);
         let timestamp = self.consensus.network.network_time.now();
-        let view_number = state.view_number;
 
         let block = self.block_producer.next_micro_block(fork_proofs, timestamp, view_number, vec![], view_change_proof);
         info!("Produced block #{}.{}: {}",
