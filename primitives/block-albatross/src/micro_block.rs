@@ -1,17 +1,16 @@
-use std::fmt;
 use std::cmp::Ordering;
+use std::fmt;
 
 use beserial::{Deserialize, Serialize};
-use hash::{Hash, Blake2bHash, SerializeContent};
+use bls::CompressedSignature;
+use hash::{Blake2bHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
 use primitives::networks::NetworkId;
-use bls::bls12_381::CompressedSignature;
 use transaction::Transaction;
 use vrf::VrfSeed;
 
-use crate::{BlockError, ViewChangeProof};
 use crate::fork_proof::ForkProof;
-
+use crate::{BlockError, ViewChangeProof};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroBlock {
@@ -134,7 +133,8 @@ impl MicroExtrinsics {
     }
 
     pub fn get_metadata_size(num_fork_proofs: usize, extra_data_size: usize) -> usize {
-        /*fork_proofs size*/ 2
+        /*fork_proofs size*/
+        2
             + num_fork_proofs * ForkProof::SIZE
             + /*extra_data size*/ 1
             + extra_data_size
@@ -143,13 +143,17 @@ impl MicroExtrinsics {
 }
 
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for MicroHeader { }
+impl Hash for MicroHeader {}
 
 impl fmt::Display for MicroHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "[#{} view {}, type Micro]", self.block_number, self.view_number)
+        write!(
+            f,
+            "[#{} view {}, type Micro]",
+            self.block_number, self.view_number
+        )
     }
 }
 
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for MicroExtrinsics { }
+impl Hash for MicroExtrinsics {}

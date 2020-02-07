@@ -31,7 +31,10 @@ impl PublicKey {
 
     pub fn compress(&self) -> CompressedPublicKey {
         let mut buffer = [0u8; 96];
-        self.public_key.into_affine().serialize(&[], &mut buffer);
+        self.public_key
+            .into_affine()
+            .serialize(&[], &mut buffer)
+            .unwrap();
         CompressedPublicKey { public_key: buffer }
     }
 }

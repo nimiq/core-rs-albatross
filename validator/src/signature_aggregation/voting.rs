@@ -1,46 +1,39 @@
-/// Generic implementation of a Handel protocol for use with Nimiq's weighted voting between validators.
-
-
-use std::sync::Arc;
-use std::io::Error as IoError;
 use std::fmt;
+use std::io::Error as IoError;
+/// Generic implementation of a Handel protocol for use with Nimiq's weighted voting between validators.
+use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use primitives::policy::TWO_THIRD_SLOTS;
 use block_albatross::signed;
-use messages::Message;
-use bls::bls12_381::PublicKey;
+use bls::PublicKey;
 use collections::bitset::BitSet;
+use messages::Message;
+use primitives::policy::TWO_THIRD_SLOTS;
 
-use handel::protocol::Protocol;
-use handel::multisig::{IndividualSignature, Signature};
-use handel::identity::{IdentityRegistry, WeightRegistry};
-use handel::verifier::MultithreadedVerifier;
-use handel::config::Config;
-use handel::store::ReplaceStore;
-use handel::partitioner::BinomialPartitioner;
-use handel::evaluator::WeightedVote;
-use handel::update::{LevelUpdate, LevelUpdateMessage};
 use handel::aggregation::Aggregation;
-use handel::store::SignatureStore;
+use handel::config::Config;
+use handel::evaluator::WeightedVote;
+use handel::identity::{IdentityRegistry, WeightRegistry};
+use handel::multisig::{IndividualSignature, Signature};
+use handel::partitioner::BinomialPartitioner;
+use handel::protocol::Protocol;
 use handel::sender::Sender;
+use handel::store::ReplaceStore;
+use handel::store::SignatureStore;
+use handel::update::{LevelUpdate, LevelUpdateMessage};
+use handel::verifier::MultithreadedVerifier;
 
 use crate::pool::ValidatorPool;
 
-
-
 /// The evaluator used for voting
-pub type VotingEvaluator = WeightedVote<ReplaceStore<BinomialPartitioner>, ValidatorRegistry, BinomialPartitioner>;
-
-
+pub type VotingEvaluator =
+    WeightedVote<ReplaceStore<BinomialPartitioner>, ValidatorRegistry, BinomialPartitioner>;
 
 pub trait Tag: signed::Message {
     // TODO: This should not be implemented by the tag, right?
     fn create_level_update_message(&self, update: LevelUpdate) -> Message;
 }
-
-
 
 /// Implementation for sender using a mapping from validator ID to `Peer`.
 pub struct VotingSender<T: Tag> {
@@ -54,10 +47,7 @@ pub struct VotingSender<T: Tag> {
 
 impl<T: Tag> VotingSender<T> {
     pub fn new(tag: T, validators: Arc<RwLock<ValidatorPool>>) -> Self {
-        Self {
-            tag,
-            validators,
-        }
+        Self { tag, validators }
     }
 }
 
@@ -72,11 +62,9 @@ impl<T: Tag> Sender for VotingSender<T> {
     }
 }
 
-
-
 /// Implementation for handel registry using a `Validators` list.
 pub struct ValidatorRegistry {
-    validators: Arc<RwLock<ValidatorPool>>
+    validators: Arc<RwLock<ValidatorPool>>,
 }
 
 impl ValidatorRegistry {
@@ -87,9 +75,10 @@ impl ValidatorRegistry {
 
 impl IdentityRegistry for ValidatorRegistry {
     fn public_key(&self, id: usize) -> Option<PublicKey> {
-        self.validators.read().get_public_key(id)
-            .and_then(|pubkey| pubkey.uncompress()
-                .map(|c| c.clone()))
+        self.validators
+            .read()
+            .get_public_key(id)
+            .and_then(|pubkey| pubkey.uncompress().map(|c| c.clone()))
     }
 }
 
@@ -108,8 +97,6 @@ impl WeightRegistry for ValidatorRegistry {
         Some(votes)
     }
 }
-
-
 
 /// The generic protocol implementation for validator voting
 pub struct VotingProtocol<T: Tag> {
@@ -151,10 +138,7 @@ impl<T: Tag> VotingProtocol<T> {
             Arc::clone(&registry),
         ));
         //let timeouts = Arc::new(LinearTimeout::new(config.timeout));
-        let partitioner = Arc::new(BinomialPartitioner::new(
-            node_id,
-            num_validators,
-        ));
+        let partitioner = Arc::new(BinomialPartitioner::new(node_id, num_validators));
         let store = Arc::new(RwLock::new(ReplaceStore::new(Arc::clone(&partitioner))));
         let evaluator = Arc::new(WeightedVote::new(
             Arc::clone(&store),
@@ -178,9 +162,11 @@ impl<T: Tag> VotingProtocol<T> {
 
     pub fn votes(&self) -> usize {
         let store = self.store.read();
-        store.combined(store.best_level())
+        store
+            .combined(store.best_level())
             .map(|multisig| {
-                self.registry.signature_weight(&Signature::Multi(multisig.clone()))
+                self.registry
+                    .signature_weight(&Signature::Multi(multisig.clone()))
                     .unwrap_or_else(|| panic!("Unknown signers in signature: {:?}", multisig))
             })
             .unwrap_or(0)
@@ -189,7 +175,11 @@ impl<T: Tag> VotingProtocol<T> {
 
 impl<T: Tag> fmt::Debug for VotingProtocol<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "VotingProtocol {{ node_id: {}, {:?} }}", self.node_id, self.tag)
+        write!(
+            f,
+            "VotingProtocol {{ node_id: {}, {:?} }}",
+            self.node_id, self.tag
+        )
     }
 }
 
@@ -230,14 +220,18 @@ impl<T: Tag> Protocol for VotingProtocol<T> {
     }
 }
 
-
 /// Wrapper to make life easier ;)
 pub struct VoteAggregation<T: Tag> {
-    pub inner: Arc<Aggregation<VotingProtocol<T>>>
+    pub inner: Arc<Aggregation<VotingProtocol<T>>>,
 }
 
 impl<T: Tag> VoteAggregation<T> {
-    pub fn new(tag: T, node_id: usize, validators: Arc<RwLock<ValidatorPool>>, config: Option<Config>) -> Self {
+    pub fn new(
+        tag: T,
+        node_id: usize,
+        validators: Arc<RwLock<ValidatorPool>>,
+        config: Option<Config>,
+    ) -> Self {
         let config = config.unwrap_or_default();
         let protocol = VotingProtocol::new(tag, node_id, validators);
         let aggregation = Aggregation::new(protocol, config);
@@ -255,7 +249,11 @@ impl<T: Tag> VoteAggregation<T> {
 
         // panic if the contribution doesn't belong to this aggregation
         if self.inner.protocol.tag != tag {
-            panic!("Submitting contribution for {:?}, but aggregation is for {:?}", tag, self.tag());
+            panic!(
+                "Submitting contribution for {:?}, but aggregation is for {:?}",
+                tag,
+                self.tag()
+            );
         }
 
         // panic if the contribution is from a different node
@@ -263,13 +261,17 @@ impl<T: Tag> VoteAggregation<T> {
             panic!("Submitting contribution for validator {}, but aggregation is running as validator {}", node_id, self.node_id());
         }
 
-        self.inner.push_contribution(IndividualSignature::new(signature, node_id));
+        self.inner
+            .push_contribution(IndividualSignature::new(signature, node_id));
     }
 
     pub fn push_update(&self, level_update: LevelUpdateMessage<T>) {
         if level_update.tag != *self.tag() {
-            panic!("Submitting level update for {:?}, but aggregation is for {:?}",
-                level_update.tag, *self.tag());
+            panic!(
+                "Submitting level update for {:?}, but aggregation is for {:?}",
+                level_update.tag,
+                *self.tag()
+            );
         }
         self.inner.push_update(level_update.update);
     }

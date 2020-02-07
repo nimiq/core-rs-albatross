@@ -1,14 +1,17 @@
 use beserial::{Deserialize, Serialize};
-use bls::bls12_381::PublicKey;
+use bls::PublicKey;
 use hash::{Blake2bHash, SerializeContent};
 use hash_derive::SerializeContent;
 use primitives::slot::ValidatorSlots;
 
 use crate::ViewChangeProof;
 
-use super::MacroHeader;
 use super::signed;
-use super::signed::{AggregateProof, AggregateProofBuilder, AggregateProofError, Message, SignedMessage, votes_for_signers};
+use super::signed::{
+    votes_for_signers, AggregateProof, AggregateProofBuilder, AggregateProofError, Message,
+    SignedMessage,
+};
+use super::MacroHeader;
 
 /// A macro block proposed by the pBFT-leader.
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
@@ -21,7 +24,6 @@ pub type SignedPbftProposal = SignedMessage<PbftProposal>;
 impl Message for PbftProposal {
     const PREFIX: u8 = signed::PREFIX_PBFT_PROPOSAL;
 }
-
 
 /// a pBFT prepare message - references the proposed macro block by hash
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
@@ -41,7 +43,6 @@ impl From<Blake2bHash> for PbftPrepareMessage {
 
 pub type SignedPbftPrepareMessage = SignedMessage<PbftPrepareMessage>;
 
-
 /// A pBFT commit message - references the proposed macro block by hash
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, PartialEq, Eq)]
 pub struct PbftCommitMessage {
@@ -59,7 +60,6 @@ impl From<Blake2bHash> for PbftCommitMessage {
 }
 
 pub type SignedPbftCommitMessage = SignedMessage<PbftCommitMessage>;
-
 
 /// A pBFT proof - which is a composition of the prepare proof and the commit proof
 /// It verifies both proofs individually and then checks that at least `threshold` validators who
@@ -81,16 +81,27 @@ impl PbftProofBuilder {
     }
 
     /// Verify if we have enough valid signatures in the prepare phase
-    pub fn verify_prepare(&self, block_hash: Blake2bHash, threshold: u16) -> Result<(), AggregateProofError> {
-        let prepare = PbftPrepareMessage{ block_hash };
+    pub fn verify_prepare(
+        &self,
+        block_hash: Blake2bHash,
+        threshold: u16,
+    ) -> Result<(), AggregateProofError> {
+        let prepare = PbftPrepareMessage { block_hash };
         self.prepare.verify(&prepare, threshold)
     }
 
     /// Verify that we have enough valid commit signatures that also signed the prepare
     /// TODO: Duplicate code (in PbftProof)
-    pub fn verify(&self, block_hash: Blake2bHash, validators: &ValidatorSlots, threshold: u16) -> Result<(), AggregateProofError> {
+    pub fn verify(
+        &self,
+        block_hash: Blake2bHash,
+        validators: &ValidatorSlots,
+        threshold: u16,
+    ) -> Result<(), AggregateProofError> {
         // XXX if we manually hash the message prefix and the block hash, we don't need to clone
-        let prepare = PbftPrepareMessage { block_hash: block_hash.clone() };
+        let prepare = PbftPrepareMessage {
+            block_hash: block_hash.clone(),
+        };
         let commit = PbftCommitMessage { block_hash };
 
         self.prepare.verify(&prepare, threshold)?;
@@ -102,16 +113,26 @@ impl PbftProofBuilder {
         trace!("votes on prepare and commit: {}", votes);
 
         if votes < threshold {
-            return Err(AggregateProofError::InsufficientSigners(votes, threshold))
+            return Err(AggregateProofError::InsufficientSigners(votes, threshold));
         }
         Ok(())
     }
 
-    pub fn add_prepare_signature(&mut self, public_key: &PublicKey, num_slots: u16, prepare: &SignedPbftPrepareMessage) -> bool {
+    pub fn add_prepare_signature(
+        &mut self,
+        public_key: &PublicKey,
+        num_slots: u16,
+        prepare: &SignedPbftPrepareMessage,
+    ) -> bool {
         self.prepare.add_signature(public_key, num_slots, prepare)
     }
 
-    pub fn add_commit_signature(&mut self, public_key: &PublicKey, num_slots: u16, commit: &SignedPbftCommitMessage) -> bool {
+    pub fn add_commit_signature(
+        &mut self,
+        public_key: &PublicKey,
+        num_slots: u16,
+        commit: &SignedPbftCommitMessage,
+    ) -> bool {
         self.commit.add_signature(public_key, num_slots, commit)
     }
 
@@ -123,7 +144,7 @@ impl PbftProofBuilder {
     pub fn build(self) -> PbftProof {
         PbftProof {
             prepare: self.prepare.build(),
-            commit: self.commit.build()
+            commit: self.commit.build(),
         }
     }
 }
@@ -146,21 +167,36 @@ impl PbftProof {
         votes_for_signers(validators, &signers)
     }
 
-    pub fn verify(&self, block_hash: Blake2bHash, validators: &ValidatorSlots, threshold: u16) -> Result<(), AggregateProofError> {
+    pub fn verify(
+        &self,
+        block_hash: Blake2bHash,
+        validators: &ValidatorSlots,
+        threshold: u16,
+    ) -> Result<(), AggregateProofError> {
         // XXX if we manually hash the message prefix and the block hash, we don't need to clone
-        let prepare = PbftPrepareMessage { block_hash: block_hash.clone() };
+        let prepare = PbftPrepareMessage {
+            block_hash: block_hash.clone(),
+        };
         let commit = PbftCommitMessage { block_hash };
 
-        self.prepare.verify(&prepare, validators, threshold)
-            .map_err(|e| {trace!("prepare verify failed"); e})?;
-        self.commit.verify(&commit, validators, threshold)
-            .map_err(|e| {trace!("commit verify failed"); e})?;
+        self.prepare
+            .verify(&prepare, validators, threshold)
+            .map_err(|e| {
+                trace!("prepare verify failed");
+                e
+            })?;
+        self.commit
+            .verify(&commit, validators, threshold)
+            .map_err(|e| {
+                trace!("commit verify failed");
+                e
+            })?;
 
         let votes = self.votes(validators)?;
         trace!("votes on prepare and commit: {}", votes);
 
         if votes < threshold {
-            return Err(AggregateProofError::InsufficientSigners(votes, threshold))
+            return Err(AggregateProofError::InsufficientSigners(votes, threshold));
         }
         Ok(())
     }

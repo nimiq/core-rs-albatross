@@ -1,14 +1,12 @@
 use std::net::SocketAddr;
 
-use beserial::{Serialize, Deserialize};
-use block_albatross::signed::{SignedMessage, PREFIX_VALIDATOR_INFO, Message};
-use bls::bls12_381::CompressedPublicKey;
+use beserial::{Deserialize, Serialize};
+use block_albatross::signed::{Message, SignedMessage, PREFIX_VALIDATOR_INFO};
+use bls::CompressedPublicKey;
 use hash::SerializeContent;
 use hash_derive::SerializeContent;
 
 use crate::address::peer_address::PeerAddress;
-
-
 
 /// Information regarding an (maybe active) validator
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, Eq)]

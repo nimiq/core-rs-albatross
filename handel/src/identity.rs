@@ -1,8 +1,7 @@
-use bls::bls12_381::PublicKey;
+use bls::PublicKey;
 use collections::bitset::BitSet;
 
 use crate::multisig::Signature;
-
 
 pub trait IdentityRegistry {
     fn public_key(&self, id: usize) -> Option<PublicKey>;
@@ -21,12 +20,8 @@ pub trait WeightRegistry {
 
     fn signature_weight(&self, signature: &Signature) -> Option<usize> {
         match signature {
-            Signature::Individual(individual) => {
-                self.weight(individual.signer)
-            },
-            Signature::Multi(multisig) => {
-                self.signers_weight(&multisig.signers)
-            }
+            Signature::Individual(individual) => self.weight(individual.signer),
+            Signature::Multi(multisig) => self.signers_weight(&multisig.signers),
         }
     }
 }

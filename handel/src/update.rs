@@ -1,9 +1,8 @@
 use std::fmt::Debug;
 
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 
-use crate::multisig::{MultiSignature, IndividualSignature};
-
+use crate::multisig::{IndividualSignature, MultiSignature};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LevelUpdate {
@@ -24,7 +23,12 @@ pub struct LevelUpdate {
 }
 
 impl LevelUpdate {
-    pub fn new(multisig: MultiSignature, individual: Option<IndividualSignature>, level: usize, origin: usize) -> Self {
+    pub fn new(
+        multisig: MultiSignature,
+        individual: Option<IndividualSignature>,
+        level: usize,
+        origin: usize,
+    ) -> Self {
         Self {
             multisig,
             individual,
@@ -33,11 +37,11 @@ impl LevelUpdate {
         }
     }
 
-    pub fn with_tag<T: Clone + Debug + Serialize + Deserialize>(self, tag: T) -> LevelUpdateMessage<T> {
-        LevelUpdateMessage {
-            update: self,
-            tag,
-        }
+    pub fn with_tag<T: Clone + Debug + Serialize + Deserialize>(
+        self,
+        tag: T,
+    ) -> LevelUpdateMessage<T> {
+        LevelUpdateMessage { update: self, tag }
     }
 
     pub fn origin(&self) -> usize {
@@ -49,7 +53,6 @@ impl LevelUpdate {
     }
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LevelUpdateMessage<T: Clone + Debug + Serialize + Deserialize> {
     /// The update for that level
@@ -60,19 +63,18 @@ pub struct LevelUpdateMessage<T: Clone + Debug + Serialize + Deserialize> {
     pub tag: T,
 }
 
-
-
-
 #[cfg(test)]
 mod test {
-    use beserial::{Serialize, Deserialize};
-    use crate::multisig::{MultiSignature, IndividualSignature};
     use super::*;
-    use bls::bls12_381;
+    use crate::multisig::{IndividualSignature, MultiSignature};
+    use beserial::{Deserialize, Serialize};
+    use bls;
 
     fn create_multisig() -> MultiSignature {
-        let raw_key = hex::decode("03480bdb948113a00dc9afbc83699944c23aa1005fa4f62c654517912adfa1cf").unwrap();
-        let key_pair = bls12_381::KeyPair::deserialize_from_vec(&raw_key).unwrap();
+        let raw_key =
+            hex::decode("03480bdb948113a00dc9afbc83699944c23aa1005fa4f62c654517912adfa1cf")
+                .unwrap();
+        let key_pair = bls::KeyPair::deserialize_from_vec(&raw_key).unwrap();
         let signature = key_pair.sign(&"foobar");
         IndividualSignature::new(signature, 1).as_multisig()
     }
@@ -92,8 +94,7 @@ mod test {
 
     #[test]
     fn test_serialize_deserialize_with_message() {
-        let update = LevelUpdate::new(create_multisig(), None, 2, 3)
-            .with_tag(42u64);
+        let update = LevelUpdate::new(create_multisig(), None, 2, 3).with_tag(42u64);
         assert_eq!(update.serialized_size(), 61 + 8);
     }
 }

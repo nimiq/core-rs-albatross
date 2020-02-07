@@ -23,7 +23,10 @@ impl Signature {
 
     pub fn compress(&self) -> CompressedSignature {
         let mut buffer = [0u8; 48];
-        self.signature.into_affine().serialize(&[], &mut buffer);
+        self.signature
+            .into_affine()
+            .serialize(&[], &mut buffer)
+            .unwrap();
         CompressedSignature { signature: buffer }
     }
 }

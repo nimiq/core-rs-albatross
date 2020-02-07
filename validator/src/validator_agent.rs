@@ -1,27 +1,27 @@
-use std::sync::{Arc, Weak};
-use std::fmt;
-use std::time::Duration;
 use std::collections::BTreeSet;
+use std::fmt;
+use std::sync::{Arc, Weak};
+use std::time::Duration;
 
 use parking_lot::RwLock;
 
-use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
-use network_primitives::address::PeerId;
-use network::Peer;
-use network::connection::close_type::CloseType;
-use utils::observer::{PassThroughNotifier, weak_passthru_listener};
-use bls::bls12_381::CompressedPublicKey;
-use block_albatross::{SignedPbftProposal, ForkProof, ViewChange, PbftPrepareMessage,
-                      PbftCommitMessage};
-use primitives::policy;
+use block_albatross::{
+    ForkProof, PbftCommitMessage, PbftPrepareMessage, SignedPbftProposal, ViewChange,
+};
 use blockchain_albatross::Blockchain;
-use hash::{Hash, Blake2bHash};
+use bls::CompressedPublicKey;
 use handel::update::LevelUpdateMessage;
+use hash::{Blake2bHash, Hash};
+use messages::{Message, ViewChangeProofMessage};
+use network::connection::close_type::CloseType;
+use network::Peer;
+use network_primitives::address::PeerId;
+use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
+use primitives::policy;
+use utils::observer::{weak_passthru_listener, PassThroughNotifier};
 use utils::rate_limit::RateLimit;
-use messages::{ViewChangeProofMessage, Message};
 
-use crate::pool::{ValidatorPool, PushResult};
-
+use crate::pool::{PushResult, ValidatorPool};
 
 pub enum ValidatorAgentEvent {
     ValidatorInfos(Vec<SignedValidatorInfo>),
@@ -48,7 +48,11 @@ pub struct ValidatorAgent {
 }
 
 impl ValidatorAgent {
-    pub fn new(peer: Arc<Peer>, blockchain: Arc<Blockchain>, validators: Weak<RwLock<ValidatorPool>>) -> Arc<Self> {
+    pub fn new(
+        peer: Arc<Peer>,
+        blockchain: Arc<Blockchain>,
+        validators: Weak<RwLock<ValidatorPool>>,
+    ) -> Arc<Self> {
         let agent = Arc::new(Self {
             peer,
             blockchain,
@@ -67,46 +71,95 @@ impl ValidatorAgent {
     }
 
     fn init_listeners(this: &Arc<Self>) {
-        this.peer.channel.msg_notifier.validator_info.write()
-            .register(weak_passthru_listener(Arc::downgrade(this), |this, signed_infos: Vec<SignedValidatorInfo>| {
-                this.on_validator_infos(signed_infos);
-            }));
-        this.peer.channel.msg_notifier.fork_proof.write()
-            .register(weak_passthru_listener(Arc::downgrade(this), |this, fork_proof| {
-                this.on_fork_proof_message(fork_proof);
-            }));
-        this.peer.channel.msg_notifier.pbft_proposal.write()
-            .register(weak_passthru_listener(Arc::downgrade(this),
-                |this, proposal| this.on_pbft_proposal_message(proposal)));
+        this.peer
+            .channel
+            .msg_notifier
+            .validator_info
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, signed_infos: Vec<SignedValidatorInfo>| {
+                    this.on_validator_infos(signed_infos);
+                },
+            ));
+        this.peer
+            .channel
+            .msg_notifier
+            .fork_proof
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, fork_proof| {
+                    this.on_fork_proof_message(fork_proof);
+                },
+            ));
+        this.peer
+            .channel
+            .msg_notifier
+            .pbft_proposal
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, proposal| this.on_pbft_proposal_message(proposal),
+            ));
 
-        this.peer.channel.msg_notifier.pbft_prepare.write()
-            .register(weak_passthru_listener(Arc::downgrade(this),
-                |this, prepare| this.on_pbft_prepare_message(prepare)));
-        this.peer.channel.msg_notifier.pbft_commit.write()
-            .register(weak_passthru_listener(Arc::downgrade(this),
-                |this, commit| this.on_pbft_commit_message(commit)));
-        this.peer.channel.msg_notifier.view_change.write()
-            .register(weak_passthru_listener( Arc::downgrade(this), |this, view_change| {
-                this.on_view_change_message(view_change);
-            }));
-        this.peer.channel.msg_notifier.view_change_proof.write()
-            .register(weak_passthru_listener( Arc::downgrade(this), |this, view_change_proof| {
-                this.on_view_change_proof(view_change_proof);
-            }));
+        this.peer
+            .channel
+            .msg_notifier
+            .pbft_prepare
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, prepare| this.on_pbft_prepare_message(prepare),
+            ));
+        this.peer
+            .channel
+            .msg_notifier
+            .pbft_commit
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, commit| this.on_pbft_commit_message(commit),
+            ));
+        this.peer
+            .channel
+            .msg_notifier
+            .view_change
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, view_change| {
+                    this.on_view_change_message(view_change);
+                },
+            ));
+        this.peer
+            .channel
+            .msg_notifier
+            .view_change_proof
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, view_change_proof| {
+                    this.on_view_change_proof(view_change_proof);
+                },
+            ));
     }
 
     /// When a list of validator infos is received, verify the signatures and notify
     fn on_validator_infos(&self, infos: Vec<SignedValidatorInfo>) {
         if infos.is_empty() {
             // peer send empty validator info set
-            warn!("Received empty validator info message from {}", self.peer.peer_address());
+            warn!(
+                "Received empty validator info message from {}",
+                self.peer.peer_address()
+            );
             self.peer.channel.close(CloseType::EmptyValidatorInfo);
             return;
         }
 
         let num_infos = infos.len();
         let mut close_type: Option<CloseType> = None;
-        let mut checked_infos= Vec::with_capacity(infos.len());
+        let mut checked_infos = Vec::with_capacity(infos.len());
 
         let validators = match Weak::upgrade(&self.validators) {
             Some(validators) => validators,
@@ -123,13 +176,19 @@ impl ValidatorAgent {
                 // ban because checking validator infos is expensive.
                 // Should we abort here? The remaining validator infos could still be valid
                 PushResult::InvalidPublicKey => {
-                    warn!("Invalid public key in validator info from {}", self.peer.peer_address());
+                    warn!(
+                        "Invalid public key in validator info from {}",
+                        self.peer.peer_address()
+                    );
                     close_type = Some(CloseType::InvalidPublicKeyInValidatorInfo)
-                },
+                }
                 PushResult::InvalidSignature => {
-                    warn!("Invalid signature in validator info from {}", self.peer.peer_address());
+                    warn!(
+                        "Invalid signature in validator info from {}",
+                        self.peer.peer_address()
+                    );
                     close_type = Some(CloseType::InvalidSignatureInValidatorInfo)
-                },
+                }
                 _ => checked_infos.push(info),
             }
         }
@@ -140,11 +199,17 @@ impl ValidatorAgent {
             self.peer.channel.close(ban_type);
         }
 
-        debug!("Received {} unknown (total {}) validator infos", checked_infos.len(), num_infos);
+        debug!(
+            "Received {} unknown (total {}) validator infos",
+            checked_infos.len(),
+            num_infos
+        );
 
         // Only notify validator, if there are any valid validator infos
         if !checked_infos.is_empty() {
-            self.notifier.read().notify(ValidatorAgentEvent::ValidatorInfos(checked_infos));
+            self.notifier
+                .read()
+                .notify(ValidatorAgentEvent::ValidatorInfos(checked_infos));
         }
     }
 
@@ -168,7 +233,9 @@ impl ValidatorAgent {
                 return;
             }
 
-            self.notifier.read().notify(ValidatorAgentEvent::ForkProof(Box::new(fork_proof)));
+            self.notifier
+                .read()
+                .notify(ValidatorAgentEvent::ForkProof(Box::new(fork_proof)));
         }
     }
 
@@ -180,8 +247,7 @@ impl ValidatorAgent {
 
         if view_change_epoch == current_epoch {
             true
-        }
-        else {
+        } else {
             trace!("[VIEW-CHANGE] Ignoring view change message for a different epoch: current=#{}/{}, change_to=#{}/{}", current_block_number, current_epoch, view_change.block_number, view_change_epoch);
             false
         }
@@ -189,13 +255,17 @@ impl ValidatorAgent {
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
     fn on_view_change_message(&self, update_message: LevelUpdateMessage<ViewChange>) {
-        trace!("[VIEW-CHANGE] Received: number={} update={:?} peer={}",
-               update_message.tag,
-               update_message.update,
-               self.peer.peer_address());
+        trace!(
+            "[VIEW-CHANGE] Received: number={} update={:?} peer={}",
+            update_message.tag,
+            update_message.update,
+            self.peer.peer_address()
+        );
 
         if self.check_view_change_epoch(&update_message.tag) {
-            self.notifier.read().notify(ValidatorAgentEvent::ViewChange(Box::new(update_message)));
+            self.notifier
+                .read()
+                .notify(ValidatorAgentEvent::ViewChange(Box::new(update_message)));
         }
     }
 
@@ -203,7 +273,9 @@ impl ValidatorAgent {
         trace!("[VIEW-CHANGE] Received proof: {:?}", proof);
 
         if self.check_view_change_epoch(&proof.view_change) {
-            self.notifier.read().notify(ValidatorAgentEvent::ViewChangeProof(Box::new(proof)));
+            self.notifier
+                .read()
+                .notify(ValidatorAgentEvent::ViewChangeProof(Box::new(proof)));
         }
     }
 
@@ -221,49 +293,72 @@ impl ValidatorAgent {
 
         // Reject proposal if the blockchain is already longer
         if proposal_block <= current_block {
-            trace!("[PBFT-PROPOSAL] Ignoring old proposal: {:?}", proposal.message.header);
+            trace!(
+                "[PBFT-PROPOSAL] Ignoring old proposal: {:?}",
+                proposal.message.header
+            );
             return;
         }
 
         // Reject proposal if it lies in another epoch
         if policy::epoch_at(proposal_block) != policy::epoch_at(current_block) {
-            warn!("[PBFT-PROPOSAL] Ignoring proposal in another epoch: {}",
-                  proposal.message.header.hash::<Blake2bHash>());
+            warn!(
+                "[PBFT-PROPOSAL] Ignoring proposal in another epoch: {}",
+                proposal.message.header.hash::<Blake2bHash>()
+            );
             return;
         }
 
-        self.notifier.read().notify(ValidatorAgentEvent::PbftProposal(Box::new(proposal)));
+        self.notifier
+            .read()
+            .notify(ValidatorAgentEvent::PbftProposal(Box::new(proposal)));
     }
 
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
     /// TODO: The validator network could just register this it-self
     fn on_pbft_prepare_message(&self, level_update: LevelUpdateMessage<PbftPrepareMessage>) {
-        trace!("[PBFT-PREPARE] Received: block_hash={} update={:?} peer={}",
-               level_update.tag.block_hash,
-               level_update.update,
-               self.peer.peer_address());
+        trace!(
+            "[PBFT-PREPARE] Received: block_hash={} update={:?} peer={}",
+            level_update.tag.block_hash,
+            level_update.update,
+            self.peer.peer_address()
+        );
 
-        self.notifier.read().notify(ValidatorAgentEvent::PbftPrepare(Box::new(level_update)));
+        self.notifier
+            .read()
+            .notify(ValidatorAgentEvent::PbftPrepare(Box::new(level_update)));
     }
 
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
     /// FIXME This will verify a commit message with the current validator set, not with the one for
     /// which this commit is for.
     fn on_pbft_commit_message(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
-        trace!("[PBFT-COMMIT] Received: block_hash={} update={:?} peer={}",
-               level_update.tag.block_hash,
-               level_update.update,
-               self.peer.peer_address());
+        trace!(
+            "[PBFT-COMMIT] Received: block_hash={} update={:?} peer={}",
+            level_update.tag.block_hash,
+            level_update.update,
+            self.peer.peer_address()
+        );
 
-        self.notifier.read().notify(ValidatorAgentEvent::PbftCommit(Box::new(level_update)));
+        self.notifier
+            .read()
+            .notify(ValidatorAgentEvent::PbftCommit(Box::new(level_update)));
     }
 
     pub fn validator_info(&self) -> Option<ValidatorInfo> {
-        self.state.read().validator_info.as_ref().map(|signed| signed.message.clone())
+        self.state
+            .read()
+            .validator_info
+            .as_ref()
+            .map(|signed| signed.message.clone())
     }
 
     pub fn public_key(&self) -> Option<CompressedPublicKey> {
-        self.state.read().validator_info.as_ref().map(|info| info.message.public_key.clone())
+        self.state
+            .read()
+            .validator_info
+            .as_ref()
+            .map(|info| info.message.public_key.clone())
     }
 
     pub fn peer_id(&self) -> PeerId {
@@ -275,7 +370,8 @@ impl ValidatorAgent {
 
         let num_infos = infos.len(); // DEBUGGING
 
-        let unknown_infos = infos.iter()
+        let unknown_infos = infos
+            .iter()
             .filter(|info| !state.known_validators.contains(&info.message.public_key))
             .map(|info| info.clone())
             .collect::<Vec<SignedValidatorInfo>>();
@@ -287,17 +383,31 @@ impl ValidatorAgent {
 
         // add unknown validators to known set
         for info in &unknown_infos {
-            state.known_validators.insert(info.message.public_key.clone());
+            state
+                .known_validators
+                .insert(info.message.public_key.clone());
         }
 
         // send unknown infos
-        debug!("Sending {} unknown validator infos (out of {}) to {}", unknown_infos.len(), num_infos, self.peer.peer_address());
-        self.peer.channel.send_or_close(Message::ValidatorInfo(unknown_infos));
+        debug!(
+            "Sending {} unknown validator infos (out of {}) to {}",
+            unknown_infos.len(),
+            num_infos,
+            self.peer.peer_address()
+        );
+        self.peer
+            .channel
+            .send_or_close(Message::ValidatorInfo(unknown_infos));
     }
 }
 
 impl fmt::Debug for ValidatorAgent {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "ValidatorAgent {{ peer_id: {}, public_key: {:?} }}", self.peer_id(), self.public_key())
+        write!(
+            f,
+            "ValidatorAgent {{ peer_id: {}, public_key: {:?} }}",
+            self.peer_id(),
+            self.public_key()
+        )
     }
 }

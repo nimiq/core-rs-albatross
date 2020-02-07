@@ -3,7 +3,7 @@ use std::io;
 
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_bls::bls12_381::{CompressedSignature, PublicKey};
+use nimiq_bls::{CompressedSignature, PublicKey};
 use primitives::policy;
 
 use crate::MicroHeader;
@@ -22,17 +22,23 @@ impl ForkProof {
     pub fn verify(&self, public_key: &PublicKey) -> Result<(), ForkProofError> {
         // XXX Duplicate check
         if self.header1.block_number != self.header2.block_number
-            || self.header1.view_number != self.header2.view_number {
+            || self.header1.view_number != self.header2.view_number
+        {
             return Err(ForkProofError::SlotMismatch);
         }
 
-        let justification1 = self.justification1.uncompress()
+        let justification1 = self
+            .justification1
+            .uncompress()
             .map_err(|_| ForkProofError::InvalidJustification)?;
-        let justification2 = self.justification2.uncompress()
+        let justification2 = self
+            .justification2
+            .uncompress()
             .map_err(|_| ForkProofError::InvalidJustification)?;
 
         if !public_key.verify(&self.header1, &justification1)
-            || !public_key.verify(&self.header2, &justification2) {
+            || !public_key.verify(&self.header2, &justification2)
+        {
             return Err(ForkProofError::InvalidJustification);
         }
 
@@ -96,7 +102,7 @@ impl SerializeContent for ForkProof {
     }
 }
 
-impl Hash for ForkProof { }
+impl Hash for ForkProof {}
 
 impl std::hash::Hash for ForkProof {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

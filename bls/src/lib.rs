@@ -17,10 +17,7 @@ use algebra::{
         bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective},
         AffineCurve, PairingEngine, ProjectiveCurve,
     },
-    fields::{
-        bls12_377::{Fq, Fq12, Fr},
-        Field, FpParameters, PrimeField,
-    },
+    fields::bls12_377::{Fq, Fq12, Fr},
     rand::UniformRand,
     serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError},
 };
@@ -35,28 +32,24 @@ use rand_chacha::ChaChaRng;
 use utils::key_rng::{CryptoRng, Rng};
 pub use utils::key_rng::{SecureGenerate, SecureRng};
 
-use hash::{Blake2bHash, Hash};
+#[cfg(feature = "beserial")]
+use beserial::{Deserialize, Serialize};
+use failure::Fail;
+use hash::{Blake2sHash, Hash};
+use hex::FromHexError;
 use std::{cmp::Ordering, fmt, str::FromStr};
 
 #[cfg(feature = "beserial")]
-use beserial::{Deserialize, Serialize};
+pub mod serialization;
 
 #[cfg(feature = "lazy")]
 pub mod lazy;
-use lazy::*;
-
-use failure::Fail;
-use hex::FromHexError;
-
-#[cfg(feature = "beserial")]
-pub mod serialization;
-use serialization::*;
-
-// Hash used for signatures
-pub type SigHash = Blake2bHash;
 
 mod types;
-use types::*;
+pub use types::*;
+
+// Hash used for signatures
+pub type SigHash = Blake2sHash;
 
 #[cfg(test)]
 mod tests;

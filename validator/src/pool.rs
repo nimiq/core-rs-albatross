@@ -1,18 +1,17 @@
-use std::collections::{HashMap, BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use bls::bls12_381::CompressedPublicKey;
-use bls::bls12_381::lazy::LazyPublicKey;
-use network_primitives::validator_info::{ValidatorInfo, SignedValidatorInfo};
-use primitives::slot::{ValidatorSlots, SlotBand, SlotCollection};
 use blockchain_albatross::Blockchain;
+use bls::lazy::LazyPublicKey;
+use bls::CompressedPublicKey;
+use hash::{Blake2bHash, Hash};
 use network::Network;
-use hash::{Hash, Blake2bHash};
+use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
+use primitives::slot::{SlotBand, SlotCollection, ValidatorSlots};
 
 use crate::validator_agent::ValidatorAgent;
-
 
 pub enum PushResult {
     OldInfo,
@@ -20,7 +19,6 @@ pub enum PushResult {
     InvalidPublicKey,
     Added,
 }
-
 
 // TODO: Arc CompressedPublicKey?
 pub struct ValidatorPool {
@@ -48,7 +46,6 @@ pub struct ValidatorPool {
     active_validators_slots: ValidatorSlots,
 }
 
-
 impl ValidatorPool {
     pub fn new(network: Arc<Network<Blockchain>>) -> Self {
         ValidatorPool {
@@ -75,21 +72,24 @@ impl ValidatorPool {
         for (validator_id, validator) in validators.iter().enumerate() {
             // create mapping from public key to validator ID
             let pubkey = validator.public_key().compressed();
-            self.validator_id_by_pubkey.insert(pubkey.clone(), validator_id);
+            self.validator_id_by_pubkey
+                .insert(pubkey.clone(), validator_id);
 
             if let Some(validator) = self.potential_validators.get(pubkey) {
                 // if we already know the validator as potential validator, put into active validators
-                self.active_validator_agents.insert(validator_id, Arc::clone(validator));
-            }
-            else if self.blacklist.read().contains(pubkey) {
+                self.active_validator_agents
+                    .insert(validator_id, Arc::clone(validator));
+            } else if self.blacklist.read().contains(pubkey) {
                 // ignore
-            }
-            else if let Some(info) = self.infos.get(pubkey) {
+            } else if let Some(info) = self.infos.get(pubkey) {
                 // otherwise we'll try to connect to them, if we have a validator info
                 self.connect_to_peer(&info.message);
-            }
-            else {
-                warn!("No validator info for: {} ({} votes)", validator_id, validator.num_slots());
+            } else {
+                warn!(
+                    "No validator info for: {} ({} votes)",
+                    validator_id,
+                    validator.num_slots()
+                );
             }
         }
     }
@@ -103,7 +103,11 @@ impl ValidatorPool {
         if let Some(known_info) = self.infos.get(pubkey) {
             // if the validator info is older that the one we have, abort
             if info.message.valid_from <= known_info.message.valid_from {
-                trace!("Received old validator info (newest valid_from={}): {:?}", known_info.message.valid_from, info);
+                trace!(
+                    "Received old validator info (newest valid_from={}): {:?}",
+                    known_info.message.valid_from,
+                    info
+                );
                 return PushResult::OldInfo;
             }
         }
@@ -114,8 +118,8 @@ impl ValidatorPool {
             Ok(pk) => pk,
             Err(_) => {
                 warn!("Invalid public key in validator info: {:?}", info.message);
-                return PushResult::InvalidPublicKey
-            },
+                return PushResult::InvalidPublicKey;
+            }
         };
 
         // verify the signature of the validator info
@@ -127,7 +131,11 @@ impl ValidatorPool {
         // remember validator info
         self.infos.insert(pubkey.clone(), info.clone());
 
-        debug!("Added validator info for: {}: {}", pubkey.hash::<Blake2bHash>(), info.message.peer_address);
+        debug!(
+            "Added validator info for: {}: {}",
+            pubkey.hash::<Blake2bHash>(),
+            info.message.peer_address
+        );
 
         PushResult::Added
     }
@@ -137,16 +145,23 @@ impl ValidatorPool {
             return;
         }
 
-        debug!("Connecting agent to validator: {}: {}", pubkey.hash::<Blake2bHash>(), agent.peer.peer_address());
+        debug!(
+            "Connecting agent to validator: {}: {}",
+            pubkey.hash::<Blake2bHash>(),
+            agent.peer.peer_address()
+        );
 
         // add to potential validators
-        if self.potential_validators
+        if self
+            .potential_validators
             .insert(pubkey.clone(), Arc::clone(agent))
-            .is_none() {
+            .is_none()
+        {
             // The agent for this validator public key was previously unknown, so we need to check
             // if they're active and insert them into our active validator map.
             if let Some(&validator_id) = self.validator_id_by_pubkey.get(pubkey) {
-                self.active_validator_agents.insert(validator_id, Arc::clone(&agent));
+                self.active_validator_agents
+                    .insert(validator_id, Arc::clone(&agent));
             }
         }
     }
@@ -158,7 +173,11 @@ impl ValidatorPool {
 
         let peer_address = Arc::new(info.peer_address.clone());
         debug!("Trying to connect to: {}", peer_address);
-        if !self.network.connections.connect_outbound(Arc::clone(&peer_address)) {
+        if !self
+            .network
+            .connections
+            .connect_outbound(Arc::clone(&peer_address))
+        {
             //warn!("Failed to connect to {}. Blacklist them for now (TODO).", peer_address);
             // TODO: Ideally the connection pool should handle this. Just don't try to reconnect to
             // them for a while
@@ -182,7 +201,10 @@ impl ValidatorPool {
         }
     }
 
-    pub fn get_potential_validator_agent(&self, pubkey: &CompressedPublicKey) -> Option<Arc<ValidatorAgent>> {
+    pub fn get_potential_validator_agent(
+        &self,
+        pubkey: &CompressedPublicKey,
+    ) -> Option<Arc<ValidatorAgent>> {
         self.potential_validators.get(pubkey).cloned()
     }
 
@@ -190,23 +212,27 @@ impl ValidatorPool {
         self.active_validator_agents.get(&validator_id).cloned()
     }
 
-    pub fn iter_potential<'a>(&'a self) -> impl Iterator<Item=Arc<ValidatorAgent>> + 'a {
-        self.potential_validators.iter()
+    pub fn iter_potential<'a>(&'a self) -> impl Iterator<Item = Arc<ValidatorAgent>> + 'a {
+        self.potential_validators
+            .iter()
             .map(|(_, agent)| Arc::clone(&agent))
     }
 
-    pub fn iter_active<'a>(&'a self) -> impl Iterator<Item=Arc<ValidatorAgent>> + 'a {
-        self.active_validator_agents.iter()
+    pub fn iter_active<'a>(&'a self) -> impl Iterator<Item = Arc<ValidatorAgent>> + 'a {
+        self.active_validator_agents
+            .iter()
             .map(|(_, agent)| Arc::clone(&agent))
     }
 
     pub fn get_public_key(&self, validator_id: usize) -> Option<&LazyPublicKey> {
-        self.active_validators_slots.get_by_band_number(validator_id as u16)
+        self.active_validators_slots
+            .get_by_band_number(validator_id as u16)
             .map(|validator| validator.public_key())
     }
 
     pub fn get_num_slots(&self, validator_id: usize) -> Option<usize> {
-        self.active_validators_slots.get_by_band_number(validator_id as u16)
+        self.active_validators_slots
+            .get_by_band_number(validator_id as u16)
             .map(|validator| validator.num_slots() as usize)
     }
 
@@ -218,7 +244,7 @@ impl ValidatorPool {
         self.active_validators_slots.len()
     }
 
-    pub fn iter_validator_infos(&self) -> impl Iterator<Item=&SignedValidatorInfo> {
+    pub fn iter_validator_infos(&self) -> impl Iterator<Item = &SignedValidatorInfo> {
         self.infos.iter().map(|(_, info)| info)
     }
 

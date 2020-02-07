@@ -16,7 +16,7 @@ impl CompressedPublicKey {
     }
 
     pub fn to_hex(&self) -> String {
-        hex::encode(self.public_key.as_ref())
+        hex::encode(self.as_ref())
     }
 }
 
@@ -24,21 +24,19 @@ impl Eq for CompressedPublicKey {}
 
 impl PartialEq for CompressedPublicKey {
     fn eq(&self, other: &CompressedPublicKey) -> bool {
-        self.public_key.as_ref() == other.public_key.as_ref()
+        self.as_ref() == other.as_ref()
     }
 }
 
 impl Ord for CompressedPublicKey {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.public_key.as_ref().cmp(other.public_key.as_ref())
+        self.as_ref().cmp(other.as_ref())
     }
 }
 
 impl PartialOrd<CompressedPublicKey> for CompressedPublicKey {
     fn partial_cmp(&self, other: &CompressedPublicKey) -> Option<Ordering> {
-        self.public_key
-            .as_ref()
-            .partial_cmp(other.public_key.as_ref())
+        self.as_ref().partial_cmp(other.as_ref())
     }
 }
 

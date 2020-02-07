@@ -16,7 +16,7 @@ impl CompressedSignature {
     }
 
     pub fn to_hex(&self) -> String {
-        hex::encode(self.signature.as_ref())
+        hex::encode(self.as_ref())
     }
 }
 
@@ -24,21 +24,19 @@ impl Eq for CompressedSignature {}
 
 impl PartialEq for CompressedSignature {
     fn eq(&self, other: &CompressedSignature) -> bool {
-        self.signature.as_ref() == other.signature.as_ref()
+        self.as_ref() == other.as_ref()
     }
 }
 
 impl Ord for CompressedSignature {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.signature.as_ref().cmp(other.signature.as_ref())
+        self.as_ref().cmp(other.as_ref())
     }
 }
 
 impl PartialOrd<CompressedSignature> for CompressedSignature {
     fn partial_cmp(&self, other: &CompressedSignature) -> Option<Ordering> {
-        self.signature
-            .as_ref()
-            .partial_cmp(other.signature.as_ref())
+        self.as_ref().partial_cmp(other.as_ref())
     }
 }
 

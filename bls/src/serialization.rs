@@ -6,8 +6,8 @@ use std::io;
 
 impl Serialize for CompressedPublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        assert_eq!(self.public_key.as_ref().len(), CompressedPublicKey::SIZE);
-        writer.write_all(self.public_key.as_ref())?;
+        assert_eq!(self.as_ref().len(), CompressedPublicKey::SIZE);
+        writer.write_all(self.as_ref())?;
         Ok(CompressedPublicKey::SIZE)
     }
 
@@ -35,8 +35,8 @@ impl Deserialize for CompressedPublicKey {
 
 impl Serialize for CompressedSignature {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        assert_eq!(self.signature.as_ref().len(), CompressedSignature::SIZE);
-        writer.write_all(self.signature.as_ref())?;
+        assert_eq!(self.as_ref().len(), CompressedSignature::SIZE);
+        writer.write_all(self.as_ref())?;
         Ok(CompressedSignature::SIZE)
     }
 

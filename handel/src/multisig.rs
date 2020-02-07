@@ -1,9 +1,8 @@
 use failure::Fail;
 
-use beserial::{Serialize, Deserialize, WriteBytesExt, ReadBytesExt, SerializingError, BigEndian};
-use bls::bls12_381;
+use beserial::{BigEndian, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use bls;
 use collections::bitset::BitSet;
-
 
 #[derive(Clone, Debug, Fail)]
 pub enum SignatureError {
@@ -15,7 +14,7 @@ pub enum SignatureError {
 
 #[derive(Clone, Debug)]
 pub struct IndividualSignature {
-    pub signature: bls12_381::Signature,
+    pub signature: bls::Signature,
     pub signer: usize,
 }
 
@@ -35,21 +34,18 @@ impl Deserialize for IndividualSignature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         Ok(Self {
             signature: Deserialize::deserialize(reader)?,
-            signer: reader.read_u16::<BigEndian>()? as usize
+            signer: reader.read_u16::<BigEndian>()? as usize,
         })
     }
 }
 
 impl IndividualSignature {
-    pub fn new(signature: bls12_381::Signature, signer: usize) -> Self {
-        Self {
-            signature,
-            signer
-        }
+    pub fn new(signature: bls::Signature, signer: usize) -> Self {
+        Self { signature, signer }
     }
 
     pub fn as_multisig(&self) -> MultiSignature {
-        let mut aggregate = bls12_381::AggregateSignature::new();
+        let mut aggregate = bls::AggregateSignature::new();
         let mut signers = BitSet::new();
 
         aggregate.aggregate(&self.signature);
@@ -59,19 +55,15 @@ impl IndividualSignature {
     }
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MultiSignature {
-    pub signature: bls12_381::AggregateSignature,
+    pub signature: bls::AggregateSignature,
     pub signers: BitSet,
 }
 
 impl MultiSignature {
-    pub fn new(signature: bls12_381::AggregateSignature, signers: BitSet) -> Self {
-        Self {
-            signature,
-            signers,
-        }
+    pub fn new(signature: bls::AggregateSignature, signers: BitSet) -> Self {
+        Self { signature, signers }
     }
 
     pub fn len(&self) -> usize {
@@ -90,8 +82,7 @@ impl MultiSignature {
             self.signature.merge_into(&other.signature);
             self.signers = &self.signers | &other.signers;
             Ok(())
-        }
-        else {
+        } else {
             Err(SignatureError::Overlapping(overlap))
         }
     }
@@ -99,8 +90,7 @@ impl MultiSignature {
     pub fn add_individual(&mut self, other: &IndividualSignature) -> Result<(), SignatureError> {
         if self.signers.contains(other.signer) {
             Err(SignatureError::Contained(other.signer))
-        }
-        else {
+        } else {
             self.signature.aggregate(&other.signature);
             self.signers.insert(other.signer);
             Ok(())
@@ -110,7 +100,7 @@ impl MultiSignature {
     pub fn add(&mut self, other: &Signature) -> Result<(), SignatureError> {
         match other {
             Signature::Individual(individual) => self.add_individual(individual),
-            Signature::Multi(multisig) => self.add_multisig(multisig)
+            Signature::Multi(multisig) => self.add_multisig(multisig),
         }
     }
 }
@@ -120,7 +110,6 @@ impl From<IndividualSignature> for MultiSignature {
         signature.as_multisig()
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub enum Signature {
@@ -135,49 +124,45 @@ impl Signature {
                 let mut s = BitSet::new();
                 s.insert(individual.signer);
                 s
-            },
+            }
             Signature::Multi(multisig) => multisig.signers.clone(),
         }
     }
 
     // TODO: Don't use `Box`. We need a specific type for the `BitSet` iterator. Then we can create an
     // enum that is either a `Once` iterator or an iterator over the `BitSet`.
-    pub fn signers<'a>(&'a self) -> Box<dyn Iterator<Item=usize> + 'a> {
+    pub fn signers<'a>(&'a self) -> Box<dyn Iterator<Item = usize> + 'a> {
         match self {
-            Signature::Individual(individual) => {
-                Box::new(std::iter::once(individual.signer))
-            },
-            Signature::Multi(multisig) => {
-                Box::new(multisig.signers.iter())
-            }
+            Signature::Individual(individual) => Box::new(std::iter::once(individual.signer)),
+            Signature::Multi(multisig) => Box::new(multisig.signers.iter()),
         }
     }
 
     pub fn len(&self) -> usize {
         match self {
             Signature::Individual(_) => 1,
-            Signature::Multi(multisig) => multisig.len()
+            Signature::Multi(multisig) => multisig.len(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         match self {
             Signature::Individual(_) => false,
-            Signature::Multi(multisig) => multisig.is_empty()
+            Signature::Multi(multisig) => multisig.is_empty(),
         }
     }
 
     pub fn is_individual(&self) -> bool {
         match self {
             Signature::Individual(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
     pub fn is_multisig(&self) -> bool {
         match self {
             Signature::Multi(_) => true,
-            _ => false
+            _ => false,
         }
     }
 }

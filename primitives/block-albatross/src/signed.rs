@@ -1,13 +1,12 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use beserial::{Serialize, Deserialize, WriteBytesExt};
-use bls::bls12_381::{Signature, SecretKey, PublicKey, AggregateSignature, AggregatePublicKey};
+use beserial::{Deserialize, Serialize, WriteBytesExt};
 use bls::SigHash;
-use hash::{Blake2bHasher, SerializeContent, Hasher};
+use bls::{AggregatePublicKey, AggregateSignature, PublicKey, SecretKey, Signature};
 use collections::bitset::BitSet;
-use primitives::slot::{ValidatorSlots, SlotCollection, SlotIndex, SlotBand};
-
+use hash::{Blake2sHasher, Hasher, SerializeContent};
+use primitives::slot::{SlotBand, SlotCollection, SlotIndex, ValidatorSlots};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedMessage<M: Message> {
@@ -46,7 +45,6 @@ impl<M: Message> SignedMessage<M> {
     }
 }
 
-
 // XXX The contents of ViewChangeMessage and PbftMessage (and any other message that is signed by
 // a validator) must be distinguishable!
 // Therefore all signed messages should be prefixed with a standardized type. We should keep those
@@ -65,14 +63,26 @@ pub const PREFIX_POKOSK: u8 = 0x05;
 /// prefix to sign a validator info
 pub const PREFIX_VALIDATOR_INFO: u8 = 0x06;
 
-
-pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent + Send + Sync + Sized + PartialEq + 'static {
+pub trait Message:
+    Clone
+    + Debug
+    + Serialize
+    + Deserialize
+    + SerializeContent
+    + Send
+    + Sync
+    + Sized
+    + PartialEq
+    + 'static
+{
     const PREFIX: u8;
 
     fn hash_with_prefix(&self) -> SigHash {
-        let mut h = Blake2bHasher::new();
-        h.write_u8(Self::PREFIX).expect("Failed to write prefix to hasher for signature.");
-        self.serialize_content(&mut h).expect("Failed to write message to hasher for signature.");
+        let mut h = Blake2sHasher::new();
+        h.write_u8(Self::PREFIX)
+            .expect("Failed to write prefix to hasher for signature.");
+        self.serialize_content(&mut h)
+            .expect("Failed to write message to hasher for signature.");
         h.finish()
     }
 
@@ -82,7 +92,7 @@ pub trait Message: Clone + Debug + Serialize + Deserialize + SerializeContent + 
 }
 
 pub enum AggregateError {
-    Overlapping
+    Overlapping,
 }
 
 /// DEPRECATED: We don't need this anymore.
@@ -101,7 +111,7 @@ pub struct AggregateProofBuilder<M> {
     pub num_slots: u16,
 
     #[beserial(skip)]
-    _message: PhantomData<M>
+    _message: PhantomData<M>,
 }
 
 impl<M: Message> AggregateProofBuilder<M> {
@@ -121,7 +131,12 @@ impl<M: Message> AggregateProofBuilder<M> {
 
     /// Adds a signed message to an aggregate proof
     /// NOTE: This method assumes the signature of the message was already checked
-    pub fn add_signature(&mut self, public_key: &PublicKey, num_slots: u16, signed: &SignedMessage<M>) -> bool {
+    pub fn add_signature(
+        &mut self,
+        public_key: &PublicKey,
+        num_slots: u16,
+        signed: &SignedMessage<M>,
+    ) -> bool {
         debug_assert!(signed.verify(public_key));
         let signer_idx = signed.signer_idx as usize;
         if self.signers.contains(signer_idx) {
@@ -141,10 +156,16 @@ impl<M: Message> AggregateProofBuilder<M> {
 
     pub fn verify(&self, message: &M, threshold: u16) -> Result<(), AggregateProofError> {
         if self.num_slots < threshold {
-            return Err(AggregateProofError::InsufficientSigners(self.num_slots, threshold));
+            return Err(AggregateProofError::InsufficientSigners(
+                self.num_slots,
+                threshold,
+            ));
         }
 
-        if !self.public_key.verify_hash(message.hash_with_prefix(), &self.signature) {
+        if !self
+            .public_key
+            .verify_hash(message.hash_with_prefix(), &self.signature)
+        {
             return Err(AggregateProofError::InvalidSignature);
         }
 
@@ -162,7 +183,7 @@ impl<M: Message> AggregateProofBuilder<M> {
         AggregateProof {
             signers: self.signers,
             signature: self.signature,
-            _message: PhantomData
+            _message: PhantomData,
         }
     }
 }
@@ -183,7 +204,7 @@ pub struct AggregateProof<M: Message> {
     pub signature: AggregateSignature,
 
     #[beserial(skip)]
-    _message: PhantomData<M>
+    _message: PhantomData<M>,
 }
 
 impl<M: Message> AggregateProof<M> {
@@ -191,7 +212,7 @@ impl<M: Message> AggregateProof<M> {
         Self {
             signature,
             signers,
-            _message: PhantomData
+            _message: PhantomData,
         }
     }
 
@@ -201,12 +222,18 @@ impl<M: Message> AggregateProof<M> {
 
     /// Verify message against aggregate signature and check the required number of signatures.
     /// Expects valid validator public keys.
-    pub fn verify(&self, message: &M, validators: &ValidatorSlots, threshold: u16) -> Result<(), AggregateProofError> {
+    pub fn verify(
+        &self,
+        message: &M,
+        validators: &ValidatorSlots,
+        threshold: u16,
+    ) -> Result<(), AggregateProofError> {
         // Aggregate signatures and count votes
         let mut public_key = AggregatePublicKey::new();
         let mut votes = 0;
         for signer_idx in self.signers.iter() {
-            let validator = validators.get_by_band_number(signer_idx as u16)
+            let validator = validators
+                .get_by_band_number(signer_idx as u16)
                 .ok_or_else(|| AggregateProofError::InvalidSignerIndex(signer_idx as u16))?;
             public_key.aggregate(&validator.public_key().uncompress_unchecked());
             votes += validator.num_slots();
@@ -225,15 +252,18 @@ impl<M: Message> AggregateProof<M> {
     }
 }
 
-pub fn votes_for_signers(validators: &ValidatorSlots, signers: &BitSet) -> Result<u16, AggregateProofError> {
+pub fn votes_for_signers(
+    validators: &ValidatorSlots,
+    signers: &BitSet,
+) -> Result<u16, AggregateProofError> {
     let mut votes = 0;
     for signer_idx in signers.iter() {
-        votes += validators.get_num_slots(SlotIndex::Band(signer_idx as u16))
+        votes += validators
+            .get_num_slots(SlotIndex::Band(signer_idx as u16))
             .ok_or_else(|| AggregateProofError::InvalidSignerIndex(signer_idx as u16))?;
     }
     Ok(votes)
 }
-
 
 #[derive(Clone, Debug, PartialEq, Eq, Fail)]
 pub enum AggregateProofError {
