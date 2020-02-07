@@ -116,13 +116,14 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
         self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
 
         let record_opt = self.vectors_to_request.get_mut(vector);
-        if record_opt.is_none() {
+        let caller_opt = agent_weak.upgrade();
+        if record_opt.is_none() || caller_opt.is_none() {
             return;
         }
 
         let record = record_opt.unwrap();
         let current_opt = record.0.upgrade();
-        let caller = agent_weak.upgrade().expect("Caller not present");
+        let caller = caller_opt.unwrap();
 
         record.1.remove(&caller);
 
