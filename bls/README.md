@@ -1,6 +1,8 @@
 # bls
 
-This is a Rust crate for making Boneh-Lynn-Shacham signatures. It only supports the BLS12-377 curve. This curve was chosen to allow the creation of SNARKs of statements about these BLS signatures. These SNARKs can be created using [ZEXE](https://github.com/scipr-lab/zexe).
+This is a Rust crate for making Boneh-Lynn-Shacham signatures. It has functionality for: securely creating key pairs, signing messages, verifying signatures and aggregating signatures on the same message. It also has serialized compressed versions of both public keys and signatures.
+
+It only supports the BLS12-377 curve. This curve was chosen to allow the creation of SNARKs of statements about these BLS signatures. These SNARKs can be created using [ZEXE](https://github.com/scipr-lab/zexe).
 
 It mainly uses the Algebra crate in [ZEXE](https://github.com/scipr-lab/zexe) for its elliptic curve arithmetic.
 
