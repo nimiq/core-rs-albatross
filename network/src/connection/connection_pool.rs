@@ -948,10 +948,11 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
         // Acquire write lock and release it again before notifying listeners.
         {
             let mut state = self.state.write();
-            let connection_id = *state.connections_by_peer_address.get(&peer_address).expect("PeerAddress not stored");
-            let info = state.connections.get(connection_id).unwrap_or_else(|| panic!("Missing connection #{}", connection_id));
-            assert_eq!(info.state(), ConnectionState::Connecting, "ConnectionInfo state not Connecting, but {:?} ({})", info.state(), peer_address);
-            state.remove(connection_id).unwrap();
+            if let Some(&connection_id) = state.connections_by_peer_address.get(&peer_address) {
+                let info = state.connections.get(connection_id).unwrap_or_else(|| panic!("Missing connection #{}", connection_id));
+                assert_eq!(info.state(), ConnectionState::Connecting, "ConnectionInfo state not Connecting, but {:?} ({})", info.state(), peer_address);
+                state.remove(connection_id).unwrap();
+            }
 
             update_checked!(state.connecting_count, PeerCountUpdate::Remove);
         }
