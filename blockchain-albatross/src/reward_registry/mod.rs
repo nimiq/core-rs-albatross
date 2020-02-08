@@ -52,9 +52,17 @@ pub enum EpochStateError {
     HistoricEpoch,
 }
 
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
+pub enum SlashedSetSelector {
+    ViewChanges,
+    ForkProofs,
+    All,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct BlockDescriptor {
-    epoch_state: BitSet,
+    view_change_epoch_state: BitSet,
+    fork_proof_epoch_state: BitSet,
     prev_epoch_state: BitSet,
 }
 
@@ -105,12 +113,16 @@ impl SlashRegistry {
         }
     }
 
-    pub fn commit_epoch(&self, txn: &mut WriteTransaction, block_number: u32, transactions: &[BlockchainTransaction], slashed_slots: &BitSet) -> Result<(), SlashPushError> {
+    pub fn commit_epoch(&self, txn: &mut WriteTransaction, block_number: u32, transactions: &[BlockchainTransaction], view_change_slashed_slots: &BitSet) -> Result<(), SlashPushError> {
         self.reward_pot.commit_epoch(block_number, transactions, txn);
 
         // Just put the whole epochs slashed set at the macro blocks position.
         // We don't have slash info for the current epoch though.
-        let descriptor = BlockDescriptor { epoch_state: BitSet::new(), prev_epoch_state: slashed_slots.clone() };
+        let descriptor = BlockDescriptor {
+            view_change_epoch_state: BitSet::new(),
+            fork_proof_epoch_state: BitSet::new(),
+            prev_epoch_state: view_change_slashed_slots.clone(),
+        };
 
         // Put descriptor into database.
         txn.put(&self.slash_registry_db, &block_number, &descriptor);
@@ -130,28 +142,34 @@ impl SlashRegistry {
         let last_change: Option<(u32, BlockDescriptor)> = cursor.prev();
 
         let prev_epoch_state: BitSet;
-        let epoch_state: BitSet;
+        let view_change_epoch_state: BitSet;
+        let fork_proof_epoch_state: BitSet;
         if let Some((change_block_number, change)) = last_change {
             if change_block_number >= policy::first_block_of(block_epoch) {
                 // last_change was in current epoch
                 prev_epoch_state = change.prev_epoch_state;
-                epoch_state = change.epoch_state;
+                view_change_epoch_state = change.view_change_epoch_state;
+                fork_proof_epoch_state = change.fork_proof_epoch_state;
             } else if block_epoch > 0 && change_block_number >= policy::first_block_of(block_epoch - 1) {
                 // last_change was in previous epoch
-                prev_epoch_state = change.epoch_state;
-                epoch_state = BitSet::new();
+                // mingle slashes together
+                prev_epoch_state = change.view_change_epoch_state | change.fork_proof_epoch_state;
+                view_change_epoch_state = BitSet::new();
+                fork_proof_epoch_state = BitSet::new();
             } else {
                 // no change in the last two epochs
                 prev_epoch_state = BitSet::new();
-                epoch_state = BitSet::new();
+                view_change_epoch_state = BitSet::new();
+                fork_proof_epoch_state = BitSet::new();
             }
         } else {
             // no change at all
             prev_epoch_state = BitSet::new();
-            epoch_state = BitSet::new();
+            view_change_epoch_state = BitSet::new();
+            fork_proof_epoch_state = BitSet::new();
         }
 
-        BlockDescriptor { prev_epoch_state, epoch_state }
+        BlockDescriptor { prev_epoch_state, view_change_epoch_state, fork_proof_epoch_state }
     }
 
     fn slash_view_changes(&self, epoch_diff: &mut BitSet, txn: &mut WriteTransaction, block_number: u32, view_number: u32, prev_view_number: u32) {
@@ -166,15 +184,15 @@ impl SlashRegistry {
     fn commit_macro_block(&self, txn: &mut WriteTransaction, block: &MacroBlock, prev_view_number: u32) -> Result<(), SlashPushError> {
         let mut epoch_diff = BitSet::new();
 
-        let BlockDescriptor { prev_epoch_state, mut epoch_state } = self.get_epoch_state(txn, block.header.block_number);
+        let BlockDescriptor { fork_proof_epoch_state, prev_epoch_state, mut view_change_epoch_state } = self.get_epoch_state(txn, block.header.block_number);
 
         self.slash_view_changes(&mut epoch_diff, txn, block.header.block_number, block.header.view_number, prev_view_number);
 
         // Apply slashes.
-        epoch_state |= epoch_diff;
+        view_change_epoch_state |= epoch_diff;
 
         // Push block descriptor and remember slash hashes.
-        let descriptor = BlockDescriptor { epoch_state, prev_epoch_state };
+        let descriptor = BlockDescriptor { view_change_epoch_state, fork_proof_epoch_state, prev_epoch_state };
 
         // Put descriptor into database.
         txn.put(&self.slash_registry_db, &block.header.block_number, &descriptor);
@@ -184,8 +202,9 @@ impl SlashRegistry {
 
     fn commit_micro_block(&self, txn: &mut WriteTransaction, block: &MicroBlock, prev_view_number: u32) -> Result<(), SlashPushError> {
         let block_epoch = policy::epoch_at(block.header.block_number);
-        let mut epoch_diff = BitSet::new();
-        let mut prev_epoch_diff = BitSet::new();
+        let mut view_change_epoch_diff = BitSet::new();
+        let mut fork_proof_epoch_diff = BitSet::new();
+        let mut fork_proof_prev_epoch_diff = BitSet::new();
 
         // Mark from fork proofs.
         let fork_proofs = &block.extrinsics.as_ref().unwrap().fork_proofs;
@@ -197,36 +216,41 @@ impl SlashRegistry {
 
             let slash_epoch = policy::epoch_at(block_number);
             if block_epoch == slash_epoch {
-                if epoch_diff.contains(slot_number as usize) {
+                if fork_proof_epoch_diff.contains(slot_number as usize) {
                     return Err(SlashPushError::DuplicateForkProof);
                 }
-                epoch_diff.insert(slot_number as usize);
+                fork_proof_epoch_diff.insert(slot_number as usize);
             } else if block_epoch == slash_epoch + 1 {
-                if prev_epoch_diff.contains(slot_number as usize) {
+                if fork_proof_prev_epoch_diff.contains(slot_number as usize) {
                     return Err(SlashPushError::DuplicateForkProof);
                 }
-                prev_epoch_diff.insert(slot_number as usize);
+                fork_proof_prev_epoch_diff.insert(slot_number as usize);
             } else {
                 return Err(SlashPushError::InvalidEpochTarget);
             }
         }
 
-        let BlockDescriptor { mut prev_epoch_state, mut epoch_state } = self.get_epoch_state(txn, block.header.block_number);
+        let BlockDescriptor { mut fork_proof_epoch_state, mut prev_epoch_state, mut view_change_epoch_state } = self.get_epoch_state(txn, block.header.block_number);
 
-        // Detect duplicate slashes
-        if !(&prev_epoch_state & &prev_epoch_diff).is_empty()
-            || !(&epoch_state & &epoch_diff).is_empty() {
+        // Detect duplicate fork proof slashes
+        if !(&prev_epoch_state & &fork_proof_prev_epoch_diff).is_empty()
+            || !(&fork_proof_epoch_state & &fork_proof_epoch_diff).is_empty() {
             return Err(SlashPushError::SlotAlreadySlashed);
         }
 
-        self.slash_view_changes(&mut epoch_diff, txn, block.header.block_number, block.header.view_number, prev_view_number);
+        self.slash_view_changes(&mut view_change_epoch_diff, txn, block.header.block_number, block.header.view_number, prev_view_number);
 
         // Apply slashes.
-        prev_epoch_state |= prev_epoch_diff;
-        epoch_state |= epoch_diff;
+        prev_epoch_state |= fork_proof_prev_epoch_diff;
+        fork_proof_epoch_state |= fork_proof_epoch_diff;
+        view_change_epoch_state |= view_change_epoch_diff;
 
         // Push block descriptor and remember slash hashes.
-        let descriptor = BlockDescriptor { epoch_state, prev_epoch_state };
+        let descriptor = BlockDescriptor {
+            view_change_epoch_state,
+            fork_proof_epoch_state,
+            prev_epoch_state
+        };
 
         // Put descriptor into database.
         txn.put(&self.slash_registry_db, &block.header.block_number, &descriptor);
@@ -288,8 +312,8 @@ impl SlashRegistry {
         //   create a list of slot numbers that are still enabled. Then sample from that and
         //   you'll have the proper slot_number instead of a "honest slot index".
 
-        // Get slashed set for epoch
-        let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number, txn_option)
+        // Get slashed set for epoch ignoring fork proofs.
+        let slashed_set = self.slashed_set_at(policy::epoch_at(block_number), block_number, SlashedSetSelector::ViewChanges, txn_option)
             .ok()?;
 
         // RNG for slot selection
@@ -307,15 +331,24 @@ impl SlashRegistry {
         Some(slot_number)
     }
 
-    // Get latest known slash set of epoch
-    pub fn slashed_set(&self, epoch_number: u32, txn_option: Option<&Transaction>) -> BitSet {
-        self.slashed_set_at(epoch_number, policy::first_block_of(epoch_number + 2), txn_option)
+    /// Get latest known slash set of epoch
+    pub fn slashed_set(&self, epoch_number: u32, set_selector: SlashedSetSelector, txn_option: Option<&Transaction>) -> BitSet {
+        self.slashed_set_at(epoch_number, policy::first_block_of(epoch_number + 2), set_selector, txn_option)
             .unwrap()
     }
 
-    // Get slash set of epoch at specific block number
-    // Returns slash set before applying block with that block_number (TODO Tests)
-    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32, txn_option: Option<&Transaction>) -> Result<BitSet, EpochStateError> {
+    fn select_slashed_set(descriptor: BlockDescriptor, selector: SlashedSetSelector) -> BitSet {
+        match selector {
+            SlashedSetSelector::ViewChanges => descriptor.view_change_epoch_state,
+            SlashedSetSelector::ForkProofs => descriptor.fork_proof_epoch_state,
+            SlashedSetSelector::All => descriptor.view_change_epoch_state | descriptor.fork_proof_epoch_state
+        }
+    }
+
+    /// Get slash set of epoch at specific block number
+    /// Returns slash set before applying block with that block_number (TODO Tests)
+    /// This includes view change slashes, but excludes fork proof slashes!
+    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32, set_selector: SlashedSetSelector, txn_option: Option<&Transaction>) -> Result<BitSet, EpochStateError> {
         let epoch_start = policy::first_block_of(policy::epoch_at(block_number));
 
         // Epoch cannot have slashes if in the future
@@ -346,7 +379,7 @@ impl SlashRegistry {
 
         if let Some((change_block_number, change)) = last_change {
             if change_block_number >= epoch_start {
-                Ok(change.epoch_state)
+                Ok(SlashRegistry::select_slashed_set(change, set_selector))
             } else {
                 Ok(BitSet::new())
             }

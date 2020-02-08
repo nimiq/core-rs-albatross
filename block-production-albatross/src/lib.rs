@@ -26,6 +26,7 @@ use mempool::Mempool;
 use primitives::policy;
 use primitives::slot::ValidatorSlots;
 use vrf::VrfSeed;
+use blockchain::reward_registry::SlashedSetSelector;
 
 pub struct BlockProducer {
     pub blockchain: Arc<Blockchain>,
@@ -79,9 +80,10 @@ impl BlockProducer {
     pub fn next_macro_extrinsics(&self, txn: &mut WriteTransaction, seed: &VrfSeed) -> MacroExtrinsics {
         // Determine slashed set without txn, so that it is not garbage collected yet.
         let prev_epoch = policy::epoch_at(self.blockchain.height() + 1) - 1;
+        // Select whole slashed set here.
         let slashed_set = self.blockchain.state()
             .reward_registry()
-            .slashed_set(prev_epoch, None);
+            .slashed_set(prev_epoch, SlashedSetSelector::All, None);
         MacroExtrinsics::from_stake_slots_and_slashed_set(self.blockchain.next_slots(seed, Some(txn)).stake_slots, slashed_set)
     }
 

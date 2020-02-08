@@ -36,7 +36,7 @@ use vrf::{VrfSeed, VrfUseCase, AliasMethod};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
-use crate::reward_registry::{EpochStateError, SlashRegistry};
+use crate::reward_registry::{EpochStateError, SlashRegistry, SlashedSetSelector};
 use crate::transaction_cache::TransactionCache;
 
 
@@ -84,6 +84,14 @@ impl<T> From<Option<T>> for OptionalCheck<T> {
             None => OptionalCheck::None,
         }
     }
+}
+
+#[derive(Eq, PartialEq)]
+enum ChainOrdering {
+    Extend,
+    Better,
+    Inferior,
+    Unknown,
 }
 
 pub struct Blockchain {
@@ -145,12 +153,14 @@ impl BlockchainState {
         Some(&self.previous_slots.as_ref()?.validator_slots)
     }
 
+    /// This includes fork proof slashes and view changes.
     pub fn current_slashed_set(&self) -> BitSet {
-        self.reward_registry.slashed_set(policy::epoch_at(self.block_number()), None)
+        self.reward_registry.slashed_set(policy::epoch_at(self.block_number()), SlashedSetSelector::All, None)
     }
 
+    /// This includes fork proof slashes and view changes.
     pub fn last_slashed_set(&self) -> BitSet {
-        self.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1, None)
+        self.reward_registry.slashed_set(policy::epoch_at(self.block_number()) - 1, SlashedSetSelector::All, None)
     }
 
     pub fn reward_registry(&self) -> &SlashRegistry {
@@ -382,6 +392,7 @@ impl Blockchain {
                     let view_change = ViewChange {
                         block_number: header.block_number(),
                         new_view_number: header.view_number(),
+                        prev_seed: prev_info.head.seed().clone(),
                     };
                     if let Err(e) = view_change_proof.verify(&view_change, &self.current_validators(), policy::TWO_THIRD_SLOTS) {
                         warn!("Rejecting block - bad view change proof: {:?}", e);
@@ -423,6 +434,80 @@ impl Blockchain {
         self.push_block(block, false)
     }
 
+    /// Calculate chain ordering.
+    fn order_chains(&self, block: &Block, prev_info: &ChainInfo, txn_option: Option<&Transaction>) -> ChainOrdering {
+        let mut chain_order = ChainOrdering::Unknown;
+        if block.parent_hash() == &self.head_hash() {
+            chain_order = ChainOrdering::Extend;
+        } else {
+            // To compare two blocks, we need to compare the view number at the intersection.
+            //   [2] - [2] - [3] - [4]
+            //      \- [3] - [3] - [3]
+            // The example above illustrates that you actually want to choose the lower chain,
+            // since its view change happened way earlier.
+            // Let's thus find the first block on the branch (not on the main chain).
+            // If there is a malicious fork, it might happen that the two view numbers before
+            // the branch are the same. Then, we need to follow and compare.
+            let mut view_numbers = vec![block.view_number()];
+            let mut current: (Blake2bHash, ChainInfo) = (block.hash(), ChainInfo::new(block.clone()));
+            let mut prev: (Blake2bHash, ChainInfo) = (prev_info.head.hash(), prev_info.clone());
+            while !prev.1.on_main_chain {
+                // Macro blocks are final
+                assert_eq!(prev.1.head.ty(), BlockType::Micro, "Trying to rebranch across macro block");
+
+                view_numbers.push(prev.1.head.view_number());
+
+                let prev_hash = prev.1.head.parent_hash().clone();
+                let prev_info = self.chain_store
+                    .get_chain_info(&prev_hash, false, txn_option)
+                    .expect("Corrupted store: Failed to find fork predecessor while rebranching");
+
+                current = prev;
+                prev = (prev_hash, prev_info);
+            }
+
+            // Now follow the view numbers back until you find one that differs.
+            // Example:
+            // [0] - [0] - [1]  *correct chain*
+            //    \- [0] - [0]
+            // Otherwise take the longest:
+            // [0] - [0] - [1] - [0]  *correct chain*
+            //    \- [0] - [1]
+            let current_height = current.1.head.block_number();
+            let min_height = cmp::min(self.head_height(), block.block_number());
+
+            // Iterate over common block heights starting from right after the intersection.
+            for h in current_height..=min_height {
+                // Take corresponding view number from branch.
+                let branch_view_number = view_numbers.pop().unwrap();
+                // And calculate equivalent on main chain.
+                let current_on_main_chain = self.chain_store
+                    .get_block_at(h, false, txn_option)
+                    .expect("Corrupted store: Failed to find main chain equivalent of fork");
+
+                // Choose better one as early as possible.
+                match current_on_main_chain.view_number().cmp(&branch_view_number) {
+                    Ordering::Less => {
+                        chain_order = ChainOrdering::Better;
+                        break;
+                    },
+                    Ordering::Greater => {
+                        chain_order = ChainOrdering::Inferior;
+                        break;
+                    },
+                    Ordering::Equal => {}, // Continue...
+                }
+            }
+
+            // If they were all equal, choose the longer one.
+            if chain_order == ChainOrdering::Unknown && self.head_height() < block.block_number() {
+                chain_order = ChainOrdering::Better;
+            }
+        }
+
+        chain_order
+    }
+
     /// Same as push, but with more options.
     pub fn push_block(&self, block: Block, create_macro_extrinsics: bool) -> Result<PushResult, PushError> {
         // Only one push operation at a time.
@@ -451,6 +536,26 @@ impl Blockchain {
                 self.metrics.note_orphan_block();
             return Err(PushError::Orphan);
         };
+
+        // We have to be careful if the previous block is on a branch!
+        // In this case `get_slot_at` would result in wrong slots.
+        // Luckily, Albatross has the nice property that branches can only happen through
+        // view changes or forks.
+        // If it is a view change, we can always decide at the intersection which one is better.
+        // We never even try to push on inferior branches, so we need to check this early.
+        // Forks either maintain the same view numbers (and thus the same slots)
+        // or there is a difference in view numbers on the way and we can discard the inferior branch.
+        // This could potentially change later on, but as forks have the same slots,
+        // we can always identify the inferior branch.
+        // This is also the reason why fork proofs do not change the slashed set for validator selection.
+        // Here, we identify inferior branches early on and discard them.
+        let chain_order = self.order_chains(&block, &prev_info, Some(&read_txn));
+        if chain_order == ChainOrdering::Inferior {
+            // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
+            info!("Ignoring block - inferior chain (#{}, {})", block.block_number(), hash);
+            // TODO: What should we return?
+            return Ok(PushResult::Forked);
+        }
 
         let view_change_proof = match block {
             Block::Macro(_) => OptionalCheck::Skip,
@@ -536,28 +641,15 @@ impl Blockchain {
         // Drop read transaction before calling other functions.
         drop(read_txn);
 
-        if *chain_info.head.parent_hash() == self.head_hash() {
-            return self.extend(chain_info.head.hash(), chain_info, prev_info, create_macro_extrinsics);
-        }
-
-        // To compare two blocks, we need to compare the view number at that height.
-        let current_block_number = self.block_number();
-        let view_number = if chain_info.head.block_number() == current_block_number {
-            self.view_number()
-        } else if chain_info.head.block_number() == current_block_number + 1 {
-            self.next_view_number()
-        } else {
-            let block = self.get_block_at(chain_info.head.block_number(), false);
-            if let Some(block) = block {
-                block.view_number()
-            } else {
-                error!("Rejecting block - Could not compare view number");
-                return Err(PushError::BlockchainError(BlockchainError::FailedLoadingMainChain));
-            }
-        };
-
-        if chain_info.head.view_number() > view_number {
-            return self.rebranch(chain_info.head.hash(), chain_info);
+        match chain_order {
+            ChainOrdering::Extend => {
+                return self.extend(chain_info.head.hash(), chain_info, prev_info, create_macro_extrinsics);
+            },
+            ChainOrdering::Better => {
+                return self.rebranch(chain_info.head.hash(), chain_info);
+            },
+            ChainOrdering::Inferior => unreachable!(),
+            ChainOrdering::Unknown => {}, // Continue.
         }
 
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
@@ -584,7 +676,8 @@ impl Blockchain {
         // Get the slashed set used to finalize the previous epoch before garbage collecting it below.
         let mut slashed_set: Option<BitSet> = None;
         if chain_info.head.ty() == BlockType::Macro {
-            slashed_set = Some(state.reward_registry.slashed_set(policy::epoch_at(chain_info.head.block_number()) - 1, Some(&txn)));
+            // Get whole slashed set here.
+            slashed_set = Some(state.reward_registry.slashed_set(policy::epoch_at(chain_info.head.block_number()) - 1, SlashedSetSelector::All, Some(&txn)));
         }
 
         if let Err(e) = state.reward_registry.commit_block(&mut txn, &chain_info.head, prev_info.head.next_view_number()) {
@@ -1208,7 +1301,6 @@ impl Blockchain {
         }
     }
 
-    // TODO: Lock my screen. No.
     pub fn get_slot_at(&self, block_number: u32, view_number: u32, txn_option: Option<&Transaction>) -> Option<(Slot, u16)> {
         let state = self.state.read_recursive();
 
@@ -1307,11 +1399,11 @@ impl Blockchain {
         }).collect::<Vec<Inherent>>()
     }
 
-    // Get slash set of epoch at specific block number
-    // Returns slash set before applying block with that block_number (TODO Tests)
-    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32) -> Result<BitSet, EpochStateError> {
+    /// Get slash set of epoch at specific block number
+    /// Returns slash set before applying block with that block_number (TODO Tests)
+    pub fn slashed_set_at(&self, epoch_number: u32, block_number: u32, set_selector: SlashedSetSelector) -> Result<BitSet, EpochStateError> {
         let s = self.state.read();
-        s.reward_registry.slashed_set_at(epoch_number, block_number, None)
+        s.reward_registry.slashed_set_at(epoch_number, block_number, set_selector, None)
     }
 
     pub fn current_validators(&self) -> MappedRwLockReadGuard<ValidatorSlots> {
@@ -1339,8 +1431,8 @@ impl Blockchain {
             .expect("Slots for last epoch are missing")
             .stake_slots;
 
-        // Slashed slots
-        let slashed_set = state.reward_registry.slashed_set(epoch, None);
+        // Slashed slots (including fork proofs)
+        let slashed_set = state.reward_registry.slashed_set(epoch, SlashedSetSelector::All, None);
 
         // Total reward for this epoch
         // TODO: Compute reward from the epoch we are in and add the remainder from last epoch

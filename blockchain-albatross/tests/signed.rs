@@ -1,16 +1,17 @@
+extern crate beserial;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_bls as bls;
-extern crate nimiq_primitives as primitives;
-extern crate beserial;
 extern crate nimiq_hash as hash;
+extern crate nimiq_primitives as primitives;
 
-use block_albatross::{ViewChange, ViewChangeProofBuilder, SignedViewChange, PbftPrepareMessage, SignedPbftCommitMessage, PbftCommitMessage};
-use bls::bls12_381::KeyPair;
-use primitives::policy;
-use block_albatross::signed::Message;
-use bls::bls12_381::lazy::LazyPublicKey;
 use beserial::Deserialize;
+use block_albatross::{PbftCommitMessage, PbftPrepareMessage, SignedPbftCommitMessage, SignedViewChange, ViewChange, ViewChangeProofBuilder};
+use block_albatross::signed::Message;
+use bls::bls12_381::KeyPair;
+use bls::bls12_381::lazy::LazyPublicKey;
 use hash::{Blake2bHash, Hash};
+use nimiq_vrf::VrfSeed;
+use primitives::policy;
 use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
@@ -25,7 +26,8 @@ fn test_view_change_single_signature() {
     // create a view change
     let view_change = ViewChange {
         block_number: 1234,
-        new_view_number: 42
+        new_view_number: 42,
+        prev_seed: VrfSeed::default(),
     };
 
     // sign view change and build view change proof

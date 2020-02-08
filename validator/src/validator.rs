@@ -344,7 +344,7 @@ impl Validator {
     }
 
     pub fn on_slot_change(&self, slot_change: SlotChange) {
-        let (block_number, view_number, view_change_proof) = match slot_change {
+        let (next_block_number, view_number, view_change_proof) = match slot_change {
             SlotChange::NextBlock => {
                 // A new block will just use the current view number and no view change proof.
                 // Since this is called from the blockchain event, the blockchain should still
@@ -357,7 +357,8 @@ impl Validator {
                 let _lock = self.blockchain.lock();
                 let mut state = self.state.write();
 
-                let current_block_number = self.blockchain.height();
+                let next_block_number = self.blockchain.height() + 1;
+                let current_seed = self.blockchain.head().seed().clone();
 
                 // If we have an active view change with this view number, clear it.
                 if let Some(vc) = &state.active_view_change {
@@ -368,13 +369,14 @@ impl Validator {
 
                 // Check if this view change is still relevant.
                 // Check if view change concerns an old block.
-                if view_change.block_number < current_block_number + 1 {
+                if view_change.block_number < next_block_number {
                     // We can ignore old view changes during block production.
                     // However, when the blockchain receives a block with this view change proof,
                     // it might need to rebranch.
-                    trace!("Got view change proof for an old block at {} (current block {}).", view_change.block_number, current_block_number);
+                    trace!("Got view change proof for an old block at {} (current block {}).", view_change.block_number, next_block_number - 1);
                     return;
-                } else if view_change.block_number == current_block_number + 1 { // Else, compare it with our current state.
+                } else if view_change.block_number == next_block_number
+                    && view_change.prev_seed == current_seed { // Else, compare it with our current state.
                     if state.view_number < view_change.new_view_number {
                         // Reset view change interval again and increase the timeout linearly.
                         let num_view_changes = view_change.new_view_number - self.blockchain.next_view_number();
@@ -388,11 +390,12 @@ impl Validator {
                         // In this case, we should not attempt to produce a block as we do not have the proof.
                         // Also the block production should have been triggered before, when we got the proof
                         // or the new block.
+                        trace!("Got view change proof with a lower view number at {}.{}, current view number at {}.", view_change.block_number, state.view_number, view_change.new_view_number);
                         return;
                     }
                 } else {
                     // View change from the future.
-                    error!("Got view change proof for a future block at {} (current block {}).", view_change.block_number, current_block_number);
+                    info!("Got view change proof for a future or parallel block at {} ({}), current block at {} ({}).", view_change.block_number, view_change.prev_seed, next_block_number - 1, current_seed);
                     return;
                 };
 
@@ -401,11 +404,11 @@ impl Validator {
         };
 
         // Get slot for relevant block.
-        let (slot, slot_number) = match self.blockchain.get_slot_at(block_number, view_number, None) {
+        let (slot, slot_number) = match self.blockchain.get_slot_at(next_block_number, view_number, None) {
             Some(slot) => slot,
             None => {
                 // Perhaps a view change from way back?
-                error!("Got view change proof for a block at {}, but could not determine slot.", block_number);
+                error!("Got view change proof for a block at {}, but could not determine slot.", next_block_number);
                 return;
             },
         };
@@ -416,15 +419,15 @@ impl Validator {
 
         // Check if we're the slot owner
         if slot.public_key().compressed() == &our_public_key {
-            let block_type = self.blockchain.get_next_block_type(Some(block_number - 1));
+            let block_type = self.blockchain.get_next_block_type(Some(next_block_number - 1));
 
             let weak = self.self_weak.clone();
             trace!("Spawning thread to produce next block");
             tokio::spawn(futures::lazy(move || {
                 if let Some(this) = Weak::upgrade(&weak) {
                     match block_type {
-                        BlockType::Macro => { this.produce_macro_block(block_number, view_number, view_change_proof) },
-                        BlockType::Micro => { this.produce_micro_block(block_number, view_number, view_change_proof) },
+                        BlockType::Macro => { this.produce_macro_block(next_block_number, view_number, view_change_proof) },
+                        BlockType::Micro => { this.produce_micro_block(next_block_number, view_number, view_change_proof) },
                     }
                 }
                 Ok(())
@@ -503,6 +506,7 @@ impl Validator {
     }
 
     fn start_view_change(&self) {
+        let _lock = self.blockchain.lock();
         let mut state = self.state.write();
 
         // View change messages should only be sent by active validators.
@@ -517,9 +521,10 @@ impl Validator {
         }
 
         // The number of the block that timed out.
+        let prev_seed = self.blockchain.head().seed().clone();
         let block_number = self.blockchain.height() + 1;
         let new_view_number = state.view_number + 1;
-        let message = ViewChange { block_number, new_view_number };
+        let message = ViewChange { block_number, new_view_number, prev_seed };
 
         info!("Starting view change to {}", message);
 

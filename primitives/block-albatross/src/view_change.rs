@@ -1,13 +1,20 @@
 use std::fmt;
 
 use beserial::{Deserialize, Serialize};
-
 use hash::SerializeContent;
 use hash_derive::SerializeContent;
+use vrf::VrfSeed;
+
 use super::signed;
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent, Hash)]
 pub struct ViewChange {
+    /// The hash of the previous block.
+    /// This is needed to distinguish view changes on different branches.
+    /// We choose the seed so that the view change applies to all branches of a malicious fork,
+    /// but not to branching because of view changes.
+    pub prev_seed: VrfSeed,
+
     /// The number of the block for which the view change is constructed (i.e. the block number
     /// the validator is at + 1, since it's for the next block)
     pub block_number: u32,
@@ -50,6 +57,6 @@ impl ViewChanges {
 
 impl fmt::Display for ViewChange {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "#{}.{}", self.block_number, self.new_view_number)
+        write!(f, "#{}.{} ({})", self.block_number, self.new_view_number, self.prev_seed)
     }
 }

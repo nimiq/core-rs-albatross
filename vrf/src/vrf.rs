@@ -1,14 +1,14 @@
-use std::io::Write;
 use std::fmt;
+use std::hash::{Hash, Hasher as StdHasher};
+use std::io::Write;
 
-use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use hash::{Blake2bHash, Blake2bHasher, Hasher};
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 use bls::bls12_381::{CompressedSignature, PublicKey, SecretKey};
+use hash::{Blake2bHash, Blake2bHasher, Hasher};
 
 use crate::rng::Rng;
-
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VrfError {
@@ -26,7 +26,7 @@ pub enum VrfUseCase {
 }
 
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct VrfSeed {
     signature: CompressedSignature,
 }
@@ -72,6 +72,12 @@ impl From<CompressedSignature> for VrfSeed {
         Self {
             signature
         }
+    }
+}
+
+impl Hash for VrfSeed {
+    fn hash<H: StdHasher>(&self, state: &mut H) {
+        self.signature.as_ref().hash(state)
     }
 }
 

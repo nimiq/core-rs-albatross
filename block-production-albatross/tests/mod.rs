@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use beserial::Deserialize;
-use nimiq_block_albatross::{Block, ForkProof, MacroBlock, MacroExtrinsics, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder};
+use nimiq_block_albatross::{Block, ForkProof, MacroBlock, MacroExtrinsics, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder, BlockError};
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult};
-use nimiq_blockchain_base::AbstractBlockchain;
+use nimiq_blockchain_base::{AbstractBlockchain, PushError};
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_bls::bls12_381::lazy::LazyPublicKey;
 use nimiq_database::volatile::VolatileEnvironment;
@@ -13,6 +13,7 @@ use nimiq_mempool::{Mempool, MempoolConfig};
 use nimiq_network_primitives::{networks::NetworkId};
 use nimiq_primitives::policy;
 use nimiq_primitives::slot::{ValidatorSlots, ValidatorSlotBand};
+use nimiq_vrf::VrfSeed;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
@@ -49,8 +50,13 @@ fn it_can_produce_micro_blocks() {
     assert_eq!(blockchain.push(Block::Micro(block)), Ok(PushResult::Extended));
     assert_eq!(blockchain.block_number(), 2);
 
-    // #2.1: Empty view-changed micro block
-    let view_change = sign_view_change(3, 1);
+    // #2.1: Empty view-changed micro block (wrong prev_hash)
+    let view_change = sign_view_change(VrfSeed::default(), 3, 1);
+    let block = producer.next_micro_block(vec![], 1565713924000, 1, vec![0x41], Some(view_change));
+    assert_eq!(blockchain.push(Block::Micro(block)), Err(PushError::InvalidBlock(BlockError::InvalidJustification)));
+
+    // #2.2: Empty view-changed micro block
+    let view_change = sign_view_change(blockchain.head().seed().clone(), 3, 1);
     let block = producer.next_micro_block(vec![], 1565713924000, 1, vec![0x41], Some(view_change));
     assert_eq!(blockchain.push(Block::Micro(block)), Ok(PushResult::Extended));
     assert_eq!(blockchain.block_number(), 3);
@@ -95,10 +101,10 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: Option<MacroExtrinsics>)
     }
 }
 
-fn sign_view_change(block_number: u32, new_view_number: u32) -> ViewChangeProof {
+fn sign_view_change(prev_seed: VrfSeed, block_number: u32, new_view_number: u32) -> ViewChangeProof {
     let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
-    let view_change = ViewChange { block_number, new_view_number };
+    let view_change = ViewChange { block_number, new_view_number, prev_seed };
     let signed_view_change = SignedViewChange::from_message(view_change.clone(), &keypair.secret, 0);
 
     let mut proof_builder = ViewChangeProofBuilder::new();
