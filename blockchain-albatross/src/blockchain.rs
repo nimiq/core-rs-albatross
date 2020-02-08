@@ -86,7 +86,7 @@ impl<T> From<Option<T>> for OptionalCheck<T> {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 enum ChainOrdering {
     Extend,
     Better,
@@ -503,6 +503,8 @@ impl Blockchain {
             if chain_order == ChainOrdering::Unknown && self.head_height() < block.block_number() {
                 chain_order = ChainOrdering::Better;
             }
+
+            info!("New block is on {:?} chain with fork at #{} (current #{}.{}, new block #{}.{})", chain_order, current_height - 1, self.head_height(), self.view_number(), block.block_number(), block.view_number());
         }
 
         chain_order
@@ -531,7 +533,7 @@ impl Blockchain {
         let prev_info = if let Some(prev_info) = self.chain_store.get_chain_info(&block.parent_hash(), false, Some(&read_txn)) {
             prev_info
         } else {
-            warn!("Rejecting block - unknown predecessor");
+            warn!("Rejecting block - unknown predecessor (#{}, current #{})", block.header().block_number(), self.state.read().main_chain.head.block_number());
             #[cfg(feature = "metrics")]
                 self.metrics.note_orphan_block();
             return Err(PushError::Orphan);
@@ -686,7 +688,7 @@ impl Blockchain {
         }
 
         // Commit block to AccountsTree.
-        if let Err(e) = self.commit_accounts(&state, &mut txn, &chain_info.head) {
+        if let Err(e) = self.commit_accounts(&state, prev_info.head.next_view_number(), &mut txn, &chain_info.head) {
             warn!("Rejecting block - commit failed: {:?}", e);
             txn.abort();
             #[cfg(feature = "metrics")]
@@ -844,7 +846,7 @@ impl Blockchain {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
                         state.reward_registry.commit_block(&mut write_txn, &fork_block.1.head, prev_view_number)
                             .map_err(|_| PushError::InvalidBlock(BlockError::InvalidSlash))
-                            .and_then(|_| self.commit_accounts(&state, &mut write_txn, &fork_block.1.head))
+                            .and_then(|_| self.commit_accounts(&state, prev_view_number, &mut write_txn, &fork_block.1.head))
 
                     } else {
                         Err(PushError::DuplicateTransaction)
@@ -928,14 +930,16 @@ impl Blockchain {
         Ok(PushResult::Rebranched)
     }
 
-    fn commit_accounts(&self, state: &BlockchainState, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
+    fn commit_accounts(&self, state: &BlockchainState, first_view_number: u32, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
         let accounts = &state.accounts;
+
         match block {
             Block::Macro(ref macro_block) => {
+                // We can rely on `state` here, since we cannot revert macro blocks.
                 let mut inherents = self.finalize_last_epoch(state, &macro_block.header);
 
                 // Add slashes for view changes.
-                let view_changes = ViewChanges::new(macro_block.header.block_number, state.main_chain.head.next_view_number(), macro_block.header.view_number);
+                let view_changes = ViewChanges::new(macro_block.header.block_number, first_view_number, macro_block.header.view_number);
                 inherents.append(&mut self.create_slash_inherents(&[], &view_changes, Some(txn)));
 
                 // Commit block to AccountsTree.
@@ -947,7 +951,7 @@ impl Blockchain {
             },
             Block::Micro(ref micro_block) => {
                 let extrinsics = micro_block.extrinsics.as_ref().unwrap();
-                let view_changes = ViewChanges::new(micro_block.header.block_number, state.main_chain.head.next_view_number(), micro_block.header.view_number);
+                let view_changes = ViewChanges::new(micro_block.header.block_number, first_view_number, micro_block.header.view_number);
                 let inherents = self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes, Some(txn));
 
                 // Commit block to AccountsTree.
