@@ -11,6 +11,7 @@ pub struct BlockchainMetrics {
     block_extended_count: AtomicUsize,
     block_rebranched_count: AtomicUsize,
     block_forked_count: AtomicUsize,
+    block_ignored_count: AtomicUsize,
 }
 
 impl BlockchainMetrics {
@@ -21,6 +22,7 @@ impl BlockchainMetrics {
             Ok(PushResult::Extended) => self.note_extended_block(),
             Ok(PushResult::Rebranched) => self.note_rebranched_block(),
             Ok(PushResult::Forked) => self.note_forked_block(),
+            Ok(PushResult::Ignored) => self.note_ignored_block(),
             Err(PushError::Orphan) => self.note_orphan_block(),
             Err(_) => self.note_invalid_block(),
         }
@@ -74,6 +76,16 @@ impl BlockchainMetrics {
     #[inline]
     pub fn block_rebranched_count(&self) -> usize {
         self.block_rebranched_count.load(Ordering::Acquire)
+    }
+
+    #[inline]
+    pub fn note_ignored_block(&self) {
+        self.block_ignored_count.fetch_add(1, Ordering::Release);
+    }
+
+    #[inline]
+    pub fn block_ignored_count(&self) -> usize {
+        self.block_ignored_count.load(Ordering::Acquire)
     }
 
     #[inline]

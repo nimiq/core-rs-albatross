@@ -571,7 +571,6 @@ impl Validator {
 
     fn produce_micro_block(&self, block_number: u32, view_number: u32, view_change_proof: Option<ViewChangeProof>) {
         let lock = self.blockchain.lock();
-        let start = Instant::now();
 
         // If we are not at the head of the chain, ignore this.
         // This may happen if a new block has been produced due to the async call.

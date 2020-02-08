@@ -11,6 +11,7 @@ use block_albatross::BlockError as AlbatrossBlockError;
 use block_base::{Block, BlockError};
 use blockchain_albatross::Blockchain as AlbatrossBlockchain;
 use blockchain_base::{AbstractBlockchain, PushError, PushResult};
+use collections::LimitHashSet;
 use hash::Blake2bHash;
 use macros::upgrade_weak;
 use network::connection::close_type::CloseType;
@@ -45,6 +46,13 @@ pub struct FullSync<B: AbstractBlockchain> {
     blockchain: Arc<B>,
     peer: Arc<Peer>,
     notifier: RwLock<PassThroughNotifier<'static, SyncEvent<<B::Block as Block>::Error>>>,
+
+    /// Inferior chain block hashes.
+    ignored_blocks: RwLock<LimitHashSet<Blake2bHash>>,
+}
+
+impl<B: AbstractBlockchain> FullSync<B> {
+    const IGNORED_BLOCKS_COUNT_MAX: usize = 40000;
 }
 
 impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
@@ -53,6 +61,7 @@ impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
             blockchain,
             peer,
             notifier: RwLock::new(PassThroughNotifier::new()),
+            ignored_blocks: RwLock::new(LimitHashSet::new(Self::IGNORED_BLOCKS_COUNT_MAX)),
         })
     }
 
@@ -69,8 +78,21 @@ impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
     }
 
     fn on_block(&self, block: B::Block) {
+        // TODO: Move this to a better location to avoid requesting of these blocks at all.
+        // If the block builds on an ignored block, ignore this one as well and return.
+        let mut ignored_blocks = self.ignored_blocks.write();
+        if ignored_blocks.contains(block.prev_hash()) {
+            ignored_blocks.insert(block.hash());
+            info!("Ignoring block on inferior chain #{}", block.height());
+            return;
+        }
+        drop(ignored_blocks);
+
         let hash = block.hash();
         let result = self.blockchain.push(block);
+        if let Ok(PushResult::Ignored) = result {
+            self.ignored_blocks.write().insert(hash.clone());
+        }
         self.notifier.read().notify(SyncEvent::BlockProcessed(hash, result));
     }
 

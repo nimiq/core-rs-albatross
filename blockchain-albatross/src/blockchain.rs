@@ -555,8 +555,7 @@ impl Blockchain {
         if chain_order == ChainOrdering::Inferior {
             // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
             info!("Ignoring block - inferior chain (#{}, {})", block.block_number(), hash);
-            // TODO: What should we return?
-            return Ok(PushResult::Forked);
+            return Ok(PushResult::Ignored);
         }
 
         let view_change_proof = match block {

@@ -161,6 +161,10 @@ impl block_base::Block for Block {
         self.header.hash()
     }
 
+    fn prev_hash(&self) -> &Blake2bHash {
+        &self.header.prev_hash
+    }
+
     fn height(&self) -> u32 {
         self.header.height
     }

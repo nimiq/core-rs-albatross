@@ -130,7 +130,7 @@ fn it_can_rebranch_view_changes() {
     let fork2 = temp_producer2.next_block(1, vec![]);
 
     // Check that producer 2 ignores inferior chain.
-    assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Forked));
+    assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
     assert_eq!(temp_producer2.push(inferior2), Err(PushError::Orphan));
 
     // Check that producer 1 rebranches.
@@ -150,7 +150,7 @@ fn it_can_rebranch_view_changes() {
     let fork2 = temp_producer2.next_block(2, vec![]);
 
     // Check that producer 2 ignores inferior chain.
-    assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Forked));
+    assert_eq!(temp_producer2.push(inferior1), Ok(PushResult::Ignored));
     assert_eq!(temp_producer2.push(inferior2), Err(PushError::Orphan));
 
     // Check that producer 1 rebranches.
@@ -209,7 +209,7 @@ fn it_can_rebranch_forks() {
 
     // Check that producer 1 rebranches.
     assert_eq!(temp_producer1.push(fork2c), Ok(PushResult::Rebranched));
-    assert_eq!(temp_producer2.push(fork1c), Ok(PushResult::Forked));
+    assert_eq!(temp_producer2.push(fork1c), Ok(PushResult::Ignored));
 
     assert_eq!(temp_producer1.push(fork2d), Ok(PushResult::Extended));
     assert_eq!(temp_producer2.push(fork1d), Err(PushError::Orphan));

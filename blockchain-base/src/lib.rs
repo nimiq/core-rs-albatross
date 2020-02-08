@@ -140,6 +140,7 @@ pub enum PushResult {
     Extended,
     Rebranched,
     Forked,
+    Ignored,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Fail)]

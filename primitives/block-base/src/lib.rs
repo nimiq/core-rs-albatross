@@ -15,6 +15,8 @@ pub trait Block: Serialize + Deserialize {
 
     fn hash(&self) -> Blake2bHash;
 
+    fn prev_hash(&self) -> &Blake2bHash;
+
     fn height(&self) -> u32;
 
     // TODO We should rather return a reference here.

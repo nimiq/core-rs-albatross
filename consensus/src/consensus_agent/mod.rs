@@ -378,10 +378,18 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
                     state.num_blocks_forking += 1;
                     state.fork_head = Some(hash.clone());
                 }
-            }
+            },
             Ok(PushResult::Known) => {
                 trace!("Known block {} from {}", hash, self.peer.peer_address());
-            }
+            },
+            Ok(PushResult::Ignored) => {
+                // Stop syncing with this peer if the block has been ignored,
+                // because it is an inferior chain.
+                if self.state.read().syncing {
+                    let sync_guard = self.sync_lock.lock();
+                    self.sync_finished(sync_guard);
+                }
+            },
             Err(PushError::Orphan) => {
                 self.on_orphan_block(hash);
             },

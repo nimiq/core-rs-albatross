@@ -334,6 +334,10 @@ impl block_base::Block for Block {
         self.hash()
     }
 
+    fn prev_hash(&self) -> &Blake2bHash {
+        self.parent_hash()
+    }
+
     fn height(&self) -> u32 {
         self.block_number()
     }
