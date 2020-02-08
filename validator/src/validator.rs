@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Mul;
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use parking_lot::RwLock;
 
@@ -28,7 +28,7 @@ use block_albatross::{
 };
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
-use blockchain_base::BlockchainEvent;
+use blockchain_base::{BlockchainEvent, AbstractBlockchain};
 use bls::bls12_381::KeyPair;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
@@ -155,20 +155,8 @@ impl Validator {
         // Set up event handlers for blockchain events
         let weak = Arc::downgrade(this);
         let blockchain = this.blockchain.notifier.write().register(move |e: &BlockchainEvent<Block>| {
-            // We're spawning this handler in a thread, since it does quite a lot of work.
-            // Specifically this might lock the validator state, but in this handler the Blockchain
-            // also still holds the push_lock. This can cause a dead-lock with another thread that
-            // produces a block, because this will first lock the validator state and then
-            // Blockchain's push_lock.
             let this = upgrade_weak!(weak);
-            // We need to clone to move this into the thread. Alternatively we could Arc events.
-            // But except for rebranching, this is only the type of the event and a hash, so not
-            // very expensive to clone anyway.
-            let e = e.clone();
-            tokio::spawn(futures::future::lazy(move|| {
-                this.on_blockchain_event(&e);
-                Ok(())
-            }));
+            this.on_blockchain_event(&e);
         });
 
         // Set up event handlers for validator network events
@@ -478,7 +466,7 @@ impl Validator {
             drop(state);
 
             // Automatically relays block.
-            self.blockchain.push_block(block, false)
+            self.blockchain.push(block)
                 .unwrap_or_else(|e| panic!("Pushing macro block to blockchain failed: {:?}", e));
         }
     }
@@ -520,6 +508,7 @@ impl Validator {
     }
 
     fn produce_macro_block(&self, view_change: Option<ViewChangeProof>) {
+        let lock = self.blockchain.lock();
         let mut state = self.state.write();
 
         // FIXME: Don't use network time
@@ -529,6 +518,7 @@ impl Validator {
         let pk_idx = state.pk_idx.expect("Checked that we are an active validator before entering this function");
 
         drop(state);
+        drop(lock);
 
         let signed_proposal = SignedPbftProposal::from_message(pbft_proposal, &self.validator_key.secret, pk_idx);
         self.validator_network.start_pbft(signed_proposal)
@@ -537,6 +527,9 @@ impl Validator {
     }
 
     fn produce_micro_block(&self, view_change_proof: Option<ViewChangeProof>) {
+        let lock = self.blockchain.lock();
+        let start = Instant::now();
+
         let max_size = MicroBlock::MAX_SIZE
             - MicroHeader::SIZE
             - MicroExtrinsics::get_metadata_size(0, 0);
@@ -546,15 +539,16 @@ impl Validator {
         let timestamp = self.consensus.network.network_time.now();
         let view_number = state.view_number;
 
-        // Drop lock before push, otherwise two concurrent threads can dead-lock because the
-        // validator and blockchain lock are circular dependent.
-        drop(state);
-
         let block = self.block_producer.next_micro_block(fork_proofs, timestamp, view_number, vec![], view_change_proof);
         info!("Produced block #{}.{}: {}",
               block.header.block_number,
               block.header.view_number,
               block.header.hash::<Blake2bHash>());
+
+        // Drop lock before push, otherwise two concurrent threads can dead-lock because the
+        // validator and blockchain lock are circular dependent.
+        drop(state);
+        drop(lock);
 
         // Automatically relays block.
         match self.blockchain.push(Block::Micro(block)) {

@@ -42,10 +42,8 @@ impl BlockProducer {
         BlockProducer { blockchain, mempool: None, validator_key }
     }
 
+    /// Needs to be called with the Blockchain lock held.
     pub fn next_macro_block_proposal(&self, timestamp: u64, view_number: u32, view_change_proof: Option<ViewChangeProof>) -> (PbftProposal, MacroExtrinsics) {
-        //  Lock blockchain/mempool while constructing the block.
-        let _lock = self.blockchain.lock();
-
         let seed = self.blockchain.head().seed().sign_next(&self.validator_key.secret);
         let mut txn = self.blockchain.write_transaction();
 
@@ -61,10 +59,8 @@ impl BlockProducer {
         }, extrinsics)
     }
 
+    /// Needs to be called with the Blockchain lock held.
     pub fn next_micro_block(&self, fork_proofs: Vec<ForkProof>, timestamp: u64, view_number: u32, extra_data: Vec<u8>, view_change_proof: Option<ViewChangeProof>) -> MicroBlock {
-        // Lock blockchain/mempool while constructing the block.
-        let _lock = self.blockchain.lock();
-
         let view_changes = ViewChanges::new(self.blockchain.block_number() + 1, self.blockchain.next_view_number(), view_number);
         let extrinsics = self.next_micro_extrinsics(fork_proofs, extra_data, &view_changes);
         let header = self.next_micro_header(timestamp, view_number, &extrinsics, &view_changes);

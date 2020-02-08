@@ -93,7 +93,7 @@ pub struct Blockchain {
     pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
     pub chain_store: Arc<ChainStore>,
     pub(crate) state: RwLock<BlockchainState>,
-    pub push_lock: Mutex<()>, // TODO: Not very nice to have this public
+    push_lock: Mutex<()>,
 
     #[cfg(feature = "metrics")]
     metrics: BlockchainMetrics,
@@ -396,8 +396,8 @@ impl Blockchain {
         }
 
         // Check if the block was produced (and signed) by the intended producer
-        if let Err(_) = header.seed().verify(prev_info.head.seed(), intended_slot_owner) {
-            warn!("Rejecting block - invalid seed");
+        if let Err(e) = header.seed().verify(prev_info.head.seed(), intended_slot_owner) {
+            warn!("Rejecting block - invalid seed ({:?})", e);
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
