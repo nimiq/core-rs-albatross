@@ -1,18 +1,18 @@
 use super::*;
 
-// An aggregate signature. Mathematically, it is equivalent to a regular signature. However, we created a new type for it in order to help differentiate between the two use cases.
+/// An aggregate signature. Mathematically, it is equivalent to a regular signature. However, we created a new type for it in order to help differentiate between the two use cases.
 #[derive(Clone, Copy)]
 pub struct AggregateSignature(pub Signature);
 
 impl AggregateSignature {
-    // Creates a new "empty" aggregate signature. It is simply the identity element of the elliptic curve, also known as the point at infinity.
+    /// Creates a new "empty" aggregate signature. It is simply the identity element of the elliptic curve, also known as the point at infinity.
     pub fn new() -> Self {
         AggregateSignature(Signature {
             signature: G1Projective::zero(),
         })
     }
 
-    // Creates an aggregated signature from an array of regular signatures.
+    /// Creates an aggregated signature from an array of regular signatures.
     pub fn from_signatures(sigs: &[Signature]) -> Self {
         let mut agg_sig = G1Projective::zero();
         for x in sigs {
@@ -21,12 +21,12 @@ impl AggregateSignature {
         return AggregateSignature(Signature { signature: agg_sig });
     }
 
-    // Adds a single regular signature to an aggregated signature.
+    /// Adds a single regular signature to an aggregated signature.
     pub fn aggregate(&mut self, sig: &Signature) {
         self.0.signature += &sig.signature;
     }
 
-    // Merges two aggregated signatures.
+    /// Merges two aggregated signatures.
     pub fn merge_into(&mut self, other: &Self) {
         self.0.signature += &other.0.signature;
     }

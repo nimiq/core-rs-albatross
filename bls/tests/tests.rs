@@ -1,9 +1,12 @@
-use super::*;
+use nimiq_bls::*;
 
+use algebra::{fields::bls12_377::Fr, rand::UniformRand};
+use nimiq_utils::key_rng::Rng;
+use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use std::vec::Vec;
 
-// fast but not secure keypair generation
+// Fast, but insecure, keypair generation. Meant only for testing.
 #[cfg(test)]
 fn generate_predictable<R: Rng>(rng: &mut R) -> KeyPair {
     let secret = SecretKey {

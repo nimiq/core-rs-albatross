@@ -32,7 +32,7 @@ inputs.push((keypair1.public, message1));
 agg_sig.aggregate(&sig1);
 
 let keypair2 = Keypair::generate(&mut rng);
-let message2 = "Another message";
+let message2 = "Some message";
 let sig2 = keypair2.sign(&message2.as_bytes());
 inputs.push((keypair2.public, message2));
 agg_sig.aggregate(&sig2);

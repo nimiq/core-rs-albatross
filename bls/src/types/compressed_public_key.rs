@@ -1,15 +1,15 @@
 use super::*;
 
-// The serialized compressed form of a public key. This form consists of the x-coordinate of the point (in the affine form), one bit indicating the sign of the y-coordinate, one bit indicating if it is the "point-at-infinity" and one bit indicating that this is the compressed form.
+/// The serialized compressed form of a public key. This form consists of the x-coordinate of the point (in the affine form), one bit indicating the sign of the y-coordinate, one bit indicating if it is the "point-at-infinity" and one bit indicating that this is the compressed form.
 #[derive(Clone)]
 pub struct CompressedPublicKey {
-    pub(crate) public_key: [u8; 96],
+    pub public_key: [u8; 96],
 }
 
 impl CompressedPublicKey {
     pub const SIZE: usize = 96;
 
-    // Transforms the compressed form back into the projective form.
+    /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<PublicKey, SerializationError> {
         let affine_point = G2Affine::deserialize(&self.public_key, &mut [])?;
         Ok(PublicKey {
@@ -17,7 +17,7 @@ impl CompressedPublicKey {
         })
     }
 
-    // Formats the compressed form into a hexadecimal string.
+    /// Formats the compressed form into a hexadecimal string.
     pub fn to_hex(&self) -> String {
         hex::encode(self.as_ref())
     }

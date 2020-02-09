@@ -2,14 +2,14 @@ use super::*;
 
 #[derive(Clone, Copy)]
 pub struct Signature {
-    // The projective form is the longer one, with three coordinates. The affine form is the shorter one, with only two coordinates. Calculation is faster with the projective form.
-    // We can't use the affine form since the Algebra library doesn't support arithmetic with it.
-    pub(crate) signature: G1Projective,
+    /// The projective form is the longer one, with three coordinates. The affine form is the shorter one, with only two coordinates. Calculation is faster with the projective form.
+    /// We can't use the affine form since the Algebra library doesn't support arithmetic with it.
+    pub signature: G1Projective,
 }
 
 impl Signature {
-    // Maps an hash to a elliptic curve point in the G1 group. It is required to create signatures.
-    // It is also known as "hash-to-curve".
+    /// Maps an hash to a elliptic curve point in the G1 group. It is required to create signatures.
+    /// It is also known as "hash-to-curve".
     pub(crate) fn hash_to_g1(h: SigHash) -> G1Projective {
         let rng = &mut ChaChaRng::from_seed(h.into());
         loop {
@@ -24,7 +24,7 @@ impl Signature {
         }
     }
 
-    // Transforms a signature into a serialized compressed form. This form consists of the x-coordinate of the point (in the affine form), one bit indicating the sign of the y-coordinate, one bit indicating if it is the "point-at-infinity" and one bit indicating that this is the compressed form.
+    /// Transforms a signature into a serialized compressed form. This form consists of the x-coordinate of the point (in the affine form), one bit indicating the sign of the y-coordinate, one bit indicating if it is the "point-at-infinity" and one bit indicating that this is the compressed form.
     pub fn compress(&self) -> CompressedSignature {
         let mut buffer = [0u8; 48];
         self.signature

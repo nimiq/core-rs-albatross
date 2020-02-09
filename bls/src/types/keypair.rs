@@ -1,6 +1,6 @@
 use super::*;
 
-// Simply a struct combining the secret key and the public key types.
+/// Simply a struct combining the secret key and the public key types.
 #[derive(Clone, PartialEq, Eq)]
 pub struct KeyPair {
     pub secret_key: SecretKey,

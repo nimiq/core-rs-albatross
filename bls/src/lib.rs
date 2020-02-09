@@ -13,14 +13,13 @@ use algebra::{
         bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective},
         AffineCurve, PairingEngine, ProjectiveCurve,
     },
-    fields::bls12_377::{Fq, Fq12, Fr},
+    fields::bls12_377::{Fq, Fr},
     rand::UniformRand,
     serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError},
 };
 
 // Zero is for used for getting the point at infinity from a curve.
-// One is used to get the identity element from a finite field.
-use num_traits::{One, Zero};
+use num_traits::Zero;
 
 // Used for the random number generation
 use rand::SeedableRng;
@@ -49,6 +48,3 @@ pub use types::*;
 
 // Specifies the hash algorithm used for signatures
 pub type SigHash = Blake2sHash;
-
-#[cfg(test)]
-mod tests;
