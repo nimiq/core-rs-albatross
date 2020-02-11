@@ -44,8 +44,8 @@ impl fmt::Display for VolatileDatabaseError {
 impl Error for VolatileDatabaseError {
     fn description(&self) -> &str {
         match self {
-            VolatileDatabaseError::IoError(e) => e.description(),
-            VolatileDatabaseError::LmdbError(e) => e.description()
+            VolatileDatabaseError::IoError(e) => e.to_string(),
+            VolatileDatabaseError::LmdbError(e) => e.to_string()
         }
     }
 
