@@ -1,10 +1,9 @@
-use std::str::from_utf8;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use http::status::StatusCode;
-use tungstenite::handshake::server::{Callback, ErrorResponse, Request};
+use reqwest::StatusCode;
+use tungstenite::handshake::server::{Callback, ErrorResponse, Request, Response};
 
 use network_primitives::address::NetAddress;
 
@@ -60,38 +59,36 @@ impl ReverseProxyCallback {
 }
 
 impl<'a> Callback for &'a ReverseProxyCallback {
-    fn on_request(self, request: &Request) -> Result<Option<Vec<(String, String)>>, ErrorResponse> {
+    fn on_request(self, request: &Request, response: Response) -> Result<Response, ErrorResponse> {
         if let Some(ref config) = self.reverse_proxy_config {
-            if let Some(value) = request.headers.find_first(&config.header) {
-                let str_value = from_utf8(value).map_err(|_| ErrorResponse {
-                    error_code: StatusCode::INTERNAL_SERVER_ERROR,
-                    headers: None,
-                    body: None,
-                })?;
-                let str_value = str_value.split(',').next().ok_or(ErrorResponse {
-                    error_code: StatusCode::INTERNAL_SERVER_ERROR,
-                    headers: None,
-                    body: None,
-                })?; // Take first value from list.
+            if let Some(value) = request.headers().get(&config.header) {
+                let str_value = value.to_str().map_err(|_| Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(None)
+                    .unwrap()
+                )?;
+                let str_value = str_value.split(',').next().ok_or(Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(None)
+                    .unwrap()
+                )?; // Take first value from list.
                 let str_value = str_value.trim();
                 let net_address = NetAddress::from_str(str_value)
                     .map_err(|_|
-                         ErrorResponse {
-                             error_code: StatusCode::INTERNAL_SERVER_ERROR,
-                             headers: None,
-                             body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
-                         }
+                        Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()))
+                            .unwrap()
                     )?;
                 self.remote_address.lock().replace(net_address);
             } else {
-                return Err(ErrorResponse {
-                        error_code: StatusCode::INTERNAL_SERVER_ERROR,
-                        headers: None,
-                        body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
-                    });
+                return Err(Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string())))
+                    .unwrap();
             }
         }
-        Ok(None)
+        Ok(response)
     }
 }
 
@@ -104,8 +101,8 @@ pub trait ToCallback<C: Callback> {
 pub struct ShareableReverseProxyCallback(Arc<ReverseProxyCallback>);
 
 impl Callback for ShareableReverseProxyCallback {
-    fn on_request(self, request: &Request) -> Result<Option<Vec<(String, String)>>, ErrorResponse> {
-        self.0.as_ref().on_request(request)
+    fn on_request(self, request: &Request, response: Response) -> Result<Response, ErrorResponse> {
+        self.0.as_ref().on_request(request, response)
     }
 }
 

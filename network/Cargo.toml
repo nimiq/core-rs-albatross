@@ -22,7 +22,7 @@ bytes = "0.5"
 failure = "0.1"
 futures = { version = "0.3" }
 hex = "0.4"
-http = "0.1" # required because of version http version mismatch reqwest vs tungstenite
+http = "0.2"
 log = "0.4"
 native-tls = "0.2"
 parking_lot = "0.9"
@@ -30,8 +30,8 @@ rand = "0.7"
 reqwest = "0.10"
 tokio = { version = "0.2", features = ["stream", "sync", "time", "tcp"] }
 tokio-tls = "0.3"
-tokio-tungstenite = { git = "https://github.com/snapview/tokio-tungstenite", features = ["tls"] }
-tungstenite = { version = "0.9", default-features = false }
+tokio-tungstenite = { version = "0.10", features = ["tls"] }
+tungstenite = { version = "0.10", default-features = false }
 url = "2.1"
 
 beserial = { path = "../beserial", version = "0.1" }
