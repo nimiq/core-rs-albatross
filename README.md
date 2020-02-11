@@ -4,6 +4,9 @@
 
 > Rust implementation of the Nimiq Blockchain Core
 
+[![Build Status](https://travis-ci.com/nimiq/core-rs-albatross.svg?branch=albatross)](https://travis-ci.com/nimiq/core-rs-albatross)
+[![dependency status](https://deps.rs/repo/github/nimiq/core-rs-albatross/status.svg)](https://deps.rs/repo/github/nimiq/core-rs-albatross)
+
 **[Nimiq](https://nimiq.com/)**  is a frictionless payment protocol for the web.
 
 This repository is currently in release-candidate phase. If you need a proven stable release to run in a production environment, please use the [JavaScript implementation](https://github.com/nimiq/core-js/) instead. Only use this if you can tolerate bugs and want to help with testing the Nimiq Rust implementation.
