@@ -67,7 +67,7 @@ impl<'a> Callback for &'a ReverseProxyCallback {
                     .body(None)
                     .unwrap()
                 )?;
-                let str_value = str_value.split(',').next().ok_or(Response::builder()
+                let str_value = str_value.split(',').next().ok_or_else(|| Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(None)
                     .unwrap()

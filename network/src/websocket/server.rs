@@ -1,3 +1,4 @@
+use futures::StreamExt;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{accept_hdr_async, MaybeTlsStream};
 use tungstenite::handshake::server::Callback;
@@ -12,7 +13,10 @@ pub async fn nimiq_accept_async<C>(stream: MaybeTlsStream<TcpStream>, net_addres
     where C: Callback + Unpin,
 {
     match accept_hdr_async(stream, callback).await {
-        Ok(ws_stream) => Ok(NimiqMessageStream::new(ws_stream, net_address, false)),
+        Ok(ws_stream) => {
+            let (tx, rx) = ws_stream.split();
+            Ok(NimiqMessageStream::new(rx, tx, net_address, false))
+        },
         Err(e) => Err(e.into()),
     }
 }

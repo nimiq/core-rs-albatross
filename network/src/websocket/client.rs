@@ -1,21 +1,23 @@
+use std::borrow::Cow;
 use std::net::IpAddr;
 
+use futures::StreamExt;
 use network_primitives::address::net_address::NetAddress;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{client_async_tls, MaybeTlsStream, WebSocketStream};
+use tungstenite::client::IntoClientRequest;
 use tungstenite::handshake::client::Response;
 use url::Url;
 
 use crate::websocket::error::Error;
 use crate::websocket::NimiqMessageStream;
-use std::borrow::Cow;
-use tungstenite::client::IntoClientRequest;
 
 /// Connect to a given URL and return a Future that will resolve to a NimiqMessageStream
 pub async fn nimiq_connect_async(url: Url) -> Result<NimiqMessageStream, Error> {
     match connect_async(url).await {
         Ok((ws_stream, _, net_address)) => {
-            Ok(NimiqMessageStream::new(ws_stream, net_address, true))
+            let (tx, rx) = ws_stream.split();
+            Ok(NimiqMessageStream::new(rx, tx, net_address, true))
         },
         Err(e) => Err(e.into()),
     }

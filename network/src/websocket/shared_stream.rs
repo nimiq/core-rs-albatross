@@ -107,11 +107,12 @@ impl Sink<Message> for SharedNimiqMessageStream {
         let this = &mut *self;
         match this.inner.poll_lock() {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(mut v ) => loop {
+            Poll::Ready(mut v ) => {
                 if let Err(err) = Self::force_flush(&mut this.buffer, &mut v) {
-                    return Poll::Ready(Err(err));
+                    Poll::Ready(Err(err))
+                } else {
+                    Sink::poll_flush(Pin::new(&mut *v), cx)
                 }
-                return Sink::poll_flush(Pin::new(&mut *v), cx);
             },
         }
     }
@@ -120,11 +121,12 @@ impl Sink<Message> for SharedNimiqMessageStream {
         let this = &mut *self;
         match this.inner.poll_lock() {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(mut v ) => loop {
+            Poll::Ready(mut v ) => {
                 if let Err(err) = Self::force_flush(&mut this.buffer, &mut v) {
-                    return Poll::Ready(Err(err));
+                    Poll::Ready(Err(err))
+                } else {
+                    Sink::poll_close(Pin::new(&mut *v), cx)
                 }
-                return Sink::poll_close(Pin::new(&mut *v), cx);
             },
         }
     }

@@ -28,7 +28,7 @@ native-tls = "0.2"
 parking_lot = "0.9"
 rand = "0.7"
 reqwest = "0.10"
-tokio = { version = "0.2", features = ["stream", "sync", "time", "tcp"] }
+tokio = { version = "0.2", features = ["macros", "stream", "sync", "time", "tcp"] }
 tokio-tls = "0.3"
 tokio-tungstenite = { version = "0.10", features = ["tls"] }
 tungstenite = { version = "0.10", default-features = false }
