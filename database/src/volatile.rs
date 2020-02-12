@@ -42,13 +42,6 @@ impl fmt::Display for VolatileDatabaseError {
 }
 
 impl Error for VolatileDatabaseError {
-    fn description(&self) -> &str {
-        match self {
-            VolatileDatabaseError::IoError(e) => e.description(),
-            VolatileDatabaseError::LmdbError(e) => e.description()
-        }
-    }
-
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             VolatileDatabaseError::IoError(e) => Some(e),

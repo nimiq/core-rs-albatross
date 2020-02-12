@@ -69,15 +69,11 @@ pub struct ParseError(String);
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {}", self.description(), self.0)
+        write!(f, "Failed to parse fixed point decimal: {}", self.0)
     }
 }
 
 impl Error for ParseError {
-    fn description(&self) -> &str {
-        "Failed to parse fixed point decimal:"
-    }
-
     fn cause(&self) -> Option<&dyn Error> {
         None
     }
