@@ -17,7 +17,7 @@ is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
 maintenance = { status = "experimental" }
 
 [dependencies]
-bit-vec = "0.6"
+bitvec = "0.17"
 hex = "0.4"
 unicode-normalization = "0.1"
 
@@ -25,7 +25,7 @@ beserial = { path = "../beserial", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-key-derivation = { path = "../key-derivation", version = "0.1", optional = true }
 nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["bit-vec", "crc"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["crc"] }
 
 [features]
 default = ["key-derivation"]

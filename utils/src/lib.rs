@@ -17,8 +17,6 @@ pub mod key_store;
 pub mod merkle;
 #[cfg(feature = "locking")]
 pub mod locking;
-#[cfg(feature = "bit-vec")]
-pub mod bit_vec;
 #[cfg(feature = "observer")]
 pub mod observer;
 #[cfg(feature = "timers")]

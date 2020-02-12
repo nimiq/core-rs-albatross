@@ -6,14 +6,13 @@ use std::fmt;
 use std::str;
 use std::str::FromStr;
 
-use bit_vec::BitVec;
+use bitvec::prelude::{AsBits, BitSlice, BitVec, Msb0};
 use hex::FromHex;
 use unicode_normalization::UnicodeNormalization;
 
 use hash::{Hasher, Sha256Hasher};
 use hash::pbkdf2::{compute_pbkdf2_sha512, Pbkdf2Error};
 use macros::{add_hex_io_fns_typed_arr, create_typed_array};
-use utils::bit_vec::IntoChunkedBitVecIterator;
 use utils::crc::Crc8Computer;
 
 #[cfg(feature = "key-derivation")]
@@ -25,24 +24,17 @@ create_typed_array!(Entropy, u8, 32);
 add_hex_io_fns_typed_arr!(Entropy, 32);
 
 impl Entropy {
-    const CHECKSUM_SIZE: usize = Self::SIZE * 8 / 32;
+    const CHECKSUM_SIZE: usize = 8;
 
     /// Computes the CRC8 checksum of this entropy.
-    fn crc8_checksum(&self) -> BitVec {
-        let hash = Crc8Computer::default().update(self.as_bytes()).result();
-
-        let mut binary_hash = BitVec::from_bytes(&[hash]);
-        binary_hash.truncate(Self::CHECKSUM_SIZE);
-        binary_hash
+    fn crc8_checksum(&self) -> u8 {
+        Crc8Computer::default().update(self.as_bytes()).result()
     }
 
     /// Computes the sha256 checksum of this entropy.
-    fn sha256_checksum(&self) -> BitVec {
+    fn sha256_checksum(&self) -> u8 {
         let hash = Sha256Hasher::default().digest(self.as_bytes());
-
-        let mut binary_hash = BitVec::from_bytes(hash.as_bytes());
-        binary_hash.truncate(Self::CHECKSUM_SIZE);
-        binary_hash
+        hash.as_bytes()[0]
     }
 
     /// Checks for collisions between legacy and BIP39 style checksums.
@@ -53,23 +45,19 @@ impl Entropy {
 
     /// Creates a Mnemonic out of this entropy (BIP39 compatible).
     pub fn to_mnemonic(&self, wordlist: Wordlist) -> Mnemonic {
-        let mut entropy = BitVec::from_bytes(self.as_bytes());
-        let checksum = self.sha256_checksum();
-
-        // TODO: ideally, we would like to use entropy.append(checksum); which isn't available right now
-        entropy.extend(checksum);
-        Mnemonic::from_bits(entropy, wordlist)
+        let mut bits = BitVec::with_capacity(Self::SIZE + Self::CHECKSUM_SIZE);
+        bits.extend_from_slice(self.as_bytes().bits::<Msb0>());
+        bits.extend_from_slice(self.sha256_checksum().bits::<Msb0>());
+        Mnemonic::from_bits(&bits, wordlist)
     }
 
     /// Creates a Mnemonic out of this entropy using the legacy style checksum.
     #[deprecated(since="0.0.1", note="please use `to_mnemonic` instead")]
     pub fn to_legacy_mnemonic(&self, wordlist: Wordlist) -> Mnemonic {
-        let mut entropy = BitVec::from_bytes(self.as_bytes());
-        let checksum = self.crc8_checksum();
-
-        // TODO: ideally, we would like to use entropy.append(checksum); which isn't available right now
-        entropy.extend(checksum);
-        Mnemonic::from_bits(entropy, wordlist)
+        let mut bits = BitVec::with_capacity(Self::SIZE + Self::CHECKSUM_SIZE);
+        bits.extend_from_slice(self.as_bytes().bits::<Msb0>());
+        bits.extend_from_slice(self.crc8_checksum().bits::<Msb0>());
+        Mnemonic::from_bits(&bits, wordlist)
     }
 }
 
@@ -82,7 +70,7 @@ pub struct Mnemonic {
     mnemonic: Vec<String>,
 }
 
-fn push_usize(bit_vec: &mut BitVec, value: usize, nbits: usize) {
+fn push_usize(bit_vec: &mut BitVec<Msb0, u8>, value: usize, nbits: usize) {
     for i in (0..nbits).rev() {
         bit_vec.push((value >> i) & 1 == 1);
     }
@@ -92,9 +80,15 @@ impl Mnemonic {
     const NUM_BITS_PER_WORD: usize = 11;
 
     /// Creates a Mnemonic out of a BitVec.
-    fn from_bits(bits: BitVec, wordlist: Wordlist) -> Self {
+    fn from_bits(bits: &BitSlice<Msb0, u8>, wordlist: Wordlist) -> Self {
         let mnemonic = bits.chunks(Self::NUM_BITS_PER_WORD)
-            .map(|chunk| wordlist[chunk].to_string())
+            .map(|chunk| {
+                let mut index = 0u16;
+                // Copy bits into index variable
+                let index_bits = index.bits_mut::<Msb0>();
+                index_bits[16-Self::NUM_BITS_PER_WORD..].clone_from_slice(chunk);
+                wordlist[index as usize].to_string()
+            })
             .collect::<Vec<String>>();
         Mnemonic {
             mnemonic
@@ -102,7 +96,7 @@ impl Mnemonic {
     }
 
     /// Tries to convert a Mnemonic into a BitVec. This may fail if the Mnemonic doesn't match the wordlist.
-    fn to_bits(&self, wordlist: Wordlist) -> Option<BitVec> {
+    fn to_bits(&self, wordlist: Wordlist) -> Option<BitVec<Msb0, u8>> {
         let mut bit_vec = BitVec::with_capacity(self.mnemonic.len() * Self::NUM_BITS_PER_WORD);
         for index in self.mnemonic.iter()
             .map(|word| wordlist.binary_search(&word.to_lowercase().as_ref()).ok()) {
@@ -115,7 +109,7 @@ impl Mnemonic {
     }
 
     /// Creates an entropy out of this mnemonic.
-    fn bits_to_entropy_generic(mut bits: BitVec, legacy: bool) -> Option<Entropy> {
+    fn bits_to_entropy_generic(bits: &BitSlice<Msb0, u8>, legacy: bool) -> Option<Entropy> {
         // Split up bits into entropy and checksum.
         let mut checksum_len = bits.len() % 8;
         if checksum_len == 0 {
@@ -124,9 +118,10 @@ impl Mnemonic {
         let divider_index = bits.len() - checksum_len;
 
         // Convert checksum and truncate bits.
-        let checksum = BitVec::from_fn(checksum_len, |i| bits.get(divider_index + i).unwrap());
-        bits.truncate(divider_index);
-        let entropy = bits.to_bytes();
+        let entropy_bits = &bits[..divider_index];
+        let mut checksum = 0u8;
+        checksum.bits_mut().copy_from_slice(&bits[divider_index..divider_index+checksum_len]);
+        let entropy = entropy_bits.as_slice();
 
         // Check length of entropy.
         if entropy.len() != Entropy::SIZE {
@@ -152,13 +147,13 @@ impl Mnemonic {
     /// Creates an entropy out of this mnemonic.
     pub fn to_entropy(&self, wordlist: Wordlist) -> Option<Entropy> {
         let bits = self.to_bits(wordlist)?;
-        Mnemonic::bits_to_entropy_generic(bits, false)
+        Mnemonic::bits_to_entropy_generic(&bits, false)
     }
 
     /// Creates an entropy out of this legacy mnemonic.
     pub fn to_entropy_legacy(&self, wordlist: Wordlist) -> Option<Entropy> {
         let bits = self.to_bits(wordlist)?;
-        Mnemonic::bits_to_entropy_generic(bits, true)
+        Mnemonic::bits_to_entropy_generic(&bits, true)
     }
 
     /// Returns the type of this Mnemonic.
@@ -170,8 +165,8 @@ impl Mnemonic {
         }
         let bits = bits.unwrap();
 
-        let is_bip39 = Mnemonic::bits_to_entropy_generic(bits.clone(), false).is_some();
-        let is_legacy = Mnemonic::bits_to_entropy_generic(bits, true).is_some();
+        let is_bip39 = Mnemonic::bits_to_entropy_generic(&bits, false).is_some();
+        let is_legacy = Mnemonic::bits_to_entropy_generic(&bits, true).is_some();
 
         match (is_bip39, is_legacy) {
             (true, false) => MnemonicType::BIP39,
