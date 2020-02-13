@@ -6,37 +6,40 @@ extern crate hex;
 extern crate nimiq_hash as hash;
 extern crate nimiq_utils as utils;
 
+use std::{cmp::Ordering, fmt, str::FromStr};
+
 // Imports the types needed for elliptic curve algebra
 use algebra::{
     biginteger::BigInteger,
     bytes::{FromBytes, ToBytes},
     curves::{
-        bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective},
-        AffineCurve, PairingEngine, ProjectiveCurve,
+        AffineCurve,
+        bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective}, PairingEngine, ProjectiveCurve,
     },
     fields::{
         bls12_377::{Fq, Fr},
         PrimeField,
     },
     rand::UniformRand,
-    serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError},
+    serialize::SerializationError,
 };
-use num_traits::{One, Zero};
-
+use blake2_rfc::blake2s::Blake2s;
 // Used for the Blake2X hashing.
 use crypto_primitives::prf::Blake2sWithParameterBlock;
+use failure::Fail;
+use hex::FromHexError;
+use num_traits::{One, Zero};
 
+#[cfg(feature = "beserial")]
+use beserial::{Deserialize, Serialize};
+use hash::{Blake2sHash, Hash};
+pub use types::*;
 // Used for the random number generation
 use utils::key_rng::{CryptoRng, Rng};
 pub use utils::key_rng::{SecureGenerate, SecureRng};
 
-#[cfg(feature = "beserial")]
-use beserial::{Deserialize, Serialize};
-use blake2_rfc::blake2s::Blake2s;
-use failure::Fail;
-use hash::{Blake2sHash, Hash};
-use hex::FromHexError;
-use std::{cmp::Ordering, fmt, str::FromStr};
+// Implements big-endian compression
+pub mod compression;
 
 // Implements several serialization-related types
 #[cfg(feature = "beserial")]
@@ -48,7 +51,6 @@ pub mod lazy;
 
 // Implements all of the types needed to do BLS signatures.
 mod types;
-pub use types::*;
 
 // Specifies the hash algorithm used for signatures
 pub type SigHash = Blake2sHash;

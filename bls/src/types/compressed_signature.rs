@@ -1,6 +1,11 @@
+use crate::compression::BeDeserialize;
+
 use super::*;
 
-/// The serialized compressed form of a signature. This form consists of the x-coordinate of the point (in the affine form), one bit indicating the sign of the y-coordinate, one bit indicating if it is the "point-at-infinity" and one bit indicating that this is the compressed form.
+/// The serialized compressed form of a signature.
+/// This form consists of the x-coordinate of the point (in the affine form),
+/// one bit indicating the sign of the y-coordinate
+/// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone, Copy)]
 pub struct CompressedSignature {
     pub signature: [u8; 48],
@@ -11,7 +16,7 @@ impl CompressedSignature {
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<Signature, SerializationError> {
-        let affine_point = G1Affine::deserialize(&self.signature, &mut [])?;
+        let affine_point: G1Affine = BeDeserialize::deserialize(&mut &self.signature[..])?;
         Ok(Signature {
             signature: affine_point.into_projective(),
         })

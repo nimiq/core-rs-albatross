@@ -1,3 +1,5 @@
+use crate::compression::BeSerialize;
+
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -8,11 +10,18 @@ pub struct PublicKey {
 }
 
 impl PublicKey {
+    fn new(public_key: G2Projective) -> Self {
+        //if public_key.is_zero() {
+        //    panic!("Invalid zero public key!");
+        //}
+        PublicKey {
+            public_key,
+        }
+    }
+
     /// Derives a public key from a secret key.
     pub fn from_secret(x: &SecretKey) -> Self {
-        PublicKey {
-            public_key: G2Projective::prime_subgroup_generator() * &x.secret_key,
-        }
+        Self::new(G2Projective::prime_subgroup_generator() * &x.secret_key)
     }
 
     /// Verifies a signature given the signature and the message.
@@ -35,13 +44,16 @@ impl PublicKey {
         lhs == rhs
     }
 
-    /// Transforms a public key into a serialized compressed form. This form consists of the x-coordinate of the point (in the affine form), one bit indicating the sign of the y-coordinate, one bit indicating if it is the "point-at-infinity" and one bit indicating that this is the compressed form.
+    /// Transforms a public key into a serialized compressed form.
+    /// This form consists of the x-coordinate of the point (in the affine form),
+    /// one bit indicating the sign of the y-coordinate
+    /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedPublicKey {
         let mut buffer = [0u8; 96];
-        self.public_key
-            .into_affine()
-            .serialize(&[], &mut buffer)
-            .unwrap();
+        BeSerialize::serialize(
+            &self.public_key.into_affine(),
+            &mut &mut buffer[..]
+        ).unwrap();
         CompressedPublicKey { public_key: buffer }
     }
 }
