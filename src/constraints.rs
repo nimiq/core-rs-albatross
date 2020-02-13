@@ -53,6 +53,7 @@ impl ConstraintSynthesizer<Fq> for Benchmark {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         let mut genesis_keys_var = vec![];
+        // TODO: let input = Vec::<Boolean>::alloc(cs.ns(|| "Input"), || Ok(scalar)).unwrap();
         for (i, key) in self.genesis_keys.iter().enumerate() {
             let key_var = G2Gadget::<Bls12_377Parameters>::alloc(
                 cs.ns(|| format!("genesis key {}", i)),
@@ -81,7 +82,7 @@ impl ConstraintSynthesizer<Fq> for Benchmark {
         let mut max_non_signers_var = FpGadget::zero(cs.ns(|| "max_signers"))?;
         max_non_signers_var.add_constant_in_place(
             cs.ns(|| "add max_non_signers"),
-            &SW6Fr::from_str(&format!("{}", self.max_non_signers)).unwrap(),
+            &SW6Fr::from(self.max_non_signers),
         )?;
 
         block_var.verify(

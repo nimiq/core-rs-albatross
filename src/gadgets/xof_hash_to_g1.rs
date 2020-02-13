@@ -26,11 +26,16 @@ impl XofHashToG1Gadget {
     pub const LOOP_LIMIT: usize = 256;
 
     fn bits_to_fp(input_bits: &[Boolean]) -> Result<(Bls12_377Fp, bool), SynthesisError> {
+        // If we take 377 bits, chances are that the resulting value is larger than the modulus.
+        // This will cause the `from_repr` call to return 0.
+        // To prevent this, we instead give up one bit of entropy and set the most significant bit
+        // to false.
         let mut bits = input_bits[..377]
             .iter()
             .map(|x| x.get_value().get())
             .collect::<Result<Vec<bool>, SynthesisError>>()?;
         bits.reverse();
+        bits[0] = false;
         let big = <Bls12_377Fp as PrimeField>::BigInt::from_bits(&bits);
         let x = Bls12_377Fp::from_repr(big);
         let greatest = input_bits[377].get_value().get().unwrap();
@@ -62,6 +67,11 @@ impl XofHashToG1Gadget {
         slice1: &[Boolean],
         slice2: &[Boolean],
     ) -> Result<(), SynthesisError> {
+        assert_eq!(
+            slice1.len(),
+            slice2.len(),
+            "bit slices should be of same size"
+        );
         for (i, (a, b)) in slice1.iter().zip(slice2.iter()).enumerate() {
             a.enforce_equal(cs.ns(|| format!("enforce bit {}", i)), b)?;
         }
@@ -85,10 +95,20 @@ impl XofHashToG1Gadget {
             Ok(x_val)
         })?;
 
-        // Convert x_var to bits.
-        let x_bits_var = x_var.to_bits(cs.ns(|| "serialized x_var"))?;
+        // Allocate y bit.
+        let y_var = Boolean::alloc(cs.ns(|| "y bit of hash"), || {
+            let (_, y) = x_and_y
+                .as_ref()
+                .map_err(|_| SynthesisError::AssignmentMissing)?;
+            Ok(y)
+        })?;
+
+        // Convert x_var to bits and add y bit.
+        let mut xof_bits_var = x_var.to_bits(cs.ns(|| "serialized x_var"))?;
+        xof_bits_var.reverse();
+        xof_bits_var.push(y_var.clone());
         // Enforce equality.
-        Self::enforce_bit_slice_equality(cs.ns(|| "x bit equality"), xof_bits, &x_bits_var)?;
+        Self::enforce_bit_slice_equality(cs.ns(|| "x bit equality"), xof_bits, &xof_bits_var)?;
 
         // Allocate nonce of try + increment.
         let i_var = FpGadget::alloc(cs.ns(|| "try and increment nonce"), || {
@@ -99,7 +119,9 @@ impl XofHashToG1Gadget {
         // Perform x + i and convert to bits.
         let point_x_var = x_var.add(cs.ns(|| "x + i"), &i_var)?;
 
-        let point_bits = point_x_var.to_bits(cs.ns(|| "valid x point bits"))?;
+        let mut point_bits = point_x_var.to_bits(cs.ns(|| "valid x point bits"))?;
+        point_bits.reverse();
+        point_bits.push(y_var);
         // -- End of x + i --
 
         // Convert i_var to bits and check that it is <= 256.
@@ -118,6 +140,11 @@ impl XofHashToG1Gadget {
                     Err(SynthesisError::AssignmentMissing)
                 } else {
                     let (x, y) = Self::bits_to_fp(&point_bits)?;
+                    assert_eq!(
+                        x,
+                        x_var.get_value().unwrap() + i_var.get_value().unwrap(),
+                        "x' = x + i"
+                    );
                     let p = G1Affine::get_point_from_x(x, y).unwrap();
                     Ok(p.into_projective())
                 }
@@ -155,6 +182,7 @@ impl XofHashToG1Gadget {
         p: &G1Gadget<Bls12_377Parameters>,
     ) -> Result<G1Gadget<Bls12_377Parameters>, SynthesisError> {
         let generator = Bls12_377G1Projective::prime_subgroup_generator();
+        // TODO: Generator should probably not be a private input.
         let generator_var =
             G1Gadget::<Bls12_377Parameters>::alloc(cs.ns(|| "generator"), || Ok(generator))?;
         let mut x_bits = BitIterator::new(Bls12_377G1Parameters::COFACTOR)

@@ -25,6 +25,8 @@ use crate::constraints::Benchmark;
 use algebra::curves::bls12_377::{G1Affine, G1Projective, G2Projective};
 use algebra::fields::bls12_377::Fr;
 use nimiq_bls::{KeyPair, SecureGenerate};
+use r1cs_core::ConstraintSynthesizer;
+use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 mod constraints;
 
@@ -57,6 +59,25 @@ fn main() -> Result<(), Box<dyn Error>> {
     let macro_hash = macro_block.hash();
     let signature = key_pair.sign_hash(macro_hash);
     let max_non_signers = 2;
+
+    // Test constraint system first.
+    let mut test_cs = TestConstraintSystem::new();
+    let c = Benchmark::new(
+        genesis_keys.clone(),
+        signers_bitmap.clone(),
+        macro_block.clone(),
+        signature.signature,
+        generator,
+        max_non_signers,
+    );
+    c.generate_constraints(&mut test_cs)?;
+    println!("Number of constraints: {}", test_cs.num_constraints());
+    if !test_cs.is_satisfied() {
+        println!("Unsatisfied @ {}", test_cs.which_is_unsatisfied().unwrap());
+        assert!(false);
+    } else {
+        println!("Test passed, creating benchmark.");
+    }
 
     // Create parameters for our circuit
     let start = Instant::now();
