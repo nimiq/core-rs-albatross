@@ -8,22 +8,27 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
-    pub fn from_secret(secret: &SecretKey) -> Self {
-        KeyPair::from(secret.clone())
+    /// Derives a key pair from a secret key. This function will panic if it is given zero as an input.
+    pub fn from_secret(x: &SecretKey) -> Self {
+        KeyPair::from(x.clone())
     }
 
+    /// Signs a message using the key pair.
     pub fn sign<M: Hash>(&self, msg: &M) -> Signature {
         self.secret_key.sign::<M>(msg)
     }
 
+    /// Signs a hash using the key pair.
     pub fn sign_hash(&self, hash: SigHash) -> Signature {
         self.secret_key.sign_hash(hash)
     }
 
+    /// Verifies a signature of a message using the key pair.
     pub fn verify<M: Hash>(&self, msg: &M, signature: &Signature) -> bool {
         self.public_key.verify::<M>(msg, signature)
     }
 
+    /// Verifies a signature of a hash using the key pair.
     pub fn verify_hash(&self, hash: SigHash, signature: &Signature) -> bool {
         self.public_key.verify_hash(hash, signature)
     }
@@ -37,7 +42,11 @@ impl SecureGenerate for KeyPair {
 }
 
 impl From<SecretKey> for KeyPair {
+    /// Derives a key pair from a secret key. This function will panic if it is given zero as an input.
     fn from(secret: SecretKey) -> Self {
+        if secret.secret_key.is_zero() {
+            panic!("Secret key cannot be zero!");
+        }
         let public = PublicKey::from_secret(&secret);
         return KeyPair {
             secret_key: secret,

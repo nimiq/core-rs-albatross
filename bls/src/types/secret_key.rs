@@ -30,9 +30,14 @@ impl SecretKey {
 
 impl SecureGenerate for SecretKey {
     fn generate<R: Rng + CryptoRng>(rng: &mut R) -> Self {
-        SecretKey {
-            secret_key: Fr::rand(rng),
+        let mut x = Fr::rand(rng);
+        loop {
+            if !x.is_zero() {
+                break;
+            }
+            x = Fr::rand(rng);
         }
+        SecretKey { secret_key: x }
     }
 }
 
