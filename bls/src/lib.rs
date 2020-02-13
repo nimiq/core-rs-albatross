@@ -55,7 +55,7 @@ pub type SigHash = Blake2sHash;
 
 /// If bytes is a little endian representation of a number, this would return the bits of the
 /// number in descending order
-pub fn bytes_to_bits(bytes: &Vec<u8>, bits_to_take: usize) -> Vec<bool> {
+pub fn bytes_to_bits(bytes: &[u8], bits_to_take: usize) -> Vec<bool> {
     let mut bits = vec![];
     for i in 0..bytes.len() {
         let mut byte = bytes[i];
