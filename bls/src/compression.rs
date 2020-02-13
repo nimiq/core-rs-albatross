@@ -1,6 +1,6 @@
 use std::io::Error;
 
-use algebra::{BigInteger384, Zero};
+use algebra::{BigInteger384, Zero, PrimeField};
 use algebra::curves::models::SWModelParameters as Parameters;
 use algebra::fields::bls12_377::{Fq, Fq2};
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
@@ -120,23 +120,23 @@ impl<P: Parameters> BeDeserialize for GroupAffine<P>
 // Fq
 impl BeSerialize for Fq {
     fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags) -> Result<(), Error> {
-        BeSerialize::serialize_with_flags(&self.0, writer, flags)
+        BeSerialize::serialize_with_flags(&self.into_repr(), writer, flags)
     }
 
     fn serialized_size(&self) -> usize {
-        BeSerialize::serialized_size(&self.0)
+        BeSerialize::serialized_size(&self.into_repr())
     }
 }
 
 impl BeDeserialize for Fq {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
         let value: BigInteger384 = BeDeserialize::deserialize(reader)?;
-        Ok(Fq::new(value))
+        Ok(Fq::from_repr(value))
     }
 
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error> {
         let (value, flags): (BigInteger384, _) = BeDeserialize::deserialize_with_flags(reader)?;
-        Ok((Fq::new(value), flags))
+        Ok((Fq::from_repr(value), flags))
     }
 }
 

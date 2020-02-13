@@ -16,7 +16,7 @@ use nimiq_network_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &'static str = "26a4160cb1092afd1e5f2f0066f29b2c5842c156e373b8dd32b014ec525b5d10";
+const SECRET_KEY: &'static str = "05984595f5a73e8236c04c5d61cc7f8c350ea7c992228d3b2c28af6bf3e2c60c";
 
 // Fill epoch with micro blocks
 fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
