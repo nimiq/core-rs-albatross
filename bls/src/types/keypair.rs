@@ -42,11 +42,8 @@ impl SecureGenerate for KeyPair {
 }
 
 impl From<SecretKey> for KeyPair {
-    /// Derives a key pair from a secret key. This function will panic if it is given zero as an input.
+    /// Derives a key pair from a secret key. This function will produce an error if it is given zero as an input.
     fn from(secret: SecretKey) -> Self {
-        if secret.secret_key.is_zero() {
-            panic!("Secret key cannot be zero!");
-        }
         let public = PublicKey::from_secret(&secret);
         return KeyPair {
             secret_key: secret,

@@ -10,19 +10,16 @@ pub struct PublicKey {
 }
 
 impl PublicKey {
-    /// Generates a public key from a given point in G2. This function will panic if it is given the point at infinity.
+    /// Generates a public key from a given point in G2. This function will produce an error if it is given the point at infinity.
     fn new(public_key: G2Projective) -> Self {
         if public_key.is_zero() {
-            panic!("Public key cannot be the point at infinity!");
+            error!("Public key cannot be the point at infinity!");
         }
         PublicKey { public_key }
     }
 
-    /// Derives a public key from a secret key. This function will panic if it is given zero as an input.
+    /// Derives a public key from a secret key. This function will produce an error if it is given zero as an input.
     pub fn from_secret(x: &SecretKey) -> Self {
-        if x.secret_key.is_zero() {
-            panic!("Secret key cannot be zero!");
-        }
         Self::new(G2Projective::prime_subgroup_generator() * &x.secret_key)
     }
 
@@ -36,10 +33,10 @@ impl PublicKey {
         self.verify_g1(Signature::hash_to_g1(hash), signature)
     }
 
-    /// Verifies a signature given the signature and the G1 point. This function will panic if the public key is the point at infinity.
+    /// Verifies a signature given the signature and the G1 point. This function will always return false if the public key is the point at infinity.
     pub fn verify_g1(&self, hash_curve: G1Projective, signature: &Signature) -> bool {
         if self.public_key.is_zero() {
-            panic!("Public key cannot be the point at infinity!");
+            return false;
         }
         let lhs = Bls12_377::pairing(
             signature.signature,

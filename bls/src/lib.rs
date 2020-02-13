@@ -6,6 +6,7 @@ extern crate hex;
 extern crate nimiq_hash as hash;
 extern crate nimiq_utils as utils;
 
+use log::error;
 use std::{cmp::Ordering, fmt, str::FromStr};
 
 // Imports the types needed for elliptic curve algebra
@@ -13,8 +14,8 @@ use algebra::{
     biginteger::BigInteger,
     bytes::{FromBytes, ToBytes},
     curves::{
-        AffineCurve,
-        bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective}, PairingEngine, ProjectiveCurve,
+        bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective},
+        AffineCurve, PairingEngine, ProjectiveCurve,
     },
     fields::{
         bls12_377::{Fq, Fr},
