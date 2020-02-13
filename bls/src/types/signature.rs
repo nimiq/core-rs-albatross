@@ -36,8 +36,13 @@ impl Signature {
         }
 
         // This converts the hash output into a x-coordinate and a y-coordinate for an elliptic curve point. At this time, it is not guaranteed to be a valid point.
-        let bits = bytes_to_bits(&bytes, 378);
-        let mut x_coordinate = Fq::new(BigInteger::from_bits(&bits[..377]));
+        // A quirk of this code is that we need to set the most significant bit to zero. The reason for this is that the field for the BLS12-377 curve is not exactly 377 bits, it is a bit smaller. This means that if we try to create a field element from 377 random bits, we may get an invalid value back (in this case it is just all zeros). There are two options to deal with this:
+        // 1) To create finite field elements, using 377 random bits, in a loop until a valid one is created.
+        // 2) Use only 376 random bits to create a finite field element. This will guaranteedly produce a valid element on the first try, but will reduce the entropy of the EC point generation by one bit.
+        // We chose the second one because we believe the entropy reduction is not significant enough.
+        let mut bits = bytes_to_bits(&bytes, 378);
+        bits[0] = false;
+        let mut x_coordinate = Fq::from_repr(BigInteger::from_bits(&bits[..377]));
         let y_coordinate = bits[377];
         // bytes[47] &= 0b00000011;
         // let mut x_coordinate_too = Fq::new(FromBytes::read(&bytes[..]).unwrap());

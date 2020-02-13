@@ -14,7 +14,10 @@ use algebra::{
         bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective},
         AffineCurve, PairingEngine, ProjectiveCurve,
     },
-    fields::bls12_377::{Fq, Fr},
+    fields::{
+        bls12_377::{Fq, Fr},
+        PrimeField,
+    },
     rand::UniformRand,
     serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError},
 };
