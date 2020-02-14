@@ -56,8 +56,7 @@ impl Signature {
         loop {
             let point = G1Affine::get_point_from_x(x_coordinate, y_coordinate);
             if point.is_some() {
-                let point = G1Affine::from(point.unwrap());
-                let g1 = point.scale_by_cofactor();
+                let g1 = point.unwrap().scale_by_cofactor();
                 return g1;
             }
             x_coordinate += &Fq::one();
@@ -70,10 +69,7 @@ impl Signature {
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedSignature {
         let mut buffer = [0u8; 48];
-        BeSerialize::serialize(
-            &self.signature.into_affine(),
-            &mut &mut buffer[..]
-        ).unwrap();
+        BeSerialize::serialize(&self.signature.into_affine(), &mut &mut buffer[..]).unwrap();
         CompressedSignature { signature: buffer }
     }
 }
