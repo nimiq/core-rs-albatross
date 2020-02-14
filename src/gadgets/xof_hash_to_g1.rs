@@ -25,20 +25,23 @@ pub struct XofHashToG1Gadget {}
 impl XofHashToG1Gadget {
     pub const LOOP_LIMIT: usize = 256;
 
-    fn bits_to_fp(input_bits: &[Boolean]) -> Result<(Bls12_377Fp, bool), SynthesisError> {
+    fn bits_to_fp(
+        input_bits: &[Boolean],
+        y_bit: &Boolean,
+    ) -> Result<(Bls12_377Fp, bool), SynthesisError> {
+        assert_eq!(input_bits.len(), 377, "Expected 377 bit input");
         // If we take 377 bits, chances are that the resulting value is larger than the modulus.
         // This will cause the `from_repr` call to return 0.
         // To prevent this, we instead give up one bit of entropy and set the most significant bit
         // to false.
-        let mut bits = input_bits[..377]
+        let mut bits = input_bits
             .iter()
             .map(|x| x.get_value().get())
             .collect::<Result<Vec<bool>, SynthesisError>>()?;
-        bits.reverse();
-        bits[0] = false;
+        bits[0] = false; // Big-Endian, so 0 is the highest bit.
         let big = <Bls12_377Fp as PrimeField>::BigInt::from_bits(&bits);
         let x = Bls12_377Fp::from_repr(big);
-        let greatest = input_bits[377].get_value().get().unwrap();
+        let greatest = y_bit.get_value().get()?;
         Ok((x, greatest))
     }
 
@@ -82,8 +85,14 @@ impl XofHashToG1Gadget {
         mut cs: CS,
         xof_bits: &[Boolean],
     ) -> Result<G1Gadget<Bls12_377Parameters>, SynthesisError> {
-        let xof_bits = &xof_bits[..377 + 1]; // Ignore unnecessary bits.
-        let x_and_y = Self::bits_to_fp(xof_bits);
+        assert_eq!(xof_bits.len(), 384); // 377 rounded to the next byte.
+
+        // We skip the first 7 bits, as this will make it easier in the non ZK-proof version.
+        // The reason for this is that we can set the first 7 bits to 0 there and get a byte-aligned
+        // number to read in.
+        let x_bits = &xof_bits[7..384];
+        let y_bit = &xof_bits[0];
+        let x_and_y = Self::bits_to_fp(x_bits, y_bit);
 
         // TODO: To reduce circuit size, we should do the addition of x and i on bit representations.
         // -- Beginning of x + i --
@@ -95,20 +104,21 @@ impl XofHashToG1Gadget {
             Ok(x_val)
         })?;
 
-        // Allocate y bit.
-        let y_var = Boolean::alloc(cs.ns(|| "y bit of hash"), || {
-            let (_, y) = x_and_y
-                .as_ref()
-                .map_err(|_| SynthesisError::AssignmentMissing)?;
-            Ok(y)
-        })?;
+        // Convert x_var to bits.
+        let xof_bits_var = x_var.to_bits(cs.ns(|| "serialized x_var"))?;
+        // `xof_bits` still might be different at the highest bit, which we set to false.
+        // Thus, we check this first.
+        xof_bits_var[0].enforce_equal(
+            cs.ns(|| "enforce highest bit unset"),
+            &Boolean::constant(false),
+        )?;
 
-        // Convert x_var to bits and add y bit.
-        let mut xof_bits_var = x_var.to_bits(cs.ns(|| "serialized x_var"))?;
-        xof_bits_var.reverse();
-        xof_bits_var.push(y_var.clone());
-        // Enforce equality.
-        Self::enforce_bit_slice_equality(cs.ns(|| "x bit equality"), xof_bits, &xof_bits_var)?;
+        // Enforce equality on the range [1..], since the highest bit has been checked before.
+        Self::enforce_bit_slice_equality(
+            cs.ns(|| "x bit equality"),
+            &x_bits[1..],
+            &xof_bits_var[1..],
+        )?;
 
         // Allocate nonce of try + increment.
         let i_var = FpGadget::alloc(cs.ns(|| "try and increment nonce"), || {
@@ -119,10 +129,10 @@ impl XofHashToG1Gadget {
         // Perform x + i and convert to bits.
         let point_x_var = x_var.add(cs.ns(|| "x + i"), &i_var)?;
 
+        // Create point_bits and append y_bit.
         let mut point_bits = point_x_var.to_bits(cs.ns(|| "valid x point bits"))?;
-        point_bits.reverse();
-        point_bits.push(y_var);
-        // -- End of x + i --
+        point_bits.push(y_bit.clone()); // We add the y_bit for later slice comparison.
+                                        // -- End of x + i --
 
         // Convert i_var to bits and check that it is <= 256.
         let i_bits_var = i_var.to_bits(cs.ns(|| "serialized i_var"))?;
@@ -139,7 +149,8 @@ impl XofHashToG1Gadget {
                 if point_bits.iter().any(|x| x.get_value().is_none()) {
                     Err(SynthesisError::AssignmentMissing)
                 } else {
-                    let (x, y) = Self::bits_to_fp(&point_bits)?;
+                    // Remember to remove the y_bit.
+                    let (x, y) = Self::bits_to_fp(&point_bits[..377], y_bit)?;
                     assert_eq!(
                         x,
                         x_var.get_value().unwrap() + i_var.get_value().unwrap(),
@@ -156,7 +167,6 @@ impl XofHashToG1Gadget {
         // Then, we compare it bit wise with the `point_bits`.
         let mut serialized_bits: Vec<Boolean> =
             expected_point_before_cofactor.x.to_bits(cs.ns(|| "bits"))?;
-        serialized_bits.reverse();
         let greatest_bit = YToBitGadget::<Bls12_377Parameters>::y_to_bit_g1(
             cs.ns(|| "y to bit"),
             &expected_point_before_cofactor,

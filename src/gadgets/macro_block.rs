@@ -13,7 +13,7 @@ use algebra::curves::bls12_377::G2Projective;
 use algebra::{One, Zero};
 use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
 use nimiq_bls::PublicKey;
-use nimiq_hash::{Blake2sHash, Blake2sHasher, HashOutput, Hasher};
+use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher};
 use r1cs_std::fields::fp::FpGadget;
 use std::borrow::{Borrow, Cow};
 
@@ -34,6 +34,7 @@ impl MacroBlock {
         }
 
         let sum_key = PublicKey { public_key: sum };
+
         let sum_hash = Blake2sHasher::new().chain(&sum_key).finish();
 
         let mut xor_bytes = [0u8; 32];
@@ -126,6 +127,7 @@ impl MacroBlockGadget {
         }
 
         // Feed normal blake2s hash into XOF.
+        // Our gadget expects normal *Big-Endian* order.
         let xof_bits = XofHashGadget::xof_hash(cs.ns(|| "xof hash"), &bits)?;
 
         // Convert to G1 using try-and-increment method.

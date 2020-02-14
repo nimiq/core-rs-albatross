@@ -1,12 +1,11 @@
 #![allow(dead_code)]
-use crate::gadgets::macro_block::{MacroBlock, MacroBlockGadget};
+use crate::gadgets::macro_block::MacroBlock;
 
 mod gadgets;
 
 // Bring in some tools for using pairing-friendly curves
 // We're going to use the BLS12-377 pairing-friendly elliptic curve.
-use algebra::One;
-use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve, UniformRand, Zero};
+use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve};
 // For randomness (during paramgen and proof generation)
 use algebra::test_rng;
 // We're going to use the Groth 16 proving system.
@@ -14,16 +13,13 @@ use groth16::{
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
 };
 // For benchmarking
-use std::str::FromStr;
-use std::{env, fs::OpenOptions, path::PathBuf, process};
 use std::{
     error::Error,
     time::{Duration, Instant},
 };
 
 use crate::constraints::Benchmark;
-use algebra::curves::bls12_377::{G1Affine, G1Projective, G2Projective};
-use algebra::fields::bls12_377::Fr;
+use algebra::curves::bls12_377::G2Projective;
 use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;

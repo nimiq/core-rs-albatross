@@ -1,22 +1,13 @@
-use std::marker::PhantomData;
-use std::ops::Add;
-
-use crate::gadgets::macro_block::{MacroBlock, MacroBlockGadget};
-use algebra::curves::bls12_377::{Bls12_377, Bls12_377Parameters, G1Projective, G2Projective};
+use algebra::curves::bls12_377::{Bls12_377Parameters, G1Projective, G2Projective};
 use algebra::fields::bls12_377::fq::Fq;
 use algebra::fields::sw6::Fr as SW6Fr;
-use algebra::{Field, PrimeField};
-use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, LinearCombination, SynthesisError};
+use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::bits::boolean::AllocatedBit;
-use r1cs_std::eq::{ConditionalEqGadget, EqGadget};
 use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::{
-    G1Gadget, G1PreparedGadget, G2Gadget, G2PreparedGadget,
-};
-use r1cs_std::pairing::bls12_377::PairingGadget;
-use r1cs_std::pairing::PairingGadget as PG;
+use r1cs_std::groups::curves::short_weierstrass::bls12::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
-use std::str::FromStr;
+
+use crate::gadgets::macro_block::{MacroBlock, MacroBlockGadget};
 
 pub struct Benchmark {
     genesis_keys: Vec<G2Projective>,

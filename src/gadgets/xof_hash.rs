@@ -1,3 +1,4 @@
+use crate::gadgets::{hash_to_bits, reverse_inner_byte_order};
 use algebra::fields::{sw6::Fr as SW6Fr, sw6::FrParameters as SW6FrParameters, FpParameters};
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget_with_parameters;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
@@ -19,6 +20,9 @@ impl XofHashGadget {
         mut cs: CS,
         hash: &[Boolean],
     ) -> Result<Vec<Boolean>, SynthesisError> {
+        // Prepare order of bits.
+        let hash = reverse_inner_byte_order(hash);
+
         // Number of iterations is ceil(XOF_DIGEST_LENGTH / 32).
         let iterations = ((Self::XOF_DIGEST_LENGTH + 32 - 1) / 32) as usize;
         let mut xof_bits = vec![];
@@ -49,16 +53,12 @@ impl XofHashGadget {
                 &hash,
                 &blake2s_parameters.parameters(),
             )?;
-            let xof_bits_i = xof_result
-                .into_iter()
-                .map(|n| n.to_bits_le())
-                .flatten()
-                .collect::<Vec<Boolean>>();
+            let xof_bits_i = hash_to_bits(xof_result);
             xof_bits.extend_from_slice(&xof_bits_i);
         }
 
         // Forget unnecessary bits.
-        xof_bits.truncate(HashToBitsFieldParameters::MODULUS_BITS as usize + 1);
+        xof_bits.truncate(8 * Self::XOF_DIGEST_LENGTH as usize);
         Ok(xof_bits)
     }
 }
