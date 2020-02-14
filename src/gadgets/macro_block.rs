@@ -6,22 +6,25 @@ use r1cs_std::prelude::{AllocGadget, CondSelectGadget, EqGadget, FieldGadget, Gr
 
 use crate::gadgets::check_sig::CheckSigGadget;
 use crate::gadgets::g2_to_blake2s::G2ToBlake2sGadget;
+use crate::gadgets::reverse_inner_byte_order;
 use crate::gadgets::smaller_than::SmallerThanGadget;
 use crate::gadgets::xof_hash::XofHashGadget;
 use crate::gadgets::xof_hash_to_g1::XofHashToG1Gadget;
-use algebra::curves::bls12_377::G2Projective;
+use algebra::curves::bls12_377::{G1Projective, G2Projective};
 use algebra::{One, Zero};
 use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
 use nimiq_bls::PublicKey;
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher};
 use r1cs_std::fields::fp::FpGadget;
+use r1cs_std::Assignment;
 use std::borrow::{Borrow, Cow};
 
 #[derive(Clone)]
 pub struct MacroBlock {
     pub header_hash: [u8; 32],
     pub public_keys: Vec<G2Projective>,
-    // TODO: Add signatures and bitmap.
+    pub signature: Option<G1Projective>,
+    pub signer_bitmap: Vec<bool>,
 }
 
 impl MacroBlock {
@@ -55,7 +58,9 @@ impl Default for MacroBlock {
     fn default() -> Self {
         MacroBlock {
             header_hash: [0; 32],
-            public_keys: vec![G2Projective::zero(); 32],
+            public_keys: vec![G2Projective::zero(); MacroBlock::SLOTS],
+            signature: None,
+            signer_bitmap: vec![false; MacroBlock::SLOTS],
         }
     }
 }
@@ -63,6 +68,8 @@ impl Default for MacroBlock {
 pub struct MacroBlockGadget {
     pub header_hash: Vec<Boolean>,
     pub public_keys: Vec<G2Gadget>,
+    pub signature: G1Gadget,
+    pub signer_bitmap: Vec<Boolean>,
 }
 
 impl MacroBlockGadget {
@@ -76,9 +83,7 @@ impl MacroBlockGadget {
         &self,
         mut cs: CS,
         prev_public_keys: &[G2Gadget],
-        signer_bitmap: &[Boolean],
         max_non_signers: &FpGadget<SW6Fr>,
-        signature: &G1Gadget,
         generator: &G2Gadget,
     ) -> Result<(), SynthesisError> {
         let hash_point = self.to_g1(cs.ns(|| "create hash point"))?;
@@ -86,7 +91,7 @@ impl MacroBlockGadget {
         let aggregate_public_key = Self::aggregate_public_key(
             cs.ns(|| "aggregate public keys"),
             prev_public_keys,
-            signer_bitmap,
+            &self.signer_bitmap,
             max_non_signers,
         )?;
 
@@ -94,7 +99,7 @@ impl MacroBlockGadget {
             cs.ns(|| "check signature"),
             &aggregate_public_key,
             generator,
-            signature,
+            &self.signature,
             &hash_point,
         )
     }
@@ -156,16 +161,15 @@ impl MacroBlockGadget {
         for (i, (key, included)) in public_keys
             .iter()
             .zip(key_bitmap.iter())
-            .skip(2)
+            .skip(1)
             .enumerate()
         {
-            println!("{:?}", public_keys);
             let new_sum = sum.add(cs.ns(|| format!("add public key {}", i)), key)?;
             let cond_sum = CondSelectGadget::conditionally_select(
                 cs.ns(|| format!("conditionally add public key {}", i)),
                 included,
-                sum.as_ref(),
                 &new_sum,
+                sum.as_ref(),
             )?;
             num_non_signers = num_non_signers.conditionally_add_constant(
                 cs.ns(|| format!("public key count {}", i)),
@@ -205,22 +209,25 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
 
         let header_hash =
             Blake2sOutputGadget::alloc(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
-        let mut public_keys = vec![];
-        for (i, public_key) in value.public_keys.iter().enumerate() {
-            public_keys.push(G2Gadget::alloc(
-                cs.ns(|| format!("public key {}", i)),
-                || Ok(public_key),
-            )?);
-        }
+        // While the bytes of the Blake2sOutputGadget start with the most significant first,
+        // the bits internally start with the least significant.
+        // Thus, we need to reverse the bit order there.
+        let header_hash = header_hash
+            .0
+            .into_iter()
+            .flat_map(|n| reverse_inner_byte_order(&n.into_bits_le()))
+            .collect::<Vec<Boolean>>();
+        let public_keys =
+            Vec::<G2Gadget>::alloc(cs.ns(|| "public keys"), || Ok(&value.public_keys[..]))?;
+        let signer_bitmap =
+            Vec::<Boolean>::alloc(cs.ns(|| "signer bitmap"), || Ok(&value.signer_bitmap[..]))?;
+        let signature = G1Gadget::alloc(cs.ns(|| "signature"), || value.signature.get())?;
 
         Ok(MacroBlockGadget {
-            header_hash: header_hash
-                .0
-                .into_iter()
-                .map(|n| n.into_bits_le())
-                .flatten()
-                .collect::<Vec<Boolean>>(),
+            header_hash,
             public_keys,
+            signature,
+            signer_bitmap,
         })
     }
 
@@ -242,22 +249,26 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
 
         let header_hash =
             Blake2sOutputGadget::alloc_input(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
-        let mut public_keys = vec![];
-        for (i, public_key) in value.public_keys.iter().enumerate() {
-            public_keys.push(G2Gadget::alloc_input(
-                cs.ns(|| format!("public key {}", i)),
-                || Ok(public_key),
-            )?);
-        }
+        // While the bytes of the Blake2sOutputGadget start with the most significant first,
+        // the bits internally start with the least significant.
+        // Thus, we need to reverse the bit order there.
+        let header_hash = header_hash
+            .0
+            .into_iter()
+            .flat_map(|n| reverse_inner_byte_order(&n.into_bits_le()))
+            .collect::<Vec<Boolean>>();
+        let public_keys =
+            Vec::<G2Gadget>::alloc_input(cs.ns(|| "public keys"), || Ok(&value.public_keys[..]))?;
+        let signer_bitmap = Vec::<Boolean>::alloc_input(cs.ns(|| "signer bitmap"), || {
+            Ok(&value.signer_bitmap[..])
+        })?;
+        let signature = G1Gadget::alloc_input(cs.ns(|| "signature"), || value.signature.get())?;
 
         Ok(MacroBlockGadget {
-            header_hash: header_hash
-                .0
-                .into_iter()
-                .map(|n| n.into_bits_le())
-                .flatten()
-                .collect::<Vec<Boolean>>(),
+            header_hash,
             public_keys,
+            signature,
+            signer_bitmap,
         })
     }
 }

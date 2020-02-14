@@ -1,19 +1,16 @@
-use algebra::curves::bls12_377::{Bls12_377Parameters, G1Projective, G2Projective};
+use algebra::curves::bls12_377::{Bls12_377Parameters, G2Projective};
 use algebra::fields::bls12_377::fq::Fq;
 use algebra::fields::sw6::Fr as SW6Fr;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::bits::boolean::AllocatedBit;
 use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::{G1Gadget, G2Gadget};
+use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
 use r1cs_std::prelude::*;
 
 use crate::gadgets::macro_block::{MacroBlock, MacroBlockGadget};
 
 pub struct Benchmark {
     genesis_keys: Vec<G2Projective>,
-    signer_bitmap: Vec<bool>,
     test_block: MacroBlock,
-    signature: G1Projective,
     generator: G2Projective,
     max_non_signers: u64,
 }
@@ -21,18 +18,14 @@ pub struct Benchmark {
 impl Benchmark {
     pub fn new(
         genesis_keys: Vec<G2Projective>,
-        signer_bitmap: Vec<bool>,
         test_block: MacroBlock,
-        signature: G1Projective,
         generator: G2Projective,
         max_non_signers: u64,
     ) -> Self {
         Self {
             genesis_keys,
-            signer_bitmap,
             test_block,
             generator,
-            signature,
             max_non_signers,
         }
     }
@@ -43,30 +36,14 @@ impl ConstraintSynthesizer<Fq> for Benchmark {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        let mut genesis_keys_var = vec![];
-        // TODO: let input = Vec::<Boolean>::alloc(cs.ns(|| "Input"), || Ok(scalar)).unwrap();
-        for (i, key) in self.genesis_keys.iter().enumerate() {
-            let key_var = G2Gadget::<Bls12_377Parameters>::alloc(
-                cs.ns(|| format!("genesis key {}", i)),
-                || Ok(key),
-            )?;
-            genesis_keys_var.push(key_var);
-        }
-
-        let mut signer_bitmap_var = vec![];
-        for (i, signer) in self.signer_bitmap.iter().enumerate() {
-            let signed = Boolean::from(AllocatedBit::alloc(
-                cs.ns(|| format!("signer bitmap {}", i)),
-                || Ok(signer),
-            )?);
-            signer_bitmap_var.push(signed);
-        }
+        let genesis_keys_var =
+            Vec::<G2Gadget<Bls12_377Parameters>>::alloc(cs.ns(|| "genesis keys"), || {
+                Ok(&self.genesis_keys[..])
+            })?;
 
         let block_var =
             MacroBlockGadget::alloc(cs.ns(|| "first macro block"), || Ok(&self.test_block))?;
 
-        let signature_var =
-            G1Gadget::<Bls12_377Parameters>::alloc(cs.ns(|| "signature"), || Ok(&self.signature))?;
         let generator_var =
             G2Gadget::<Bls12_377Parameters>::alloc(cs.ns(|| "sig"), || Ok(&self.generator))?;
 
@@ -79,9 +56,7 @@ impl ConstraintSynthesizer<Fq> for Benchmark {
         block_var.verify(
             cs.ns(|| "verify block"),
             &genesis_keys_var,
-            &signer_bitmap_var,
             &max_non_signers_var,
-            &signature_var,
             &generator_var,
         )?;
 

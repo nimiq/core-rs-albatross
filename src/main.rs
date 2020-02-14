@@ -43,26 +43,29 @@ fn main() -> Result<(), Box<dyn Error>> {
         key_pair2.public_key.public_key,
     ];
 
-    let signers_bitmap = vec![true, false];
-    let macro_block = MacroBlock {
+    let mut macro_block = MacroBlock {
         header_hash: [0; 32],
         public_keys: vec![
             key_pair.public_key.public_key,
             key_pair2.public_key.public_key,
         ],
+        signature: None,
+        signer_bitmap: vec![],
     };
 
     let macro_hash = macro_block.hash();
     let signature = key_pair.sign_hash(macro_hash);
     let max_non_signers = 2;
 
+    macro_block.signature = Some(signature.signature);
+    let signers_bitmap = vec![true, false];
+    macro_block.signer_bitmap = signers_bitmap;
+
     // Test constraint system first.
     let mut test_cs = TestConstraintSystem::new();
     let c = Benchmark::new(
         genesis_keys.clone(),
-        signers_bitmap.clone(),
         macro_block.clone(),
-        signature.signature,
         generator,
         max_non_signers,
     );
@@ -80,9 +83,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let params = {
         let c = Benchmark::new(
             genesis_keys.clone(),
-            signers_bitmap.clone(),
             macro_block.clone(),
-            signature.signature,
             generator,
             max_non_signers,
         );
@@ -99,9 +100,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Create an instance of our circuit (with the witness)
         let c = Benchmark::new(
             genesis_keys.clone(),
-            signers_bitmap.clone(),
             macro_block.clone(),
-            signature.signature,
             generator,
             max_non_signers,
         );
