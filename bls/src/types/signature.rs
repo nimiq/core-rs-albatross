@@ -12,7 +12,7 @@ pub struct Signature {
 impl Signature {
     /// Maps an hash to a elliptic curve point in the G1 group. It is required to create signatures.
     /// It is also known as "hash-to-curve".
-    pub(crate) fn hash_to_g1(h: SigHash) -> G1Projective {
+    pub fn hash_to_g1(h: SigHash) -> G1Projective {
         // This extends the input hash from 32 bytes to 48 bytes using the Blake2X algorithm.
         // See https://blake2.net/blake2x.pdf for more details.
         let mut bytes = vec![];
@@ -38,17 +38,18 @@ impl Signature {
         }
 
         // This converts the hash output into a x-coordinate and a y-coordinate for an elliptic curve point. At this time, it is not guaranteed to be a valid point.
-        // A quirk of this code is that we need to set the most significant bit to zero. The reason for this is that the field for the BLS12-377 curve is not exactly 377 bits, it is a bit smaller. This means that if we try to create a field element from 377 random bits, we may get an invalid value back (in this case it is just all zeros). There are two options to deal with this:
+        // A quirk of this code is that we need to set the most significant bit to zero. The reason for this is that the field for the BLS12-377 curve is not exactly 377 bits, it is a bit smaller.
+        // This means that if we try to create a field element from 377 random bits, we may get an invalid value back (in this case it is just all zeros). There are two options to deal with this:
         // 1) To create finite field elements, using 377 random bits, in a loop until a valid one is created.
         // 2) Use only 376 random bits to create a finite field element. This will guaranteedly produce a valid element on the first try, but will reduce the entropy of the EC point generation by one bit.
         // We chose the second one because we believe the entropy reduction is not significant enough.
-        let mut bits = bytes_to_bits(&bytes, 378);
-        bits[0] = false;
-        let mut x_coordinate = Fq::from_repr(BigInteger::from_bits(&bits[..377]));
-        let y_coordinate = bits[377];
-        // bytes[47] &= 0b00000011;
-        // let mut x_coordinate_too = Fq::new(FromBytes::read(&bytes[..]).unwrap());
-        // assert_eq!(x_coordinate, x_coordinate_too);
+        // The y-coordinate is at first bit.
+        let y_coordinate = (bytes[0] >> 7) & 1 == 1;
+        // In order to easily read the BigInt from the bytes, we use the first 7 bits as padding.
+        // However, because of the previous explanation, we also need to set the 8th bit to 0.
+        // Thus, we can nullify the whole first byte.
+        bytes[0] = 0;
+        let mut x_coordinate = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..]));
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.
