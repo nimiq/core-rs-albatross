@@ -18,6 +18,21 @@ where
     ) -> Result<Self, SynthesisError>;
 }
 
+impl<I, ConstraintF: Field, A: AllocConstantGadget<I, ConstraintF>>
+    AllocConstantGadget<[I], ConstraintF> for Vec<A>
+{
+    fn alloc_const<CS: ConstraintSystem<ConstraintF>>(
+        mut cs: CS,
+        constant: &[I],
+    ) -> Result<Self, SynthesisError> {
+        let mut vec = Vec::new();
+        for (i, value) in constant.iter().enumerate() {
+            vec.push(A::alloc_const(cs.ns(|| format!("value_{}", i)), value)?);
+        }
+        Ok(vec)
+    }
+}
+
 impl<F: PrimeField> AllocConstantGadget<F, F> for FpGadget<F> {
     fn alloc_const<CS: ConstraintSystem<F>>(
         mut cs: CS,

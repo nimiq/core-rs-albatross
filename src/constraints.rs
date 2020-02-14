@@ -14,6 +14,9 @@ pub struct Benchmark {
     test_block: MacroBlock,
     generator: G2Projective,
     max_non_signers: u64,
+
+    // Public input
+    last_public_keys: Vec<G2Projective>,
 }
 
 impl Benchmark {
@@ -22,12 +25,14 @@ impl Benchmark {
         test_block: MacroBlock,
         generator: G2Projective,
         max_non_signers: u64,
+        last_public_keys: Vec<G2Projective>,
     ) -> Self {
         Self {
             genesis_keys,
             test_block,
             generator,
             max_non_signers,
+            last_public_keys,
         }
     }
 }
@@ -37,10 +42,17 @@ impl ConstraintSynthesizer<Fq> for Benchmark {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        let genesis_keys_var =
-            Vec::<G2Gadget<Bls12_377Parameters>>::alloc(cs.ns(|| "genesis keys"), || {
-                Ok(&self.genesis_keys[..])
-            })?;
+        assert_eq!(self.last_public_keys.len(), MacroBlock::SLOTS);
+
+        let last_public_keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc_input(
+            cs.ns(|| "last public keys"),
+            || Ok(&self.last_public_keys[..]),
+        )?;
+
+        let genesis_keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc_const(
+            cs.ns(|| "genesis keys"),
+            &self.genesis_keys[..],
+        )?;
 
         let block_var =
             MacroBlockGadget::alloc(cs.ns(|| "first macro block"), || Ok(&self.test_block))?;
@@ -59,6 +71,18 @@ impl ConstraintSynthesizer<Fq> for Benchmark {
             &max_non_signers_var,
             &generator_var,
         )?;
+
+        let last_block_var = block_var;
+
+        // Finally verify that the last block's public keys correspond to the public input.
+        // This assumes giving them in exactly the same order.
+        for (i, (key1, key2)) in last_public_keys_var
+            .iter()
+            .zip(last_block_var.public_keys.iter())
+            .enumerate()
+        {
+            key1.enforce_equal(cs.ns(|| format!("public key equality {}", i)), key2)?;
+        }
 
         Ok(())
     }

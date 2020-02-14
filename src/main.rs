@@ -20,11 +20,13 @@ use std::{
 
 use crate::constraints::Benchmark;
 use algebra::curves::bls12_377::G2Projective;
+use input::Input;
 use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 mod constraints;
+mod input;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use
@@ -53,6 +55,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         signer_bitmap: vec![],
     };
 
+    let last_block_public_keys = vec![
+        key_pair.public_key.public_key,
+        key_pair2.public_key.public_key,
+    ];
+
     let macro_hash = macro_block.hash();
     let signature = key_pair.sign_hash(macro_hash);
     let max_non_signers = 2;
@@ -68,6 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         macro_block.clone(),
         generator,
         max_non_signers,
+        last_block_public_keys.clone(),
     );
     c.generate_constraints(&mut test_cs)?;
     println!("Number of constraints: {}", test_cs.num_constraints());
@@ -86,6 +94,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             macro_block.clone(),
             generator,
             max_non_signers,
+            last_block_public_keys.clone(),
         );
         generate_random_parameters::<SW6, _, _>(c, rng)?
     };
@@ -103,6 +112,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             macro_block.clone(),
             generator,
             max_non_signers,
+            last_block_public_keys.clone(),
         );
         // Create a proof with our parameters.
         create_random_proof(c, &params, rng)?
@@ -110,7 +120,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     total_proving += start.elapsed();
 
-    let inputs: Vec<Fq> = vec![];
+    let mut inputs: Vec<Fq> = vec![];
+    for key in last_block_public_keys.iter() {
+        Input::append_to_inputs(&key.into_affine(), &mut inputs);
+    }
 
     let start = Instant::now();
     // let proof = Proof::read(&proof_vec[..]).unwrap();
