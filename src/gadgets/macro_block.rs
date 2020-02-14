@@ -156,9 +156,10 @@ impl MacroBlockGadget {
         for (i, (key, included)) in public_keys
             .iter()
             .zip(key_bitmap.iter())
-            .skip(1)
+            .skip(2)
             .enumerate()
         {
+            println!("{:?}", public_keys);
             let new_sum = sum.add(cs.ns(|| format!("add public key {}", i)), key)?;
             let cond_sum = CondSelectGadget::conditionally_select(
                 cs.ns(|| format!("conditionally add public key {}", i)),
