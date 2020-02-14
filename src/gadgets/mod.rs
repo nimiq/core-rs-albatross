@@ -3,6 +3,7 @@ use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::bits::uint32::UInt32;
 
 pub mod check_sig;
+pub mod constant;
 pub mod g2_to_blake2s;
 pub mod macro_block;
 pub mod smaller_than;

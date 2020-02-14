@@ -6,6 +6,7 @@ use r1cs_std::fields::fp::FpGadget;
 use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
 use r1cs_std::prelude::*;
 
+use crate::gadgets::constant::AllocConstantGadget;
 use crate::gadgets::macro_block::{MacroBlock, MacroBlockGadget};
 
 pub struct Benchmark {
@@ -44,12 +45,11 @@ impl ConstraintSynthesizer<Fq> for Benchmark {
         let block_var =
             MacroBlockGadget::alloc(cs.ns(|| "first macro block"), || Ok(&self.test_block))?;
 
-        let generator_var =
-            G2Gadget::<Bls12_377Parameters>::alloc(cs.ns(|| "sig"), || Ok(&self.generator))?;
+        let generator_var: G2Gadget<Bls12_377Parameters> =
+            AllocConstantGadget::alloc_const(cs.ns(|| "generator"), &self.generator)?;
 
-        let mut max_non_signers_var = FpGadget::zero(cs.ns(|| "max_signers"))?;
-        max_non_signers_var.add_constant_in_place(
-            cs.ns(|| "add max_non_signers"),
+        let max_non_signers_var: FpGadget<SW6Fr> = AllocConstantGadget::alloc_const(
+            cs.ns(|| "max non signers"),
             &SW6Fr::from(self.max_non_signers),
         )?;
 
