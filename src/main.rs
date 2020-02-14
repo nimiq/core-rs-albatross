@@ -18,7 +18,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::constraints::Benchmark;
+use crate::constraints::Circuit;
 use algebra::curves::bls12_377::G2Projective;
 use input::Input;
 use nimiq_bls::{KeyPair, SecureGenerate};
@@ -48,6 +48,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut macro_block = MacroBlock {
         header_hash: [0; 32],
         public_keys: vec![
+            key_pair2.public_key.public_key,
+            key_pair.public_key.public_key,
+        ],
+        signature: None,
+        signer_bitmap: vec![],
+    };
+
+    let mut header_hash = [0; 32];
+    header_hash[2] = 212;
+    header_hash[20] = 118;
+    let mut macro_block2 = MacroBlock {
+        header_hash,
+        public_keys: vec![
             key_pair.public_key.public_key,
             key_pair2.public_key.public_key,
         ],
@@ -60,19 +73,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         key_pair2.public_key.public_key,
     ];
 
-    let macro_hash = macro_block.hash();
-    let signature = key_pair.sign_hash(macro_hash);
     let max_non_signers = 2;
-
-    macro_block.signature = Some(signature.signature);
+    let macro_hash = macro_block.hash();
+    macro_block.signature = Some(key_pair.sign_hash(macro_hash).signature);
     let signers_bitmap = vec![true, false];
     macro_block.signer_bitmap = signers_bitmap;
 
+    let macro_hash2 = macro_block2.hash();
+    macro_block2.signature = Some(key_pair2.sign_hash(macro_hash2).signature);
+    let signers_bitmap = vec![true, false];
+    macro_block2.signer_bitmap = signers_bitmap;
+
     // Test constraint system first.
     let mut test_cs = TestConstraintSystem::new();
-    let c = Benchmark::new(
+    let c = Circuit::new(
         genesis_keys.clone(),
-        macro_block.clone(),
+        vec![macro_block.clone(), macro_block2.clone()],
         generator,
         max_non_signers,
         last_block_public_keys.clone(),
@@ -89,9 +105,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Create parameters for our circuit
     let start = Instant::now();
     let params = {
-        let c = Benchmark::new(
+        let c = Circuit::new(
             genesis_keys.clone(),
-            macro_block.clone(),
+            vec![macro_block.clone(), macro_block2.clone()],
             generator,
             max_non_signers,
             last_block_public_keys.clone(),
@@ -107,9 +123,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let proof = {
         // Create an instance of our circuit (with the witness)
-        let c = Benchmark::new(
+        let c = Circuit::new(
             genesis_keys.clone(),
-            macro_block.clone(),
+            vec![macro_block.clone(), macro_block2.clone()],
             generator,
             max_non_signers,
             last_block_public_keys.clone(),

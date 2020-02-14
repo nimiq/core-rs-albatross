@@ -2,7 +2,7 @@ use algebra::fields::sw6::Fr as SW6Fr;
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::groups::curves::short_weierstrass::bls12::bls12_377::{G1Gadget, G2Gadget};
-use r1cs_std::prelude::{AllocGadget, CondSelectGadget, EqGadget, FieldGadget, GroupGadget};
+use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
 
 use crate::gadgets::check_sig::CheckSigGadget;
 use crate::gadgets::g2_to_blake2s::G2ToBlake2sGadget;
@@ -11,13 +11,15 @@ use crate::gadgets::smaller_than::SmallerThanGadget;
 use crate::gadgets::xof_hash::XofHashGadget;
 use crate::gadgets::xof_hash_to_g1::XofHashToG1Gadget;
 use algebra::curves::bls12_377::{G1Projective, G2Projective};
-use algebra::{One, Zero};
+use algebra::fields::bls12_377::Fr;
+use algebra::{One, ProjectiveCurve, Zero};
 use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
 use nimiq_bls::PublicKey;
 use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher};
 use r1cs_std::fields::fp::FpGadget;
 use r1cs_std::Assignment;
 use std::borrow::{Borrow, Cow};
+use std::ops::Mul;
 
 #[derive(Clone)]
 pub struct MacroBlock {
@@ -58,9 +60,13 @@ impl Default for MacroBlock {
     fn default() -> Self {
         MacroBlock {
             header_hash: [0; 32],
-            public_keys: vec![G2Projective::zero(); MacroBlock::SLOTS],
-            signature: None,
-            signer_bitmap: vec![false; MacroBlock::SLOTS],
+            // TODO: Replace by a proper number.
+            public_keys: vec![
+                G2Projective::prime_subgroup_generator().mul(&Fr::from(2149u32));
+                MacroBlock::SLOTS
+            ],
+            signature: Some(G1Projective::prime_subgroup_generator().mul(&Fr::from(2013u32))),
+            signer_bitmap: vec![true; MacroBlock::SLOTS],
         }
     }
 }
@@ -79,44 +85,64 @@ impl MacroBlockGadget {
         &self.public_keys
     }
 
-    pub fn verify<CS: ConstraintSystem<SW6Fr>>(
+    pub fn conditional_verify<CS: ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
         prev_public_keys: &[G2Gadget],
         max_non_signers: &FpGadget<SW6Fr>,
         generator: &G2Gadget,
-    ) -> Result<(), SynthesisError> {
-        let hash_point = self.to_g1(cs.ns(|| "create hash point"))?;
+        condition: &Boolean,
+    ) -> Result<Vec<G2Gadget>, SynthesisError> {
+        let hash_point = self.to_g1(cs.ns(|| "create hash point"), generator)?;
 
         let aggregate_public_key = Self::aggregate_public_key(
             cs.ns(|| "aggregate public keys"),
             prev_public_keys,
             &self.signer_bitmap,
             max_non_signers,
+            generator,
         )?;
 
-        CheckSigGadget::check_signature(
+        CheckSigGadget::conditional_check_signature(
             cs.ns(|| "check signature"),
             &aggregate_public_key,
             generator,
             &self.signature,
             &hash_point,
-        )
+            condition,
+        )?;
+
+        // Either return the prev_public_keys or this block's public keys,
+        // depending on the condition.
+        let mut public_keys = vec![];
+        for (i, (prev_key, current_key)) in prev_public_keys
+            .iter()
+            .zip(self.public_keys.iter())
+            .enumerate()
+        {
+            // If condition is true, select current key, else previous key.
+            let last_verified_public_key = CondSelectGadget::conditionally_select(
+                cs.ns(|| format!("select pubkey {}", i)),
+                condition,
+                current_key,
+                prev_key,
+            )?;
+            public_keys.push(last_verified_public_key);
+        }
+        Ok(public_keys)
     }
 
     pub fn to_g1<CS: ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
+        generator: &G2Gadget,
     ) -> Result<G1Gadget, SynthesisError> {
         // Sum public keys and hash them.
-        let mut sum = Cow::Borrowed(
-            self.public_keys
-                .get(0)
-                .ok_or(SynthesisError::Unsatisfiable)?,
-        );
-        for (i, key) in self.public_keys.iter().skip(1).enumerate() {
+        let mut sum = Cow::Borrowed(generator);
+        for (i, key) in self.public_keys.iter().enumerate() {
             sum = Cow::Owned(sum.add(cs.ns(|| format!("add public key {}", i)), key)?);
         }
+        sum = Cow::Owned(sum.sub(cs.ns(|| "finalize sum"), generator)?);
 
         let hash = G2ToBlake2sGadget::hash_from_g2(cs.ns(|| "public keys to hash"), &sum)?;
 
@@ -141,29 +167,20 @@ impl MacroBlockGadget {
         Ok(g1)
     }
 
-    /// Public keys must be in an order such that the `key_bitmap` is true for the first public key.
     pub fn aggregate_public_key<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
         public_keys: &[G2Gadget],
         key_bitmap: &[Boolean],
         max_non_signers: &FpGadget<SW6Fr>,
+        generator: &G2Gadget,
     ) -> Result<G2Gadget, SynthesisError> {
         // Sum public keys.
-        // Since the neutral element is not allowed, we enforce the first public key to be always
-        // included in the `key_bitmap`.
-        key_bitmap[0]
-            .enforce_equal(cs.ns(|| "enforce first key true"), &Boolean::constant(true))?;
         let mut num_non_signers = FpGadget::zero(cs.ns(|| "num used public keys"))?;
 
-        let mut sum = Cow::Borrowed(public_keys.get(0).ok_or(SynthesisError::Unsatisfiable)?);
+        let mut sum = Cow::Borrowed(generator);
 
         // Conditionally add all other public keys.
-        for (i, (key, included)) in public_keys
-            .iter()
-            .zip(key_bitmap.iter())
-            .skip(1)
-            .enumerate()
-        {
+        for (i, (key, included)) in public_keys.iter().zip(key_bitmap.iter()).enumerate() {
             let new_sum = sum.add(cs.ns(|| format!("add public key {}", i)), key)?;
             let cond_sum = CondSelectGadget::conditionally_select(
                 cs.ns(|| format!("conditionally add public key {}", i)),
@@ -178,6 +195,7 @@ impl MacroBlockGadget {
             )?;
             sum = Cow::Owned(cond_sum);
         }
+        sum = Cow::Owned(sum.sub(cs.ns(|| "finalize aggregate public key"), generator)?);
 
         // Enforce enough signers.
         SmallerThanGadget::enforce_smaller_than(

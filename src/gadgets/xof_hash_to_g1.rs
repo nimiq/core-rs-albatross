@@ -18,6 +18,7 @@ use r1cs_std::{
     Assignment,
 };
 
+use crate::gadgets::constant::AllocConstantGadget;
 use crate::gadgets::y_to_bit::YToBitGadget;
 
 pub struct XofHashToG1Gadget {}
@@ -191,10 +192,10 @@ impl XofHashToG1Gadget {
         mut cs: CS,
         p: &G1Gadget<Bls12_377Parameters>,
     ) -> Result<G1Gadget<Bls12_377Parameters>, SynthesisError> {
+        // TODO: Do not allocate a new generator for every call.
         let generator = Bls12_377G1Projective::prime_subgroup_generator();
-        // TODO: Generator should probably not be a private input.
         let generator_var =
-            G1Gadget::<Bls12_377Parameters>::alloc(cs.ns(|| "generator"), || Ok(generator))?;
+            G1Gadget::<Bls12_377Parameters>::alloc_const(cs.ns(|| "generator"), &generator)?;
         let mut x_bits = BitIterator::new(Bls12_377G1Parameters::COFACTOR)
             .map(|b| Boolean::constant(b))
             .collect::<Vec<Boolean>>();
