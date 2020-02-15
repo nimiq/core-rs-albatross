@@ -66,6 +66,45 @@ fn test_working_chain() {
     assert!(test_cs.is_satisfied())
 }
 
+#[test]
+fn test_invalid_commit_subset() {
+    let generator = G2Projective::prime_subgroup_generator();
+    let (key_pair1, key_pair2) = setup_keys();
+
+    let genesis_keys = vec![
+        key_pair1.public_key.public_key,
+        key_pair2.public_key.public_key,
+    ];
+
+    let mut macro_block1 = MacroBlock::without_signatures(
+        Circuit::EPOCH_LENGTH,
+        [0; 32],
+        vec![
+            key_pair1.public_key.public_key,
+            key_pair2.public_key.public_key,
+        ],
+    );
+
+    let last_block_public_keys = macro_block1.public_keys.clone();
+
+    let max_non_signers = 2;
+    macro_block1.sign_prepare(&key_pair1, 0);
+    macro_block1.sign_commit(&key_pair2, 1);
+
+    // Test constraint system first.
+    let mut test_cs = TestConstraintSystem::new();
+    let c = Circuit::new(
+        genesis_keys.clone(),
+        vec![macro_block1],
+        generator,
+        max_non_signers,
+        last_block_public_keys.clone(),
+    );
+    c.generate_constraints(&mut test_cs).unwrap();
+
+    assert!(!test_cs.is_satisfied())
+}
+
 fn setup_keys() -> (KeyPair, KeyPair) {
     let key1 = KeyPair::from(
         SecretKey::deserialize_from_vec(
