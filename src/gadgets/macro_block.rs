@@ -51,11 +51,12 @@ impl MacroBlockGadget {
         &mut self,
         mut cs: CS,
         prev_public_keys: &[G2Gadget],
+        prev_public_key_sum: &G2Gadget,
         max_non_signers: &FpGadget<SW6Fr>,
         block_number: &UInt32,
         generator: &G2Gadget,
         condition: &Boolean,
-    ) -> Result<Vec<G2Gadget>, SynthesisError> {
+    ) -> Result<G2Gadget, SynthesisError> {
         // Verify prepare signature.
         self.conditional_verify_signature(
             cs.ns(|| "prepare"),
@@ -78,24 +79,16 @@ impl MacroBlockGadget {
             condition,
         )?;
 
-        // Either return the prev_public_keys or this block's public keys,
+        // Either return the prev_public_key_sum or this block's public key sum,
         // depending on the condition.
-        let mut public_keys = vec![];
-        for (i, (prev_key, current_key)) in prev_public_keys
-            .iter()
-            .zip(self.public_keys.iter())
-            .enumerate()
-        {
-            // If condition is true, select current key, else previous key.
-            let last_verified_public_key = CondSelectGadget::conditionally_select(
-                cs.ns(|| format!("select pubkey {}", i)),
-                condition,
-                current_key,
-                prev_key,
-            )?;
-            public_keys.push(last_verified_public_key);
-        }
-        Ok(public_keys)
+        // If condition is true, select current key, else previous key.
+        let last_verified_public_key_sum = CondSelectGadget::conditionally_select(
+            cs.ns(|| "select pubkey"),
+            condition,
+            self.sum_public_keys.as_ref().get()?,
+            prev_public_key_sum,
+        )?;
+        Ok(last_verified_public_key_sum)
     }
 
     fn conditional_verify_signature<CS: ConstraintSystem<SW6Fr>>(

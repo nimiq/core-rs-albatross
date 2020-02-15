@@ -1,5 +1,5 @@
 use algebra::curves::bls12_377::G2Projective;
-use algebra::ProjectiveCurve;
+use algebra::{ProjectiveCurve, Zero};
 use beserial::Deserialize;
 use nano_sync::*;
 use nimiq_bls::{KeyPair, SecretKey};
@@ -45,6 +45,11 @@ fn test_working_chain() {
     );
 
     let last_block_public_keys = macro_block2.public_keys.clone();
+    // Add last public keys together.
+    let mut last_block_public_key_sum = G2Projective::zero();
+    for key in last_block_public_keys.iter() {
+        last_block_public_key_sum += &key;
+    }
 
     let min_signers = 1;
     macro_block1.sign(&key_pair1, 0);
@@ -60,7 +65,7 @@ fn test_working_chain() {
         vec![macro_block1, macro_block2],
         generator,
         min_signers,
-        last_block_public_keys.clone(),
+        last_block_public_key_sum,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -87,6 +92,11 @@ fn test_invalid_commit_subset() {
     );
 
     let last_block_public_keys = macro_block1.public_keys.clone();
+    // Add last public keys together.
+    let mut last_block_public_key_sum = G2Projective::zero();
+    for key in last_block_public_keys.iter() {
+        last_block_public_key_sum += &key;
+    }
 
     let min_signers = 1;
     macro_block1.sign_prepare(&key_pair1, 0);
@@ -100,7 +110,7 @@ fn test_invalid_commit_subset() {
         vec![macro_block1],
         generator,
         min_signers,
-        last_block_public_keys.clone(),
+        last_block_public_key_sum,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -127,6 +137,11 @@ fn test_invalid_hash() {
     );
 
     let last_block_public_keys = macro_block1.public_keys.clone();
+    // Add last public keys together.
+    let mut last_block_public_key_sum = G2Projective::zero();
+    for key in last_block_public_keys.iter() {
+        last_block_public_key_sum += &key;
+    }
 
     let min_signers = 1;
     macro_block1.sign(&key_pair1, 0);
@@ -142,7 +157,7 @@ fn test_invalid_hash() {
         vec![macro_block1],
         generator,
         min_signers,
-        last_block_public_keys.clone(),
+        last_block_public_key_sum,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -169,6 +184,11 @@ fn test_too_few_signers() {
     );
 
     let last_block_public_keys = macro_block1.public_keys.clone();
+    // Add last public keys together.
+    let mut last_block_public_key_sum = G2Projective::zero();
+    for key in last_block_public_keys.iter() {
+        last_block_public_key_sum += &key;
+    }
 
     let min_signers = 2;
     macro_block1.sign(&key_pair1, 0);
@@ -181,7 +201,7 @@ fn test_too_few_signers() {
         vec![macro_block1],
         generator,
         min_signers,
-        last_block_public_keys.clone(),
+        last_block_public_key_sum,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -207,8 +227,12 @@ fn test_invalid_last_public_keys() {
         ],
     );
 
-    let mut last_block_public_keys = macro_block1.public_keys.clone();
-    last_block_public_keys.reverse();
+    let last_block_public_keys = macro_block1.public_keys.clone();
+    // Add last public keys together.
+    let mut last_block_public_key_sum = G2Projective::zero();
+    for key in last_block_public_keys.iter().skip(1) {
+        last_block_public_key_sum += &key;
+    }
 
     let min_signers = 1;
     macro_block1.sign(&key_pair1, 0);
@@ -221,7 +245,7 @@ fn test_invalid_last_public_keys() {
         vec![macro_block1],
         generator,
         min_signers,
-        last_block_public_keys.clone(),
+        last_block_public_key_sum,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
