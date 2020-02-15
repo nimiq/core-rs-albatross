@@ -1,3 +1,4 @@
+use crate::gadgets::bytes_to_bits;
 use algebra::curves::bls12_377::{
     g1::Bls12_377G1Parameters, Bls12_377Parameters, G1Affine, G1Projective as Bls12_377G1Projective,
 };
@@ -7,13 +8,11 @@ use algebra::{
     AffineCurve, BigInteger, BitIterator, One, PrimeField, Zero,
 };
 use r1cs_core::SynthesisError;
-use r1cs_std::fields::fp::FpGadget;
 use r1cs_std::{
     alloc::AllocGadget,
     bits::ToBitsGadget,
     boolean::Boolean,
     eq::EqGadget,
-    fields::FieldGadget,
     groups::{curves::short_weierstrass::bls12::G1Gadget, GroupGadget},
     Assignment,
 };
@@ -24,8 +23,6 @@ use crate::gadgets::y_to_bit::YToBitGadget;
 pub struct XofHashToG1Gadget {}
 
 impl XofHashToG1Gadget {
-    pub const LOOP_LIMIT: usize = 256;
-
     fn bits_to_fp(
         input_bits: &[Boolean],
         y_bit: &Boolean,
@@ -46,21 +43,23 @@ impl XofHashToG1Gadget {
         Ok((x, greatest))
     }
 
-    /// Returns the nonce i, such that (x + i) is a valid x coordinate for G1.
-    fn try_and_increment(x: Bls12_377Fp, y: bool) -> Option<Bls12_377Fp> {
+    /// Returns the nonce i (as a vector of big endian bits), such that (x + i) is a valid x coordinate for G1.
+    fn try_and_increment(x: Bls12_377Fp, y: bool) -> Option<Vec<bool>> {
         let mut i = Bls12_377Fp::zero();
+        let mut i_byte: u8 = 0;
         let mut valid = false;
 
-        for _ in 0..Self::LOOP_LIMIT {
+        for _ in 0..256 {
             let tmp = x + &i;
             if G1Affine::get_point_from_x(tmp, y).is_some() {
                 valid = true;
                 break;
             }
             i += &Bls12_377Fp::one();
+            i_byte += 1;
         }
         if valid {
-            Some(i)
+            Some(bytes_to_bits(&[i_byte]))
         } else {
             None
         }
@@ -91,57 +90,36 @@ impl XofHashToG1Gadget {
         // We skip the first 7 bits, as this will make it easier in the non ZK-proof version.
         // The reason for this is that we can set the first 7 bits to 0 there and get a byte-aligned
         // number to read in.
-        let x_bits = &xof_bits[7..384];
+        let mut x_bits = vec![Boolean::constant(false)];
+        x_bits.extend_from_slice(&xof_bits[8..384]);
         let y_bit = &xof_bits[0];
-        let x_and_y = Self::bits_to_fp(x_bits, y_bit);
+        let nonce_bits =
+            Self::bits_to_fp(&x_bits, y_bit).and_then(|(x, y)| Self::try_and_increment(x, y).get());
 
-        // TODO: To reduce circuit size, we should do the addition of x and i on bit representations.
-        // -- Beginning of x + i --
-        // Allocate the Fp representation of `xof_bits`.
-        let x_var = FpGadget::alloc(cs.ns(|| "Fp repr of hash"), || {
-            let (x_val, _) = x_and_y
-                .as_ref()
-                .map_err(|_| SynthesisError::AssignmentMissing)?;
-            Ok(x_val)
-        })?;
+        // Allocate the bits of the nonce of try + increment.
+        let mut nonce_var = vec![];
+        for _ in 0..369 {
+            nonce_var.push(Boolean::constant(false));
+        }
+        for k in 369..377 {
+            nonce_var.push(Boolean::alloc(
+                cs.ns(|| format!("allocating bit {} for try and increment nonce", k)),
+                || {
+                    let nonce_val = nonce_bits
+                        .as_ref()
+                        .map_err(|_| SynthesisError::AssignmentMissing)?;
+                    Ok(nonce_val[k - 369])
+                },
+            )?);
+        }
 
-        // Convert x_var to bits.
-        let xof_bits_var = x_var.to_bits(cs.ns(|| "serialized x_var"))?;
-        // `xof_bits` still might be different at the highest bit, which we set to false.
-        // Thus, we check this first.
-        xof_bits_var[0].enforce_equal(
-            cs.ns(|| "enforce highest bit unset"),
-            &Boolean::constant(false),
+        // Perform x + i and append y_bit.
+        let mut point_bits = Boolean::binary_adder(
+            cs.ns(|| "binary addition of x coordinate and nonce"),
+            &x_bits,
+            &nonce_var,
         )?;
-
-        // Enforce equality on the range [1..], since the highest bit has been checked before.
-        Self::enforce_bit_slice_equality(
-            cs.ns(|| "x bit equality"),
-            &x_bits[1..],
-            &xof_bits_var[1..],
-        )?;
-
-        // Allocate nonce of try + increment.
-        let i_var = FpGadget::alloc(cs.ns(|| "try and increment nonce"), || {
-            let (x_val, y_val) = x_and_y?;
-            Self::try_and_increment(x_val, y_val).ok_or(SynthesisError::Unsatisfiable)
-        })?;
-
-        // Perform x + i and convert to bits.
-        let point_x_var = x_var.add(cs.ns(|| "x + i"), &i_var)?;
-
-        // Create point_bits and append y_bit.
-        let mut point_bits = point_x_var.to_bits(cs.ns(|| "valid x point bits"))?;
         point_bits.push(y_bit.clone()); // We add the y_bit for later slice comparison.
-                                        // -- End of x + i --
-
-        // Convert i_var to bits and check that it is <= 256.
-        let i_bits_var = i_var.to_bits(cs.ns(|| "serialized i_var"))?;
-        Boolean::enforce_smaller_or_equal_than::<_, _, Bls12_377Fp, _>(
-            cs.ns(|| "i <= 256"),
-            &i_bits_var,
-            &[Self::LOOP_LIMIT as u64],
-        )?;
 
         // Now, it is guaranteed that `point_bits` will result in a valid x coordinate.
         let expected_point_before_cofactor = G1Gadget::<Bls12_377Parameters>::alloc(
@@ -152,11 +130,6 @@ impl XofHashToG1Gadget {
                 } else {
                     // Remember to remove the y_bit.
                     let (x, y) = Self::bits_to_fp(&point_bits[..377], y_bit)?;
-                    assert_eq!(
-                        x,
-                        x_var.get_value().unwrap() + i_var.get_value().unwrap(),
-                        "x' = x + i"
-                    );
                     let p = G1Affine::get_point_from_x(x, y).unwrap();
                     Ok(p.into_projective())
                 }
