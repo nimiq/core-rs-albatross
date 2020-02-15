@@ -4,16 +4,13 @@ use crate::gadgets::xof_hash::XofHashGadget;
 use crate::gadgets::xof_hash_to_g1::XofHashToG1Gadget;
 use crate::gadgets::y_to_bit::YToBitGadget;
 use crate::gadgets::{hash_to_bits, pad_point_bits, reverse_inner_byte_order};
+use crate::macro_block::MacroBlock;
 use algebra::curves::bls12_377::Bls12_377Parameters;
-use algebra::curves::bls12_377::{G1Projective, G2Projective};
 use algebra::fields::bls12_377::FqParameters;
-use algebra::fields::bls12_377::Fr;
 use algebra::fields::sw6::Fr as SW6Fr;
-use algebra::{One, ProjectiveCurve, Zero};
+use algebra::One;
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
 use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
-use nimiq_bls::PublicKey;
-use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher};
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::bits::uint32::UInt32;
@@ -24,59 +21,23 @@ use r1cs_std::groups::curves::short_weierstrass::bls12::bls12_377::{G1Gadget, G2
 use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
 use r1cs_std::Assignment;
 use std::borrow::{Borrow, Cow};
-use std::ops::Mul;
 
-#[derive(Clone)]
-pub struct MacroBlock {
-    pub header_hash: [u8; 32],
-    pub public_keys: Vec<G2Projective>,
-    pub signature: Option<G1Projective>,
-    pub signer_bitmap: Vec<bool>,
-}
-
-impl MacroBlock {
-    pub const SLOTS: usize = 2; // TODO: Set correctly.
-
-    pub fn hash(&self, round_number: u8, block_number: u32) -> Blake2sHash {
-        let mut sum = G2Projective::zero();
-        for key in self.public_keys.iter() {
-            sum += key;
-        }
-
-        let sum_key = PublicKey { public_key: sum };
-
-        // Then, concatenate the prefix || header_hash || sum_pks,
-        // with prefix = (round number || block number).
-        let mut prefix = vec![round_number];
-        prefix.extend_from_slice(&block_number.to_be_bytes());
-        let mut msg = prefix;
-        msg.extend_from_slice(&self.header_hash);
-        msg.extend_from_slice(sum_key.compress().as_ref());
-
-        Blake2sHasher::new().chain(&msg).finish()
-    }
-}
-
-impl Default for MacroBlock {
-    fn default() -> Self {
-        MacroBlock {
-            header_hash: [0; 32],
-            // TODO: Replace by a proper number.
-            public_keys: vec![
-                G2Projective::prime_subgroup_generator().mul(&Fr::from(2149u32));
-                MacroBlock::SLOTS
-            ],
-            signature: Some(G1Projective::prime_subgroup_generator().mul(&Fr::from(2013u32))),
-            signer_bitmap: vec![true; MacroBlock::SLOTS],
-        }
-    }
+#[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+enum Round {
+    Prepare = 0,
+    Commit = 1,
 }
 
 pub struct MacroBlockGadget {
     pub header_hash: Vec<Boolean>,
     pub public_keys: Vec<G2Gadget>,
-    pub signature: G1Gadget,
-    pub signer_bitmap: Vec<Boolean>,
+    pub prepare_signature: G1Gadget,
+    pub prepare_signer_bitmap: Vec<Boolean>,
+    pub commit_signature: G1Gadget,
+    pub commit_signer_bitmap: Vec<Boolean>,
+
+    // Internal state used for caching.
+    sum_public_keys: Option<G2Gadget>,
 }
 
 impl MacroBlockGadget {
@@ -87,7 +48,7 @@ impl MacroBlockGadget {
     }
 
     pub fn conditional_verify<CS: ConstraintSystem<SW6Fr>>(
-        &self,
+        &mut self,
         mut cs: CS,
         prev_public_keys: &[G2Gadget],
         max_non_signers: &FpGadget<SW6Fr>,
@@ -95,29 +56,29 @@ impl MacroBlockGadget {
         generator: &G2Gadget,
         condition: &Boolean,
     ) -> Result<Vec<G2Gadget>, SynthesisError> {
-        let hash_point = self.to_g1(
-            cs.ns(|| "create hash point"),
-            &UInt8::constant(0),
+        // Verify prepare signature.
+        self.conditional_verify_signature(
+            cs.ns(|| "prepare"),
+            Round::Prepare,
+            prev_public_keys,
+            max_non_signers,
             block_number,
             generator,
-        )?;
-
-        let aggregate_public_key = Self::aggregate_public_key(
-            cs.ns(|| "aggregate public keys"),
-            prev_public_keys,
-            &self.signer_bitmap,
-            max_non_signers,
-            generator,
-        )?;
-
-        CheckSigGadget::conditional_check_signature(
-            cs.ns(|| "check signature"),
-            &aggregate_public_key,
-            generator,
-            &self.signature,
-            &hash_point,
             condition,
         )?;
+
+        // Verify commit signature.
+        self.conditional_verify_signature(
+            cs.ns(|| "commit"),
+            Round::Commit,
+            prev_public_keys,
+            max_non_signers,
+            block_number,
+            generator,
+            condition,
+        )?;
+
+        // TODO: Enforce signer subset restriction between signer bitmaps.
 
         // Either return the prev_public_keys or this block's public keys,
         // depending on the condition.
@@ -139,25 +100,74 @@ impl MacroBlockGadget {
         Ok(public_keys)
     }
 
-    pub fn to_g1<CS: ConstraintSystem<SW6Fr>>(
-        &self,
+    fn conditional_verify_signature<CS: ConstraintSystem<SW6Fr>>(
+        &mut self,
         mut cs: CS,
-        round_number: &UInt8,
+        round: Round,
+        prev_public_keys: &[G2Gadget],
+        max_non_signers: &FpGadget<SW6Fr>,
+        block_number: &UInt32,
+        generator: &G2Gadget,
+        condition: &Boolean,
+    ) -> Result<(), SynthesisError> {
+        let hash_point = self.to_g1(
+            cs.ns(|| "create hash point"),
+            round,
+            block_number,
+            generator,
+        )?;
+
+        let (signer_bitmap, signature) = match round {
+            Round::Prepare => (&self.prepare_signer_bitmap, &self.prepare_signature),
+            Round::Commit => (&self.commit_signer_bitmap, &self.commit_signature),
+        };
+
+        let aggregate_public_key = Self::aggregate_public_key(
+            cs.ns(|| "aggregate public keys"),
+            prev_public_keys,
+            signer_bitmap,
+            max_non_signers,
+            generator,
+        )?;
+
+        CheckSigGadget::conditional_check_signature(
+            cs.ns(|| "check signature"),
+            &aggregate_public_key,
+            generator,
+            signature,
+            &hash_point,
+            condition,
+        )?;
+        Ok(())
+    }
+
+    fn to_g1<CS: ConstraintSystem<SW6Fr>>(
+        &mut self,
+        mut cs: CS,
+        round: Round,
         block_number: &UInt32,
         generator: &G2Gadget,
     ) -> Result<G1Gadget, SynthesisError> {
-        // Sum public keys.
-        let mut sum = Cow::Borrowed(generator);
-        for (i, key) in self.public_keys.iter().enumerate() {
-            sum = Cow::Owned(sum.add(cs.ns(|| format!("add public key {}", i)), key)?);
+        // Sum public keys on first call.
+        if self.sum_public_keys.is_none() {
+            let mut sum = Cow::Borrowed(generator);
+            for (i, key) in self.public_keys.iter().enumerate() {
+                sum = Cow::Owned(sum.add(cs.ns(|| format!("add public key {}", i)), key)?);
+            }
+            sum = Cow::Owned(sum.sub(cs.ns(|| "finalize sum"), generator)?);
+
+            self.sum_public_keys = Some(sum.into_owned());
         }
-        sum = Cow::Owned(sum.sub(cs.ns(|| "finalize sum"), generator)?);
+        // Then use value from circuit.
+        let sum = self.sum_public_keys.as_ref().unwrap();
+
+        let round_number = UInt8::constant(round as u8);
 
         let hash = self.hash(
             cs.ns(|| "prefix || header_hash || sum_pks to hash"),
-            round_number,
+            &round_number,
             block_number,
-            &sum,
+            sum,
         )?;
         assert_eq!(hash.len(), 32 * 8);
 
@@ -282,15 +292,30 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             .collect::<Vec<Boolean>>();
         let public_keys =
             Vec::<G2Gadget>::alloc(cs.ns(|| "public keys"), || Ok(&value.public_keys[..]))?;
-        let signer_bitmap =
-            Vec::<Boolean>::alloc(cs.ns(|| "signer bitmap"), || Ok(&value.signer_bitmap[..]))?;
-        let signature = G1Gadget::alloc(cs.ns(|| "signature"), || value.signature.get())?;
+
+        let prepare_signer_bitmap =
+            Vec::<Boolean>::alloc(cs.ns(|| "prepare signer bitmap"), || {
+                Ok(&value.prepare_signer_bitmap[..])
+            })?;
+        let prepare_signature = G1Gadget::alloc(cs.ns(|| "prepare signature"), || {
+            value.prepare_signature.get()
+        })?;
+
+        let commit_signer_bitmap = Vec::<Boolean>::alloc(cs.ns(|| "commit signer bitmap"), || {
+            Ok(&value.commit_signer_bitmap[..])
+        })?;
+        let commit_signature = G1Gadget::alloc(cs.ns(|| "commit signature"), || {
+            value.commit_signature.get()
+        })?;
 
         Ok(MacroBlockGadget {
             header_hash,
             public_keys,
-            signature,
-            signer_bitmap,
+            prepare_signature,
+            prepare_signer_bitmap,
+            commit_signature,
+            commit_signer_bitmap,
+            sum_public_keys: None,
         })
     }
 
@@ -322,16 +347,31 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             .collect::<Vec<Boolean>>();
         let public_keys =
             Vec::<G2Gadget>::alloc_input(cs.ns(|| "public keys"), || Ok(&value.public_keys[..]))?;
-        let signer_bitmap = Vec::<Boolean>::alloc_input(cs.ns(|| "signer bitmap"), || {
-            Ok(&value.signer_bitmap[..])
+
+        let prepare_signer_bitmap =
+            Vec::<Boolean>::alloc_input(cs.ns(|| "prepare signer bitmap"), || {
+                Ok(&value.prepare_signer_bitmap[..])
+            })?;
+        let prepare_signature = G1Gadget::alloc_input(cs.ns(|| "prepare signature"), || {
+            value.prepare_signature.get()
         })?;
-        let signature = G1Gadget::alloc_input(cs.ns(|| "signature"), || value.signature.get())?;
+
+        let commit_signer_bitmap =
+            Vec::<Boolean>::alloc_input(cs.ns(|| "commit signer bitmap"), || {
+                Ok(&value.commit_signer_bitmap[..])
+            })?;
+        let commit_signature = G1Gadget::alloc_input(cs.ns(|| "commit signature"), || {
+            value.commit_signature.get()
+        })?;
 
         Ok(MacroBlockGadget {
             header_hash,
             public_keys,
-            signature,
-            signer_bitmap,
+            prepare_signature,
+            prepare_signer_bitmap,
+            commit_signature,
+            commit_signer_bitmap,
+            sum_public_keys: None,
         })
     }
 }

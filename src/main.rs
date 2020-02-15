@@ -1,10 +1,14 @@
 #![allow(dead_code)]
-use crate::gadgets::macro_block::MacroBlock;
 
-pub mod gadgets;
+// For benchmarking
+use std::{
+    error::Error,
+    time::{Duration, Instant},
+};
 
 // Bring in some tools for using pairing-friendly curves
 // We're going to use the BLS12-377 pairing-friendly elliptic curve.
+use algebra::curves::bls12_377::G2Projective;
 use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve};
 // For randomness (during paramgen and proof generation)
 use algebra::test_rng;
@@ -12,21 +16,19 @@ use algebra::test_rng;
 use groth16::{
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
 };
-// For benchmarking
-use std::{
-    error::Error,
-    time::{Duration, Instant},
-};
-
-use crate::constraints::Circuit;
-use algebra::curves::bls12_377::G2Projective;
-use input::Input;
 use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
+use input::Input;
+
+use crate::constraints::Circuit;
+use crate::macro_block::MacroBlock;
+
 mod constraints;
+pub mod gadgets;
 mod input;
+pub mod macro_block;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use
@@ -38,57 +40,47 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut total_verifying = Duration::new(0, 0);
 
     let generator = G2Projective::prime_subgroup_generator();
-    let key_pair = KeyPair::generate_default_csprng();
+    let key_pair1 = KeyPair::generate_default_csprng();
     let key_pair2 = KeyPair::generate_default_csprng();
     let genesis_keys = vec![
-        key_pair.public_key.public_key,
+        key_pair1.public_key.public_key,
         key_pair2.public_key.public_key,
     ];
 
-    let mut macro_block = MacroBlock {
-        header_hash: [0; 32],
-        public_keys: vec![
+    let mut macro_block1 = MacroBlock::without_signatures(
+        Circuit::EPOCH_LENGTH,
+        [0; 32],
+        vec![
             key_pair2.public_key.public_key,
-            key_pair.public_key.public_key,
+            key_pair1.public_key.public_key,
         ],
-        signature: None,
-        signer_bitmap: vec![],
-    };
+    );
 
     let mut header_hash = [0; 32];
     header_hash[2] = 212;
     header_hash[20] = 118;
-    let mut macro_block2 = MacroBlock {
+    let mut macro_block2 = MacroBlock::without_signatures(
+        Circuit::EPOCH_LENGTH * 2,
         header_hash,
-        public_keys: vec![
-            key_pair.public_key.public_key,
+        vec![
+            key_pair1.public_key.public_key,
             key_pair2.public_key.public_key,
         ],
-        signature: None,
-        signer_bitmap: vec![],
-    };
+    );
 
-    let last_block_public_keys = vec![
-        key_pair.public_key.public_key,
-        key_pair2.public_key.public_key,
-    ];
+    let last_block_public_keys = macro_block2.public_keys.clone();
 
     let max_non_signers = 2;
-    let macro_hash = macro_block.hash(0, Circuit::EPOCH_LENGTH);
-    macro_block.signature = Some(key_pair.sign_hash(macro_hash).signature);
-    let signers_bitmap = vec![true, false];
-    macro_block.signer_bitmap = signers_bitmap;
+    macro_block1.sign(&key_pair1, 0);
 
-    let macro_hash2 = macro_block2.hash(0, Circuit::EPOCH_LENGTH * 2);
-    macro_block2.signature = Some(key_pair2.sign_hash(macro_hash2).signature);
-    let signers_bitmap = vec![true, false];
-    macro_block2.signer_bitmap = signers_bitmap;
+    macro_block2.sign(&key_pair1, 1);
+    macro_block2.sign(&key_pair2, 0);
 
     // Test constraint system first.
     let mut test_cs = TestConstraintSystem::new();
     let c = Circuit::new(
         genesis_keys.clone(),
-        vec![macro_block.clone(), macro_block2.clone()],
+        vec![macro_block1.clone(), macro_block2.clone()],
         generator,
         max_non_signers,
         last_block_public_keys.clone(),
@@ -107,7 +99,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let params = {
         let c = Circuit::new(
             genesis_keys.clone(),
-            vec![macro_block.clone(), macro_block2.clone()],
+            vec![macro_block1.clone(), macro_block2.clone()],
             generator,
             max_non_signers,
             last_block_public_keys.clone(),
@@ -125,7 +117,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Create an instance of our circuit (with the witness)
         let c = Circuit::new(
             genesis_keys.clone(),
-            vec![macro_block.clone(), macro_block2.clone()],
+            vec![macro_block1.clone(), macro_block2.clone()],
             generator,
             max_non_signers,
             last_block_public_keys.clone(),

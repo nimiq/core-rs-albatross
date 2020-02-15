@@ -22,6 +22,7 @@ use std::error::Error;
 use std::str::FromStr;
 
 mod gadgets;
+mod macro_block;
 
 fn sum_keys_and_hash<CS: ConstraintSystem<Fq>>(
     mut cs: CS,

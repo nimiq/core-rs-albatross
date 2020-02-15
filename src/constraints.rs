@@ -7,7 +7,8 @@ use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
 use r1cs_std::prelude::*;
 
 use crate::gadgets::constant::AllocConstantGadget;
-use crate::gadgets::macro_block::{MacroBlock, MacroBlockGadget};
+use crate::gadgets::macro_block::MacroBlockGadget;
+use crate::macro_block::MacroBlock;
 
 pub struct Circuit {
     genesis_keys: Vec<G2Projective>,
@@ -91,7 +92,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         // This block then also provides the initial values for conditional selects during
         // the rest of the circuit. One example is the last block's list of public keys.
         let mut block_number = epoch_length.clone(); // Our first block to verify ist at EPOCH_LENGTH.
-        let first_block_var = blocks_var.remove(0);
+        let mut first_block_var = blocks_var.remove(0);
         let mut prev_public_keys = first_block_var.conditional_verify(
             cs.ns(|| "verify block 0"),
             &genesis_keys_var,
@@ -108,7 +109,11 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         // This enforces that once a block flag was set to false, no following block flag might
         // ever be set to true again.
         let mut verification_flag = Boolean::constant(true);
-        for (i, (block, block_flag)) in blocks_var.iter().zip(block_flags_var.iter()).enumerate() {
+        for (i, (block, block_flag)) in blocks_var
+            .iter_mut()
+            .zip(block_flags_var.iter())
+            .enumerate()
+        {
             // TODO: Use Fq instead.
             block_number = UInt32::addmany(
                 cs.ns(|| format!("block number for {}", i + 1)),
