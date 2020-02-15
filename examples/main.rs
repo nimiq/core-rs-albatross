@@ -71,6 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Test constraint system first.
     let mut test_cs = TestConstraintSystem::new();
     let c = Circuit::new(
+        3,
         genesis_keys.clone(),
         vec![macro_block1.clone(), macro_block2.clone()],
         generator,
@@ -90,6 +91,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let params = {
         let c = Circuit::new(
+            3,
             genesis_keys.clone(),
             vec![macro_block1.clone(), macro_block2.clone()],
             generator,
@@ -108,6 +110,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let proof = {
         // Create an instance of our circuit (with the witness)
         let c = Circuit::new(
+            3,
             genesis_keys.clone(),
             vec![macro_block1.clone(), macro_block2.clone()],
             generator,

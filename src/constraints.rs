@@ -11,6 +11,7 @@ use crate::gadgets::macro_block::MacroBlockGadget;
 use crate::macro_block::MacroBlock;
 
 pub struct Circuit {
+    max_blocks: usize,
     genesis_keys: Vec<G2Projective>,
     blocks: Vec<MacroBlock>,
     generator: G2Projective,
@@ -22,10 +23,10 @@ pub struct Circuit {
 }
 
 impl Circuit {
-    pub const MAX_BLOCKS: usize = 3;
     pub const EPOCH_LENGTH: u32 = 10;
 
     pub fn new(
+        max_blocks: usize,
         genesis_keys: Vec<G2Projective>,
         mut blocks: Vec<MacroBlock>,
         generator: G2Projective,
@@ -37,12 +38,13 @@ impl Circuit {
         let mut block_flags = vec![true; num_blocks - 1];
 
         // Fill up dummy data for rest of the blocks.
-        for _ in num_blocks..Self::MAX_BLOCKS {
+        for _ in num_blocks..max_blocks {
             blocks.push(Default::default());
             block_flags.push(false);
         }
 
         Self {
+            max_blocks,
             genesis_keys,
             blocks,
             generator,
@@ -59,8 +61,8 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         assert_eq!(self.last_public_keys.len(), MacroBlock::SLOTS);
-        assert_eq!(self.block_flags.len(), Self::MAX_BLOCKS - 1);
-        assert_eq!(self.blocks.len(), Self::MAX_BLOCKS);
+        assert_eq!(self.block_flags.len(), self.max_blocks - 1);
+        assert_eq!(self.blocks.len(), self.max_blocks);
 
         let last_public_keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc_input(
             cs.ns(|| "last public keys"),
