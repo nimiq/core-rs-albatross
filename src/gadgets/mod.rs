@@ -4,7 +4,6 @@ use r1cs_std::bits::uint32::UInt32;
 
 pub mod check_sig;
 pub mod constant;
-pub mod g2_to_blake2s;
 pub mod macro_block;
 pub mod smaller_than;
 pub mod xof_hash;
@@ -29,7 +28,7 @@ pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
 /// This function pads each chunk of `MODULUS_BITS` to full bytes, prepending the `y_bit`
 /// in the very front.
 /// This maintains *Big-Endian* representation.
-fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -> Vec<Boolean> {
+pub fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -> Vec<Boolean> {
     let point_len = P::MODULUS_BITS;
     let padding = 8 - (point_len % 8);
     assert_eq!(
@@ -75,7 +74,7 @@ fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -> Ve
 }
 
 /// Takes a hash output and returns the *Big-Endian* representation of it.
-fn hash_to_bits(hash: Vec<UInt32>) -> Vec<Boolean> {
+pub fn hash_to_bits(hash: Vec<UInt32>) -> Vec<Boolean> {
     hash.into_iter()
         .flat_map(|n| reverse_inner_byte_order(&n.to_bits_le()))
         .collect::<Vec<Boolean>>()
@@ -84,7 +83,7 @@ fn hash_to_bits(hash: Vec<UInt32>) -> Vec<Boolean> {
 /// Takes a data vector in *Big-Endian* representation and transforms it,
 /// such that each byte starts with the least significant bit (as expected by blake2 gadgets).
 /// b0 b1 b2 b3 b4 b5 b6 b7 b8 -> b8 b7 b6 b5 b4 b3 b2 b1 b0
-fn reverse_inner_byte_order(data: &[Boolean]) -> Vec<Boolean> {
+pub fn reverse_inner_byte_order(data: &[Boolean]) -> Vec<Boolean> {
     assert_eq!(data.len() % 8, 0);
     data.chunks(8)
         // Reverse each 8 bit chunk.

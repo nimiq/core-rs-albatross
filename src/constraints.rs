@@ -22,6 +22,7 @@ pub struct Circuit {
 
 impl Circuit {
     pub const MAX_BLOCKS: usize = 3;
+    pub const EPOCH_LENGTH: u32 = 10;
 
     pub fn new(
         genesis_keys: Vec<G2Projective>,
@@ -72,6 +73,8 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             cs.ns(|| "genesis keys"),
             &self.genesis_keys[..],
         )?;
+        // The block number is part of the hash.
+        let epoch_length = UInt32::constant(Self::EPOCH_LENGTH);
 
         let mut blocks_var =
             Vec::<MacroBlockGadget>::alloc(cs.ns(|| "macro blocks"), || Ok(&self.blocks[..]))?;
@@ -87,11 +90,13 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         // We always require at least one block to be verified.
         // This block then also provides the initial values for conditional selects during
         // the rest of the circuit. One example is the last block's list of public keys.
+        let mut block_number = epoch_length.clone(); // Our first block to verify ist at EPOCH_LENGTH.
         let first_block_var = blocks_var.remove(0);
         let mut prev_public_keys = first_block_var.conditional_verify(
             cs.ns(|| "verify block 0"),
             &genesis_keys_var,
             &max_non_signers_var,
+            &block_number,
             &generator_var,
             &Boolean::constant(true),
         )?;
@@ -104,6 +109,12 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         // ever be set to true again.
         let mut verification_flag = Boolean::constant(true);
         for (i, (block, block_flag)) in blocks_var.iter().zip(block_flags_var.iter()).enumerate() {
+            // TODO: Use Fq instead.
+            block_number = UInt32::addmany(
+                cs.ns(|| format!("block number for {}", i + 1)),
+                &[block_number, epoch_length.clone()],
+            )?;
+
             // Enforce verification.
             verification_flag = Boolean::and(
                 cs.ns(|| format!("verification flag {}", i + 1)),
@@ -119,6 +130,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
                 cs.ns(|| format!("verify block {}", i + 1)),
                 &prev_public_keys,
                 &max_non_signers_var,
+                &block_number,
                 &generator_var,
                 &block_flag,
             )?;

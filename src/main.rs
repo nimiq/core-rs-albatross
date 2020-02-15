@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::gadgets::macro_block::MacroBlock;
 
-mod gadgets;
+pub mod gadgets;
 
 // Bring in some tools for using pairing-friendly curves
 // We're going to use the BLS12-377 pairing-friendly elliptic curve.
@@ -74,12 +74,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     ];
 
     let max_non_signers = 2;
-    let macro_hash = macro_block.hash();
+    let macro_hash = macro_block.hash(0, Circuit::EPOCH_LENGTH);
     macro_block.signature = Some(key_pair.sign_hash(macro_hash).signature);
     let signers_bitmap = vec![true, false];
     macro_block.signer_bitmap = signers_bitmap;
 
-    let macro_hash2 = macro_block2.hash();
+    let macro_hash2 = macro_block2.hash(0, Circuit::EPOCH_LENGTH * 2);
     macro_block2.signature = Some(key_pair2.sign_hash(macro_hash2).signature);
     let signers_bitmap = vec![true, false];
     macro_block2.signer_bitmap = signers_bitmap;
