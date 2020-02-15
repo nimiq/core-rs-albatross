@@ -57,6 +57,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         macro_block1.sign(&keys[i], i);
     }
 
+    println!("=== Benchmarking Groth16: ====");
     println!("Parameter generation");
     // Create parameters for our circuit
     let start = Instant::now();
@@ -75,6 +76,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Prepare the verification key (for proof verification)
     let pvk = prepare_verifying_key(&params.vk);
     total_setup += start.elapsed();
+    println!(
+        "Verification key size: {:?} bytes",
+        336 + 48 * params.vk.gamma_abc_g1.len()
+    );
+    println!(
+        "Verification key gamma len: {:?}",
+        params.vk.gamma_abc_g1.len()
+    );
+    println!("Average setup time: {:?} seconds", total_setup);
 
     println!("Proof generation");
     let start = Instant::now();
@@ -93,6 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     total_proving += start.elapsed();
+    println!("Average proving time: {:?} seconds", total_proving);
 
     let mut inputs: Vec<Fq> = vec![];
     Input::append_to_inputs(&last_block_public_key_sum.into_affine(), &mut inputs);
@@ -104,18 +115,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let verified = verify_proof(&pvk, &proof, &inputs).unwrap();
     total_verifying += start.elapsed();
 
-    println!("=== Benchmarking Groth16: ====");
     println!("Result: {}", verified);
-    println!(
-        "Verification key size: {:?} bytes",
-        336 + 48 * params.vk.gamma_abc_g1.len()
-    );
-    println!(
-        "Verification key gamma len: {:?}",
-        params.vk.gamma_abc_g1.len()
-    );
-    println!("Average setup time: {:?} seconds", total_setup);
-    println!("Average proving time: {:?} seconds", total_proving);
     println!("Average verifying time: {:?} seconds", total_verifying);
 
     Ok(())
