@@ -20,15 +20,7 @@ use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
-use input::Input;
-
-use crate::constraints::Circuit;
-use crate::macro_block::MacroBlock;
-
-mod constraints;
-pub mod gadgets;
-mod input;
-pub mod macro_block;
+use nano_sync::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use

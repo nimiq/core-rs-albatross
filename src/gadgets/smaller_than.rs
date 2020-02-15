@@ -73,34 +73,17 @@ impl<ConstraintF: Field + PrimeField> SmallerThanGadget<ConstraintF> {
     }
 }
 
+#[allow(unused_assignments)]
 #[cfg(test)]
 mod test {
     use rand::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
 
     use super::SmallerThanGadget;
-    use algebra::{
-        curves::{
-            bls12_377::{
-                Bls12_377, G1Projective as Bls12_377G1Projective,
-                G2Projective as Bls12_377G2Projective,
-            },
-            ProjectiveCurve,
-        },
-        fields::bls12_377::Fr as Bls12_377Fr,
-        fields::sw6::Fr as SW6Fr,
-        fields::{Field, PrimeField},
-        UniformRand,
-    };
+    use algebra::{fields::sw6::Fr as SW6Fr, fields::PrimeField, UniformRand, Zero};
     use r1cs_core::ConstraintSystem;
     use r1cs_std::fields::fp::FpGadget;
-    use r1cs_std::{
-        alloc::AllocGadget,
-        boolean::Boolean,
-        groups::bls12::bls12_377::{G1Gadget as Bls12_377G1Gadget, G2Gadget as Bls12_377G2Gadget},
-        pairing::bls12_377::PairingGadget as Bls12_377PairingGadget,
-        test_constraint_system::TestConstraintSystem,
-    };
+    use r1cs_std::{alloc::AllocGadget, test_constraint_system::TestConstraintSystem};
 
     #[test]
     fn test_smaller_than() {

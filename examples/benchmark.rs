@@ -3,9 +3,9 @@ use algebra::curves::bls12_377::{Bls12_377Parameters, G2Projective};
 use algebra::fields::bls12_377::{Fq, FqParameters};
 use algebra::ProjectiveCurve;
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
-use gadgets::constant::AllocConstantGadget;
-use gadgets::y_to_bit::YToBitGadget;
-use gadgets::{pad_point_bits, reverse_inner_byte_order};
+use nano_sync::gadgets::constant::AllocConstantGadget;
+use nano_sync::gadgets::y_to_bit::YToBitGadget;
+use nano_sync::gadgets::{pad_point_bits, reverse_inner_byte_order};
 use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::alloc::AllocGadget;
@@ -20,9 +20,6 @@ use r1cs_std::ToBitsGadget;
 use std::env;
 use std::error::Error;
 use std::str::FromStr;
-
-mod gadgets;
-mod macro_block;
 
 fn sum_keys_and_hash<CS: ConstraintSystem<Fq>>(
     mut cs: CS,
