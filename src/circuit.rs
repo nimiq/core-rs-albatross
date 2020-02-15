@@ -25,12 +25,13 @@ pub struct Circuit {
 impl Circuit {
     pub const EPOCH_LENGTH: u32 = 10;
 
+    /// `min_signers` enforces the number of signers to be >= `min_signers`.
     pub fn new(
         max_blocks: usize,
         genesis_keys: Vec<G2Projective>,
         mut blocks: Vec<MacroBlock>,
         generator: G2Projective,
-        max_non_signers: u64,
+        min_signers: usize,
         last_public_keys: Vec<G2Projective>,
     ) -> Self {
         let num_blocks = blocks.len();
@@ -48,7 +49,8 @@ impl Circuit {
             genesis_keys,
             blocks,
             generator,
-            max_non_signers,
+            // non < max_excl <=> signers >= min_incl => max_excl = (SLOTS - min_incl + 1)
+            max_non_signers: (MacroBlock::SLOTS - min_signers + 1) as u64,
             last_public_keys,
             block_flags,
         }

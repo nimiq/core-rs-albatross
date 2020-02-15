@@ -46,7 +46,7 @@ fn test_working_chain() {
 
     let last_block_public_keys = macro_block2.public_keys.clone();
 
-    let max_non_signers = 2;
+    let min_signers = 1;
     macro_block1.sign(&key_pair1, 0);
 
     macro_block2.sign(&key_pair1, 1);
@@ -59,7 +59,7 @@ fn test_working_chain() {
         genesis_keys.clone(),
         vec![macro_block1, macro_block2],
         generator,
-        max_non_signers,
+        min_signers,
         last_block_public_keys.clone(),
     );
     c.generate_constraints(&mut test_cs).unwrap();
@@ -88,7 +88,7 @@ fn test_invalid_commit_subset() {
 
     let last_block_public_keys = macro_block1.public_keys.clone();
 
-    let max_non_signers = 2;
+    let min_signers = 1;
     macro_block1.sign_prepare(&key_pair1, 0);
     macro_block1.sign_commit(&key_pair2, 1);
 
@@ -99,7 +99,7 @@ fn test_invalid_commit_subset() {
         genesis_keys.clone(),
         vec![macro_block1],
         generator,
-        max_non_signers,
+        min_signers,
         last_block_public_keys.clone(),
     );
     c.generate_constraints(&mut test_cs).unwrap();
@@ -128,7 +128,7 @@ fn test_invalid_hash() {
 
     let last_block_public_keys = macro_block1.public_keys.clone();
 
-    let max_non_signers = 2;
+    let min_signers = 1;
     macro_block1.sign(&key_pair1, 0);
     macro_block1.sign(&key_pair2, 1);
 
@@ -141,7 +141,7 @@ fn test_invalid_hash() {
         genesis_keys.clone(),
         vec![macro_block1],
         generator,
-        max_non_signers,
+        min_signers,
         last_block_public_keys.clone(),
     );
     c.generate_constraints(&mut test_cs).unwrap();
@@ -170,7 +170,7 @@ fn test_too_few_signers() {
 
     let last_block_public_keys = macro_block1.public_keys.clone();
 
-    let max_non_signers = 1;
+    let min_signers = 2;
     macro_block1.sign(&key_pair1, 0);
 
     // Test constraint system first.
@@ -180,7 +180,7 @@ fn test_too_few_signers() {
         genesis_keys.clone(),
         vec![macro_block1],
         generator,
-        max_non_signers,
+        min_signers,
         last_block_public_keys.clone(),
     );
     c.generate_constraints(&mut test_cs).unwrap();
@@ -210,7 +210,7 @@ fn test_invalid_last_public_keys() {
     let mut last_block_public_keys = macro_block1.public_keys.clone();
     last_block_public_keys.reverse();
 
-    let max_non_signers = 2;
+    let min_signers = 1;
     macro_block1.sign(&key_pair1, 0);
 
     // Test constraint system first.
@@ -220,7 +220,7 @@ fn test_invalid_last_public_keys() {
         genesis_keys.clone(),
         vec![macro_block1],
         generator,
-        max_non_signers,
+        min_signers,
         last_block_public_keys.clone(),
     );
     c.generate_constraints(&mut test_cs).unwrap();

@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let last_block_public_keys = macro_block2.public_keys.clone();
 
-    let max_non_signers = 2;
+    let min_signers = 1;
     macro_block1.sign(&key_pair1, 0);
 
     macro_block2.sign(&key_pair1, 1);
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         genesis_keys.clone(),
         vec![macro_block1.clone(), macro_block2.clone()],
         generator,
-        max_non_signers,
+        min_signers,
         last_block_public_keys.clone(),
     );
     c.generate_constraints(&mut test_cs)?;
@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             genesis_keys.clone(),
             vec![macro_block1.clone(), macro_block2.clone()],
             generator,
-            max_non_signers,
+            min_signers,
             last_block_public_keys.clone(),
         );
         generate_random_parameters::<SW6, _, _>(c, rng)?
@@ -114,7 +114,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             genesis_keys.clone(),
             vec![macro_block1.clone(), macro_block2.clone()],
             generator,
-            max_non_signers,
+            min_signers,
             last_block_public_keys.clone(),
         );
         // Create a proof with our parameters.
