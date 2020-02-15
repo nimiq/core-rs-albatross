@@ -78,8 +78,6 @@ impl MacroBlockGadget {
             condition,
         )?;
 
-        // TODO: Enforce signer subset restriction between signer bitmaps.
-
         // Either return the prev_public_keys or this block's public keys,
         // depending on the condition.
         let mut public_keys = vec![];
@@ -117,15 +115,24 @@ impl MacroBlockGadget {
             generator,
         )?;
 
+        // Choose signer bitmap and signature based on round.
         let (signer_bitmap, signature) = match round {
             Round::Prepare => (&self.prepare_signer_bitmap, &self.prepare_signature),
             Round::Commit => (&self.commit_signer_bitmap, &self.commit_signature),
+        };
+
+        // Also, during the commit round, we need to check the max-non-signer restriction
+        // with respect to prepare_signer_bitmap & commit_signer_bitmap.
+        let reference_bitmap = match round {
+            Round::Prepare => None,
+            Round::Commit => Some(self.prepare_signer_bitmap.as_ref()),
         };
 
         let aggregate_public_key = Self::aggregate_public_key(
             cs.ns(|| "aggregate public keys"),
             prev_public_keys,
             signer_bitmap,
+            reference_bitmap,
             max_non_signers,
             generator,
         )?;
@@ -185,6 +192,7 @@ impl MacroBlockGadget {
         mut cs: CS,
         public_keys: &[G2Gadget],
         key_bitmap: &[Boolean],
+        reference_bitmap: Option<&[Boolean]>,
         max_non_signers: &FpGadget<SW6Fr>,
         generator: &G2Gadget,
     ) -> Result<G2Gadget, SynthesisError> {
@@ -202,6 +210,20 @@ impl MacroBlockGadget {
                 &new_sum,
                 sum.as_ref(),
             )?;
+
+            // If there is a reference bitmap, we only count such signatures as included
+            // that fulfill included & reference[i]. That means, we only count these that
+            // also signed in the reference bitmap (usually the prepare phase).
+            // The result is then negated to get the non-signers: ~(included & reference[i]).
+            let included = if let Some(reference) = reference_bitmap {
+                Boolean::and(
+                    cs.ns(|| format!("included & reference[{}]", i)),
+                    included,
+                    &reference[i],
+                )?
+            } else {
+                *included
+            };
             num_non_signers = num_non_signers.conditionally_add_constant(
                 cs.ns(|| format!("public key count {}", i)),
                 &included.not(),
