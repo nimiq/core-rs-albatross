@@ -1,4 +1,5 @@
 use crate::gadgets::{hash_to_bits, reverse_inner_byte_order};
+use crate::{end_cost_analysis, start_cost_analysis};
 use algebra::fields::{sw6::Fr as SW6Fr, sw6::FrParameters as SW6FrParameters, FpParameters};
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget_with_parameters;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
@@ -27,6 +28,9 @@ impl XofHashGadget {
         let iterations = ((Self::XOF_DIGEST_LENGTH + 32 - 1) / 32) as usize;
         let mut xof_bits = vec![];
         for i in 0..iterations {
+            #[allow(unused_mut)]
+            let mut cost = start_cost_analysis!(cs, || format!("XOF hash round {}", i));
+
             // Digest length is 32 for all except the last iteration.
             // If XOF_DIGEST_LENGTH % 32 != 0, the digest_length for the last iteration
             // needs to be set to this value.
@@ -55,6 +59,8 @@ impl XofHashGadget {
             )?;
             let xof_bits_i = hash_to_bits(xof_result);
             xof_bits.extend_from_slice(&xof_bits_i);
+
+            end_cost_analysis!(cs, cost);
         }
 
         // Forget unnecessary bits.

@@ -5,6 +5,7 @@ use crate::gadgets::xof_hash_to_g1::XofHashToG1Gadget;
 use crate::gadgets::y_to_bit::YToBitGadget;
 use crate::gadgets::{hash_to_bits, pad_point_bits, reverse_inner_byte_order};
 use crate::macro_block::MacroBlock;
+use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 use algebra::curves::bls12_377::Bls12_377Parameters;
 use algebra::fields::bls12_377::FqParameters;
 use algebra::fields::sw6::Fr as SW6Fr;
@@ -58,6 +59,8 @@ impl MacroBlockGadget {
         condition: &Boolean,
     ) -> Result<G2Gadget, SynthesisError> {
         // Verify prepare signature.
+        #[allow(unused_mut)]
+        let mut cost = start_cost_analysis!(cs, || "Verify prepare signature");
         self.conditional_verify_signature(
             cs.ns(|| "prepare"),
             Round::Prepare,
@@ -69,6 +72,7 @@ impl MacroBlockGadget {
         )?;
 
         // Verify commit signature.
+        next_cost_analysis!(cs, cost, || "Verify commit signature");
         self.conditional_verify_signature(
             cs.ns(|| "commit"),
             Round::Commit,
@@ -82,12 +86,14 @@ impl MacroBlockGadget {
         // Either return the prev_public_key_sum or this block's public key sum,
         // depending on the condition.
         // If condition is true, select current key, else previous key.
+        next_cost_analysis!(cs, cost, || "Select public key");
         let last_verified_public_key_sum = CondSelectGadget::conditionally_select(
             cs.ns(|| "select pubkey"),
             condition,
             self.sum_public_keys.as_ref().get()?,
             prev_public_key_sum,
         )?;
+        end_cost_analysis!(cs, cost);
         Ok(last_verified_public_key_sum)
     }
 
@@ -101,6 +107,8 @@ impl MacroBlockGadget {
         generator: &G2Gadget,
         condition: &Boolean,
     ) -> Result<(), SynthesisError> {
+        #[allow(unused_mut)]
+        let mut cost = start_cost_analysis!(cs, || "Create hash point");
         let hash_point = self.to_g1(
             cs.ns(|| "create hash point"),
             round,
@@ -121,6 +129,7 @@ impl MacroBlockGadget {
             Round::Commit => Some(self.prepare_signer_bitmap.as_ref()),
         };
 
+        next_cost_analysis!(cs, cost, || "Aggregate public key");
         let aggregate_public_key = Self::aggregate_public_key(
             cs.ns(|| "aggregate public keys"),
             prev_public_keys,
@@ -130,6 +139,7 @@ impl MacroBlockGadget {
             generator,
         )?;
 
+        next_cost_analysis!(cs, cost, || "Check signature");
         CheckSigGadget::conditional_check_signature(
             cs.ns(|| "check signature"),
             &aggregate_public_key,
@@ -138,6 +148,7 @@ impl MacroBlockGadget {
             &hash_point,
             condition,
         )?;
+        end_cost_analysis!(cs, cost);
         Ok(())
     }
 
@@ -149,6 +160,8 @@ impl MacroBlockGadget {
         generator: &G2Gadget,
     ) -> Result<G1Gadget, SynthesisError> {
         // Sum public keys on first call.
+        #[allow(unused_mut)]
+        let mut cost = start_cost_analysis!(cs, || "Sum public keys");
         if self.sum_public_keys.is_none() {
             let mut sum = Cow::Borrowed(generator);
             for (i, key) in self.public_keys.iter().enumerate() {
@@ -163,6 +176,7 @@ impl MacroBlockGadget {
 
         let round_number = UInt8::constant(round as u8);
 
+        next_cost_analysis!(cs, cost, || "Construct hash");
         let hash = self.hash(
             cs.ns(|| "prefix || header_hash || sum_pks to hash"),
             &round_number,
@@ -173,11 +187,13 @@ impl MacroBlockGadget {
 
         // Feed normal blake2s hash into XOF.
         // Our gadget expects normal *Big-Endian* order.
+        next_cost_analysis!(cs, cost, || "Feed to XOF");
         let xof_bits = XofHashGadget::xof_hash(cs.ns(|| "xof hash"), &hash)?;
 
         // Convert to G1 using try-and-increment method.
+        next_cost_analysis!(cs, cost, || "Convert to g1");
         let g1 = XofHashToG1Gadget::hash_to_g1(cs.ns(|| "xor hash to g1"), &xof_bits)?;
-
+        end_cost_analysis!(cs, cost);
         Ok(g1)
     }
 
@@ -228,7 +244,7 @@ impl MacroBlockGadget {
 
         // Enforce enough signers.
         SmallerThanGadget::enforce_smaller_than(
-            cs.ns(|| "non signers < 171"),
+            cs.ns(|| "enforce non signers"),
             &num_non_signers,
             max_non_signers,
         )?;
@@ -244,6 +260,8 @@ impl MacroBlockGadget {
         g2: &G2Gadget,
     ) -> Result<Vec<Boolean>, SynthesisError> {
         // Convert g2 to bits before hashing.
+        #[allow(unused_mut)]
+        let mut cost = start_cost_analysis!(cs, || "Convert g2 to bits");
         let serialized_bits: Vec<Boolean> = g2.x.to_bits(cs.ns(|| "bits"))?;
         let greatest_bit =
             YToBitGadget::<Bls12_377Parameters>::y_to_bit_g2(cs.ns(|| "y to bit"), g2)?;
@@ -272,8 +290,10 @@ impl MacroBlockGadget {
         let bits = reverse_inner_byte_order(&bits);
 
         // Hash serialized bits.
+        next_cost_analysis!(cs, cost, || "Blake2s hash");
         let h0 = blake2s_gadget(cs.ns(|| "h0 from serialized bits"), &bits)?;
         let h0_bits = hash_to_bits(h0);
+        end_cost_analysis!(cs, cost);
         Ok(h0_bits)
     }
 }

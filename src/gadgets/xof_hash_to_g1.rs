@@ -1,4 +1,3 @@
-use crate::gadgets::bytes_to_bits;
 use algebra::curves::bls12_377::{
     g1::Bls12_377G1Parameters, Bls12_377Parameters, G1Affine, G1Projective as Bls12_377G1Projective,
 };
@@ -17,8 +16,10 @@ use r1cs_std::{
     Assignment,
 };
 
+use crate::gadgets::bytes_to_bits;
 use crate::gadgets::constant::AllocConstantGadget;
 use crate::gadgets::y_to_bit::YToBitGadget;
+use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 pub struct XofHashToG1Gadget {}
 
@@ -87,6 +88,9 @@ impl XofHashToG1Gadget {
     ) -> Result<G1Gadget<Bls12_377Parameters>, SynthesisError> {
         assert_eq!(xof_bits.len(), 384); // 377 rounded to the next byte.
 
+        #[allow(unused_mut)]
+        let mut cost = start_cost_analysis!(cs, || "Alloc nonce");
+
         // We skip the first 7 bits, as this will make it easier in the non ZK-proof version.
         // The reason for this is that we can set the first 7 bits to 0 there and get a byte-aligned
         // number to read in.
@@ -114,6 +118,7 @@ impl XofHashToG1Gadget {
         }
 
         // Perform x + i and append y_bit.
+        next_cost_analysis!(cs, cost, || "Binary adder x + nonce");
         let mut point_bits = Boolean::binary_adder(
             cs.ns(|| "binary addition of x coordinate and nonce"),
             &x_bits,
@@ -122,6 +127,7 @@ impl XofHashToG1Gadget {
         point_bits.push(y_bit.clone()); // We add the y_bit for later slice comparison.
 
         // Now, it is guaranteed that `point_bits` will result in a valid x coordinate.
+        next_cost_analysis!(cs, cost, || "Allocate expected point");
         let expected_point_before_cofactor = G1Gadget::<Bls12_377Parameters>::alloc(
             cs.ns(|| "expected point before cofactor"),
             || {
@@ -139,6 +145,7 @@ impl XofHashToG1Gadget {
         // We're not going to implement get_point_from_x inside the circuit.
         // Instead, we assume the given G1Gadget and calculate its bit representation in the CS.
         // Then, we compare it bit wise with the `point_bits`.
+        next_cost_analysis!(cs, cost, || "Serialize expected point");
         let mut serialized_bits: Vec<Boolean> =
             expected_point_before_cofactor.x.to_bits(cs.ns(|| "bits"))?;
         let greatest_bit = YToBitGadget::<Bls12_377Parameters>::y_to_bit_g1(
@@ -147,17 +154,19 @@ impl XofHashToG1Gadget {
         )?;
         serialized_bits.push(greatest_bit);
 
+        next_cost_analysis!(cs, cost, || "Enforce equality with bit result");
         Self::enforce_bit_slice_equality(
             cs.ns(|| "point equality"),
             &serialized_bits,
             &point_bits,
         )?;
 
+        next_cost_analysis!(cs, cost, || "Scale by cofactor");
         let scaled_point = Self::scale_by_cofactor_g1(
             cs.ns(|| "scale by cofactor"),
             &expected_point_before_cofactor,
         )?;
-
+        end_cost_analysis!(cs, cost);
         Ok(scaled_point)
     }
 

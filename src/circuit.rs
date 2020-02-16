@@ -10,6 +10,7 @@ use std::borrow::Cow;
 use crate::gadgets::constant::AllocConstantGadget;
 use crate::gadgets::macro_block::MacroBlockGadget;
 use crate::macro_block::MacroBlock;
+use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 pub struct Circuit {
     max_blocks: usize,
@@ -66,11 +67,14 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         assert_eq!(self.block_flags.len(), self.max_blocks - 1);
         assert_eq!(self.blocks.len(), self.max_blocks);
 
+        #[allow(unused_mut)]
+        let mut cost = start_cost_analysis!(cs, || "Alloc public input");
         let last_public_key_sum_var =
             G2Gadget::<Bls12_377Parameters>::alloc_input(cs.ns(|| "last public key sum"), || {
                 Ok(&self.last_public_key_sum)
             })?;
 
+        next_cost_analysis!(cs, cost, || "Alloc private input & constants");
         let block_flags_var =
             Vec::<Boolean>::alloc(cs.ns(|| "block flags"), || Ok(&self.block_flags[..]))?;
 
@@ -94,6 +98,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
 
         // We're later on comparing the public input to the sum of public keys in the last block.
         // Hence, we start with the sum of all genesis keys.
+        next_cost_analysis!(cs, cost, || "Sum genesis keys");
         let mut sum = Cow::Borrowed(&generator_var);
         for (i, key) in genesis_keys_var.iter().enumerate() {
             sum = Cow::Owned(sum.add(cs.ns(|| format!("add genesis key {}", i)), key)?);
@@ -103,6 +108,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         // We always require at least one block to be verified.
         // This block then also provides the initial values for conditional selects during
         // the rest of the circuit. One example is the last block's list of public keys.
+        next_cost_analysis!(cs, cost, || "Verify first block");
         let mut block_number = epoch_length.clone(); // Our first block to verify ist at EPOCH_LENGTH.
         let mut first_block_var = blocks_var.remove(0);
         let mut prev_public_keys = &genesis_keys_var[..];
@@ -129,6 +135,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             .zip(block_flags_var.iter())
             .enumerate()
         {
+            next_cost_analysis!(cs, cost, || format!("Increase block number {}", i));
             // TODO: Use Fq instead.
             block_number = UInt32::addmany(
                 cs.ns(|| format!("block number for {}", i + 1)),
@@ -136,6 +143,10 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             )?;
 
             // Enforce verification.
+            next_cost_analysis!(cs, cost, || format!(
+                "Verification flag for block {}",
+                i + 1
+            ));
             verification_flag = Boolean::and(
                 cs.ns(|| format!("verification flag {}", i + 1)),
                 &verification_flag,
@@ -146,6 +157,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
                 block_flag,
             )?;
 
+            next_cost_analysis!(cs, cost, || format!("Verify block number {}", i + 1));
             prev_public_key_sum = block.conditional_verify(
                 cs.ns(|| format!("verify block {}", i + 1)),
                 &prev_public_keys,
@@ -159,8 +171,10 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         }
 
         // Finally verify that the last block's public key sum correspond to the public input.
+        next_cost_analysis!(cs, cost, || "Public key equality with input");
         last_public_key_sum_var
             .enforce_equal(cs.ns(|| "public key equality"), &prev_public_key_sum)?;
+        end_cost_analysis!(cs, cost);
 
         Ok(())
     }
