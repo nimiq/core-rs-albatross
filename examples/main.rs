@@ -20,6 +20,7 @@ use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
+use nano_sync::setup::{setup_crh, CRHWindow};
 use nano_sync::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -31,7 +32,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut total_proving = Duration::new(0, 0);
     let mut total_verifying = Duration::new(0, 0);
 
-    let generator = G2Projective::prime_subgroup_generator();
     let key_pair1 = KeyPair::generate_default_csprng();
     let key_pair2 = KeyPair::generate_default_csprng();
     let genesis_keys = vec![
@@ -68,10 +68,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let min_signers = 1;
-    macro_block1.sign(&key_pair1, 0);
+    let crh_parameters = setup_crh::<CRHWindow>();
+    macro_block1.sign(&key_pair1, 0, &crh_parameters);
 
-    macro_block2.sign(&key_pair1, 1);
-    macro_block2.sign(&key_pair2, 0);
+    macro_block2.sign(&key_pair1, 1, &crh_parameters);
+    macro_block2.sign(&key_pair2, 0, &crh_parameters);
 
     // Test constraint system first.
     let mut test_cs = TestConstraintSystem::new();
@@ -79,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         3,
         genesis_keys.clone(),
         vec![macro_block1.clone(), macro_block2.clone()],
-        generator,
+        crh_parameters.clone(),
         min_signers,
         last_block_public_key_sum,
     );
@@ -99,7 +100,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             3,
             genesis_keys.clone(),
             vec![macro_block1.clone(), macro_block2.clone()],
-            generator,
+            crh_parameters.clone(),
             min_signers,
             last_block_public_key_sum,
         );
@@ -118,7 +119,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             3,
             genesis_keys.clone(),
             vec![macro_block1.clone(), macro_block2.clone()],
-            generator,
+            crh_parameters,
             min_signers,
             last_block_public_key_sum,
         );

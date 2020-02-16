@@ -17,6 +17,7 @@ use algebra::bytes::FromBytes;
 use groth16::{create_random_proof, prepare_verifying_key, verify_proof, Parameters, VerifyingKey};
 use nimiq_bls::{KeyPair, SecureGenerate};
 
+use nano_sync::setup::{setup_crh, CRHWindow};
 use nano_sync::*;
 use std::fs::File;
 
@@ -30,7 +31,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Key setup");
     let num_keys = MacroBlock::SLOTS;
-    let generator = G2Projective::prime_subgroup_generator();
     let mut keys = vec![];
     for _ in 0..num_keys {
         let key_pair = KeyPair::generate_default_csprng();
@@ -51,9 +51,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("Macro block signing");
+    let crh_parameters = setup_crh::<CRHWindow>();
     let min_signers = num_keys / 2;
     for i in 0..min_signers {
-        macro_block1.sign(&keys[i], i);
+        macro_block1.sign(&keys[i], i, &crh_parameters);
     }
 
     // Reading parameters.
@@ -146,7 +147,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             1,
             genesis_keys.clone(),
             vec![macro_block1.clone()],
-            generator,
+            crh_parameters,
             min_signers,
             last_block_public_key_sum,
         );

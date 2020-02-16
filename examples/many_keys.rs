@@ -18,6 +18,7 @@ use groth16::{
 };
 use nimiq_bls::{KeyPair, SecureGenerate};
 
+use nano_sync::setup::{setup_crh, CRHWindow};
 use nano_sync::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -31,7 +32,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Key setup");
     let num_keys = MacroBlock::SLOTS;
-    let generator = G2Projective::prime_subgroup_generator();
     let mut keys = vec![];
     for _ in 0..num_keys {
         let key_pair = KeyPair::generate_default_csprng();
@@ -53,8 +53,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Macro block signing");
     let min_signers = num_keys / 2;
+    let crh_parameters = setup_crh::<CRHWindow>();
     for i in 0..min_signers {
-        macro_block1.sign(&keys[i], i);
+        macro_block1.sign(&keys[i], i, &crh_parameters);
     }
 
     println!("=== Benchmarking Groth16: ====");
@@ -66,7 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             1,
             genesis_keys.clone(),
             vec![macro_block1.clone()],
-            generator,
+            crh_parameters.clone(),
             min_signers,
             last_block_public_key_sum,
         );
@@ -101,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             1,
             genesis_keys.clone(),
             vec![macro_block1.clone()],
-            generator,
+            crh_parameters.clone(),
             min_signers,
             last_block_public_key_sum,
         );

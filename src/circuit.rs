@@ -1,6 +1,9 @@
-use algebra::curves::bls12_377::{Bls12_377Parameters, G2Projective};
+use algebra::curves::bls12_377::{Bls12_377Parameters, G1Projective, G2Projective};
 use algebra::fields::bls12_377::fq::Fq;
 use algebra::fields::sw6::Fr as SW6Fr;
+use algebra::ProjectiveCurve;
+use crypto_primitives::crh::pedersen::PedersenParameters;
+use crypto_primitives::FixedLengthCRHGadget;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::fields::fp::FpGadget;
 use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
@@ -8,8 +11,9 @@ use r1cs_std::prelude::*;
 use std::borrow::Cow;
 
 use crate::gadgets::constant::AllocConstantGadget;
-use crate::gadgets::macro_block::MacroBlockGadget;
+use crate::gadgets::macro_block::{CRHGadget, MacroBlockGadget};
 use crate::macro_block::MacroBlock;
+use crate::setup::CRH;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 pub struct Circuit {
@@ -19,6 +23,7 @@ pub struct Circuit {
     generator: G2Projective,
     max_non_signers: u64,
     block_flags: Vec<bool>,
+    crh_parameters: PedersenParameters<G1Projective>,
 
     // Public input
     last_public_key_sum: G2Projective,
@@ -32,7 +37,7 @@ impl Circuit {
         max_blocks: usize,
         genesis_keys: Vec<G2Projective>,
         mut blocks: Vec<MacroBlock>,
-        generator: G2Projective,
+        crh_parameters: PedersenParameters<G1Projective>,
         min_signers: usize,
         last_public_key_sum: G2Projective,
     ) -> Self {
@@ -50,9 +55,10 @@ impl Circuit {
             max_blocks,
             genesis_keys,
             blocks,
-            generator,
+            generator: G2Projective::prime_subgroup_generator(),
             // non < max_excl <=> signers >= min_incl => max_excl = (SLOTS - min_incl + 1)
             max_non_signers: (MacroBlock::SLOTS - min_signers + 1) as u64,
+            crh_parameters,
             last_public_key_sum,
             block_flags,
         }
@@ -96,6 +102,15 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             &SW6Fr::from(self.max_non_signers),
         )?;
 
+        next_cost_analysis!(cs, cost, || {
+            "Alloc parameters for Bowe-Hopwood Pedersen Hash"
+        });
+        let crh_parameters =
+            <CRHGadget as FixedLengthCRHGadget<CRH, SW6Fr>>::ParametersGadget::alloc(
+                &mut cs.ns(|| "crh_parameters"),
+                || Ok(&self.crh_parameters),
+            )?;
+
         // We're later on comparing the public input to the sum of public keys in the last block.
         // Hence, we start with the sum of all genesis keys.
         next_cost_analysis!(cs, cost, || "Sum genesis keys");
@@ -119,6 +134,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             &max_non_signers_var,
             &block_number,
             &generator_var,
+            &crh_parameters,
             &Boolean::constant(true),
         )?;
         prev_public_keys = first_block_var.public_keys();
@@ -165,6 +181,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
                 &max_non_signers_var,
                 &block_number,
                 &generator_var,
+                &crh_parameters,
                 &block_flag,
             )?;
             prev_public_keys = block.public_keys();

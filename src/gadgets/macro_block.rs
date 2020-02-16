@@ -1,17 +1,17 @@
 use crate::gadgets::check_sig::CheckSigGadget;
 use crate::gadgets::smaller_than::SmallerThanGadget;
-use crate::gadgets::xof_hash::XofHashGadget;
-use crate::gadgets::xof_hash_to_g1::XofHashToG1Gadget;
 use crate::gadgets::y_to_bit::YToBitGadget;
-use crate::gadgets::{hash_to_bits, pad_point_bits, reverse_inner_byte_order};
+use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
 use crate::macro_block::MacroBlock;
+use crate::setup::CRH;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
-use algebra::curves::bls12_377::Bls12_377Parameters;
+use algebra::curves::bls12_377::{Bls12_377Parameters, G1Projective};
 use algebra::fields::bls12_377::FqParameters;
 use algebra::fields::sw6::Fr as SW6Fr;
 use algebra::One;
-use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
+use crypto_primitives::crh::pedersen::constraints::PedersenCRHGadget;
 use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
+use crypto_primitives::FixedLengthCRHGadget;
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::bits::uint32::UInt32;
@@ -22,6 +22,9 @@ use r1cs_std::groups::curves::short_weierstrass::bls12::bls12_377::{G1Gadget, G2
 use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
 use r1cs_std::Assignment;
 use std::borrow::{Borrow, Cow};
+
+pub type CRHGadget = PedersenCRHGadget<G1Projective, SW6Fr, G1Gadget>;
+pub type CRHGadgetParameters = <CRHGadget as FixedLengthCRHGadget<CRH, SW6Fr>>::ParametersGadget;
 
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 enum Round {
@@ -56,6 +59,7 @@ impl MacroBlockGadget {
         max_non_signers: &FpGadget<SW6Fr>,
         block_number: &UInt32,
         generator: &G2Gadget,
+        crh_parameters: &CRHGadgetParameters,
         condition: &Boolean,
     ) -> Result<G2Gadget, SynthesisError> {
         // Verify prepare signature.
@@ -68,6 +72,7 @@ impl MacroBlockGadget {
             max_non_signers,
             block_number,
             generator,
+            crh_parameters,
             condition,
         )?;
 
@@ -80,6 +85,7 @@ impl MacroBlockGadget {
             max_non_signers,
             block_number,
             generator,
+            crh_parameters,
             condition,
         )?;
 
@@ -105,6 +111,7 @@ impl MacroBlockGadget {
         max_non_signers: &FpGadget<SW6Fr>,
         block_number: &UInt32,
         generator: &G2Gadget,
+        crh_parameters: &CRHGadgetParameters,
         condition: &Boolean,
     ) -> Result<(), SynthesisError> {
         #[allow(unused_mut)]
@@ -114,6 +121,7 @@ impl MacroBlockGadget {
             round,
             block_number,
             generator,
+            crh_parameters,
         )?;
 
         // Choose signer bitmap and signature based on round.
@@ -158,6 +166,7 @@ impl MacroBlockGadget {
         round: Round,
         block_number: &UInt32,
         generator: &G2Gadget,
+        crh_parameters: &CRHGadgetParameters,
     ) -> Result<G1Gadget, SynthesisError> {
         // Sum public keys on first call.
         #[allow(unused_mut)]
@@ -176,23 +185,14 @@ impl MacroBlockGadget {
 
         let round_number = UInt8::constant(round as u8);
 
-        next_cost_analysis!(cs, cost, || "Construct hash");
-        let hash = self.hash(
+        next_cost_analysis!(cs, cost, || "Construct Bowe-Hopwood Pedersen Hash");
+        let g1 = self.hash(
             cs.ns(|| "prefix || header_hash || sum_pks to hash"),
             &round_number,
             block_number,
             sum,
+            crh_parameters,
         )?;
-        assert_eq!(hash.len(), 32 * 8);
-
-        // Feed normal blake2s hash into XOF.
-        // Our gadget expects normal *Big-Endian* order.
-        next_cost_analysis!(cs, cost, || "Feed to XOF");
-        let xof_bits = XofHashGadget::xof_hash(cs.ns(|| "xof hash"), &hash)?;
-
-        // Convert to G1 using try-and-increment method.
-        next_cost_analysis!(cs, cost, || "Convert to g1");
-        let g1 = XofHashToG1Gadget::hash_to_g1(cs.ns(|| "xor hash to g1"), &xof_bits)?;
         end_cost_analysis!(cs, cost);
         Ok(g1)
     }
@@ -258,7 +258,8 @@ impl MacroBlockGadget {
         round_number: &UInt8,
         block_number: &UInt32,
         g2: &G2Gadget,
-    ) -> Result<Vec<Boolean>, SynthesisError> {
+        crh_parameters: &CRHGadgetParameters,
+    ) -> Result<G1Gadget, SynthesisError> {
         // Convert g2 to bits before hashing.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Convert g2 to bits");
@@ -288,13 +289,20 @@ impl MacroBlockGadget {
 
         // Prepare order of booleans for blake2s (it doesn't expect Big-Endian).
         let bits = reverse_inner_byte_order(&bits);
+        let input_bytes: Vec<UInt8> = bits
+            .chunks(8)
+            .map(|chunk| UInt8::from_bits_le(chunk))
+            .collect();
 
         // Hash serialized bits.
-        next_cost_analysis!(cs, cost, || "Blake2s hash");
-        let h0 = blake2s_gadget(cs.ns(|| "h0 from serialized bits"), &bits)?;
-        let h0_bits = hash_to_bits(h0);
+        next_cost_analysis!(cs, cost, || "Bowe-Hopwood Pedersen Hash");
+        let crh_result = <CRHGadget as FixedLengthCRHGadget<CRH, SW6Fr>>::check_evaluation_gadget(
+            &mut cs.ns(|| "crh_evaluation"),
+            crh_parameters,
+            &input_bytes,
+        )?;
         end_cost_analysis!(cs, cost);
-        Ok(h0_bits)
+        Ok(crh_result)
     }
 }
 

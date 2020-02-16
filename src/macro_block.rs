@@ -1,8 +1,9 @@
+use crate::setup::{CRH, G1_GENERATOR, G2_GENERATOR};
 use algebra::curves::bls12_377::{G1Projective, G2Projective};
-use algebra::fields::bls12_377::Fr;
-use algebra::{Group, ProjectiveCurve, Zero};
+use algebra::Zero;
+use crypto_primitives::crh::pedersen::PedersenParameters;
+use crypto_primitives::FixedLengthCRH;
 use nimiq_bls::{KeyPair, PublicKey};
-use nimiq_hash::{Blake2sHash, Blake2sHasher, Hasher};
 
 #[derive(Clone)]
 pub struct MacroBlock {
@@ -35,15 +36,25 @@ impl MacroBlock {
     }
 
     /// This function is only useful for testing purposes.
-    pub fn sign(&mut self, key_pair: &KeyPair, signer_id: usize) {
-        self.sign_prepare(key_pair, signer_id);
-        self.sign_commit(key_pair, signer_id);
+    pub fn sign(
+        &mut self,
+        key_pair: &KeyPair,
+        signer_id: usize,
+        parameters: &PedersenParameters<G1Projective>,
+    ) {
+        self.sign_prepare(key_pair, signer_id, parameters);
+        self.sign_commit(key_pair, signer_id, parameters);
     }
 
     /// This function is only useful for testing purposes.
-    pub fn sign_prepare(&mut self, key_pair: &KeyPair, signer_id: usize) {
-        let hash_point = self.hash(0);
-        let signature = key_pair.sign_hash(hash_point);
+    pub fn sign_prepare(
+        &mut self,
+        key_pair: &KeyPair,
+        signer_id: usize,
+        parameters: &PedersenParameters<G1Projective>,
+    ) {
+        let hash_point = self.hash(0, parameters);
+        let signature = key_pair.secret_key.sign_g1(hash_point);
 
         if let Some(sig) = self.prepare_signature.as_mut() {
             *sig += &signature.signature;
@@ -55,9 +66,14 @@ impl MacroBlock {
     }
 
     /// This function is only useful for testing purposes.
-    pub fn sign_commit(&mut self, key_pair: &KeyPair, signer_id: usize) {
-        let hash_point = self.hash(1);
-        let signature = key_pair.sign_hash(hash_point);
+    pub fn sign_commit(
+        &mut self,
+        key_pair: &KeyPair,
+        signer_id: usize,
+        parameters: &PedersenParameters<G1Projective>,
+    ) {
+        let hash_point = self.hash(1, parameters);
+        let signature = key_pair.secret_key.sign_g1(hash_point);
 
         if let Some(sig) = self.commit_signature.as_mut() {
             *sig += &signature.signature;
@@ -68,7 +84,11 @@ impl MacroBlock {
         self.commit_signer_bitmap[signer_id] = true;
     }
 
-    pub fn hash(&self, round_number: u8) -> Blake2sHash {
+    pub fn hash(
+        &self,
+        round_number: u8,
+        parameters: &PedersenParameters<G1Projective>,
+    ) -> G1Projective {
         let mut sum = G2Projective::zero();
         for key in self.public_keys.iter() {
             sum += key;
@@ -84,7 +104,7 @@ impl MacroBlock {
         msg.extend_from_slice(&self.header_hash);
         msg.extend_from_slice(sum_key.compress().as_ref());
 
-        Blake2sHasher::new().chain(&msg).finish()
+        CRH::evaluate(parameters, &msg).unwrap()
     }
 }
 
@@ -93,18 +113,10 @@ impl Default for MacroBlock {
         MacroBlock {
             block_number: 0,
             header_hash: [0; 32],
-            // TODO: Replace by a proper number.
-            public_keys: vec![
-                G2Projective::prime_subgroup_generator().mul(&Fr::from(2149u32));
-                MacroBlock::SLOTS
-            ],
-            prepare_signature: Some(
-                G1Projective::prime_subgroup_generator().mul(&Fr::from(2013u32)),
-            ),
+            public_keys: vec![*G2_GENERATOR; MacroBlock::SLOTS],
+            prepare_signature: Some(*G1_GENERATOR),
             prepare_signer_bitmap: vec![true; MacroBlock::SLOTS],
-            commit_signature: Some(
-                G1Projective::prime_subgroup_generator().mul(&Fr::from(2013u32)),
-            ),
+            commit_signature: Some(*G1_GENERATOR),
             commit_signer_bitmap: vec![true; MacroBlock::SLOTS],
         }
     }
