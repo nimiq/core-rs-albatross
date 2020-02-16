@@ -47,6 +47,7 @@ impl CheckSigGadget {
         Ok(())
     }
 
+    /// Implements signature aggregation from https://crypto.stanford.edu/%7Edabo/pubs/papers/aggreg.pdf .
     pub fn conditional_check_signatures<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
         public_keys: &[G2Gadget<Bls12_377Parameters>],

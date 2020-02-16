@@ -190,7 +190,7 @@ impl MacroBlockGadget {
 
         let round_number = UInt8::constant(round as u8);
 
-        next_cost_analysis!(cs, cost, || "Construct Bowe-Hopwood Pedersen Hash");
+        next_cost_analysis!(cs, cost, || "Construct Pedersen Hash");
         let g1 = self.hash(
             cs.ns(|| "prefix || header_hash || sum_pks to hash"),
             &round_number,
@@ -257,6 +257,13 @@ impl MacroBlockGadget {
         Ok(sum.into_owned())
     }
 
+    /// Calculates the Pedersen Hash for the block from:
+    /// prefix || header_hash || sum_pks
+    ///
+    /// Note that the Pedersen Hash is only collision-resistant
+    /// and does not provide pseudo-random output!
+    /// For our use-case, however, this suffices as the `header_hash`
+    /// provides enough entropy.
     pub fn hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
@@ -300,7 +307,7 @@ impl MacroBlockGadget {
             .collect();
 
         // Hash serialized bits.
-        next_cost_analysis!(cs, cost, || "Bowe-Hopwood Pedersen Hash");
+        next_cost_analysis!(cs, cost, || "Pedersen Hash");
         let crh_result = <CRHGadget as FixedLengthCRHGadget<CRH, SW6Fr>>::check_evaluation_gadget(
             &mut cs.ns(|| "crh_evaluation"),
             crh_parameters,

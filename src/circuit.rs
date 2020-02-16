@@ -111,9 +111,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             &G2_GENERATOR.into_affine(),
         )?;
 
-        next_cost_analysis!(cs, cost, || {
-            "Alloc parameters for Bowe-Hopwood Pedersen Hash"
-        });
+        next_cost_analysis!(cs, cost, || { "Alloc parameters for Pedersen Hash" });
         let crh_parameters =
             <CRHGadget as FixedLengthCRHGadget<CRH, SW6Fr>>::ParametersGadget::alloc(
                 &mut cs.ns(|| "crh_parameters"),
