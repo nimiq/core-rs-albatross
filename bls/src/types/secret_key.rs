@@ -21,7 +21,7 @@ impl SecretKey {
     }
 
     /// Creates a signature given a G1 point.
-    fn sign_g1(&self, hash_curve: G1Projective) -> Signature {
+    pub fn sign_g1(&self, hash_curve: G1Projective) -> Signature {
         Signature {
             signature: hash_curve * &self.secret_key,
         }
