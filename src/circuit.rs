@@ -6,14 +6,14 @@ use crypto_primitives::crh::pedersen::PedersenParameters;
 use crypto_primitives::FixedLengthCRHGadget;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
+use r1cs_std::groups::curves::short_weierstrass::bls12::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 use std::borrow::Cow;
 
 use crate::gadgets::constant::AllocConstantGadget;
 use crate::gadgets::macro_block::{CRHGadget, MacroBlockGadget};
 use crate::macro_block::MacroBlock;
-use crate::setup::CRH;
+use crate::setup::{CRH, G1_GENERATOR2, G2_GENERATOR};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 pub struct Circuit {
@@ -94,12 +94,21 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         let mut blocks_var =
             Vec::<MacroBlockGadget>::alloc(cs.ns(|| "macro blocks"), || Ok(&self.blocks[..]))?;
 
-        let generator_var: G2Gadget<Bls12_377Parameters> =
-            AllocConstantGadget::alloc_const(cs.ns(|| "generator"), &self.generator)?;
-
         let max_non_signers_var: FpGadget<SW6Fr> = AllocConstantGadget::alloc_const(
             cs.ns(|| "max non signers"),
             &SW6Fr::from(self.max_non_signers),
+        )?;
+
+        let generator_var: G2Gadget<Bls12_377Parameters> =
+            AllocConstantGadget::alloc_const(cs.ns(|| "generator"), &self.generator)?;
+
+        let sum_generator_g1_var: G1Gadget<Bls12_377Parameters> = AllocConstantGadget::alloc_const(
+            cs.ns(|| "sum generator g1"),
+            &G1_GENERATOR2.into_affine(),
+        )?;
+        let sum_generator_g2_var: G2Gadget<Bls12_377Parameters> = AllocConstantGadget::alloc_const(
+            cs.ns(|| "sum generator g2"),
+            &G2_GENERATOR.into_affine(),
         )?;
 
         next_cost_analysis!(cs, cost, || {
@@ -134,6 +143,8 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             &max_non_signers_var,
             &block_number,
             &generator_var,
+            &sum_generator_g1_var,
+            &sum_generator_g2_var,
             &crh_parameters,
             &Boolean::constant(true),
         )?;
@@ -181,6 +192,8 @@ impl ConstraintSynthesizer<Fq> for Circuit {
                 &max_non_signers_var,
                 &block_number,
                 &generator_var,
+                &sum_generator_g1_var,
+                &sum_generator_g2_var,
                 &crh_parameters,
                 &block_flag,
             )?;

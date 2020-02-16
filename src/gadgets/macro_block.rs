@@ -59,33 +59,49 @@ impl MacroBlockGadget {
         max_non_signers: &FpGadget<SW6Fr>,
         block_number: &UInt32,
         generator: &G2Gadget,
+        sum_generator_g1: &G1Gadget,
+        sum_generator_g2: &G2Gadget,
         crh_parameters: &CRHGadgetParameters,
         condition: &Boolean,
     ) -> Result<G2Gadget, SynthesisError> {
         // Verify prepare signature.
         #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Verify prepare signature");
-        self.conditional_verify_signature(
+        let mut cost = start_cost_analysis!(cs, || "Verify signatures");
+        let (hash0, pub_key0) = self.get_hash_and_public_keys(
             cs.ns(|| "prepare"),
             Round::Prepare,
             prev_public_keys,
             max_non_signers,
             block_number,
-            generator,
+            sum_generator_g2,
             crh_parameters,
-            condition,
         )?;
 
         // Verify commit signature.
         next_cost_analysis!(cs, cost, || "Verify commit signature");
-        self.conditional_verify_signature(
+        let (hash1, pub_key1) = self.get_hash_and_public_keys(
             cs.ns(|| "commit"),
             Round::Commit,
             prev_public_keys,
             max_non_signers,
             block_number,
-            generator,
+            sum_generator_g2,
             crh_parameters,
+        )?;
+
+        next_cost_analysis!(cs, cost, || "Add signatures");
+        let mut signature =
+            sum_generator_g1.add(cs.ns(|| "add prepare sig"), &self.prepare_signature)?;
+        signature = signature.add(cs.ns(|| "add commit sig"), &self.commit_signature)?;
+        signature = signature.sub(cs.ns(|| "finalize sig"), sum_generator_g1)?;
+
+        next_cost_analysis!(cs, cost, || "Check signature");
+        CheckSigGadget::conditional_check_signatures(
+            cs.ns(|| "check signatures"),
+            &[pub_key0, pub_key1],
+            generator,
+            &signature,
+            &[hash0, hash1],
             condition,
         )?;
 
@@ -103,7 +119,7 @@ impl MacroBlockGadget {
         Ok(last_verified_public_key_sum)
     }
 
-    fn conditional_verify_signature<CS: ConstraintSystem<SW6Fr>>(
+    fn get_hash_and_public_keys<CS: ConstraintSystem<SW6Fr>>(
         &mut self,
         mut cs: CS,
         round: Round,
@@ -112,8 +128,7 @@ impl MacroBlockGadget {
         block_number: &UInt32,
         generator: &G2Gadget,
         crh_parameters: &CRHGadgetParameters,
-        condition: &Boolean,
-    ) -> Result<(), SynthesisError> {
+    ) -> Result<(G1Gadget, G2Gadget), SynthesisError> {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Create hash point");
         let hash_point = self.to_g1(
@@ -125,9 +140,9 @@ impl MacroBlockGadget {
         )?;
 
         // Choose signer bitmap and signature based on round.
-        let (signer_bitmap, signature) = match round {
-            Round::Prepare => (&self.prepare_signer_bitmap, &self.prepare_signature),
-            Round::Commit => (&self.commit_signer_bitmap, &self.commit_signature),
+        let signer_bitmap = match round {
+            Round::Prepare => &self.prepare_signer_bitmap,
+            Round::Commit => &self.commit_signer_bitmap,
         };
 
         // Also, during the commit round, we need to check the max-non-signer restriction
@@ -146,18 +161,8 @@ impl MacroBlockGadget {
             max_non_signers,
             generator,
         )?;
-
-        next_cost_analysis!(cs, cost, || "Check signature");
-        CheckSigGadget::conditional_check_signature(
-            cs.ns(|| "check signature"),
-            &aggregate_public_key,
-            generator,
-            signature,
-            &hash_point,
-            condition,
-        )?;
         end_cost_analysis!(cs, cost);
-        Ok(())
+        Ok((hash_point, aggregate_public_key))
     }
 
     fn to_g1<CS: ConstraintSystem<SW6Fr>>(

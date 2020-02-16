@@ -1,6 +1,6 @@
-use crate::setup::{CRH, G1_GENERATOR, G2_GENERATOR};
+use crate::setup::CRH;
 use algebra::curves::bls12_377::{G1Projective, G2Projective};
-use algebra::Zero;
+use algebra::{ProjectiveCurve, Zero};
 use crypto_primitives::crh::pedersen::PedersenParameters;
 use crypto_primitives::FixedLengthCRH;
 use nimiq_bls::{KeyPair, PublicKey};
@@ -113,10 +113,10 @@ impl Default for MacroBlock {
         MacroBlock {
             block_number: 0,
             header_hash: [0; 32],
-            public_keys: vec![*G2_GENERATOR; MacroBlock::SLOTS],
-            prepare_signature: Some(*G1_GENERATOR),
+            public_keys: vec![G2Projective::prime_subgroup_generator(); MacroBlock::SLOTS],
+            prepare_signature: Some(G1Projective::prime_subgroup_generator()),
             prepare_signer_bitmap: vec![true; MacroBlock::SLOTS],
-            commit_signature: Some(*G1_GENERATOR),
+            commit_signature: Some(G1Projective::prime_subgroup_generator()),
             commit_signer_bitmap: vec![true; MacroBlock::SLOTS],
         }
     }

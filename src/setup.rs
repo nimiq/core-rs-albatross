@@ -33,9 +33,14 @@ const G2_Y_C1: &str = "0137475DC960B837006D974B800104C9BA9DD100344BD2A363A89B7C1
 
 lazy_static! {
     pub static ref G2_GENERATOR: G2Projective = g2_generator();
-    pub static ref G1_GENERATOR: G1Projective = {
+    pub static ref G1_GENERATOR1: G1Projective = {
         let x = Fq::from_repr(read_bigint384_const(G1_X_1));
         let y = Fq::from_repr(read_bigint384_const(G1_Y_1));
+        G1Affine::new(x, y, false).into_projective()
+    };
+    pub static ref G1_GENERATOR2: G1Projective = {
+        let x = Fq::from_repr(read_bigint384_const(G1_X_2));
+        let y = Fq::from_repr(read_bigint384_const(G1_Y_2));
         G1Affine::new(x, y, false).into_projective()
     };
 }
