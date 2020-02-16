@@ -13,19 +13,18 @@ use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve, Zero
 // For randomness (during paramgen and proof generation)
 use algebra::test_rng;
 // We're going to use the Groth 16 proving system.
-use groth16::{
-    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
-};
+use algebra::bytes::FromBytes;
+use groth16::{create_random_proof, prepare_verifying_key, verify_proof, Parameters, VerifyingKey};
 use nimiq_bls::{KeyPair, SecureGenerate};
 
 use nano_sync::*;
+use std::fs::File;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use
     // `OsRng` (for example) in production software.
     let rng = &mut test_rng();
 
-    let mut total_setup = Duration::new(0, 0);
     let mut total_proving = Duration::new(0, 0);
     let mut total_verifying = Duration::new(0, 0);
 
@@ -57,42 +56,88 @@ fn main() -> Result<(), Box<dyn Error>> {
         macro_block1.sign(&keys[i], i);
     }
 
-    println!("=== Benchmarking Groth16: ====");
-    println!("Parameter generation");
-    // Create parameters for our circuit
-    let start = Instant::now();
-    let params = {
-        let c = Circuit::new(
-            1,
-            genesis_keys.clone(),
-            vec![macro_block1.clone()],
-            generator,
-            min_signers,
-            last_block_public_key_sum,
-        );
-        generate_random_parameters::<SW6, _, _>(c, rng)?
+    // Reading parameters.
+    println!("Reading parameters from params.bin");
+    // Load parameters to file.
+    let mut parameter_f = File::open("params.bin")?;
+    // Verifying key.
+    println!("1/11 vk");
+    let alpha_g1 = FromBytes::read(&mut parameter_f)?;
+    let beta_g2 = FromBytes::read(&mut parameter_f)?;
+    let gamma_g2 = FromBytes::read(&mut parameter_f)?;
+    let delta_g2 = FromBytes::read(&mut parameter_f)?;
+    let gamma_abc_g1_len: u64 = FromBytes::read(&mut parameter_f)?;
+    let mut gamma_abc_g1 = vec![];
+    for _ in 0..gamma_abc_g1_len {
+        gamma_abc_g1.push(FromBytes::read(&mut parameter_f)?);
+    }
+    let vk = VerifyingKey {
+        alpha_g1,
+        beta_g2,
+        gamma_g2,
+        delta_g2,
+        gamma_abc_g1,
+    };
+    // Parameters.
+    println!("2/11 alpha_g1");
+    let alpha_g1 = FromBytes::read(&mut parameter_f)?;
+    println!("3/11 beta_g1");
+    let beta_g1 = FromBytes::read(&mut parameter_f)?;
+    println!("4/11 beta_g2");
+    let beta_g2 = FromBytes::read(&mut parameter_f)?;
+    println!("5/11 delta_g1");
+    let delta_g1 = FromBytes::read(&mut parameter_f)?;
+    println!("6/11 delta_g2");
+    let delta_g2 = FromBytes::read(&mut parameter_f)?;
+    let a_query_len: u64 = FromBytes::read(&mut parameter_f)?;
+    println!("7/11 a_query({})", a_query_len);
+    let mut a_query = vec![];
+    for _ in 0..a_query_len {
+        a_query.push(FromBytes::read(&mut parameter_f)?);
+    }
+    let b_g1_query_len: u64 = FromBytes::read(&mut parameter_f)?;
+    println!("8/11 b_g1_query({})", b_g1_query_len);
+    let mut b_g1_query = vec![];
+    for _ in 0..b_g1_query_len {
+        b_g1_query.push(FromBytes::read(&mut parameter_f)?);
+    }
+    let b_g2_query_len: u64 = FromBytes::read(&mut parameter_f)?;
+    println!("9/11 b_g2_query({})", b_g2_query_len);
+    let mut b_g2_query = vec![];
+    for _ in 0..b_g2_query_len {
+        b_g2_query.push(FromBytes::read(&mut parameter_f)?);
+    }
+    let h_query_len: u64 = FromBytes::read(&mut parameter_f)?;
+    println!("10/11 h_query({})", h_query_len);
+    let mut h_query = vec![];
+    for _ in 0..h_query_len {
+        h_query.push(FromBytes::read(&mut parameter_f)?);
+    }
+    let l_query_len: u64 = FromBytes::read(&mut parameter_f)?;
+    println!("11/11 l_query({})", l_query_len);
+    let mut l_query = vec![];
+    for _ in 0..l_query_len {
+        l_query.push(FromBytes::read(&mut parameter_f)?);
+    }
+    drop(parameter_f);
+
+    let params = Parameters::<SW6> {
+        vk,
+        alpha_g1,
+        beta_g1,
+        beta_g2,
+        delta_g1,
+        delta_g2,
+        a_query,
+        b_g1_query,
+        b_g2_query,
+        h_query,
+        l_query,
     };
 
-    // Prepare the verification key (for proof verification)
     let pvk = prepare_verifying_key(&params.vk);
-    total_setup += start.elapsed();
-    let vk_size = 1040 + 104 * params.vk.gamma_abc_g1.len();
-    let pk_size = vk_size
-        + 936
-        + 312 * params.b_g2_query.len()
-        + 104
-            * (params.a_query.len()
-                + params.b_g1_query.len()
-                + params.h_query.len()
-                + params.l_query.len());
-    println!("Verification key size: {:?} bytes", vk_size);
-    println!(
-        "Verification key gamma len: {:?}",
-        params.vk.gamma_abc_g1.len()
-    );
-    println!("Prover key size: {:?} bytes", pk_size);
-    println!("Average setup time: {:?} seconds", total_setup);
 
+    println!("=== Benchmarking Groth16: ====");
     println!("Proof generation");
     let start = Instant::now();
     let proof = {

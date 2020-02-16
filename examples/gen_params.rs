@@ -9,16 +9,16 @@ use std::{
 // Bring in some tools for using pairing-friendly curves
 // We're going to use the BLS12-377 pairing-friendly elliptic curve.
 use algebra::curves::bls12_377::G2Projective;
-use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve, Zero};
+use algebra::{curves::sw6::SW6, ProjectiveCurve, Zero};
 // For randomness (during paramgen and proof generation)
 use algebra::test_rng;
 // We're going to use the Groth 16 proving system.
-use groth16::{
-    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
-};
+use algebra::bytes::ToBytes;
+use groth16::generate_random_parameters;
 use nimiq_bls::{KeyPair, SecureGenerate};
 
 use nano_sync::*;
+use std::fs::File;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use
@@ -26,8 +26,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let rng = &mut test_rng();
 
     let mut total_setup = Duration::new(0, 0);
-    let mut total_proving = Duration::new(0, 0);
-    let mut total_verifying = Duration::new(0, 0);
 
     println!("Key setup");
     let num_keys = MacroBlock::SLOTS;
@@ -72,9 +70,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         generate_random_parameters::<SW6, _, _>(c, rng)?
     };
-
-    // Prepare the verification key (for proof verification)
-    let pvk = prepare_verifying_key(&params.vk);
     total_setup += start.elapsed();
     let vk_size = 1040 + 104 * params.vk.gamma_abc_g1.len();
     let pk_size = vk_size
@@ -93,37 +88,57 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Prover key size: {:?} bytes", pk_size);
     println!("Average setup time: {:?} seconds", total_setup);
 
-    println!("Proof generation");
-    let start = Instant::now();
-    let proof = {
-        // Create an instance of our circuit (with the witness)
-        let c = Circuit::new(
-            1,
-            genesis_keys.clone(),
-            vec![macro_block1.clone()],
-            generator,
-            min_signers,
-            last_block_public_key_sum,
-        );
-        // Create a proof with our parameters.
-        create_random_proof(c, &params, rng)?
-    };
-
-    total_proving += start.elapsed();
-    println!("Average proving time: {:?} seconds", total_proving);
-
-    let mut inputs: Vec<Fq> = vec![];
-    Input::append_to_inputs(&last_block_public_key_sum.into_affine(), &mut inputs);
-
-    println!("Proof verification");
-    let start = Instant::now();
-    // let proof = Proof::read(&proof_vec[..]).unwrap();
-    // Check the proof
-    let verified = verify_proof(&pvk, &proof, &inputs).unwrap();
-    total_verifying += start.elapsed();
-
-    println!("Result: {}", verified);
-    println!("Average verifying time: {:?} seconds", total_verifying);
+    // Save parameters to file.
+    println!("Storing parameters to params.bin");
+    //    pub struct Parameters<E: PairingEngine> {
+    //        pub vk:         VerifyingKey<E>,
+    //        pub alpha_g1:   E::G1Affine,
+    //        pub beta_g1:    E::G1Affine,
+    //        pub beta_g2:    E::G2Affine,
+    //        pub delta_g1:   E::G1Affine,
+    //        pub delta_g2:   E::G2Affine,
+    //        pub a_query:    Vec<E::G1Affine>,
+    //        pub b_g1_query: Vec<E::G1Affine>,
+    //        pub b_g2_query: Vec<E::G2Affine>,
+    //        pub h_query:    Vec<E::G1Affine>,
+    //        pub l_query:    Vec<E::G1Affine>,
+    //    }
+    let mut parameter_f = File::create("params.bin")?;
+    // Verifying key.
+    println!("1/11: Verifying key");
+    ToBytes::write(&params.vk.alpha_g1, &mut parameter_f)?;
+    ToBytes::write(&params.vk.beta_g2, &mut parameter_f)?;
+    ToBytes::write(&params.vk.gamma_g2, &mut parameter_f)?;
+    ToBytes::write(&params.vk.delta_g2, &mut parameter_f)?;
+    ToBytes::write(&(params.vk.gamma_abc_g1.len() as u64), &mut parameter_f)?;
+    ToBytes::write(&params.vk.gamma_abc_g1, &mut parameter_f)?;
+    // Parameters.
+    println!("2/11: alpha_g1");
+    ToBytes::write(&params.alpha_g1, &mut parameter_f)?;
+    println!("3/11: beta_g1");
+    ToBytes::write(&params.beta_g1, &mut parameter_f)?;
+    println!("4/11: beta_g2");
+    ToBytes::write(&params.beta_g2, &mut parameter_f)?;
+    println!("5/11: delta_g1");
+    ToBytes::write(&params.delta_g1, &mut parameter_f)?;
+    println!("6/11: delta_g2");
+    ToBytes::write(&params.delta_g2, &mut parameter_f)?;
+    println!("7/11: a_query({})", params.a_query.len());
+    ToBytes::write(&(params.a_query.len() as u64), &mut parameter_f)?;
+    ToBytes::write(&params.a_query, &mut parameter_f)?;
+    println!("8/11: b_g1_query({})", params.b_g1_query.len());
+    ToBytes::write(&(params.b_g1_query.len() as u64), &mut parameter_f)?;
+    ToBytes::write(&params.b_g1_query, &mut parameter_f)?;
+    println!("9/11: b_g2_query({})", params.b_g2_query.len());
+    ToBytes::write(&(params.b_g2_query.len() as u64), &mut parameter_f)?;
+    ToBytes::write(&params.b_g2_query, &mut parameter_f)?;
+    println!("10/11: h_query({})", params.h_query.len());
+    ToBytes::write(&(params.h_query.len() as u64), &mut parameter_f)?;
+    ToBytes::write(&params.h_query, &mut parameter_f)?;
+    println!("11/11: l_query({})", params.l_query.len());
+    ToBytes::write(&(params.l_query.len() as u64), &mut parameter_f)?;
+    ToBytes::write(&params.l_query, &mut parameter_f)?;
+    parameter_f.sync_all()?;
 
     Ok(())
 }

@@ -139,14 +139,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("=== Benchmarking Groth16: ====");
     println!("Result: {}", verified);
-    println!(
-        "Verification key size: {:?} bytes",
-        336 + 48 * params.vk.gamma_abc_g1.len()
-    );
+    let vk_size = 1040 + 104 * params.vk.gamma_abc_g1.len();
+    let pk_size = vk_size
+        + 936
+        + 312 * params.b_g2_query.len()
+        + 104
+            * (params.a_query.len()
+                + params.b_g1_query.len()
+                + params.h_query.len()
+                + params.l_query.len());
+    println!("Verification key size: {:?} bytes", vk_size);
     println!(
         "Verification key gamma len: {:?}",
         params.vk.gamma_abc_g1.len()
     );
+    println!("Prover key size: {:?} bytes", pk_size);
     println!("Average setup time: {:?} seconds", total_setup);
     println!("Average proving time: {:?} seconds", total_proving);
     println!("Average verifying time: {:?} seconds", total_verifying);
