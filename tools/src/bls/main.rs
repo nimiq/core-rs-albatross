@@ -16,4 +16,8 @@ fn main() {
     println!("# Secret Key:");
     println!();
     println!("{}", hex::encode(secret_key.serialize_to_vec()));
+    println!();
+    println!("# Proof Of Knowledge:");
+    println!();
+    println!("{}", hex::encode(&secret_key.sign(&public_key).compress()));
 }
