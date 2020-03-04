@@ -9,9 +9,11 @@ use crate::client::Client;
 use crate::config::config::RpcServerConfig;
 use crate::error::Error;
 use crate::config::consts::default_bind;
+use crate::consensus::ConsensusProtocol;
 
 
-pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result<RpcServer, Error> {
+pub fn initialize_rpc_server<P, BH>(client: &Client<P>, config: RpcServerConfig) -> Result<RpcServer, Error>
+    where P : ConsensusProtocol, BH: AbstractBlockchainHandler<P::Blockchain> + Module {
     let ip = config.bind_to.unwrap_or_else(default_bind);
     info!("Initializing RPC server: {}:{}", ip, config.port);
 
@@ -49,8 +51,7 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
             handler.add_module(block_production_handler);
         }
     }
-
-    let blockchain_handler = BlockchainAlbatrossHandler::new(client.blockchain());
+    let blockchain_handler = BH::new(client.blockchain());
     handler.add_module(blockchain_handler);
 
     let consensus_handler = ConsensusHandler::new(client.consensus());
@@ -63,7 +64,7 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
     let wallet_manager = Arc::clone(&wallet_handler.unlocked_wallets);
     handler.add_module(wallet_handler);
 
-    let mempool_handler = MempoolAlbatrossHandler::new(client.mempool(), Some(wallet_manager));
+    let mempool_handler:MempoolHandler<P> = MempoolHandler::new(client.mempool(), Some(wallet_manager));
     handler.add_module(mempool_handler);
 
     Ok(rpc_server)

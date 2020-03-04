@@ -24,9 +24,8 @@ use parking_lot::RwLock;
 use json::{JsonValue, object};
 
 use utils::unique_id::UniqueId;
-use consensus::{Consensus, AlbatrossConsensusProtocol};
-use blockchain_base::AbstractBlockchain;
-use blockchain_albatross::blockchain::BlockchainEvent;
+use consensus::{Consensus, ConsensusProtocol};
+use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use hash::{Hash, Blake2bHash};
 #[cfg(feature="validator")]
 use validator::validator_network::ValidatorNetworkEvent;
@@ -147,12 +146,12 @@ impl WsRpcServer {
         })
     }
 
-    pub fn register_blockchain(&self, consensus: Arc<Consensus<AlbatrossConsensusProtocol>>) {
+    pub fn register_blockchain<P: ConsensusProtocol>(&self, consensus: Arc<Consensus<P>>) {
         let connections_listener = Arc::clone(&self.connections);
 
-        consensus.blockchain.register_listener(move |event: &BlockchainEvent| {
+        consensus.blockchain.register_listener(move |event: &BlockchainEvent<<<P as consensus::ConsensusProtocol>::Blockchain as AbstractBlockchain>::Block>| {
             if !connections_listener.read().is_empty() {
-                if let Some(message) = Self::map_blockchain_event(event) {
+                if let Some(message) = Self::map_blockchain_event::<P>(event) {
                     Self::broadcast_message(&connections_listener, message)
                 }
             }
@@ -172,7 +171,7 @@ impl WsRpcServer {
         });
     }
 
-    fn map_blockchain_event(event: &BlockchainEvent) -> Option<JsonValue> {
+    fn map_blockchain_event<P: ConsensusProtocol>(event: &BlockchainEvent<<<P as consensus::ConsensusProtocol>::Blockchain as AbstractBlockchain>::Block>) -> Option<JsonValue> {
         Some(match event {
             BlockchainEvent::Extended(block_hash) => object!{
                 "eventType" => "blockchainExtended",

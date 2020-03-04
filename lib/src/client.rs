@@ -3,24 +3,14 @@ use std::sync::{Arc, Weak};
 
 #[cfg(feature="validator")]
 use validator::validator::Validator;
-use consensus::{
-    Consensus as AbstractConsensus,
-    AlbatrossConsensusProtocol,
-};
+use consensus::{Consensus as GenericConsensus, ConsensusProtocol};
 use database::Environment;
 use network::{NetworkConfig, Network as GenericNetwork};
 use mempool::Mempool as GenericMempool;
 use network_primitives::services::ServiceFlags;
-use blockchain::Blockchain;
 
 use crate::error::Error;
 use crate::config::config::{ClientConfig, ProtocolConfig};
-
-
-/// Alias for the Consensus specialized over Albatross
-pub type Consensus = AbstractConsensus<AlbatrossConsensusProtocol>;
-pub type Mempool = GenericMempool<Blockchain>;
-pub type Network = GenericNetwork<Blockchain>;
 
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
@@ -32,14 +22,14 @@ pub type Network = GenericNetwork<Blockchain>;
 /// * Move RPC server, Ws-RPC server and Metrics server out of here
 /// * Move Validator out of here?
 ///
-pub(crate) struct ClientInner {
+pub(crate) struct ClientInner<P: ConsensusProtocol +'static> {
     /// The database environment. This is here to give the consumer access to the DB too. This
     /// reference is also stored in the consensus though.
     environment: Environment,
 
     /// The consensus object, which maintains the blockchain, the network and other things to
     /// reach consensus.
-    consensus: Arc<Consensus>,
+    consensus: Arc<GenericConsensus<P>>,
 
     /// The block production logic. This is optional and can also be fully disabled at compile-time
     #[cfg(feature="validator")]
@@ -47,7 +37,7 @@ pub(crate) struct ClientInner {
 }
 
 
-impl TryFrom<ClientConfig> for ClientInner {
+impl<P: ConsensusProtocol> TryFrom<ClientConfig> for ClientInner<P> {
     type Error = Error;
 
     fn try_from(config: ClientConfig) -> Result<Self, Self::Error> {
@@ -101,21 +91,18 @@ impl TryFrom<ClientConfig> for ClientInner {
         // Open database
         let environment = config.storage.database(config.network, config.consensus, config.database)?;
 
-        // Create Nimiq consensus
-        if !config.network.is_albatross() {
-            return Err(Error::config_error(&format!("{} is not compatible with Albatross", config.network)));
-        }
-        let consensus = Consensus::new(
+        let consensus = GenericConsensus::<P>::new(
             environment.clone(),
             config.network,
             network_config,
             config.mempool,
         )?;
 
-        #[cfg(feature="validator")]
-        let validator = config.validator.map(|_config| {
-            Validator::new(Arc::clone(&consensus), validator_key)
-        }).transpose()?;
+        // #[cfg(feature="validator")]
+        // let validator = config.validator.map(|_config| {
+        //     Validator::new(Arc::clone(&consensus), validator_key)
+        // }).transpose()?;
+        let validator: Option<Arc<Validator>> = None;
 
         Ok(ClientInner {
             environment,
@@ -146,12 +133,12 @@ impl TryFrom<ClientConfig> for ClientInner {
 /// * Shortcuts for common tasks, such at `get_block`.
 /// * Register listeners for certain events.
 ///
-pub struct Client {
-    inner: Arc<ClientInner>
+pub struct Client<P: ConsensusProtocol + 'static>  {
+    inner: Arc<ClientInner<P>>
 }
 
 
-impl Client {
+impl<P: ConsensusProtocol> Client<P> {
     /// Initializes the Nimiq network stack.
     pub fn initialize(&self) -> Result<(), Error> {
         self.inner.consensus.network.initialize()?;
@@ -165,22 +152,22 @@ impl Client {
     }
 
     /// Returns a reference to the *Consensus*.
-    pub fn consensus(&self) -> Arc<Consensus> {
+    pub fn consensus(&self) -> Arc<GenericConsensus<P>> {
         Arc::clone(&self.inner.consensus)
     }
 
     /// Returns a reference to the *Network* stack
-    pub fn network(&self) -> Arc<Network> {
+    pub fn network(&self) -> Arc<GenericNetwork<P::Blockchain>> {
         Arc::clone(&self.inner.consensus.network)
     }
 
     /// Returns a reference to the blockchain
-    pub fn blockchain(&self) -> Arc<Blockchain> {
+    pub fn blockchain(&self) -> Arc<P::Blockchain> {
         Arc::clone(&self.inner.consensus.blockchain)
     }
 
     /// Returns a reference to the *Mempool*
-    pub fn mempool(&self) -> Arc<Mempool> {
+    pub fn mempool(&self) -> Arc<GenericMempool<P::Blockchain>> {
         Arc::clone(&self.inner.consensus.mempool)
     }
 
@@ -197,25 +184,24 @@ impl Client {
 
     /// Short-cut to get weak reference to the inner client object.
     /// TODO: We'll use this to register listeners
-    pub(crate) fn inner_weak(&self) -> Weak<ClientInner> {
+    pub(crate) fn inner_weak(&self) -> Weak<ClientInner<P>> {
         Arc::downgrade(&self.inner)
     }
 
-    pub(crate) fn inner(&self) -> Arc<ClientInner> {
+    pub(crate) fn inner(&self) -> Arc<ClientInner<P>> {
         Arc::clone(&self.inner)
     }
 }
-
-impl TryFrom<ClientConfig> for Client {
+impl<P: ConsensusProtocol>  TryFrom<ClientConfig> for Client<P> {
     type Error = Error;
 
     fn try_from(config: ClientConfig) -> Result<Self, Self::Error> {
-        let inner = ClientInner::try_from(config)?;
+        let inner = ClientInner::<P>::try_from(config)?;
         Ok(Client { inner: Arc::new(inner) })
     }
 }
 
-impl Clone for Client {
+impl<P: ConsensusProtocol> Clone for Client<P> {
     fn clone(&self) -> Self {
         Client { inner: Arc::clone(&self.inner)}
     }

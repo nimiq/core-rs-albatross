@@ -12,7 +12,7 @@ use transaction::{Transaction, TransactionReceipt};
 
 use crate::handler::Method;
 use crate::handlers::Module;
-use crate::handlers::blockchain::{parse_hash, BlockchainHandler};
+use crate::handlers::blockchain::{parse_hash, BlockchainHandler, AbstractBlockchainHandler};
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 use crate::rpc_not_implemented;
 
@@ -22,13 +22,6 @@ pub struct BlockchainNimiqHandler {
 }
 
 impl BlockchainNimiqHandler {
-    pub fn new(blockchain: Arc<Blockchain>) -> Self {
-        Self {
-            generic: BlockchainHandler::new(blockchain.clone()),
-            blockchain,
-        }
-    }
-
     // Blocks
 
     /// Returns a block object for a block hash.
@@ -256,6 +249,15 @@ impl BlockchainNimiqHandler {
             "timestamp" => block.map(|block| block.header.timestamp.into()).unwrap_or(Null),
             "timestampMillis" => block.map(|block| (u64::from(block.header.timestamp) * 1000).into()).unwrap_or(Null),
             "transactionIndex" => index.map(|i| i.into()).unwrap_or(Null)
+        }
+    }
+}
+
+impl AbstractBlockchainHandler<Blockchain> for BlockchainNimiqHandler {
+    fn new(blockchain: Arc<Blockchain>) -> Self {
+        Self {
+            generic: BlockchainHandler::new(blockchain.clone()),
+            blockchain,
         }
     }
 }

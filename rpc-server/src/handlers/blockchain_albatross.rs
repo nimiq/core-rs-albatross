@@ -17,7 +17,7 @@ use primitives::slot::{Slot, Slots, SlotBand};
 
 use crate::handler::Method;
 use crate::handlers::Module;
-use crate::handlers::blockchain::BlockchainHandler;
+use crate::handlers::blockchain::{AbstractBlockchainHandler, BlockchainHandler};
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
 use crate::rpc_not_implemented;
 
@@ -471,6 +471,15 @@ impl BlockchainAlbatrossHandler {
             "stakerAddress" => address.to_user_friendly_address(),
             "balance" => u64::from(stake.balance),
             "retireTime" => stake.retire_time,
+        }
+    }
+}
+
+impl AbstractBlockchainHandler<Blockchain> for BlockchainAlbatrossHandler {
+    fn new(blockchain: Arc<Blockchain>) -> Self {
+        Self {
+            generic: BlockchainHandler::new(blockchain.clone()),
+            blockchain,
         }
     }
 }

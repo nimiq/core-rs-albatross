@@ -21,6 +21,11 @@ maintenance = { status = "experimental" }
 futures = "0.1"
 log = "0.4"
 tokio = "0.1"
+nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1"}
+nimiq-consensus = { path = "../consensus", version = "0.1" }
+nimiq-metrics-server = {path = "../metrics-server", version = "0.1" }
+nimiq-primitives = { path = "../primitives", version = "0.1" }
+nimiq-rpc-server = { path = "../rpc-server", version = "0.1" }
 
 [dependencies.nimiq-lib]
 path = "../lib"

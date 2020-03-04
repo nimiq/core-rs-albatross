@@ -40,6 +40,7 @@ pub use self::consensus::ConsensusHandler;
 pub use self::block_production_nimiq::BlockProductionNimiqHandler;
 #[cfg(feature="validator")]
 pub use self::block_production_albatross::BlockProductionAlbatrossHandler;
+pub use self::blockchain::AbstractBlockchainHandler;
 pub use self::blockchain::BlockchainHandler;
 pub use self::blockchain_nimiq::BlockchainNimiqHandler;
 pub use self::blockchain_albatross::BlockchainAlbatrossHandler;

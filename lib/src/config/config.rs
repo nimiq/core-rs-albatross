@@ -11,6 +11,7 @@ use url::Url;
 use bls::SecureGenerate;
 #[cfg(feature="validator")]
 use bls::bls12_381::KeyPair as BlsKeyPair;
+use consensus::ConsensusProtocol;
 use database::Environment;
 use database::lmdb::{LmdbEnvironment, open as LmdbFlags};
 use database::volatile::VolatileEnvironment;
@@ -541,7 +542,7 @@ impl ClientConfig {
 
     /// Instantiates the Nimiq client from this configuration
     ///
-    pub fn instantiate_client(self) -> Result<Client, Error> {
+    pub fn instantiate_client<P: ConsensusProtocol>(self) -> Result<Client<P>, Error> {
         Client::try_from(self)
     }
 }
@@ -560,7 +561,7 @@ impl ClientConfigBuilder {
 
     /// Short cut to build the config and instantiate the client
     ///
-    pub fn instantiate_client(&self) -> Result<Client, Error> {
+    pub fn instantiate_client<P: ConsensusProtocol>(&self) -> Result<Client<P>, Error> {
         self.build()?
             .instantiate_client()
     }
