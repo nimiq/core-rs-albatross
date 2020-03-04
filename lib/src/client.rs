@@ -11,6 +11,7 @@ use network_primitives::services::ServiceFlags;
 
 use crate::error::Error;
 use crate::config::config::{ClientConfig, ProtocolConfig};
+use crate::extras::block_producer::BlockProducerFactory;
 
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
@@ -22,7 +23,7 @@ use crate::config::config::{ClientConfig, ProtocolConfig};
 /// * Move RPC server, Ws-RPC server and Metrics server out of here
 /// * Move Validator out of here?
 ///
-pub(crate) struct ClientInner<P: ConsensusProtocol +'static> {
+pub(crate) struct ClientInner<P: ConsensusProtocol + BlockProducerFactory + 'static> {
     /// The database environment. This is here to give the consumer access to the DB too. This
     /// reference is also stored in the consensus though.
     environment: Environment,
@@ -37,7 +38,7 @@ pub(crate) struct ClientInner<P: ConsensusProtocol +'static> {
 }
 
 
-impl<P: ConsensusProtocol> TryFrom<ClientConfig> for ClientInner<P> {
+impl<P: ConsensusProtocol + BlockProducerFactory> TryFrom<ClientConfig> for ClientInner<P> {
     type Error = Error;
 
     fn try_from(config: ClientConfig) -> Result<Self, Self::Error> {
@@ -98,11 +99,12 @@ impl<P: ConsensusProtocol> TryFrom<ClientConfig> for ClientInner<P> {
             config.mempool,
         )?;
 
-        // #[cfg(feature="validator")]
-        // let validator = config.validator.map(|_config| {
-        //     Validator::new(Arc::clone(&consensus), validator_key)
-        // }).transpose()?;
-        let validator: Option<Arc<Validator>> = None;
+        #[cfg(feature="validator")]
+        let validator = P::validator_constructor()(
+            config.validator,
+            &consensus,
+            validator_key,
+        ).transpose()?;
 
         Ok(ClientInner {
             environment,
@@ -133,12 +135,12 @@ impl<P: ConsensusProtocol> TryFrom<ClientConfig> for ClientInner<P> {
 /// * Shortcuts for common tasks, such at `get_block`.
 /// * Register listeners for certain events.
 ///
-pub struct Client<P: ConsensusProtocol + 'static>  {
+pub struct Client<P: ConsensusProtocol + BlockProducerFactory + 'static>  {
     inner: Arc<ClientInner<P>>
 }
 
 
-impl<P: ConsensusProtocol> Client<P> {
+impl<P: ConsensusProtocol + BlockProducerFactory> Client<P> {
     /// Initializes the Nimiq network stack.
     pub fn initialize(&self) -> Result<(), Error> {
         self.inner.consensus.network.initialize()?;
@@ -192,7 +194,7 @@ impl<P: ConsensusProtocol> Client<P> {
         Arc::clone(&self.inner)
     }
 }
-impl<P: ConsensusProtocol>  TryFrom<ClientConfig> for Client<P> {
+impl<P: ConsensusProtocol + BlockProducerFactory>  TryFrom<ClientConfig> for Client<P> {
     type Error = Error;
 
     fn try_from(config: ClientConfig) -> Result<Self, Self::Error> {
@@ -201,7 +203,7 @@ impl<P: ConsensusProtocol>  TryFrom<ClientConfig> for Client<P> {
     }
 }
 
-impl<P: ConsensusProtocol> Clone for Client<P> {
+impl<P: ConsensusProtocol + BlockProducerFactory> Clone for Client<P> {
     fn clone(&self) -> Self {
         Client { inner: Arc::clone(&self.inner)}
     }

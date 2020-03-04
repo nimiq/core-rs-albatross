@@ -6,10 +6,12 @@ use consensus::ConsensusProtocol;
 
 use crate::config::config::MetricsServerConfig;
 use crate::client::Client;
+use crate::extras::block_producer::BlockProducerFactory;
 use crate::config::consts::default_bind;
 
 
-pub fn initialize_metrics_server<P: ConsensusProtocol, CM: AbstractChainMetrics<P> + server::Metrics + 'static>(client: &Client<P>, config: MetricsServerConfig, pkcs12_key_file: &str, pkcs12_passphrase: &str) -> Result<MetricsServer, Error> {
+pub fn initialize_metrics_server<P: ConsensusProtocol + BlockProducerFactory, CM: AbstractChainMetrics<P> + server::Metrics + 'static>(client: &Client<P>, config: MetricsServerConfig, pkcs12_key_file: &str, pkcs12_passphrase: &str) -> Result<MetricsServer, Error> {
+
     let ip = config.bind_to.unwrap_or_else(default_bind);
     info!("Initializing metrics server: {}:{}", ip, config.port);
 

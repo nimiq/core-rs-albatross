@@ -6,6 +6,7 @@ use rpc_server::{RpcServer, JsonRpcConfig};
 use rpc_server::handlers::*;
 
 use crate::client::Client;
+use crate::extras::block_producer::BlockProducerFactory;
 use crate::config::config::RpcServerConfig;
 use crate::error::Error;
 use crate::config::consts::default_bind;
@@ -13,7 +14,7 @@ use crate::consensus::ConsensusProtocol;
 
 
 pub fn initialize_rpc_server<P, BH>(client: &Client<P>, config: RpcServerConfig) -> Result<RpcServer, Error>
-    where P : ConsensusProtocol, BH: AbstractBlockchainHandler<P::Blockchain> + Module {
+    where P : ConsensusProtocol + BlockProducerFactory, BH: AbstractBlockchainHandler<P::Blockchain> + Module {
     let ip = config.bind_to.unwrap_or_else(default_bind);
     info!("Initializing RPC server: {}:{}", ip, config.port);
 

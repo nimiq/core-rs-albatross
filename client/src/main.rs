@@ -71,7 +71,7 @@ fn main_inner() -> Result<(), Error> {
     Ok(())
 }
 
-fn initialize<P: AbstractConsensusProtocol +'static, BH: AbstractBlockchainHandler<P::Blockchain> + Module, CM: AbstractChainMetrics<P> + server::Metrics + 'static>(config: ClientConfig, config_file: ConfigFile) -> Result<(), Error> {
+fn initialize<P: AbstractConsensusProtocol + BlockProducerFactory +'static, BH: AbstractBlockchainHandler<P::Blockchain> + Module, CM: AbstractChainMetrics<P> + server::Metrics + 'static>(config: ClientConfig, config_file: ConfigFile) -> Result<(), Error> {
     tokio::run(
         // TODO: Return this from `Client::into_future()`
         future::lazy(move || {

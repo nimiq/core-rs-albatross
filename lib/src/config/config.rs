@@ -25,6 +25,7 @@ use utils::key_store::KeyStore;
 use keys::PublicKey;
 
 use crate::client::Client;
+use crate::extras::block_producer::BlockProducerFactory;
 use crate::config::command_line::CommandLine;
 use crate::config::config_file;
 use crate::config::config_file::ConfigFile;
@@ -542,7 +543,7 @@ impl ClientConfig {
 
     /// Instantiates the Nimiq client from this configuration
     ///
-    pub fn instantiate_client<P: ConsensusProtocol>(self) -> Result<Client<P>, Error> {
+    pub fn instantiate_client<P: ConsensusProtocol + BlockProducerFactory>(self) -> Result<Client<P>, Error> {
         Client::try_from(self)
     }
 }
@@ -561,7 +562,7 @@ impl ClientConfigBuilder {
 
     /// Short cut to build the config and instantiate the client
     ///
-    pub fn instantiate_client<P: ConsensusProtocol>(&self) -> Result<Client<P>, Error> {
+    pub fn instantiate_client<P: ConsensusProtocol +BlockProducerFactory>(&self) -> Result<Client<P>, Error> {
         self.build()?
             .instantiate_client()
     }

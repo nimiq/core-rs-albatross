@@ -14,3 +14,5 @@ pub mod ws_rpc_server;
 
 #[cfg(feature = "launcher")]
 pub mod launcher;
+
+pub mod block_producer;

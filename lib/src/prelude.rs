@@ -7,3 +7,4 @@ pub use crate::config::config::ClientConfigBuilder;
 pub use crate::config::config_file::ConfigFile;
 pub use crate::config::command_line::CommandLine;
 pub use crate::client::Client;
+pub use crate::extras::block_producer::BlockProducerFactory;
