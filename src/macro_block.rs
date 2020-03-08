@@ -37,6 +37,30 @@ impl MacroBlock {
         }
     }
 
+    /// Calculates the Pedersen Hash for the block from:
+    /// prefix || header_hash || public_keys
+    ///
+    /// Note that the Pedersen Hash is only collision-resistant
+    /// and does not provide pseudo-random output!
+    /// For our use-case, however, this suffices as the `header_hash`
+    /// provides enough entropy.
+    pub fn hash(
+        &self,
+        round_number: u8,
+        parameters: &PedersenParameters<G1Projective>,
+    ) -> G1Projective {
+        // Then, concatenate the prefix || header_hash || public_keys,
+        // with prefix = (round number || block number).
+        let mut msg = vec![round_number];
+        msg.extend_from_slice(&self.block_number.to_be_bytes());
+        msg.extend_from_slice(&self.header_hash);
+        for key in self.public_keys.iter() {
+            msg.extend_from_slice(key.compress().as_ref());
+        }
+
+        CRH::evaluate(parameters, &msg).unwrap()
+    }
+
     /// This function is only useful for testing purposes.
     pub fn sign(
         &mut self,
@@ -84,30 +108,6 @@ impl MacroBlock {
         }
 
         self.commit_signer_bitmap[signer_id] = true;
-    }
-
-    pub fn hash(
-        &self,
-        round_number: u8,
-        parameters: &PedersenParameters<G1Projective>,
-    ) -> G1Projective {
-        let mut sum = G2Projective::zero();
-        for key in self.public_keys.iter() {
-            sum += key;
-        }
-
-        let sum_key = PublicKey { public_key: sum };
-
-        // TODO: change from sum_pks to pks
-        // Then, concatenate the prefix || header_hash || pks,
-        // with prefix = (round number || block number).
-        let mut prefix = vec![round_number];
-        prefix.extend_from_slice(&self.block_number.to_be_bytes());
-        let mut msg = prefix;
-        msg.extend_from_slice(&self.header_hash);
-        msg.extend_from_slice(sum_key.compress().as_ref());
-
-        CRH::evaluate(parameters, &msg).unwrap()
     }
 }
 

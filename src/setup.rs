@@ -3,6 +3,7 @@ use algebra::curves::bls12_377::{G1Affine, G1Projective, G2Affine, G2Projective}
 use algebra::fields::bls12_377::{Fq, Fq2};
 use algebra::{AffineCurve, BigInteger384, Group, PrimeField};
 use crypto_primitives::crh::pedersen::{PedersenCRH, PedersenParameters, PedersenWindow};
+
 use lazy_static::lazy_static;
 
 pub type CRH = PedersenCRH<G1Projective, CRHWindow>;
@@ -48,10 +49,10 @@ lazy_static! {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct CRHWindow;
 
-// TODO: Verify parameters. 133 * 8 = 1064 bits.
-// Our fixed-length input is 1064 bits.
+// Parameters are 1 + 4 + 32 + 512 * 96 = 98341 bytes
+// Our fixed-length input is 393512 bits.
 impl PedersenWindow for CRHWindow {
-    const WINDOW_SIZE: usize = 133;
+    const WINDOW_SIZE: usize = 49189;
     const NUM_WINDOWS: usize = 8;
 }
 
