@@ -6,8 +6,6 @@ pub mod check_sig;
 pub mod constant;
 pub mod macro_block;
 pub mod smaller_than;
-pub mod xof_hash;
-pub mod xof_hash_to_g1;
 pub mod y_to_bit;
 
 pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {

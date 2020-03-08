@@ -1,9 +1,10 @@
-use crate::setup::CRH;
 use algebra::curves::bls12_377::{G1Projective, G2Projective};
 use algebra::{ProjectiveCurve, Zero};
 use crypto_primitives::crh::pedersen::PedersenParameters;
 use crypto_primitives::FixedLengthCRH;
 use nimiq_bls::{KeyPair, PublicKey};
+
+use crate::setup::CRH;
 
 #[derive(Clone)]
 pub struct MacroBlock {
@@ -17,7 +18,8 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
-    pub const SLOTS: usize = 2; // TODO: Set correctly.
+    // TODO: Set correctly.
+    pub const SLOTS: usize = 2;
 
     pub fn without_signatures(
         block_number: u32,
@@ -96,7 +98,8 @@ impl MacroBlock {
 
         let sum_key = PublicKey { public_key: sum };
 
-        // Then, concatenate the prefix || header_hash || sum_pks,
+        // TODO: change from sum_pks to pks
+        // Then, concatenate the prefix || header_hash || pks,
         // with prefix = (round number || block number).
         let mut prefix = vec![round_number];
         prefix.extend_from_slice(&self.block_number.to_be_bytes());
