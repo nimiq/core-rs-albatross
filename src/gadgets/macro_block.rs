@@ -61,10 +61,10 @@ impl MacroBlockGadget {
         sum_generator_g1: &G1Gadget,
         sum_generator_g2: &G2Gadget,
         crh_parameters: &CRHGadgetParameters,
-    ) -> Result<G2Gadget, SynthesisError> {
+    ) -> Result<(), SynthesisError> {
         // Verify prepare signature.
         #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Verify signatures");
+        let mut cost = start_cost_analysis!(cs, || "Get hash and pks for prepare round");
         let (hash0, pub_key0) = self.get_hash_and_public_keys(
             cs.ns(|| "prepare"),
             Round::Prepare,
@@ -76,7 +76,7 @@ impl MacroBlockGadget {
         )?;
 
         // Verify commit signature.
-        next_cost_analysis!(cs, cost, || "Verify commit signature");
+        next_cost_analysis!(cs, cost, || "Get hash and pks for commit round");
         let (hash1, pub_key1) = self.get_hash_and_public_keys(
             cs.ns(|| "commit"),
             Round::Commit,
@@ -93,7 +93,7 @@ impl MacroBlockGadget {
         signature = signature.add(cs.ns(|| "add commit sig"), &self.commit_signature)?;
         signature = signature.sub(cs.ns(|| "finalize sig"), sum_generator_g1)?;
 
-        next_cost_analysis!(cs, cost, || "Check signature");
+        next_cost_analysis!(cs, cost, || "Check signatures");
         CheckSigGadget::check_signatures(
             cs.ns(|| "check signatures"),
             &[pub_key0, pub_key1],
@@ -102,20 +102,8 @@ impl MacroBlockGadget {
             &[hash0, hash1],
         )?;
 
-        // TODO: Always return the public keys and the block number.
-        // TODO: Increment the block number by one.
-        // Either return the prev_public_key_sum or this block's public key sum,
-        // depending on the condition.
-        // If condition is true, select current key, else previous key.
-        next_cost_analysis!(cs, cost, || "Select public key");
-        let last_verified_public_key_sum = CondSelectGadget::conditionally_select(
-            cs.ns(|| "select pubkey"),
-            condition,
-            self.sum_public_keys.as_ref().get()?,
-            prev_public_key_sum,
-        )?;
         end_cost_analysis!(cs, cost);
-        Ok(last_verified_public_key_sum)
+        Ok(())
     }
 
     fn get_hash_and_public_keys<CS: ConstraintSystem<SW6Fr>>(
@@ -151,7 +139,7 @@ impl MacroBlockGadget {
             Round::Commit => Some(self.prepare_signer_bitmap.as_ref()),
         };
 
-        next_cost_analysis!(cs, cost, || "Aggregate public key");
+        next_cost_analysis!(cs, cost, || "Aggregate public keys");
         let aggregate_public_key = Self::aggregate_public_key(
             cs.ns(|| "aggregate public keys"),
             prev_public_keys,
@@ -203,7 +191,7 @@ impl MacroBlockGadget {
         let mut cost = start_cost_analysis!(cs, || "Convert pks to bits");
         for key in self.public_keys {
             // Get bits from the x coordinate.
-            let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "bits"))?;
+            let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
             // Get one bit from the y coordinate.
             let greatest_bit = YToBitGadget::<Bls12_377Parameters>::y_to_bit_g2(
                 cs.ns(|| "y to bit"),
@@ -243,7 +231,7 @@ impl MacroBlockGadget {
         generator: &G2Gadget,
     ) -> Result<G2Gadget, SynthesisError> {
         // Sum public keys.
-        let mut num_non_signers = FpGadget::zero(cs.ns(|| "num used public keys"))?;
+        let mut num_non_signers = FpGadget::zero(cs.ns(|| "number used public keys"))?;
 
         let mut sum = Cow::Borrowed(generator);
 

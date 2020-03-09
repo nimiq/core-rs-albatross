@@ -8,7 +8,6 @@ use crate::setup::CRH;
 
 #[derive(Clone)]
 pub struct MacroBlock {
-    pub block_number: u32,
     pub header_hash: [u8; 32],
     pub public_keys: Vec<G2Projective>,
     pub prepare_signature: Option<G1Projective>,
@@ -21,13 +20,8 @@ impl MacroBlock {
     // TODO: Set correctly.
     pub const SLOTS: usize = 2;
 
-    pub fn without_signatures(
-        block_number: u32,
-        header_hash: [u8; 32],
-        public_keys: Vec<G2Projective>,
-    ) -> Self {
+    pub fn without_signatures(header_hash: [u8; 32], public_keys: Vec<G2Projective>) -> Self {
         MacroBlock {
-            block_number,
             header_hash,
             public_keys,
             prepare_signature: None,
@@ -47,15 +41,17 @@ impl MacroBlock {
     pub fn hash(
         &self,
         round_number: u8,
+        block_number: u32,
         parameters: &PedersenParameters<G1Projective>,
     ) -> G1Projective {
         // Then, concatenate the prefix || header_hash || public_keys,
         // with prefix = (round number || block number).
         let mut msg = vec![round_number];
-        msg.extend_from_slice(&self.block_number.to_be_bytes());
+        msg.extend_from_slice(block_number.to_be_bytes());
         msg.extend_from_slice(&self.header_hash);
-        for key in self.public_keys.iter() {
-            msg.extend_from_slice(key.compress().as_ref());
+        for key in self.public_keys {
+            let pk = PublicKey { public_key: key };
+            msg.extend_from_slice(pk.compress().as_ref());
         }
 
         CRH::evaluate(parameters, &msg).unwrap()
@@ -114,7 +110,6 @@ impl MacroBlock {
 impl Default for MacroBlock {
     fn default() -> Self {
         MacroBlock {
-            block_number: 0,
             header_hash: [0; 32],
             public_keys: vec![G2Projective::prime_subgroup_generator(); MacroBlock::SLOTS],
             prepare_signature: Some(G1Projective::prime_subgroup_generator()),
