@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use algebra::curves::bls12_377::{Bls12_377Parameters, G1Projective, G2Projective};
 use algebra::fields::bls12_377::fq::Fq;
 use algebra::fields::sw6::Fr as SW6Fr;
@@ -12,9 +10,10 @@ use r1cs_std::groups::curves::short_weierstrass::bls12::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
 use crate::gadgets::constant::AllocConstantGadget;
+use crate::gadgets::crh::{CRHWindowBlock, CRH};
 use crate::gadgets::macro_block::{CRHGadget, MacroBlockGadget};
 use crate::macro_block::MacroBlock;
-use crate::setup::{CRH, G1_GENERATOR2, G2_GENERATOR};
+use crate::setup::{EPOCH_LENGTH, G1_GENERATOR2, G2_GENERATOR, MAX_NON_SIGNERS, VALIDATOR_SLOTS};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 pub struct Circuit {
@@ -30,14 +29,11 @@ pub struct Circuit {
 }
 
 impl Circuit {
-    pub const EPOCH_LENGTH: u32 = 10;
-
     /// `min_signers` enforces the number of signers to be >= `min_signers`.
     pub fn new(
         prev_keys: Vec<G2Projective>,
-        mut block: MacroBlock,
+        block: MacroBlock,
         crh_parameters: PedersenParameters<G1Projective>,
-        min_signers: usize,
         state_hash: G1Projective,
     ) -> Self {
         Self {
@@ -45,8 +41,8 @@ impl Circuit {
             block_number: 0,
             block,
             generator: G2Projective::prime_subgroup_generator(),
-            // non < max_excl <=> signers >= min_incl => max_excl = (SLOTS - min_incl + 1)
-            max_non_signers: (MacroBlock::SLOTS - min_signers + 1) as u64,
+            // Note that we want an exclusive number of non-signers!
+            max_non_signers: (MAX_NON_SIGNERS + 1) as u64,
             crh_parameters,
             state_hash,
         }
@@ -67,17 +63,16 @@ impl ConstraintSynthesizer<Fq> for Circuit {
 
         next_cost_analysis!(cs, cost, || "Alloc private input & constants");
         // The block number is part of the hash.
-        let epoch_length = UInt32::constant(Self::EPOCH_LENGTH);
+        let epoch_length = UInt32::constant(EPOCH_LENGTH);
 
-        let prev_keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc(
+        let prev_keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc_const(
             cs.ns(|| "previous keys"),
             &self.prev_keys[..],
         )?;
 
         let block_number_var = UInt32::alloc(cs.ns(|| "block number"), Some(self.block_number))?;
 
-        let mut block_var =
-            MacroBlockGadget::alloc(cs.ns(|| "macro blocks"), || Ok(&self.blocks[..]))?;
+        let mut block_var = MacroBlockGadget::alloc(cs.ns(|| "macro blocks"), || Ok(&self.block))?;
 
         let max_non_signers_var: FpGadget<SW6Fr> = AllocConstantGadget::alloc_const(
             cs.ns(|| "max non signers"),
@@ -98,7 +93,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
 
         next_cost_analysis!(cs, cost, || { "Alloc parameters for Pedersen Hash" });
         let crh_parameters =
-            <CRHGadget as FixedLengthCRHGadget<CRH, SW6Fr>>::ParametersGadget::alloc(
+            <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindowBlock>, SW6Fr>>::ParametersGadget::alloc(
                 &mut cs.ns(|| "crh_parameters"),
                 || Ok(&self.crh_parameters),
             )?;
@@ -109,7 +104,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         next_cost_analysis!(cs, cost, || "Verify block");
         block_var.verify(
             cs.ns(|| "verify block"),
-            &prev_keys,
+            &prev_keys_var,
             &max_non_signers_var,
             &block_number_var,
             &generator_var,
@@ -118,17 +113,16 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             &crh_parameters,
         )?;
 
-        // TODO: Use Fq instead.
-        block_number = UInt32::addmany(
-            cs.ns(|| format!("block number for {}", i + 1)),
-            &[block_number, epoch_length.clone()],
+        // Increment block number
+        let block_number_var = UInt32::addmany(
+            cs.ns(|| format!("increment block number")),
+            &[block_number_var, epoch_length.clone()],
         )?;
 
         // TODO: verify equality output state hash
         // Finally verify that the last block's public key sum correspond to the public input.
         next_cost_analysis!(cs, cost, || "Public key equality with input");
-        last_public_key_sum_var
-            .enforce_equal(cs.ns(|| "public key equality"), &prev_public_key_sum)?;
+
         end_cost_analysis!(cs, cost);
 
         Ok(())

@@ -1,10 +1,11 @@
 use algebra::curves::bls12_377::{G1Projective, G2Projective};
-use algebra::{ProjectiveCurve, Zero};
+use algebra::ProjectiveCurve;
 use crypto_primitives::crh::pedersen::PedersenParameters;
 use crypto_primitives::FixedLengthCRH;
 use nimiq_bls::{KeyPair, PublicKey};
 
-use crate::setup::CRH;
+use crate::gadgets::crh::{CRHWindowBlock, CRH};
+use crate::setup::VALIDATOR_SLOTS;
 
 #[derive(Clone)]
 pub struct MacroBlock {
@@ -17,17 +18,14 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
-    // TODO: Set correctly.
-    pub const SLOTS: usize = 2;
-
     pub fn without_signatures(header_hash: [u8; 32], public_keys: Vec<G2Projective>) -> Self {
         MacroBlock {
             header_hash,
             public_keys,
             prepare_signature: None,
-            prepare_signer_bitmap: vec![false; Self::SLOTS],
+            prepare_signer_bitmap: vec![false; VALIDATOR_SLOTS],
             commit_signature: None,
-            commit_signer_bitmap: vec![false; Self::SLOTS],
+            commit_signer_bitmap: vec![false; VALIDATOR_SLOTS],
         }
     }
 
@@ -47,14 +45,14 @@ impl MacroBlock {
         // Then, concatenate the prefix || header_hash || public_keys,
         // with prefix = (round number || block number).
         let mut msg = vec![round_number];
-        msg.extend_from_slice(block_number.to_be_bytes());
+        msg.extend_from_slice(&block_number.to_be_bytes());
         msg.extend_from_slice(&self.header_hash);
-        for key in self.public_keys {
-            let pk = PublicKey { public_key: key };
+        for key in self.public_keys.iter() {
+            let pk = PublicKey { public_key: *key };
             msg.extend_from_slice(pk.compress().as_ref());
         }
 
-        CRH::evaluate(parameters, &msg).unwrap()
+        CRH::<CRHWindowBlock>::evaluate(parameters, &msg).unwrap()
     }
 
     /// This function is only useful for testing purposes.
@@ -75,7 +73,7 @@ impl MacroBlock {
         signer_id: usize,
         parameters: &PedersenParameters<G1Projective>,
     ) {
-        let hash_point = self.hash(0, parameters);
+        let hash_point = self.hash(0, 0, parameters);
         let signature = key_pair.secret_key.sign_g1(hash_point);
 
         if let Some(sig) = self.prepare_signature.as_mut() {
@@ -94,7 +92,7 @@ impl MacroBlock {
         signer_id: usize,
         parameters: &PedersenParameters<G1Projective>,
     ) {
-        let hash_point = self.hash(1, parameters);
+        let hash_point = self.hash(1, 0, parameters);
         let signature = key_pair.secret_key.sign_g1(hash_point);
 
         if let Some(sig) = self.commit_signature.as_mut() {
@@ -111,11 +109,11 @@ impl Default for MacroBlock {
     fn default() -> Self {
         MacroBlock {
             header_hash: [0; 32],
-            public_keys: vec![G2Projective::prime_subgroup_generator(); MacroBlock::SLOTS],
+            public_keys: vec![G2Projective::prime_subgroup_generator(); VALIDATOR_SLOTS],
             prepare_signature: Some(G1Projective::prime_subgroup_generator()),
-            prepare_signer_bitmap: vec![true; MacroBlock::SLOTS],
+            prepare_signer_bitmap: vec![true; VALIDATOR_SLOTS],
             commit_signature: Some(G1Projective::prime_subgroup_generator()),
-            commit_signer_bitmap: vec![true; MacroBlock::SLOTS],
+            commit_signer_bitmap: vec![true; VALIDATOR_SLOTS],
         }
     }
 }

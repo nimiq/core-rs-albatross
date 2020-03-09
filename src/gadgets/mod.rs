@@ -4,6 +4,7 @@ use r1cs_std::bits::uint32::UInt32;
 
 pub mod check_sig;
 pub mod constant;
+pub mod crh;
 pub mod macro_block;
 pub mod smaller_than;
 pub mod y_to_bit;

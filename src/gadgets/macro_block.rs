@@ -18,18 +18,20 @@ use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget}
 use r1cs_std::Assignment;
 
 use crate::gadgets::check_sig::CheckSigGadget;
+use crate::gadgets::crh::{CRHWindowBlock, CRH};
 use crate::gadgets::smaller_than::SmallerThanGadget;
 use crate::gadgets::y_to_bit::YToBitGadget;
 use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
 use crate::macro_block::MacroBlock;
-use crate::setup::CRH;
+use crate::setup::VALIDATOR_SLOTS;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 pub type CRHGadget = PedersenCRHGadget<G1Projective, SW6Fr, G1Gadget>;
-pub type CRHGadgetParameters = <CRHGadget as FixedLengthCRHGadget<CRH, SW6Fr>>::ParametersGadget;
+pub type CRHGadgetParameters =
+    <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindowBlock>, SW6Fr>>::ParametersGadget;
 
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
-enum Round {
+pub enum Round {
     Prepare = 0,
     Commit = 1,
 }
@@ -44,9 +46,6 @@ pub struct MacroBlockGadget {
 }
 
 impl MacroBlockGadget {
-    // TODO: Set this to correct number
-    pub const MAXIMUM_NON_SIGNERS: u64 = 170;
-
     pub fn public_keys(&self) -> &[G2Gadget] {
         &self.public_keys
     }
@@ -168,7 +167,7 @@ impl MacroBlockGadget {
         crh_parameters: &CRHGadgetParameters,
     ) -> Result<G1Gadget, SynthesisError> {
         // Initialize Boolean vector.
-        let mut bits: Vec<Boolean>;
+        let mut bits: Vec<Boolean> = vec![];
 
         // The round number comes in little endian,
         // which is why we need to reverse the bits to get big endian.
@@ -189,14 +188,12 @@ impl MacroBlockGadget {
         // Convert each public key to bits and append it.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Convert pks to bits");
-        for key in self.public_keys {
+        for key in self.public_keys.iter() {
             // Get bits from the x coordinate.
             let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
             // Get one bit from the y coordinate.
-            let greatest_bit = YToBitGadget::<Bls12_377Parameters>::y_to_bit_g2(
-                cs.ns(|| "y to bit"),
-                key.borrow(),
-            )?;
+            let greatest_bit =
+                YToBitGadget::<Bls12_377Parameters>::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
             // Pad points and get *Big-Endian* representation.
             let mut serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
             // Append to Boolean vector.
@@ -213,7 +210,7 @@ impl MacroBlockGadget {
 
         // Hash serialized bits.
         next_cost_analysis!(cs, cost, || "Pedersen Hash");
-        let crh_result = <CRHGadget as FixedLengthCRHGadget<CRH, SW6Fr>>::check_evaluation_gadget(
+        let crh_result = <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindowBlock>, SW6Fr>>::check_evaluation_gadget(
             &mut cs.ns(|| "crh_evaluation"),
             crh_parameters,
             &input_bytes,
@@ -268,6 +265,7 @@ impl MacroBlockGadget {
         sum = Cow::Owned(sum.sub(cs.ns(|| "finalize aggregate public key"), generator)?);
 
         // Enforce enough signers.
+        // Note that we don't verify equality.
         SmallerThanGadget::enforce_smaller_than(
             cs.ns(|| "enforce non signers"),
             &num_non_signers,
@@ -293,7 +291,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             Err(_) => empty_block,
         };
 
-        assert_eq!(value.public_keys.len(), MacroBlock::SLOTS);
+        assert_eq!(value.public_keys.len(), VALIDATOR_SLOTS);
 
         let header_hash =
             Blake2sOutputGadget::alloc(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
@@ -347,7 +345,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             Err(_) => empty_block,
         };
 
-        assert_eq!(value.public_keys.len(), MacroBlock::SLOTS);
+        assert_eq!(value.public_keys.len(), VALIDATOR_SLOTS);
 
         let header_hash =
             Blake2sOutputGadget::alloc_input(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
