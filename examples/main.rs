@@ -6,10 +6,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve, Zero};
 // Bring in some tools for using pairing-friendly curves
 // We're going to use the BLS12-377 pairing-friendly elliptic curve.
 use algebra::curves::bls12_377::G2Projective;
-use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve, Zero};
 // For randomness (during paramgen and proof generation)
 use algebra::test_rng;
 // We're going to use the Groth 16 proving system.
@@ -20,7 +20,7 @@ use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
-use nano_sync::setup::{setup_crh, CRHWindow};
+use nano_sync::constants::{setup_crh, CRHWindow};
 use nano_sync::*;
 
 fn main() -> Result<(), Box<dyn Error>> {

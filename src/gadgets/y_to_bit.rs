@@ -1,3 +1,5 @@
+use std::{marker::PhantomData, ops::Neg};
+
 use algebra::{curves::models::bls12::Bls12Parameters, One, PrimeField};
 use r1cs_core::SynthesisError;
 use r1cs_std::{
@@ -8,7 +10,6 @@ use r1cs_std::{
     groups::curves::short_weierstrass::bls12::{G1Gadget, G2Gadget},
     Assignment,
 };
-use std::{marker::PhantomData, ops::Neg};
 
 pub struct YToBitGadget<P: Bls12Parameters> {
     parameters_type: PhantomData<P>,
@@ -179,9 +180,6 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
 
 #[cfg(test)]
 mod test {
-    use rand::SeedableRng;
-    use rand_xorshift::XorShiftRng;
-
     use algebra::{
         curves::{
             bls12_377::{
@@ -202,6 +200,8 @@ mod test {
         test_constraint_system::TestConstraintSystem,
         Assignment,
     };
+    use rand::SeedableRng;
+    use rand_xorshift::XorShiftRng;
 
     use super::YToBitGadget;
 

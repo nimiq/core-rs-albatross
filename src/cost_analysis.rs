@@ -5,8 +5,10 @@ pub use self::inner::*;
 #[macro_use]
 #[cfg(feature = "cost-analysis")]
 pub mod inner {
-    pub use colored::Colorize;
     use std::sync::atomic::AtomicUsize;
+
+    pub use colored::Colorize;
+
     pub static NUM_INDENT: AtomicUsize = AtomicUsize::new(0);
     pub const PAD_CHAR: &'static str = "·";
 

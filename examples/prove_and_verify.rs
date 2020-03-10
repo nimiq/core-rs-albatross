@@ -1,25 +1,25 @@
 #![allow(dead_code)]
 
-// For benchmarking
 use std::{
     error::Error,
     time::{Duration, Instant},
 };
+// For benchmarking
+use std::fs::File;
 
+use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve, Zero};
+// We're going to use the Groth 16 proving system.
+use algebra::bytes::FromBytes;
 // Bring in some tools for using pairing-friendly curves
 // We're going to use the BLS12-377 pairing-friendly elliptic curve.
 use algebra::curves::bls12_377::G2Projective;
-use algebra::{curves::sw6::SW6, fields::bls12_377::fq::Fq, ProjectiveCurve, Zero};
 // For randomness (during paramgen and proof generation)
 use algebra::test_rng;
-// We're going to use the Groth 16 proving system.
-use algebra::bytes::FromBytes;
 use groth16::{create_random_proof, prepare_verifying_key, verify_proof, Parameters, VerifyingKey};
 use nimiq_bls::{KeyPair, SecureGenerate};
 
-use nano_sync::setup::{setup_crh, CRHWindow};
+use nano_sync::constants::{setup_crh, CRHWindow};
 use nano_sync::*;
-use std::fs::File;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use

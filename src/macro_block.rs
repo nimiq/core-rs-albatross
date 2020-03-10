@@ -4,8 +4,8 @@ use crypto_primitives::crh::pedersen::PedersenParameters;
 use crypto_primitives::FixedLengthCRH;
 use nimiq_bls::{KeyPair, PublicKey};
 
-use crate::gadgets::crh::{CRHWindowBlock, CRH};
-use crate::setup::VALIDATOR_SLOTS;
+use crate::constants::VALIDATOR_SLOTS;
+use crate::gadgets::crh::{CRHWindow, CRH};
 
 #[derive(Clone)]
 pub struct MacroBlock {
@@ -52,7 +52,7 @@ impl MacroBlock {
             msg.extend_from_slice(pk.compress().as_ref());
         }
 
-        CRH::<CRHWindowBlock>::evaluate(parameters, &msg).unwrap()
+        CRH::<CRHWindow>::evaluate(parameters, &msg).unwrap()
     }
 
     /// This function is only useful for testing purposes.

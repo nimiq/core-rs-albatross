@@ -1,10 +1,11 @@
 use algebra::curves::bls12_377::G2Projective;
 use algebra::{ProjectiveCurve, Zero};
 use beserial::Deserialize;
-use nano_sync::*;
 use nimiq_bls::{KeyPair, SecretKey};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
+
+use nano_sync::*;
 
 #[test]
 fn test_working_chain() {

@@ -1,34 +1,28 @@
 use std::borrow::{Borrow, Cow};
 
-use algebra::curves::bls12_377::{Bls12_377Parameters, G1Projective};
+use algebra::curves::bls12_377::Bls12_377Parameters;
 use algebra::fields::bls12_377::FqParameters;
 use algebra::fields::sw6::Fr as SW6Fr;
 use algebra::One;
-use crypto_primitives::crh::pedersen::constraints::PedersenCRHGadget;
 use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
 use crypto_primitives::FixedLengthCRHGadget;
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::bits::uint32::UInt32;
 use r1cs_std::bits::uint8::UInt8;
-use r1cs_std::bits::ToBitsGadget;
 use r1cs_std::fields::fp::FpGadget;
 use r1cs_std::groups::curves::short_weierstrass::bls12::bls12_377::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
-use r1cs_std::Assignment;
+use r1cs_std::{Assignment, ToBitsGadget};
 
+use crate::constants::VALIDATOR_SLOTS;
 use crate::gadgets::check_sig::CheckSigGadget;
-use crate::gadgets::crh::{CRHWindowBlock, CRH};
+use crate::gadgets::crh::{CRHGadget, CRHGadgetParameters, CRHWindow, CRH};
 use crate::gadgets::smaller_than::SmallerThanGadget;
 use crate::gadgets::y_to_bit::YToBitGadget;
 use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
 use crate::macro_block::MacroBlock;
-use crate::setup::VALIDATOR_SLOTS;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
-
-pub type CRHGadget = PedersenCRHGadget<G1Projective, SW6Fr, G1Gadget>;
-pub type CRHGadgetParameters =
-    <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindowBlock>, SW6Fr>>::ParametersGadget;
 
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 pub enum Round {
@@ -51,12 +45,12 @@ impl MacroBlockGadget {
     }
 
     pub fn verify<CS: ConstraintSystem<SW6Fr>>(
-        &mut self,
+        &self,
         mut cs: CS,
         prev_public_keys: &[G2Gadget],
         max_non_signers: &FpGadget<SW6Fr>,
         block_number: &UInt32,
-        generator: &G2Gadget,
+        sig_generator: &G2Gadget,
         sum_generator_g1: &G1Gadget,
         sum_generator_g2: &G2Gadget,
         crh_parameters: &CRHGadgetParameters,
@@ -96,7 +90,7 @@ impl MacroBlockGadget {
         CheckSigGadget::check_signatures(
             cs.ns(|| "check signatures"),
             &[pub_key0, pub_key1],
-            generator,
+            sig_generator,
             &signature,
             &[hash0, hash1],
         )?;
@@ -106,7 +100,7 @@ impl MacroBlockGadget {
     }
 
     fn get_hash_and_public_keys<CS: ConstraintSystem<SW6Fr>>(
-        &mut self,
+        &self,
         mut cs: CS,
         round: Round,
         prev_public_keys: &[G2Gadget],
@@ -186,8 +180,6 @@ impl MacroBlockGadget {
         bits.extend_from_slice(&self.header_hash);
 
         // Convert each public key to bits and append it.
-        #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Convert pks to bits");
         for key in self.public_keys.iter() {
             // Get bits from the x coordinate.
             let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
@@ -209,13 +201,12 @@ impl MacroBlockGadget {
             .collect();
 
         // Hash serialized bits.
-        next_cost_analysis!(cs, cost, || "Pedersen Hash");
-        let crh_result = <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindowBlock>, SW6Fr>>::check_evaluation_gadget(
-            &mut cs.ns(|| "crh_evaluation"),
-            crh_parameters,
-            &input_bytes,
-        )?;
-        end_cost_analysis!(cs, cost);
+        let crh_result =
+            <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindow>, SW6Fr>>::check_evaluation_gadget(
+                &mut cs.ns(|| "crh_evaluation"),
+                crh_parameters,
+                &input_bytes,
+            )?;
         Ok(crh_result)
     }
 

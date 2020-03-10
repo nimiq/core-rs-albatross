@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use algebra::{Field, PrimeField};
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::{
@@ -5,7 +7,6 @@ use r1cs_std::{
     fields::{fp::FpGadget, FieldGadget},
     ToBitsGadget,
 };
-use std::marker::PhantomData;
 
 pub struct SmallerThanGadget<ConstraintF: Field + PrimeField> {
     constraint_field_type: PhantomData<ConstraintF>,
@@ -76,14 +77,14 @@ impl<ConstraintF: Field + PrimeField> SmallerThanGadget<ConstraintF> {
 #[allow(unused_assignments)]
 #[cfg(test)]
 mod test {
-    use rand::{Rng, SeedableRng};
-    use rand_xorshift::XorShiftRng;
-
-    use super::SmallerThanGadget;
     use algebra::{fields::sw6::Fr as SW6Fr, fields::PrimeField, UniformRand, Zero};
     use r1cs_core::ConstraintSystem;
     use r1cs_std::fields::fp::FpGadget;
     use r1cs_std::{alloc::AllocGadget, test_constraint_system::TestConstraintSystem};
+    use rand::{Rng, SeedableRng};
+    use rand_xorshift::XorShiftRng;
+
+    use super::SmallerThanGadget;
 
     #[test]
     fn test_smaller_than() {
