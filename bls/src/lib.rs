@@ -6,25 +6,20 @@ extern crate hex;
 extern crate nimiq_hash as hash;
 extern crate nimiq_utils as utils;
 
-use std::{cmp::Ordering, fmt, str::FromStr};
+use std::io::Error;
+use std::{cmp::Ordering, fmt, ops::MulAssign, str::FromStr};
 
-// Imports the types needed for elliptic curve algebra
-use algebra::{
-    BigInteger384,
-    bytes::{FromBytes, ToBytes},
-    curves::{
-        AffineCurve,
-        bls12_377::{Bls12_377, G1Affine, G1Projective, G2Affine, G2Projective}, PairingEngine, ProjectiveCurve,
-    },
-    fields::{
-        bls12_377::{Fq, Fr},
-        PrimeField,
-    },
-    rand::UniformRand,
-    serialize::SerializationError,
+use algebra::bls12_377::{Bls12_377, Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
+use algebra::short_weierstrass_jacobian::GroupAffine;
+use algebra::{BigInteger384, SerializationError};
+use algebra_core::bytes::{FromBytes, ToBytes};
+use algebra_core::curves::{
+    models::SWModelParameters, AffineCurve, PairingEngine, ProjectiveCurve,
 };
+use algebra_core::fields::PrimeField;
+use algebra_core::UniformRand;
 use blake2_rfc::blake2s::Blake2s;
-// Used for the Blake2X hashing.
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use failure::Fail;
 use hex::FromHexError;
@@ -35,7 +30,6 @@ use num_traits::{One, Zero};
 use beserial::{Deserialize, Serialize};
 use hash::{Blake2sHash, Hash};
 pub use types::*;
-// Used for the random number generation
 use utils::key_rng::{CryptoRng, Rng};
 pub use utils::key_rng::{SecureGenerate, SecureRng};
 

@@ -1,8 +1,8 @@
-use super::*;
-
 use parking_lot::{
     MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
+
+use super::*;
 
 pub struct LazyPublicKey {
     pub(crate) compressed: CompressedPublicKey,

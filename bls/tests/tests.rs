@@ -1,9 +1,9 @@
 use std::vec::Vec;
 
-use algebra::{fields::bls12_377::Fr, rand::UniformRand};
-use algebra::curves::bls12_377::{G1Affine, G1Projective};
-use algebra::fields::bls12_377::Fq;
-use algebra::fields::PrimeField;
+use algebra::bls12_377::{Fq, Fr, G1Affine, G1Projective};
+use algebra_core::fields::PrimeField;
+use algebra_core::UniformRand;
+
 use num_traits::identities::One;
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
@@ -48,7 +48,10 @@ fn compress_uncompress() {
         let message = format!("Message {}", i);
         let sig = keypair.sign(&message);
 
-        assert_eq!(keypair.public_key.compress().uncompress().unwrap(), keypair.public_key);
+        assert_eq!(
+            keypair.public_key.compress().uncompress().unwrap(),
+            keypair.public_key
+        );
         assert_eq!(sig.compress().uncompress().unwrap(), sig);
     }
 }

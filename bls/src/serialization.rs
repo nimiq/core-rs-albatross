@@ -1,8 +1,8 @@
-use super::*;
-
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
 use std::io;
+
+use super::*;
 
 impl Serialize for CompressedPublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {

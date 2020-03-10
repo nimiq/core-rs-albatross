@@ -20,7 +20,9 @@ impl PublicKey {
 
     /// Derives a public key from a secret key. This function will produce an error if it is given zero as an input.
     pub fn from_secret(x: &SecretKey) -> Self {
-        Self::new(G2Projective::prime_subgroup_generator() * &x.secret_key)
+        let mut pk = G2Projective::prime_subgroup_generator();
+        pk.mul_assign(x.secret_key);
+        Self::new(pk)
     }
 
     /// Verifies a signature given the signature and the message.

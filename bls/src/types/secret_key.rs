@@ -22,9 +22,9 @@ impl SecretKey {
 
     /// Creates a signature given a G1 point.
     pub fn sign_g1(&self, hash_curve: G1Projective) -> Signature {
-        Signature {
-            signature: hash_curve * &self.secret_key,
-        }
+        let mut sig = hash_curve;
+        sig.mul_assign(self.secret_key);
+        Signature { signature: sig }
     }
 }
 

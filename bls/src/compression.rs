@@ -1,10 +1,4 @@
-use std::io::Error;
-
-use algebra::{BigInteger384, Zero, PrimeField};
-use algebra::curves::models::SWModelParameters as Parameters;
-use algebra::fields::bls12_377::{Fq, Fq2};
-use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
-use algebra::curves::models::short_weierstrass_jacobian::GroupAffine;
+use super::*;
 
 /// Serializer in big endian format.
 pub trait BeSerialize {
@@ -13,7 +7,11 @@ pub trait BeSerialize {
         BeSerialize::serialize_with_flags(self, writer, Default::default())
     }
     /// Serializes `self` and `flags` into `writer`.
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, _flags: Flags) -> Result<(), Error>;
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        _flags: Flags,
+    ) -> Result<(), Error>;
     fn serialized_size(&self) -> usize;
 }
 
@@ -65,7 +63,7 @@ impl Flags {
         let is_infinity = (value >> 62) & 1 == 1;
         Flags {
             y_sign: x_sign,
-            is_infinity
+            is_infinity,
         }
     }
 
@@ -77,9 +75,15 @@ impl Flags {
 }
 
 // GroupAffine
-impl<P: Parameters> BeSerialize for GroupAffine<P>
-    where P::BaseField: BeSerialize {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, _flags: Flags) -> Result<(), Error> {
+impl<P: SWModelParameters> BeSerialize for GroupAffine<P>
+where
+    P::BaseField: BeSerialize,
+{
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        _flags: Flags,
+    ) -> Result<(), Error> {
         // We always ignore flags here.
         if self.is_zero() {
             let flags = Flags::infinity();
@@ -96,8 +100,10 @@ impl<P: Parameters> BeSerialize for GroupAffine<P>
     }
 }
 
-impl<P: Parameters> BeDeserialize for GroupAffine<P>
-    where P::BaseField: BeDeserialize {
+impl<P: SWModelParameters> BeDeserialize for GroupAffine<P>
+where
+    P::BaseField: BeDeserialize,
+{
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
         let (point, _): (Self, _) = BeDeserialize::deserialize_with_flags(reader)?;
         Ok(point)
@@ -108,18 +114,22 @@ impl<P: Parameters> BeDeserialize for GroupAffine<P>
         if flags.is_infinity {
             Ok((Self::zero(), flags))
         } else {
-            Ok(
-                (GroupAffine::get_point_from_x(x, flags.y_sign)
-                     .ok_or(Error::from(std::io::ErrorKind::InvalidData))?,
-                 flags)
-            )
+            Ok((
+                GroupAffine::get_point_from_x(x, flags.y_sign)
+                    .ok_or(Error::from(std::io::ErrorKind::InvalidData))?,
+                flags,
+            ))
         }
     }
 }
 
 // Fq
 impl BeSerialize for Fq {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+    ) -> Result<(), Error> {
         BeSerialize::serialize_with_flags(&self.into_repr(), writer, flags)
     }
 
@@ -142,7 +152,11 @@ impl BeDeserialize for Fq {
 
 // Fq2
 impl BeSerialize for Fq2 {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+    ) -> Result<(), Error> {
         BeSerialize::serialize_with_flags(&self.c0, writer, flags)?;
         BeSerialize::serialize(&self.c1, writer)
     }
@@ -168,7 +182,11 @@ impl BeDeserialize for Fq2 {
 
 // BigInteger384
 impl BeSerialize for BigInteger384 {
-    fn serialize_with_flags<W: WriteBytesExt>(&self, writer: &mut W, flags: Flags) -> Result<(), Error> {
+    fn serialize_with_flags<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+        flags: Flags,
+    ) -> Result<(), Error> {
         // BigInteger stores the least significant u64 first, so we need to reverse the order.
         for (i, &limb) in self.as_ref().iter().rev().enumerate() {
             let mut limb_to_encode = limb;
