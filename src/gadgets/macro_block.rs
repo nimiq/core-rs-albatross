@@ -1,28 +1,4 @@
-use std::borrow::{Borrow, Cow};
-
-use algebra::curves::bls12_377::Bls12_377Parameters;
-use algebra::fields::bls12_377::FqParameters;
-use algebra::fields::sw6::Fr as SW6Fr;
-use algebra::One;
-use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
-use crypto_primitives::FixedLengthCRHGadget;
-use r1cs_core::{ConstraintSystem, SynthesisError};
-use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::bits::uint32::UInt32;
-use r1cs_std::bits::uint8::UInt8;
-use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::bls12_377::{G1Gadget, G2Gadget};
-use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
-use r1cs_std::{Assignment, ToBitsGadget};
-
-use crate::constants::VALIDATOR_SLOTS;
-use crate::gadgets::check_sig::CheckSigGadget;
-use crate::gadgets::crh::{CRHGadget, CRHGadgetParameters, CRHWindow, CRH};
-use crate::gadgets::smaller_than::SmallerThanGadget;
-use crate::gadgets::y_to_bit::YToBitGadget;
-use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
-use crate::macro_block::MacroBlock;
-use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
+use super::*;
 
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 pub enum Round {
@@ -32,27 +8,27 @@ pub enum Round {
 
 pub struct MacroBlockGadget {
     pub header_hash: Vec<Boolean>,
-    pub public_keys: Vec<G2Gadget>,
-    pub prepare_signature: G1Gadget,
+    pub public_keys: Vec<G2Gadget<Bls12_377>>,
+    pub prepare_signature: G1Gadget<Bls12_377>,
     pub prepare_signer_bitmap: Vec<Boolean>,
-    pub commit_signature: G1Gadget,
+    pub commit_signature: G1Gadget<Bls12_377>,
     pub commit_signer_bitmap: Vec<Boolean>,
 }
 
 impl MacroBlockGadget {
-    pub fn public_keys(&self) -> &[G2Gadget] {
+    pub fn public_keys(&self) -> &[G2Gadget<Bls12_377>] {
         &self.public_keys
     }
 
     pub fn verify<CS: ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
-        prev_public_keys: &[G2Gadget],
+        prev_public_keys: &[G2Gadget<Bls12_377>],
         max_non_signers: &FpGadget<SW6Fr>,
         block_number: &UInt32,
-        sig_generator: &G2Gadget,
-        sum_generator_g1: &G1Gadget,
-        sum_generator_g2: &G2Gadget,
+        sig_generator: &G2Gadget<Bls12_377>,
+        sum_generator_g1: &G1Gadget<Bls12_377>,
+        sum_generator_g2: &G2Gadget<Bls12_377>,
         crh_parameters: &CRHGadgetParameters,
     ) -> Result<(), SynthesisError> {
         // Verify prepare signature.
@@ -103,12 +79,12 @@ impl MacroBlockGadget {
         &self,
         mut cs: CS,
         round: Round,
-        prev_public_keys: &[G2Gadget],
+        prev_public_keys: &[G2Gadget<Bls12_377>],
         max_non_signers: &FpGadget<SW6Fr>,
         block_number: &UInt32,
-        generator: &G2Gadget,
+        generator: &G2Gadget<Bls12_377>,
         crh_parameters: &CRHGadgetParameters,
-    ) -> Result<(G1Gadget, G2Gadget), SynthesisError> {
+    ) -> Result<(G1Gadget<Bls12_377>, G2Gadget<Bls12_377>), SynthesisError> {
         // Calculate the Pedersen hash for the block.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Create hash point");
@@ -159,7 +135,7 @@ impl MacroBlockGadget {
         round: Round,
         block_number: &UInt32,
         crh_parameters: &CRHGadgetParameters,
-    ) -> Result<G1Gadget, SynthesisError> {
+    ) -> Result<G1Gadget<Bls12_377>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits: Vec<Boolean> = vec![];
 
@@ -184,8 +160,7 @@ impl MacroBlockGadget {
             // Get bits from the x coordinate.
             let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
             // Get one bit from the y coordinate.
-            let greatest_bit =
-                YToBitGadget::<Bls12_377Parameters>::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
+            let greatest_bit = YToBitGadget::<Bls12_377>::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
             // Pad points and get *Big-Endian* representation.
             let mut serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
             // Append to Boolean vector.
@@ -212,12 +187,12 @@ impl MacroBlockGadget {
 
     pub fn aggregate_public_key<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
-        public_keys: &[G2Gadget],
+        public_keys: &[G2Gadget<Bls12_377>],
         key_bitmap: &[Boolean],
         reference_bitmap: Option<&[Boolean]>,
         max_non_signers: &FpGadget<SW6Fr>,
-        generator: &G2Gadget,
-    ) -> Result<G2Gadget, SynthesisError> {
+        generator: &G2Gadget<Bls12_377>,
+    ) -> Result<G2Gadget<Bls12_377>, SynthesisError> {
         // Sum public keys.
         let mut num_non_signers = FpGadget::zero(cs.ns(|| "number used public keys"))?;
 

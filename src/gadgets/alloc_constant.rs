@@ -1,11 +1,4 @@
-use algebra::curves::models::short_weierstrass_jacobian::{GroupAffine, GroupProjective};
-use algebra::{Field, Fp2, Fp2Parameters, PrimeField, ProjectiveCurve, SWModelParameters};
-use r1cs_core::{ConstraintSystem, SynthesisError};
-use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::fields::fp2::Fp2Gadget;
-use r1cs_std::fields::FieldGadget;
-use r1cs_std::groups::curves::short_weierstrass::AffineGadget;
+use super::*;
 
 pub trait AllocConstantGadget<V, ConstraintF: Field>
 where

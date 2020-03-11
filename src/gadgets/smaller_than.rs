@@ -1,12 +1,4 @@
-use std::marker::PhantomData;
-
-use algebra::{Field, PrimeField};
-use r1cs_core::{ConstraintSystem, SynthesisError};
-use r1cs_std::{
-    boolean::Boolean,
-    fields::{fp::FpGadget, FieldGadget},
-    ToBitsGadget,
-};
+use super::*;
 
 pub struct SmallerThanGadget<ConstraintF: Field + PrimeField> {
     constraint_field_type: PhantomData<ConstraintF>,

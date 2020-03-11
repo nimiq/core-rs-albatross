@@ -1,15 +1,4 @@
-use std::{marker::PhantomData, ops::Neg};
-
-use algebra::{curves::models::bls12::Bls12Parameters, One, PrimeField};
-use r1cs_core::SynthesisError;
-use r1cs_std::{
-    alloc::AllocGadget,
-    bits::ToBitsGadget,
-    boolean::Boolean,
-    fields::{fp::FpGadget, FieldGadget},
-    groups::curves::short_weierstrass::bls12::{G1Gadget, G2Gadget},
-    Assignment,
-};
+use super::*;
 
 pub struct YToBitGadget<P: Bls12Parameters> {
     parameters_type: PhantomData<P>,

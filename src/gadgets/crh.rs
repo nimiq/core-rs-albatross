@@ -1,19 +1,8 @@
-use algebra::curves::bls12_377::{G1Affine, G1Projective};
-use algebra::fields::sw6::Fr as SW6Fr;
-use algebra::{AffineCurve, Group};
-use crypto_primitives::crh::pedersen::constraints::PedersenCRHGadget;
-use crypto_primitives::crh::pedersen::{PedersenCRH, PedersenParameters, PedersenWindow};
-use crypto_primitives::FixedLengthCRHGadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::bls12_377::G1Gadget;
-
-use crate::constants::{
-    G1_GENERATOR1, G1_GENERATOR2, G1_GENERATOR3, G1_GENERATOR4, G1_GENERATOR5, G1_GENERATOR6,
-    G1_GENERATOR7, G1_GENERATOR8,
-};
+use super::*;
 
 pub type CRH<T> = PedersenCRH<G1Projective, T>;
 
-pub type CRHGadget = PedersenCRHGadget<G1Projective, SW6Fr, G1Gadget>;
+pub type CRHGadget = PedersenCRHGadget<G1Projective, SW6Fr, G1Gadget<Bls12_377>>;
 
 pub type CRHGadgetParameters =
     <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindow>, SW6Fr>>::ParametersGadget;

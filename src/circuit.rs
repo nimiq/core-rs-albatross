@@ -1,8 +1,6 @@
-use algebra::curves::bls12_377::{Bls12_377Parameters, G1Projective, G2Projective};
-use algebra::curves::AffineCurve;
-use algebra::fields::bls12_377::fq::Fq;
-use algebra::fields::sw6::Fr as SW6Fr;
-use algebra::ProjectiveCurve;
+use algebra::bls12_377::{Fq, G2Projective};
+use algebra::sw6::Fr as SW6Fr;
+use algebra_core::{AffineCurve, ProjectiveCurve};
 use crypto_primitives::FixedLengthCRHGadget;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::fields::fp::FpGadget;
@@ -10,11 +8,13 @@ use r1cs_std::groups::curves::short_weierstrass::bls12::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
 use crate::constants::{EPOCH_LENGTH, G1_GENERATOR1, G2_GENERATOR, MAX_NON_SIGNERS};
-use crate::gadgets::alloc_constant::AllocConstantGadget;
-use crate::gadgets::crh::{setup_crh, CRHGadget, CRHWindow, CRH};
-use crate::gadgets::macro_block::MacroBlockGadget;
+use crate::gadgets::{
+    calculate_state_hash, setup_crh, AllocConstantGadget, CRHGadget, CRHWindow, MacroBlockGadget,
+    CRH,
+};
 use crate::macro_block::MacroBlock;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
+use algebra_core::curves::models::bls12::Bls12Parameters;
 
 pub struct Circuit {
     // Private inputs
@@ -23,7 +23,7 @@ pub struct Circuit {
     block: MacroBlock,
 
     // Public inputs
-    state_hash: G1Projective,
+    state_hash: Vec<u32>,
 }
 
 impl Circuit {
@@ -31,7 +31,7 @@ impl Circuit {
         prev_keys: Vec<G2Projective>,
         block_number: u32,
         block: MacroBlock,
-        state_hash: G1Projective,
+        state_hash: Vec<u32>,
     ) -> Self {
         Self {
             prev_keys,
@@ -55,15 +55,15 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             cs.ns(|| "max non signers"),
             &SW6Fr::from(MAX_NON_SIGNERS),
         )?;
-        let sig_generator_var: G2Gadget<Bls12_377Parameters> = AllocConstantGadget::alloc_const(
+        let sig_generator_var: G2Gadget<dyn Bls12Parameters> = AllocConstantGadget::alloc_const(
             cs.ns(|| "signature generator"),
             &G2Projective::prime_subgroup_generator(),
         )?;
-        let sum_generator_g1_var: G1Gadget<Bls12_377Parameters> = AllocConstantGadget::alloc_const(
+        let sum_generator_g1_var: G1Gadget<dyn Bls12Parameters> = AllocConstantGadget::alloc_const(
             cs.ns(|| "sum generator g1"),
             &G1_GENERATOR1.clone().into_projective(),
         )?;
-        let sum_generator_g2_var: G2Gadget<Bls12_377Parameters> = AllocConstantGadget::alloc_const(
+        let sum_generator_g2_var: G2Gadget<dyn Bls12Parameters> = AllocConstantGadget::alloc_const(
             cs.ns(|| "sum generator g2"),
             &G2_GENERATOR.clone().into_projective(),
         )?;
@@ -72,16 +72,9 @@ impl ConstraintSynthesizer<Fq> for Circuit {
                 &mut cs.ns(|| "CRH block parameters"),
                 || Ok(setup_crh::<CRHWindow>()),
             )?;
-        // let crh_state_parameters_var = <CRHGadget as FixedLengthCRHGadget<
-        //     CRH<CRHWindowState>,
-        //     SW6Fr,
-        // >>::ParametersGadget::alloc(
-        //     &mut cs.ns(|| "CRH state parameters"),
-        //     || Ok(setup_crh::<CRHWindowState>()),
-        // )?;
 
         next_cost_analysis!(cs, cost, || "Alloc private inputs");
-        let prev_keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc_const(
+        let prev_keys_var = Vec::<G2Gadget<dyn Bls12Parameters>>::alloc_const(
             cs.ns(|| "previous keys"),
             &self.prev_keys[..],
         )?;
@@ -91,18 +84,22 @@ impl ConstraintSynthesizer<Fq> for Circuit {
         let block_var = MacroBlockGadget::alloc(cs.ns(|| "macro blocks"), || Ok(&self.block))?;
 
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
+        // TODO: Make it a public input
         let state_hash_var =
-            G1Gadget::<Bls12_377Parameters>::alloc_input(cs.ns(|| "state hash"), || {
-                Ok(&self.state_hash)
-            })?;
+            Vec::<UInt32>::alloc(cs.ns(|| "state hash"), || Ok(&self.state_hash[..]))?;
 
         // Verify equality initial state hash
         next_cost_analysis!(cs, cost, || { "Verify initial state hash" });
-        // let reference_hash = calculate_state_hash(
-        //     cs.ns(|| "calculate initial state hash"),
-        //     &block_number_var,
-        //     &block_var.public_keys,
-        //     &crh_state_parameters_var,
+        let reference_hash = calculate_state_hash(
+            cs.ns(|| "calculate initial state hash"),
+            &block_number_var,
+            &block_var.public_keys,
+        )?;
+        // for i in 0..state_hash.len() {}
+        //
+        // verification_flag.enforce_equal(
+        //     cs.ns(|| format!("verification flag == block flag {}", i + 1)),
+        //     block_flag,
         // )?;
         // state_hash_var.enforce_equal(cs.ns(|| "initial state hash equality"), &reference_hash)?;
 

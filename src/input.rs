@@ -1,6 +1,6 @@
+use algebra::bls12_377::{Fq, Fq2};
 use algebra::curves::models::short_weierstrass_jacobian::GroupAffine;
-use algebra::fields::bls12_377::{Fq, Fq2};
-use algebra::fields::sw6::Fr;
+use algebra::sw6::Fr;
 use algebra::{One, SWModelParameters, Zero};
 
 pub trait Input<I>

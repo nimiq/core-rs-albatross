@@ -1,6 +1,5 @@
+use algebra::bls12_377::{Fq, Fq2, G1Affine, G2Affine};
 use algebra::bytes::FromBytes;
-use algebra::curves::bls12_377::{G1Affine, G2Affine};
-use algebra::fields::bls12_377::{Fq, Fq2};
 use algebra::{BigInteger384, PrimeField};
 
 use lazy_static::lazy_static;

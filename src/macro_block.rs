@@ -1,11 +1,11 @@
-use algebra::curves::bls12_377::{G1Projective, G2Projective};
+use algebra::bls12_377::{G1Projective, G2Projective};
 use algebra::ProjectiveCurve;
 use crypto_primitives::crh::pedersen::PedersenParameters;
 use crypto_primitives::FixedLengthCRH;
 use nimiq_bls::{KeyPair, PublicKey};
 
 use crate::constants::VALIDATOR_SLOTS;
-use crate::gadgets::crh::{CRHWindow, CRH};
+use crate::gadgets::{CRHWindow, CRH};
 
 #[derive(Clone)]
 pub struct MacroBlock {
