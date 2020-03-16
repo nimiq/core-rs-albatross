@@ -2,7 +2,9 @@ use std::borrow::{Borrow, Cow};
 use std::marker::PhantomData;
 use std::ops::Neg;
 
-use algebra::bls12_377::{Bls12_377, FqParameters, G1Affine, G1Projective};
+use algebra::bls12_377::{
+    Bls12_377, FqParameters, G1Affine, G1Projective, Parameters as Bls12_377Parameters,
+};
 use algebra::curves::models::short_weierstrass_jacobian::{GroupAffine, GroupProjective};
 use algebra::sw6::Fr as SW6Fr;
 use algebra::FpParameters;

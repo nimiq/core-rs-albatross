@@ -2,7 +2,7 @@ use super::*;
 
 pub type CRH<T> = PedersenCRH<G1Projective, T>;
 
-pub type CRHGadget = PedersenCRHGadget<G1Projective, SW6Fr, G1Gadget<Bls12_377>>;
+pub type CRHGadget = PedersenCRHGadget<G1Projective, SW6Fr, G1Gadget<Bls12_377Parameters>>;
 
 pub type CRHGadgetParameters =
     <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindow>, SW6Fr>>::ParametersGadget;
@@ -37,7 +37,7 @@ pub fn setup_crh<W: PedersenWindow>() -> PedersenParameters<G1Projective> {
         for _ in 0..W::WINDOW_SIZE {
             generators_for_segment.push(base);
             for _ in 0..4 {
-                base.double_in_place();
+                algebra_core::curves::ProjectiveCurve::double_in_place(&mut base);
             }
         }
         generators.push(generators_for_segment);

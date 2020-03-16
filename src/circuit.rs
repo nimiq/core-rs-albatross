@@ -1,4 +1,4 @@
-use algebra::bls12_377::{Fq, G2Projective};
+use algebra::bls12_377::{Fq, G2Projective, Parameters as Bls12_377Parameters};
 use algebra::sw6::Fr as SW6Fr;
 use algebra_core::{AffineCurve, ProjectiveCurve};
 use crypto_primitives::FixedLengthCRHGadget;
@@ -55,15 +55,15 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             cs.ns(|| "max non signers"),
             &SW6Fr::from(MAX_NON_SIGNERS),
         )?;
-        let sig_generator_var: G2Gadget<dyn Bls12Parameters> = AllocConstantGadget::alloc_const(
+        let sig_generator_var: G2Gadget<Bls12_377Parameters> = AllocConstantGadget::alloc_const(
             cs.ns(|| "signature generator"),
             &G2Projective::prime_subgroup_generator(),
         )?;
-        let sum_generator_g1_var: G1Gadget<dyn Bls12Parameters> = AllocConstantGadget::alloc_const(
+        let sum_generator_g1_var: G1Gadget<Bls12_377Parameters> = AllocConstantGadget::alloc_const(
             cs.ns(|| "sum generator g1"),
             &G1_GENERATOR1.clone().into_projective(),
         )?;
-        let sum_generator_g2_var: G2Gadget<dyn Bls12Parameters> = AllocConstantGadget::alloc_const(
+        let sum_generator_g2_var: G2Gadget<Bls12_377Parameters> = AllocConstantGadget::alloc_const(
             cs.ns(|| "sum generator g2"),
             &G2_GENERATOR.clone().into_projective(),
         )?;
@@ -74,7 +74,7 @@ impl ConstraintSynthesizer<Fq> for Circuit {
             )?;
 
         next_cost_analysis!(cs, cost, || "Alloc private inputs");
-        let prev_keys_var = Vec::<G2Gadget<dyn Bls12Parameters>>::alloc_const(
+        let prev_keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc_const(
             cs.ns(|| "previous keys"),
             &self.prev_keys[..],
         )?;

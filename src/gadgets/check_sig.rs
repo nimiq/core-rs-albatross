@@ -6,10 +6,10 @@ impl CheckSigGadget {
     /// Implements signature aggregation from https://crypto.stanford.edu/%7Edabo/pubs/papers/aggreg.pdf .
     pub fn check_signatures<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
-        public_keys: &[G2Gadget<dyn Bls12Parameters>],
-        generator: &G2Gadget<dyn Bls12Parameters>,
-        signature: &G1Gadget<dyn Bls12Parameters>,
-        hash_points: &[G1Gadget<dyn Bls12Parameters>],
+        public_keys: &[G2Gadget<Bls12_377Parameters>],
+        generator: &G2Gadget<Bls12_377Parameters>,
+        signature: &G1Gadget<Bls12_377Parameters>,
+        hash_points: &[G1Gadget<Bls12_377Parameters>],
     ) -> Result<(), SynthesisError> {
         assert_eq!(
             hash_points.len(),

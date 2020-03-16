@@ -5,7 +5,7 @@ use super::*;
 pub fn calculate_state_hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
     mut cs: CS,
     block_number: &UInt32,
-    public_keys: &Vec<G2Gadget<Bls12_377>>,
+    public_keys: &Vec<G2Gadget<Bls12_377Parameters>>,
 ) -> Result<Vec<UInt32>, SynthesisError> {
     // Initialize Boolean vector.
     let mut bits: Vec<Boolean> = vec![];
@@ -21,7 +21,8 @@ pub fn calculate_state_hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         // Get bits from the x coordinate.
         let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
         // Get one bit from the y coordinate.
-        let greatest_bit = YToBitGadget::<Bls12_377>::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
+        let greatest_bit =
+            YToBitGadget::<Bls12_377Parameters>::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
         // Pad points and get *Big-Endian* representation.
         let mut serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
         // Append to Boolean vector.
