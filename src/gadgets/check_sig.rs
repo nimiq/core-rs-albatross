@@ -1,4 +1,6 @@
 use super::*;
+use r1cs_std::fields::fp12::Fp12Gadget;
+use r1cs_std::groups::curves::short_weierstrass::bls12::G1PreparedGadget;
 use r1cs_std::groups::curves::short_weierstrass::bls12::G2PreparedGadget;
 
 pub struct CheckSigGadget {}
@@ -21,38 +23,56 @@ impl CheckSigGadget {
 
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Prepare g1 sig and g2 generator");
-        let sig_p_var = PairingGadget::prepare_g1(cs.ns(|| "sig_p"), &signature)?;
+        let sig_p_var: G1PreparedGadget<Bls12_377Parameters> =
+            PairingGadget::<Bls12_377, SW6Fr>::prepare_g1(cs.ns(|| "sig_p"), &signature)?;
         let generator_p_var: G2PreparedGadget<Bls12_377Parameters> =
-            PairingGadget::prepare_g2(cs.ns(|| "generator"), &generator)?;
+            PairingGadget::<Bls12_377, SW6Fr>::prepare_g2(cs.ns(|| "generator"), &generator)?;
 
         next_cost_analysis!(cs, cost, || "Prepare g1 hash points");
         let mut hash_p_vars = vec![];
         for (i, hash_point) in hash_points.iter().enumerate() {
-            let hash_p_var =
-                PairingGadget::prepare_g1(cs.ns(|| format!("hash_p {}", i)), &hash_point)?;
+            let hash_p_var: G1PreparedGadget<Bls12_377Parameters> =
+                PairingGadget::<Bls12_377, SW6Fr>::prepare_g1(
+                    cs.ns(|| format!("hash_p {}", i)),
+                    &hash_point,
+                )?;
             hash_p_vars.push(hash_p_var);
         }
 
         next_cost_analysis!(cs, cost, || "Prepare g2 public keys");
         let mut pub_key_p_vars = vec![];
         for (i, public_key) in public_keys.iter().enumerate() {
-            let pub_key_p_var =
-                PairingGadget::prepare_g2(cs.ns(|| format!("pub_key_p {}", i)), &public_key)?;
+            let pub_key_p_var: G2PreparedGadget<Bls12_377Parameters> =
+                PairingGadget::<Bls12_377, SW6Fr>::prepare_g2(
+                    cs.ns(|| format!("pub_key_p {}", i)),
+                    &public_key,
+                )?;
             pub_key_p_vars.push(pub_key_p_var);
         }
 
         next_cost_analysis!(cs, cost, || "Pairing 1 (sig & generator)");
-        let pairing1_var =
-            PairingGadget::pairing(cs.ns(|| "sig pairing"), sig_p_var, generator_p_var.clone())?;
+        let pairing1_var: Fp12Gadget<
+            <Bls12_377Parameters as Bls12Parameters>::Fp12Params,
+            <Bls12_377Parameters as Bls12Parameters>::Fp,
+        > = PairingGadget::<Bls12_377, SW6Fr>::pairing(
+            cs.ns(|| "sig pairing"),
+            sig_p_var,
+            generator_p_var.clone(),
+        )?;
 
         next_cost_analysis!(cs, cost, || "Pairings 2 (hash & pub)");
-        let mut pairings2_var = vec![];
+        let mut pairings2_var: Vec<
+            Fp12Gadget<
+                <Bls12_377Parameters as Bls12Parameters>::Fp12Params,
+                <Bls12_377Parameters as Bls12Parameters>::Fp,
+            >,
+        > = vec![];
         for (i, (hash_p_var, pub_key_p_var)) in hash_p_vars
             .drain(..)
             .zip(pub_key_p_vars.drain(..))
             .enumerate()
         {
-            let pairing2_var = PairingGadget::pairing(
+            let pairing2_var = PairingGadget::<Bls12_377, SW6Fr>::pairing(
                 cs.ns(|| format!("pub pairing {}", i)),
                 hash_p_var,
                 pub_key_p_var,
