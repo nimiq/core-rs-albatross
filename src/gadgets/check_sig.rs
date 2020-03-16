@@ -1,4 +1,5 @@
 use super::*;
+use r1cs_std::groups::curves::short_weierstrass::bls12::G2PreparedGadget;
 
 pub struct CheckSigGadget {}
 
@@ -21,7 +22,8 @@ impl CheckSigGadget {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Prepare g1 sig and g2 generator");
         let sig_p_var = PairingGadget::prepare_g1(cs.ns(|| "sig_p"), &signature)?;
-        let generator_p_var = PairingGadget::prepare_g2(cs.ns(|| "generator"), &generator)?;
+        let generator_p_var: G2PreparedGadget<Bls12_377Parameters> =
+            PairingGadget::prepare_g2(cs.ns(|| "generator"), &generator)?;
 
         next_cost_analysis!(cs, cost, || "Prepare g1 hash points");
         let mut hash_p_vars = vec![];

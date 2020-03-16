@@ -85,8 +85,8 @@ impl ConstraintSynthesizer<Fq> for Circuit {
 
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
         // TODO: Make it a public input
-        let state_hash_var =
-            Vec::<UInt32>::alloc(cs.ns(|| "state hash"), || Ok(&self.state_hash[..]))?;
+        // let state_hash_var =
+        //     Vec::<UInt32>::alloc(cs.ns(|| "state hash"), || Ok(&self.state_hash[..]))?;
 
         // Verify equality initial state hash
         next_cost_analysis!(cs, cost, || { "Verify initial state hash" });
