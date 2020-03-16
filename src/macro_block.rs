@@ -5,7 +5,7 @@ use crypto_primitives::FixedLengthCRH;
 use nimiq_bls::{KeyPair, PublicKey};
 
 use crate::constants::VALIDATOR_SLOTS;
-use crate::gadgets::{CRHWindow, CRH};
+use crate::gadgets::crh::{CRHWindow, CRH};
 
 #[derive(Clone)]
 pub struct MacroBlock {

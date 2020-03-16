@@ -1,58 +1,14 @@
-use std::borrow::{Borrow, Cow};
-use std::marker::PhantomData;
-use std::ops::Neg;
-
-use algebra::bls12_377::{
-    Bls12_377, FqParameters, G1Affine, G1Projective, Parameters as Bls12_377Parameters,
-};
-use algebra::curves::models::short_weierstrass_jacobian::{GroupAffine, GroupProjective};
-use algebra::sw6::Fr as SW6Fr;
 use algebra::FpParameters;
-use algebra::{
-    AffineCurve, Field, Fp2, Fp2Parameters, Group, One, PrimeField, ProjectiveCurve,
-    SWModelParameters,
-};
-use algebra_core::curves::models::bls12::Bls12Parameters;
-use crypto_primitives::crh::pedersen::constraints::PedersenCRHGadget;
-use crypto_primitives::crh::pedersen::{PedersenCRH, PedersenParameters, PedersenWindow};
-use crypto_primitives::prf::blake2s::constraints::{blake2s_gadget, Blake2sOutputGadget};
-use crypto_primitives::FixedLengthCRHGadget;
-use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::bits::uint32::UInt32;
-use r1cs_std::bits::uint8::UInt8;
-use r1cs_std::eq::EqGadget;
-use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::fields::fp2::Fp2Gadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::G1Gadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
-use r1cs_std::groups::curves::short_weierstrass::AffineGadget;
-use r1cs_std::pairing::PairingGadget;
-use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
-use r1cs_std::{Assignment, ToBitsGadget};
 
-pub use alloc_constant::*;
-pub use check_sig::*;
-pub use crh::*;
-pub use macro_block::*;
-pub use smaller_than::*;
-pub use state_hash::*;
-pub use y_to_bit::*;
-
-use crate::constants::{
-    G1_GENERATOR1, G1_GENERATOR2, G1_GENERATOR3, G1_GENERATOR4, G1_GENERATOR5, G1_GENERATOR6,
-    G1_GENERATOR7, G1_GENERATOR8, VALIDATOR_SLOTS,
-};
-use crate::macro_block::MacroBlock;
-use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
-
-mod alloc_constant;
-mod check_sig;
-mod crh;
-mod macro_block;
-mod smaller_than;
-mod state_hash;
-mod y_to_bit;
+pub mod alloc_constant;
+pub mod check_sig;
+pub mod crh;
+pub mod macro_block;
+pub mod smaller_than;
+pub mod state_hash;
+pub mod y_to_bit;
 
 pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     let mut bits = vec![];

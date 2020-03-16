@@ -1,4 +1,14 @@
-use super::*;
+use algebra::bls12_377::{FqParameters, Parameters as Bls12_377Parameters};
+use algebra::sw6::Fr as SW6Fr;
+use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
+use r1cs_core::SynthesisError;
+use r1cs_std::bits::boolean::Boolean;
+use r1cs_std::bits::uint32::UInt32;
+use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
+use r1cs_std::ToBitsGadget;
+
+use crate::gadgets::y_to_bit::YToBitGadget;
+use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
 
 /// Calculates the Blake2s hash for the block from:
 /// block number || public_keys.
@@ -32,10 +42,6 @@ pub fn calculate_state_hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
     // TODO: Is this needed?
     // Prepare order of booleans for blake2s (it doesn't expect Big-Endian).
     let bits = reverse_inner_byte_order(&bits);
-    let input_bytes: Vec<UInt8> = bits
-        .chunks(8)
-        .map(|chunk| UInt8::from_bits_le(chunk))
-        .collect();
 
     blake2s_gadget(cs.ns(|| "blake2s hash from serialized bits"), &bits)
 }

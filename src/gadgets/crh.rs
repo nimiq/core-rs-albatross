@@ -1,4 +1,15 @@
-use super::*;
+use algebra::bls12_377::{G1Affine, G1Projective, Parameters as Bls12_377Parameters};
+use algebra::sw6::Fr as SW6Fr;
+use algebra::AffineCurve;
+use crypto_primitives::crh::pedersen::constraints::PedersenCRHGadget;
+use crypto_primitives::crh::pedersen::{PedersenCRH, PedersenParameters, PedersenWindow};
+use crypto_primitives::FixedLengthCRHGadget;
+use r1cs_std::groups::curves::short_weierstrass::bls12::G1Gadget;
+
+use crate::constants::{
+    G1_GENERATOR1, G1_GENERATOR2, G1_GENERATOR3, G1_GENERATOR4, G1_GENERATOR5, G1_GENERATOR6,
+    G1_GENERATOR7, G1_GENERATOR8, VALIDATOR_SLOTS,
+};
 
 pub type CRH<T> = PedersenCRH<G1Projective, T>;
 
@@ -10,11 +21,13 @@ pub type CRHGadgetParameters =
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct CRHWindow;
 
-// TODO: Change to use the validator slots constant.
-// Parameters are 1 + 4 + 32 + 512 * 96 = 49189 bytes
-// Our fixed-length input is xxx bits.
+// The input is composed of:
+// - Round number: 1 byte
+// - Block number: 4 bytes
+// - Header hash: 32 bytes
+// - Validator public keys: validator slots * public key size bytes
 impl PedersenWindow for CRHWindow {
-    const WINDOW_SIZE: usize = 49189;
+    const WINDOW_SIZE: usize = 1 + 4 + 32 + VALIDATOR_SLOTS * 96;
     const NUM_WINDOWS: usize = 8;
 }
 

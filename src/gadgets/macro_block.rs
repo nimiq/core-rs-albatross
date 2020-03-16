@@ -1,4 +1,27 @@
-use super::*;
+use std::borrow::{Borrow, Cow};
+
+use algebra::bls12_377::{FqParameters, Parameters as Bls12_377Parameters};
+use algebra::sw6::Fr as SW6Fr;
+use algebra::One;
+use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
+use crypto_primitives::FixedLengthCRHGadget;
+use r1cs_core::{ConstraintSystem, SynthesisError};
+use r1cs_std::bits::boolean::Boolean;
+use r1cs_std::bits::uint32::UInt32;
+use r1cs_std::bits::uint8::UInt8;
+use r1cs_std::fields::fp::FpGadget;
+use r1cs_std::groups::curves::short_weierstrass::bls12::G1Gadget;
+use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
+use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
+use r1cs_std::{Assignment, ToBitsGadget};
+
+use crate::constants::VALIDATOR_SLOTS;
+use crate::gadgets::check_sig::CheckSigGadget;
+use crate::gadgets::crh::{CRHGadget, CRHGadgetParameters, CRHWindow, CRH};
+use crate::gadgets::smaller_than::SmallerThanGadget;
+use crate::gadgets::y_to_bit::YToBitGadget;
+use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
+use crate::macro_block::MacroBlock;
 
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 pub enum Round {
@@ -32,8 +55,6 @@ impl MacroBlockGadget {
         crh_parameters: &CRHGadgetParameters,
     ) -> Result<(), SynthesisError> {
         // Verify prepare signature.
-        #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Get hash and pks for prepare round");
         let (hash0, pub_key0) = self.get_hash_and_public_keys(
             cs.ns(|| "prepare"),
             Round::Prepare,
@@ -45,7 +66,6 @@ impl MacroBlockGadget {
         )?;
 
         // Verify commit signature.
-        next_cost_analysis!(cs, cost, || "Get hash and pks for commit round");
         let (hash1, pub_key1) = self.get_hash_and_public_keys(
             cs.ns(|| "commit"),
             Round::Commit,
@@ -56,13 +76,11 @@ impl MacroBlockGadget {
             crh_parameters,
         )?;
 
-        next_cost_analysis!(cs, cost, || "Add signatures");
         let mut signature =
             sum_generator_g1.add(cs.ns(|| "add prepare sig"), &self.prepare_signature)?;
         signature = signature.add(cs.ns(|| "add commit sig"), &self.commit_signature)?;
         signature = signature.sub(cs.ns(|| "finalize sig"), sum_generator_g1)?;
 
-        next_cost_analysis!(cs, cost, || "Check signatures");
         CheckSigGadget::check_signatures(
             cs.ns(|| "check signatures"),
             &[pub_key0, pub_key1],
@@ -71,7 +89,6 @@ impl MacroBlockGadget {
             &[hash0, hash1],
         )?;
 
-        end_cost_analysis!(cs, cost);
         Ok(())
     }
 
@@ -87,8 +104,6 @@ impl MacroBlockGadget {
     ) -> Result<(G1Gadget<Bls12_377Parameters>, G2Gadget<Bls12_377Parameters>), SynthesisError>
     {
         // Calculate the Pedersen hash for the block.
-        #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Create hash point");
         let hash_point = self.hash(
             cs.ns(|| "create hash point"),
             round,
@@ -109,7 +124,6 @@ impl MacroBlockGadget {
             Round::Commit => Some(self.prepare_signer_bitmap.as_ref()),
         };
 
-        next_cost_analysis!(cs, cost, || "Aggregate public keys");
         let aggregate_public_key = Self::aggregate_public_key(
             cs.ns(|| "aggregate public keys"),
             prev_public_keys,
@@ -118,7 +132,6 @@ impl MacroBlockGadget {
             max_non_signers,
             generator,
         )?;
-        end_cost_analysis!(cs, cost);
         Ok((hash_point, aggregate_public_key))
     }
 
