@@ -3,11 +3,9 @@ use r1cs_core::SynthesisError;
 use r1cs_std::bls12_377::{
     Fq12Gadget, G1Gadget, G1PreparedGadget, G2Gadget, G2PreparedGadget, PairingGadget,
 };
-use r1cs_std::eq::EqGadget;
-use r1cs_std::fields::FieldGadget;
-use r1cs_std::pairing::PairingGadget as PG;
+use r1cs_std::{eq::EqGadget, fields::FieldGadget, pairing::PairingGadget as PG};
 
-pub struct CheckSigGadget {}
+pub struct CheckSigGadget;
 
 impl CheckSigGadget {
     /// Implements signature aggregation from https://crypto.stanford.edu/%7Edabo/pubs/papers/aggreg.pdf .

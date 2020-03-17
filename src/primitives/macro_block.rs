@@ -1,10 +1,10 @@
 use algebra::bls12_377::{G1Projective, G2Projective};
 use algebra::ProjectiveCurve;
-use crypto_primitives::{crh::pedersen::PedersenParameters, FixedLengthCRH};
+use crypto_primitives::FixedLengthCRH;
 use nimiq_bls::{KeyPair, PublicKey};
 
 use crate::constants::VALIDATOR_SLOTS;
-use crate::gadgets::crh::CRH;
+use crate::primitives::crh::{setup_crh, CRH};
 
 #[derive(Clone)]
 pub struct MacroBlock {
@@ -17,6 +17,7 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
+    /// This function is only useful for testing purposes.
     pub fn without_signatures(header_hash: [u8; 32], public_keys: Vec<G2Projective>) -> Self {
         MacroBlock {
             header_hash,
@@ -28,51 +29,15 @@ impl MacroBlock {
         }
     }
 
-    /// Calculates the Pedersen Hash for the block from:
-    /// prefix || header_hash || public_keys
-    ///
-    /// Note that the Pedersen Hash is only collision-resistant
-    /// and does not provide pseudo-random output!
-    /// For our use-case, however, this suffices as the `header_hash`
-    /// provides enough entropy.
-    pub fn hash(
-        &self,
-        round_number: u8,
-        block_number: u32,
-        parameters: &PedersenParameters<G1Projective>,
-    ) -> G1Projective {
-        // Then, concatenate the prefix || header_hash || public_keys,
-        // with prefix = (round number || block number).
-        let mut msg = vec![round_number];
-        msg.extend_from_slice(&block_number.to_be_bytes());
-        msg.extend_from_slice(&self.header_hash);
-        for key in self.public_keys.iter() {
-            let pk = PublicKey { public_key: *key };
-            msg.extend_from_slice(pk.compress().as_ref());
-        }
-
-        CRH::evaluate(parameters, &msg).unwrap()
+    /// This function is only useful for testing purposes.
+    pub fn sign(&mut self, key_pair: &KeyPair, signer_id: usize) {
+        self.sign_prepare(key_pair, signer_id);
+        self.sign_commit(key_pair, signer_id);
     }
 
     /// This function is only useful for testing purposes.
-    pub fn sign(
-        &mut self,
-        key_pair: &KeyPair,
-        signer_id: usize,
-        parameters: &PedersenParameters<G1Projective>,
-    ) {
-        self.sign_prepare(key_pair, signer_id, parameters);
-        self.sign_commit(key_pair, signer_id, parameters);
-    }
-
-    /// This function is only useful for testing purposes.
-    pub fn sign_prepare(
-        &mut self,
-        key_pair: &KeyPair,
-        signer_id: usize,
-        parameters: &PedersenParameters<G1Projective>,
-    ) {
-        let hash_point = self.hash(0, 0, parameters);
+    pub fn sign_prepare(&mut self, key_pair: &KeyPair, signer_id: usize) {
+        let hash_point = self.hash(0, 0);
         let signature = key_pair.secret_key.sign_g1(hash_point);
 
         if let Some(sig) = self.prepare_signature.as_mut() {
@@ -85,13 +50,8 @@ impl MacroBlock {
     }
 
     /// This function is only useful for testing purposes.
-    pub fn sign_commit(
-        &mut self,
-        key_pair: &KeyPair,
-        signer_id: usize,
-        parameters: &PedersenParameters<G1Projective>,
-    ) {
-        let hash_point = self.hash(1, 0, parameters);
+    pub fn sign_commit(&mut self, key_pair: &KeyPair, signer_id: usize) {
+        let hash_point = self.hash(1, 0);
         let signature = key_pair.secret_key.sign_g1(hash_point);
 
         if let Some(sig) = self.commit_signature.as_mut() {
@@ -101,6 +61,21 @@ impl MacroBlock {
         }
 
         self.commit_signer_bitmap[signer_id] = true;
+    }
+
+    /// This function is only useful for testing purposes.
+    pub fn hash(&self, round_number: u8, block_number: u32) -> G1Projective {
+        let parameters = setup_crh();
+
+        let mut msg = vec![round_number];
+        msg.extend_from_slice(&block_number.to_be_bytes());
+        msg.extend_from_slice(&self.header_hash);
+        for key in self.public_keys.iter() {
+            let pk = PublicKey { public_key: *key };
+            msg.extend_from_slice(pk.compress().as_ref());
+        }
+
+        CRH::evaluate(&parameters, &msg).unwrap()
     }
 }
 

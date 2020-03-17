@@ -10,12 +10,11 @@ use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget}
 use r1cs_std::{Assignment, ToBitsGadget};
 
 use crate::constants::VALIDATOR_SLOTS;
-use crate::gadgets::check_sig::CheckSigGadget;
-use crate::gadgets::crh::{CRHGadget, CRHGadgetParameters};
-use crate::gadgets::smaller_than::SmallerThanGadget;
-use crate::gadgets::y_to_bit::YToBitGadget;
-use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
-use crate::macro_block::MacroBlock;
+use crate::gadgets::{
+    pad_point_bits, reverse_inner_byte_order, CRHGadget, CRHGadgetParameters, CheckSigGadget,
+    SmallerThanGadget, YToBitGadget,
+};
+use crate::primitives::MacroBlock;
 
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 pub enum Round {

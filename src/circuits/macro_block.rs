@@ -6,12 +6,8 @@ use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
 use crate::constants::{EPOCH_LENGTH, G1_GENERATOR1, G2_GENERATOR, MAX_NON_SIGNERS};
-use crate::gadgets::crh::{setup_crh, CRHGadgetParameters, CRHWindow};
-use crate::gadgets::{
-    alloc_constant::AllocConstantGadget, macro_block::MacroBlockGadget,
-    state_hash::calculate_state_hash,
-};
-use crate::macro_block::MacroBlock;
+use crate::gadgets::{AllocConstantGadget, CRHGadgetParameters, MacroBlockGadget, StateHashGadget};
+use crate::primitives::{setup_crh, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 pub struct MacroBlockCircuit {
@@ -76,9 +72,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
 
         //TODO: Make this a constant alloc.
         let crh_block_parameters_var =
-            CRHGadgetParameters::alloc(&mut cs.ns(|| "CRH block parameters"), || {
-                Ok(setup_crh::<CRHWindow>())
-            })?;
+            CRHGadgetParameters::alloc(&mut cs.ns(|| "CRH block parameters"), || Ok(setup_crh()))?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || "Alloc private inputs");
@@ -117,7 +111,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
         // Verify equality initial state hash
         next_cost_analysis!(cs, cost, || { "Verify initial state hash" });
 
-        let reference_hash = calculate_state_hash(
+        let reference_hash = StateHashGadget::evaluate(
             cs.ns(|| "reference initial state hash"),
             &block_number_var,
             &prev_keys_var,
@@ -153,7 +147,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
         // Verify equality final state hash
         next_cost_analysis!(cs, cost, || { "Verify final state hash" });
 
-        let reference_hash = calculate_state_hash(
+        let reference_hash = StateHashGadget::evaluate(
             cs.ns(|| "reference final state hash"),
             &new_block_number_var,
             &block_var.public_keys,

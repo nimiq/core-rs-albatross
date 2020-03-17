@@ -1,1 +1,3 @@
-pub mod macro_block;
+pub use macro_block::MacroBlockCircuit;
+
+mod macro_block;
