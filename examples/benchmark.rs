@@ -4,8 +4,8 @@ use std::env;
 use std::error::Error;
 use std::str::FromStr;
 
-use algebra::curves::bls12_377::{Bls12_377Parameters, G2Projective};
-use algebra::fields::bls12_377::{Fq, FqParameters};
+use algebra::bls12_377::{Fq, FqParameters};
+use algebra::bls12_377::{G2Projective, Parameters as Bls12_377Parameters};
 use algebra::ProjectiveCurve;
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
 use nimiq_bls::{KeyPair, SecureGenerate};
@@ -13,9 +13,9 @@ use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::alloc::AllocGadget;
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::bits::uint32::UInt32;
-use r1cs_std::fields::bls12_377::FqGadget;
 use r1cs_std::fields::FieldGadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::bls12_377::G2Gadget;
+use r1cs_std::fields::FqGadget;
+use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
 use r1cs_std::groups::GroupGadget;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use r1cs_std::ToBitsGadget;
@@ -28,9 +28,11 @@ fn sum_keys_and_hash<CS: ConstraintSystem<Fq>>(
     mut cs: CS,
     public_keys: &[G2Projective],
 ) -> Result<(), SynthesisError> {
-    let keys_var = Vec::<G2Gadget>::alloc(cs.ns(|| "public keys"), || Ok(&public_keys[..]))?;
+    let keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc(cs.ns(|| "public keys"), || {
+        Ok(&public_keys[..])
+    })?;
 
-    let mut sum: G2Gadget = G2Gadget::alloc_const(
+    let mut sum: G2Gadget<Bls12_377Parameters> = G2Gadget::alloc_const(
         cs.ns(|| "generator"),
         &G2Projective::prime_subgroup_generator(),
     )?;
@@ -59,7 +61,9 @@ fn only_blake2s_circuit<CS: ConstraintSystem<Fq>>(
     mut cs: CS,
     public_keys: &[G2Projective],
 ) -> Result<(), SynthesisError> {
-    let keys_var = Vec::<G2Gadget>::alloc(cs.ns(|| "public keys"), || Ok(&public_keys[..]))?;
+    let keys_var = Vec::<G2Gadget<Bls12_377Parameters>>::alloc(cs.ns(|| "public keys"), || {
+        Ok(&public_keys[..])
+    })?;
 
     let mut bits = vec![];
     // Just append all bit representations.

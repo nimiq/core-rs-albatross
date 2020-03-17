@@ -1,11 +1,10 @@
 use algebra::bls12_377::{G1Projective, G2Projective};
 use algebra::ProjectiveCurve;
-use crypto_primitives::crh::pedersen::PedersenParameters;
-use crypto_primitives::FixedLengthCRH;
+use crypto_primitives::{crh::pedersen::PedersenParameters, FixedLengthCRH};
 use nimiq_bls::{KeyPair, PublicKey};
 
 use crate::constants::VALIDATOR_SLOTS;
-use crate::gadgets::crh::{CRHWindow, CRH};
+use crate::gadgets::crh::CRH;
 
 #[derive(Clone)]
 pub struct MacroBlock {
@@ -52,7 +51,7 @@ impl MacroBlock {
             msg.extend_from_slice(pk.compress().as_ref());
         }
 
-        CRH::<CRHWindow>::evaluate(parameters, &msg).unwrap()
+        CRH::evaluate(parameters, &msg).unwrap()
     }
 
     /// This function is only useful for testing purposes.

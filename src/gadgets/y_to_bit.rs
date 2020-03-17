@@ -1,41 +1,34 @@
-use std::marker::PhantomData;
 use std::ops::Neg;
 
-use algebra::{One, PrimeField};
-use algebra_core::curves::models::bls12::Bls12Parameters;
+use algebra::{bls12_377::Fq, sw6::Fr as SW6Fr, One, PrimeField};
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::G1Gadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
+use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, FieldGadget};
 use r1cs_std::{Assignment, ToBitsGadget};
 
-pub struct YToBitGadget<P: Bls12Parameters> {
-    parameters_type: PhantomData<P>,
-}
+pub struct YToBitGadget {}
 
-impl<P: Bls12Parameters> YToBitGadget<P> {
-    pub fn y_to_bit_g1<CS: r1cs_core::ConstraintSystem<P::Fp>>(
+impl YToBitGadget {
+    pub fn y_to_bit_g1<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
-        pk: &G1Gadget<P>,
+        pk: &G1Gadget,
     ) -> Result<Boolean, SynthesisError> {
-        let half_plus_one_neg =
-            (P::Fp::from_repr(P::Fp::modulus_minus_one_div_two()) + &P::Fp::one()).neg();
+        let half_plus_one_neg = (Fq::from_repr(Fq::modulus_minus_one_div_two()) + &Fq::one()).neg();
         let y_bit = Boolean::alloc(cs.ns(|| "alloc y bit"), || {
             if pk.y.get_value().is_some() {
-                let half = P::Fp::modulus_minus_one_div_two();
+                let half = Fq::modulus_minus_one_div_two();
                 Ok(pk.y.get_value().get()?.into_repr() > half)
             } else {
                 Err(SynthesisError::AssignmentMissing)
             }
         })?;
-        let y_adjusted = FpGadget::alloc(cs.ns(|| "alloc y"), || {
+        let y_adjusted = FqGadget::alloc(cs.ns(|| "alloc y"), || {
             if pk.y.get_value().is_some() {
-                let half = P::Fp::modulus_minus_one_div_two();
+                let half = Fq::modulus_minus_one_div_two();
                 let y_value = pk.y.get_value().get()?;
                 if y_value.into_repr() > half {
-                    Ok(y_value - &(P::Fp::from_repr(half) + &P::Fp::one()))
+                    Ok(y_value - &(Fq::from_repr(half) + &Fq::one()))
                 } else {
                     Ok(y_value)
                 }
@@ -46,28 +39,27 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
         let y_bit_lc = y_bit.lc(CS::one(), half_plus_one_neg);
         cs.enforce(
             || "check y bit",
-            |lc| lc + (P::Fp::one(), CS::one()),
+            |lc| lc + (Fq::one(), CS::one()),
             |lc| pk.y.get_variable() + y_bit_lc + lc,
             |lc| y_adjusted.get_variable() + lc,
         );
         let y_adjusted_bits = &y_adjusted.to_bits(cs.ns(|| "y adjusted to bits"))?;
-        Boolean::enforce_smaller_or_equal_than::<_, _, P::Fp, _>(
+        Boolean::enforce_smaller_or_equal_than::<_, _, Fq, _>(
             cs.ns(|| "enforce smaller than modulus minus one div two"),
             y_adjusted_bits,
-            P::Fp::modulus_minus_one_div_two(),
+            Fq::modulus_minus_one_div_two(),
         )?;
         Ok(y_bit)
     }
 
-    pub fn y_to_bit_g2<CS: r1cs_core::ConstraintSystem<P::Fp>>(
+    pub fn y_to_bit_g2<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
-        pk: &G2Gadget<P>,
+        pk: &G2Gadget,
     ) -> Result<Boolean, SynthesisError> {
-        let half_plus_one_neg =
-            (P::Fp::from_repr(P::Fp::modulus_minus_one_div_two()) + &P::Fp::one()).neg();
+        let half_plus_one_neg = (Fq::from_repr(Fq::modulus_minus_one_div_two()) + &Fq::one()).neg();
         let y_c1_bit = Boolean::alloc(cs.ns(|| "alloc y c1 bit"), || {
             if pk.y.c1.get_value().is_some() {
-                let half = P::Fp::modulus_minus_one_div_two();
+                let half = Fq::modulus_minus_one_div_two();
                 Ok(pk.y.c1.get_value().get()?.into_repr() > half)
             } else {
                 Err(SynthesisError::AssignmentMissing)
@@ -75,7 +67,7 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
         })?;
         let y_c0_bit = Boolean::alloc(cs.ns(|| "alloc y c0 bit"), || {
             if pk.y.c0.get_value().is_some() {
-                let half = P::Fp::modulus_minus_one_div_two();
+                let half = Fq::modulus_minus_one_div_two();
                 Ok(pk.y.c0.get_value().get()?.into_repr() > half)
             } else {
                 Err(SynthesisError::AssignmentMissing)
@@ -83,7 +75,7 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
         })?;
         let y_eq_bit = Boolean::alloc(cs.ns(|| "alloc y eq bit"), || {
             if pk.y.c0.get_value().is_some() {
-                let half = P::Fp::modulus_minus_one_div_two();
+                let half = Fq::modulus_minus_one_div_two();
                 Ok(pk.y.c0.get_value().get()?.into_repr() == half)
             } else {
                 Err(SynthesisError::AssignmentMissing)
@@ -91,7 +83,7 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
         })?;
         let y_bit = Boolean::alloc(cs.ns(|| "alloc y bit"), || {
             if pk.y.c1.get_value().is_some() {
-                let half = P::Fp::modulus_minus_one_div_two();
+                let half = Fq::modulus_minus_one_div_two();
                 if pk.y.c1.get_value().get()?.into_repr() > half {
                     Ok(true)
                 } else if pk.y.c1.get_value().get()?.into_repr() == half
@@ -105,12 +97,12 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
                 Err(SynthesisError::AssignmentMissing)
             }
         })?;
-        let y_c1_adjusted = FpGadget::alloc(cs.ns(|| "alloc y c1"), || {
+        let y_c1_adjusted = FqGadget::alloc(cs.ns(|| "alloc y c1"), || {
             if pk.y.get_value().is_some() {
-                let half = P::Fp::modulus_minus_one_div_two();
+                let half = Fq::modulus_minus_one_div_two();
                 let y_value = pk.y.c1.get_value().get()?;
                 if y_value.into_repr() > half {
-                    Ok(y_value - &(P::Fp::from_repr(half) + &P::Fp::one()))
+                    Ok(y_value - &(Fq::from_repr(half) + &Fq::one()))
                 } else {
                     Ok(y_value)
                 }
@@ -118,12 +110,12 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
                 Err(SynthesisError::AssignmentMissing)
             }
         })?;
-        let y_c0_adjusted = FpGadget::alloc(cs.ns(|| "alloc y c0"), || {
+        let y_c0_adjusted = FqGadget::alloc(cs.ns(|| "alloc y c0"), || {
             if pk.y.get_value().is_some() {
-                let half = P::Fp::modulus_minus_one_div_two();
+                let half = Fq::modulus_minus_one_div_two();
                 let y_value = pk.y.c0.get_value().get()?;
                 if y_value.into_repr() > half {
-                    Ok(y_value - &(P::Fp::from_repr(half) + &P::Fp::one()))
+                    Ok(y_value - &(Fq::from_repr(half) + &Fq::one()))
                 } else {
                     Ok(y_value)
                 }
@@ -134,28 +126,28 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
         let y_c1_bit_lc = y_c1_bit.lc(CS::one(), half_plus_one_neg);
         cs.enforce(
             || "check y bit c1",
-            |lc| lc + (P::Fp::one(), CS::one()),
+            |lc| lc + (Fq::one(), CS::one()),
             |lc| pk.y.c1.get_variable() + y_c1_bit_lc + lc,
             |lc| y_c1_adjusted.get_variable() + lc,
         );
         let y_c1_adjusted_bits = &y_c1_adjusted.to_bits(cs.ns(|| "y c1 adjusted to bits"))?;
-        Boolean::enforce_smaller_or_equal_than::<_, _, P::Fp, _>(
+        Boolean::enforce_smaller_or_equal_than::<_, _, Fq, _>(
             cs.ns(|| "enforce y c1 smaller than modulus minus one div two"),
             y_c1_adjusted_bits,
-            P::Fp::modulus_minus_one_div_two(),
+            Fq::modulus_minus_one_div_two(),
         )?;
         let y_c0_bit_lc = y_c0_bit.lc(CS::one(), half_plus_one_neg);
         cs.enforce(
             || "check y bit c0",
-            |lc| lc + (P::Fp::one(), CS::one()),
+            |lc| lc + (Fq::one(), CS::one()),
             |lc| pk.y.c0.get_variable() + y_c0_bit_lc + lc,
             |lc| y_c0_adjusted.get_variable() + lc,
         );
         let y_c0_adjusted_bits = &y_c0_adjusted.to_bits(cs.ns(|| "y c0 adjusted to bits"))?;
-        Boolean::enforce_smaller_or_equal_than::<_, _, P::Fp, _>(
+        Boolean::enforce_smaller_or_equal_than::<_, _, Fq, _>(
             cs.ns(|| "enforce y c0 smaller than modulus minus one div two"),
             y_c0_adjusted_bits,
-            P::Fp::modulus_minus_one_div_two(),
+            Fq::modulus_minus_one_div_two(),
         )?;
 
         // (1-a)*(b*c) == o - a
@@ -167,11 +159,9 @@ impl<P: Bls12Parameters> YToBitGadget<P> {
 
         cs.enforce(
             || "enforce y bit derived correctly",
-            |lc| lc + (P::Fp::one(), CS::one()) + y_c1_bit.lc(CS::one(), P::Fp::one().neg()),
-            |_| bc.lc(CS::one(), P::Fp::one()),
-            |lc| {
-                lc + y_bit.lc(CS::one(), P::Fp::one()) + y_c1_bit.lc(CS::one(), P::Fp::one().neg())
-            },
+            |lc| lc + (Fq::one(), CS::one()) + y_c1_bit.lc(CS::one(), Fq::one().neg()),
+            |_| bc.lc(CS::one(), Fq::one()),
+            |lc| lc + y_bit.lc(CS::one(), Fq::one()) + y_c1_bit.lc(CS::one(), Fq::one().neg()),
         );
 
         Ok(y_bit)

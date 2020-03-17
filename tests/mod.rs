@@ -1,4 +1,4 @@
-use algebra::curves::bls12_377::G2Projective;
+use algebra::bls12_377::G2Projective;
 use algebra::{ProjectiveCurve, Zero};
 use beserial::Deserialize;
 use nimiq_bls::{KeyPair, SecretKey};

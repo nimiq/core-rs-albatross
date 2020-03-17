@@ -1,23 +1,17 @@
 use std::borrow::{Borrow, Cow};
 
-use algebra::bls12_377::{FqParameters, Parameters as Bls12_377Parameters};
-use algebra::sw6::Fr as SW6Fr;
-use algebra::One;
-use crypto_primitives::prf::blake2s::constraints::Blake2sOutputGadget;
-use crypto_primitives::FixedLengthCRHGadget;
+use algebra::bls12_377::{Fq, FqParameters};
+use algebra::{sw6::Fr as SW6Fr, One};
+use crypto_primitives::{prf::blake2s::constraints::Blake2sOutputGadget, FixedLengthCRHGadget};
 use r1cs_core::{ConstraintSystem, SynthesisError};
-use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::bits::uint32::UInt32;
-use r1cs_std::bits::uint8::UInt8;
-use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::G1Gadget;
-use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
+use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
+use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
 use r1cs_std::{Assignment, ToBitsGadget};
 
 use crate::constants::VALIDATOR_SLOTS;
 use crate::gadgets::check_sig::CheckSigGadget;
-use crate::gadgets::crh::{CRHGadget, CRHGadgetParameters, CRHWindow, CRH};
+use crate::gadgets::crh::{CRHGadget, CRHGadgetParameters};
 use crate::gadgets::smaller_than::SmallerThanGadget;
 use crate::gadgets::y_to_bit::YToBitGadget;
 use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
@@ -31,27 +25,27 @@ pub enum Round {
 
 pub struct MacroBlockGadget {
     pub header_hash: Vec<Boolean>,
-    pub public_keys: Vec<G2Gadget<Bls12_377Parameters>>,
-    pub prepare_signature: G1Gadget<Bls12_377Parameters>,
+    pub public_keys: Vec<G2Gadget>,
+    pub prepare_signature: G1Gadget,
     pub prepare_signer_bitmap: Vec<Boolean>,
-    pub commit_signature: G1Gadget<Bls12_377Parameters>,
+    pub commit_signature: G1Gadget,
     pub commit_signer_bitmap: Vec<Boolean>,
 }
 
 impl MacroBlockGadget {
-    pub fn public_keys(&self) -> &[G2Gadget<Bls12_377Parameters>] {
+    pub fn public_keys(&self) -> &[G2Gadget] {
         &self.public_keys
     }
 
     pub fn verify<CS: ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
-        prev_public_keys: &[G2Gadget<Bls12_377Parameters>],
-        max_non_signers: &FpGadget<SW6Fr>,
+        prev_public_keys: &[G2Gadget],
+        max_non_signers: &FqGadget,
         block_number: &UInt32,
-        sig_generator: &G2Gadget<Bls12_377Parameters>,
-        sum_generator_g1: &G1Gadget<Bls12_377Parameters>,
-        sum_generator_g2: &G2Gadget<Bls12_377Parameters>,
+        sig_generator: &G2Gadget,
+        sum_generator_g1: &G1Gadget,
+        sum_generator_g2: &G2Gadget,
         crh_parameters: &CRHGadgetParameters,
     ) -> Result<(), SynthesisError> {
         // Verify prepare signature.
@@ -96,13 +90,12 @@ impl MacroBlockGadget {
         &self,
         mut cs: CS,
         round: Round,
-        prev_public_keys: &[G2Gadget<Bls12_377Parameters>],
-        max_non_signers: &FpGadget<SW6Fr>,
+        prev_public_keys: &[G2Gadget],
+        max_non_signers: &FqGadget,
         block_number: &UInt32,
-        generator: &G2Gadget<Bls12_377Parameters>,
+        generator: &G2Gadget,
         crh_parameters: &CRHGadgetParameters,
-    ) -> Result<(G1Gadget<Bls12_377Parameters>, G2Gadget<Bls12_377Parameters>), SynthesisError>
-    {
+    ) -> Result<(G1Gadget, G2Gadget), SynthesisError> {
         // Calculate the Pedersen hash for the block.
         let hash_point = self.hash(
             cs.ns(|| "create hash point"),
@@ -149,7 +142,7 @@ impl MacroBlockGadget {
         round: Round,
         block_number: &UInt32,
         crh_parameters: &CRHGadgetParameters,
-    ) -> Result<G1Gadget<Bls12_377Parameters>, SynthesisError> {
+    ) -> Result<G1Gadget, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits: Vec<Boolean> = vec![];
 
@@ -174,8 +167,7 @@ impl MacroBlockGadget {
             // Get bits from the x coordinate.
             let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
             // Get one bit from the y coordinate.
-            let greatest_bit =
-                YToBitGadget::<Bls12_377Parameters>::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
+            let greatest_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
             // Pad points and get *Big-Endian* representation.
             let mut serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
             // Append to Boolean vector.
@@ -191,25 +183,24 @@ impl MacroBlockGadget {
             .collect();
 
         // Hash serialized bits.
-        let crh_result =
-            <CRHGadget as FixedLengthCRHGadget<CRH<CRHWindow>, SW6Fr>>::check_evaluation_gadget(
-                &mut cs.ns(|| "crh_evaluation"),
-                crh_parameters,
-                &input_bytes,
-            )?;
+        let crh_result = CRHGadget::check_evaluation_gadget(
+            &mut cs.ns(|| "crh_evaluation"),
+            crh_parameters,
+            &input_bytes,
+        )?;
         Ok(crh_result)
     }
 
     pub fn aggregate_public_key<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
-        public_keys: &[G2Gadget<Bls12_377Parameters>],
+        public_keys: &[G2Gadget],
         key_bitmap: &[Boolean],
         reference_bitmap: Option<&[Boolean]>,
-        max_non_signers: &FpGadget<SW6Fr>,
-        generator: &G2Gadget<Bls12_377Parameters>,
-    ) -> Result<G2Gadget<Bls12_377Parameters>, SynthesisError> {
+        max_non_signers: &FqGadget,
+        generator: &G2Gadget,
+    ) -> Result<G2Gadget, SynthesisError> {
         // Sum public keys.
-        let mut num_non_signers = FpGadget::zero(cs.ns(|| "number used public keys"))?;
+        let mut num_non_signers = FqGadget::zero(cs.ns(|| "number used public keys"))?;
 
         let mut sum = Cow::Borrowed(generator);
 
@@ -239,7 +230,7 @@ impl MacroBlockGadget {
             num_non_signers = num_non_signers.conditionally_add_constant(
                 cs.ns(|| format!("public key count {}", i)),
                 &included.not(),
-                SW6Fr::one(),
+                Fq::one(),
             )?;
             sum = Cow::Owned(cond_sum);
         }
@@ -285,26 +276,22 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             .flat_map(|n| reverse_inner_byte_order(&n.into_bits_le()))
             .collect::<Vec<Boolean>>();
         let public_keys =
-            Vec::<G2Gadget<Bls12_377Parameters>>::alloc(cs.ns(|| "public keys"), || {
-                Ok(&value.public_keys[..])
-            })?;
+            Vec::<G2Gadget>::alloc(cs.ns(|| "public keys"), || Ok(&value.public_keys[..]))?;
 
         let prepare_signer_bitmap =
             Vec::<Boolean>::alloc(cs.ns(|| "prepare signer bitmap"), || {
                 Ok(&value.prepare_signer_bitmap[..])
             })?;
-        let prepare_signature =
-            G1Gadget::<Bls12_377Parameters>::alloc(cs.ns(|| "prepare signature"), || {
-                value.prepare_signature.get()
-            })?;
+        let prepare_signature = G1Gadget::alloc(cs.ns(|| "prepare signature"), || {
+            value.prepare_signature.get()
+        })?;
 
         let commit_signer_bitmap = Vec::<Boolean>::alloc(cs.ns(|| "commit signer bitmap"), || {
             Ok(&value.commit_signer_bitmap[..])
         })?;
-        let commit_signature =
-            G1Gadget::<Bls12_377Parameters>::alloc(cs.ns(|| "commit signature"), || {
-                value.commit_signature.get()
-            })?;
+        let commit_signature = G1Gadget::alloc(cs.ns(|| "commit signature"), || {
+            value.commit_signature.get()
+        })?;
 
         Ok(MacroBlockGadget {
             header_hash,
@@ -343,27 +330,23 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             .flat_map(|n| reverse_inner_byte_order(&n.into_bits_le()))
             .collect::<Vec<Boolean>>();
         let public_keys =
-            Vec::<G2Gadget<Bls12_377Parameters>>::alloc_input(cs.ns(|| "public keys"), || {
-                Ok(&value.public_keys[..])
-            })?;
+            Vec::<G2Gadget>::alloc_input(cs.ns(|| "public keys"), || Ok(&value.public_keys[..]))?;
 
         let prepare_signer_bitmap =
             Vec::<Boolean>::alloc_input(cs.ns(|| "prepare signer bitmap"), || {
                 Ok(&value.prepare_signer_bitmap[..])
             })?;
-        let prepare_signature =
-            G1Gadget::<Bls12_377Parameters>::alloc_input(cs.ns(|| "prepare signature"), || {
-                value.prepare_signature.get()
-            })?;
+        let prepare_signature = G1Gadget::alloc_input(cs.ns(|| "prepare signature"), || {
+            value.prepare_signature.get()
+        })?;
 
         let commit_signer_bitmap =
             Vec::<Boolean>::alloc_input(cs.ns(|| "commit signer bitmap"), || {
                 Ok(&value.commit_signer_bitmap[..])
             })?;
-        let commit_signature =
-            G1Gadget::<Bls12_377Parameters>::alloc_input(cs.ns(|| "commit signature"), || {
-                value.commit_signature.get()
-            })?;
+        let commit_signature = G1Gadget::alloc_input(cs.ns(|| "commit signature"), || {
+            value.commit_signature.get()
+        })?;
 
         Ok(MacroBlockGadget {
             header_hash,

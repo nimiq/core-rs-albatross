@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-pub use circuit::Circuit;
+pub use circuits::macro_block::MacroBlockCircuit;
 pub use input::Input;
 pub use macro_block::MacroBlock;
 
-pub mod circuit;
+pub mod circuits;
 pub mod constants;
 pub mod cost_analysis;
 pub mod gadgets;

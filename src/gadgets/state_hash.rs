@@ -1,10 +1,9 @@
-use algebra::bls12_377::{FqParameters, Parameters as Bls12_377Parameters};
+use algebra::bls12_377::FqParameters;
 use algebra::sw6::Fr as SW6Fr;
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
 use r1cs_core::SynthesisError;
-use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::bits::uint32::UInt32;
-use r1cs_std::groups::curves::short_weierstrass::bls12::G2Gadget;
+use r1cs_std::bits::{boolean::Boolean, uint32::UInt32};
+use r1cs_std::bls12_377::G2Gadget;
 use r1cs_std::ToBitsGadget;
 
 use crate::gadgets::y_to_bit::YToBitGadget;
@@ -15,7 +14,7 @@ use crate::gadgets::{pad_point_bits, reverse_inner_byte_order};
 pub fn calculate_state_hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
     mut cs: CS,
     block_number: &UInt32,
-    public_keys: &Vec<G2Gadget<Bls12_377Parameters>>,
+    public_keys: &Vec<G2Gadget>,
 ) -> Result<Vec<UInt32>, SynthesisError> {
     // Initialize Boolean vector.
     let mut bits: Vec<Boolean> = vec![];
@@ -31,8 +30,7 @@ pub fn calculate_state_hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         // Get bits from the x coordinate.
         let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
         // Get one bit from the y coordinate.
-        let greatest_bit =
-            YToBitGadget::<Bls12_377Parameters>::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
+        let greatest_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
         // Pad points and get *Big-Endian* representation.
         let mut serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
         // Append to Boolean vector.
