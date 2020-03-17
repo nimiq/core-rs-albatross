@@ -1,6 +1,9 @@
 use algebra::bls12_377::FqParameters;
 use algebra::sw6::Fr as SW6Fr;
-use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
+use crypto_primitives::prf::blake2s::constraints::{
+    blake2s_gadget, blake2s_gadget_with_parameters,
+};
+use crypto_primitives::prf::Blake2sWithParameterBlock;
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::{boolean::Boolean, uint32::UInt32};
 use r1cs_std::bls12_377::G2Gadget;
@@ -43,6 +46,26 @@ impl StateHashGadget {
         // Prepare order of booleans for blake2s (it doesn't expect Big-Endian).
         let bits = reverse_inner_byte_order(&bits);
 
-        blake2s_gadget(cs.ns(|| "blake2s hash from serialized bits"), &bits)
+        // Initialize Blake2s parameters.
+        let blake2s_parameters = Blake2sWithParameterBlock {
+            digest_length: 32,
+            key_length: 0,
+            fan_out: 1,
+            depth: 1,
+            leaf_length: 0,
+            node_offset: 0,
+            xof_digest_length: 0,
+            node_depth: 0,
+            inner_length: 0,
+            salt: [0; 8],
+            personalization: [0; 8],
+        };
+
+        // Calculate hash.
+        blake2s_gadget_with_parameters(
+            cs.ns(|| "blake2s hash from serialized bits"),
+            &bits,
+            &blake2s_parameters.parameters(),
+        )
     }
 }
