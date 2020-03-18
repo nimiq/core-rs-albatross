@@ -17,8 +17,8 @@ pub struct MacroBlockCircuit {
     block: MacroBlock,
 
     // Public inputs
-    initial_state_hash: Vec<u32>,
-    final_state_hash: Vec<u32>,
+    initial_state_hash: Vec<u8>,
+    final_state_hash: Vec<u8>,
 }
 
 impl MacroBlockCircuit {
@@ -26,8 +26,8 @@ impl MacroBlockCircuit {
         prev_keys: Vec<G2Projective>,
         block_number: u32,
         block: MacroBlock,
-        initial_state_hash: Vec<u32>,
-        final_state_hash: Vec<u32>,
+        initial_state_hash: Vec<u8>,
+        final_state_hash: Vec<u8>,
     ) -> Self {
         Self {
             prev_keys,
@@ -92,21 +92,13 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let mut initial_state_hash_var = Vec::new();
-        for i in 0..8 {
-            initial_state_hash_var.push(UInt32::alloc_input(
-                cs.ns(|| format!("initial state hash byte {}", i)),
-                Some(self.initial_state_hash[i]),
-            )?);
-        }
+        let initial_state_hash_var = UInt8::alloc_input_vec(
+            cs.ns(|| "initial state hash"),
+            self.initial_state_hash.as_ref(),
+        )?;
 
-        let mut final_state_hash_var = Vec::new();
-        for i in 0..8 {
-            final_state_hash_var.push(UInt32::alloc_input(
-                cs.ns(|| format!("final state hash byte {}", i)),
-                Some(self.final_state_hash[i]),
-            )?);
-        }
+        let final_state_hash_var =
+            UInt8::alloc_input_vec(cs.ns(|| "final state hash"), self.final_state_hash.as_ref())?;
 
         // Verify equality initial state hash
         next_cost_analysis!(cs, cost, || { "Verify initial state hash" });
@@ -117,7 +109,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             &prev_keys_var,
         )?;
 
-        for i in 0..8 {
+        for i in 0..32 {
             initial_state_hash_var[i].enforce_equal(
                 cs.ns(|| format!("initial state hash == reference hash: byte {}", i)),
                 &reference_hash[i],
@@ -153,7 +145,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             &block_var.public_keys,
         )?;
 
-        for i in 0..8 {
+        for i in 0..32 {
             final_state_hash_var[i].enforce_equal(
                 cs.ns(|| format!("final state hash == reference hash: byte {}", i)),
                 &reference_hash[i],

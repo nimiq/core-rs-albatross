@@ -17,18 +17,18 @@ pub fn evaluate_state_hash(block_number: u32, public_keys: &Vec<G2Projective>) -
     // Initialize Boolean vector.
     let mut bytes: Vec<u8> = vec![];
 
-    // The block number comes in little endian all the way.
-    // So, a reverse will put it into big endian.
-    let mut block_number_be = block_number.to_be();
-    bytes.append(&mut block_number_be);
-
-    // Convert each public key to bytes and append it.
-    for key in public_keys.iter() {
-        let mut key_bytes = key.to_bytes()?;
-        for byte in key_bytes {
-            bytes.push(byte.get_value().unwrap());
-        }
-    }
+    // // The block number comes in little endian all the way.
+    // // So, a reverse will put it into big endian.
+    // let mut block_number_be = block_number.to_be();
+    // bytes.append(&mut block_number_be);
+    //
+    // // Convert each public key to bytes and append it.
+    // for key in public_keys.iter() {
+    //     let mut key_bytes = key.to_bytes()?;
+    //     for byte in key_bytes {
+    //         bytes.push(byte.get_value().unwrap());
+    //     }
+    // }
 
     // Initialize Blake2s parameters.
     let blake2s = Blake2sWithParameterBlock {
