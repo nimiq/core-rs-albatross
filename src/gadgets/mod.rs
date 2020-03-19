@@ -1,7 +1,7 @@
 pub use alloc_constant::AllocConstantGadget;
 pub use check_sig::CheckSigGadget;
 pub use crh::{CRHGadget, CRHGadgetParameters};
-pub use macro_block::MacroBlockGadget;
+pub use macro_block::{MacroBlockGadget, Round};
 pub use smaller_than::SmallerThanGadget;
 pub use state_hash::StateHashGadget;
 pub use utils::{bytes_to_bits, hash_to_bits, pad_point_bits, reverse_inner_byte_order};

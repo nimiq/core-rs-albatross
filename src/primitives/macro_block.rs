@@ -75,7 +75,13 @@ impl MacroBlock {
             msg.extend_from_slice(pk.compress().as_ref());
         }
 
-        CRH::evaluate(&parameters, &msg).unwrap()
+        println!("hash from off-circuit:/n {:?}", msg);
+
+        let result = CRH::evaluate(&parameters, &msg).unwrap();
+
+        println!("g1 from off-circuit: /n {:?}", result.into_affine());
+
+        result
     }
 }
 

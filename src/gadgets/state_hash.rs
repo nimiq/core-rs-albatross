@@ -29,18 +29,19 @@ impl StateHashGadget {
         bits.extend(block_number_be);
 
         // Convert each public key to bits and append it.
-        for key in public_keys.iter() {
+        for i in 0..public_keys.len() {
+            let key = &public_keys[i];
             // Get bits from the x coordinate.
-            let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
+            let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| format!("x to bits: pk {}", i)))?;
             // Get one bit from the y coordinate.
-            let greatest_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
+            let greatest_bit =
+                YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bits: pk {}", i)), key)?;
             // Pad points and get *Big-Endian* representation.
             let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
             // Append to Boolean vector.
             bits.extend(serialized_bits);
         }
 
-        // TODO: Is this needed?
         // Prepare order of booleans for blake2s (it doesn't expect Big-Endian).
         let bits = reverse_inner_byte_order(&bits);
 

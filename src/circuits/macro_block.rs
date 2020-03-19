@@ -6,7 +6,9 @@ use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
 use crate::constants::{EPOCH_LENGTH, G1_GENERATOR1, G2_GENERATOR, MAX_NON_SIGNERS};
-use crate::gadgets::{AllocConstantGadget, CRHGadgetParameters, MacroBlockGadget, StateHashGadget};
+use crate::gadgets::{
+    AllocConstantGadget, CRHGadgetParameters, MacroBlockGadget, Round, StateHashGadget,
+};
 use crate::primitives::{setup_crh, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
@@ -52,7 +54,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
 
         let max_non_signers_var: FqGadget = AllocConstantGadget::alloc_const(
             cs.ns(|| "max non signers"),
-            &Fq::from(MAX_NON_SIGNERS),
+            &Fq::from((MAX_NON_SIGNERS + 1) as u64),
         )?;
 
         let sig_generator_var: G2Gadget = AllocConstantGadget::alloc_const(
@@ -70,7 +72,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             &G2_GENERATOR.clone().into_projective(),
         )?;
 
-        //TODO: Make this a constant alloc.
+        //This already creates a constant alloc internally.
         let crh_block_parameters_var =
             CRHGadgetParameters::alloc(&mut cs.ns(|| "CRH block parameters"), || Ok(setup_crh()))?;
 
@@ -103,32 +105,43 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
         // Verify equality initial state hash
         next_cost_analysis!(cs, cost, || { "Verify initial state hash" });
 
-        let reference_hash = StateHashGadget::evaluate(
-            cs.ns(|| "reference initial state hash"),
-            &block_number_var,
-            &prev_keys_var,
-        )?;
-
-        for i in 0..32 {
-            initial_state_hash_var[i].enforce_equal(
-                cs.ns(|| format!("initial state hash == reference hash: byte {}", i)),
-                &reference_hash[i],
-            )?;
-        }
+        // let reference_hash = StateHashGadget::evaluate(
+        //     cs.ns(|| "reference initial state hash"),
+        //     &block_number_var,
+        //     &prev_keys_var,
+        // )?;
+        //
+        // for i in 0..32 {
+        //     initial_state_hash_var[i].enforce_equal(
+        //         cs.ns(|| format!("initial state hash == reference hash: byte {}", i)),
+        //         &reference_hash[i],
+        //     )?;
+        // }
 
         // Verify block
         next_cost_analysis!(cs, cost, || "Verify block");
 
-        block_var.verify(
-            cs.ns(|| "verify block"),
-            &prev_keys_var,
-            &max_non_signers_var,
+        // block_var.verify(
+        //     cs.ns(|| "verify block"),
+        //     &prev_keys_var,
+        //     &max_non_signers_var,
+        //     &block_number_var,
+        //     &sig_generator_var,
+        //     &sum_generator_g1_var,
+        //     &sum_generator_g2_var,
+        //     &crh_block_parameters_var,
+        // )?;
+
+        // This is the section for testing purposes.
+        let hash_1 = self.block.hash(0, self.block_number);
+        let hash_1_var = G1Gadget::alloc(cs.ns(|| "alloc ped hash 1"), || Ok(&hash_1))?;
+        let hash_2_var = block_var.hash(
+            cs.ns(|| "create ped hash 2"),
+            Round::Prepare,
             &block_number_var,
-            &sig_generator_var,
-            &sum_generator_g1_var,
-            &sum_generator_g2_var,
             &crh_block_parameters_var,
         )?;
+        hash_1_var.enforce_equal(cs.ns(|| "equal ped hashes"), &hash_2_var)?;
 
         // Increment block number
         let new_block_number_var = UInt32::addmany(
@@ -139,18 +152,18 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
         // Verify equality final state hash
         next_cost_analysis!(cs, cost, || { "Verify final state hash" });
 
-        let reference_hash = StateHashGadget::evaluate(
-            cs.ns(|| "reference final state hash"),
-            &new_block_number_var,
-            &block_var.public_keys,
-        )?;
-
-        for i in 0..32 {
-            final_state_hash_var[i].enforce_equal(
-                cs.ns(|| format!("final state hash == reference hash: byte {}", i)),
-                &reference_hash[i],
-            )?;
-        }
+        // let reference_hash = StateHashGadget::evaluate(
+        //     cs.ns(|| "reference final state hash"),
+        //     &new_block_number_var,
+        //     &block_var.public_keys,
+        // )?;
+        //
+        // for i in 0..32 {
+        //     final_state_hash_var[i].enforce_equal(
+        //         cs.ns(|| format!("final state hash == reference hash: byte {}", i)),
+        //         &reference_hash[i],
+        //     )?;
+        // }
 
         end_cost_analysis!(cs, cost);
 

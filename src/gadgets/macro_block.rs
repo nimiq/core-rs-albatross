@@ -161,25 +161,34 @@ impl MacroBlockGadget {
         // Append the header hash.
         bits.extend_from_slice(&self.header_hash);
 
-        // Convert each public key to bits and append it.
-        for key in self.public_keys.iter() {
+        for i in 0..self.public_keys.len() {
+            let key = &self.public_keys[i];
             // Get bits from the x coordinate.
-            let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| "pks to bits"))?;
+            let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| format!("x to bits: pk {}", i)))?;
             // Get one bit from the y coordinate.
-            let greatest_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit"), key)?;
+            let greatest_bit =
+                YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bits: pk {}", i)), key)?;
             // Pad points and get *Big-Endian* representation.
-            let mut serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
+            let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
             // Append to Boolean vector.
-            bits.append(&mut serialized_bits);
+            bits.extend(serialized_bits);
         }
 
-        // TODO: Is this still needed? We are not using blake2s anymore.
-        // Prepare order of booleans for blake2s (it doesn't expect Big-Endian).
+        // Prepare order of booleans for Pedersen hash.
         let bits = reverse_inner_byte_order(&bits);
-        let input_bytes: Vec<UInt8> = bits
+        let mut input_bytes: Vec<UInt8> = bits
             .chunks(8)
             .map(|chunk| UInt8::from_bits_le(chunk))
             .collect();
+
+        let mut test_vec = vec![];
+        for i in 0..input_bytes.len() {
+            let value = input_bytes[i].get_value().unwrap();
+            test_vec.push(value);
+        }
+        println!("hash from on-circuit:/n {:?}", test_vec);
+
+        input_bytes.reverse();
 
         // Hash serialized bits.
         let crh_result = CRHGadget::check_evaluation_gadget(
@@ -187,6 +196,9 @@ impl MacroBlockGadget {
             crh_parameters,
             &input_bytes,
         )?;
+
+        println!("g1 from on-circuit: /n {:?}", crh_result);
+
         Ok(crh_result)
     }
 

@@ -5,15 +5,20 @@ use algebra::{BigInteger384, PrimeField};
 use lazy_static::lazy_static;
 
 // bla bla the length of one epoch
-pub const EPOCH_LENGTH: u32 = 10;
+pub const EPOCH_LENGTH: u32 = 128;
 
 // yada yada the number of validators in a block
-pub const VALIDATOR_SLOTS: usize = 512;
+// VALIDATOR_SLOTS = MIN_SIGNERS + MAX_NON_SIGNERS
+pub const VALIDATOR_SLOTS: usize = 4;
 
-// slots = 3*f +1 <=> f= (slots -1)/3 where we take the floor of the division
-// The max is exclusive, we do NOT tolerate MAX_NON_SIGNERS
-// MAX_NON_SIGNERS = f +1
-pub const MAX_NON_SIGNERS: u64 = ((VALIDATOR_SLOTS - 1) / 3 + 1) as u64;
+// MIN_SIGNERS = 2f +1
+// Formula for ceiling division of x/y is (x+y-1)/y.
+pub const MIN_SIGNERS: usize = (VALIDATOR_SLOTS * 2 + 3 - 1) / 3;
+
+// we take the floor of the division
+// The max is exclusive, we do tolerate MAX_NON_SIGNERS
+// MAX_NON_SIGNERS = f
+pub const MAX_NON_SIGNERS: usize = VALIDATOR_SLOTS / 3;
 
 // Generated via https://github.com/nimiq/generator-generation
 // G1 generators
