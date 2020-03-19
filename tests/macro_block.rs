@@ -1,19 +1,22 @@
 use algebra::bls12_377::{G1Projective, G2Projective};
+use algebra::sw6::Fr as SW6Fr;
 use algebra::{ProjectiveCurve, Zero};
 use beserial::Deserialize;
-use crypto_primitives::crh::pedersen::PedersenParameters;
-use crypto_primitives::FixedLengthCRH;
+use crypto_primitives::crh::pedersen::{PedersenParameters, PedersenWindow};
+use crypto_primitives::{FixedLengthCRH, FixedLengthCRHGadget};
 use nimiq_bls::{KeyPair, PublicKey, SecretKey};
-use r1cs_core::ConstraintSynthesizer;
+use r1cs_core::{ConstraintSynthesizer, ConstraintSystem};
+use r1cs_std::prelude::{AllocGadget, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 use nano_sync::constants::{EPOCH_LENGTH, MAX_NON_SIGNERS, MIN_SIGNERS, VALIDATOR_SLOTS};
-use nano_sync::primitives::evaluate_state_hash;
+use nano_sync::gadgets::{CRHGadget, CRHGadgetParameters};
+use nano_sync::primitives::{evaluate_state_hash, setup_crh, CRHWindow, CRH};
 use nano_sync::*;
 
 // When running tests you are advised to set VALIDATOR_SLOTS in constants.rs to a more manageable number, for example 4.
 
-#[test]
+//#[test]
 fn everything_works() {
     // Setup keys.
     let (key_pair1, key_pair2) = setup_keys();

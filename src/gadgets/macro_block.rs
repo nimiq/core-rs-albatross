@@ -188,8 +188,6 @@ impl MacroBlockGadget {
         }
         println!("hash from on-circuit:\n {:?}\n", test_vec);
 
-        input_bytes.reverse();
-
         // Hash serialized bits.
         let crh_result = CRHGadget::check_evaluation_gadget(
             &mut cs.ns(|| "crh_evaluation"),
