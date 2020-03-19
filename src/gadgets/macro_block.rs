@@ -186,7 +186,7 @@ impl MacroBlockGadget {
             let value = input_bytes[i].get_value().unwrap();
             test_vec.push(value);
         }
-        println!("hash from on-circuit:/n {:?}", test_vec);
+        println!("hash from on-circuit:\n {:?}\n", test_vec);
 
         input_bytes.reverse();
 
@@ -197,7 +197,7 @@ impl MacroBlockGadget {
             &input_bytes,
         )?;
 
-        println!("g1 from on-circuit: /n {:?}", crh_result);
+        println!("g1 from on-circuit:\n{:?}\n", crh_result);
 
         Ok(crh_result)
     }
