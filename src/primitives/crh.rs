@@ -19,7 +19,7 @@ pub struct CRHWindow;
 // - Header hash: 32 bytes
 // - Validator public keys: validator slots * public key size bytes
 impl PedersenWindow for CRHWindow {
-    const WINDOW_SIZE: usize = 128; //1 + 4 + 32 + VALIDATOR_SLOTS * 96;
+    const WINDOW_SIZE: usize = 1 + 4 + 32 + VALIDATOR_SLOTS * 96;
     const NUM_WINDOWS: usize = 8;
 }
 

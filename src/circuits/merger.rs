@@ -19,6 +19,7 @@ type MyProofGadget = ProofGadget<Bls12_377, Fq, PairingGadget>;
 type MyVkGadget = VerifyingKeyGadget<Bls12_377, Fq, PairingGadget>;
 type MyVerifierGadget = Groth16VerifierGadget<Bls12_377, Fq, PairingGadget>;
 
+#[derive(Clone)]
 pub struct MergerCircuit {
     // Private inputs
     proof_1: Proof<Bls12_377>,

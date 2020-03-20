@@ -176,7 +176,7 @@ impl MacroBlockGadget {
 
         // Prepare order of booleans for Pedersen hash.
         let bits = reverse_inner_byte_order(&bits);
-        let mut input_bytes: Vec<UInt8> = bits
+        let input_bytes: Vec<UInt8> = bits
             .chunks(8)
             .map(|chunk| UInt8::from_bits_le(chunk))
             .collect();

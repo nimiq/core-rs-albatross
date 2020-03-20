@@ -4,6 +4,7 @@ use r1cs_std::prelude::*;
 
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
+#[derive(Clone)]
 pub struct DummyCircuit {
     // Public inputs
     initial_state_hash: Vec<u8>,
