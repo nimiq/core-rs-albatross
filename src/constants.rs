@@ -4,23 +4,27 @@ use algebra::{BigInteger384, PrimeField};
 
 use lazy_static::lazy_static;
 
-// bla bla the length of one epoch
+/// This is the length of one epoch in Albatross. Basically, the difference in the block numbers of
+/// two consecutive macro blocks.
 pub const EPOCH_LENGTH: u32 = 128;
 
-// yada yada the number of validators in a block
-// VALIDATOR_SLOTS = MIN_SIGNERS + MAX_NON_SIGNERS
+/// This is the number of validator slots in Albatross.
+/// VALIDATOR_SLOTS = MIN_SIGNERS + MAX_NON_SIGNERS
 pub const VALIDATOR_SLOTS: usize = 4;
 
-// MIN_SIGNERS = 2f +1
-// Formula for ceiling division of x/y is (x+y-1)/y.
+/// This is the minimum number of validator slots that must sign a macro block in order to be valid.
+/// MIN_SIGNERS = ceiling( VALIDATOR_SLOTS * 2/3 )
+/// The formula used for the ceiling division of x/y is (x+y-1)/y.
 pub const MIN_SIGNERS: usize = (VALIDATOR_SLOTS * 2 + 3 - 1) / 3;
 
-// we take the floor of the division
-// The max is exclusive, we do tolerate MAX_NON_SIGNERS
-// MAX_NON_SIGNERS = f
+/// This the maximum number of validator slots that can NOT sign a macro block and it still being valid.
+/// MAX_NON_SIGNERS = floor( VALIDATOR_SLOTS/3 )
 pub const MAX_NON_SIGNERS: usize = VALIDATOR_SLOTS / 3;
 
-// Generated via https://github.com/nimiq/generator-generation
+/// A series of generator points in the BLS12-377 curve. Required for as parameters for Pedersen hashes
+/// and as a "buffer" when adding elliptic curves. The buffer is necessary sometimes because the addition
+/// formula for elliptic curves in the gadgets is incomplete and can't handle the identity element (aka zero).
+/// Generated via https://github.com/nimiq/generator-generation
 // G1 generators
 pub const G1_X_1: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
 pub const G1_Y_1: &str = "0181E06254E9432CA7C3FD61CEA96175D6D99BB78A1FE848F354D7FB727A50A7F3EFBEF595609BA9B3C03EA3FB3DFC79";

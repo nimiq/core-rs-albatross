@@ -1,6 +1,7 @@
 use algebra::FpParameters;
 use r1cs_std::bits::{boolean::Boolean, uint32::UInt32};
 
+/// Transforms a vector of bytes into the corresponding vector of bits.
 pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     let mut bits = vec![];
     for i in 0..bytes.len() {

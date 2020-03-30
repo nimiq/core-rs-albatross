@@ -7,6 +7,8 @@ use r1cs_std::fields::fp::FpGadget;
 use r1cs_std::prelude::FieldGadget;
 use r1cs_std::ToBitsGadget;
 
+/// This is a gadget that checks, for two numbers a and b in a prime field, the relation a < b.
+// TODO: When this gadget gets added to zexe, delete this one and instead import it from zexe.
 pub struct SmallerThanGadget<ConstraintF: Field + PrimeField> {
     constraint_field_type: PhantomData<ConstraintF>,
 }

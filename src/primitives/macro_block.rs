@@ -6,13 +6,21 @@ use nimiq_bls::{KeyPair, PublicKey};
 use crate::constants::VALIDATOR_SLOTS;
 use crate::primitives::crh::{setup_crh, CRH};
 
+/// A struct representing a macro block in Albatross.
 #[derive(Clone)]
 pub struct MacroBlock {
+    /// This is simply the Blake2b hash of the entire macro block header.
     pub header_hash: [u8; 32],
+    /// These are the public keys of the new validator list, so the validators that will produce
+    /// blocks during the next epoch.
     pub public_keys: Vec<G2Projective>,
+    /// This is the aggregated signature of the signers for this block, for the first round.
     pub prepare_signature: Option<G1Projective>,
+    /// This is a bitmap stating which validators signed this block, for the first round.
     pub prepare_signer_bitmap: Vec<bool>,
+    /// This is the aggregated signature of the signers for this block, for the second round.
     pub commit_signature: Option<G1Projective>,
+    /// This is a bitmap stating which validators signed this block, for the second round.
     pub commit_signer_bitmap: Vec<bool>,
 }
 

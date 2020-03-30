@@ -14,11 +14,19 @@ use r1cs_std::prelude::*;
 use crate::circuits::DummyCircuit;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
+// Renaming some types for convenience. We can change the circuit and elliptic curve of the input
+// proof to the merger circuit just by editing these types.
 type MyProofSystem = Groth16<Bls12_377, DummyCircuit, Fr>;
 type MyProofGadget = ProofGadget<Bls12_377, Fq, PairingGadget>;
 type MyVkGadget = VerifyingKeyGadget<Bls12_377, Fq, PairingGadget>;
 type MyVerifierGadget = Groth16VerifierGadget<Bls12_377, Fq, PairingGadget>;
 
+/// This is the merger circuit. It takes as inputs an initial state hash, a final state hash and a
+/// verifying key and it produces a proof that there exists two valid SNARK proofs that transforms the
+/// initial state into the final state passing through some intermediate state.
+/// The circuit is composed of two SNARK verifiers in a row. It's used to merge two SNARK proofs
+/// (normally two wrapper proofs) into a single proof. Evidently, this is needed for recursive
+/// composition of SNARK proofs.
 #[derive(Clone)]
 pub struct MergerCircuit {
     // Private inputs
@@ -27,8 +35,7 @@ pub struct MergerCircuit {
     intermediate_state_hash: Vec<u8>,
 
     // Public inputs
-    verifying_key_1: VerifyingKey<Bls12_377>,
-    verifying_key_2: VerifyingKey<Bls12_377>,
+    verifying_key: VerifyingKey<Bls12_377>,
     initial_state_hash: Vec<u8>,
     final_state_hash: Vec<u8>,
 }
@@ -38,8 +45,7 @@ impl MergerCircuit {
         proof_1: Proof<Bls12_377>,
         proof_2: Proof<Bls12_377>,
         intermediate_state_hash: Vec<u8>,
-        verifying_key_1: VerifyingKey<Bls12_377>,
-        verifying_key_2: VerifyingKey<Bls12_377>,
+        verifying_key: VerifyingKey<Bls12_377>,
         initial_state_hash: Vec<u8>,
         final_state_hash: Vec<u8>,
     ) -> Self {
@@ -47,8 +53,7 @@ impl MergerCircuit {
             proof_1,
             proof_2,
             intermediate_state_hash,
-            verifying_key_1,
-            verifying_key_2,
+            verifying_key,
             initial_state_hash,
             final_state_hash,
         }
@@ -56,6 +61,7 @@ impl MergerCircuit {
 }
 
 impl ConstraintSynthesizer<SW6Fr> for MergerCircuit {
+    /// This function generates the constraints for the circuit.
     fn generate_constraints<CS: ConstraintSystem<SW6Fr>>(
         self,
         cs: &mut CS,
@@ -78,17 +84,8 @@ impl ConstraintSynthesizer<SW6Fr> for MergerCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let verifying_key_1_var =
-            MyVkGadget::alloc_input(
-                cs.ns(|| "alloc verifying key"),
-                || Ok(&self.verifying_key_1),
-            )?;
-
-        let verifying_key_2_var =
-            MyVkGadget::alloc_input(
-                cs.ns(|| "alloc verifying key"),
-                || Ok(&self.verifying_key_2),
-            )?;
+        let verifying_key_var =
+            MyVkGadget::alloc_input(cs.ns(|| "alloc verifying key"), || Ok(&self.verifying_key))?;
 
         let initial_state_hash_var = UInt8::alloc_input_vec(
             cs.ns(|| "initial state hash"),
@@ -106,7 +103,7 @@ impl ConstraintSynthesizer<SW6Fr> for MergerCircuit {
 
         <MyVerifierGadget as NIZKVerifierGadget<MyProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify first groth16 proof"),
-            &verifying_key_1_var,
+            &verifying_key_var,
             proof_inputs.iter(),
             &proof_1_var,
         )?;
@@ -119,7 +116,7 @@ impl ConstraintSynthesizer<SW6Fr> for MergerCircuit {
 
         <MyVerifierGadget as NIZKVerifierGadget<MyProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify second groth16 proof"),
-            &verifying_key_2_var,
+            &verifying_key_var,
             proof_inputs.iter(),
             &proof_2_var,
         )?;

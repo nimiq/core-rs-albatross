@@ -2,8 +2,9 @@ use algebra::bls12_377::G2Projective;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use nimiq_bls::PublicKey;
 
-/// Calculates the Blake2s hash for the block from:
-/// block number || public_keys.
+/// This function is meant to calculate the "state hash" off-circuit, which is simply the Blake2s
+/// hash, for a given block, of the block number concatenated with the public_keys. It is used as
+/// input for all of the three zk-SNARK circuits.
 pub fn evaluate_state_hash(block_number: u32, public_keys: &Vec<G2Projective>) -> Vec<u8> {
     // Create byte vector.
     let mut bytes: Vec<u8> = vec![];

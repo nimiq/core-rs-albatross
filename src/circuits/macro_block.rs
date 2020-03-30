@@ -10,6 +10,12 @@ use crate::gadgets::{AllocConstantGadget, CRHGadgetParameters, MacroBlockGadget,
 use crate::primitives::{setup_crh, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
+/// This is the macro block circuit. It takes as inputs an initial state hash and final state hash
+/// and it produces a proof that there exists a valid macro block that transforms the initial state
+/// into the final state.
+/// Since the state is composed only of the block number and the public keys of the current validator
+/// list, updating the state is just incrementing the block number and substituting the previous
+/// public keys with the public keys of the new validator list.
 #[derive(Clone)]
 pub struct MacroBlockCircuit {
     // Private inputs
@@ -41,6 +47,7 @@ impl MacroBlockCircuit {
 }
 
 impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
+    /// This function generates the constraints for the circuit.
     fn generate_constraints<CS: ConstraintSystem<SW6Fr>>(
         self,
         cs: &mut CS,
@@ -71,7 +78,8 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             &G2_GENERATOR.clone().into_projective(),
         )?;
 
-        //This already creates a constant alloc internally.
+        // Note: this already creates a constant allocation internally, so it's fine to use the normal
+        // alloc function.
         let crh_block_parameters_var =
             CRHGadgetParameters::alloc(&mut cs.ns(|| "CRH block parameters"), || Ok(setup_crh()))?;
 
@@ -101,7 +109,8 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
         let final_state_hash_var =
             UInt8::alloc_input_vec(cs.ns(|| "final state hash"), self.final_state_hash.as_ref())?;
 
-        // Verify equality initial state hash
+        // Verifying equality for initial state hash. It just checks that the private inputs are correct
+        // by hashing them and comparing the result with the initial state hash given as a public input.
         next_cost_analysis!(cs, cost, || { "Verify initial state hash" });
 
         let reference_hash = StateHashGadget::evaluate(
@@ -117,7 +126,8 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             )?;
         }
 
-        // Verify block
+        // Verifying block that the block is valid. Indirectly, this also allows us to know the
+        // next validator list public keys.
         next_cost_analysis!(cs, cost, || "Verify block");
 
         block_var.verify(
@@ -131,13 +141,14 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             &crh_block_parameters_var,
         )?;
 
-        // Increment block number
+        // Incrementing the block number.
         let new_block_number_var = UInt32::addmany(
             cs.ns(|| format!("increment block number")),
             &[block_number_var, epoch_length_var.clone()],
         )?;
 
-        // Verify equality final state hash
+        // Verifying equality for final state hash. It just checks that the internal results are
+        // indeed equal to the final state hash given as a public input.
         next_cost_analysis!(cs, cost, || { "Verify final state hash" });
 
         let reference_hash = StateHashGadget::evaluate(

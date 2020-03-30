@@ -7,6 +7,9 @@ use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, FieldGadget};
 use r1cs_std::{Assignment, ToBitsGadget};
 
+/// A gadget that takes an elliptic curve point as input and outputs a single bit representing the
+/// "sign" of the y-coordinate. It is meant to aid with serialization.
+/// It was originally part of the Celo light client library.
 pub struct YToBitGadget;
 
 impl YToBitGadget {

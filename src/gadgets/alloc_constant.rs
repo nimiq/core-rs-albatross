@@ -6,6 +6,9 @@ use r1cs_std::fields::{fp::FpGadget, fp2::Fp2Gadget};
 use r1cs_std::groups::curves::short_weierstrass::AffineGadget;
 use r1cs_std::prelude::FieldGadget;
 
+/// This a gadget that is meant to allocate constant values in the circuit. Useful when you have a
+/// variable with a predefined value and don't want to waste space having it as a public or
+/// private input. It is implemented for several different types.
 pub trait AllocConstantGadget<V, ConstraintF: Field>
 where
     Self: Sized,

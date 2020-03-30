@@ -4,6 +4,7 @@ use r1cs_std::prelude::*;
 
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
+/// This is just a circuit used for testing. It needs to be deleted afterwards.
 #[derive(Clone)]
 pub struct DummyCircuit {
     // Public inputs
@@ -39,7 +40,7 @@ impl ConstraintSynthesizer<Fr> for DummyCircuit {
 
         // Verify equality.
         next_cost_analysis!(cs, || "Verify equality");
-        for i in 0..32 {
+        for i in 0..self.initial_state_hash.len() {
             initial_state_hash_var[i].enforce_equal(
                 cs.ns(|| format!("initial state hash == final state hash: byte {}", i)),
                 &final_state_hash_var[i],

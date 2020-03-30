@@ -14,11 +14,18 @@ use r1cs_std::prelude::*;
 use crate::circuits::DummyCircuit;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
+// Renaming some types for convenience. We can change the circuit and elliptic curve of the input
+// proof to the wrapper circuit just by editing these types.
 type MyProofSystem = Groth16<Bls12_377, DummyCircuit, Fr>;
 type MyProofGadget = ProofGadget<Bls12_377, Fq, PairingGadget>;
 type MyVkGadget = VerifyingKeyGadget<Bls12_377, Fq, PairingGadget>;
 type MyVerifierGadget = Groth16VerifierGadget<Bls12_377, Fq, PairingGadget>;
 
+/// This is the wrapper circuit. It takes as inputs an initial state hash, a final state hash and a
+/// verifying key and it produces a proof that there exists a valid SNARK proof that transforms the
+/// initial state into the final state.
+/// The circuit is basically only a SNARK verifier. Its use is just to change the elliptic curve
+/// that the proof exists in, which is sometimes needed for recursive composition of SNARK proofs.
 #[derive(Clone)]
 pub struct WrapperCircuit {
     // Private inputs
@@ -47,6 +54,7 @@ impl WrapperCircuit {
 }
 
 impl ConstraintSynthesizer<SW6Fr> for WrapperCircuit {
+    /// This function generates the constraints for the circuit.
     fn generate_constraints<CS: ConstraintSystem<SW6Fr>>(
         self,
         cs: &mut CS,

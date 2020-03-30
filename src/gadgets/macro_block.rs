@@ -16,12 +16,14 @@ use crate::gadgets::{
 };
 use crate::primitives::MacroBlock;
 
+/// A simple enum representing the two rounds of signing in the macro blocks.
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 pub enum Round {
     Prepare = 0,
     Commit = 1,
 }
 
+/// A gadget representing a macro block in Albatross.
 pub struct MacroBlockGadget {
     pub header_hash: Vec<Boolean>,
     pub public_keys: Vec<G2Gadget>,
@@ -32,22 +34,40 @@ pub struct MacroBlockGadget {
 }
 
 impl MacroBlockGadget {
+    /// A convenience method to return the public keys of the macro block.
     pub fn public_keys(&self) -> &[G2Gadget] {
         &self.public_keys
     }
 
+    /// A function that verifies the validity of a given macro block. It is the main function for
+    /// the macro block gadget.
     pub fn verify<CS: ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
+        // This is the set of public keys that signed this macro block. Corresponds to the previous
+        // set of validators.
         prev_public_keys: &[G2Gadget],
+        // This is the maximum number of non-signers for the block. It is exclusive, meaning that if
+        // number of non-signers == max_non-signers then the block is NOT valid.
+        // Note: Some confusion might arise because the constant MAX_NON_SIGNERS in constants.rs is
+        // an inclusive maximum. These two values are different,
+        // (max_non_signers here) == (MAX_NON_SIGNERS in constants.rs) + 1
         max_non_signers: &FqGadget,
+        // Simply the number of the macro block.
         block_number: &UInt32,
+        // The generator used in the BLS signature scheme. It is the generator used to create public
+        // keys.
         sig_generator: &G2Gadget,
+        // The two next generators are only needed because the elliptic curve addition in-circuit is
+        // incomplete. Meaning that it can't handle the identity element (aka zero, aka point-at-infinity).
+        // So, these generators are needed to do running sums. Instead of starting at zero, we start
+        // with the generator and subtract it at the end of the running sum.
         sum_generator_g1: &G1Gadget,
         sum_generator_g2: &G2Gadget,
+        // These are just the parameters for the Pedersen hash gadget.
         crh_parameters: &CRHGadgetParameters,
     ) -> Result<(), SynthesisError> {
-        // Verify prepare signature.
+        // Get the hash point and the aggregated public key for the prepare round of signing.
         let (hash0, pub_key0) = self.get_hash_and_public_keys(
             cs.ns(|| "prepare"),
             Round::Prepare,
@@ -58,7 +78,7 @@ impl MacroBlockGadget {
             crh_parameters,
         )?;
 
-        // Verify commit signature.
+        // Get the hash point and the aggregated public key for the commit round of signing.
         let (hash1, pub_key1) = self.get_hash_and_public_keys(
             cs.ns(|| "commit"),
             Round::Commit,
@@ -69,11 +89,14 @@ impl MacroBlockGadget {
             crh_parameters,
         )?;
 
+        // Add together the two aggregated signatures for the prepare and commit rounds of signing.
+        // Note the use of the generator to avoid an error in the sum.
         let mut signature =
             sum_generator_g1.add(cs.ns(|| "add prepare sig"), &self.prepare_signature)?;
         signature = signature.add(cs.ns(|| "add commit sig"), &self.commit_signature)?;
         signature = signature.sub(cs.ns(|| "finalize sig"), sum_generator_g1)?;
 
+        // Verifies the validity of the signatures.
         CheckSigGadget::check_signatures(
             cs.ns(|| "check signatures"),
             &[pub_key0, pub_key1],
@@ -85,6 +108,8 @@ impl MacroBlockGadget {
         Ok(())
     }
 
+    /// A function that returns the aggregated public key and the hash point, for a given round,
+    /// of the macro block.
     fn get_hash_and_public_keys<CS: ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
@@ -95,7 +120,7 @@ impl MacroBlockGadget {
         generator: &G2Gadget,
         crh_parameters: &CRHGadgetParameters,
     ) -> Result<(G1Gadget, G2Gadget), SynthesisError> {
-        // Calculate the Pedersen hash for the block.
+        // Calculate the Pedersen hash for the given macro block and round.
         let hash_point = self.hash(
             cs.ns(|| "create hash point"),
             round,
@@ -116,6 +141,7 @@ impl MacroBlockGadget {
             Round::Commit => Some(self.prepare_signer_bitmap.as_ref()),
         };
 
+        // Calculate the an aggregate public key given the set of public keys and a bitmap of signers.
         let aggregate_public_key = Self::aggregate_public_key(
             cs.ns(|| "aggregate public keys"),
             prev_public_keys,
@@ -124,17 +150,18 @@ impl MacroBlockGadget {
             max_non_signers,
             generator,
         )?;
+
         Ok((hash_point, aggregate_public_key))
     }
 
-    /// Calculates the Pedersen Hash for the block from:
-    /// prefix || header_hash || public_keys
-    /// with prefix = (round number || block number).
-    ///
-    /// Note that the Pedersen Hash is only collision-resistant
-    /// and does not provide pseudo-random output!
-    /// For our use-case, however, this suffices as the `header_hash`
-    /// provides enough entropy.
+    /// A function that calculates the Pedersen hash for the block from:
+    /// round number || block number || header_hash || public_keys
+    /// where || means concatenation.
+    /// Note that the Pedersen hash is only collision-resistant
+    /// and does not provide pseudo-random output! Such pseudo-randomness is necessary for
+    /// the BLS signature scheme.
+    /// For our use-case, however, this suffices as the header_hash field
+    /// already provides sufficient entropy.
     pub fn hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
@@ -161,6 +188,7 @@ impl MacroBlockGadget {
         // Append the header hash.
         bits.extend_from_slice(&self.header_hash);
 
+        // Serialize all the public keys.
         for i in 0..self.public_keys.len() {
             let key = &self.public_keys[i];
             // Get bits from the x coordinate.
@@ -181,25 +209,19 @@ impl MacroBlockGadget {
             .map(|chunk| UInt8::from_bits_le(chunk))
             .collect();
 
-        let mut test_vec = vec![];
-        for i in 0..input_bytes.len() {
-            let value = input_bytes[i].get_value().unwrap();
-            test_vec.push(value);
-        }
-        println!("hash from on-circuit:\n {:?}\n", test_vec);
-
-        // Hash serialized bits.
+        // Finally feed the serialized bits into the Pedersen hash gadget.
         let crh_result = CRHGadget::check_evaluation_gadget(
             &mut cs.ns(|| "crh_evaluation"),
             crh_parameters,
             &input_bytes,
         )?;
 
-        println!("g1 from on-circuit:\n{:?}\n", crh_result);
-
         Ok(crh_result)
     }
 
+    /// A function that aggregates the public keys of all the validators that signed the block. If
+    /// it is performing the aggregation for the commit round, then it will also check if every signer
+    /// in the commit round was also a signer in the prepare round.
     pub fn aggregate_public_key<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
         public_keys: &[G2Gadget],
@@ -208,14 +230,18 @@ impl MacroBlockGadget {
         max_non_signers: &FqGadget,
         generator: &G2Gadget,
     ) -> Result<G2Gadget, SynthesisError> {
-        // Sum public keys.
+        // Initialize the running sums.
+        // Note that we initialize the public key sum to the generator, not to zero.
         let mut num_non_signers = FqGadget::zero(cs.ns(|| "number used public keys"))?;
-
         let mut sum = Cow::Borrowed(generator);
 
         // Conditionally add all other public keys.
         for (i, (key, included)) in public_keys.iter().zip(key_bitmap.iter()).enumerate() {
+            // Calculate a new sum that includes the next public key.
             let new_sum = sum.add(cs.ns(|| format!("add public key {}", i)), key)?;
+
+            // Choose either the new public key sum or the old public key sum, depending on whether
+            // the bitmap indicates that the validator signed or not.
             let cond_sum = CondSelectGadget::conditionally_select(
                 cs.ns(|| format!("conditionally add public key {}", i)),
                 included,
@@ -226,7 +252,6 @@ impl MacroBlockGadget {
             // If there is a reference bitmap, we only count such signatures as included
             // that fulfill included & reference[i]. That means, we only count these that
             // also signed in the reference bitmap (usually the prepare phase).
-            // The result is then negated to get the non-signers: ~(included & reference[i]).
             let included = if let Some(reference) = reference_bitmap {
                 Boolean::and(
                     cs.ns(|| format!("included & reference[{}]", i)),
@@ -236,16 +261,23 @@ impl MacroBlockGadget {
             } else {
                 *included
             };
+
+            // Update the number of non-signers. Note that the bitmap is negated to get the
+            // non-signers: ~(included).
             num_non_signers = num_non_signers.conditionally_add_constant(
                 cs.ns(|| format!("public key count {}", i)),
                 &included.not(),
                 Fq::one(),
             )?;
+
+            // Update the public key sum.
             sum = Cow::Owned(cond_sum);
         }
+
+        // Finally subtract the generator from the sum to get the correct value.
         sum = Cow::Owned(sum.sub(cs.ns(|| "finalize aggregate public key"), generator)?);
 
-        // Enforce enough signers.
+        // Enforce that there are enough signers.
         // Note that we don't verify equality.
         SmallerThanGadget::enforce_smaller_than(
             cs.ns(|| "enforce non signers"),
@@ -257,7 +289,9 @@ impl MacroBlockGadget {
     }
 }
 
+/// The allocation function for the macro block gadget.
 impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
+    /// This is the allocation function for a private input.
     fn alloc<F, T, CS: ConstraintSystem<SW6Fr>>(
         mut cs: CS,
         value_gen: F,
@@ -267,6 +301,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
         T: Borrow<MacroBlock>,
     {
         let empty_block = MacroBlock::default();
+
         let value = match value_gen() {
             Ok(val) => val.borrow().clone(),
             Err(_) => empty_block,
@@ -276,6 +311,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
 
         let header_hash =
             Blake2sOutputGadget::alloc(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
+
         // While the bytes of the Blake2sOutputGadget start with the most significant first,
         // the bits internally start with the least significant.
         // Thus, we need to reverse the bit order there.
@@ -284,6 +320,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             .into_iter()
             .flat_map(|n| reverse_inner_byte_order(&n.into_bits_le()))
             .collect::<Vec<Boolean>>();
+
         let public_keys =
             Vec::<G2Gadget>::alloc(cs.ns(|| "public keys"), || Ok(&value.public_keys[..]))?;
 
@@ -291,6 +328,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             Vec::<Boolean>::alloc(cs.ns(|| "prepare signer bitmap"), || {
                 Ok(&value.prepare_signer_bitmap[..])
             })?;
+
         let prepare_signature = G1Gadget::alloc(cs.ns(|| "prepare signature"), || {
             value.prepare_signature.get()
         })?;
@@ -298,6 +336,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
         let commit_signer_bitmap = Vec::<Boolean>::alloc(cs.ns(|| "commit signer bitmap"), || {
             Ok(&value.commit_signer_bitmap[..])
         })?;
+
         let commit_signature = G1Gadget::alloc(cs.ns(|| "commit signature"), || {
             value.commit_signature.get()
         })?;
@@ -312,6 +351,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
         })
     }
 
+    /// This is the allocation function for a private input.
     fn alloc_input<F, T, CS: ConstraintSystem<SW6Fr>>(
         mut cs: CS,
         value_gen: F,
@@ -321,6 +361,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
         T: Borrow<MacroBlock>,
     {
         let empty_block = MacroBlock::default();
+
         let value = match value_gen() {
             Ok(val) => val.borrow().clone(),
             Err(_) => empty_block,
@@ -330,6 +371,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
 
         let header_hash =
             Blake2sOutputGadget::alloc_input(cs.ns(|| "header hash"), || Ok(&value.header_hash))?;
+
         // While the bytes of the Blake2sOutputGadget start with the most significant first,
         // the bits internally start with the least significant.
         // Thus, we need to reverse the bit order there.
@@ -338,6 +380,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             .into_iter()
             .flat_map(|n| reverse_inner_byte_order(&n.into_bits_le()))
             .collect::<Vec<Boolean>>();
+
         let public_keys =
             Vec::<G2Gadget>::alloc_input(cs.ns(|| "public keys"), || Ok(&value.public_keys[..]))?;
 
@@ -345,6 +388,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             Vec::<Boolean>::alloc_input(cs.ns(|| "prepare signer bitmap"), || {
                 Ok(&value.prepare_signer_bitmap[..])
             })?;
+
         let prepare_signature = G1Gadget::alloc_input(cs.ns(|| "prepare signature"), || {
             value.prepare_signature.get()
         })?;
@@ -353,6 +397,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
             Vec::<Boolean>::alloc_input(cs.ns(|| "commit signer bitmap"), || {
                 Ok(&value.commit_signer_bitmap[..])
             })?;
+
         let commit_signature = G1Gadget::alloc_input(cs.ns(|| "commit signature"), || {
             value.commit_signature.get()
         })?;

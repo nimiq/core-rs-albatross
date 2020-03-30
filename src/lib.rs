@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
-pub use circuits::MacroBlockCircuit;
+pub use circuits::*;
+pub use gadgets::*;
 pub use input::Input;
-pub use primitives::MacroBlock;
+pub use primitives::*;
 
 pub mod circuits;
 pub mod constants;

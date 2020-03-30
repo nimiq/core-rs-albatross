@@ -9,11 +9,13 @@ use r1cs_std::{ToBitsGadget, ToBytesGadget};
 
 use crate::gadgets::{pad_point_bits, reverse_inner_byte_order, YToBitGadget};
 
+/// This is a gadget that calculates the "state hash" in-circuit, which is simply the Blake2s
+/// hash, for a given block, of the block number concatenated with the public_keys.
 pub struct StateHashGadget;
 
 impl StateHashGadget {
     /// Calculates the Blake2s hash for the block from:
-    /// block number || public_keys.
+    /// block number || public_keys
     pub fn evaluate<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         mut cs: CS,
         block_number: &UInt32,
