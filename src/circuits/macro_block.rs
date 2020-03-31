@@ -60,7 +60,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
 
         let max_non_signers_var: FqGadget = AllocConstantGadget::alloc_const(
             cs.ns(|| "max non signers"),
-            &Fq::from((MAX_NON_SIGNERS + 1) as u64),
+            &Fq::from(MAX_NON_SIGNERS as u64),
         )?;
 
         let sig_generator_var: G2Gadget = AllocConstantGadget::alloc_const(

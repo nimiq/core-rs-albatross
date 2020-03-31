@@ -1,3 +1,4 @@
+use core::cmp::Ordering;
 use std::borrow::{Borrow, Cow};
 
 use algebra::bls12_377::{Fq, FqParameters};
@@ -12,7 +13,7 @@ use r1cs_std::{Assignment, ToBitsGadget};
 use crate::constants::VALIDATOR_SLOTS;
 use crate::gadgets::{
     pad_point_bits, reverse_inner_byte_order, CRHGadget, CRHGadgetParameters, CheckSigGadget,
-    SmallerThanGadget, YToBitGadget,
+    YToBitGadget,
 };
 use crate::primitives::MacroBlock;
 
@@ -47,11 +48,8 @@ impl MacroBlockGadget {
         // This is the set of public keys that signed this macro block. Corresponds to the previous
         // set of validators.
         prev_public_keys: &[G2Gadget],
-        // This is the maximum number of non-signers for the block. It is exclusive, meaning that if
-        // number of non-signers == max_non-signers then the block is NOT valid.
-        // Note: Some confusion might arise because the constant MAX_NON_SIGNERS in constants.rs is
-        // an inclusive maximum. These two values are different,
-        // (max_non_signers here) == (MAX_NON_SIGNERS in constants.rs) + 1
+        // This is the maximum number of non-signers for the block. It is inclusive, meaning that if
+        // the number of non-signers == max_non-signers then the block is still valid.
         max_non_signers: &FqGadget,
         // Simply the number of the macro block.
         block_number: &UInt32,
@@ -277,12 +275,13 @@ impl MacroBlockGadget {
         // Finally subtract the generator from the sum to get the correct value.
         sum = Cow::Owned(sum.sub(cs.ns(|| "finalize aggregate public key"), generator)?);
 
-        // Enforce that there are enough signers.
-        // Note that we don't verify equality.
-        SmallerThanGadget::enforce_smaller_than(
+        // Enforce that there are enough signers. Specifically that:
+        // num_non_signers <= max_non_signers
+        num_non_signers.enforce_cmp(
             cs.ns(|| "enforce non signers"),
-            &num_non_signers,
             max_non_signers,
+            Ordering::Less,
+            true,
         )?;
 
         Ok(sum.into_owned())
