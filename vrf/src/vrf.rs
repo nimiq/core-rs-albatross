@@ -75,6 +75,10 @@ impl From<CompressedSignature> for VrfSeed {
     }
 }
 
+// Disable clippy error because the property "k1 == k2 -> hash(k1) == hash(k2)" is maintained here since PartialEq
+// derivation is based on all fields being equal (see https://doc.rust-lang.org/std/cmp/trait.PartialEq.html#derivable)
+// which implies that `self.signature.as_ref()` would be equal, and thus the hash value of it would be equal too
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for VrfSeed {
     fn hash<H: StdHasher>(&self, state: &mut H) {
         self.signature.as_ref().hash(state)
