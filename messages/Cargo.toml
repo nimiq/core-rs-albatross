@@ -18,7 +18,7 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 bitflags = "1.0"
-bitvec = "0.15"
+bitvec = "0.17"
 byteorder = "1.2"
 hex = "0.4"
 log = "0.4"
