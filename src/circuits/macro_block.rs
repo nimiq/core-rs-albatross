@@ -1,13 +1,13 @@
 use algebra::bls12_377::{Fq, G2Projective};
 use algebra::sw6::Fr as SW6Fr;
-use algebra_core::{AffineCurve, ProjectiveCurve};
+use algebra_core::ProjectiveCurve;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
-use crate::constants::{EPOCH_LENGTH, G1_GENERATOR1, G2_GENERATOR, MAX_NON_SIGNERS};
-use crate::gadgets::{AllocConstantGadget, CRHGadgetParameters, MacroBlockGadget, StateHashGadget};
-use crate::primitives::{setup_crh, MacroBlock};
+use crate::constants::{sum_generator_g1, sum_generator_g2, EPOCH_LENGTH, MAX_NON_SIGNERS};
+use crate::gadgets::{AllocConstantGadget, MacroBlockGadget, StateHashGadget};
+use crate::primitives::{setup_pedersen, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the macro block circuit. It takes as inputs an initial state hash and final state hash
@@ -68,20 +68,20 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             &G2Projective::prime_subgroup_generator(),
         )?;
 
-        let sum_generator_g1_var: G1Gadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "sum generator g1"),
-            &G1_GENERATOR1.clone().into_projective(),
-        )?;
+        let sum_generator_g1_var: G1Gadget =
+            AllocConstantGadget::alloc_const(cs.ns(|| "sum generator g1"), &sum_generator_g1())?;
 
-        let sum_generator_g2_var: G2Gadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "sum generator g2"),
-            &G2_GENERATOR.clone().into_projective(),
-        )?;
+        let sum_generator_g2_var: G2Gadget =
+            AllocConstantGadget::alloc_const(cs.ns(|| "sum generator g2"), &sum_generator_g2())?;
 
-        // Note: this already creates a constant allocation internally, so it's fine to use the normal
-        // alloc function.
-        let crh_block_parameters_var =
-            CRHGadgetParameters::alloc(&mut cs.ns(|| "CRH block parameters"), || Ok(setup_crh()))?;
+        let pedersen_generators = setup_pedersen();
+        let mut pedersen_generators_var = Vec::new();
+        for i in 0..pedersen_generators.len() {
+            pedersen_generators_var.push(AllocConstantGadget::alloc_const(
+                cs.ns(|| format!("pedersen_generators: generator {}", i)),
+                &pedersen_generators[i],
+            )?);
+        }
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || "Alloc private inputs");
@@ -138,7 +138,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             &sig_generator_var,
             &sum_generator_g1_var,
             &sum_generator_g2_var,
-            &crh_block_parameters_var,
+            &pedersen_generators_var,
         )?;
 
         // Incrementing the block number.

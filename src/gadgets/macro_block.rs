@@ -3,17 +3,20 @@ use std::borrow::{Borrow, Cow};
 
 use algebra::bls12_377::{Fq, FqParameters};
 use algebra::{sw6::Fr as SW6Fr, One};
-use crypto_primitives::{prf::blake2s::constraints::Blake2sOutputGadget, FixedLengthCRHGadget};
+use crypto_primitives::prf::blake2s::constraints::{
+    blake2s_gadget_with_parameters, Blake2sOutputGadget,
+};
+use crypto_primitives::prf::Blake2sWithParameterBlock;
 use r1cs_core::{ConstraintSystem, SynthesisError};
-use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
 use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
-use r1cs_std::prelude::{AllocGadget, CondSelectGadget, FieldGadget, GroupGadget};
-use r1cs_std::{Assignment, ToBitsGadget};
+use r1cs_std::prelude::{
+    AllocGadget, Boolean, CondSelectGadget, FieldGadget, GroupGadget, UInt32, UInt8,
+};
+use r1cs_std::{Assignment, ToBitsGadget, ToBytesGadget};
 
 use crate::constants::VALIDATOR_SLOTS;
 use crate::gadgets::{
-    pad_point_bits, reverse_inner_byte_order, CRHGadget, CRHGadgetParameters, CheckSigGadget,
-    YToBitGadget,
+    pad_point_bits, reverse_inner_byte_order, CheckSigGadget, PedersenHashGadget, YToBitGadget,
 };
 use crate::primitives::MacroBlock;
 
@@ -63,7 +66,7 @@ impl MacroBlockGadget {
         sum_generator_g1: &G1Gadget,
         sum_generator_g2: &G2Gadget,
         // These are just the parameters for the Pedersen hash gadget.
-        crh_parameters: &CRHGadgetParameters,
+        pedersen_generators: &Vec<G1Gadget>,
     ) -> Result<(), SynthesisError> {
         // Get the hash point and the aggregated public key for the prepare round of signing.
         let (hash0, pub_key0) = self.get_hash_and_public_keys(
@@ -72,8 +75,9 @@ impl MacroBlockGadget {
             prev_public_keys,
             max_non_signers,
             block_number,
+            sum_generator_g1,
             sum_generator_g2,
-            crh_parameters,
+            pedersen_generators,
         )?;
 
         // Get the hash point and the aggregated public key for the commit round of signing.
@@ -83,8 +87,9 @@ impl MacroBlockGadget {
             prev_public_keys,
             max_non_signers,
             block_number,
+            sum_generator_g1,
             sum_generator_g2,
-            crh_parameters,
+            pedersen_generators,
         )?;
 
         // Add together the two aggregated signatures for the prepare and commit rounds of signing.
@@ -115,15 +120,17 @@ impl MacroBlockGadget {
         prev_public_keys: &[G2Gadget],
         max_non_signers: &FqGadget,
         block_number: &UInt32,
-        generator: &G2Gadget,
-        crh_parameters: &CRHGadgetParameters,
+        sum_generator_g1: &G1Gadget,
+        sum_generator_g2: &G2Gadget,
+        pedersen_generators: &Vec<G1Gadget>,
     ) -> Result<(G1Gadget, G2Gadget), SynthesisError> {
         // Calculate the Pedersen hash for the given macro block and round.
         let hash_point = self.hash(
             cs.ns(|| "create hash point"),
             round,
             block_number,
-            crh_parameters,
+            sum_generator_g1,
+            pedersen_generators,
         )?;
 
         // Choose signer bitmap and signature based on round.
@@ -146,26 +153,24 @@ impl MacroBlockGadget {
             signer_bitmap,
             reference_bitmap,
             max_non_signers,
-            generator,
+            sum_generator_g2,
         )?;
 
         Ok((hash_point, aggregate_public_key))
     }
 
-    /// A function that calculates the Pedersen hash for the block from:
+    /// A function that calculates the hash for the block from:
     /// round number || block number || header_hash || public_keys
     /// where || means concatenation.
-    /// Note that the Pedersen hash is only collision-resistant
-    /// and does not provide pseudo-random output! Such pseudo-randomness is necessary for
-    /// the BLS signature scheme.
-    /// For our use-case, however, this suffices as the header_hash field
-    /// already provides sufficient entropy.
+    /// First we hash with the Blake2s hash algorithm, getting an output of 256 bits. Then we use
+    /// the Pedersen hash algorithm on those 256 bits to obtain a single EC point.
     pub fn hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
         &self,
         mut cs: CS,
         round: Round,
         block_number: &UInt32,
-        crh_parameters: &CRHGadgetParameters,
+        sum_generator_g1: &G1Gadget,
+        pedersen_generators: &Vec<G1Gadget>,
     ) -> Result<G1Gadget, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits: Vec<Boolean> = vec![];
@@ -200,21 +205,47 @@ impl MacroBlockGadget {
             bits.extend(serialized_bits);
         }
 
-        // Prepare order of booleans for Pedersen hash.
+        // Prepare order of booleans for blake2s (it doesn't expect Big-Endian).
         let bits = reverse_inner_byte_order(&bits);
-        let input_bytes: Vec<UInt8> = bits
-            .chunks(8)
-            .map(|chunk| UInt8::from_bits_le(chunk))
-            .collect();
 
-        // Finally feed the serialized bits into the Pedersen hash gadget.
-        let crh_result = CRHGadget::check_evaluation_gadget(
-            &mut cs.ns(|| "crh_evaluation"),
-            crh_parameters,
-            &input_bytes,
+        // Initialize Blake2s parameters.
+        let blake2s_parameters = Blake2sWithParameterBlock {
+            digest_length: 32,
+            key_length: 0,
+            fan_out: 1,
+            depth: 1,
+            leaf_length: 0,
+            node_offset: 0,
+            xof_digest_length: 0,
+            node_depth: 0,
+            inner_length: 0,
+            salt: [0; 8],
+            personalization: [0; 8],
+        };
+
+        // Calculate Blake2s hash.
+        let hash = blake2s_gadget_with_parameters(
+            cs.ns(|| "blake2s hash from serialized bits"),
+            &bits,
+            &blake2s_parameters.parameters(),
         )?;
 
-        Ok(crh_result)
+        // Convert to bytes.
+        let mut result = Vec::new();
+        for i in 0..8 {
+            let chunk = hash[i].to_bytes(&mut cs.ns(|| format!("hash to bytes {}", i)))?;
+            result.extend(chunk);
+        }
+
+        // Finally feed the bytes into the Pedersen hash gadget.
+        let pedersen_result = PedersenHashGadget::evaluate(
+            &mut cs.ns(|| "crh_evaluation"),
+            pedersen_generators,
+            &result,
+            sum_generator_g1,
+        )?;
+
+        Ok(pedersen_result)
     }
 
     /// A function that aggregates the public keys of all the validators that signed the block. If
@@ -226,12 +257,12 @@ impl MacroBlockGadget {
         key_bitmap: &[Boolean],
         reference_bitmap: Option<&[Boolean]>,
         max_non_signers: &FqGadget,
-        generator: &G2Gadget,
+        sum_generator_g2: &G2Gadget,
     ) -> Result<G2Gadget, SynthesisError> {
         // Initialize the running sums.
         // Note that we initialize the public key sum to the generator, not to zero.
         let mut num_non_signers = FqGadget::zero(cs.ns(|| "number used public keys"))?;
-        let mut sum = Cow::Borrowed(generator);
+        let mut sum = Cow::Borrowed(sum_generator_g2);
 
         // Conditionally add all other public keys.
         for (i, (key, included)) in public_keys.iter().zip(key_bitmap.iter()).enumerate() {
@@ -273,7 +304,7 @@ impl MacroBlockGadget {
         }
 
         // Finally subtract the generator from the sum to get the correct value.
-        sum = Cow::Owned(sum.sub(cs.ns(|| "finalize aggregate public key"), generator)?);
+        sum = Cow::Owned(sum.sub(cs.ns(|| "finalize aggregate public key"), sum_generator_g2)?);
 
         // Enforce that there are enough signers. Specifically that:
         // num_non_signers <= max_non_signers

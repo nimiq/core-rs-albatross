@@ -1,10 +1,10 @@
+use algebra::bls12_377::Fq;
 use algebra::Bls12_377;
+use algebra_core::test_rng;
+use groth16::{create_random_proof, generate_random_parameters, Parameters, Proof};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
-use algebra::bls12_377::Fq;
-use algebra_core::test_rng;
-use groth16::{create_random_proof, generate_random_parameters, Parameters, Proof};
 use nano_sync::circuits::{DummyCircuit, WrapperCircuit};
 
 // Create the dummy circuit parameters and proof.
@@ -20,7 +20,7 @@ fn setup(state_hash: Vec<u8>) -> (Parameters<Bls12_377>, Proof<Bls12_377>) {
     (params, proof)
 }
 
-//#[test]
+#[test]
 fn everything_works() {
     // Create public input.
     let state_hash: Vec<u8> = vec![0; 2];

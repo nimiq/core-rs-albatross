@@ -1,10 +1,10 @@
 use algebra::bls12_377::{G1Projective, G2Projective};
 use algebra::ProjectiveCurve;
-use crypto_primitives::FixedLengthCRH;
+use crypto_primitives::prf::Blake2sWithParameterBlock;
 use nimiq_bls::{KeyPair, PublicKey};
 
 use crate::constants::VALIDATOR_SLOTS;
-use crate::primitives::crh::{setup_crh, CRH};
+use crate::primitives::pedersen::{evaluate_pedersen, setup_pedersen};
 
 /// A struct representing a macro block in Albatross.
 #[derive(Clone)]
@@ -25,7 +25,7 @@ pub struct MacroBlock {
 }
 
 impl MacroBlock {
-    /// This function is only useful for testing purposes.
+    /// This function generates an header that has no signatures or bitmaps.
     pub fn without_signatures(header_hash: [u8; 32], public_keys: Vec<G2Projective>) -> Self {
         MacroBlock {
             header_hash,
@@ -37,15 +37,20 @@ impl MacroBlock {
         }
     }
 
-    /// This function is only useful for testing purposes.
+    /// This function signs a macro block, for the prepare and commit rounds, given a validator's
+    /// key pair and signer id (which is simply the position in the signer bitmap).
     pub fn sign(&mut self, key_pair: &KeyPair, signer_id: usize) {
         self.sign_prepare(key_pair, signer_id);
         self.sign_commit(key_pair, signer_id);
     }
 
-    /// This function is only useful for testing purposes.
+    /// This function signs a macro block, for only the prepare round, given a validator's
+    /// key pair and signer id (which is simply the position in the signer bitmap).
     pub fn sign_prepare(&mut self, key_pair: &KeyPair, signer_id: usize) {
+        // Generate the hash point for the signature.
         let hash_point = self.hash(0, 0);
+
+        // Generates the signature.
         let signature = key_pair.secret_key.sign_g1(hash_point);
 
         if let Some(sig) = self.prepare_signature.as_mut() {
@@ -54,12 +59,17 @@ impl MacroBlock {
             self.prepare_signature = Some(signature.signature);
         }
 
+        // Set the signer id to true.
         self.prepare_signer_bitmap[signer_id] = true;
     }
 
-    /// This function is only useful for testing purposes.
+    /// This function signs a macro block, for only the prepare round, given a validator's
+    /// key pair and signer id (which is simply the position in the signer bitmap).
     pub fn sign_commit(&mut self, key_pair: &KeyPair, signer_id: usize) {
+        // Generate the hash point for the signature.
         let hash_point = self.hash(1, 0);
+
+        // Generates the signature.
         let signature = key_pair.secret_key.sign_g1(hash_point);
 
         if let Some(sig) = self.commit_signature.as_mut() {
@@ -68,13 +78,17 @@ impl MacroBlock {
             self.commit_signature = Some(signature.signature);
         }
 
+        // Set the signer id to true.
         self.commit_signer_bitmap[signer_id] = true;
     }
 
-    /// This function is only useful for testing purposes.
+    /// This function hashes the macro block and outputs an EC point. Internally, it first hashes using
+    /// the Blake2s to get an output of 256 bits, then we use the Pedersen hash algorithm to transform
+    /// those 256 bits into an EC point.
     pub fn hash(&self, round_number: u8, block_number: u32) -> G1Projective {
-        let parameters = setup_crh();
-
+        // Generates the message to be signed from the block like so:
+        // round number || block number || header_hash || public_keys
+        // where || means concatenation.
         let mut msg = vec![round_number];
         msg.extend_from_slice(&block_number.to_be_bytes());
         msg.extend_from_slice(&self.header_hash);
@@ -83,11 +97,29 @@ impl MacroBlock {
             msg.extend_from_slice(pk.compress().as_ref());
         }
 
-        println!("hash from off-circuit:\n{:?}\n", msg);
+        // Initialize Blake2s parameters.
+        let blake2s = Blake2sWithParameterBlock {
+            digest_length: 32,
+            key_length: 0,
+            fan_out: 1,
+            depth: 1,
+            leaf_length: 0,
+            node_offset: 0,
+            xof_digest_length: 0,
+            node_depth: 0,
+            inner_length: 0,
+            salt: [0; 8],
+            personalization: [0; 8],
+        };
 
-        let result = CRH::evaluate(&parameters, &msg).unwrap();
+        // Calculate the Blake2s hash.
+        let hash = blake2s.evaluate(msg.as_ref());
 
-        println!("g1 from off-circuit:\n{:?}\n", result.into_affine());
+        // Get the generators for the Pedersen hash.
+        let generators = setup_pedersen();
+
+        // Calculate the Pedersen hash.
+        let result = evaluate_pedersen(generators, hash);
 
         result
     }

@@ -11,3 +11,4 @@ pub mod cost_analysis;
 pub mod gadgets;
 pub mod input;
 pub mod primitives;
+pub mod rand_gen;

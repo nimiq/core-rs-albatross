@@ -1,8 +1,14 @@
-use algebra::bls12_377::{Fq, Fq2, G1Affine, G2Affine};
-use algebra::bytes::FromBytes;
-use algebra::{BigInteger384, PrimeField};
+//! This module contains several constants that are used throughout the library. They can be changed
+//! easily here, without needing to change them in several places in the code.
 
-use lazy_static::lazy_static;
+use algebra::bls12_377::{Fq, Fq2, G1Affine, G1Projective, G2Affine, G2Projective};
+use algebra::PrimeField;
+use algebra_core::One;
+use blake2_rfc::blake2s::Blake2s;
+use crypto_primitives::prf::Blake2sWithParameterBlock;
+use nimiq_bls::big_int_from_bytes_be;
+
+use crate::rand_gen::generate_random_seed;
 
 /// This is the length of one epoch in Albatross. Basically, the difference in the block numbers of
 /// two consecutive macro blocks.
@@ -21,87 +27,123 @@ pub const MIN_SIGNERS: usize = (VALIDATOR_SLOTS * 2 + 3 - 1) / 3;
 /// MAX_NON_SIGNERS = floor( VALIDATOR_SLOTS/3 )
 pub const MAX_NON_SIGNERS: usize = VALIDATOR_SLOTS / 3;
 
-/// A series of generator points in the BLS12-377 curve. Required for as parameters for Pedersen hashes
-/// and as a "buffer" when adding elliptic curves. The buffer is necessary sometimes because the addition
-/// formula for elliptic curves in the gadgets is incomplete and can't handle the identity element (aka zero).
-/// Generated via https://github.com/nimiq/generator-generation
-// G1 generators
-pub const G1_X_1: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
-pub const G1_Y_1: &str = "0181E06254E9432CA7C3FD61CEA96175D6D99BB78A1FE848F354D7FB727A50A7F3EFBEF595609BA9B3C03EA3FB3DFC79";
-pub const G1_X_2: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
-pub const G1_Y_2: &str = "002C59E3C2DBCDBE1E77085E9DF7E7C543493E3B76D52B462B9E8A34478EF758231B9E4E9A9F6456D148815C04C20388";
-pub const G1_X_3: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
-pub const G1_Y_3: &str = "002C59E3C2DBCDBE1E77085E9DF7E7C543493E3B76D52B462B9E8A34478EF758231B9E4E9A9F6456D148815C04C20388";
-pub const G1_X_4: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
-pub const G1_Y_4: &str = "002C59E3C2DBCDBE1E77085E9DF7E7C543493E3B76D52B462B9E8A34478EF758231B9E4E9A9F6456D148815C04C20388";
-pub const G1_X_5: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
-pub const G1_Y_5: &str = "002C59E3C2DBCDBE1E77085E9DF7E7C543493E3B76D52B462B9E8A34478EF758231B9E4E9A9F6456D148815C04C20388";
-pub const G1_X_6: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
-pub const G1_Y_6: &str = "0181E06254E9432CA7C3FD61CEA96175D6D99BB78A1FE848F354D7FB727A50A7F3EFBEF595609BA9B3C03EA3FB3DFC79";
-pub const G1_X_7: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
-pub const G1_Y_7: &str = "002C59E3C2DBCDBE1E77085E9DF7E7C543493E3B76D52B462B9E8A34478EF758231B9E4E9A9F6456D148815C04C20388";
-pub const G1_X_8: &str = "00B9EACABE8A2BD0BDDF7ED1DC14BAEAAAEDC63EF62ECECFACFF0C2A59D84DC1B6A64E36BC7E9FE29AF6CA3A87AA398F";
-pub const G1_Y_8: &str = "002C59E3C2DBCDBE1E77085E9DF7E7C543493E3B76D52B462B9E8A34478EF758231B9E4E9A9F6456D148815C04C20388";
-// G2 generator
-const G2_X_C0: &str = "0079032CD5D4C0484673FF7F131B151A378E02C6F013AAF4D2A92BB201DAF98AEC2018CFD62F9EB8B7BAF3B049D35728";
-const G2_X_C1: &str = "00D48600562B8D313FB188B42B196A49FED48CFFB591CE7134B1F73D9ABEECA147138BA1327C4C6D7FADA61704B95626";
-const G2_Y_C0: &str = "00C67FF0068B87A0B9DEED1804C9BEF06814DD79BAD0A05DBA81AEA18CD83E6766EC6EE3D3E20B58044C749FC44366B8";
-const G2_Y_C1: &str = "0137475DC960B837006D974B800104C9BA9DD100344BD2A363A89B7C15071F6F63A644A52C9B9BF5AFD0E6C1D7E1FAFF";
+/// Creates a generator point for the G1 group in the BLS12-377 curve, from a verifiably random seed.
+/// The generator is mainly used as a "buffer" when adding elliptic curves. The buffer is necessary
+/// sometimes because the addition formula for elliptic curves in the gadgets is incomplete and can't
+/// handle the identity element (aka zero).
+pub fn sum_generator_g1() -> G1Projective {
+    // This gets a verifiably random seed.
+    let seed = generate_random_seed();
 
-lazy_static! {
-    pub static ref G2_GENERATOR: G2Affine = {
-        let x_c0 = read_bigint384_const(G2_X_C0);
-        let x_c1 = read_bigint384_const(G2_X_C1);
-        let y_c0 = read_bigint384_const(G2_Y_C0);
-        let y_c1 = read_bigint384_const(G2_Y_C1);
-        let x = Fq2::new(Fq::from_repr(x_c0), Fq::from_repr(x_c1));
-        let y = Fq2::new(Fq::from_repr(y_c0), Fq::from_repr(y_c1));
-        G2Affine::new(x, y, false)
-    };
-    pub static ref G1_GENERATOR1: G1Affine = {
-        let x = Fq::from_repr(read_bigint384_const(G1_X_1));
-        let y = Fq::from_repr(read_bigint384_const(G1_Y_1));
-        G1Affine::new(x, y, false)
-    };
-    pub static ref G1_GENERATOR2: G1Affine = {
-        let x = Fq::from_repr(read_bigint384_const(G1_X_2));
-        let y = Fq::from_repr(read_bigint384_const(G1_Y_2));
-        G1Affine::new(x, y, false)
-    };
-    pub static ref G1_GENERATOR3: G1Affine = {
-        let x = Fq::from_repr(read_bigint384_const(G1_X_3));
-        let y = Fq::from_repr(read_bigint384_const(G1_Y_3));
-        G1Affine::new(x, y, false)
-    };
-    pub static ref G1_GENERATOR4: G1Affine = {
-        let x = Fq::from_repr(read_bigint384_const(G1_X_4));
-        let y = Fq::from_repr(read_bigint384_const(G1_Y_4));
-        G1Affine::new(x, y, false)
-    };
-    pub static ref G1_GENERATOR5: G1Affine = {
-        let x = Fq::from_repr(read_bigint384_const(G1_X_5));
-        let y = Fq::from_repr(read_bigint384_const(G1_Y_5));
-        G1Affine::new(x, y, false)
-    };
-    pub static ref G1_GENERATOR6: G1Affine = {
-        let x = Fq::from_repr(read_bigint384_const(G1_X_6));
-        let y = Fq::from_repr(read_bigint384_const(G1_Y_6));
-        G1Affine::new(x, y, false)
-    };
-    pub static ref G1_GENERATOR7: G1Affine = {
-        let x = Fq::from_repr(read_bigint384_const(G1_X_7));
-        let y = Fq::from_repr(read_bigint384_const(G1_Y_7));
-        G1Affine::new(x, y, false)
-    };
-    pub static ref G1_GENERATOR8: G1Affine = {
-        let x = Fq::from_repr(read_bigint384_const(G1_X_8));
-        let y = Fq::from_repr(read_bigint384_const(G1_Y_8));
-        G1Affine::new(x, y, false)
-    };
+    // This extends the seed using the Blake2X algorithm.
+    // See https://blake2.net/blake2x.pdf for more details.
+    // We need 48 bytes of output.
+    let mut bytes = vec![];
+    for i in 0..2 {
+        let blake2x = Blake2sWithParameterBlock {
+            digest_length: 32,
+            key_length: 0,
+            fan_out: 0,
+            depth: 0,
+            leaf_length: 32,
+            node_offset: i as u32,
+            xof_digest_length: 65535,
+            node_depth: 0,
+            inner_length: 32,
+            salt: [0; 8],
+            personalization: [0; 8],
+        };
+        let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
+        state.update(&seed);
+        let mut result = state.finalize().as_bytes().to_vec();
+        bytes.append(&mut result);
+    }
+
+    // This converts the hash output into a x-coordinate and a y-coordinate for an elliptic curve point. At this time, it is not guaranteed to be a valid point.
+    // A quirk of this code is that we need to set the most significant bit to zero. The reason for this is that the field for the BLS12-377 curve is not exactly 377 bits, it is a bit smaller.
+    // This means that if we try to create a field element from 377 random bits, we may get an invalid value back (in this case it is just all zeros). There are two options to deal with this:
+    // 1) To create finite field elements, using 377 random bits, in a loop until a valid one is created.
+    // 2) Use only 376 random bits to create a finite field element. This will guaranteedly produce a valid element on the first try, but will reduce the entropy of the EC point generation by one bit.
+    // We chose the second one because we believe the entropy reduction is not significant enough.
+    // The y-coordinate is at first bit.
+    let y_coordinate = (bytes[0] >> 7) & 1 == 1;
+
+    // In order to easily read the BigInt from the bytes, we use the first 7 bits as padding.
+    // However, because of the previous explanation, we also need to set the 8th bit to 0.
+    // Thus, we can nullify the whole first byte.
+    bytes[0] = 0;
+    let mut x_coordinate = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..48]));
+
+    // This implements the try-and-increment method of converting an integer to an elliptic curve point.
+    // See https://eprint.iacr.org/2009/226.pdf for more details.
+    loop {
+        let point = G1Affine::get_point_from_x(x_coordinate, y_coordinate);
+        if point.is_some() {
+            let g1 = point.unwrap().scale_by_cofactor();
+            return g1;
+        }
+        x_coordinate += &Fq::one();
+    }
 }
 
-pub fn read_bigint384_const(constant: &str) -> BigInteger384 {
-    let mut v = hex::decode(constant).unwrap();
-    v.reverse();
-    BigInteger384::read(&mut &v[..]).unwrap()
+/// Creates a generator point for the G2 group in the BLS12-377 curve, from a verifiably random seed.
+/// The generator is mainly used as a "buffer" when adding elliptic curves. The buffer is necessary
+/// sometimes because the addition formula for elliptic curves in the gadgets is incomplete and can't
+/// handle the identity element (aka zero).
+pub fn sum_generator_g2() -> G2Projective {
+    // This gets a verifiably random seed.
+    let seed = generate_random_seed();
+
+    // This extends the seed using the Blake2X algorithm.
+    // See https://blake2.net/blake2x.pdf for more details.
+    // We need 96 bytes of output.
+    let mut bytes = vec![];
+    for i in 0..3 {
+        let blake2x = Blake2sWithParameterBlock {
+            digest_length: 32,
+            key_length: 0,
+            fan_out: 0,
+            depth: 0,
+            leaf_length: 32,
+            node_offset: i as u32,
+            xof_digest_length: 65535,
+            node_depth: 0,
+            inner_length: 32,
+            salt: [0; 8],
+            personalization: [0; 8],
+        };
+        let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
+        state.update(&seed);
+        let mut result = state.finalize().as_bytes().to_vec();
+        bytes.append(&mut result);
+    }
+
+    // This converts the hash output into a x-coordinate and a y-coordinate for an elliptic curve point. At this time, it is not guaranteed to be a valid point.
+    // A quirk of this code is that we need to set the most significant bit to zero. The reason for this is that the field for the BLS12-377 curve is not exactly 377 bits, it is a bit smaller.
+    // This means that if we try to create a field element from 377 random bits, we may get an invalid value back (in this case it is just all zeros). There are two options to deal with this:
+    // 1) To create finite field elements, using 377 random bits, in a loop until a valid one is created.
+    // 2) Use only 376 random bits to create a finite field element. This will guaranteedly produce a valid element on the first try, but will reduce the entropy of the EC point generation by one bit.
+    // We chose the second one because we believe the entropy reduction is not significant enough.
+    // The y-coordinate is at first bit.
+    let y_coordinate = (bytes[0] >> 7) & 1 == 1;
+
+    // In order to easily read the BigInt from the bytes, we use the first 7 bits as padding.
+    // However, because of the previous explanation, we also need to set the 8th bit to 0.
+    // Thus, we can nullify the whole first byte.
+    bytes[0] = 0;
+    bytes[48] = 0;
+    let c0 = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..48]));
+    let c1 = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[48..96]));
+    let mut x_coordinate = Fq2::new(c0, c1);
+
+    // This implements the try-and-increment method of converting an integer to an elliptic curve point.
+    // See https://eprint.iacr.org/2009/226.pdf for more details.
+    loop {
+        let point = G2Affine::get_point_from_x(x_coordinate, y_coordinate);
+        if point.is_some() {
+            let g2 = point.unwrap().scale_by_cofactor();
+            return g2;
+        }
+        x_coordinate += &Fq2::one();
+    }
 }
