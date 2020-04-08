@@ -5,15 +5,15 @@ use r1cs_std::prelude::*;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is just a circuit used for testing of the wrapper and merger circuits. It simply verifies
-/// that state hashes are equal.
+/// that state hashes are symmetrical.
 #[derive(Clone)]
-pub struct DummyCircuit {
+pub struct OtherDummyCircuit {
     // Public inputs
     initial_state_hash: Vec<u8>,
     final_state_hash: Vec<u8>,
 }
 
-impl DummyCircuit {
+impl OtherDummyCircuit {
     pub fn new(initial_state_hash: Vec<u8>, final_state_hash: Vec<u8>) -> Self {
         Self {
             initial_state_hash,
@@ -22,7 +22,7 @@ impl DummyCircuit {
     }
 }
 
-impl ConstraintSynthesizer<Fr> for DummyCircuit {
+impl ConstraintSynthesizer<Fr> for OtherDummyCircuit {
     fn generate_constraints<CS: ConstraintSystem<Fr>>(
         self,
         cs: &mut CS,
@@ -39,12 +39,15 @@ impl ConstraintSynthesizer<Fr> for DummyCircuit {
         let final_state_hash_var =
             UInt8::alloc_input_vec(cs.ns(|| "final state hash"), self.final_state_hash.as_ref())?;
 
-        // Verify equality.
-        next_cost_analysis!(cs, || "Verify equality");
-        for i in 0..self.initial_state_hash.len() {
+        // Create variable "length", just for convenience
+        let length = self.initial_state_hash.len();
+
+        // Verify that hashes are symmetrical.
+        next_cost_analysis!(cs, || "Verify inequality");
+        for i in 0..length {
             initial_state_hash_var[i].enforce_equal(
                 cs.ns(|| format!("initial state hash == final state hash: byte {}", i)),
-                &final_state_hash_var[i],
+                &final_state_hash_var[length - i - 1],
             )?;
         }
 

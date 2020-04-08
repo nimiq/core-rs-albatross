@@ -75,7 +75,7 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             AllocConstantGadget::alloc_const(cs.ns(|| "sum generator g2"), &sum_generator_g2())?;
 
         let pedersen_generators = setup_pedersen();
-        let mut pedersen_generators_var = Vec::new();
+        let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
         for i in 0..pedersen_generators.len() {
             pedersen_generators_var.push(AllocConstantGadget::alloc_const(
                 cs.ns(|| format!("pedersen_generators: generator {}", i)),

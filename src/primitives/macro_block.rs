@@ -39,16 +39,16 @@ impl MacroBlock {
 
     /// This function signs a macro block, for the prepare and commit rounds, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign(&mut self, key_pair: &KeyPair, signer_id: usize) {
-        self.sign_prepare(key_pair, signer_id);
-        self.sign_commit(key_pair, signer_id);
+    pub fn sign(&mut self, key_pair: &KeyPair, signer_id: usize, block_number: u32) {
+        self.sign_prepare(key_pair, signer_id, block_number);
+        self.sign_commit(key_pair, signer_id, block_number);
     }
 
     /// This function signs a macro block, for only the prepare round, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign_prepare(&mut self, key_pair: &KeyPair, signer_id: usize) {
+    pub fn sign_prepare(&mut self, key_pair: &KeyPair, signer_id: usize, block_number: u32) {
         // Generate the hash point for the signature.
-        let hash_point = self.hash(0, 0);
+        let hash_point = self.hash(0, block_number);
 
         // Generates the signature.
         let signature = key_pair.secret_key.sign_g1(hash_point);
@@ -65,9 +65,9 @@ impl MacroBlock {
 
     /// This function signs a macro block, for only the prepare round, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign_commit(&mut self, key_pair: &KeyPair, signer_id: usize) {
+    pub fn sign_commit(&mut self, key_pair: &KeyPair, signer_id: usize, block_number: u32) {
         // Generate the hash point for the signature.
-        let hash_point = self.hash(1, 0);
+        let hash_point = self.hash(1, block_number);
 
         // Generates the signature.
         let signature = key_pair.secret_key.sign_g1(hash_point);

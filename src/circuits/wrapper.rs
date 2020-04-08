@@ -16,23 +16,26 @@ use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 // Renaming some types for convenience. We can change the circuit and elliptic curve of the input
 // proof to the wrapper circuit just by editing these types.
-type MyProofSystem = Groth16<Bls12_377, DummyCircuit, Fr>;
-type MyProofGadget = ProofGadget<Bls12_377, Fq, PairingGadget>;
-type MyVkGadget = VerifyingKeyGadget<Bls12_377, Fq, PairingGadget>;
-type MyVerifierGadget = Groth16VerifierGadget<Bls12_377, Fq, PairingGadget>;
+type TheProofSystem = Groth16<Bls12_377, DummyCircuit, Fr>;
+type TheProofGadget = ProofGadget<Bls12_377, Fq, PairingGadget>;
+type TheVkGadget = VerifyingKeyGadget<Bls12_377, Fq, PairingGadget>;
+type TheVerifierGadget = Groth16VerifierGadget<Bls12_377, Fq, PairingGadget>;
 
 /// This is the wrapper circuit. It takes as inputs an initial state hash, a final state hash and a
 /// verifying key and it produces a proof that there exists a valid SNARK proof that transforms the
 /// initial state into the final state.
 /// The circuit is basically only a SNARK verifier. Its use is just to change the elliptic curve
 /// that the proof exists in, which is sometimes needed for recursive composition of SNARK proofs.
+/// This circuit is not safe to use because it has the verifying key as a private input. In production
+/// this needs to be a constant, so we'll have different wrapper circuits (one for each inner circuit
+/// that is being verified).
 #[derive(Clone)]
 pub struct WrapperCircuit {
     // Private inputs
     proof: Proof<Bls12_377>,
+    verifying_key: VerifyingKey<Bls12_377>,
 
     // Public inputs
-    verifying_key: VerifyingKey<Bls12_377>,
     initial_state_hash: Vec<u8>,
     final_state_hash: Vec<u8>,
 }
@@ -63,13 +66,13 @@ impl ConstraintSynthesizer<SW6Fr> for WrapperCircuit {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc private inputs");
 
-        let proof_var = MyProofGadget::alloc(cs.ns(|| "alloc proof"), || Ok(&self.proof))?;
+        let proof_var = TheProofGadget::alloc(cs.ns(|| "alloc proof"), || Ok(&self.proof))?;
+
+        let verifying_key_var =
+            TheVkGadget::alloc(cs.ns(|| "alloc verifying key"), || Ok(&self.verifying_key))?;
 
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
-
-        let verifying_key_var =
-            MyVkGadget::alloc_input(cs.ns(|| "alloc verifying key"), || Ok(&self.verifying_key))?;
 
         let initial_state_hash_var = UInt8::alloc_input_vec(
             cs.ns(|| "initial state hash"),
@@ -82,10 +85,10 @@ impl ConstraintSynthesizer<SW6Fr> for WrapperCircuit {
         // Verify the ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify ZK proof" });
         let mut proof_inputs = vec![];
-        proof_inputs.extend(initial_state_hash_var);
-        proof_inputs.extend(final_state_hash_var);
+        proof_inputs.push(initial_state_hash_var);
+        proof_inputs.push(final_state_hash_var);
 
-        <MyVerifierGadget as NIZKVerifierGadget<MyProofSystem, Fq>>::check_verify(
+        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify groth16 proof"),
             &verifying_key_var,
             proof_inputs.iter(),
