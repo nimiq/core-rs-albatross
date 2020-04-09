@@ -37,27 +37,25 @@ impl PedersenHashGadget {
         // Initiate the result with the sum generator. We can't initiate it with the neutral element
         // because that would result in an error. The addition function for EC points is incomplete
         // and can't handle the neutral element (aka zero, point-at-infinity).
-        let mut result = sum_generator;
-        let mut new_result;
+        // This weird initialization (instead of just doing let mut result = sum_generator) is to
+        // appease Rust's borrow checker. Best to leave it as is!
+        let mut result = G1Gadget::new(
+            sum_generator.x.clone(),
+            sum_generator.y.clone(),
+            sum_generator.infinity,
+        );
 
         for i in 0..bits.len() {
             // Add the next generator to the current sum.
             let new_sum = result.add(cs.ns(|| format!("add bit {}", i)), &generators[i])?;
             // If the bit is zero, keep the current sum. If it is one, take the new sum.
-            new_result = G1Gadget::conditionally_select(
+            result = G1Gadget::conditionally_select(
                 &mut cs.ns(|| format!("Conditional Select {}", i)),
                 bits[i].borrow(),
                 &new_sum,
                 &result,
             )?;
-            // This whole thing with the result and new_result is needed because the Rust borrow checker
-            // complains otherwise. Looks weird but better to leave it as is.
-            result = &new_result;
         }
-
-        // Finally subtract the sum generator from the current sum. In the end, this gives the same
-        // result as if we just started the sum with zero.
-        let result = result.sub(cs.ns(|| "sub generator"), sum_generator)?;
 
         Ok(result)
     }

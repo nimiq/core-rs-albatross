@@ -498,8 +498,7 @@ fn wrong_block_number_prepare() {
     assert!(!test_cs.is_satisfied())
 }
 
-// TODO: Understand why this test panics.
-//#[test]
+#[test]
 fn wrong_block_number_commit() {
     // Create inputs.
     let (key_pair1, key_pair2) = setup_keys();

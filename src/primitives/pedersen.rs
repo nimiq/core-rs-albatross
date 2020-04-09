@@ -1,5 +1,5 @@
 use algebra::bls12_377::{Fq, G1Affine, G1Projective};
-use algebra_core::{One, PrimeField, Zero};
+use algebra_core::{One, PrimeField};
 use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use nimiq_bls::big_int_from_bytes_be;
@@ -82,7 +82,11 @@ pub fn setup_pedersen() -> Vec<G1Projective> {
 /// Calculates the Pedersen hash. Given a vector of generators G_i and a vector of bits b_i, the
 /// hash is calculated like so:
 /// H = b_1*G_1 + b_2*G_2 + ... + b_n*G_n
-pub fn evaluate_pedersen(generators: Vec<G1Projective>, input: Vec<u8>) -> G1Projective {
+pub fn evaluate_pedersen(
+    generators: Vec<G1Projective>,
+    input: Vec<u8>,
+    sum_generator: G1Projective,
+) -> G1Projective {
     assert_eq!(generators.len(), input.len() * 8);
 
     // Convert the input bytes to bits.
@@ -94,8 +98,9 @@ pub fn evaluate_pedersen(generators: Vec<G1Projective>, input: Vec<u8>) -> G1Pro
         }
     }
 
-    // Initialize the sum to zero.
-    let mut result = G1Projective::zero();
+    // Initialize the sum to the generator. Normally it would be zero, but this is necessary because
+    // of some complications in the PedersenHashGadget.
+    let mut result = sum_generator;
 
     // Calculate the hash by adding a generator whenever the corresponding bit is set to 1.
     for i in 0..bits.len() {

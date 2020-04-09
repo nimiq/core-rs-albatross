@@ -47,31 +47,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
 
     for i in 0..VALIDATOR_SLOTS {
-        macro_block.sign_prepare(&key_pair1, i);
+        macro_block.sign_prepare(&key_pair1, i, previous_block_number);
     }
 
     for i in 0..VALIDATOR_SLOTS {
-        macro_block.sign_commit(&key_pair1, i);
+        macro_block.sign_commit(&key_pair1, i, previous_block_number);
     }
 
-    // Test constraint system first.
-    // let mut test_cs = TestConstraintSystem::new();
-    // let c = Circuit::new(
-    //     3,
-    //     genesis_keys.clone(),
-    //     vec![macro_block1.clone(), macro_block2.clone()],
-    //     crh_parameters.clone(),
-    //     min_signers,
-    //     last_block_public_key_sum,
-    // );
-    // c.generate_constraints(&mut test_cs)?;
-    // println!("Number of constraints: {}", test_cs.num_constraints());
-    // if !test_cs.is_satisfied() {
-    //     println!("Unsatisfied @ {}", test_cs.which_is_unsatisfied().unwrap());
-    //     assert!(false);
-    // } else {
-    //     println!("Test passed, creating benchmark.");
-    // }
+    // Test constraint system.
+    let mut test_cs = TestConstraintSystem::new();
+    let c = MacroBlockCircuit::new(
+        previous_keys.clone(),
+        previous_block_number,
+        macro_block.clone(),
+        initial_state_hash.clone(),
+        final_state_hash.clone(),
+    );
+    c.generate_constraints(&mut test_cs).unwrap();
+    println!("Number of constraints: {}", test_cs.num_constraints());
+    if !test_cs.is_satisfied() {
+        println!("Unsatisfied @ {}", test_cs.which_is_unsatisfied().unwrap());
+        assert!(false);
+    } else {
+        println!("Test passed, starting benchmark.");
+    }
 
     // Create parameters for our circuit
     let start = Instant::now();
@@ -85,56 +84,55 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         generate_random_parameters::<SW6, _, _>(c, rng)?
     };
-
-    // Prepare the verification key (for proof verification)
-    let pvk = prepare_verifying_key(&params.vk);
     total_setup += start.elapsed();
+    println!("Parameter generation finished, creating proof.");
 
     // Create a proof with our parameters.
     let start = Instant::now();
     let proof = {
         let c = MacroBlockCircuit::new(
-            previous_keys,
+            previous_keys.clone(),
             previous_block_number,
-            macro_block,
+            macro_block.clone(),
             initial_state_hash.clone(),
             final_state_hash.clone(),
         );
         create_random_proof(c, &params, rng)?
     };
-
     total_proving += start.elapsed();
+    println!("Proof generation finished, starting verification.");
 
-    // // Prepare inputs for verification.
+    // Prepare inputs for verification.
     // let mut inputs: Vec<u8> = vec![];
     // Input::append_to_inputs(&initial_state_hash, &mut inputs);
     // Input::append_to_inputs(&final_state_hash, &mut inputs);
-    //
-    // // Verify the proof
+    // let pvk = prepare_verifying_key(&params.vk);
+
+    // Verify the proof
     // let start = Instant::now();
     // let verified = verify_proof(&pvk, &proof, &inputs).unwrap();
     // total_verifying += start.elapsed();
 
-    // println!("=== Benchmarking Groth16: ====");
-    // println!("Result: {}", verified);
-    // let vk_size = 1040 + 104 * params.vk.gamma_abc_g1.len();
-    // let pk_size = vk_size
-    //     + 936
-    //     + 312 * params.b_g2_query.len()
-    //     + 104
-    //         * (params.a_query.len()
-    //             + params.b_g1_query.len()
-    //             + params.h_query.len()
-    //             + params.l_query.len());
-    // println!("Verification key size: {:?} bytes", vk_size);
-    // println!(
-    //     "Verification key gamma len: {:?}",
-    //     params.vk.gamma_abc_g1.len()
-    // );
-    // println!("Prover key size: {:?} bytes", pk_size);
-    // println!("Average setup time: {:?} seconds", total_setup);
-    // println!("Average proving time: {:?} seconds", total_proving);
-    // println!("Average verifying time: {:?} seconds", total_verifying);
+    println!("===== Benchmarks =====");
+    //println!("Result: {}", verified);
+    let vk_size = 1040 + 104 * params.vk.gamma_abc_g1.len();
+    let pk_size = vk_size
+        + 936
+        + 312 * params.b_g2_query.len()
+        + 104
+            * (params.a_query.len()
+                + params.b_g1_query.len()
+                + params.h_query.len()
+                + params.l_query.len());
+    println!("Verification key size: {:?} bytes", vk_size);
+    println!(
+        "Verification key gamma len: {:?}",
+        params.vk.gamma_abc_g1.len()
+    );
+    println!("Prover key size: {:?} bytes", pk_size);
+    println!("Average setup time: {:?} seconds", total_setup);
+    println!("Average proving time: {:?} seconds", total_proving);
+    println!("Average verifying time: {:?} seconds", total_verifying);
 
     Ok(())
 }
