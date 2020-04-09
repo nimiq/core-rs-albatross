@@ -3,9 +3,9 @@ use algebra::sw6::Fr as SW6Fr;
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget_with_parameters;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use r1cs_core::SynthesisError;
-use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
+use r1cs_std::bits::{boolean::Boolean, uint32::UInt32};
 use r1cs_std::bls12_377::G2Gadget;
-use r1cs_std::{ToBitsGadget, ToBytesGadget};
+use r1cs_std::ToBitsGadget;
 
 use crate::gadgets::{pad_point_bits, reverse_inner_byte_order, YToBitGadget};
 
@@ -20,7 +20,7 @@ impl StateHashGadget {
         mut cs: CS,
         block_number: &UInt32,
         public_keys: &Vec<G2Gadget>,
-    ) -> Result<Vec<UInt8>, SynthesisError> {
+    ) -> Result<Vec<UInt32>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits: Vec<Boolean> = vec![];
 
@@ -69,13 +69,6 @@ impl StateHashGadget {
             &blake2s_parameters.parameters(),
         )?;
 
-        // Convert to bytes.
-        let mut result = Vec::new();
-        for i in 0..8 {
-            let chunk = hash[i].to_bytes(&mut cs.ns(|| format!("hash to bytes {}", i)))?;
-            result.extend(chunk);
-        }
-
-        Ok(result)
+        Ok(hash)
     }
 }

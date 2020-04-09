@@ -1,18 +1,5 @@
 use algebra::FpParameters;
-use r1cs_std::bits::{boolean::Boolean, uint32::UInt32};
-
-/// Transforms a vector of bytes into the corresponding vector of bits.
-pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
-    let mut bits = vec![];
-    for i in 0..bytes.len() {
-        let byte = bytes[i];
-        for j in (0..8).rev() {
-            bits.push((byte >> j) & 1 == 1);
-        }
-    }
-
-    bits
-}
+use r1cs_std::prelude::*;
 
 /// Takes multiple bit representations of a point (Fp/Fp2).
 /// Its length must be a multiple of `P::MODULUS_BITS`.
@@ -63,13 +50,6 @@ pub fn pad_point_bits<P: FpParameters>(mut bits: Vec<Boolean>, y_bit: Boolean) -
     );
 
     serialization
-}
-
-/// Takes a hash output and returns the *Big-Endian* representation of it.
-pub fn hash_to_bits(hash: Vec<UInt32>) -> Vec<Boolean> {
-    hash.into_iter()
-        .flat_map(|n| reverse_inner_byte_order(&n.to_bits_le()))
-        .collect::<Vec<Boolean>>()
 }
 
 /// Takes a data vector in *Big-Endian* representation and transforms it,

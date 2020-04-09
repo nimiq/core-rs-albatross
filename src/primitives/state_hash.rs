@@ -1,11 +1,12 @@
 use algebra::bls12_377::G2Projective;
+use byteorder::{ByteOrder, LittleEndian};
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use nimiq_bls::PublicKey;
 
 /// This function is meant to calculate the "state hash" off-circuit, which is simply the Blake2s
 /// hash, for a given block, of the block number concatenated with the public_keys. It is used as
 /// input for all of the three zk-SNARK circuits.
-pub fn evaluate_state_hash(block_number: u32, public_keys: &Vec<G2Projective>) -> Vec<u8> {
+pub fn evaluate_state_hash(block_number: u32, public_keys: &Vec<G2Projective>) -> Vec<u32> {
     // Create byte vector.
     let mut bytes: Vec<u8> = vec![];
     bytes.extend_from_slice(&block_number.to_be_bytes());
@@ -30,5 +31,13 @@ pub fn evaluate_state_hash(block_number: u32, public_keys: &Vec<G2Projective>) -
     };
 
     // Calculate the hash.
-    blake2s.evaluate(bytes.as_ref())
+    let hash = blake2s.evaluate(bytes.as_ref());
+
+    let mut result = vec![];
+    for i in 0..8 {
+        let chunk = &hash[4 * i..4 * i + 4];
+        result.push(LittleEndian::read_u32(chunk));
+    }
+
+    result
 }

@@ -6,15 +6,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use algebra::bls12_377::{Fq, G2Projective};
-use algebra::sw6::SW6;
+use algebra::sw6::{Fr as SW6Fr, SW6};
 use algebra::test_rng;
-use algebra_core::{ProjectiveCurve, Zero};
 use groth16::{
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
 };
 use nimiq_bls::{KeyPair, SecureGenerate};
-use r1cs_core::ConstraintSynthesizer;
+use r1cs_core::{ConstraintSynthesizer, ToConstraintField};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 use nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
@@ -23,6 +21,7 @@ use nano_sync::*;
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use
     // `OsRng` (for example) in production software.
+    //
     let rng = &mut test_rng();
 
     let mut total_setup = Duration::new(0, 0);
@@ -102,19 +101,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     total_proving += start.elapsed();
     println!("Proof generation finished, starting verification.");
 
-    // Prepare inputs for verification.
-    // let mut inputs: Vec<u8> = vec![];
-    // Input::append_to_inputs(&initial_state_hash, &mut inputs);
-    // Input::append_to_inputs(&final_state_hash, &mut inputs);
-    // let pvk = prepare_verifying_key(&params.vk);
+    // // Prepare inputs for verification.
+    let mut inputs: Vec<SW6Fr> = vec![];
+    let field_elements: Vec<SW6Fr> = initial_state_hash.to_field_elements().unwrap();
+    inputs.extend(field_elements);
+    let field_elements: Vec<SW6Fr> = final_state_hash.to_field_elements().unwrap();
+    inputs.extend(field_elements);
+    let pvk = prepare_verifying_key(&params.vk);
 
-    // Verify the proof
-    // let start = Instant::now();
-    // let verified = verify_proof(&pvk, &proof, &inputs).unwrap();
-    // total_verifying += start.elapsed();
+    // // Verify the proof
+    let start = Instant::now();
+    let verified = verify_proof(&pvk, &proof, &inputs).unwrap();
+    total_verifying += start.elapsed();
 
     println!("===== Benchmarks =====");
-    //println!("Result: {}", verified);
+    println!("Result: {}", verified);
     let vk_size = 1040 + 104 * params.vk.gamma_abc_g1.len();
     let pk_size = vk_size
         + 936
