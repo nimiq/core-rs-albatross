@@ -1,8 +1,8 @@
 use algebra::curves::models::short_weierstrass_jacobian::{GroupAffine, GroupProjective};
-use algebra::{Field, Fp2, Fp2Parameters, PrimeField, ProjectiveCurve, SWModelParameters};
+use algebra::{Field, Fp3, Fp3Parameters, PrimeField, ProjectiveCurve, SWModelParameters};
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::fields::{fp::FpGadget, fp2::Fp2Gadget};
+use r1cs_std::fields::{fp::FpGadget, fp3::Fp3Gadget};
 use r1cs_std::groups::curves::short_weierstrass::AffineGadget;
 use r1cs_std::prelude::FieldGadget;
 
@@ -46,16 +46,19 @@ impl<F: PrimeField> AllocConstantGadget<F, F> for FpGadget<F> {
     }
 }
 
-impl<P: Fp2Parameters<Fp = ConstraintF>, ConstraintF: PrimeField>
-    AllocConstantGadget<Fp2<P>, ConstraintF> for Fp2Gadget<P, ConstraintF>
+impl<
+        P: Fp3Parameters<Fp = ConstraintF>,
+        ConstraintF: PrimeField + algebra_core::fields::SquareRootField,
+    > AllocConstantGadget<Fp3<P>, ConstraintF> for Fp3Gadget<P, ConstraintF>
 {
     fn alloc_const<CS: ConstraintSystem<ConstraintF>>(
         mut cs: CS,
-        constant: &Fp2<P>,
+        constant: &Fp3<P>,
     ) -> Result<Self, SynthesisError> {
         let c0 = AllocConstantGadget::alloc_const(cs.ns(|| "c0"), &constant.c0)?;
         let c1 = AllocConstantGadget::alloc_const(cs.ns(|| "c1"), &constant.c1)?;
-        let value = Fp2Gadget::new(c0, c1);
+        let c2 = AllocConstantGadget::alloc_const(cs.ns(|| "c2"), &constant.c2)?;
+        let value = Fp3Gadget::new(c0, c1, c2);
         Ok(value)
     }
 }

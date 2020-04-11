@@ -1,6 +1,6 @@
 use std::ops::Neg;
 
-use algebra::{mnt6_753::Fq, mnt4_753::Fr as MNT4Fr, One, PrimeField};
+use algebra::{mnt4_753::Fr as MNT4Fr, mnt6_753::Fq, One, PrimeField};
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};

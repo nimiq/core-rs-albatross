@@ -23,4 +23,11 @@ pub mod rand_gen;
 // - The merger and the merger wrapper receive both the vks_mnt6_hash and the vks_mnt4_hash as inputs.
 // - The macro block wrapper receives the vks_mnt4_hash as input.
 // - The macro block receives neither.
+// - The merger wrapper must have a special condition that makes the proof pass if both input state
+//   hashes are equal. This is necessary for the genesis block. The chain needs to start somewhere.
+// TODO: You can optimize the vks hashes by adding the points together before feeding them to Blake2s. (?)
+// TODO: Doing the same for the state hashes is trickier...
+//       - You can add every 3 keys together.
+//       - You can use a Pedersen hash before the Blake2s.
+//       - You can use a windowed Pedersen commitment.
 // TODO: Finish the examples.
