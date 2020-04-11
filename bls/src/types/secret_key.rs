@@ -1,4 +1,15 @@
-use super::*;
+use std::{fmt, ops::MulAssign};
+
+use algebra::mnt6_753::{Fr, G1Projective};
+use algebra_core::UniformRand;
+use num_traits::Zero;
+
+use beserial::Serialize;
+use hash::Hash;
+use utils::key_rng::{CryptoRng, Rng};
+pub use utils::key_rng::{SecureGenerate, SecureRng};
+
+use crate::{SigHash, Signature};
 
 #[derive(Clone, Copy)]
 pub struct SecretKey {
@@ -8,6 +19,7 @@ pub struct SecretKey {
 }
 
 impl SecretKey {
+    // TODO: Should this remain as 256 bits or should we increase it to the entire Fr???
     pub const SIZE: usize = 32;
 
     /// Creates a signature given a message.

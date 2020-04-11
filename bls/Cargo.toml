@@ -20,7 +20,7 @@ parking_lot = { version = "0.9", optional = true }
 rand = "0.7"
 rand_chacha = "0.2"
 
-algebra = { git = "https://github.com/nimiq/zexe", branch = "nimiq", features=["bls12_377"]}
+algebra = { git = "https://github.com/nimiq/zexe", branch = "nimiq", features=["mnt6_753"]}
 algebra-core = { git = "https://github.com/nimiq/zexe", branch = "nimiq"}
 crypto-primitives = { git = "https://github.com/nimiq/zexe", branch = "nimiq"}
 

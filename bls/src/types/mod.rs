@@ -8,8 +8,6 @@ pub use public_key_parse_error::*;
 pub use secret_key::*;
 pub use signature::*;
 
-use super::*;
-
 mod aggregate_public_key;
 mod aggregate_signature;
 mod compressed_public_key;

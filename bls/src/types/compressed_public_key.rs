@@ -1,6 +1,15 @@
-use crate::compression::BeDeserialize;
+use std::{cmp::Ordering, fmt, str::FromStr};
 
-use super::*;
+use algebra::mnt6_753::G2Affine;
+use algebra::SerializationError;
+use algebra_core::curves::AffineCurve;
+
+#[cfg(feature = "beserial")]
+use beserial::Deserialize;
+pub use utils::key_rng::{SecureGenerate, SecureRng};
+
+use crate::compression::BeDeserialize;
+use crate::{PublicKey, PublicKeyParseError};
 
 /// The serialized compressed form of a public key.
 /// This form consists of the x-coordinate of the point (in the affine form),
@@ -8,11 +17,11 @@ use super::*;
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone)]
 pub struct CompressedPublicKey {
-    pub public_key: [u8; 96],
+    pub public_key: [u8; 288],
 }
 
 impl CompressedPublicKey {
-    pub const SIZE: usize = 96;
+    pub const SIZE: usize = 288;
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<PublicKey, SerializationError> {

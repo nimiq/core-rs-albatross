@@ -1,8 +1,12 @@
+use std::{cmp::Ordering, fmt};
+
 use parking_lot::{
     MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
 
-use super::*;
+use hash::Hash;
+
+use crate::{CompressedPublicKey, PublicKey, SigHash, Signature};
 
 pub struct LazyPublicKey {
     pub(crate) compressed: CompressedPublicKey,

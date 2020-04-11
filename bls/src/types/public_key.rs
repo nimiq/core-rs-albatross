@@ -1,6 +1,15 @@
-use crate::compression::BeSerialize;
+use std::{cmp::Ordering, fmt, ops::MulAssign};
 
-use super::*;
+use algebra::mnt6_753::{G1Projective, G2Projective, MNT6_753};
+use algebra_core::curves::{PairingEngine, ProjectiveCurve};
+use log::error;
+use num_traits::Zero;
+
+use hash::Hash;
+pub use utils::key_rng::{SecureGenerate, SecureRng};
+
+use crate::compression::BeSerialize;
+use crate::{CompressedPublicKey, SecretKey, SigHash, Signature};
 
 #[derive(Clone, Copy)]
 pub struct PublicKey {
@@ -40,11 +49,11 @@ impl PublicKey {
         if self.public_key.is_zero() {
             return false;
         }
-        let lhs = Bls12_377::pairing(
+        let lhs = MNT6_753::pairing(
             signature.signature,
             G2Projective::prime_subgroup_generator(),
         );
-        let rhs = Bls12_377::pairing(hash_curve, self.public_key);
+        let rhs = MNT6_753::pairing(hash_curve, self.public_key);
         lhs == rhs
     }
 
@@ -53,7 +62,7 @@ impl PublicKey {
     /// one bit indicating the sign of the y-coordinate
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedPublicKey {
-        let mut buffer = [0u8; 96];
+        let mut buffer = [0u8; 288];
         BeSerialize::serialize(&self.public_key.into_affine(), &mut &mut buffer[..]).unwrap();
         CompressedPublicKey { public_key: buffer }
     }

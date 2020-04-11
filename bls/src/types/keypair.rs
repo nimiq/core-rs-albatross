@@ -1,4 +1,11 @@
-use super::*;
+use std::fmt;
+
+use beserial::Serialize;
+use hash::Hash;
+use utils::key_rng::{CryptoRng, Rng};
+pub use utils::key_rng::{SecureGenerate, SecureRng};
+
+use crate::{PublicKey, SecretKey, SigHash, Signature};
 
 /// Simply a struct combining the secret key and the public key types.
 #[derive(Clone, PartialEq, Eq)]

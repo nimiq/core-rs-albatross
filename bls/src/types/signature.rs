@@ -1,6 +1,16 @@
-use crate::compression::BeSerialize;
+use std::fmt;
 
-use super::*;
+use algebra::mnt6_753::{Fq, G1Affine, G1Projective};
+use algebra_core::curves::ProjectiveCurve;
+use algebra_core::fields::PrimeField;
+use blake2_rfc::blake2s::Blake2s;
+use crypto_primitives::prf::Blake2sWithParameterBlock;
+use num_traits::One;
+
+pub use utils::key_rng::{SecureGenerate, SecureRng};
+
+use crate::compression::BeSerialize;
+use crate::{big_int_from_bytes_be, CompressedSignature, SigHash};
 
 #[derive(Clone, Copy)]
 pub struct Signature {
@@ -12,20 +22,20 @@ pub struct Signature {
 impl Signature {
     /// Maps an hash to a elliptic curve point in the G1 group. It is required to create signatures.
     /// It is also known as "hash-to-curve".
+    // TODO: Redo this to use the Pedersen hash.
     pub fn hash_to_g1(h: SigHash) -> G1Projective {
         // This extends the input hash from 32 bytes to 48 bytes using the Blake2X algorithm.
         // See https://blake2.net/blake2x.pdf for more details.
         let mut bytes = vec![];
-        let digest_length = vec![32, 16];
-        for i in 0..2 {
+        for i in 0..3 {
             let blake2x = Blake2sWithParameterBlock {
-                digest_length: digest_length[i],
+                digest_length: 32,
                 key_length: 0,
                 fan_out: 0,
                 depth: 0,
                 leaf_length: 32,
                 node_offset: i as u32,
-                xof_digest_length: 48,
+                xof_digest_length: 96,
                 node_depth: 0,
                 inner_length: 32,
                 salt: [0; 8],
@@ -68,7 +78,7 @@ impl Signature {
     /// one bit indicating the sign of the y-coordinate
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedSignature {
-        let mut buffer = [0u8; 48];
+        let mut buffer = [0u8; 96];
         BeSerialize::serialize(&self.signature.into_affine(), &mut &mut buffer[..]).unwrap();
         CompressedSignature { signature: buffer }
     }

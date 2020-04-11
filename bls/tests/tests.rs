@@ -1,9 +1,8 @@
 use std::vec::Vec;
 
-use algebra::bls12_377::{Fq, Fr, G1Affine, G1Projective};
+use algebra::mnt6_753::{Fq, Fr, G1Affine, G1Projective};
 use algebra_core::fields::PrimeField;
 use algebra_core::UniformRand;
-
 use num_traits::identities::One;
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
@@ -28,7 +27,7 @@ fn sign_verify() {
         0x54,
     ]);
 
-    for i in 0..100 {
+    for i in 0..10 {
         let keypair = generate_predictable(&mut rng);
         let message = format!("Message {}", i);
         let sig = keypair.sign(&message);
@@ -43,7 +42,7 @@ fn compress_uncompress() {
         0x54,
     ]);
 
-    for i in 0..100 {
+    for i in 0..10 {
         let keypair = generate_predictable(&mut rng);
         let message = format!("Message {}", i);
         let sig = keypair.sign(&message);
@@ -66,7 +65,7 @@ fn aggregate_signatures_same_messages() {
     let mut public_keys = Vec::with_capacity(1000);
     let message = "Same message";
     let mut signatures = Vec::with_capacity(1000);
-    for _ in 0..100 {
+    for _ in 0..10 {
         let keypair = generate_predictable(&mut rng);
         let signature = keypair.sign(&message);
         public_keys.push(keypair.public_key);
@@ -81,7 +80,7 @@ fn aggregate_signatures_same_messages() {
 
 #[test]
 fn hash_to_g1_encoding() {
-    for i in 0..100 {
+    for i in 0..10 {
         let message = format!("Message {}", i);
         let hash = Blake2sHasher::new().chain(&message).finish();
         let point = test_hash_to_g1_encoding(hash.clone());
@@ -106,10 +105,9 @@ fn test_hash_to_g1_encoding(h: nimiq_hash::Blake2sHash) -> G1Projective {
     // This extends the input hash from 32 bytes to 48 bytes using the Blake2X algorithm.
     // See https://blake2.net/blake2x.pdf for more details.
     let mut bytes = vec![];
-    let digest_length = vec![32, 16];
-    for i in 0..2 {
+    for i in 0..3 {
         let blake2x = crypto_primitives::prf::blake2s::Blake2sWithParameterBlock {
-            digest_length: digest_length[i],
+            digest_length: 32,
             key_length: 0,
             fan_out: 0,
             depth: 0,
@@ -132,7 +130,7 @@ fn test_hash_to_g1_encoding(h: nimiq_hash::Blake2sHash) -> G1Projective {
     let y_coordinate = bits[0];
     // Set highest relevant bit to false.
     bits[7] = false;
-    let x_coordinate = Fq::from_repr(algebra::BigInteger::from_bits(&bits[7..384]));
+    let x_coordinate = Fq::from_repr(algebra::BigInteger::from_bits(&bits[7..768]));
 
     // y-coordinate is at first bit.
     let y_coordinate2 = (bytes[0] >> 7) & 1 == 1;

@@ -1,4 +1,12 @@
-use super::*;
+use std::io::Error;
+
+use algebra::mnt6_753::{Fq, Fq3};
+use algebra::short_weierstrass_jacobian::GroupAffine;
+use algebra::BigInteger768;
+use algebra_core::curves::models::SWModelParameters;
+use algebra_core::fields::PrimeField;
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use num_traits::Zero;
 
 /// Serializer in big endian format.
 pub trait BeSerialize {
@@ -140,48 +148,53 @@ impl BeSerialize for Fq {
 
 impl BeDeserialize for Fq {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
-        let value: BigInteger384 = BeDeserialize::deserialize(reader)?;
+        let value: BigInteger768 = BeDeserialize::deserialize(reader)?;
         Ok(Fq::from_repr(value))
     }
 
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error> {
-        let (value, flags): (BigInteger384, _) = BeDeserialize::deserialize_with_flags(reader)?;
+        let (value, flags): (BigInteger768, _) = BeDeserialize::deserialize_with_flags(reader)?;
         Ok((Fq::from_repr(value), flags))
     }
 }
 
-// Fq2
-impl BeSerialize for Fq2 {
+// Fq3
+impl BeSerialize for Fq3 {
     fn serialize_with_flags<W: WriteBytesExt>(
         &self,
         writer: &mut W,
         flags: Flags,
     ) -> Result<(), Error> {
         BeSerialize::serialize_with_flags(&self.c0, writer, flags)?;
-        BeSerialize::serialize(&self.c1, writer)
+        BeSerialize::serialize(&self.c1, writer)?;
+        BeSerialize::serialize(&self.c2, writer)
     }
 
     fn serialized_size(&self) -> usize {
-        BeSerialize::serialized_size(&self.c0) + BeSerialize::serialized_size(&self.c1)
+        BeSerialize::serialized_size(&self.c0)
+            + BeSerialize::serialized_size(&self.c1)
+            + BeSerialize::serialized_size(&self.c2)
     }
 }
 
-impl BeDeserialize for Fq2 {
+impl BeDeserialize for Fq3 {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
         let c0: Fq = BeDeserialize::deserialize(reader)?;
         let c1: Fq = BeDeserialize::deserialize(reader)?;
-        Ok(Fq2::new(c0, c1))
+        let c2: Fq = BeDeserialize::deserialize(reader)?;
+        Ok(Fq3::new(c0, c1, c2))
     }
 
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error> {
         let (c0, flags): (Fq, Flags) = BeDeserialize::deserialize_with_flags(reader)?;
         let c1: Fq = BeDeserialize::deserialize(reader)?;
-        Ok((Fq2::new(c0, c1), flags))
+        let c2: Fq = BeDeserialize::deserialize(reader)?;
+        Ok((Fq3::new(c0, c1, c2), flags))
     }
 }
 
-// BigInteger384
-impl BeSerialize for BigInteger384 {
+// BigInteger768
+impl BeSerialize for BigInteger768 {
     fn serialize_with_flags<W: WriteBytesExt>(
         &self,
         writer: &mut W,
@@ -200,21 +213,21 @@ impl BeSerialize for BigInteger384 {
     }
 
     fn serialized_size(&self) -> usize {
-        48
+        96
     }
 }
 
-impl BeDeserialize for BigInteger384 {
+impl BeDeserialize for BigInteger768 {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error> {
-        let mut limbs = [0u64; 6];
+        let mut limbs = [0u64; 12];
         for limb in limbs.iter_mut().rev() {
             *limb = reader.read_u64::<BigEndian>()?;
         }
-        Ok(BigInteger384::new(limbs))
+        Ok(BigInteger768::new(limbs))
     }
 
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error> {
-        let mut limbs = [0u64; 6];
+        let mut limbs = [0u64; 12];
         let mut flags = Default::default();
         for (i, limb) in limbs.iter_mut().rev().enumerate() {
             *limb = reader.read_u64::<BigEndian>()?;
@@ -223,6 +236,6 @@ impl BeDeserialize for BigInteger384 {
                 flags = Flags::from_u64_remove_flags(limb);
             }
         }
-        Ok((BigInteger384::new(limbs), flags))
+        Ok((BigInteger768::new(limbs), flags))
     }
 }

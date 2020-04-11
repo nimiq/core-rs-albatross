@@ -1,6 +1,13 @@
-use crate::compression::BeDeserialize;
+use std::{cmp::Ordering, fmt};
 
-use super::*;
+use algebra::mnt6_753::G1Affine;
+use algebra::SerializationError;
+use algebra_core::curves::AffineCurve;
+
+pub use utils::key_rng::{SecureGenerate, SecureRng};
+
+use crate::compression::BeDeserialize;
+use crate::Signature;
 
 /// The serialized compressed form of a signature.
 /// This form consists of the x-coordinate of the point (in the affine form),
@@ -8,11 +15,11 @@ use super::*;
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone, Copy)]
 pub struct CompressedSignature {
-    pub signature: [u8; 48],
+    pub signature: [u8; 96],
 }
 
 impl CompressedSignature {
-    pub const SIZE: usize = 48;
+    pub const SIZE: usize = 96;
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<Signature, SerializationError> {
@@ -51,7 +58,7 @@ impl PartialOrd<CompressedSignature> for CompressedSignature {
 impl Default for CompressedSignature {
     fn default() -> Self {
         CompressedSignature {
-            signature: [0u8; 48],
+            signature: [0u8; 96],
         }
     }
 }

@@ -1,4 +1,5 @@
-use super::*;
+use failure::Fail;
+use hex::FromHexError;
 
 #[derive(Clone, Debug, Fail)]
 pub enum PublicKeyParseError {
