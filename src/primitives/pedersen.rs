@@ -1,4 +1,4 @@
-use algebra::bls12_377::{Fq, G1Affine, G1Projective};
+use algebra::mnt6_753::{Fq, G1Affine, G1Projective};
 use algebra_core::{One, PrimeField};
 use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
@@ -18,11 +18,11 @@ pub fn setup_pedersen() -> Vec<G1Projective> {
 
     // This extends the seed using the Blake2X algorithm.
     // See https://blake2.net/blake2x.pdf for more details.
-    // We need 48 bytes of output for each generator that we are going to create.
+    // We need 96 bytes of output for each generator that we are going to create.
     // The number of rounds is calculated so that we get 48 bytes per generator needed. We use the
     // following formula for the ceiling division: |x/y| = (x+y-1)/y
     let mut bytes = vec![];
-    let number_rounds = (INPUT_SIZE * 8 * 48 + 32 - 1) / 32;
+    let number_rounds = (INPUT_SIZE * 8 * 96 + 32 - 1) / 32;
     for i in 0..number_rounds {
         let blake2x = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -55,13 +55,15 @@ pub fn setup_pedersen() -> Vec<G1Projective> {
         // 2) Use only 376 random bits to create a finite field element. This will guaranteedly produce a valid element on the first try, but will reduce the entropy of the EC point generation by one bit.
         // We chose the second one because we believe the entropy reduction is not significant enough.
         // The y-coordinate is at first bit.
-        let y_coordinate = (bytes[48 * i] >> 7) & 1 == 1;
+        let y_coordinate = (bytes[96 * i] >> 7) & 1 == 1;
 
         // In order to easily read the BigInt from the bytes, we use the first 7 bits as padding.
         // However, because of the previous explanation, we also need to set the 8th bit to 0.
         // Thus, we can nullify the whole first byte.
-        bytes[48 * i] = 0;
-        let mut x_coordinate = Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..48 * (i + 1)]));
+        bytes[96 * i] = 0;
+        bytes[96 * i + 1] = 0;
+        let mut x_coordinate =
+            Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96 * i..96 * (i + 1)]));
 
         // This implements the try-and-increment method of converting an integer to an elliptic curve point.
         // See https://eprint.iacr.org/2009/226.pdf for more details.

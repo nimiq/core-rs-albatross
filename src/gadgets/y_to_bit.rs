@@ -1,9 +1,9 @@
 use std::ops::Neg;
 
-use algebra::{bls12_377::Fq, sw6::Fr as SW6Fr, One, PrimeField};
+use algebra::{mnt6_753::Fq, mnt4_753::Fr as MNT4Fr, One, PrimeField};
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
+use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, FieldGadget};
 use r1cs_std::{Assignment, ToBitsGadget};
 
@@ -13,7 +13,7 @@ use r1cs_std::{Assignment, ToBitsGadget};
 pub struct YToBitGadget;
 
 impl YToBitGadget {
-    pub fn y_to_bit_g1<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
+    pub fn y_to_bit_g1<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         pk: &G1Gadget,
     ) -> Result<Boolean, SynthesisError> {
@@ -55,7 +55,7 @@ impl YToBitGadget {
         Ok(y_bit)
     }
 
-    pub fn y_to_bit_g2<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
+    pub fn y_to_bit_g2<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         pk: &G2Gadget,
     ) -> Result<Boolean, SynthesisError> {

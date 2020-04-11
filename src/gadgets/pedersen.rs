@@ -1,9 +1,9 @@
 use std::borrow::Borrow;
 
-use algebra::sw6::Fr as SW6Fr;
+use algebra::mnt4_753::Fr as MNT4Fr;
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::uint8::UInt8;
-use r1cs_std::bls12_377::G1Gadget;
+use r1cs_std::mnt6_753::G1Gadget;
 use r1cs_std::boolean::Boolean;
 use r1cs_std::groups::GroupGadget;
 use r1cs_std::prelude::CondSelectGadget;
@@ -18,7 +18,7 @@ impl PedersenHashGadget {
     /// Calculates the Pedersen hash. Given a vector of generators G_i and a vector of bits b_i, the
     /// hash is calculated like so:
     /// H = b_1*G_1 + b_2*G_2 + ... + b_n*G_n
-    pub fn evaluate<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
+    pub fn evaluate<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         generators: &Vec<G1Gadget>,
         input: &Vec<UInt8>,

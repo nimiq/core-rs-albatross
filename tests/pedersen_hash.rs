@@ -1,19 +1,19 @@
-use algebra::sw6::Fr as SW6Fr;
+use algebra::mnt4_753::Fr as MNT4Fr;
 use algebra::test_rng;
 use r1cs_core::ConstraintSystem;
-use r1cs_std::bls12_377::G1Gadget;
+use r1cs_std::mnt6_753::G1Gadget;
 use r1cs_std::prelude::{AllocGadget, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
-use nano_sync::constants::sum_generator_g1;
+use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::PedersenHashGadget;
 use nano_sync::primitives::{evaluate_pedersen, setup_pedersen};
 
 #[test]
 fn pedersen_test() {
     // Initialize the constraint system.
-    let mut cs = TestConstraintSystem::<SW6Fr>::new();
+    let mut cs = TestConstraintSystem::<MNT4Fr>::new();
 
     // Create random bytes.
     let rng = &mut test_rng();
@@ -24,7 +24,8 @@ fn pedersen_test() {
     let generators = setup_pedersen();
 
     // Evaluate Pedersen hash using the primitive version.
-    let primitive_out = evaluate_pedersen(generators.clone(), input.to_vec(), sum_generator_g1());
+    let primitive_out =
+        evaluate_pedersen(generators.clone(), input.to_vec(), sum_generator_g1_mnt6());
 
     // Convert the result to a G1Gadget for easier comparison.
     let primitive_out_var =
@@ -55,7 +56,7 @@ fn pedersen_test() {
 
     // Allocate the sum generator in the circuit.
     let sum_generator = G1Gadget::alloc(cs.ns(|| "allocating sum generator"), || {
-        Ok(sum_generator_g1())
+        Ok(sum_generator_g1_mnt6())
     })
     .unwrap();
 

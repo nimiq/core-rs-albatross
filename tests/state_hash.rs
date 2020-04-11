@@ -1,7 +1,7 @@
-use algebra::sw6::Fr as SW6Fr;
+use algebra::mnt4_753::Fr as MNT4Fr;
 use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::ConstraintSystem;
-use r1cs_std::bls12_377::G2Gadget;
+use r1cs_std::mnt6_753::G2Gadget;
 use r1cs_std::prelude::{AllocGadget, UInt32};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
@@ -10,7 +10,7 @@ use nano_sync::{evaluate_state_hash, StateHashGadget};
 #[test]
 fn state_hash_test() {
     // Initialize the constraint system.
-    let mut cs = TestConstraintSystem::<SW6Fr>::new();
+    let mut cs = TestConstraintSystem::<MNT4Fr>::new();
 
     // Create random inputs.
     let key_pair1 = KeyPair::generate_default_csprng();

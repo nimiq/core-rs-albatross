@@ -1,7 +1,7 @@
-use algebra::sw6::Fr as SW6Fr;
+use algebra::mnt4_753::Fr as MNT4Fr;
 use r1cs_core::SynthesisError;
-use r1cs_std::bls12_377::{
-    Fq12Gadget, G1Gadget, G1PreparedGadget, G2Gadget, G2PreparedGadget, PairingGadget,
+use r1cs_std::mnt6_753::{
+    G1Gadget, G1PreparedGadget, G2Gadget, G2PreparedGadget, PairingGadget,
 };
 use r1cs_std::{eq::EqGadget, fields::FieldGadget, pairing::PairingGadget as PG};
 
@@ -15,7 +15,7 @@ impl CheckSigGadget {
     /// https://crypto.stanford.edu/%7Edabo/pubs/papers/aggreg.pdf
     /// It implements the following verification formula:
     /// e(sig, gen) = e(hash_1, pk_1)*e(hash_2, pk_2)*...*e(hash_n, pk_n)
-    pub fn check_signatures<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
+    pub fn check_signatures<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         public_keys: &[G2Gadget],
         generator: &G2Gadget,
@@ -55,12 +55,12 @@ impl CheckSigGadget {
 
         // Calculate the pairing for the left hand side of the verification equation.
         // e(sig, gen)
-        let pairing1_var: Fq12Gadget =
+        let pairing1_var =
             PairingGadget::pairing(cs.ns(|| "sig pairing"), sig_p_var, generator_p_var.clone())?;
 
         // Calculates the pairings for the right hand side of the verification equation.
         // e(hash_1, pk_1), e(hash_2, pk_2), ... , e(hash_n, pk_n)
-        let mut pairings2_var: Vec<Fq12Gadget> = vec![];
+        let mut pairings2_var = vec![];
         for (i, (hash_p_var, pub_key_p_var)) in hash_p_vars
             .drain(..)
             .zip(pub_key_p_vars.drain(..))

@@ -1,14 +1,14 @@
 use core::cmp::Ordering;
 use std::borrow::{Borrow, Cow};
 
-use algebra::bls12_377::{Fq, FqParameters};
-use algebra::{sw6::Fr as SW6Fr, One};
+use algebra::mnt6_753::{Fq, FqParameters};
+use algebra::{mnt4_753::Fr as MNT4Fr, One};
 use crypto_primitives::prf::blake2s::constraints::{
     blake2s_gadget_with_parameters, Blake2sOutputGadget,
 };
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use r1cs_core::{ConstraintSystem, SynthesisError};
-use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
+use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::{
     AllocGadget, Boolean, CondSelectGadget, FieldGadget, GroupGadget, UInt32, UInt8,
 };
@@ -45,7 +45,7 @@ impl MacroBlockGadget {
 
     /// A function that verifies the validity of a given macro block. It is the main function for
     /// the macro block gadget.
-    pub fn verify<CS: ConstraintSystem<SW6Fr>>(
+    pub fn verify<CS: ConstraintSystem<MNT4Fr>>(
         &self,
         mut cs: CS,
         // This is the set of public keys that signed this macro block. Corresponds to the previous
@@ -113,7 +113,7 @@ impl MacroBlockGadget {
 
     /// A function that returns the aggregated public key and the hash point, for a given round,
     /// of the macro block.
-    fn get_hash_and_public_keys<CS: ConstraintSystem<SW6Fr>>(
+    fn get_hash_and_public_keys<CS: ConstraintSystem<MNT4Fr>>(
         &self,
         mut cs: CS,
         round: Round,
@@ -164,7 +164,7 @@ impl MacroBlockGadget {
     /// where || means concatenation.
     /// First we hash with the Blake2s hash algorithm, getting an output of 256 bits. Then we use
     /// the Pedersen hash algorithm on those 256 bits to obtain a single EC point.
-    pub fn hash<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
+    pub fn hash<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         &self,
         mut cs: CS,
         round: Round,
@@ -251,7 +251,7 @@ impl MacroBlockGadget {
     /// A function that aggregates the public keys of all the validators that signed the block. If
     /// it is performing the aggregation for the commit round, then it will also check if every signer
     /// in the commit round was also a signer in the prepare round.
-    pub fn aggregate_public_key<CS: r1cs_core::ConstraintSystem<SW6Fr>>(
+    pub fn aggregate_public_key<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         public_keys: &[G2Gadget],
         key_bitmap: &[Boolean],
@@ -320,9 +320,9 @@ impl MacroBlockGadget {
 }
 
 /// The allocation function for the macro block gadget.
-impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
+impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
     /// This is the allocation function for a private input.
-    fn alloc<F, T, CS: ConstraintSystem<SW6Fr>>(
+    fn alloc<F, T, CS: ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         value_gen: F,
     ) -> Result<Self, SynthesisError>
@@ -382,7 +382,7 @@ impl AllocGadget<MacroBlock, SW6Fr> for MacroBlockGadget {
     }
 
     /// This is the allocation function for a private input.
-    fn alloc_input<F, T, CS: ConstraintSystem<SW6Fr>>(
+    fn alloc_input<F, T, CS: ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         value_gen: F,
     ) -> Result<Self, SynthesisError>

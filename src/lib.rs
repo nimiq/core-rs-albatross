@@ -13,9 +13,14 @@ pub mod rand_gen;
 
 // TODO: Integrate the MNT4/6 curves.
 // TODO: Create the specific instances of the wrapper and merger circuits that we need.
-// - Wrapper for the macro block gets the vk for the macro block circuit as constant.
-// - Merger gets the vk for the macro block wrapper as constant.
-// - Both merger and wrapper for the merger get two extra inputs, two verifying keys.
-// - The two verifying keys are the ones for the merger and wrapper for the merger.
-// - That means both merger and wrapper for the merger have the exact same public inputs.
+// - You separate the wrapper into two new circuits: macro block wrapper and merger wrapper.
+// - You create two new types of inputs, the vks_mnt6_hash and the vks_mnt4_hash. Both are Blake2s
+//   hashes, similar to how state hashes work.
+// - vks_mnt6_hash contains the verifying keys for the mnt6 circuits (both wrappers). This hash is
+//   only opened in the mnt4 circuits.
+// - vks_mnt4_hash contains the verifying keys for the mnt4 circuits (macro block and merger). This hash is
+//   only opened in the mnt6 circuits.
+// - The merger and the merger wrapper receive both the vks_mnt6_hash and the vks_mnt4_hash as inputs.
+// - The macro block wrapper receives the vks_mnt4_hash as input.
+// - The macro block receives neither.
 // TODO: Finish the examples.

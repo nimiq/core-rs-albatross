@@ -1,16 +1,18 @@
-use algebra::bls12_377::{Fq, G2Projective};
-use algebra::sw6::Fr as SW6Fr;
+use algebra::mnt4_753::Fr as MNT4Fr;
+use algebra::mnt6_753::{Fq, G2Projective};
 use algebra_core::ProjectiveCurve;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::bls12_377::{FqGadget, G1Gadget, G2Gadget};
+use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
-use crate::constants::{sum_generator_g1, sum_generator_g2, EPOCH_LENGTH, MAX_NON_SIGNERS};
+use crate::constants::{
+    sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS,
+};
 use crate::gadgets::{AllocConstantGadget, MacroBlockGadget, StateHashGadget};
 use crate::primitives::{setup_pedersen, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
-/// This is the macro block circuit. It takes as inputs an initial state hash and final state hash
+/// This is the macro block circuit. It takes as inputs an initial state hash and SW6Frfinal state hash
 /// and it produces a proof that there exists a valid macro block that transforms the initial state
 /// into the final state.
 /// Since the state is composed only of the block number and the public keys of the current validator
@@ -46,9 +48,9 @@ impl MacroBlockCircuit {
     }
 }
 
-impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
+impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<SW6Fr>>(
+    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
@@ -68,11 +70,15 @@ impl ConstraintSynthesizer<SW6Fr> for MacroBlockCircuit {
             &G2Projective::prime_subgroup_generator(),
         )?;
 
-        let sum_generator_g1_var: G1Gadget =
-            AllocConstantGadget::alloc_const(cs.ns(|| "sum generator g1"), &sum_generator_g1())?;
+        let sum_generator_g1_var: G1Gadget = AllocConstantGadget::alloc_const(
+            cs.ns(|| "sum generator g1"),
+            &sum_generator_g1_mnt6(),
+        )?;
 
-        let sum_generator_g2_var: G2Gadget =
-            AllocConstantGadget::alloc_const(cs.ns(|| "sum generator g2"), &sum_generator_g2())?;
+        let sum_generator_g2_var: G2Gadget = AllocConstantGadget::alloc_const(
+            cs.ns(|| "sum generator g2"),
+            &sum_generator_g2_mnt6(),
+        )?;
 
         let pedersen_generators = setup_pedersen();
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();

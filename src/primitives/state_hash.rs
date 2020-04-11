@@ -1,4 +1,4 @@
-use algebra::bls12_377::G2Projective;
+use algebra::mnt6_753::G2Projective;
 use byteorder::{ByteOrder, LittleEndian};
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use nimiq_bls::PublicKey;

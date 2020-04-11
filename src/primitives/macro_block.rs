@@ -1,9 +1,9 @@
-use algebra::bls12_377::{G1Projective, G2Projective};
+use algebra::mnt6_753::{G1Projective, G2Projective};
 use algebra::ProjectiveCurve;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use nimiq_bls::{KeyPair, PublicKey};
 
-use crate::constants::{sum_generator_g1, VALIDATOR_SLOTS};
+use crate::constants::{sum_generator_g1_mnt6, VALIDATOR_SLOTS};
 use crate::primitives::pedersen::{evaluate_pedersen, setup_pedersen};
 
 /// A struct representing a macro block in Albatross.
@@ -119,7 +119,7 @@ impl MacroBlock {
         let generators = setup_pedersen();
 
         // Calculate the Pedersen hash.
-        let result = evaluate_pedersen(generators, hash, sum_generator_g1());
+        let result = evaluate_pedersen(generators, hash, sum_generator_g1_mnt6());
 
         result
     }
