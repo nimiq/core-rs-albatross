@@ -130,10 +130,10 @@ lazy_static! {
             network_id: NetworkId::Test,
             name: "test",
             seed_peers: vec![
-                create_seed_peer_addr("seed1.nimiqtest.net", 8080, "175d5f01af8a5911c240a78df689a76eef782d793ca15d073bdc913edd07c74b"),
-                create_seed_peer_addr("seed2.nimiqtest.net", 8080, "2c950d2afad1aa7ad12f01a56527f709b7687b1b00c94da6e0bd8ae4d263d47c"),
-                create_seed_peer_addr("seed3.nimiqtest.net", 8080, "03feec9d5316a7b5ebb69c4e709547a28afe8e9ef91ee568df489d29e9845bb8"),
-                create_seed_peer_addr("seed4.nimiqtest.net", 8080, "943d5669226d3716a830371d99143af98bbaf84c630db24bdd67e55ccb7a9011")
+                create_seed_peer_addr("seed1.nimiq-testnet.com", 8080, "175d5f01af8a5911c240a78df689a76eef782d793ca15d073bdc913edd07c74b"),
+                create_seed_peer_addr("seed2.nimiq-testnet.com", 8080, "2c950d2afad1aa7ad12f01a56527f709b7687b1b00c94da6e0bd8ae4d263d47c"),
+                create_seed_peer_addr("seed3.nimiq-testnet.com", 8080, "03feec9d5316a7b5ebb69c4e709547a28afe8e9ef91ee568df489d29e9845bb8"),
+                create_seed_peer_addr("seed4.nimiq-testnet.com", 8080, "943d5669226d3716a830371d99143af98bbaf84c630db24bdd67e55ccb7a9011")
             ],
             seed_lists: vec![],
             genesis: include!(concat!(env!("OUT_DIR"), "/genesis/test-powchain/genesis.rs")),
