@@ -33,12 +33,14 @@ nimiq-consensus = { path = "../consensus", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
 nimiq-handel = { path = "../handel", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-messages = { path = "../messages", version = "0.1" }
 nimiq-network = { path = "../network", version = "0.1" }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "time"] }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
+nimiq-transaction-builder = { path = "../transaction-builder", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
 
 [features]

@@ -2,6 +2,7 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::net::IpAddr;
+use std::str::FromStr;
 
 use derive_builder::Builder;
 use enum_display_derive::Display;
@@ -120,6 +121,15 @@ pub enum ProtocolConfig {
 #[derive(Debug, Clone)]
 pub struct ValidatorConfig {
     // TODO
+    /// Validator wallet key
+    validator_wallet_key: Option<keys::KeyPair>,
+}
+
+impl ValidatorConfig {
+    #[cfg(feature="validator")]
+    pub fn validator_wallet_key(self) -> Result<Option<keys::KeyPair>, Error> {
+        Ok(self.validator_wallet_key)
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -693,7 +703,9 @@ impl ClientConfigBuilder {
     /// yet, this will just enable the validator.
     #[cfg(feature="validator")]
     pub fn validator(&mut self) -> &mut Self {
-        self.validator = Some(Some(ValidatorConfig {}));
+        self.validator = Some(Some(ValidatorConfig {
+            validator_wallet_key: None
+        }));
         self
     }
 
@@ -847,7 +859,20 @@ impl ClientConfigBuilder {
         // Configure validator
         #[cfg(feature="validator")] {
             if config_file.validator.is_some() {
-                self.validator = Some(Some(ValidatorConfig {}));
+                let wallet_private_key = config_file.validator.as_ref()
+                    .map(|settings| settings.clone().wallet_private_key)
+                    .expect("Failed to load validator settings");
+
+                let wallet_key = wallet_private_key.map(|config_private_key| {
+                    Some(keys::KeyPair::from(
+                        keys::PrivateKey::from_str(&config_private_key)
+                            .map_err(|e| Error::config_error(format!("Invalid wallet private key: {:?}: {}", &config_private_key, e))).ok()?
+                    ))
+                }).unwrap_or_else(|| None);
+
+                self.validator = Some(Some(ValidatorConfig {
+                    validator_wallet_key: wallet_key
+                }));
             }
         }
 

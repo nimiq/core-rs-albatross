@@ -21,6 +21,8 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_block_production_albatross as block_production_albatross;
+extern crate nimiq_keys as keys;
+extern crate nimiq_transaction_builder as transaction_builder;
 
 pub mod validator;
 pub mod validator_network;

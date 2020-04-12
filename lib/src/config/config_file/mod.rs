@@ -534,4 +534,5 @@ impl From<MempoolFilterSettings> for MempoolRules {
 #[serde(deny_unknown_fields)]
 pub struct ValidatorSettings {
     pub key_file: Option<String>,
+    pub wallet_private_key: Option<String>,
 }
