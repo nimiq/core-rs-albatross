@@ -1,6 +1,5 @@
-use algebra::bls12_377::{Fq, Fr};
-use algebra::sw6::Fr as SW6Fr;
-use algebra::Bls12_377;
+use algebra::mnt4_753::Fr as MNT4Fr;
+use algebra::mnt6_753::{Fq, Fr, MNT6_753};
 use crypto_primitives::nizk::groth16::constraints::{
     Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
 };
@@ -8,19 +7,19 @@ use crypto_primitives::nizk::groth16::Groth16;
 use crypto_primitives::NIZKVerifierGadget;
 use groth16::{Proof, VerifyingKey};
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::bls12_377::PairingGadget;
+use r1cs_std::mnt6_753::PairingGadget;
 use r1cs_std::prelude::*;
 
-use crate::circuits::{DummyCircuit, OtherDummyCircuit};
+use crate::circuits::mnt6::{DummyCircuit, OtherDummyCircuit};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 // Renaming some types for convenience. We can change the circuit and elliptic curve of the input
 // proof to the merger circuit just by editing these types.
-type FirstProofSystem = Groth16<Bls12_377, DummyCircuit, Fr>;
-type SecondProofSystem = Groth16<Bls12_377, OtherDummyCircuit, Fr>;
-type TheProofGadget = ProofGadget<Bls12_377, Fq, PairingGadget>;
-type TheVkGadget = VerifyingKeyGadget<Bls12_377, Fq, PairingGadget>;
-type TheVerifierGadget = Groth16VerifierGadget<Bls12_377, Fq, PairingGadget>;
+type FirstProofSystem = Groth16<MNT6_753, DummyCircuit, Fr>;
+type SecondProofSystem = Groth16<MNT6_753, OtherDummyCircuit, Fr>;
+type TheProofGadget = ProofGadget<MNT6_753, Fq, PairingGadget>;
+type TheVkGadget = VerifyingKeyGadget<MNT6_753, Fq, PairingGadget>;
+type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
 
 /// This is the merger circuit. It takes as inputs an initial state hash, a final state hash and a
 /// verifying key and it produces a proof that there exists two valid SNARK proofs that transforms the
@@ -34,10 +33,10 @@ type TheVerifierGadget = Groth16VerifierGadget<Bls12_377, Fq, PairingGadget>;
 #[derive(Clone)]
 pub struct MergerCircuit {
     // Private inputs
-    proof_1: Proof<Bls12_377>,
-    proof_2: Proof<Bls12_377>,
-    verifying_key_1: VerifyingKey<Bls12_377>,
-    verifying_key_2: VerifyingKey<Bls12_377>,
+    proof_1: Proof<MNT6_753>,
+    proof_2: Proof<MNT6_753>,
+    verifying_key_1: VerifyingKey<MNT6_753>,
+    verifying_key_2: VerifyingKey<MNT6_753>,
     intermediate_state_hash: Vec<u8>,
 
     // Public inputs
@@ -47,10 +46,10 @@ pub struct MergerCircuit {
 
 impl MergerCircuit {
     pub fn new(
-        proof_1: Proof<Bls12_377>,
-        proof_2: Proof<Bls12_377>,
-        verifying_key_1: VerifyingKey<Bls12_377>,
-        verifying_key_2: VerifyingKey<Bls12_377>,
+        proof_1: Proof<MNT6_753>,
+        proof_2: Proof<MNT6_753>,
+        verifying_key_1: VerifyingKey<MNT6_753>,
+        verifying_key_2: VerifyingKey<MNT6_753>,
         intermediate_state_hash: Vec<u8>,
         initial_state_hash: Vec<u8>,
         final_state_hash: Vec<u8>,
@@ -67,9 +66,9 @@ impl MergerCircuit {
     }
 }
 
-impl ConstraintSynthesizer<SW6Fr> for MergerCircuit {
+impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<SW6Fr>>(
+    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {

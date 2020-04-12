@@ -1,8 +1,6 @@
 use algebra::mnt4_753::Fr as MNT4Fr;
 use r1cs_core::SynthesisError;
-use r1cs_std::mnt6_753::{
-    G1Gadget, G1PreparedGadget, G2Gadget, G2PreparedGadget, PairingGadget,
-};
+use r1cs_std::mnt6_753::{G1Gadget, G1PreparedGadget, G2Gadget, G2PreparedGadget, PairingGadget};
 use r1cs_std::{eq::EqGadget, fields::FieldGadget, pairing::PairingGadget as PG};
 
 /// This gadget checks that a given BLS signature is correct. But it only works if given the hash

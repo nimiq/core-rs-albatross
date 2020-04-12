@@ -1,13 +1,13 @@
-use algebra::mnt6_753::FqParameters;
 use algebra::mnt4_753::Fr as MNT4Fr;
+use algebra::mnt6_753::FqParameters;
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget_with_parameters;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use r1cs_core::SynthesisError;
-use r1cs_std::bits::{boolean::Boolean, uint32::UInt32};
+use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
 use r1cs_std::mnt6_753::G2Gadget;
-use r1cs_std::ToBitsGadget;
+use r1cs_std::{ToBitsGadget, ToBytesGadget};
 
-use crate::gadgets::{pad_point_bits, reverse_inner_byte_order, YToBitGadget};
+use crate::gadgets::{mnt4::YToBitGadget, pad_point_bits, reverse_inner_byte_order};
 
 /// This is a gadget that calculates the "state hash" in-circuit, which is simply the Blake2s
 /// hash, for a given block, of the block number concatenated with the public_keys.
@@ -20,7 +20,7 @@ impl StateHashGadget {
         mut cs: CS,
         block_number: &UInt32,
         public_keys: &Vec<G2Gadget>,
-    ) -> Result<Vec<UInt32>, SynthesisError> {
+    ) -> Result<Vec<UInt8>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits: Vec<Boolean> = vec![];
 
@@ -69,6 +69,13 @@ impl StateHashGadget {
             &blake2s_parameters.parameters(),
         )?;
 
-        Ok(hash)
+        // Convert to bytes.
+        let mut result = Vec::new();
+        for i in 0..8 {
+            let chunk = hash[i].to_bytes(&mut cs.ns(|| format!("hash to bytes {}", i)))?;
+            result.extend(chunk);
+        }
+
+        Ok(result)
     }
 }

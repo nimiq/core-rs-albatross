@@ -8,8 +8,8 @@ use r1cs_std::prelude::*;
 use crate::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS,
 };
-use crate::gadgets::{AllocConstantGadget, MacroBlockGadget, StateHashGadget};
-use crate::primitives::{setup_pedersen, MacroBlock};
+use crate::gadgets::{mnt4::MacroBlockGadget, mnt4::StateHashGadget, AllocConstantGadget};
+use crate::primitives::mnt4::{setup_pedersen, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the macro block circuit. It takes as inputs an initial state hash and SW6Frfinal state hash
@@ -26,8 +26,8 @@ pub struct MacroBlockCircuit {
     block: MacroBlock,
 
     // Public inputs
-    initial_state_hash: Vec<u32>,
-    final_state_hash: Vec<u32>,
+    initial_state_hash: Vec<u8>,
+    final_state_hash: Vec<u8>,
 }
 
 impl MacroBlockCircuit {
@@ -35,8 +35,8 @@ impl MacroBlockCircuit {
         prev_keys: Vec<G2Projective>,
         block_number: u32,
         block: MacroBlock,
-        initial_state_hash: Vec<u32>,
-        final_state_hash: Vec<u32>,
+        initial_state_hash: Vec<u8>,
+        final_state_hash: Vec<u8>,
     ) -> Self {
         Self {
             prev_keys,
@@ -107,21 +107,13 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let mut initial_state_hash_var: Vec<UInt32> = Vec::new();
-        for i in 0..8 {
-            initial_state_hash_var.push(UInt32::alloc_input(
-                cs.ns(|| format!("initial state hash: chunk {}", i)),
-                Some(self.initial_state_hash[i]),
-            )?);
-        }
+        let initial_state_hash_var = UInt8::alloc_input_vec(
+            cs.ns(|| "initial state hash"),
+            self.initial_state_hash.as_ref(),
+        )?;
 
-        let mut final_state_hash_var: Vec<UInt32> = Vec::new();
-        for i in 0..8 {
-            final_state_hash_var.push(UInt32::alloc_input(
-                cs.ns(|| format!("final state hash: chunk {}", i)),
-                Some(self.final_state_hash[i]),
-            )?);
-        }
+        let final_state_hash_var =
+            UInt8::alloc_input_vec(cs.ns(|| "final state hash"), self.final_state_hash.as_ref())?;
 
         // Verifying equality for initial state hash. It just checks that the private inputs are correct
         // by hashing them and comparing the result with the initial state hash given as a public input.
@@ -133,7 +125,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &prev_keys_var,
         )?;
 
-        for i in 0..8 {
+        for i in 0..32 {
             initial_state_hash_var[i].enforce_equal(
                 cs.ns(|| format!("initial state hash == reference hash: byte {}", i)),
                 &reference_hash[i],
@@ -171,7 +163,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &block_var.public_keys,
         )?;
 
-        for i in 0..8 {
+        for i in 0..32 {
             final_state_hash_var[i].enforce_equal(
                 cs.ns(|| format!("final state hash == reference hash: byte {}", i)),
                 &reference_hash[i],

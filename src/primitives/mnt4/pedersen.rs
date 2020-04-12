@@ -13,16 +13,16 @@ pub const INPUT_SIZE: usize = 32;
 /// This is the function for generating the Pedersen hash generators for our specific instance. We
 /// need one generator per each bit of input.
 pub fn setup_pedersen() -> Vec<G1Projective> {
-    // This gets a verifiably random seed.
+    // This gets a verifiably random seed. Whenever we use this seed we need to set the personalization
+    // field on the Blake2X to an unique value. See below.
     let seed = generate_random_seed();
 
     // This extends the seed using the Blake2X algorithm.
     // See https://blake2.net/blake2x.pdf for more details.
     // We need 96 bytes of output for each generator that we are going to create.
-    // The number of rounds is calculated so that we get 48 bytes per generator needed. We use the
-    // following formula for the ceiling division: |x/y| = (x+y-1)/y
+    // The number of rounds is calculated so that we get 96 bytes per generator needed.
     let mut bytes = vec![];
-    let number_rounds = (INPUT_SIZE * 8 * 96 + 32 - 1) / 32;
+    let number_rounds = INPUT_SIZE * 8 * 3;
     for i in 0..number_rounds {
         let blake2x = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -35,7 +35,7 @@ pub fn setup_pedersen() -> Vec<G1Projective> {
             node_depth: 0,
             inner_length: 32,
             salt: [1; 8],
-            personalization: [1; 8], // We set this to be different from the one used to generate the sum generators in constants.rs
+            personalization: [0; 8], // This needs to be set to an unique value. See above.
         };
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
         state.update(&seed);
@@ -48,18 +48,25 @@ pub fn setup_pedersen() -> Vec<G1Projective> {
 
     // Generating the generators.
     for i in 0..INPUT_SIZE * 8 {
-        // This converts the hash output into a x-coordinate and a y-coordinate for an elliptic curve point. At this time, it is not guaranteed to be a valid point.
-        // A quirk of this code is that we need to set the most significant bit to zero. The reason for this is that the field for the BLS12-377 curve is not exactly 377 bits, it is a bit smaller.
-        // This means that if we try to create a field element from 377 random bits, we may get an invalid value back (in this case it is just all zeros). There are two options to deal with this:
-        // 1) To create finite field elements, using 377 random bits, in a loop until a valid one is created.
-        // 2) Use only 376 random bits to create a finite field element. This will guaranteedly produce a valid element on the first try, but will reduce the entropy of the EC point generation by one bit.
+        // This converts the hash output into a x-coordinate and a y-coordinate for an elliptic curve
+        // point. At this time, it is not guaranteed to be a valid point. A quirk of this code is that
+        // we need to set the most significant 16 bits to zero. The reason for this is that the field for
+        // the MNT6-753 curve is not exactly 753 bits, it is a bit smaller. This means that if we try
+        // to create a field element from 753 random bits, we may get an invalid value back (in this
+        // case it is just all zeros). There are two options to deal with this:
+        // 1) To create finite field elements, using 753 random bits, in a loop until a valid one
+        //    is created.
+        // 2) Use only 752 random bits to create a finite field element. This will guaranteedly
+        //    produce a valid element on the first try, but will reduce the entropy of the EC
+        //    point generation by one bit.
         // We chose the second one because we believe the entropy reduction is not significant enough.
-        // The y-coordinate is at first bit.
+        // Since we have 768 bits per generator but only need 752 bits, we set the first 16 bits (768-752=16)
+        // to zero.
+        // The y-coordinate is at the first bit. We convert it to a boolean.
         let y_coordinate = (bytes[96 * i] >> 7) & 1 == 1;
 
-        // In order to easily read the BigInt from the bytes, we use the first 7 bits as padding.
-        // However, because of the previous explanation, we also need to set the 8th bit to 0.
-        // Thus, we can nullify the whole first byte.
+        // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
+        // However, because of the previous explanation, we need to nullify the whole first two bytes.
         bytes[96 * i] = 0;
         bytes[96 * i + 1] = 0;
         let mut x_coordinate =

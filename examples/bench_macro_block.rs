@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use algebra::sw6::{Fr as SW6Fr, SW6};
+use algebra::mnt4_753::{Fr as MNT4Fr, MNT4_753};
 use algebra::test_rng;
 use groth16::{
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
@@ -15,8 +15,9 @@ use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::{ConstraintSynthesizer, ToConstraintField};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
+use nano_sync::circuits::mnt4::MacroBlockCircuit;
 use nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
-use nano_sync::*;
+use nano_sync::primitives::mnt4::{evaluate_state_hash, MacroBlock};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use
@@ -81,7 +82,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             initial_state_hash.clone(),
             final_state_hash.clone(),
         );
-        generate_random_parameters::<SW6, _, _>(c, rng)?
+        generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
     total_setup += start.elapsed();
     println!("Parameter generation finished, creating proof.");
@@ -101,21 +102,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     total_proving += start.elapsed();
     println!("Proof generation finished, starting verification.");
 
-    // // Prepare inputs for verification.
-    let mut inputs: Vec<SW6Fr> = vec![];
-    let field_elements: Vec<SW6Fr> = initial_state_hash.to_field_elements().unwrap();
+    // Prepare inputs for verification.
+    let mut inputs: Vec<MNT4Fr> = vec![];
+    let field_elements: Vec<MNT4Fr> = initial_state_hash.to_field_elements().unwrap();
     inputs.extend(field_elements);
-    let field_elements: Vec<SW6Fr> = final_state_hash.to_field_elements().unwrap();
+    let field_elements: Vec<MNT4Fr> = final_state_hash.to_field_elements().unwrap();
     inputs.extend(field_elements);
     let pvk = prepare_verifying_key(&params.vk);
 
-    // // Verify the proof
+    // Verify the proof
     let start = Instant::now();
     let verified = verify_proof(&pvk, &proof, &inputs).unwrap();
     total_verifying += start.elapsed();
 
     println!("===== Benchmarks =====");
     println!("Result: {}", verified);
+    // TODO: Verify these numbers!!!
     let vk_size = 1040 + 104 * params.vk.gamma_abc_g1.len();
     let pk_size = vk_size
         + 936

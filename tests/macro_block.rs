@@ -4,8 +4,8 @@ use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 use nano_sync::constants::{EPOCH_LENGTH, MAX_NON_SIGNERS, MIN_SIGNERS, VALIDATOR_SLOTS};
-use nano_sync::primitives::evaluate_state_hash;
-use nano_sync::{MacroBlock, MacroBlockCircuit};
+use nano_sync::primitives::mnt4::{evaluate_state_hash, MacroBlock};
+use nano_sync::MacroBlockCircuit;
 
 // When running tests you are advised to set VALIDATOR_SLOTS in constants.rs to a more manageable number, for example 4.
 

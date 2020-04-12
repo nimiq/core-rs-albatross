@@ -7,8 +7,8 @@ use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
 use nano_sync::constants::sum_generator_g1_mnt6;
-use nano_sync::gadgets::PedersenHashGadget;
-use nano_sync::primitives::{evaluate_pedersen, setup_pedersen};
+use nano_sync::gadgets::mnt4::PedersenHashGadget;
+use nano_sync::primitives::mnt4::{evaluate_pedersen, setup_pedersen};
 
 #[test]
 fn pedersen_test() {

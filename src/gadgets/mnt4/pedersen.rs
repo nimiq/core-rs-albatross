@@ -3,9 +3,9 @@ use std::borrow::Borrow;
 use algebra::mnt4_753::Fr as MNT4Fr;
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::uint8::UInt8;
-use r1cs_std::mnt6_753::G1Gadget;
 use r1cs_std::boolean::Boolean;
 use r1cs_std::groups::GroupGadget;
+use r1cs_std::mnt6_753::G1Gadget;
 use r1cs_std::prelude::CondSelectGadget;
 use r1cs_std::ToBitsGadget;
 
@@ -24,6 +24,9 @@ impl PedersenHashGadget {
         input: &Vec<UInt8>,
         sum_generator: &G1Gadget,
     ) -> Result<G1Gadget, SynthesisError> {
+        // Verify that we have the same number of generators and input bits.
+        assert_eq!(input.len() * 8, generators.len());
+
         // Initialize Boolean vector.
         let mut bits: Vec<Boolean> = vec![];
 
