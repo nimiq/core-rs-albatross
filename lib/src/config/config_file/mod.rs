@@ -52,6 +52,8 @@ pub struct ConfigFile {
     #[serde(default)]
     pub peer_key_file: Option<String>,
     #[serde(default)]
+    pub transaction: Option<TransactionSettings>,
+    #[serde(default)]
     pub validator: Option<ValidatorSettings>,
 }
 
@@ -528,6 +530,12 @@ impl From<MempoolFilterSettings> for MempoolRules {
             recipient_balance: f.recipient_balance,
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct TransactionSettings {
+    pub key_file: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Default)]

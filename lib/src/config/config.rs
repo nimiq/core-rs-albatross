@@ -132,6 +132,9 @@ pub struct FileStorageConfig {
     /// Path to peer key
     peer_key: PathBuf,
 
+    /// Path to transaction key
+    transaction_key: Option<PathBuf>,
+
     /// Path to validator key
     validator_key: Option<PathBuf>,
 }
@@ -144,6 +147,7 @@ impl FileStorageConfig {
         Self {
             database_parent: path.to_path_buf(),
             peer_key: path.join("peer_key.dat"),
+            transaction_key: Some(path.join("transaction_key.dat")),
             validator_key: Some(path.join("validator_key.dat")),
         }
     }
@@ -291,6 +295,32 @@ impl StorageConfig {
             _ => return Err(self.not_available()),
         }
         Ok(())
+    }
+
+    #[cfg(feature="validator")]
+    pub(crate) fn transaction_key(&self) -> Result<keys::KeyPair, Error> {
+        Ok(match self {
+            StorageConfig::Volatile => {
+                keys::KeyPair::generate_default_csprng()
+            },
+            StorageConfig::Filesystem(file_storage) => {
+                let key_path = file_storage.transaction_key.as_ref()
+                    .ok_or_else(|| Error::config_error("No path for transaction key specified"))?;
+                let key_path = key_path.to_str()
+                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of transaction key to string: {}", key_path.display())))?
+                    .to_string(); // ?
+                let key_store = KeyStore::new(key_path);
+                match key_store.load_key() {
+                    Err(KeyStoreError::IoError(_)) => {
+                        let transaction_key = keys::KeyPair::generate_default_csprng();
+                        key_store.save_key(&transaction_key)?;
+                        Ok(transaction_key)
+                    },
+                    res => res,
+                }?
+            },
+            _ => return Err(self.not_available()),
+        })
     }
 
     #[cfg(feature="validator")]
@@ -744,6 +774,11 @@ impl ClientConfigBuilder {
         config_file.peer_key_file.as_ref()
             .map(|path| {
                 file_storage.peer_key = PathBuf::from(path);
+            });
+        config_file.transaction.as_ref()
+            .map(|transaction_config| {
+                transaction_config.key_file.as_ref()
+                    .map(|key_path| file_storage.transaction_key = Some(PathBuf::from(key_path)));
             });
         config_file.validator.as_ref()
             .map(|validator_config| {

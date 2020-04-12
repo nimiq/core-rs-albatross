@@ -82,7 +82,12 @@ impl TryFrom<ClientConfig> for ClientInner {
         // Initialize peer key
         config.storage.init_key_store(&mut network_config)?;
 
-        // Load validator key (before we give away ownership of the storage config
+        // Load transaction key (before we give away ownership of the storage config)
+        #[cfg(feature="validator")]
+        let transaction_key = config.storage.transaction_key()
+            .expect("Failed to load transaction key");
+
+        // Load validator key (before we give away ownership of the storage config)
         #[cfg(feature="validator")]
         let validator_key = config.storage.validator_key()
             .expect("Failed to load validator key");
@@ -114,7 +119,7 @@ impl TryFrom<ClientConfig> for ClientInner {
 
         #[cfg(feature="validator")]
         let validator = config.validator.map(|_config| {
-            Validator::new(Arc::clone(&consensus), validator_key)
+            Validator::new(Arc::clone(&consensus), validator_key, transaction_key)
         }).transpose()?;
 
         Ok(ClientInner {

@@ -32,9 +32,13 @@ use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use bls::bls12_381::KeyPair;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
+use keys::Address;
 use macros::upgrade_weak;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
+use primitives::coin::Coin;
+use primitives::policy;
+use transaction_builder::{Recipient, TransactionBuilder};
 use utils::mutable_once::MutableOnce;
 use utils::observer::ListenerHandle;
 use utils::timers::Timers;
@@ -69,6 +73,7 @@ pub struct Validator {
     consensus: Arc<Consensus<AlbatrossConsensusProtocol>>,
     pub validator_network: Arc<ValidatorNetwork>,
     pub validator_key: KeyPair,
+    pub transaction_key: keys::KeyPair,
 
     timers: Timers<ValidatorTimer>,
 
@@ -97,7 +102,7 @@ impl Validator {
     const BLOCK_TIMEOUT: Duration = Duration::from_secs(10);
     //const PBFT_TIMEOUT: Duration = Duration::from_secs(60);
 
-    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair) -> Result<Arc<Self>, Error> {
+    pub fn new(consensus: Arc<Consensus<AlbatrossConsensusProtocol>>, validator_key: KeyPair, transaction_key: keys::KeyPair) -> Result<Arc<Self>, Error> {
         let compressed_public_key = validator_key.public.compress();
         let info = ValidatorInfo {
             public_key: compressed_public_key,
@@ -118,6 +123,7 @@ impl Validator {
             validator_network,
 
             validator_key,
+            transaction_key,
             timers: Timers::new(),
 
             state: RwLock::new(ValidatorState {
@@ -240,7 +246,7 @@ impl Validator {
         // Therefore we always update here.
         state.view_number = self.blockchain.next_view_number();
 
-        // clear out proposed extrinsics
+        // Clear out proposed extrinsics
         state.proposed_extrinsics.clear();
 
         if state.status == ValidatorStatus::Potential || state.status == ValidatorStatus::Active {
@@ -257,6 +263,37 @@ impl Validator {
             drop(state);
             self.on_slot_change(SlotChange::NextBlock);
         }
+
+        // If we're a parked validator, we signal to unpark automatically.
+        let validator_registry = NetworkInfo::from_network_id(self.blockchain.network_id).validator_registry_address().expect("Albatross consensus always has the address set.");
+
+        if !self.is_parked(validator_registry) {
+            return;
+        }
+
+        let mut recipient = Recipient::new_staking_builder(validator_registry.clone());
+        recipient.unpark_validator(&self.validator_key.public);
+
+        // Send the unpark transaction with a fixed height each epoch in case there's already a pushed unpark transaction.
+        // Note: If the validity window is ever less than an epoch's length, using the last macro block's height would require
+        // handling the case where the last macro block is more blocks away than the validity window inverval, since otherwise
+        // invalid transactions would be created.
+        let validity_start_height = policy::macro_block_before(self.consensus.mempool.current_height());
+
+        let mut tx_builder = TransactionBuilder::new();
+        tx_builder.with_sender(validator_registry.clone())
+            .with_value(Coin::ZERO)
+            .with_network_id(self.blockchain.network_id)
+            .with_validity_start_height(validity_start_height)
+            .with_recipient(recipient.generate().unwrap());
+
+        let mut proof_builder = tx_builder.generate().unwrap().unwrap_signalling();
+        proof_builder.sign_with_validator_key_pair(&self.validator_key);
+        let mut proof_builder = proof_builder.generate().unwrap().unwrap_basic();
+        proof_builder.sign_with_key_pair(&self.transaction_key);
+        let transaction = proof_builder.generate().unwrap();
+
+        self.consensus.mempool.push_transaction(transaction.clone());
     }
 
     fn init_epoch(&self) {
@@ -613,6 +650,18 @@ impl Validator {
 
             // FIXME: Inefficient linear scan.
             contract.active_validators_by_key.contains_key(&public_key)
+        } else {
+            panic!("Validator registry has a wrong account type.");
+        }
+    }
+
+    fn is_parked(&self, validator_registry: &Address) -> bool {
+        let contract = self.blockchain.state().accounts().get(validator_registry, None);
+
+        if let Account::Staking(contract) = contract {
+            let public_key = self.validator_key.public.compress();
+
+            contract.current_epoch_parking.contains(&public_key) || contract.previous_epoch_parking.contains(&public_key)
         } else {
             panic!("Validator registry has a wrong account type.");
         }
