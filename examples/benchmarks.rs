@@ -1,67 +1,80 @@
 #![allow(dead_code)]
 
+use std::borrow::Borrow;
 // For benchmarking
 use std::error::Error;
 
 use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra_core::{One, PrimeField};
-use blake2_rfc::blake2s::Blake2s;
-use nimiq_bls::{big_int_from_bytes_be, KeyPair, SecureGenerate};
-use r1cs_core::{ConstraintSystem, SynthesisError};
-use r1cs_std::test_constraint_system::TestConstraintSystem;
-
 use algebra::mnt6_753::{Fq, FqParameters, G1Affine, G1Projective, G2Projective};
+use algebra_core::{Group, One, PrimeField};
+use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
-use nano_sync::constants::{sum_generator_g1_mnt6, sum_generator_g2_mnt6};
-use nano_sync::rand_gen::generate_random_seed;
-use nano_sync::*;
+use nimiq_bls::{big_int_from_bytes_be, KeyPair, SecureGenerate};
+use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{G1Gadget, G1PreparedGadget, G2Gadget, G2PreparedGadget, PairingGadget};
 use r1cs_std::pairing::PairingGadget as PG;
 use r1cs_std::prelude::{AllocGadget, Boolean, CondSelectGadget, GroupGadget};
+use r1cs_std::test_constraint_system::TestConstraintSystem;
 use r1cs_std::ToBitsGadget;
-use std::borrow::Borrow;
+
+use nano_sync::constants::{sum_generator_g1_mnt6, sum_generator_g2_mnt6};
+use nano_sync::gadgets::mnt4::YToBitGadget;
+use nano_sync::gadgets::{pad_point_bits, reverse_inner_byte_order};
+use nano_sync::rand_gen::generate_random_seed;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Setup keys.
     let key_pair1 = KeyPair::generate_default_csprng();
     let keys = vec![key_pair1.public_key.public_key; 1];
 
-    // Only serialization.
-    println!("Only serialization:");
+    // // Only serialization.
+    // println!("Only serialization:");
+    // let mut cs = TestConstraintSystem::new();
+    // only_serialize_pks(cs.ns(|| "circuit 0"), &keys.clone())?;
+    // println!("Number of constraints: {}", cs.num_constraints());
+    //
+    // // Full serialization, without y-to-bit.
+    // println!("Full serialization:");
+    // let mut cs = TestConstraintSystem::new();
+    // fully_serialize_pks(cs.ns(|| "circuit -1"), &keys.clone())?;
+    // println!("Number of constraints: {}", cs.num_constraints());
+    //
+    // // All Blake2s.
+    // println!("Only Blake2s:");
+    // let mut cs = TestConstraintSystem::new();
+    // only_blake2s_circuit(cs.ns(|| "circuit 1"), &keys.clone())?;
+    // println!("Number of constraints: {}", cs.num_constraints());
+
+    // // Only allocate generators.
+    // println!("Only alloc generators:");
+    // let mut cs = TestConstraintSystem::new();
+    // only_allocate_generators(cs.ns(|| "circuit 69"))?;
+    // println!("Number of constraints: {}", cs.num_constraints());
+
+    // Pedersen without keys.
+    println!("Pure Pedersen:");
     let mut cs = TestConstraintSystem::new();
-    only_serialize_pks(cs.ns(|| "circuit 0"), &keys.clone())?;
+    pedersen_no_keys(cs.ns(|| "circuit 96"))?;
     println!("Number of constraints: {}", cs.num_constraints());
 
-    // Full serialization, without y-to-bit.
-    println!("Full serialization:");
+    // double and add.
+    println!("Double and add:");
     let mut cs = TestConstraintSystem::new();
-    fully_serialize_pks(cs.ns(|| "circuit -1"), &keys.clone())?;
+    double_and_add(cs.ns(|| "circuit 88"))?;
     println!("Number of constraints: {}", cs.num_constraints());
 
-    // All Blake2s.
-    println!("Only Blake2s:");
-    let mut cs = TestConstraintSystem::new();
-    only_blake2s_circuit(cs.ns(|| "circuit 1"), &keys.clone())?;
-    println!("Number of constraints: {}", cs.num_constraints());
-
-    // Only allocate generators.
-    println!("Only alloc generators:");
-    let mut cs = TestConstraintSystem::new();
-    only_allocate_generators(cs.ns(|| "circuit 69"))?;
-    println!("Number of constraints: {}", cs.num_constraints());
-
-    // All Pedersen.
-    println!("Only Pedersen:");
-    let mut cs = TestConstraintSystem::new();
-    only_pedersen_circuit(cs.ns(|| "circuit 2"), &keys.clone())?;
-    println!("Number of constraints: {}", cs.num_constraints());
-
-    // Pairing.
-    println!("Pairing:");
-    let mut cs = TestConstraintSystem::new();
-    pairing_circuit(cs.ns(|| "circuit 3"))?;
-    println!("Number of constraints: {}", cs.num_constraints());
+    // // All Pedersen.
+    // println!("Only Pedersen:");
+    // let mut cs = TestConstraintSystem::new();
+    // only_pedersen_circuit(cs.ns(|| "circuit 2"), &keys.clone())?;
+    // println!("Number of constraints: {}", cs.num_constraints());
+    //
+    // // Pairing.
+    // println!("Pairing:");
+    // let mut cs = TestConstraintSystem::new();
+    // pairing_circuit(cs.ns(|| "circuit 3"))?;
+    // println!("Number of constraints: {}", cs.num_constraints());
 
     Ok(())
 }
@@ -204,6 +217,48 @@ fn only_pedersen_circuit<CS: ConstraintSystem<MNT4Fr>>(
     Ok(())
 }
 
+fn pedersen_no_keys<CS: ConstraintSystem<MNT4Fr>>(mut cs: CS) -> Result<(), SynthesisError> {
+    let mut bits = Vec::new();
+    for i in 0..INPUT_SIZE * 8 {
+        bits.push(Boolean::alloc(
+            cs.ns(|| format!("alloc bit {}", i)),
+            || Ok(true),
+        )?);
+    }
+
+    let sum_generator = sum_generator_g1_mnt6();
+
+    let sum_generator_var = G1Gadget::alloc(cs.ns(|| "sum generator"), || Ok(sum_generator))?;
+
+    let mut result = sum_generator_var.clone();
+
+    let pedersen_generators = setup_pedersen();
+    let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
+    for i in 0..pedersen_generators.len() {
+        pedersen_generators_var.push(G1Gadget::alloc(
+            cs.ns(|| format!("pedersen_generators: generator {}", i)),
+            || Ok(pedersen_generators[i]),
+        )?);
+    }
+
+    for i in 0..bits.len() {
+        // Add the next generator to the current sum.
+        let new_sum = result.add(
+            cs.ns(|| format!("add bit {}", i)),
+            &pedersen_generators_var[i],
+        )?;
+        // If the bit is zero, keep the current sum. If it is one, take the new sum.
+        result = G1Gadget::conditionally_select(
+            &mut cs.ns(|| format!("Conditional Select {}", i)),
+            bits[i].borrow(),
+            &new_sum,
+            &result,
+        )?;
+    }
+
+    Ok(())
+}
+
 fn only_allocate_generators<CS: ConstraintSystem<MNT4Fr>>(
     mut cs: CS,
 ) -> Result<(), SynthesisError> {
@@ -223,9 +278,29 @@ fn only_allocate_generators<CS: ConstraintSystem<MNT4Fr>>(
     Ok(())
 }
 
+fn double_and_add<CS: ConstraintSystem<MNT4Fr>>(mut cs: CS) -> Result<(), SynthesisError> {
+    let pedersen_generators = setup_pedersen();
+
+    let gen_1_var = G1Gadget::alloc(cs.ns(|| "sum generator 1"), || Ok(&pedersen_generators[0]))?;
+
+    let gen_2_var = G1Gadget::alloc(cs.ns(|| "sum generator 2"), || Ok(&pedersen_generators[1]))?;
+
+    let mut bits_var = Vec::new();
+    for i in 0..INPUT_SIZE * 8 {
+        bits_var.push(Boolean::alloc(
+            cs.ns(|| format!("alloc bit {}", i)),
+            || Ok(true),
+        )?);
+    }
+
+    gen_1_var.mul_bits(cs.ns(|| "mutiplication"), &gen_2_var, bits_var.iter())?;
+
+    Ok(())
+}
+
 /// The size of the input to the Pedersen hash, in bytes. It must be know ahead of time in order to
 /// create the vector of generators. We need one generator per bit of input (8 per byte).
-pub const INPUT_SIZE: usize = 285;
+pub const INPUT_SIZE: usize = 94;
 
 /// This is the function for generating the Pedersen hash generators for our specific instance. We
 /// need one generator per each bit of input.

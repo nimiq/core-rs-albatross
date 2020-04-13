@@ -12,7 +12,7 @@ use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::{
     AllocGadget, Boolean, CondSelectGadget, FieldGadget, GroupGadget, UInt32, UInt8,
 };
-use r1cs_std::{Assignment, ToBitsGadget, ToBytesGadget};
+use r1cs_std::{Assignment, ToBitsGadget};
 
 use crate::constants::VALIDATOR_SLOTS;
 use crate::gadgets::{
@@ -231,14 +231,13 @@ impl MacroBlockGadget {
             &blake2s_parameters.parameters(),
         )?;
 
-        // Convert to bytes.
+        // Convert to bits.
         let mut result = Vec::new();
         for i in 0..8 {
-            let chunk = hash[i].to_bytes(&mut cs.ns(|| format!("hash to bytes {}", i)))?;
-            result.extend(chunk);
+            result.extend(hash[i].to_bits_le());
         }
 
-        // Finally feed the bytes into the Pedersen hash gadget.
+        // Finally feed the bits into the Pedersen hash gadget.
         let pedersen_result = PedersenHashGadget::evaluate(
             &mut cs.ns(|| "crh_evaluation"),
             pedersen_generators,

@@ -21,6 +21,5 @@ pub mod rand_gen;
 // - The merger wrapper must have a special condition that makes the proof pass if both input state
 //   hashes are equal. This is necessary for the genesis block. The chain needs to start somewhere.
 // TODO: Optimize the state hashes (and the vks hashes). Right now it won't work with 1024 pks.
-//       - You can use a Pedersen commitment before the Blake2s.
-//       - You can use a windowed Pedersen commitment (different from a Pedersen hash).
+// TODO: Integrate the Pedersen commitment.
 // TODO: Finish the examples.

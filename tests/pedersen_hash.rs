@@ -8,7 +8,7 @@ use rand::RngCore;
 
 use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::mnt4::PedersenHashGadget;
-use nano_sync::primitives::mnt4::{evaluate_pedersen, setup_pedersen};
+use nano_sync::primitives::mnt4::{pedersen_generators, pedersen_hash};
 
 #[test]
 fn pedersen_test() {
@@ -21,11 +21,10 @@ fn pedersen_test() {
     rng.fill_bytes(&mut input);
 
     // Generate the generators for the Pedersen hash.
-    let generators = setup_pedersen();
+    let generators = pedersen_generators();
 
     // Evaluate Pedersen hash using the primitive version.
-    let primitive_out =
-        evaluate_pedersen(generators.clone(), input.to_vec(), sum_generator_g1_mnt6());
+    let primitive_out = pedersen_hash(generators.clone(), input.to_vec(), sum_generator_g1_mnt6());
 
     // Convert the result to a G1Gadget for easier comparison.
     let primitive_out_var =

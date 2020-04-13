@@ -4,7 +4,8 @@ use crypto_primitives::prf::Blake2sWithParameterBlock;
 use nimiq_bls::{KeyPair, PublicKey};
 
 use crate::constants::{sum_generator_g1_mnt6, VALIDATOR_SLOTS};
-use crate::primitives::mnt4::pedersen::{evaluate_pedersen, setup_pedersen};
+use crate::gadgets::bytes_to_bits;
+use crate::primitives::mnt4::pedersen::{pedersen_generators, pedersen_hash};
 
 /// A struct representing a macro block in Albatross.
 #[derive(Clone)]
@@ -115,11 +116,14 @@ impl MacroBlock {
         // Calculate the Blake2s hash.
         let hash = blake2s.evaluate(msg.as_ref());
 
+        // Convert to bits.
+        let bits = bytes_to_bits(hash.as_ref());
+
         // Get the generators for the Pedersen hash.
-        let generators = setup_pedersen();
+        let generators = pedersen_generators(256);
 
         // Calculate the Pedersen hash.
-        let result = evaluate_pedersen(generators, hash, sum_generator_g1_mnt6());
+        let result = pedersen_hash(generators, bits, sum_generator_g1_mnt6());
 
         result
     }

@@ -62,3 +62,15 @@ pub fn reverse_inner_byte_order(data: &[Boolean]) -> Vec<Boolean> {
         .flat_map(|chunk| chunk.iter().rev().cloned())
         .collect::<Vec<Boolean>>()
 }
+
+pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
+    let mut bits = vec![];
+    for i in 0..bytes.len() {
+        let byte = bytes[i];
+        for j in (0..8).rev() {
+            bits.push((byte >> j) & 1 == 1);
+        }
+    }
+
+    bits
+}

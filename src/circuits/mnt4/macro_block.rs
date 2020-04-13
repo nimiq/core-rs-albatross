@@ -9,7 +9,7 @@ use crate::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS,
 };
 use crate::gadgets::{mnt4::MacroBlockGadget, mnt4::StateHashGadget, AllocConstantGadget};
-use crate::primitives::mnt4::{setup_pedersen, MacroBlock};
+use crate::primitives::mnt4::{pedersen_generators, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the macro block circuit. It takes as inputs an initial state hash and SW6Frfinal state hash
@@ -80,7 +80,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &sum_generator_g2_mnt6(),
         )?;
 
-        let pedersen_generators = setup_pedersen();
+        let pedersen_generators = pedersen_generators(256);
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
         for i in 0..256 {
             pedersen_generators_var.push(AllocConstantGadget::alloc_const(
