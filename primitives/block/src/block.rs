@@ -147,10 +147,6 @@ impl Block {
         self.body = None;
         self
     }
-
-    pub fn is_light(&self) -> bool {
-        self.body.is_none()
-    }
 }
 
 impl block_base::Block for Block {
@@ -179,5 +175,9 @@ impl block_base::Block for Block {
 
     fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
         self.body.as_mut().map(|body| &mut body.transactions)
+    }
+
+    fn is_light(&self) -> bool {
+        self.body.is_none()
     }
 }

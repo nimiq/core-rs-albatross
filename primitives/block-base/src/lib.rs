@@ -25,6 +25,8 @@ pub trait Block: Serialize + Deserialize {
     fn transactions(&self) -> Option<&Vec<Transaction>>;
 
     fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>>;
+
+    fn is_light(&self) -> bool;
 }
 
 pub trait BlockHeader: Serialize + Deserialize {

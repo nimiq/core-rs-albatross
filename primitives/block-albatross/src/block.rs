@@ -353,5 +353,11 @@ impl block_base::Block for Block {
     fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
         self.transactions_mut()
     }
-}
 
+    fn is_light(&self) -> bool {
+        match self {
+            Block::Macro(block) => block.extrinsics.is_none(),
+            Block::Micro(block) => block.extrinsics.is_none(),
+        }
+    }
+}
