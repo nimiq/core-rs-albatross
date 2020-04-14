@@ -9,8 +9,8 @@ use rand::RngCore;
 
 use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::bytes_to_bits;
-use nano_sync::gadgets::mnt4::PedersenHashGadget;
-use nano_sync::primitives::mnt4::{pedersen_generators, pedersen_hash};
+use nano_sync::gadgets::mnt4::PedersenCommitmentGadget;
+use nano_sync::primitives::mnt4::{pedersen_commitment, pedersen_generators};
 
 #[test]
 fn pedersen_test() {
@@ -19,15 +19,16 @@ fn pedersen_test() {
 
     // Create random bits.
     let rng = &mut test_rng();
-    let mut bytes = [0u8; 32];
+    let mut bytes = [0u8; 450];
     rng.fill_bytes(&mut bytes);
     let bits = bytes_to_bits(&bytes);
 
-    // Generate the generators for the Pedersen hash.
-    let generators = pedersen_generators(256);
+    // Generate the generators for the Pedersen commitment.
+    let generators = pedersen_generators(3600);
 
-    // Evaluate Pedersen hash using the primitive version.
-    let primitive_out = pedersen_hash(generators.clone(), bits.clone(), sum_generator_g1_mnt6());
+    // Evaluate Pedersen commitment using the primitive version.
+    let primitive_out =
+        pedersen_commitment(generators.clone(), bits.clone(), sum_generator_g1_mnt6());
 
     // Convert the result to a G1Gadget for easier comparison.
     let primitive_out_var =
@@ -35,7 +36,7 @@ fn pedersen_test() {
 
     // Allocate the random bits in the circuit.
     let mut bits_var = vec![];
-    for i in 0..256 {
+    for i in 0..3600 {
         bits_var.push(
             Boolean::alloc(cs.ns(|| format!("allocating input bit {}", i)), || {
                 Ok(&bits[i])
@@ -61,8 +62,8 @@ fn pedersen_test() {
     })
     .unwrap();
 
-    // Evaluate Pedersen hash using the gadget version.
-    let gadget_out = PedersenHashGadget::evaluate(
+    // Evaluate Pedersen commitment using the gadget version.
+    let gadget_out = PedersenCommitmentGadget::evaluate(
         cs.ns(|| "evaluate pedersen gadget"),
         &c_generators,
         &bits_var,

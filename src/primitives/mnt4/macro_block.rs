@@ -1,11 +1,12 @@
 use algebra::mnt6_753::{G1Projective, G2Projective};
 use algebra::ProjectiveCurve;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
-use nimiq_bls::{KeyPair, PublicKey};
+use nimiq_bls::{KeyPair, PublicKey, Signature};
 
 use crate::constants::{sum_generator_g1_mnt6, VALIDATOR_SLOTS};
 use crate::gadgets::bytes_to_bits;
 use crate::primitives::mnt4::pedersen::{pedersen_generators, pedersen_hash};
+use crate::primitives::mnt4::pedersen_commitment;
 
 /// A struct representing a macro block in Albatross.
 #[derive(Clone)]
@@ -83,20 +84,41 @@ impl MacroBlock {
         self.commit_signer_bitmap[signer_id] = true;
     }
 
-    /// This function hashes the macro block and outputs an EC point. Internally, it first hashes using
-    /// the Blake2s to get an output of 256 bits, then we use the Pedersen hash algorithm to transform
-    /// those 256 bits into an EC point.
+    /// A function that calculates the hash for the block from:
+    /// round number || block number || header_hash || public_keys
+    /// where || means concatenation.
+    /// First we use the Pedersen commitment to compress the input. Then we serialize the resulting
+    /// EC point and hash it with the Blake2s hash algorithm, getting an output of 256 bits. This is
+    /// necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
+    /// for the BLS signature scheme. Finally we use the Pedersen hash algorithm on those 256 bits
+    /// to obtain a single EC point.
     pub fn hash(&self, round_number: u8, block_number: u32) -> G1Projective {
-        // Generates the message to be signed from the block like so:
-        // round number || block number || header_hash || public_keys
-        // where || means concatenation.
-        let mut msg = vec![round_number];
-        msg.extend_from_slice(&block_number.to_be_bytes());
-        msg.extend_from_slice(&self.header_hash);
+        // Serialize the input into bits.
+        let mut bytes = vec![round_number];
+        bytes.extend_from_slice(&block_number.to_be_bytes());
+        bytes.extend_from_slice(&self.header_hash);
         for key in self.public_keys.iter() {
             let pk = PublicKey { public_key: *key };
-            msg.extend_from_slice(pk.compress().as_ref());
+            bytes.extend_from_slice(pk.compress().as_ref());
         }
+        let bits = bytes_to_bits(&bytes);
+
+        //Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
+        // division of x/y is (x+y-1)/y.
+        let generators_needed = (bits.len() + 752 - 1) / 752;
+        let generators = pedersen_generators(generators_needed);
+        let sum_generator = sum_generator_g1_mnt6();
+
+        // Calculate the Pedersen commitment.
+        let pedersen_commitment = pedersen_commitment(generators.clone(), bits, sum_generator);
+
+        // Serialize the Pedersen commitment.
+        // TODO: This is a very ugly way of doing this...
+        let sig = Signature {
+            signature: pedersen_commitment,
+        }
+        .compress();
+        let serialized_commitment = sig.as_ref();
 
         // Initialize Blake2s parameters.
         let blake2s = Blake2sWithParameterBlock {
@@ -114,7 +136,7 @@ impl MacroBlock {
         };
 
         // Calculate the Blake2s hash.
-        let hash = blake2s.evaluate(msg.as_ref());
+        let hash = blake2s.evaluate(serialized_commitment);
 
         // Convert to bits.
         let bits = bytes_to_bits(hash.as_ref());

@@ -10,7 +10,7 @@ pub mod rand_gen;
 // TODO: Create the specific instances of the wrapper and merger circuits that we need.
 // - You separate the wrapper into two new circuits: macro block wrapper and merger wrapper.
 // - You create two new types of inputs, the vks_mnt6_hash and the vks_mnt4_hash. Both are Blake2s
-//   hashes, similar to how state hashes work.
+//   hashes, similar to how state commitmentes work.
 // - vks_mnt6_hash contains the verifying keys for the mnt6 circuits (both wrappers). This hash is
 //   only opened in the mnt4 circuits.
 // - vks_mnt4_hash contains the verifying keys for the mnt4 circuits (macro block and merger). This hash is
@@ -20,6 +20,5 @@ pub mod rand_gen;
 // - The macro block receives neither.
 // - The merger wrapper must have a special condition that makes the proof pass if both input state
 //   hashes are equal. This is necessary for the genesis block. The chain needs to start somewhere.
-// TODO: Optimize the state hashes (and the vks hashes). Right now it won't work with 1024 pks.
-// TODO: Integrate the Pedersen commitment.
+// TODO: Optimize the state commitmentes (and the vks hashes). Right now it won't work with 1024 pks.
 // TODO: Finish the examples.

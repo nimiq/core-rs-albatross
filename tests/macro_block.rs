@@ -4,7 +4,7 @@ use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 use nano_sync::constants::{EPOCH_LENGTH, MAX_NON_SIGNERS, MIN_SIGNERS, VALIDATOR_SLOTS};
-use nano_sync::primitives::mnt4::{evaluate_state_hash, MacroBlock};
+use nano_sync::primitives::mnt4::{state_commitment, MacroBlock};
 use nano_sync::MacroBlockCircuit;
 
 // When running tests you are advised to set VALIDATOR_SLOTS in constants.rs to a more manageable number, for example 4.
@@ -20,10 +20,10 @@ fn everything_works() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block with correct prepare and commit sets.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -42,8 +42,8 @@ fn everything_works() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -51,7 +51,7 @@ fn everything_works() {
 }
 
 //#[test]
-fn wrong_initial_state_hash_1() {
+fn wrong_initial_state_commitment_1() {
     // Create inputs.
     let (key_pair1, key_pair2) = setup_keys();
     let previous_keys = vec![key_pair1.public_key.public_key; VALIDATOR_SLOTS];
@@ -60,10 +60,10 @@ fn wrong_initial_state_hash_1() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state, with the wrong block number.
-    let initial_state_hash = evaluate_state_hash(previous_block_number + 1, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number + 1, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block with correct prepare and commit sets.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -82,8 +82,8 @@ fn wrong_initial_state_hash_1() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -91,7 +91,7 @@ fn wrong_initial_state_hash_1() {
 }
 
 //#[test]
-fn wrong_initial_state_hash_2() {
+fn wrong_initial_state_commitment_2() {
     // Create inputs.
     let (key_pair1, key_pair2) = setup_keys();
     let previous_keys = vec![key_pair1.public_key.public_key; VALIDATOR_SLOTS];
@@ -100,10 +100,10 @@ fn wrong_initial_state_hash_2() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state, with the wrong public keys.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &next_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &next_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block with correct prepare and commit sets.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -122,8 +122,8 @@ fn wrong_initial_state_hash_2() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -131,7 +131,7 @@ fn wrong_initial_state_hash_2() {
 }
 
 //#[test]
-fn wrong_final_state_hash_1() {
+fn wrong_final_state_commitment_1() {
     // Create inputs.
     let (key_pair1, key_pair2) = setup_keys();
     let previous_keys = vec![key_pair1.public_key.public_key; VALIDATOR_SLOTS];
@@ -140,10 +140,10 @@ fn wrong_final_state_hash_1() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state, with the wrong block number.
-    let final_state_hash = evaluate_state_hash(next_block_number + 1, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number + 1, &next_keys);
 
     // Create macro block with correct prepare and commit sets.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -162,8 +162,8 @@ fn wrong_final_state_hash_1() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -171,7 +171,7 @@ fn wrong_final_state_hash_1() {
 }
 
 //#[test]
-fn wrong_final_state_hash_2() {
+fn wrong_final_state_commitment_2() {
     // Create inputs.
     let (key_pair1, key_pair2) = setup_keys();
     let previous_keys = vec![key_pair1.public_key.public_key; VALIDATOR_SLOTS];
@@ -180,10 +180,10 @@ fn wrong_final_state_hash_2() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state, with the wrong public keys.
-    let final_state_hash = evaluate_state_hash(next_block_number, &previous_keys);
+    let final_state_commitment = state_commitment(next_block_number, &previous_keys);
 
     // Create macro block with correct prepare and commit sets.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -202,8 +202,8 @@ fn wrong_final_state_hash_2() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -220,10 +220,10 @@ fn too_few_signers_prepare() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, with insufficient signers in the prepare set.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -242,8 +242,8 @@ fn too_few_signers_prepare() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -260,10 +260,10 @@ fn too_few_signers_commit() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, with insufficient signers in the commit set.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -282,8 +282,8 @@ fn too_few_signers_commit() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -300,10 +300,10 @@ fn wrong_key_pair_prepare() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, with a wrong key pair in the prepare set.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -323,8 +323,8 @@ fn wrong_key_pair_prepare() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -341,10 +341,10 @@ fn wrong_key_pair_commit() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, with a wrong key pair in the commit set.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -364,8 +364,8 @@ fn wrong_key_pair_commit() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -382,10 +382,10 @@ fn wrong_signer_id_prepare() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, but we swap two values in the prepare bitmap.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -407,8 +407,8 @@ fn wrong_signer_id_prepare() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -425,10 +425,10 @@ fn wrong_signer_id_commit() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, but we swap two values in the commit bitmap.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -450,8 +450,8 @@ fn wrong_signer_id_commit() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -468,10 +468,10 @@ fn wrong_block_number_prepare() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, but one of the signers uses the wrong block number in the prepare round.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -491,8 +491,8 @@ fn wrong_block_number_prepare() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -509,10 +509,10 @@ fn wrong_block_number_commit() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, but one of the signers uses the wrong block number in the commit round.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -532,8 +532,8 @@ fn wrong_block_number_commit() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -550,10 +550,10 @@ fn mismatched_sets() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block, with mismatched prepare and commit sets. Note that not enough signers signed
     // both the prepare and commit rounds, that's why it's invalid.
@@ -573,8 +573,8 @@ fn mismatched_sets() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -591,10 +591,10 @@ fn wrong_header_hash() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -616,8 +616,8 @@ fn wrong_header_hash() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -634,10 +634,10 @@ fn wrong_public_keys() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -659,8 +659,8 @@ fn wrong_public_keys() {
         previous_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -677,10 +677,10 @@ fn wrong_previous_keys() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys.clone());
@@ -699,8 +699,8 @@ fn wrong_previous_keys() {
         next_keys,
         previous_block_number,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 
@@ -717,10 +717,10 @@ fn wrong_block_number() {
     let next_block_number = previous_block_number + EPOCH_LENGTH;
 
     // Create initial state.
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, &previous_keys);
 
     // Create final state.
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, &next_keys);
 
     // Create macro block.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -739,8 +739,8 @@ fn wrong_block_number() {
         previous_keys,
         0,
         macro_block,
-        initial_state_hash,
-        final_state_hash,
+        initial_state_commitment,
+        final_state_commitment,
     );
     c.generate_constraints(&mut test_cs).unwrap();
 

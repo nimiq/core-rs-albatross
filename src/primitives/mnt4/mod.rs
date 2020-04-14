@@ -3,8 +3,8 @@
 
 pub use macro_block::*;
 pub use pedersen::*;
-pub use state_hash::*;
+pub use state_commitment::*;
 
 pub mod macro_block;
 pub mod pedersen;
-pub mod state_hash;
+pub mod state_commitment;

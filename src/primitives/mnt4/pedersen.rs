@@ -6,10 +6,6 @@ use nimiq_bls::big_int_from_bytes_be;
 
 use crate::rand_gen::generate_random_seed;
 
-/// The size of the input to the Pedersen hash, in bytes. It must be know ahead of time in order to
-/// create the vector of generators. We need one generator per bit of input (8 per byte).
-pub const INPUT_SIZE: usize = 32;
-
 /// This is the function for creating generators in the G1 group for the MNT4-753 curve. These
 /// generators are meant to be use for the Pedersen hash and the Pedersen commitment functions.
 pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
@@ -101,7 +97,8 @@ pub fn pedersen_hash(
     input: Vec<bool>,
     sum_generator: G1Projective,
 ) -> G1Projective {
-    assert_eq!(generators.len(), input.len());
+    // Verify that we have enough generators for the input bits.
+    assert!(generators.len() >= input.len());
 
     // Initialize the sum to the generator. Normally it would be zero, but this is necessary because
     // of some complications in the PedersenHashGadget.

@@ -12,10 +12,10 @@ fn everything_works() {
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -25,7 +25,8 @@ fn everything_works() {
     let proof = create_random_proof(dummy_circuit, &parameters, rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -41,9 +42,9 @@ fn everything_works() {
         other_proof,
         parameters.vk,
         other_parameters.vk,
-        state_hash.clone(),
-        state_hash.clone(),
-        state_hash,
+        state_commitment.clone(),
+        state_commitment.clone(),
+        state_commitment,
     );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
@@ -51,16 +52,16 @@ fn everything_works() {
 }
 
 #[test]
-fn different_state_hashes() {
+fn different_state_commitmentes() {
     // Initialize RNG.
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
-    let other_state_hash: Vec<u8> = vec![1; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
+    let other_state_commitment: Vec<u8> = vec![1; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -70,7 +71,8 @@ fn different_state_hashes() {
     let proof = create_random_proof(dummy_circuit, &parameters, rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -86,9 +88,9 @@ fn different_state_hashes() {
         other_proof,
         parameters.vk,
         other_parameters.vk,
-        state_hash.clone(),
-        state_hash,
-        other_state_hash,
+        state_commitment.clone(),
+        state_commitment,
+        other_state_commitment,
     );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
@@ -96,16 +98,16 @@ fn different_state_hashes() {
 }
 
 #[test]
-fn wrong_intermediate_state_hash() {
+fn wrong_intermediate_state_commitment() {
     // Initialize RNG.
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
-    let other_state_hash: Vec<u8> = vec![1; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
+    let other_state_commitment: Vec<u8> = vec![1; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -115,7 +117,8 @@ fn wrong_intermediate_state_hash() {
     let proof = create_random_proof(dummy_circuit, &parameters, rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -131,9 +134,9 @@ fn wrong_intermediate_state_hash() {
         other_proof,
         parameters.vk,
         other_parameters.vk,
-        other_state_hash,
-        state_hash.clone(),
-        state_hash,
+        other_state_commitment,
+        state_commitment.clone(),
+        state_commitment,
     );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
@@ -146,10 +149,10 @@ fn wrong_first_verifying_key() {
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -159,7 +162,8 @@ fn wrong_first_verifying_key() {
     let proof = create_random_proof(dummy_circuit, &parameters, rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -175,9 +179,9 @@ fn wrong_first_verifying_key() {
         other_proof,
         other_parameters.clone().vk,
         other_parameters.vk,
-        state_hash.clone(),
-        state_hash.clone(),
-        state_hash,
+        state_commitment.clone(),
+        state_commitment.clone(),
+        state_commitment,
     );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
@@ -190,10 +194,10 @@ fn wrong_second_verifying_key() {
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -203,7 +207,8 @@ fn wrong_second_verifying_key() {
     let proof = create_random_proof(dummy_circuit, &parameters, rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -219,9 +224,9 @@ fn wrong_second_verifying_key() {
         other_proof,
         parameters.clone().vk,
         parameters.vk,
-        state_hash.clone(),
-        state_hash.clone(),
-        state_hash,
+        state_commitment.clone(),
+        state_commitment.clone(),
+        state_commitment,
     );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
@@ -234,17 +239,18 @@ fn wrong_first_proof() {
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
         generate_random_parameters::<Bls12_377, _, _>(dummy_circuit.clone(), rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -260,9 +266,9 @@ fn wrong_first_proof() {
         other_proof,
         parameters.vk,
         other_parameters.vk,
-        state_hash.clone(),
-        state_hash.clone(),
-        state_hash,
+        state_commitment.clone(),
+        state_commitment.clone(),
+        state_commitment,
     );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
@@ -275,10 +281,10 @@ fn wrong_second_proof() {
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -288,7 +294,8 @@ fn wrong_second_proof() {
     let proof = create_random_proof(dummy_circuit, &parameters, rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -301,9 +308,9 @@ fn wrong_second_proof() {
         proof,
         parameters.vk,
         other_parameters.vk,
-        state_hash.clone(),
-        state_hash.clone(),
-        state_hash,
+        state_commitment.clone(),
+        state_commitment.clone(),
+        state_commitment,
     );
     circuit.generate_constraints(&mut test_cs).unwrap();
 

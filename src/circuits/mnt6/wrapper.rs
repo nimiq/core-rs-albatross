@@ -20,7 +20,7 @@ type TheProofGadget = ProofGadget<MNT4_753, Fq, PairingGadget>;
 type TheVkGadget = VerifyingKeyGadget<MNT4_753, Fq, PairingGadget>;
 type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, Fq, PairingGadget>;
 
-/// This is the wrapper circuit. It takes as inputs an initial state hash, a final state hash and a
+/// This is the wrapper circuit. It takes as inputs an initial state commitment, a final state commitment and a
 /// verifying key and it produces a proof that there exists a valid SNARK proof that transforms the
 /// initial state into the final state.
 /// The circuit is basically only a SNARK verifier. Its use is just to change the elliptic curve
@@ -35,22 +35,22 @@ pub struct WrapperCircuit {
     verifying_key: VerifyingKey<MNT4_753>,
 
     // Public inputs
-    initial_state_hash: Vec<u8>,
-    final_state_hash: Vec<u8>,
+    initial_state_commitment: Vec<u8>,
+    final_state_commitment: Vec<u8>,
 }
 
 impl WrapperCircuit {
     pub fn new(
         proof: Proof<MNT4_753>,
         verifying_key: VerifyingKey<MNT4_753>,
-        initial_state_hash: Vec<u8>,
-        final_state_hash: Vec<u8>,
+        initial_state_commitment: Vec<u8>,
+        final_state_commitment: Vec<u8>,
     ) -> Self {
         Self {
             proof,
             verifying_key,
-            initial_state_hash,
-            final_state_hash,
+            initial_state_commitment,
+            final_state_commitment,
         }
     }
 }
@@ -73,19 +73,21 @@ impl ConstraintSynthesizer<MNT6Fr> for WrapperCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let initial_state_hash_var = UInt8::alloc_input_vec(
-            cs.ns(|| "initial state hash"),
-            self.initial_state_hash.as_ref(),
+        let initial_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "initial state commitment"),
+            self.initial_state_commitment.as_ref(),
         )?;
 
-        let final_state_hash_var =
-            UInt8::alloc_input_vec(cs.ns(|| "final state hash"), self.final_state_hash.as_ref())?;
+        let final_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "final state commitment"),
+            self.final_state_commitment.as_ref(),
+        )?;
 
         // Verify the ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify ZK proof" });
         let mut proof_inputs = vec![];
-        proof_inputs.push(initial_state_hash_var);
-        proof_inputs.push(final_state_hash_var);
+        proof_inputs.push(initial_state_commitment_var);
+        proof_inputs.push(final_state_commitment_var);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify groth16 proof"),

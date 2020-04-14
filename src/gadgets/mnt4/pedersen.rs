@@ -25,8 +25,8 @@ impl PedersenHashGadget {
         input: &Vec<Boolean>,
         sum_generator: &G1Gadget,
     ) -> Result<G1Gadget, SynthesisError> {
-        // Verify that we have the same number of generators and input bits.
-        assert_eq!(input.len(), generators.len());
+        // Verify that we have enough generators for the input bits.
+        assert!(generators.len() >= input.len());
 
         // Initiate the result with the sum generator. We can't initiate it with the neutral element
         // because that would result in an error. The addition function for EC points is incomplete

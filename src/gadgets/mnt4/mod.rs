@@ -4,11 +4,11 @@
 pub use check_sig::*;
 pub use macro_block::*;
 pub use pedersen::*;
-pub use state_hash::*;
+pub use state_commitment::*;
 pub use y_to_bit::*;
 
 mod check_sig;
 mod macro_block;
 mod pedersen;
-mod state_hash;
+mod state_commitment;
 mod y_to_bit;

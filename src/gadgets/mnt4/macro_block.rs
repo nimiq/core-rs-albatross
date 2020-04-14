@@ -15,6 +15,7 @@ use r1cs_std::prelude::{
 use r1cs_std::{Assignment, ToBitsGadget};
 
 use crate::constants::VALIDATOR_SLOTS;
+use crate::gadgets::mnt4::PedersenCommitmentGadget;
 use crate::gadgets::{
     mnt4::CheckSigGadget, mnt4::PedersenHashGadget, mnt4::YToBitGadget, pad_point_bits,
     reverse_inner_byte_order,
@@ -163,8 +164,11 @@ impl MacroBlockGadget {
     /// A function that calculates the hash for the block from:
     /// round number || block number || header_hash || public_keys
     /// where || means concatenation.
-    /// First we hash with the Blake2s hash algorithm, getting an output of 256 bits. Then we use
-    /// the Pedersen hash algorithm on those 256 bits to obtain a single EC point.
+    /// First we use the Pedersen commitment to compress the input. Then we serialize the resulting
+    /// EC point and hash it with the Blake2s hash algorithm, getting an output of 256 bits. This is
+    /// necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
+    /// for the BLS signature scheme. Finally we use the Pedersen hash algorithm on those 256 bits
+    /// to obtain a single EC point.
     pub fn hash<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         &self,
         mut cs: CS,
@@ -206,8 +210,26 @@ impl MacroBlockGadget {
             bits.extend(serialized_bits);
         }
 
+        // Calculate the Pedersen commitment.
+        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
+            cs.ns(|| "pedersen commitment"),
+            pedersen_generators,
+            &bits,
+            &sum_generator_g1,
+        )?;
+
+        // Serialize the Pedersen commitment.
+        let x_bits = pedersen_commitment
+            .x
+            .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
+        let greatest_bit = YToBitGadget::y_to_bit_g1(
+            cs.ns(|| "y to bit: pedersen commitment"),
+            &pedersen_commitment,
+        )?;
+        let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
+
         // Prepare order of booleans for blake2s (it doesn't expect Big-Endian).
-        let bits = reverse_inner_byte_order(&bits);
+        let serialized_bits = reverse_inner_byte_order(&serialized_bits);
 
         // Initialize Blake2s parameters.
         let blake2s_parameters = Blake2sWithParameterBlock {
@@ -227,7 +249,7 @@ impl MacroBlockGadget {
         // Calculate Blake2s hash.
         let hash = blake2s_gadget_with_parameters(
             cs.ns(|| "blake2s hash from serialized bits"),
-            &bits,
+            &serialized_bits,
             &blake2s_parameters.parameters(),
         )?;
 

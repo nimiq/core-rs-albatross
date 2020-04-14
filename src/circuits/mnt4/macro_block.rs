@@ -8,11 +8,11 @@ use r1cs_std::prelude::*;
 use crate::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS,
 };
-use crate::gadgets::{mnt4::MacroBlockGadget, mnt4::StateHashGadget, AllocConstantGadget};
+use crate::gadgets::{mnt4::MacroBlockGadget, mnt4::StateCommitmentGadget, AllocConstantGadget};
 use crate::primitives::mnt4::{pedersen_generators, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
-/// This is the macro block circuit. It takes as inputs an initial state hash and SW6Frfinal state hash
+/// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the initial state
 /// into the final state.
 /// Since the state is composed only of the block number and the public keys of the current validator
@@ -26,8 +26,8 @@ pub struct MacroBlockCircuit {
     block: MacroBlock,
 
     // Public inputs
-    initial_state_hash: Vec<u8>,
-    final_state_hash: Vec<u8>,
+    initial_state_commitment: Vec<u8>,
+    final_state_commitment: Vec<u8>,
 }
 
 impl MacroBlockCircuit {
@@ -35,15 +35,15 @@ impl MacroBlockCircuit {
         prev_keys: Vec<G2Projective>,
         block_number: u32,
         block: MacroBlock,
-        initial_state_hash: Vec<u8>,
-        final_state_hash: Vec<u8>,
+        initial_state_commitment: Vec<u8>,
+        final_state_commitment: Vec<u8>,
     ) -> Self {
         Self {
             prev_keys,
             block_number,
             block,
-            initial_state_hash,
-            final_state_hash,
+            initial_state_commitment,
+            final_state_commitment,
         }
     }
 }
@@ -107,28 +107,37 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let initial_state_hash_var = UInt8::alloc_input_vec(
-            cs.ns(|| "initial state hash"),
-            self.initial_state_hash.as_ref(),
+        let initial_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "initial state commitment"),
+            self.initial_state_commitment.as_ref(),
         )?;
 
-        let final_state_hash_var =
-            UInt8::alloc_input_vec(cs.ns(|| "final state hash"), self.final_state_hash.as_ref())?;
+        let final_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "final state commitment"),
+            self.final_state_commitment.as_ref(),
+        )?;
 
-        // Verifying equality for initial state hash. It just checks that the private inputs are correct
-        // by hashing them and comparing the result with the initial state hash given as a public input.
-        next_cost_analysis!(cs, cost, || { "Verify initial state hash" });
+        // Verifying equality for initial state commitment. It just checks that the private inputs are correct
+        // by hashing them and comparing the result with the initial state commitment given as a public input.
+        next_cost_analysis!(cs, cost, || { "Verify initial state commitment" });
 
-        let reference_hash = StateHashGadget::evaluate(
-            cs.ns(|| "reference initial state hash"),
+        let reference_commitment = StateCommitmentGadget::evaluate(
+            cs.ns(|| "reference initial state commitment"),
             &block_number_var,
             &prev_keys_var,
+            &pedersen_generators_var,
+            &sum_generator_g1_var,
         )?;
 
         for i in 0..32 {
-            initial_state_hash_var[i].enforce_equal(
-                cs.ns(|| format!("initial state hash == reference hash: byte {}", i)),
-                &reference_hash[i],
+            initial_state_commitment_var[i].enforce_equal(
+                cs.ns(|| {
+                    format!(
+                        "initial state commitment == reference commitment: byte {}",
+                        i
+                    )
+                }),
+                &reference_commitment[i],
             )?;
         }
 
@@ -153,20 +162,22 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &[block_number_var, epoch_length_var.clone()],
         )?;
 
-        // Verifying equality for final state hash. It just checks that the internal results are
-        // indeed equal to the final state hash given as a public input.
-        next_cost_analysis!(cs, cost, || { "Verify final state hash" });
+        // Verifying equality for final state commitment. It just checks that the internal results are
+        // indeed equal to the final state commitment given as a public input.
+        next_cost_analysis!(cs, cost, || { "Verify final state commitment" });
 
-        let reference_hash = StateHashGadget::evaluate(
-            cs.ns(|| "reference final state hash"),
+        let reference_commitment = StateCommitmentGadget::evaluate(
+            cs.ns(|| "reference final state commitment"),
             &new_block_number_var,
             &block_var.public_keys,
+            &pedersen_generators_var,
+            &sum_generator_g1_var,
         )?;
 
         for i in 0..32 {
-            final_state_hash_var[i].enforce_equal(
-                cs.ns(|| format!("final state hash == reference hash: byte {}", i)),
-                &reference_hash[i],
+            final_state_commitment_var[i].enforce_equal(
+                cs.ns(|| format!("final state commitment == reference commitment: byte {}", i)),
+                &reference_commitment[i],
             )?;
         }
 

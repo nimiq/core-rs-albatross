@@ -17,7 +17,7 @@ use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 use nano_sync::circuits::mnt4::MacroBlockCircuit;
 use nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
-use nano_sync::primitives::mnt4::{evaluate_state_hash, MacroBlock};
+use nano_sync::primitives::mnt4::{state_commitment, MacroBlock};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use
@@ -36,12 +36,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Create initial state.
     let previous_keys = vec![key_pair1.public_key.public_key; VALIDATOR_SLOTS];
     let previous_block_number = 1;
-    let initial_state_hash = evaluate_state_hash(previous_block_number, &previous_keys);
+    let initial_state_commitment = state_commitment(previous_block_number, previous_keys.clone());
 
     // Create final state.
     let next_keys = vec![key_pair2.public_key.public_key; VALIDATOR_SLOTS];
     let next_block_number = previous_block_number + EPOCH_LENGTH;
-    let final_state_hash = evaluate_state_hash(next_block_number, &next_keys);
+    let final_state_commitment = state_commitment(next_block_number, next_keys.clone());
 
     // Create macro block with correct prepare and commit sets.
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
@@ -60,8 +60,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         previous_keys.clone(),
         previous_block_number,
         macro_block.clone(),
-        initial_state_hash.clone(),
-        final_state_hash.clone(),
+        initial_state_commitment.clone(),
+        final_state_commitment.clone(),
     );
     c.generate_constraints(&mut test_cs).unwrap();
     println!("Number of constraints: {}", test_cs.num_constraints());
@@ -79,8 +79,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             previous_keys.clone(),
             previous_block_number,
             macro_block.clone(),
-            initial_state_hash.clone(),
-            final_state_hash.clone(),
+            initial_state_commitment.clone(),
+            final_state_commitment.clone(),
         );
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
@@ -94,8 +94,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             previous_keys.clone(),
             previous_block_number,
             macro_block.clone(),
-            initial_state_hash.clone(),
-            final_state_hash.clone(),
+            initial_state_commitment.clone(),
+            final_state_commitment.clone(),
         );
         create_random_proof(c, &params, rng)?
     };
@@ -104,9 +104,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Prepare inputs for verification.
     let mut inputs: Vec<MNT4Fr> = vec![];
-    let field_elements: Vec<MNT4Fr> = initial_state_hash.to_field_elements().unwrap();
+    let field_elements: Vec<MNT4Fr> = initial_state_commitment.to_field_elements().unwrap();
     inputs.extend(field_elements);
-    let field_elements: Vec<MNT4Fr> = final_state_hash.to_field_elements().unwrap();
+    let field_elements: Vec<MNT4Fr> = final_state_commitment.to_field_elements().unwrap();
     inputs.extend(field_elements);
     let pvk = prepare_verifying_key(&params.vk);
 

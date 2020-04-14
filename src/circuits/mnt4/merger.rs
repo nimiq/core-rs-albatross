@@ -21,7 +21,7 @@ type TheProofGadget = ProofGadget<MNT6_753, Fq, PairingGadget>;
 type TheVkGadget = VerifyingKeyGadget<MNT6_753, Fq, PairingGadget>;
 type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
 
-/// This is the merger circuit. It takes as inputs an initial state hash, a final state hash and a
+/// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment and a
 /// verifying key and it produces a proof that there exists two valid SNARK proofs that transforms the
 /// initial state into the final state passing through some intermediate state.
 /// The circuit is composed of two SNARK verifiers in a row. It's used to merge two SNARK proofs
@@ -37,11 +37,11 @@ pub struct MergerCircuit {
     proof_2: Proof<MNT6_753>,
     verifying_key_1: VerifyingKey<MNT6_753>,
     verifying_key_2: VerifyingKey<MNT6_753>,
-    intermediate_state_hash: Vec<u8>,
+    intermediate_state_commitment: Vec<u8>,
 
     // Public inputs
-    initial_state_hash: Vec<u8>,
-    final_state_hash: Vec<u8>,
+    initial_state_commitment: Vec<u8>,
+    final_state_commitment: Vec<u8>,
 }
 
 impl MergerCircuit {
@@ -50,18 +50,18 @@ impl MergerCircuit {
         proof_2: Proof<MNT6_753>,
         verifying_key_1: VerifyingKey<MNT6_753>,
         verifying_key_2: VerifyingKey<MNT6_753>,
-        intermediate_state_hash: Vec<u8>,
-        initial_state_hash: Vec<u8>,
-        final_state_hash: Vec<u8>,
+        intermediate_state_commitment: Vec<u8>,
+        initial_state_commitment: Vec<u8>,
+        final_state_commitment: Vec<u8>,
     ) -> Self {
         Self {
             proof_1,
             proof_2,
             verifying_key_1,
             verifying_key_2,
-            intermediate_state_hash,
-            initial_state_hash,
-            final_state_hash,
+            intermediate_state_commitment,
+            initial_state_commitment,
+            final_state_commitment,
         }
     }
 }
@@ -82,9 +82,9 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         let proof_2_var =
             TheProofGadget::alloc(cs.ns(|| "alloc second proof"), || Ok(&self.proof_2))?;
 
-        let intermediate_state_hash_var = UInt8::alloc_vec(
-            cs.ns(|| "intermediate state hash"),
-            self.intermediate_state_hash.as_ref(),
+        let intermediate_state_commitment_var = UInt8::alloc_vec(
+            cs.ns(|| "intermediate state commitment"),
+            self.intermediate_state_commitment.as_ref(),
         )?;
 
         let verifying_key_var_1 =
@@ -100,19 +100,21 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
-        let initial_state_hash_var = UInt8::alloc_input_vec(
-            cs.ns(|| "initial state hash"),
-            self.initial_state_hash.as_ref(),
+        let initial_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "initial state commitment"),
+            self.initial_state_commitment.as_ref(),
         )?;
 
-        let final_state_hash_var =
-            UInt8::alloc_input_vec(cs.ns(|| "final state hash"), self.final_state_hash.as_ref())?;
+        let final_state_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "final state commitment"),
+            self.final_state_commitment.as_ref(),
+        )?;
 
         // Verify the first ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify first ZK proof" });
         let mut proof_inputs = vec![];
-        proof_inputs.push(initial_state_hash_var);
-        proof_inputs.push(intermediate_state_hash_var.clone());
+        proof_inputs.push(initial_state_commitment_var);
+        proof_inputs.push(intermediate_state_commitment_var.clone());
 
         <TheVerifierGadget as NIZKVerifierGadget<FirstProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify first groth16 proof"),
@@ -124,8 +126,8 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // Verify the second ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify second ZK proof" });
         let mut proof_inputs = vec![];
-        proof_inputs.push(intermediate_state_hash_var);
-        proof_inputs.push(final_state_hash_var);
+        proof_inputs.push(intermediate_state_commitment_var);
+        proof_inputs.push(final_state_commitment_var);
 
         <TheVerifierGadget as NIZKVerifierGadget<SecondProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify second groth16 proof"),

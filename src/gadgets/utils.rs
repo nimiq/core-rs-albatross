@@ -63,6 +63,7 @@ pub fn reverse_inner_byte_order(data: &[Boolean]) -> Vec<Boolean> {
         .collect::<Vec<Boolean>>()
 }
 
+/// Transforms a vector of bytes into the corresponding vector of bits (booleans).
 pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     let mut bits = vec![];
     for i in 0..bytes.len() {

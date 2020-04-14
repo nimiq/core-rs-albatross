@@ -12,10 +12,10 @@ fn everything_works() {
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -26,23 +26,28 @@ fn everything_works() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = WrapperCircuit::new(proof, parameters.vk, state_hash.clone(), state_hash);
+    let circuit = WrapperCircuit::new(
+        proof,
+        parameters.vk,
+        state_commitment.clone(),
+        state_commitment,
+    );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(test_cs.is_satisfied())
 }
 
 #[test]
-fn different_state_hashes() {
+fn different_state_commitmentes() {
     // Initialize RNG.
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
-    let other_state_hash: Vec<u8> = vec![1; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
+    let other_state_commitment: Vec<u8> = vec![1; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -53,7 +58,12 @@ fn different_state_hashes() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = WrapperCircuit::new(proof, parameters.vk, state_hash.clone(), other_state_hash);
+    let circuit = WrapperCircuit::new(
+        proof,
+        parameters.vk,
+        state_commitment.clone(),
+        other_state_commitment,
+    );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -65,10 +75,10 @@ fn wrong_verifying_key() {
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
@@ -78,7 +88,8 @@ fn wrong_verifying_key() {
     let proof = create_random_proof(dummy_circuit, &parameters, rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -86,7 +97,12 @@ fn wrong_verifying_key() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = WrapperCircuit::new(proof, other_parameters.vk, state_hash.clone(), state_hash);
+    let circuit = WrapperCircuit::new(
+        proof,
+        other_parameters.vk,
+        state_commitment.clone(),
+        state_commitment,
+    );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
@@ -98,17 +114,18 @@ fn wrong_proof() {
     let rng = &mut test_rng();
 
     // Create public input.
-    let state_hash: Vec<u8> = vec![0; 2];
+    let state_commitment: Vec<u8> = vec![0; 2];
 
     // Create dummy circuit.
-    let dummy_circuit = DummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let dummy_circuit = DummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the dummy circuit.
     let parameters =
         generate_random_parameters::<Bls12_377, _, _>(dummy_circuit.clone(), rng).unwrap();
 
     // Create other dummy circuit.
-    let other_dummy_circuit = OtherDummyCircuit::new(state_hash.clone(), state_hash.clone());
+    let other_dummy_circuit =
+        OtherDummyCircuit::new(state_commitment.clone(), state_commitment.clone());
 
     // Generate parameters for the other dummy circuit.
     let other_parameters =
@@ -119,7 +136,12 @@ fn wrong_proof() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = WrapperCircuit::new(other_proof, parameters.vk, state_hash.clone(), state_hash);
+    let circuit = WrapperCircuit::new(
+        other_proof,
+        parameters.vk,
+        state_commitment.clone(),
+        state_commitment,
+    );
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied())
