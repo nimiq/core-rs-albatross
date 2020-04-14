@@ -52,7 +52,7 @@ lazy_static! {
     ];
 }
 
-pub const DEFAULT_LEVEL: LevelFilter = LevelFilter::Warn;
+pub const DEFAULT_LEVEL: LevelFilter = LevelFilter::Info;
 
 /// Retrieve and set max module width.
 fn max_module_width(target: &str) -> usize {
