@@ -1,13 +1,12 @@
 use std::convert::TryInto;
 
+#[cfg(feature = "coin")]
+use crate::coin::Coin;
+use fixed_unsigned::types::FixedUnsigned10;
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use num_traits::pow;
 use parking_lot::RwLock;
-#[cfg(feature = "coin")]
-use crate::coin::Coin;
-use fixed_unsigned::types::FixedUnsigned10;
-
 
 lazy_static! {
     /// The highest (easiest) block PoW target.
@@ -103,9 +102,10 @@ fn compute_block_reward(current_supply: u64, block_height: u32) -> u64 {
 pub fn block_reward_at(block_height: u32) -> Coin {
     assert!(block_height >= 1, "block_height must be >= 1");
     let current_supply = supply_after(block_height - 1);
-    compute_block_reward(current_supply, block_height).try_into().unwrap()
+    compute_block_reward(current_supply, block_height)
+        .try_into()
+        .unwrap()
 }
-
 
 /* Albatross */
 
@@ -115,9 +115,11 @@ pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.
 /// Number of available slots
 pub const SLOTS: u16 = 512;
 
-/// ceil(2/3) of active validators
-// (2 * n + 3) / 3 = ceil(2f + 1) where n = 3f + 1
-pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3) / 3;
+/// Calculates ceil(2 * SLOTS / 3) which is the minimum number of validators necessary to produce a
+/// macro block, a view change and other actions.   
+/// We use the following formula for the ceiling division:
+/// ceil(x/y) = (x+y-1)/y
+pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3 - 1) / 3;
 
 // Length of epoch including macro block
 pub const EPOCH_LENGTH: u32 = 128;
@@ -243,17 +245,17 @@ mod tests {
 
     #[test]
     fn it_correctly_computes_macro_block_position() {
-        assert_eq!( is_macro_block_at(0), true);
+        assert_eq!(is_macro_block_at(0), true);
         assert_eq!(!is_micro_block_at(0), true);
-        assert_eq!( is_macro_block_at(1), false);
+        assert_eq!(is_macro_block_at(1), false);
         assert_eq!(!is_micro_block_at(1), false);
-        assert_eq!( is_macro_block_at(2), false);
+        assert_eq!(is_macro_block_at(2), false);
         assert_eq!(!is_micro_block_at(2), false);
-        assert_eq!( is_macro_block_at(127), false);
+        assert_eq!(is_macro_block_at(127), false);
         assert_eq!(!is_micro_block_at(127), false);
-        assert_eq!( is_macro_block_at(128), true);
+        assert_eq!(is_macro_block_at(128), true);
         assert_eq!(!is_micro_block_at(128), true);
-        assert_eq!( is_macro_block_at(129), false);
+        assert_eq!(is_macro_block_at(129), false);
         assert_eq!(!is_micro_block_at(129), false);
     }
 
