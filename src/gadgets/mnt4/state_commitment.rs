@@ -5,8 +5,8 @@ use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
 use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
 use r1cs_std::ToBitsGadget;
 
-use crate::gadgets::mnt4::PedersenCommitmentGadget;
-use crate::gadgets::{mnt4::YToBitGadget, pad_point_bits};
+use crate::gadgets::mnt4::{PedersenCommitmentGadget, YToBitGadget};
+use crate::utils::pad_point_bits;
 
 /// This function is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the public_keys. We calculate it by first

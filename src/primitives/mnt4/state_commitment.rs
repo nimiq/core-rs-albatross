@@ -1,9 +1,8 @@
 use algebra::mnt6_753::G2Projective;
-use nimiq_bls::{PublicKey, Signature};
 
 use crate::constants::sum_generator_g1_mnt6;
-use crate::gadgets::bytes_to_bits;
 use crate::primitives::mnt4::{pedersen_commitment, pedersen_generators};
+use crate::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// This function is meant to calculate the "state commitment" off-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the public_keys. We calculate it by first
@@ -14,9 +13,8 @@ pub fn state_commitment(block_number: u32, public_keys: Vec<G2Projective>) -> Ve
     // Serialize the state into bits.
     let mut bytes: Vec<u8> = vec![];
     bytes.extend_from_slice(&block_number.to_be_bytes());
-    for key in public_keys.iter() {
-        let pk = PublicKey { public_key: *key };
-        bytes.extend_from_slice(pk.compress().as_ref());
+    for i in 0..public_keys.len() {
+        bytes.extend_from_slice(serialize_g2_mnt6(public_keys[i]).as_ref());
     }
     let bits = bytes_to_bits(&bytes);
 
@@ -30,9 +28,6 @@ pub fn state_commitment(block_number: u32, public_keys: Vec<G2Projective>) -> Ve
     let pedersen_commitment = pedersen_commitment(generators, bits, sum_generator);
 
     // Serialize the Pedersen commitment.
-    // TODO: This is a very ugly way of doing this...
-    let sig = Signature {
-        signature: pedersen_commitment,
-    };
-    Vec::from(sig.compress().as_ref())
+    let bytes = serialize_g1_mnt6(pedersen_commitment);
+    Vec::from(bytes.as_ref())
 }

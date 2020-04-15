@@ -4,9 +4,8 @@ use crypto_primitives::prf::Blake2sWithParameterBlock;
 use nimiq_bls::{KeyPair, PublicKey, Signature};
 
 use crate::constants::{sum_generator_g1_mnt6, VALIDATOR_SLOTS};
-use crate::gadgets::bytes_to_bits;
-use crate::primitives::mnt4::pedersen::{pedersen_generators, pedersen_hash};
-use crate::primitives::mnt4::pedersen_commitment;
+use crate::primitives::mnt4::{pedersen_commitment, pedersen_generators, pedersen_hash};
+use crate::utils::bytes_to_bits;
 
 /// A struct representing a macro block in Albatross.
 #[derive(Clone)]

@@ -3,7 +3,7 @@ use std::ops::Neg;
 use algebra::{mnt4_753::Fr as MNT4Fr, mnt6_753::Fq, One, PrimeField};
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::boolean::Boolean;
-use r1cs_std::eq::{ConditionalEqGadget, ConditionalOrEqualsGadget, EqGadget};
+use r1cs_std::eq::EqGadget;
 use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, FieldGadget};
 use r1cs_std::select::CondSelectGadget;
@@ -222,7 +222,7 @@ impl YToBitGadget {
             &computed_inner_y_bit,
             &y_c2_bit,
         )?;
-        y_bit.conditional_enforce_equal(cs.ns(|| "check y bit"), &computed_y_bit)?;
+        y_bit.enforce_equal(cs.ns(|| "check y bit"), &computed_y_bit)?;
 
         Ok(y_bit)
     }

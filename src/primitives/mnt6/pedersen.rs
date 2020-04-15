@@ -1,4 +1,4 @@
-use algebra::mnt6_753::{Fq, G1Affine, G1Projective};
+use algebra::mnt4_753::{Fq, G1Affine, G1Projective};
 use algebra_core::{Group, One, PrimeField};
 use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
@@ -6,7 +6,7 @@ use nimiq_bls::big_int_from_bytes_be;
 
 use crate::rand_gen::generate_random_seed;
 
-/// This is the function for creating generators in the G1 group for the MNT6-753 curve. These
+/// This is the function for creating generators in the G1 group for the MNT4-753 curve. These
 /// generators are meant to be use for the Pedersen hash and the Pedersen commitment functions.
 pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
     // This gets a verifiably random seed. Whenever we use this seed we need to set the personalization

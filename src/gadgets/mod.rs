@@ -2,8 +2,6 @@
 //! of on-circuit code intended to facilitate the creation of larger circuits.
 
 pub use alloc_constant::*;
-pub use utils::*;
 
 pub mod alloc_constant;
 pub mod mnt4;
-pub mod utils;

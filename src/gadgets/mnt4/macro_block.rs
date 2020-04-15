@@ -15,12 +15,11 @@ use r1cs_std::prelude::{
 use r1cs_std::{Assignment, ToBitsGadget};
 
 use crate::constants::VALIDATOR_SLOTS;
-use crate::gadgets::mnt4::PedersenCommitmentGadget;
-use crate::gadgets::{
-    mnt4::CheckSigGadget, mnt4::PedersenHashGadget, mnt4::YToBitGadget, pad_point_bits,
-    reverse_inner_byte_order,
+use crate::gadgets::mnt4::{
+    CheckSigGadget, PedersenCommitmentGadget, PedersenHashGadget, YToBitGadget,
 };
 use crate::primitives::mnt4::MacroBlock;
+use crate::utils::{pad_point_bits, reverse_inner_byte_order};
 
 /// A simple enum representing the two rounds of signing in the macro blocks.
 #[derive(Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]

@@ -4,3 +4,4 @@
 //! primitive used by one of our zk-SNARKs. They are also used for testing.
 
 pub mod mnt4;
+pub mod mnt6;
