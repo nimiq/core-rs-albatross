@@ -5,3 +5,4 @@ pub use alloc_constant::*;
 
 pub mod alloc_constant;
 pub mod mnt4;
+pub mod mnt6;

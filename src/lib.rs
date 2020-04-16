@@ -18,8 +18,9 @@ pub mod utils;
 //   pass if both input state hashes are equal. This is necessary for the genesis block. The chain needs
 //   to start somewhere.
 // TODO: Fix the y_to_bit_g2 gadget.
-// TODO: Optimize the state commitments (and the vks commitments). Right now it won't work with 1024 pks.
+// TODO: Optimize the state commitments. Right now it won't work with 1024 pks.
 // - final pks don't need to be serialized in-circuit. (I only need the commitment to it)
 // - recursive snarks tree for the initial pks.
 // TODO: Finish the examples.
+// TODO: Improve unit tests.
 // Note: ~5m per 1M constraints proving time. 10GB memory per 1M constraints.

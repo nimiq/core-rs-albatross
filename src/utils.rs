@@ -34,7 +34,7 @@ pub fn serialize_g2_mnt6(point: MNT6G2Projective) -> [u8; 288] {
     buffer
 }
 
-/// Takes multiple bit representations of a point (Fp/Fp2).
+/// Takes multiple bit representations of a point (Fp/Fp2/Fp3).
 /// Its length must be a multiple of `P::MODULUS_BITS`.
 /// None of the underlying points must be zero!
 /// This function pads each chunk of `MODULUS_BITS` to full bytes, prepending the `y_bit`

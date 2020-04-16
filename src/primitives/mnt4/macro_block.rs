@@ -1,11 +1,11 @@
 use algebra::mnt6_753::{G1Projective, G2Projective};
 use algebra::ProjectiveCurve;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
-use nimiq_bls::{KeyPair, PublicKey, Signature};
+use nimiq_bls::KeyPair;
 
 use crate::constants::{sum_generator_g1_mnt6, VALIDATOR_SLOTS};
 use crate::primitives::mnt4::{pedersen_commitment, pedersen_generators, pedersen_hash};
-use crate::utils::bytes_to_bits;
+use crate::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// A struct representing a macro block in Albatross.
 #[derive(Clone)]
@@ -96,9 +96,8 @@ impl MacroBlock {
         let mut bytes = vec![round_number];
         bytes.extend_from_slice(&block_number.to_be_bytes());
         bytes.extend_from_slice(&self.header_hash);
-        for key in self.public_keys.iter() {
-            let pk = PublicKey { public_key: *key };
-            bytes.extend_from_slice(pk.compress().as_ref());
+        for i in 0..self.public_keys.len() {
+            bytes.extend_from_slice(serialize_g2_mnt6(self.public_keys[i]).as_ref());
         }
         let bits = bytes_to_bits(&bytes);
 
@@ -112,12 +111,7 @@ impl MacroBlock {
         let pedersen_commitment = pedersen_commitment(generators.clone(), bits, sum_generator);
 
         // Serialize the Pedersen commitment.
-        // TODO: This is a very ugly way of doing this...
-        let sig = Signature {
-            signature: pedersen_commitment,
-        }
-        .compress();
-        let serialized_commitment = sig.as_ref();
+        let serialized_commitment = serialize_g1_mnt6(pedersen_commitment);
 
         // Initialize Blake2s parameters.
         let blake2s = Blake2sWithParameterBlock {
@@ -135,10 +129,10 @@ impl MacroBlock {
         };
 
         // Calculate the Blake2s hash.
-        let hash = blake2s.evaluate(serialized_commitment);
+        let hash = blake2s.evaluate(&serialized_commitment);
 
         // Convert to bits.
-        let bits = bytes_to_bits(hash.as_ref());
+        let bits = bytes_to_bits(&hash);
 
         // Get the generators for the Pedersen hash.
         let generators = pedersen_generators(256);
