@@ -151,7 +151,7 @@ impl StakingContract {
         for (staker_address, &stake) in validator.active_stake_by_address.read().iter() {
             let receipt = self.retire_recipient(staker_address, stake, Some(inactive_validator.retire_time))?;
             retirement_by_address.insert(staker_address.clone(), RetirementReceipt {
-                stake: stake,
+                stake,
                 inactive_stake_receipt: receipt,
             });
         }
@@ -223,7 +223,7 @@ impl StakingContract {
         self.reactivate_validator(validator_key).map(|_| ())
     }
 
-    /// Revert inactivating a validator entry.
+    /// Reactivate a validator entry.
     pub(super) fn reactivate_validator(&mut self, validator_key: BlsPublicKey) -> Result<InactiveValidatorReceipt, AccountError> {
         // Move validator from inactive map to active map/set.
         let inactive_validator = self.inactive_validators_by_key.remove(&validator_key)
@@ -231,7 +231,7 @@ impl StakingContract {
 
         // All checks passed, not allowed to fail from here on!
         self.active_validators_sorted.insert(Arc::clone(&inactive_validator.validator));
-        self.active_validators_by_key.insert(validator_key.clone(), inactive_validator.validator);
+        self.active_validators_by_key.insert(validator_key, inactive_validator.validator);
         Ok(InactiveValidatorReceipt {
             retire_time: inactive_validator.retire_time,
         })

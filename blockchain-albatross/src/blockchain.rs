@@ -1428,7 +1428,7 @@ impl Blockchain {
             return vec![];
         }
 
-        // Get stake slots
+        // Get validator slots
         // NOTE: Field `last_slots` is expected to be always set.
         let validator_slots = &state.previous_slots.as_ref()
             .expect("Slots for last epoch are missing")

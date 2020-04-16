@@ -131,7 +131,7 @@ impl StakingContract {
         self.reactivate_sender(staker_address, value, Some(retire_time)).map(|_| ())
     }
 
-    /// Reverts a retire transaction.
+    /// Reactivates stake (sender side).
     pub(super) fn reactivate_sender(&mut self, staker_address: &Address, value: Coin, new_retire_time: Option<u32>) -> Result<Option<InactiveStakeReceipt>, AccountError> {
         let inactive_stake = self.inactive_stake_by_address.remove(staker_address)
             .ok_or(AccountError::InvalidForRecipient)?;
@@ -159,7 +159,7 @@ impl StakingContract {
         self.retire_recipient(staker_address, value, receipt.map(|r| r.retire_time)).map(|_| ())
     }
 
-    /// Reverts the sender side of a retire transaction.
+    /// Reactivates stake (recipient side).
     pub(super) fn reactivate_recipient(&mut self, staker_address: Address, value: Coin, validator_key: &BlsPublicKey) -> Result<(), AccountError> {
         self.stake(staker_address, value, validator_key)
     }

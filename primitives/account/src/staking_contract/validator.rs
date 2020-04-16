@@ -32,7 +32,7 @@ impl Validator {
     }
 
     pub fn update_validator(&self, new_reward_address: Option<Address>, new_validator_key: Option<BlsPublicKey>) -> Self {
-        let active_stake_by_address = mem::replace(self.active_stake_by_address.write().deref_mut(), Default::default());
+        let active_stake_by_address = mem::take(self.active_stake_by_address.write().deref_mut());
         Validator {
             balance: self.balance,
             reward_address: new_reward_address.unwrap_or_else(|| self.reward_address.clone()),
@@ -42,7 +42,7 @@ impl Validator {
     }
 
     fn with_balance(&self, balance: Coin) -> Self {
-        let active_stake_by_address = mem::replace(self.active_stake_by_address.write().deref_mut(), Default::default());
+        let active_stake_by_address = mem::take(self.active_stake_by_address.write().deref_mut());
         Validator {
             balance,
             reward_address: self.reward_address.clone(),
@@ -214,9 +214,7 @@ impl ValidatorEntry {
             },
         }
     }
-}
 
-impl ValidatorEntry {
     pub fn update_validator(&mut self, new_reward_address: Option<Address>, new_validator_key: Option<BlsPublicKey>) {
         self.replace(Ok(Arc::new(
             self.as_validator().update_validator(new_reward_address, new_validator_key)

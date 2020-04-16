@@ -47,7 +47,8 @@ impl AccountTransactionVerification for StakingContractVerifier {
                         return Err(TransactionError::InvalidForRecipient);
                     }
                 },
-                IncomingStakingTransactionData::CreateValidator { .. } => {// Implicitly checks that value > 0.
+                IncomingStakingTransactionData::CreateValidator { .. } => {
+                    // Implicitly checks that value > 0.
                     if transaction.value < Coin::from_u64_unchecked(policy::MIN_VALIDATOR_STAKE) {
                         warn!("Validator stake value below minimum");
                         return Err(TransactionError::InvalidForRecipient);
