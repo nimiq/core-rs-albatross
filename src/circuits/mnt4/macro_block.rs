@@ -61,22 +61,22 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let epoch_length_var = UInt32::constant(EPOCH_LENGTH);
 
         let max_non_signers_var: FqGadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "max non signers"),
+            cs.ns(|| "alloc max non signers"),
             &Fq::from(MAX_NON_SIGNERS as u64),
         )?;
 
         let sig_generator_var: G2Gadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "signature generator"),
+            cs.ns(|| "alloc signature generator"),
             &G2Projective::prime_subgroup_generator(),
         )?;
 
         let sum_generator_g1_var: G1Gadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "sum generator g1"),
+            cs.ns(|| "alloc sum generator g1"),
             &sum_generator_g1_mnt6(),
         )?;
 
         let sum_generator_g2_var: G2Gadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "sum generator g2"),
+            cs.ns(|| "alloc sum generator g2"),
             &sum_generator_g2_mnt6(),
         )?;
 
@@ -84,7 +84,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
         for i in 0..256 {
             pedersen_generators_var.push(AllocConstantGadget::alloc_const(
-                cs.ns(|| format!("pedersen_generators: generator {}", i)),
+                cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
                 &pedersen_generators[i],
             )?);
         }
@@ -95,30 +95,32 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let mut prev_keys_var = Vec::new();
         for i in 0..self.prev_keys.len() {
             prev_keys_var.push(G2Gadget::alloc(
-                cs.ns(|| format!("previous keys: key {}", i)),
+                cs.ns(|| format!("alloc previous keys: key {}", i)),
                 || Ok(&self.prev_keys[i]),
             )?);
         }
 
-        let block_number_var = UInt32::alloc(cs.ns(|| "block number"), Some(self.block_number))?;
+        let block_number_var =
+            UInt32::alloc(cs.ns(|| "alloc block number"), Some(self.block_number))?;
 
-        let block_var = MacroBlockGadget::alloc(cs.ns(|| "macro block"), || Ok(&self.block))?;
+        let block_var = MacroBlockGadget::alloc(cs.ns(|| "alloc macro block"), || Ok(&self.block))?;
 
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
         let initial_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "initial state commitment"),
+            cs.ns(|| "alloc initial state commitment"),
             self.initial_state_commitment.as_ref(),
         )?;
 
         let final_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "final state commitment"),
+            cs.ns(|| "alloc final state commitment"),
             self.final_state_commitment.as_ref(),
         )?;
 
-        // Verifying equality for initial state commitment. It just checks that the private inputs are correct
-        // by hashing them and comparing the result with the initial state commitment given as a public input.
+        // Verifying equality for initial state commitment. It just checks that the private input is
+        // correct by committing to it and comparing the result with the initial state commitment
+        // given as a public input.
         next_cost_analysis!(cs, cost, || { "Verify initial state commitment" });
 
         let reference_commitment = StateCommitmentGadget::evaluate(
@@ -162,8 +164,9 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &[block_number_var, epoch_length_var.clone()],
         )?;
 
-        // Verifying equality for final state commitment. It just checks that the internal results are
-        // indeed equal to the final state commitment given as a public input.
+        // Verifying equality for final state commitment. It just checks that the private input is
+        // correct by committing to it and comparing the result with the final state commitment
+        // given as a public input.
         next_cost_analysis!(cs, cost, || { "Verify final state commitment" });
 
         let reference_commitment = StateCommitmentGadget::evaluate(

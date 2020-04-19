@@ -10,76 +10,82 @@ use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::mnt4_753::PairingGadget;
 use r1cs_std::prelude::*;
 
-use crate::circuits::mnt4::DummyCircuit;
+use crate::circuits::mnt4::MacroBlockCircuit;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 // Renaming some types for convenience. We can change the circuit and elliptic curve of the input
 // proof to the wrapper circuit just by editing these types.
-type TheProofSystem = Groth16<MNT4_753, DummyCircuit, Fr>;
+type TheProofSystem = Groth16<MNT4_753, MacroBlockCircuit, Fr>;
 type TheProofGadget = ProofGadget<MNT4_753, Fq, PairingGadget>;
 type TheVkGadget = VerifyingKeyGadget<MNT4_753, Fq, PairingGadget>;
 type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, Fq, PairingGadget>;
 
-/// This is the wrapper circuit. It takes as inputs an initial state commitment, a final state commitment and a
-/// verifying key and it produces a proof that there exists a valid SNARK proof that transforms the
-/// initial state into the final state.
+/// This is the macro block wrapper circuit. It takes as inputs an initial state commitment and a
+/// final state commitment and it produces a proof that there exists a valid SNARK proof that transforms
+/// the initial state into the final state.
 /// The circuit is basically only a SNARK verifier. Its use is just to change the elliptic curve
 /// that the proof exists in, which is sometimes needed for recursive composition of SNARK proofs.
-/// This circuit is not safe to use because it has the verifying key as a private input. In production
-/// this needs to be a constant, so we'll have different wrapper circuits (one for each inner circuit
-/// that is being verified).
+/// This circuit only verifies proofs from the Macro Block circuit because it has the corresponding
+/// verification key hard-coded as a constant.
 #[derive(Clone)]
-pub struct WrapperCircuit {
+pub struct MacroBlockWrapperCircuit {
     // Private inputs
     proof: Proof<MNT4_753>,
-    verifying_key: VerifyingKey<MNT4_753>,
+    vk_macro_block: VerifyingKey<MNT4_753>,
 
     // Public inputs
     initial_state_commitment: Vec<u8>,
     final_state_commitment: Vec<u8>,
 }
 
-impl WrapperCircuit {
+impl MacroBlockWrapperCircuit {
     pub fn new(
         proof: Proof<MNT4_753>,
-        verifying_key: VerifyingKey<MNT4_753>,
+        vk_macro_block: VerifyingKey<MNT4_753>,
         initial_state_commitment: Vec<u8>,
         final_state_commitment: Vec<u8>,
     ) -> Self {
         Self {
             proof,
-            verifying_key,
+            vk_macro_block,
             initial_state_commitment,
             final_state_commitment,
         }
     }
 }
 
-impl ConstraintSynthesizer<MNT6Fr> for WrapperCircuit {
+impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        // Allocate all the private inputs.
+        // Allocate all the constants.
         #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Alloc private inputs");
+        let mut cost = start_cost_analysis!(cs, || "Alloc constants");
+
+        // TODO: This needs to be changed to a constant!
+        let vk_macro_block_var =
+            TheVkGadget::alloc(
+                cs.ns(|| "alloc vk macro block"),
+                || Ok(&self.vk_macro_block),
+            )?;
+
+        // Allocate all the private inputs.
+        next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
 
         let proof_var = TheProofGadget::alloc(cs.ns(|| "alloc proof"), || Ok(&self.proof))?;
-
-        let verifying_key_var =
-            TheVkGadget::alloc(cs.ns(|| "alloc verifying key"), || Ok(&self.verifying_key))?;
 
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
         let initial_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "initial state commitment"),
+            cs.ns(|| "alloc initial state commitment"),
             self.initial_state_commitment.as_ref(),
         )?;
 
         let final_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "final state commitment"),
+            cs.ns(|| "alloc final state commitment"),
             self.final_state_commitment.as_ref(),
         )?;
 
@@ -91,7 +97,7 @@ impl ConstraintSynthesizer<MNT6Fr> for WrapperCircuit {
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify groth16 proof"),
-            &verifying_key_var,
+            &vk_macro_block_var,
             proof_inputs.iter(),
             &proof_var,
         )?;

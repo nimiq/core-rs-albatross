@@ -7,61 +7,82 @@ use crypto_primitives::nizk::groth16::Groth16;
 use crypto_primitives::NIZKVerifierGadget;
 use groth16::{Proof, VerifyingKey};
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::mnt6_753::PairingGadget;
+use r1cs_std::mnt6_753::{G1Gadget, PairingGadget};
 use r1cs_std::prelude::*;
 
-use crate::circuits::mnt6::{DummyCircuit, OtherDummyCircuit};
+use crate::circuits::mnt6::{MacroBlockWrapperCircuit, MergerWrapperCircuit};
+use crate::constants::sum_generator_g1_mnt6;
+use crate::gadgets::mnt4::VKCommitmentGadget;
+use crate::gadgets::AllocConstantGadget;
+use crate::primitives::mnt4::pedersen_generators;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 // Renaming some types for convenience. We can change the circuit and elliptic curve of the input
 // proof to the merger circuit just by editing these types.
-type FirstProofSystem = Groth16<MNT6_753, DummyCircuit, Fr>;
-type SecondProofSystem = Groth16<MNT6_753, OtherDummyCircuit, Fr>;
+type FirstProofSystem = Groth16<MNT6_753, MergerWrapperCircuit, Fr>;
+type SecondProofSystem = Groth16<MNT6_753, MacroBlockWrapperCircuit, Fr>;
 type TheProofGadget = ProofGadget<MNT6_753, Fq, PairingGadget>;
 type TheVkGadget = VerifyingKeyGadget<MNT6_753, Fq, PairingGadget>;
 type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
 
-/// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment and a
-/// verifying key and it produces a proof that there exists two valid SNARK proofs that transforms the
-/// initial state into the final state passing through some intermediate state.
-/// The circuit is composed of two SNARK verifiers in a row. It's used to merge two SNARK proofs
-/// (normally two wrapper proofs) into a single proof. Evidently, this is needed for recursive
-/// composition of SNARK proofs.
-/// This circuit is not safe to use because it has the verifying key as a private input. In production
-/// this needs to be a constant, so we'll have different wrapper circuits (one for each inner circuit
-/// that is being verified).
+/// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment
+/// and a verifying key and it produces a proof that there exists two valid SNARK proofs that transforms
+/// the initial state into the final state passing through some intermediate state.
+/// The circuit is composed of two SNARK verifiers in a row. It's used to verify a Merger Wrapper proof
+/// and a Macro Block Wrapper, effectively merging both into a single proof. Evidently, this is needed
+/// for recursive composition of SNARK proofs.
+/// This circuit has the verification key for the Macro Block Wrapper hard-coded as a constant, but the
+/// verification key for the Merger Wrapper is given as a private input.
+/// To guarantee that the prover inputs the correct Merger Wrapper verification key, the verifier also
+/// supplies a commitment to the desired verification key as a public input. This circuit then enforces
+/// the equality of the commitment and of the verification key.
+/// Additionally, the prover can set (as a private input) a boolean flag determining if this circuit
+/// is evaluating the genesis block or not. If the flag is set to true, the circuit will enforce that
+/// the initial state and the intermediate state are equal but it will not enforce the verification of
+/// the Merger Wrapper proof. If the flag is set to false, the circuit will enforce the verification
+/// of the Merger Wrapper proof, but it will not enforce the equality of the initial and intermediate
+/// states.
+/// The rationale is that, for the genesis block, the merger circuit will not have any previous Merger
+/// Wrapper proof to verify since there are no previous state changes. But in that case, the initial
+/// and intermediate states must be equal by definition.
 #[derive(Clone)]
 pub struct MergerCircuit {
     // Private inputs
-    proof_1: Proof<MNT6_753>,
-    proof_2: Proof<MNT6_753>,
-    verifying_key_1: VerifyingKey<MNT6_753>,
-    verifying_key_2: VerifyingKey<MNT6_753>,
+    proof_merger_wrapper: Proof<MNT6_753>,
+    proof_macro_block_wrapper: Proof<MNT6_753>,
+    vk_merger_wrapper: VerifyingKey<MNT6_753>,
+    vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
     intermediate_state_commitment: Vec<u8>,
+    genesis_flag: bool,
 
     // Public inputs
     initial_state_commitment: Vec<u8>,
     final_state_commitment: Vec<u8>,
+    vk_commitment: Vec<u8>,
 }
 
 impl MergerCircuit {
     pub fn new(
-        proof_1: Proof<MNT6_753>,
-        proof_2: Proof<MNT6_753>,
-        verifying_key_1: VerifyingKey<MNT6_753>,
-        verifying_key_2: VerifyingKey<MNT6_753>,
+        proof_merger_wrapper: Proof<MNT6_753>,
+        proof_macro_block_wrapper: Proof<MNT6_753>,
+        vk_merger_wrapper: VerifyingKey<MNT6_753>,
+        vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
         intermediate_state_commitment: Vec<u8>,
         initial_state_commitment: Vec<u8>,
         final_state_commitment: Vec<u8>,
+        vk_commitment: Vec<u8>,
+        genesis_flag: bool,
     ) -> Self {
         Self {
-            proof_1,
-            proof_2,
-            verifying_key_1,
-            verifying_key_2,
+            proof_merger_wrapper,
+            proof_macro_block_wrapper,
+            vk_merger_wrapper,
+            vk_macro_block_wrapper,
             intermediate_state_commitment,
             initial_state_commitment,
             final_state_commitment,
+            vk_commitment,
+            genesis_flag,
         }
     }
 }
@@ -72,68 +93,143 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
-        // Allocate all the private inputs.
+        // Allocate all the constants.
         #[allow(unused_mut)]
-        let mut cost = start_cost_analysis!(cs, || "Alloc private inputs");
+        let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        let proof_1_var =
-            TheProofGadget::alloc(cs.ns(|| "alloc first proof"), || Ok(&self.proof_1))?;
+        let sum_generator_g1_var: G1Gadget = AllocConstantGadget::alloc_const(
+            cs.ns(|| "alloc sum generator g1"),
+            &sum_generator_g1_mnt6(),
+        )?;
 
-        let proof_2_var =
-            TheProofGadget::alloc(cs.ns(|| "alloc second proof"), || Ok(&self.proof_2))?;
+        // TODO: Calculate correct number of generators.
+        let pedersen_generators = pedersen_generators(256);
+        let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
+        for i in 0..256 {
+            pedersen_generators_var.push(AllocConstantGadget::alloc_const(
+                cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
+                &pedersen_generators[i],
+            )?);
+        }
+
+        // TODO: This needs to be changed to a constant!
+        let vk_macro_block_wrapper_var =
+            TheVkGadget::alloc(cs.ns(|| "alloc vk macro block wrapper"), || {
+                Ok(&self.vk_macro_block_wrapper)
+            })?;
+
+        // Allocate all the private inputs.
+        next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
+
+        let proof_merger_wrapper_var =
+            TheProofGadget::alloc(cs.ns(|| "alloc proof merger wrapper"), || {
+                Ok(&self.proof_merger_wrapper)
+            })?;
+
+        let proof_macro_block_wrapper_var =
+            TheProofGadget::alloc(cs.ns(|| "alloc proof macro block wrapper"), || {
+                Ok(&self.proof_macro_block_wrapper)
+            })?;
+
+        let vk_merger_wrapper_var =
+            TheVkGadget::alloc(cs.ns(|| "alloc vk merger wrapper"), || {
+                Ok(&self.vk_merger_wrapper)
+            })?;
 
         let intermediate_state_commitment_var = UInt8::alloc_vec(
-            cs.ns(|| "intermediate state commitment"),
+            cs.ns(|| "alloc intermediate state commitment"),
             self.intermediate_state_commitment.as_ref(),
         )?;
 
-        let verifying_key_var_1 =
-            TheVkGadget::alloc(cs.ns(|| "alloc first verifying key"), || {
-                Ok(&self.verifying_key_1)
-            })?;
-
-        let verifying_key_var_2 =
-            TheVkGadget::alloc(cs.ns(|| "alloc second verifying key"), || {
-                Ok(&self.verifying_key_2)
-            })?;
+        let genesis_flag_var =
+            Boolean::alloc(cs.ns(|| "alloc genesis flag"), || Ok(self.genesis_flag))?;
 
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
         let initial_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "initial state commitment"),
+            cs.ns(|| "alloc initial state commitment"),
             self.initial_state_commitment.as_ref(),
         )?;
 
         let final_state_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "final state commitment"),
+            cs.ns(|| "alloc final state commitment"),
             self.final_state_commitment.as_ref(),
         )?;
 
-        // Verify the first ZK proof.
-        next_cost_analysis!(cs, cost, || { "Verify first ZK proof" });
+        let vk_commitment_var =
+            UInt8::alloc_input_vec(cs.ns(|| "alloc vk commitment"), self.vk_commitment.as_ref())?;
+
+        // Verify equality for vk commitment. It just checks that the private input is correct by
+        // committing to it and then comparing the result with the vk commitment given as a public input.
+        next_cost_analysis!(cs, cost, || { "Verify vk commitment" });
+
+        let reference_commitment = VKCommitmentGadget::evaluate(
+            cs.ns(|| "reference vk commitment"),
+            &vk_merger_wrapper_var,
+            &pedersen_generators_var,
+            &sum_generator_g1_var,
+        )?;
+
+        for i in 0..self.vk_commitment.len() {
+            vk_commitment_var[i].enforce_equal(
+                cs.ns(|| format!("vk commitment == reference commitment: byte {}", i)),
+                &reference_commitment[i],
+            )?;
+        }
+
+        // Verify equality of initial and intermediate state commitments. If the genesis flag is set to
+        // true, it enforces the equality. If it is set to false, it doesn't. This is necessary for
+        // the genesis block, for the first merger circuit.
+        next_cost_analysis!(cs, cost, || {
+            "Conditionally verify initial and intermediate state commitments"
+        });
+
+        for i in 0..self.initial_state_commitment.len() {
+            initial_state_commitment_var[i].conditional_enforce_equal(
+                cs.ns(|| {
+                    format!(
+                        "initial state commitment == intermediate state commitment: byte {}",
+                        i
+                    )
+                }),
+                &intermediate_state_commitment_var[i],
+                &genesis_flag_var,
+            )?;
+        }
+
+        // Verify the ZK proof for the Merger Wrapper circuit. If the genesis flag is set to false,
+        // it enforces the verification. If it is set to true, it doesn't. This is necessary for
+        // the genesis block, for the first merger circuit.
+        next_cost_analysis!(cs, cost, || { "Conditionally verify proof merger wrapper" });
+
         let mut proof_inputs = vec![];
         proof_inputs.push(initial_state_commitment_var);
         proof_inputs.push(intermediate_state_commitment_var.clone());
+        proof_inputs.push(vk_commitment_var);
 
-        <TheVerifierGadget as NIZKVerifierGadget<FirstProofSystem, Fq>>::check_verify(
-            cs.ns(|| "verify first groth16 proof"),
-            &verifying_key_var_1,
+        let neg_genesis_flag_var = genesis_flag_var.not();
+
+        <TheVerifierGadget as NIZKVerifierGadget<FirstProofSystem, Fq>>::conditional_check_verify(
+            cs.ns(|| "verify merger wrapper groth16 proof"),
+            &vk_merger_wrapper_var,
             proof_inputs.iter(),
-            &proof_1_var,
+            &proof_merger_wrapper_var,
+            &neg_genesis_flag_var,
         )?;
 
-        // Verify the second ZK proof.
-        next_cost_analysis!(cs, cost, || { "Verify second ZK proof" });
+        // Verify the ZK proof for the Macro Block Wrapper circuit.
+        next_cost_analysis!(cs, cost, || { "Verify proof macro block wrapper" });
+
         let mut proof_inputs = vec![];
         proof_inputs.push(intermediate_state_commitment_var);
         proof_inputs.push(final_state_commitment_var);
 
         <TheVerifierGadget as NIZKVerifierGadget<SecondProofSystem, Fq>>::check_verify(
-            cs.ns(|| "verify second groth16 proof"),
-            &verifying_key_var_2,
+            cs.ns(|| "verify macro block wrapper groth16 proof"),
+            &vk_macro_block_wrapper_var,
             proof_inputs.iter(),
-            &proof_2_var,
+            &proof_macro_block_wrapper_var,
         )?;
 
         end_cost_analysis!(cs, cost);
