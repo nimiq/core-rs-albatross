@@ -13,7 +13,6 @@ use r1cs_std::prelude::*;
 use crate::circuits::mnt6::{MacroBlockWrapperCircuit, MergerWrapperCircuit};
 use crate::constants::sum_generator_g1_mnt6;
 use crate::gadgets::mnt4::VKCommitmentGadget;
-use crate::gadgets::AllocConstantGadget;
 use crate::primitives::mnt4::pedersen_generators;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
@@ -97,16 +96,14 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        let sum_generator_g1_var: G1Gadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "alloc sum generator g1"),
-            &sum_generator_g1_mnt6(),
-        )?;
+        let sum_generator_g1_var =
+            G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
 
         // TODO: Calculate correct number of generators.
         let pedersen_generators = pedersen_generators(256);
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
         for i in 0..256 {
-            pedersen_generators_var.push(AllocConstantGadget::alloc_const(
+            pedersen_generators_var.push(G1Gadget::alloc_constant(
                 cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
                 &pedersen_generators[i],
             )?);

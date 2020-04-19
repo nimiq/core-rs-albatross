@@ -342,6 +342,17 @@ impl MacroBlockGadget {
 
 /// The allocation function for the macro block gadget.
 impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
+    /// This is the allocation function for a constant. It does not need to be implemented.
+    fn alloc_constant<T, CS: ConstraintSystem<MNT4Fr>>(
+        _cs: CS,
+        _val: T,
+    ) -> Result<Self, SynthesisError>
+    where
+        T: Borrow<MacroBlock>,
+    {
+        unimplemented!()
+    }
+
     /// This is the allocation function for a private input.
     fn alloc<F, T, CS: ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
@@ -402,7 +413,7 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
         })
     }
 
-    /// This is the allocation function for a private input.
+    /// This is the allocation function for a public input.
     fn alloc_input<F, T, CS: ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         value_gen: F,

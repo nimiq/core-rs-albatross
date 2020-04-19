@@ -8,7 +8,7 @@ use r1cs_std::prelude::*;
 use crate::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS,
 };
-use crate::gadgets::{mnt4::MacroBlockGadget, mnt4::StateCommitmentGadget, AllocConstantGadget};
+use crate::gadgets::{mnt4::MacroBlockGadget, mnt4::StateCommitmentGadget};
 use crate::primitives::mnt4::{pedersen_generators, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
@@ -60,30 +60,26 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         let epoch_length_var = UInt32::constant(EPOCH_LENGTH);
 
-        let max_non_signers_var: FqGadget = AllocConstantGadget::alloc_const(
+        let max_non_signers_var = FqGadget::alloc_constant(
             cs.ns(|| "alloc max non signers"),
             &Fq::from(MAX_NON_SIGNERS as u64),
         )?;
 
-        let sig_generator_var: G2Gadget = AllocConstantGadget::alloc_const(
+        let sig_generator_var = G2Gadget::alloc_constant(
             cs.ns(|| "alloc signature generator"),
             &G2Projective::prime_subgroup_generator(),
         )?;
 
-        let sum_generator_g1_var: G1Gadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "alloc sum generator g1"),
-            &sum_generator_g1_mnt6(),
-        )?;
+        let sum_generator_g1_var =
+            G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
 
-        let sum_generator_g2_var: G2Gadget = AllocConstantGadget::alloc_const(
-            cs.ns(|| "alloc sum generator g2"),
-            &sum_generator_g2_mnt6(),
-        )?;
+        let sum_generator_g2_var =
+            G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
 
         let pedersen_generators = pedersen_generators(256);
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
         for i in 0..256 {
-            pedersen_generators_var.push(AllocConstantGadget::alloc_const(
+            pedersen_generators_var.push(G1Gadget::alloc_constant(
                 cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
                 &pedersen_generators[i],
             )?);
