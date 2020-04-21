@@ -9,4 +9,4 @@ pub use vk_commitment::*;
 pub mod macro_block;
 pub mod pedersen;
 pub mod state_commitment;
-mod vk_commitment;
+pub mod vk_commitment;

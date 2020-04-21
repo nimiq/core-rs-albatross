@@ -22,8 +22,8 @@ impl YToBitGadget {
         mut cs: CS,
         point: &G1Gadget,
     ) -> Result<Boolean, SynthesisError> {
-        // Calculates -(half + 1), where half = (p-1)/2.
-        let half_plus_one_neg = (Fq::from_repr(Fq::modulus_minus_one_div_two()) + &Fq::one()).neg();
+        // Calculates -half.
+        let half_neg = (Fq::from_repr(Fq::modulus_minus_one_div_two())).neg();
 
         // ----------------   y > half   ----------------
         // Calculates and allocates the bit representing the "sign" of the y-coordinate.
@@ -62,8 +62,8 @@ impl YToBitGadget {
         )?;
 
         // Enforces the following relation:
-        // y + y_bit * (-(half + 1)) = y_adjusted
-        let y_bit_lc = y_bit.lc(CS::one(), half_plus_one_neg);
+        // y + y_bit * (-half) = y_adjusted
+        let y_bit_lc = y_bit.lc(CS::one(), half_neg);
         cs.enforce(
             || "check y bit",
             |lc| lc + (Fq::one(), CS::one()),
@@ -81,8 +81,8 @@ impl YToBitGadget {
         mut cs: CS,
         point: &G2Gadget,
     ) -> Result<Boolean, SynthesisError> {
-        // Calculates -(half + 1), where half = (p-1)/2.
-        let half_plus_one_neg = (Fq::from_repr(Fq::modulus_minus_one_div_two()) + &Fq::one()).neg();
+        // Calculates -half.
+        let half_neg = (Fq::from_repr(Fq::modulus_minus_one_div_two())).neg();
 
         // ----------------   y_c2 > half   ----------------
         // Calculates and allocates the bit representing the "sign" of the y-coordinate for this
@@ -122,8 +122,8 @@ impl YToBitGadget {
         )?;
 
         // Enforces the following relation:
-        // y_c2 + y_c2_bit * (-(half + 1)) = y_c2_adjusted
-        let y_c2_bit_lc = y_c2_bit.lc(CS::one(), half_plus_one_neg);
+        // y_c2 + y_c2_bit * (-half) = y_c2_adjusted
+        let y_c2_bit_lc = y_c2_bit.lc(CS::one(), half_neg);
         cs.enforce(
             || "check y c2 bit",
             |lc| lc + (Fq::one(), CS::one()),
@@ -169,8 +169,8 @@ impl YToBitGadget {
         )?;
 
         // Enforces the following relation:
-        // y_c1 + y_c1_bit * (-(half + 1)) = y_c1_adjusted
-        let y_c1_bit_lc = y_c1_bit.lc(CS::one(), half_plus_one_neg);
+        // y_c1 + y_c1_bit * (-half) = y_c1_adjusted
+        let y_c1_bit_lc = y_c1_bit.lc(CS::one(), half_neg);
         cs.enforce(
             || "check y c1 bit",
             |lc| lc + (Fq::one(), CS::one()),
@@ -216,8 +216,8 @@ impl YToBitGadget {
         )?;
 
         // Enforces the following relation:
-        // y_c0 + y_c0_bit * (-(half + 1)) = y_c0_adjusted
-        let y_c0_bit_lc = y_c0_bit.lc(CS::one(), half_plus_one_neg);
+        // y_c0 + y_c0_bit * (-half) = y_c0_adjusted
+        let y_c0_bit_lc = y_c0_bit.lc(CS::one(), half_neg);
         cs.enforce(
             || "check y c0 bit",
             |lc| lc + (Fq::one(), CS::one()),

@@ -7,7 +7,7 @@ use r1cs_std::mnt4_753::{G1Gadget, PairingGadget};
 use r1cs_std::ToBitsGadget;
 
 use crate::gadgets::mnt6::{PedersenCommitmentGadget, YToBitGadget};
-use crate::utils::pad_point_bits;
+use crate::utils::{pad_point_bits, reverse_inner_byte_order};
 
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK in the
 /// MNT4-753 curve. This means we can open this commitment inside of a circuit in the MNT6-753 curve
@@ -75,11 +75,12 @@ impl VKCommitmentGadget {
             &pedersen_commitment,
         )?;
         let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
+        let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
         // Convert to bytes.
         let mut bytes = Vec::new();
         for i in 0..serialized_bits.len() / 8 {
-            bytes.push(UInt8::from_bits_le(&serialized_bits[i..i + 8]));
+            bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
         }
 
         Ok(bytes)

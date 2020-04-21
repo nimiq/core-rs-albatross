@@ -109,7 +109,8 @@ pub fn sum_generator_g1_mnt4() -> MNT4G1Projective {
 /// sometimes because the addition formula for elliptic curves in the gadgets is incomplete and can't
 /// handle the identity element (aka zero).
 pub fn sum_generator_g2_mnt4() -> MNT4G2Projective {
-    // This gets a verifiably random seed.
+    // This gets a verifiably random seed. Whenever we use this seed we need to set the personalization
+    // field on the Blake2X to an unique value. See below.
     let seed = generate_random_seed();
 
     // This extends the seed using the Blake2X algorithm.
@@ -253,7 +254,8 @@ pub fn sum_generator_g1_mnt6() -> MNT6G1Projective {
 /// sometimes because the addition formula for elliptic curves in the gadgets is incomplete and can't
 /// handle the identity element (aka zero).
 pub fn sum_generator_g2_mnt6() -> MNT6G2Projective {
-    // This gets a verifiably random seed.
+    // This gets a verifiably random seed. Whenever we use this seed we need to set the personalization
+    // field on the Blake2X to an unique value. See below.
     let seed = generate_random_seed();
 
     // This extends the seed using the Blake2X algorithm.

@@ -6,7 +6,7 @@ use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
 use r1cs_std::ToBitsGadget;
 
 use crate::gadgets::mnt4::{PedersenCommitmentGadget, YToBitGadget};
-use crate::utils::pad_point_bits;
+use crate::utils::{pad_point_bits, reverse_inner_byte_order};
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the public_keys. We calculate it by first
@@ -63,11 +63,12 @@ impl StateCommitmentGadget {
             &pedersen_commitment,
         )?;
         let serialized_bits = pad_point_bits::<FqParameters>(x_bits, y_bit);
+        let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
         // Convert to bytes.
         let mut bytes = Vec::new();
         for i in 0..serialized_bits.len() / 8 {
-            bytes.push(UInt8::from_bits_le(&serialized_bits[i..i + 8]));
+            bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
         }
 
         Ok(bytes)

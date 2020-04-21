@@ -32,7 +32,7 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
             inner_length: 32,
             salt: [1; 8],
             // This needs to be set to an unique value, since we want a different random stream for
-            // each sum generator that we create.
+            // each generator series that we create.
             personalization: [0; 8],
         };
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
