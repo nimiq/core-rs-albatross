@@ -17,8 +17,8 @@ use transaction::Transaction;
 pub use crate::proof::TransactionProofBuilder;
 pub use crate::recipient::Recipient;
 
-pub mod recipient;
 pub mod proof;
+pub mod recipient;
 
 /// Building a transaction can fail if mandatory fields are not set.
 /// In these cases, a `TransactionBuilderError` is returned.
@@ -72,7 +72,9 @@ pub enum TransactionBuilderError {
     /// Zero value transactions are called [`signalling transaction`] (also see there for a list of signalling transactions).
     ///
     /// [`signalling transaction`]: struct.TransactionBuilder.html#method.with_value
-    #[fail(display = "The value must be zero for signalling transactions and cannot be zero for others.")]
+    #[fail(
+        display = "The value must be zero for signalling transactions and cannot be zero for others."
+    )]
     InvalidValue,
 }
 
@@ -151,9 +153,16 @@ impl TransactionBuilder {
     /// let transaction = proof_builder.preliminary_transaction();
     /// assert_eq!(transaction.sender, sender);
     /// ```
-    pub fn with_required(sender: Address, recipient: Recipient, value: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
+    pub fn with_required(
+        sender: Address,
+        recipient: Recipient,
+        value: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Self {
         let mut builder = Self::default();
-        builder.with_sender(sender)
+        builder
+            .with_sender(sender)
             .with_recipient(recipient)
             .with_value(value)
             .with_validity_start_height(validity_start_height)
@@ -418,9 +427,12 @@ impl TransactionBuilder {
         }
 
         let value = self.value.ok_or(TransactionBuilderError::NoValue)?;
-        let validity_start_height = self.validity_start_height
+        let validity_start_height = self
+            .validity_start_height
             .ok_or(TransactionBuilderError::NoValidityStartHeight)?;
-        let network_id = self.network_id.ok_or(TransactionBuilderError::NoNetworkId)?;
+        let network_id = self
+            .network_id
+            .ok_or(TransactionBuilderError::NoNetworkId)?;
 
         if recipient.is_signalling() != value.is_zero() {
             return Err(TransactionBuilderError::InvalidValue);
@@ -436,7 +448,7 @@ impl TransactionBuilder {
                 value,
                 self.fee.unwrap_or(Coin::ZERO),
                 validity_start_height,
-                network_id
+                network_id,
             )
         } else if recipient.is_signalling() {
             Transaction::new_signalling(
@@ -448,7 +460,7 @@ impl TransactionBuilder {
                 self.fee.unwrap_or(Coin::ZERO),
                 recipient.data(),
                 validity_start_height,
-                network_id
+                network_id,
             )
         } else {
             Transaction::new_extended(
@@ -460,7 +472,7 @@ impl TransactionBuilder {
                 self.fee.unwrap_or(Coin::ZERO),
                 recipient.data(),
                 validity_start_height,
-                network_id
+                network_id,
             )
         };
 
@@ -471,10 +483,18 @@ impl TransactionBuilder {
 // Convenience functionality.
 impl TransactionBuilder {
     /// Creates a simple transaction from the address of a given `key_pair` to a basic `recipient`.
-    pub fn new_simple(key_pair: &KeyPair, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
+    pub fn new_simple(
+        key_pair: &KeyPair,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
         let sender = Address::from(key_pair);
         let mut builder = Self::new();
-        builder.with_sender(sender)
+        builder
+            .with_sender(sender)
             .with_recipient(Recipient::new_basic(recipient))
             .with_value(value)
             .with_fee(fee)
@@ -486,18 +506,27 @@ impl TransactionBuilder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(&key_pair);
                 builder.generate().unwrap()
-            },
+            }
             _ => unreachable!(),
         }
     }
 
     /// Creates a staking transaction from the address of a given `key_pair` to a specified `validator_key`.
-    pub fn new_stake(staking_contract: Address, key_pair: &KeyPair, validator_key: &BlsPublicKey, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
-        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+    pub fn new_stake(
+        staking_contract: Address,
+        key_pair: &KeyPair,
+        validator_key: &BlsPublicKey,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut recipient = Recipient::new_staking_builder(staking_contract);
         recipient.stake(validator_key, None);
 
         let mut builder = Self::new();
-        builder.with_sender(Address::from(key_pair))
+        builder
+            .with_sender(Address::from(key_pair))
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
             .with_fee(fee)
@@ -509,18 +538,27 @@ impl TransactionBuilder {
             TransactionProofBuilder::Basic(mut builder) => {
                 builder.sign_with_key_pair(&key_pair);
                 builder.generate().unwrap()
-            },
+            }
             _ => unreachable!(),
         }
     }
 
     /// Retires the stake from the address of a given `key_pair` and a specified `validator_key`.
-    pub fn new_retire(staking_contract: Address, key_pair: &KeyPair, validator_key: &BlsPublicKey, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
+    pub fn new_retire(
+        staking_contract: Address,
+        key_pair: &KeyPair,
+        validator_key: &BlsPublicKey,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
         recipient.retire_stake(validator_key);
 
         let mut builder = Self::new();
-        builder.with_sender(staking_contract)
+        builder
+            .with_sender(staking_contract)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -533,18 +571,27 @@ impl TransactionBuilder {
             TransactionProofBuilder::StakingSelf(mut builder) => {
                 builder.sign_with_key_pair(&key_pair);
                 builder.generate().unwrap()
-            },
+            }
             _ => unreachable!(),
         }
     }
 
     /// Re-activates the stake from the address of a given `key_pair` to a new `validator_key`.
-    pub fn new_reactivate(staking_contract: Address, key_pair: &KeyPair, validator_key: &BlsPublicKey, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
+    pub fn new_reactivate(
+        staking_contract: Address,
+        key_pair: &KeyPair,
+        validator_key: &BlsPublicKey,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
         let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
         recipient.reactivate_stake(validator_key);
 
         let mut builder = Self::new();
-        builder.with_sender(staking_contract)
+        builder
+            .with_sender(staking_contract)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient.generate().unwrap())
             .with_value(value)
@@ -557,7 +604,7 @@ impl TransactionBuilder {
             TransactionProofBuilder::StakingSelf(mut builder) => {
                 builder.sign_with_key_pair(&key_pair);
                 builder.generate().unwrap()
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -566,11 +613,20 @@ impl TransactionBuilder {
     /// from the staking contract to a new basic `recipient` address.
     ///
     /// Note that unstaking transactions can only be executed after the cooldown period has passed.
-    pub fn new_unstake(staking_contract: Address, key_pair: &KeyPair, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
+    pub fn new_unstake(
+        staking_contract: Address,
+        key_pair: &KeyPair,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
         let recipient = Recipient::new_basic(recipient);
 
         let mut builder = Self::new();
-        builder.with_sender(staking_contract)
+        builder
+            .with_sender(staking_contract)
             .with_sender_type(AccountType::Staking)
             .with_recipient(recipient)
             .with_value(value)
@@ -583,7 +639,7 @@ impl TransactionBuilder {
             TransactionProofBuilder::Staking(mut builder) => {
                 builder.unstake(key_pair);
                 builder.generate().unwrap()
-            },
+            }
             _ => unreachable!(),
         }
     }

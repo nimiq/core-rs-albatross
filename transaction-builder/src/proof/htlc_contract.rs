@@ -1,8 +1,8 @@
 use beserial::{Serialize, SerializingError, WriteBytesExt};
 use hash::{Blake2bHash, Sha256Hash};
 use keys::KeyPair;
-use transaction::{SignatureProof, Transaction};
 use transaction::account::htlc_contract::{AnyHash, HashAlgorithm, ProofType};
+use transaction::{SignatureProof, Transaction};
 
 /// The `HtlcProof` represents a serializable form of all possible proof types
 /// for a transaction from a HTLC contract.
@@ -39,23 +39,32 @@ impl Serialize for HtlcProof {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         match self {
-            HtlcProof::RegularTransfer { hash_algorithm, hash_depth, hash_root, pre_image, recipient_signature } => {
+            HtlcProof::RegularTransfer {
+                hash_algorithm,
+                hash_depth,
+                hash_root,
+                pre_image,
+                recipient_signature,
+            } => {
                 size += ProofType::RegularTransfer.serialize(writer)?;
                 size += hash_algorithm.serialize(writer)?;
                 size += hash_depth.serialize(writer)?;
                 size += hash_root.serialize(writer)?;
                 size += pre_image.serialize(writer)?;
                 size += recipient_signature.serialize(writer)?;
-            },
-            HtlcProof::EarlyResolve { recipient_signature, sender_signature } => {
+            }
+            HtlcProof::EarlyResolve {
+                recipient_signature,
+                sender_signature,
+            } => {
                 size += ProofType::EarlyResolve.serialize(writer)?;
                 size += recipient_signature.serialize(writer)?;
                 size += sender_signature.serialize(writer)?;
-            },
+            }
             HtlcProof::TimeoutResolve { signature } => {
                 size += ProofType::TimeoutResolve.serialize(writer)?;
                 size += signature.serialize(writer)?;
-            },
+            }
         }
         Ok(size)
     }
@@ -63,23 +72,32 @@ impl Serialize for HtlcProof {
     fn serialized_size(&self) -> usize {
         let mut size = 0;
         match self {
-            HtlcProof::RegularTransfer { hash_algorithm, hash_depth, hash_root, pre_image, recipient_signature } => {
+            HtlcProof::RegularTransfer {
+                hash_algorithm,
+                hash_depth,
+                hash_root,
+                pre_image,
+                recipient_signature,
+            } => {
                 size += ProofType::RegularTransfer.serialized_size();
                 size += hash_algorithm.serialized_size();
                 size += hash_depth.serialized_size();
                 size += hash_root.serialized_size();
                 size += pre_image.serialized_size();
                 size += recipient_signature.serialized_size();
-            },
-            HtlcProof::EarlyResolve { recipient_signature, sender_signature } => {
+            }
+            HtlcProof::EarlyResolve {
+                recipient_signature,
+                sender_signature,
+            } => {
                 size += ProofType::EarlyResolve.serialized_size();
                 size += recipient_signature.serialized_size();
                 size += sender_signature.serialized_size();
-            },
+            }
             HtlcProof::TimeoutResolve { signature } => {
                 size += ProofType::TimeoutResolve.serialized_size();
                 size += signature.serialized_size();
-            },
+            }
         }
         size
     }
@@ -247,7 +265,11 @@ impl HtlcProofBuilder {
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
-    pub fn early_resolve(&mut self, sender_signature: SignatureProof, recipient_signature: SignatureProof) -> &mut Self {
+    pub fn early_resolve(
+        &mut self,
+        sender_signature: SignatureProof,
+        recipient_signature: SignatureProof,
+    ) -> &mut Self {
         self.proof = Some(HtlcProof::EarlyResolve {
             sender_signature,
             recipient_signature,
@@ -266,13 +288,20 @@ impl HtlcProofBuilder {
     /// The required signature can be generated using [`signature_with_key_pair`].
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
-    pub fn regular_transfer(&mut self, hash_algorithm: HashAlgorithm, pre_image: AnyHash, hash_count: u8, hash_root: AnyHash, recipient_signature: SignatureProof) -> &mut Self {
+    pub fn regular_transfer(
+        &mut self,
+        hash_algorithm: HashAlgorithm,
+        pre_image: AnyHash,
+        hash_count: u8,
+        hash_root: AnyHash,
+        recipient_signature: SignatureProof,
+    ) -> &mut Self {
         self.proof = Some(HtlcProof::RegularTransfer {
             hash_algorithm,
             hash_depth: hash_count,
             hash_root,
             pre_image,
-            recipient_signature
+            recipient_signature,
         });
         self
     }
@@ -337,10 +366,22 @@ impl HtlcProofBuilder {
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
-    pub fn regular_transfer_sha256(&mut self, pre_image: Sha256Hash, hash_count: u8, hash_root: Sha256Hash, recipient_signature: SignatureProof) -> &mut Self {
+    pub fn regular_transfer_sha256(
+        &mut self,
+        pre_image: Sha256Hash,
+        hash_count: u8,
+        hash_root: Sha256Hash,
+        recipient_signature: SignatureProof,
+    ) -> &mut Self {
         let pre_image: [u8; 32] = pre_image.into();
         let hash_root: [u8; 32] = hash_root.into();
-        self.regular_transfer(HashAlgorithm::Sha256, pre_image.into(), hash_count, hash_root.into(), recipient_signature)
+        self.regular_transfer(
+            HashAlgorithm::Sha256,
+            pre_image.into(),
+            hash_count,
+            hash_root.into(),
+            recipient_signature,
+        )
     }
 
     /// This method creates a proof for the `RegularTransfer` case using Blake2b hashes.
@@ -403,10 +444,22 @@ impl HtlcProofBuilder {
     /// ```
     ///
     /// [`signature_with_key_pair`]: struct.HtlcProofBuilder.html#method.signature_with_key_pair
-    pub fn regular_transfer_blake2b(&mut self, pre_image: Blake2bHash, hash_count: u8, hash_root: Blake2bHash, recipient_signature: SignatureProof) -> &mut Self {
+    pub fn regular_transfer_blake2b(
+        &mut self,
+        pre_image: Blake2bHash,
+        hash_count: u8,
+        hash_root: Blake2bHash,
+        recipient_signature: SignatureProof,
+    ) -> &mut Self {
         let pre_image: [u8; 32] = pre_image.into();
         let hash_root: [u8; 32] = hash_root.into();
-        self.regular_transfer(HashAlgorithm::Blake2b, pre_image.into(), hash_count, hash_root.into(), recipient_signature)
+        self.regular_transfer(
+            HashAlgorithm::Blake2b,
+            pre_image.into(),
+            hash_count,
+            hash_root.into(),
+            recipient_signature,
+        )
     }
 
     /// This method generates the final transaction if the signature has been set correctly.

@@ -1,8 +1,10 @@
 use beserial::{Deserialize, Serialize};
 use bls::bls12_381::KeyPair as BlsKeyPair;
 use keys::KeyPair;
+use transaction::account::staking_contract::{
+    IncomingStakingTransactionData, OutgoingStakingTransactionProof,
+};
 use transaction::{SignatureProof, Transaction};
-use transaction::account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof};
 
 use crate::proof::TransactionProofBuilder;
 
@@ -31,8 +33,10 @@ impl SignallingProofBuilder {
     /// using a BLS key pair `validator_key_pair`.
     pub fn sign_with_validator_key_pair(&mut self, validator_key_pair: &BlsKeyPair) -> &mut Self {
         // Set validator signature first.
-        let mut data: IncomingStakingTransactionData = Deserialize::deserialize_from_vec(&self.transaction.data[..]).unwrap();
-        let validator_signature = validator_key_pair.sign(&self.transaction.serialize_content().as_slice());
+        let mut data: IncomingStakingTransactionData =
+            Deserialize::deserialize_from_vec(&self.transaction.data[..]).unwrap();
+        let validator_signature =
+            validator_key_pair.sign(&self.transaction.serialize_content().as_slice());
         data.set_validator_signature(validator_signature.compress());
         self.data = Some(data);
         self
@@ -82,7 +86,7 @@ impl StakingProofBuilder {
     pub fn unstake(&mut self, key_pair: &KeyPair) -> &mut Self {
         let signature = key_pair.sign(self.transaction.serialize_content().as_slice());
         self.proof = Some(OutgoingStakingTransactionProof::Unstake(
-            SignatureProof::from(key_pair.public, signature)
+            SignatureProof::from(key_pair.public, signature),
         ));
         self
     }

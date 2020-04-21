@@ -7,7 +7,7 @@ use primitives::account::AccountType;
 use transaction::{SignatureProof, Transaction, TransactionFlags};
 
 use crate::proof::htlc_contract::HtlcProofBuilder;
-use crate::proof::staking_contract::{StakingProofBuilder, SignallingProofBuilder};
+use crate::proof::staking_contract::{SignallingProofBuilder, StakingProofBuilder};
 
 pub mod htlc_contract;
 pub mod staking_contract;
@@ -39,26 +39,20 @@ impl TransactionProofBuilder {
     /// Internal method that ignores signalling transactions.
     fn without_signalling(transaction: Transaction) -> Self {
         match transaction.sender_type {
-            AccountType::Basic => TransactionProofBuilder::Basic(
-                BasicProofBuilder::new(transaction)
-            ),
-            AccountType::Vesting => TransactionProofBuilder::Vesting(
-                BasicProofBuilder::new(transaction)
-            ),
-            AccountType::HTLC => TransactionProofBuilder::Htlc(
-                HtlcProofBuilder::new(transaction)
-            ),
+            AccountType::Basic => {
+                TransactionProofBuilder::Basic(BasicProofBuilder::new(transaction))
+            }
+            AccountType::Vesting => {
+                TransactionProofBuilder::Vesting(BasicProofBuilder::new(transaction))
+            }
+            AccountType::HTLC => TransactionProofBuilder::Htlc(HtlcProofBuilder::new(transaction)),
             AccountType::Staking => {
                 if transaction.sender == transaction.recipient {
-                    TransactionProofBuilder::StakingSelf(
-                        BasicProofBuilder::new(transaction)
-                    )
+                    TransactionProofBuilder::StakingSelf(BasicProofBuilder::new(transaction))
                 } else {
-                    TransactionProofBuilder::Staking(
-                        StakingProofBuilder::new(transaction)
-                    )
+                    TransactionProofBuilder::Staking(StakingProofBuilder::new(transaction))
                 }
-            },
+            }
         }
     }
 
@@ -66,9 +60,7 @@ impl TransactionProofBuilder {
     /// used to populate it with the required proof.
     pub fn new(transaction: Transaction) -> Self {
         if transaction.flags.contains(TransactionFlags::SIGNALLING) {
-            return TransactionProofBuilder::Signalling(
-                SignallingProofBuilder::new(transaction)
-            );
+            return TransactionProofBuilder::Signalling(SignallingProofBuilder::new(transaction));
         }
 
         TransactionProofBuilder::without_signalling(transaction)
@@ -320,12 +312,24 @@ impl TransactionProofBuilder {
 impl SerializeContent for TransactionProofBuilder {
     fn serialize_content<W: io::Write>(&self, writer: &mut W) -> Result<usize, io::Error> {
         match self {
-            TransactionProofBuilder::Basic(builder) => SerializeContent::serialize_content(&builder.transaction, writer),
-            TransactionProofBuilder::Vesting(builder) => SerializeContent::serialize_content(&builder.transaction, writer),
-            TransactionProofBuilder::Htlc(builder) => SerializeContent::serialize_content(&builder.transaction, writer),
-            TransactionProofBuilder::StakingSelf(builder) => SerializeContent::serialize_content(&builder.transaction, writer),
-            TransactionProofBuilder::Staking(builder) => SerializeContent::serialize_content(&builder.transaction, writer),
-            TransactionProofBuilder::Signalling(builder) => SerializeContent::serialize_content(&builder.transaction, writer),
+            TransactionProofBuilder::Basic(builder) => {
+                SerializeContent::serialize_content(&builder.transaction, writer)
+            }
+            TransactionProofBuilder::Vesting(builder) => {
+                SerializeContent::serialize_content(&builder.transaction, writer)
+            }
+            TransactionProofBuilder::Htlc(builder) => {
+                SerializeContent::serialize_content(&builder.transaction, writer)
+            }
+            TransactionProofBuilder::StakingSelf(builder) => {
+                SerializeContent::serialize_content(&builder.transaction, writer)
+            }
+            TransactionProofBuilder::Staking(builder) => {
+                SerializeContent::serialize_content(&builder.transaction, writer)
+            }
+            TransactionProofBuilder::Signalling(builder) => {
+                SerializeContent::serialize_content(&builder.transaction, writer)
+            }
         }
     }
 }

@@ -8,9 +8,9 @@ use crate::recipient::htlc_contract::HtlcRecipientBuilder;
 use crate::recipient::staking_contract::{StakingRecipientBuilder, StakingTransaction};
 use crate::recipient::vesting_contract::VestingRecipientBuilder;
 
-pub mod vesting_contract;
 pub mod htlc_contract;
 pub mod staking_contract;
+pub mod vesting_contract;
 
 /// A `Recipient` describes the recipient of a transaction.
 /// This also determines the data field of the transaction to be built.
@@ -58,9 +58,7 @@ impl Recipient {
     /// );
     /// ```
     pub fn new_basic(address: Address) -> Self {
-        Recipient::Basic {
-            address
-        }
+        Recipient::Basic { address }
     }
 
     /// Initiates a [`HtlcRecipientBuilder`] that can be used to create new HTLC contracts.
@@ -202,8 +200,7 @@ impl Recipient {
     /// Returns the recipient address if this is not a contract creation.
     pub fn address(&self) -> Option<&Address> {
         match self {
-            Recipient::Basic { address } |
-            Recipient::Staking { address, .. } => Some(address),
+            Recipient::Basic { address } | Recipient::Staking { address, .. } => Some(address),
             _ => None,
         }
     }
@@ -234,7 +231,7 @@ impl Recipient {
                 } else {
                     true
                 }
-            },
+            }
             _ => true,
         }
     }

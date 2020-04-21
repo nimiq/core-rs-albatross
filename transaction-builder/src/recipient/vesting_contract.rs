@@ -79,7 +79,8 @@ impl VestingRecipientBuilder {
     /// at blockchain height `start_block`.
     pub fn new_single_step(owner: Address, start_block: u32, amount: Coin) -> Self {
         let mut builder = Self::new(owner);
-        builder.with_start_block(0)
+        builder
+            .with_start_block(0)
             .with_step_distance(start_block)
             .with_total_amount(amount)
             .with_step_amount(amount);
@@ -109,7 +110,13 @@ impl VestingRecipientBuilder {
 
     /// This convenience function allows to quickly create a release schedule of `num_steps`
     /// payouts starting at `start_block + step_distance`.
-    pub fn with_steps(&mut self, total_amount: Coin, start_block: u32, step_distance: u32, num_steps: u32) -> &mut Self {
+    pub fn with_steps(
+        &mut self,
+        total_amount: Coin,
+        start_block: u32,
+        step_distance: u32,
+        num_steps: u32,
+    ) -> &mut Self {
         let step_amount = total_amount.div(u64::from(num_steps));
         self.with_total_amount(total_amount)
             .with_start_block(start_block)
@@ -159,11 +166,19 @@ impl VestingRecipientBuilder {
         Ok(Recipient::VestingCreation {
             data: VestingCreationData {
                 owner: self.owner.ok_or(VestingRecipientBuilderError::NoOwner)?,
-                start: self.start_block.ok_or(VestingRecipientBuilderError::NoStartBlock)?,
-                step_blocks: self.step_distance.ok_or(VestingRecipientBuilderError::NoStepDistance)?,
-                step_amount: self.step_amount.ok_or(VestingRecipientBuilderError::NoStepAmount)?,
-                total_amount: self.total_amount.ok_or(VestingRecipientBuilderError::NoTotalAmount)?
-            }
+                start: self
+                    .start_block
+                    .ok_or(VestingRecipientBuilderError::NoStartBlock)?,
+                step_blocks: self
+                    .step_distance
+                    .ok_or(VestingRecipientBuilderError::NoStepDistance)?,
+                step_amount: self
+                    .step_amount
+                    .ok_or(VestingRecipientBuilderError::NoStepAmount)?,
+                total_amount: self
+                    .total_amount
+                    .ok_or(VestingRecipientBuilderError::NoTotalAmount)?,
+            },
         })
     }
 }
