@@ -5,7 +5,8 @@ use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
 use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
 use r1cs_std::ToBitsGadget;
 
-use crate::gadgets::mnt4::{PedersenCommitmentGadget, YToBitGadget};
+use crate::gadgets::mnt4::{MNT4YToBitGadget, PedersenCommitmentGadget};
+use crate::gadgets::y_to_bit::YToBitGadget;
 use crate::utils::{pad_point_bits, reverse_inner_byte_order};
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
@@ -39,7 +40,8 @@ impl StateCommitmentGadget {
             // Get bits from the x coordinate.
             let x_bits = key.x.to_bits(cs.ns(|| format!("x to bits: pk {}", i)))?;
             // Get one bit from the y coordinate.
-            let y_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit: pk {}", i)), key)?;
+            let y_bit =
+                MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit: pk {}", i)), key)?;
             // Pad points and get *Big-Endian* representation.
             let serialized_bits = pad_point_bits::<FqParameters>(x_bits, y_bit);
             // Append to Boolean vector.
@@ -58,7 +60,7 @@ impl StateCommitmentGadget {
         let x_bits = pedersen_commitment
             .x
             .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
-        let y_bit = YToBitGadget::y_to_bit_g1(
+        let y_bit = MNT4YToBitGadget::y_to_bit_g1(
             cs.ns(|| "y to bit: pedersen commitment"),
             &pedersen_commitment,
         )?;

@@ -6,7 +6,8 @@ use r1cs_std::bits::{boolean::Boolean, uint8::UInt8};
 use r1cs_std::mnt4_753::{G1Gadget, PairingGadget};
 use r1cs_std::ToBitsGadget;
 
-use crate::gadgets::mnt6::{PedersenCommitmentGadget, YToBitGadget};
+use crate::gadgets::mnt6::{MNT6YToBitGadget, PedersenCommitmentGadget};
+use crate::gadgets::y_to_bit::YToBitGadget;
 use crate::utils::{pad_point_bits, reverse_inner_byte_order};
 
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK in the
@@ -31,19 +32,19 @@ impl VKCommitmentGadget {
         // Serialize the verifying key into bits.
         // Alpha G1
         let x_bits = vk.alpha_g1.x.to_bits(cs.ns(|| "x to bits: alpha g1"))?;
-        let y_bit = YToBitGadget::y_to_bit_g1(cs.ns(|| "y to bit: alpha g1"), &vk.alpha_g1)?;
+        let y_bit = MNT6YToBitGadget::y_to_bit_g1(cs.ns(|| "y to bit: alpha g1"), &vk.alpha_g1)?;
         bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
         // Beta G2
         let x_bits = vk.beta_g2.x.to_bits(cs.ns(|| "x to bits: beta g2"))?;
-        let y_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: beta g2"), &vk.beta_g2)?;
+        let y_bit = MNT6YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: beta g2"), &vk.beta_g2)?;
         bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
         // Gamma G2
         let x_bits = vk.gamma_g2.x.to_bits(cs.ns(|| "x to bits: gamma g2"))?;
-        let y_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: gamma g2"), &vk.gamma_g2)?;
+        let y_bit = MNT6YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: gamma g2"), &vk.gamma_g2)?;
         bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
         // Delta G2
         let x_bits = vk.delta_g2.x.to_bits(cs.ns(|| "x to bits: delta g2"))?;
-        let y_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: delta g2"), &vk.delta_g2)?;
+        let y_bit = MNT6YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: delta g2"), &vk.delta_g2)?;
         bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
         // Gamma ABC G1
         for i in 0..vk.gamma_abc_g1.len() {
@@ -51,7 +52,7 @@ impl VKCommitmentGadget {
             let x_bits = point
                 .x
                 .to_bits(cs.ns(|| format!("x to bits: gamma abc g1: point {}", i)))?;
-            let y_bit = YToBitGadget::y_to_bit_g1(
+            let y_bit = MNT6YToBitGadget::y_to_bit_g1(
                 cs.ns(|| format!("y to bit: gamma abc g1: point {}", i)),
                 point,
             )?;
@@ -70,7 +71,7 @@ impl VKCommitmentGadget {
         let x_bits = pedersen_commitment
             .x
             .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
-        let greatest_bit = YToBitGadget::y_to_bit_g1(
+        let greatest_bit = MNT6YToBitGadget::y_to_bit_g1(
             cs.ns(|| "y to bit: pedersen commitment"),
             &pedersen_commitment,
         )?;

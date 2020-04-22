@@ -10,7 +10,7 @@ use r1cs_std::test_constraint_system::TestConstraintSystem;
 use r1cs_std::ToBitsGadget;
 use rand::RngCore;
 
-use nano_sync::gadgets::mnt4::YToBitGadget;
+use nano_sync::gadgets::mnt4::MNT4YToBitGadget;
 use nano_sync::utils::{bytes_to_bits, pad_point_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 #[test]
@@ -52,7 +52,7 @@ fn serialization_mnt6_works() {
     // Serialize using the gadget version.
     let mut gadget_var = vec![];
     let x_bits = g2_point_var.x.to_bits(cs.ns(|| "g2 x to bits")).unwrap();
-    let y_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| "g2 y to bit"), &g2_point_var).unwrap();
+    let y_bit = MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| "g2 y to bit"), &g2_point_var).unwrap();
     gadget_var.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
 
     assert_eq!(primitive_var, gadget_var);
@@ -77,7 +77,7 @@ fn serialization_mnt6_works() {
     // Serialize using the gadget version.
     let mut gadget_var = vec![];
     let x_bits = g1_point_var.x.to_bits(cs.ns(|| "g1 x to bits")).unwrap();
-    let y_bit = YToBitGadget::y_to_bit_g1(cs.ns(|| "g1 y to bit"), &g1_point_var).unwrap();
+    let y_bit = MNT4YToBitGadget::y_to_bit_g1(cs.ns(|| "g1 y to bit"), &g1_point_var).unwrap();
     gadget_var.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
 
     assert_eq!(primitive_var, gadget_var);

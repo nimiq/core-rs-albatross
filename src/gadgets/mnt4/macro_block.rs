@@ -16,8 +16,9 @@ use r1cs_std::{Assignment, ToBitsGadget};
 
 use crate::constants::VALIDATOR_SLOTS;
 use crate::gadgets::mnt4::{
-    CheckSigGadget, PedersenCommitmentGadget, PedersenHashGadget, YToBitGadget,
+    CheckSigGadget, MNT4YToBitGadget, PedersenCommitmentGadget, PedersenHashGadget,
 };
+use crate::gadgets::y_to_bit::YToBitGadget;
 use crate::primitives::MacroBlock;
 use crate::utils::{pad_point_bits, reverse_inner_byte_order};
 
@@ -202,7 +203,7 @@ impl MacroBlockGadget {
             let x_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| format!("x to bits: pk {}", i)))?;
             // Get one bit from the y coordinate.
             let greatest_bit =
-                YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bits: pk {}", i)), key)?;
+                MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bits: pk {}", i)), key)?;
             // Pad points and get *Big-Endian* representation.
             let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
             // Append to Boolean vector.
@@ -221,7 +222,7 @@ impl MacroBlockGadget {
         let x_bits = pedersen_commitment
             .x
             .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
-        let greatest_bit = YToBitGadget::y_to_bit_g1(
+        let greatest_bit = MNT4YToBitGadget::y_to_bit_g1(
             cs.ns(|| "y to bit: pedersen commitment"),
             &pedersen_commitment,
         )?;

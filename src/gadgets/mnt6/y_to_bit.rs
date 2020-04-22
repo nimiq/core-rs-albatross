@@ -1,24 +1,30 @@
 use std::ops::Neg;
 
-use algebra::{mnt4_753::Fq, mnt6_753::Fr as MNT6Fr, One, PrimeField};
+use algebra::{
+    mnt4_753::{Fq, MNT4_753},
+    mnt6_753::Fr as MNT6Fr,
+    One, PrimeField,
+};
 use algebra_core::{Field, Zero};
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::fields::fp::FpGadget;
-use r1cs_std::mnt4_753::{FqGadget, G1Gadget, G2Gadget};
+use r1cs_std::mnt4_753::{FqGadget, G1Gadget, G2Gadget, PairingGadget};
 use r1cs_std::prelude::{AllocGadget, FieldGadget};
 use r1cs_std::{Assignment, ToBitsGadget};
+
+use crate::gadgets::y_to_bit::YToBitGadget;
 
 /// A gadget that takes an elliptic curve point as input and outputs a single bit representing the
 /// "sign" of the y-coordinate. It is meant to aid with serialization.
 /// It was originally part of the Celo light client library. (https://github.com/celo-org/bls-zexe)
-pub struct YToBitGadget;
+pub struct MNT6YToBitGadget;
 
-impl YToBitGadget {
+impl YToBitGadget<MNT4_753, MNT6Fr, PairingGadget> for MNT6YToBitGadget {
     /// Outputs a boolean representing the relation:
     /// y > half
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
-    pub fn y_to_bit_g1<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
+    fn y_to_bit_g1<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
         mut cs: CS,
         point: &G1Gadget,
     ) -> Result<Boolean, SynthesisError> {
@@ -77,7 +83,7 @@ impl YToBitGadget {
     /// Outputs a boolean representing the relation:
     /// (y_c1 > half) || (y_c1 == 0 && y_c0 > half)
     /// where half means the half point of the modulus of the underlying field. So, half = (p-1)/2.
-    pub fn y_to_bit_g2<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
+    fn y_to_bit_g2<CS: r1cs_core::ConstraintSystem<MNT6Fr>>(
         mut cs: CS,
         point: &G2Gadget,
     ) -> Result<Boolean, SynthesisError> {
