@@ -11,6 +11,7 @@ use r1cs_std::mnt4_753::PairingGadget;
 use r1cs_std::prelude::*;
 
 use crate::circuits::mnt4::MergerCircuit;
+use crate::gadgets::input::RecursiveInputGadget;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 // Renaming some types for convenience. We can change the circuit and elliptic curve of the input
@@ -96,10 +97,14 @@ impl ConstraintSynthesizer<MNT6Fr> for MergerWrapperCircuit {
 
         // Verify the ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify ZK proof" });
-        let mut proof_inputs = vec![];
-        proof_inputs.push(initial_state_commitment_var);
-        proof_inputs.push(final_state_commitment_var);
-        proof_inputs.push(vk_commitment_var);
+        let mut proof_inputs =
+            RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &final_state_commitment_var,
+        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &vk_commitment_var,
+        )?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify groth16 proof"),

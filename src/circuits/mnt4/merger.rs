@@ -12,6 +12,7 @@ use r1cs_std::prelude::*;
 
 use crate::circuits::mnt6::{MacroBlockWrapperCircuit, MergerWrapperCircuit};
 use crate::constants::sum_generator_g1_mnt6;
+use crate::gadgets::input::RecursiveInputGadget;
 use crate::gadgets::mnt4::VKCommitmentGadget;
 use crate::primitives::pedersen_generators;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
@@ -200,10 +201,14 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // the genesis block, for the first merger circuit.
         next_cost_analysis!(cs, cost, || { "Conditionally verify proof merger wrapper" });
 
-        let mut proof_inputs = vec![];
-        proof_inputs.push(initial_state_commitment_var);
-        proof_inputs.push(intermediate_state_commitment_var.clone());
-        proof_inputs.push(vk_commitment_var);
+        let mut proof_inputs =
+            RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &intermediate_state_commitment_var,
+        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &vk_commitment_var,
+        )?);
 
         let neg_genesis_flag_var = genesis_flag_var.not();
 
@@ -218,9 +223,11 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // Verify the ZK proof for the Macro Block Wrapper circuit.
         next_cost_analysis!(cs, cost, || { "Verify proof macro block wrapper" });
 
-        let mut proof_inputs = vec![];
-        proof_inputs.push(intermediate_state_commitment_var);
-        proof_inputs.push(final_state_commitment_var);
+        let mut proof_inputs =
+            RecursiveInputGadget::to_field_elements::<Fr>(&intermediate_state_commitment_var)?;
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &final_state_commitment_var,
+        )?);
 
         <TheVerifierGadget as NIZKVerifierGadget<SecondProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify macro block wrapper groth16 proof"),
