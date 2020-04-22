@@ -2,9 +2,9 @@ use algebra::mnt6_753::{Fq, G1Affine, G1Projective};
 use algebra_core::{Group, One, PrimeField};
 use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
-use nimiq_bls::big_int_from_bytes_be;
 
 use crate::rand_gen::generate_random_seed;
+use crate::utils::big_int_from_bytes_be;
 
 /// This is the function for creating generators in the G1 group for the MNT6-753 curve. These
 /// generators are meant to be use for the Pedersen hash and the Pedersen commitment functions.

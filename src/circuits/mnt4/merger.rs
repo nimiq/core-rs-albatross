@@ -13,7 +13,7 @@ use r1cs_std::prelude::*;
 use crate::circuits::mnt6::{MacroBlockWrapperCircuit, MergerWrapperCircuit};
 use crate::constants::sum_generator_g1_mnt6;
 use crate::gadgets::mnt4::VKCommitmentGadget;
-use crate::primitives::mnt4::pedersen_generators;
+use crate::primitives::pedersen_generators;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 // Renaming some types for convenience. We can change the circuit and elliptic curve of the input
@@ -102,7 +102,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         // TODO: Calculate correct number of generators.
         let pedersen_generators = pedersen_generators(256);
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
-        for i in 0..256 {
+        for i in 0..pedersen_generators.len() {
             pedersen_generators_var.push(G1Gadget::alloc_constant(
                 cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
                 &pedersen_generators[i],

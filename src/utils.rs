@@ -1,6 +1,6 @@
 use algebra::mnt4_753::{G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective};
 use algebra::mnt6_753::{G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective};
-use algebra::FpParameters;
+use algebra::{BigInteger768, FpParameters};
 use algebra_core::ProjectiveCurve;
 use r1cs_std::prelude::*;
 
@@ -107,4 +107,15 @@ pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     }
 
     bits
+}
+
+/// Cretes a BigInteger from an array of bytes in big-endian format.
+pub fn big_int_from_bytes_be<R: std::io::Read>(reader: &mut R) -> BigInteger768 {
+    let mut res = [0u64; 12];
+    for num in res.iter_mut().rev() {
+        let mut bytes = [0u8; 8];
+        reader.read_exact(&mut bytes).unwrap();
+        *num = u64::from_be_bytes(bytes);
+    }
+    BigInteger768::new(res)
 }

@@ -18,7 +18,7 @@ use crate::constants::VALIDATOR_SLOTS;
 use crate::gadgets::mnt4::{
     CheckSigGadget, PedersenCommitmentGadget, PedersenHashGadget, YToBitGadget,
 };
-use crate::primitives::mnt4::MacroBlock;
+use crate::primitives::MacroBlock;
 use crate::utils::{pad_point_bits, reverse_inner_byte_order};
 
 /// A simple enum representing the two rounds of signing in the macro blocks.

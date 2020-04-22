@@ -1,11 +1,11 @@
 use beserial::Deserialize;
-use nimiq_bls::{KeyPair, SecretKey, SecureGenerate};
 use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 use nano_sync::constants::{EPOCH_LENGTH, MAX_NON_SIGNERS, MIN_SIGNERS, VALIDATOR_SLOTS};
 use nano_sync::primitives::mnt4::{state_commitment, MacroBlock};
 use nano_sync::MacroBlockCircuit;
+use nimiq_bls::{KeyPair, SecretKey, SecureGenerate};
 
 // When running tests you are advised to set VALIDATOR_SLOTS in constants.rs to a more manageable number, for example 4.
 

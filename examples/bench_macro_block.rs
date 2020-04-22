@@ -11,13 +11,13 @@ use algebra::test_rng;
 use groth16::{
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
 };
-use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::{ConstraintSynthesizer, ToConstraintField};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 use nano_sync::circuits::mnt4::MacroBlockCircuit;
 use nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
 use nano_sync::primitives::mnt4::{state_commitment, MacroBlock};
+use nimiq_bls::{KeyPair, SecureGenerate};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use

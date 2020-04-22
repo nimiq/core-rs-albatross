@@ -3,5 +3,12 @@
 //! need an off-circuit version of a primitive that is however guaranteed to be consistent with the on-circuit
 //! primitive used by one of our zk-SNARKs. They are also used for testing.
 
-pub mod mnt4;
-pub mod mnt6;
+pub use macro_block::*;
+pub use pedersen::*;
+pub use state_commitment::*;
+pub use vk_commitment::*;
+
+pub mod macro_block;
+pub mod pedersen;
+pub mod state_commitment;
+pub mod vk_commitment;

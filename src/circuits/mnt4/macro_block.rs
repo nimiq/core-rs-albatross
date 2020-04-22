@@ -9,7 +9,7 @@ use crate::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS,
 };
 use crate::gadgets::{mnt4::MacroBlockGadget, mnt4::StateCommitmentGadget};
-use crate::primitives::mnt4::{pedersen_generators, MacroBlock};
+use crate::primitives::{pedersen_generators, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
@@ -127,7 +127,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &sum_generator_g1_var,
         )?;
 
-        for i in 0..32 {
+        for i in 0..self.initial_state_commitment.len() {
             initial_state_commitment_var[i].enforce_equal(
                 cs.ns(|| {
                     format!(

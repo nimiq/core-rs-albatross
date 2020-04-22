@@ -13,9 +13,9 @@ use algebra::PrimeField;
 use algebra_core::One;
 use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
-use nimiq_bls::big_int_from_bytes_be;
 
 use crate::rand_gen::generate_random_seed;
+use crate::utils::big_int_from_bytes_be;
 
 /// This is the length of one epoch in Albatross. Basically, the difference in the block numbers of
 /// two consecutive macro blocks.

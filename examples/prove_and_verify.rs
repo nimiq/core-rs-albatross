@@ -16,10 +16,10 @@ use algebra::curves::bls12_377::G2Projective;
 // For randomness (during paramgen and proof generation)
 use algebra::test_rng;
 use groth16::{create_random_proof, prepare_verifying_key, verify_proof, Parameters, VerifyingKey};
-use nimiq_bls::{KeyPair, SecureGenerate};
 
 use nano_sync::constants::{setup_crh, CRHWindow};
 use nano_sync::*;
+use nimiq_bls::{KeyPair, SecureGenerate};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // This may not be cryptographically safe, use

@@ -1,10 +1,9 @@
-use algebra::mnt6_753::{G1Projective, G2Projective};
+use algebra::mnt6_753::{Fr, G1Projective, G2Projective};
 use algebra::ProjectiveCurve;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
-use nimiq_bls::KeyPair;
 
 use crate::constants::{sum_generator_g1_mnt6, VALIDATOR_SLOTS};
-use crate::primitives::mnt4::{pedersen_commitment, pedersen_generators, pedersen_hash};
+use crate::primitives::{pedersen_commitment, pedersen_generators, pedersen_hash};
 use crate::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// A struct representing a macro block in Albatross.
@@ -40,25 +39,21 @@ impl MacroBlock {
 
     /// This function signs a macro block, for the prepare and commit rounds, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign(&mut self, key_pair: &KeyPair, signer_id: usize, block_number: u32) {
-        self.sign_prepare(key_pair, signer_id, block_number);
-        self.sign_commit(key_pair, signer_id, block_number);
+    pub fn sign(&mut self, sk: Fr, signer_id: usize, block_number: u32) {
+        self.sign_prepare(sk.clone(), signer_id, block_number);
+        self.sign_commit(sk, signer_id, block_number);
     }
 
     /// This function signs a macro block, for only the prepare round, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign_prepare(&mut self, key_pair: &KeyPair, signer_id: usize, block_number: u32) {
+    pub fn sign_prepare(&mut self, sk: Fr, signer_id: usize, block_number: u32) {
         // Generate the hash point for the signature.
         let hash_point = self.hash(0, block_number);
 
         // Generates the signature.
-        let signature = key_pair.secret_key.sign_g1(hash_point);
+        let signature = hash_point.mul(sk);
 
-        if let Some(sig) = self.prepare_signature.as_mut() {
-            *sig += &signature.signature;
-        } else {
-            self.prepare_signature = Some(signature.signature);
-        }
+        self.prepare_signature = Some(signature);
 
         // Set the signer id to true.
         self.prepare_signer_bitmap[signer_id] = true;
@@ -66,18 +61,14 @@ impl MacroBlock {
 
     /// This function signs a macro block, for only the prepare round, given a validator's
     /// key pair and signer id (which is simply the position in the signer bitmap).
-    pub fn sign_commit(&mut self, key_pair: &KeyPair, signer_id: usize, block_number: u32) {
+    pub fn sign_commit(&mut self, sk: Fr, signer_id: usize, block_number: u32) {
         // Generate the hash point for the signature.
         let hash_point = self.hash(1, block_number);
 
         // Generates the signature.
-        let signature = key_pair.secret_key.sign_g1(hash_point);
+        let signature = hash_point.mul(sk);
 
-        if let Some(sig) = self.commit_signature.as_mut() {
-            *sig += &signature.signature;
-        } else {
-            self.commit_signature = Some(signature.signature);
-        }
+        self.commit_signature = Some(signature);
 
         // Set the signer id to true.
         self.commit_signer_bitmap[signer_id] = true;

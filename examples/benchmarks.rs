@@ -6,7 +6,6 @@ use std::error::Error;
 use algebra::mnt4_753::Fr as MNT4Fr;
 use algebra::mnt6_753::{FqParameters, G2Projective};
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
-use nimiq_bls::{KeyPair, SecureGenerate};
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, Boolean, UInt8};
@@ -17,6 +16,7 @@ use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::mnt4::{PedersenCommitmentGadget, YToBitGadget};
 use nano_sync::gadgets::{pad_point_bits, reverse_inner_byte_order};
 use nano_sync::primitives::mnt4::pedersen_generators;
+use nimiq_bls::{KeyPair, SecureGenerate};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Setup keys.

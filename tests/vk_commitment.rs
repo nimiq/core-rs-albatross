@@ -1,13 +1,13 @@
 use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::{Fq, FqParameters, Fr, G1Projective, G2Projective};
+use algebra::mnt6_753::{Fq, Fr, G1Projective, G2Projective};
 use algebra::MNT6_753;
 use algebra_core::fields::Field;
 use algebra_core::{test_rng, ProjectiveCurve};
 use crypto_primitives::nizk::groth16::constraints::VerifyingKeyGadget;
 use groth16::VerifyingKey;
 use r1cs_core::ConstraintSystem;
-use r1cs_std::mnt6_753::{G1Gadget, G2Gadget, PairingGadget};
-use r1cs_std::prelude::{AllocGadget, UInt32, UInt8};
+use r1cs_std::mnt6_753::{G1Gadget, PairingGadget};
+use r1cs_std::prelude::{AllocGadget, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 

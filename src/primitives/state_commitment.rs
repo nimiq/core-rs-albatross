@@ -1,7 +1,7 @@
 use algebra::mnt6_753::G2Projective;
 
 use crate::constants::sum_generator_g1_mnt6;
-use crate::primitives::mnt4::{pedersen_commitment, pedersen_generators};
+use crate::primitives::{pedersen_commitment, pedersen_generators};
 use crate::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// This function is meant to calculate the "state commitment" off-circuit, which is simply a commitment,
