@@ -8,7 +8,7 @@ use r1cs_std::prelude::*;
 use crate::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS,
 };
-use crate::gadgets::{mnt4::MacroBlockGadget, mnt4::StateCommitmentGadget};
+use crate::gadgets::mnt4::{MacroBlockGadget, StateCommitmentGadget};
 use crate::primitives::{pedersen_generators, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 

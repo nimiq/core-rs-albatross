@@ -13,7 +13,7 @@ use rand::RngCore;
 
 use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::mnt4::VKCommitmentGadget;
-use nano_sync::primitives::mnt4::{pedersen_generators, vk_commitment};
+use nano_sync::primitives::{pedersen_generators, vk_commitment};
 
 #[test]
 fn vk_commitment_test() {

@@ -1,45 +1,51 @@
 #![allow(dead_code)]
 
-// For benchmarking
 use std::{
     error::Error,
     time::{Duration, Instant},
 };
 
+// For benchmarking
 use algebra::mnt4_753::{Fr as MNT4Fr, MNT4_753};
+use algebra::mnt6_753::{Fr, G2Projective};
 use algebra::test_rng;
+use algebra_core::fields::Field;
+use algebra_core::ProjectiveCurve;
 use groth16::{
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
 };
 use r1cs_core::{ConstraintSynthesizer, ToConstraintField};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
+use rand::RngCore;
 
 use nano_sync::circuits::mnt4::MacroBlockCircuit;
 use nano_sync::constants::{EPOCH_LENGTH, VALIDATOR_SLOTS};
-use nano_sync::primitives::mnt4::{state_commitment, MacroBlock};
-use nimiq_bls::{KeyPair, SecureGenerate};
+use nano_sync::primitives::{state_commitment, MacroBlock};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // This may not be cryptographically safe, use
-    // `OsRng` (for example) in production software.
-    //
-    let rng = &mut test_rng();
-
     let mut total_setup = Duration::new(0, 0);
     let mut total_proving = Duration::new(0, 0);
     let mut total_verifying = Duration::new(0, 0);
 
-    // Setup keys.
-    let key_pair1 = KeyPair::generate_default_csprng();
-    let key_pair2 = KeyPair::generate_default_csprng();
+    // Create random integers.
+    let rng = &mut test_rng();
+    let mut bytes = [0u8; 96];
+    rng.fill_bytes(&mut bytes[2..]);
+    let sk_1 = Fr::from_random_bytes(&bytes).unwrap();
+    rng.fill_bytes(&mut bytes[2..]);
+    let sk_2 = Fr::from_random_bytes(&bytes).unwrap();
+
+    // Create random points.
+    let pk_1 = G2Projective::prime_subgroup_generator().mul(sk_1);
+    let pk_2 = G2Projective::prime_subgroup_generator().mul(sk_2);
 
     // Create initial state.
-    let previous_keys = vec![key_pair1.public_key.public_key; VALIDATOR_SLOTS];
+    let previous_keys = vec![pk_1; VALIDATOR_SLOTS];
     let previous_block_number = 1;
     let initial_state_commitment = state_commitment(previous_block_number, previous_keys.clone());
 
     // Create final state.
-    let next_keys = vec![key_pair2.public_key.public_key; VALIDATOR_SLOTS];
+    let next_keys = vec![pk_2; VALIDATOR_SLOTS];
     let next_block_number = previous_block_number + EPOCH_LENGTH;
     let final_state_commitment = state_commitment(next_block_number, next_keys.clone());
 
@@ -47,11 +53,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut macro_block = MacroBlock::without_signatures([0; 32], next_keys);
 
     for i in 0..VALIDATOR_SLOTS {
-        macro_block.sign_prepare(&key_pair1, i, previous_block_number);
+        macro_block.sign_prepare(sk_1.clone(), i, previous_block_number);
     }
 
     for i in 0..VALIDATOR_SLOTS {
-        macro_block.sign_commit(&key_pair1, i, previous_block_number);
+        macro_block.sign_commit(sk_1, i, previous_block_number);
     }
 
     // Test constraint system.

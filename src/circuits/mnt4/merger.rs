@@ -68,10 +68,10 @@ impl MergerCircuit {
         vk_merger_wrapper: VerifyingKey<MNT6_753>,
         vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
         intermediate_state_commitment: Vec<u8>,
+        genesis_flag: bool,
         initial_state_commitment: Vec<u8>,
         final_state_commitment: Vec<u8>,
         vk_commitment: Vec<u8>,
-        genesis_flag: bool,
     ) -> Self {
         Self {
             proof_merger_wrapper,
@@ -79,10 +79,10 @@ impl MergerCircuit {
             vk_merger_wrapper,
             vk_macro_block_wrapper,
             intermediate_state_commitment,
+            genesis_flag,
             initial_state_commitment,
             final_state_commitment,
             vk_commitment,
-            genesis_flag,
         }
     }
 }

@@ -9,7 +9,7 @@ use rand::RngCore;
 
 use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::mnt4::{PedersenCommitmentGadget, PedersenHashGadget};
-use nano_sync::primitives::mnt4::{pedersen_commitment, pedersen_generators, pedersen_hash};
+use nano_sync::primitives::{pedersen_commitment, pedersen_generators, pedersen_hash};
 use nano_sync::utils::bytes_to_bits;
 
 #[test]

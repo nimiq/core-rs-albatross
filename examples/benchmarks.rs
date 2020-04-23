@@ -13,7 +13,7 @@ use r1cs_std::test_constraint_system::TestConstraintSystem;
 use r1cs_std::ToBitsGadget;
 
 use nano_sync::constants::sum_generator_g1_mnt6;
-use nano_sync::gadgets::mnt4::{MNT4YToBitGadget, PedersenCommitmentGadget};
+use nano_sync::gadgets::mnt4::{PedersenCommitmentGadget, YToBitGadget};
 use nano_sync::gadgets::{pad_point_bits, reverse_inner_byte_order};
 use nano_sync::primitives::mnt4::pedersen_generators;
 use nimiq_bls::{KeyPair, SecureGenerate};
@@ -54,7 +54,7 @@ fn only_blake2s_circuit<CS: ConstraintSystem<MNT4Fr>>(
     // Just append all bit representations.
     for (i, key) in keys_var.iter().enumerate() {
         let serialized_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| format!("bits {}", i)))?;
-        let greatest_bit = MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit {}", i)), key)?;
+        let greatest_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit {}", i)), key)?;
 
         // Pad points and get *Big-Endian* representation.
         let mut serialized_bits = pad_point_bits::<FqParameters>(serialized_bits, greatest_bit);
@@ -80,7 +80,7 @@ fn only_pedersen_circuit<CS: ConstraintSystem<MNT4Fr>>(
     // Just append all bit representations.
     for (i, key) in keys_var.iter().enumerate() {
         let serialized_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| format!("bits {}", i)))?;
-        let greatest_bit = MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit {}", i)), key)?;
+        let greatest_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit {}", i)), key)?;
 
         // Pad points and get *Big-Endian* representation.
         let mut serialized_bits = pad_point_bits::<FqParameters>(serialized_bits, greatest_bit);
@@ -114,7 +114,7 @@ fn only_pedersen_circuit<CS: ConstraintSystem<MNT4Fr>>(
     let x_bits = pedersen_commitment
         .x
         .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
-    let greatest_bit = MNT4YToBitGadget::y_to_bit_g1(
+    let greatest_bit = YToBitGadget::y_to_bit_g1(
         cs.ns(|| "y to bit: pedersen commitment"),
         &pedersen_commitment,
     )?;
@@ -139,7 +139,7 @@ fn only_serialize_pks<CS: ConstraintSystem<MNT4Fr>>(
     // Just append all bit representations.
     for (i, key) in keys_var.iter().enumerate() {
         let serialized_bits: Vec<Boolean> = key.x.to_bits(cs.ns(|| format!("bits {}", i)))?;
-        let greatest_bit = MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit {}", i)), key)?;
+        let greatest_bit = YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit {}", i)), key)?;
 
         // Pad points and get *Big-Endian* representation.
         let mut serialized_bits = pad_point_bits::<FqParameters>(serialized_bits, greatest_bit);

@@ -1,5 +1,5 @@
 use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::{FqParameters, Fr, G1Projective, G2Projective};
+use algebra::mnt6_753::{Fr, G2Projective};
 use algebra_core::fields::Field;
 use algebra_core::{test_rng, ProjectiveCurve};
 use r1cs_core::ConstraintSystem;
@@ -10,7 +10,7 @@ use rand::RngCore;
 
 use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::mnt4::StateCommitmentGadget;
-use nano_sync::primitives::mnt4::{pedersen_generators, state_commitment};
+use nano_sync::primitives::{pedersen_generators, state_commitment};
 
 #[test]
 fn state_commitment_works() {

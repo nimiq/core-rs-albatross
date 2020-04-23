@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use algebra_core::{PrimeField, SWModelParameters};
 use r1cs_core::SynthesisError;
 use r1cs_std::boolean::Boolean;
@@ -5,7 +7,6 @@ use r1cs_std::fields::FieldGadget;
 use r1cs_std::groups::curves::short_weierstrass::AffineGadget;
 use r1cs_std::groups::GroupGadget;
 use r1cs_std::prelude::CondSelectGadget;
-use std::marker::PhantomData;
 
 /// This is a gadget that calculates a Pedersen hash. It is collision resistant, but it's not
 /// pseudo-random. Furthermore, its input must have a fixed-length. The main advantage is that it

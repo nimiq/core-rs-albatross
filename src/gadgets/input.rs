@@ -9,7 +9,7 @@ use r1cs_std::uint8::UInt8;
 pub struct RecursiveInputGadget;
 
 impl RecursiveInputGadget {
-    /// Converts a `Vec<Uint8>` into field elements, each represented by a `Vec<Uint8>`,
+    /// Converts a `Vec<Uint8>` into field elements, each represented by a `Vec<UInt8>`,
     /// that can be read by `Uint8::alloc_input_vec` when passing to a proof verification.
     pub fn to_field_elements<TargetConstraintF: PrimeField>(
         input_bytes: &[UInt8],

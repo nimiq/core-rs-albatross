@@ -1,13 +1,10 @@
 use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::FqParameters;
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
 use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
-use r1cs_std::ToBitsGadget;
 
-use crate::gadgets::mnt4::{MNT4YToBitGadget, PedersenCommitmentGadget};
-use crate::gadgets::y_to_bit::YToBitGadget;
-use crate::utils::{pad_point_bits, reverse_inner_byte_order};
+use crate::gadgets::mnt4::{PedersenCommitmentGadget, SerializeGadget};
+use crate::utils::reverse_inner_byte_order;
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the public_keys. We calculate it by first
@@ -36,16 +33,10 @@ impl StateCommitmentGadget {
 
         // Convert each public key to bits and append it.
         for i in 0..public_keys.len() {
-            let key = &public_keys[i];
-            // Get bits from the x coordinate.
-            let x_bits = key.x.to_bits(cs.ns(|| format!("x to bits: pk {}", i)))?;
-            // Get one bit from the y coordinate.
-            let y_bit =
-                MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| format!("y to bit: pk {}", i)), key)?;
-            // Pad points and get *Big-Endian* representation.
-            let serialized_bits = pad_point_bits::<FqParameters>(x_bits, y_bit);
-            // Append to Boolean vector.
-            bits.extend(serialized_bits);
+            bits.extend(SerializeGadget::serialize_g2(
+                cs.ns(|| format!("serialize pks: {}", i)),
+                &public_keys[i],
+            )?);
         }
 
         // Calculate the Pedersen commitment.
@@ -57,14 +48,10 @@ impl StateCommitmentGadget {
         )?;
 
         // Serialize the Pedersen commitment.
-        let x_bits = pedersen_commitment
-            .x
-            .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
-        let y_bit = MNT4YToBitGadget::y_to_bit_g1(
-            cs.ns(|| "y to bit: pedersen commitment"),
+        let serialized_bits = SerializeGadget::serialize_g1(
+            cs.ns(|| "serialize pedersen commitment"),
             &pedersen_commitment,
         )?;
-        let serialized_bits = pad_point_bits::<FqParameters>(x_bits, y_bit);
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
         // Convert to bytes.

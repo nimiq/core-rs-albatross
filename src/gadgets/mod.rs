@@ -5,4 +5,3 @@ pub mod input;
 pub mod mnt4;
 pub mod mnt6;
 pub mod pedersen;
-pub mod y_to_bit;

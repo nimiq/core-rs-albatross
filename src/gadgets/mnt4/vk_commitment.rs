@@ -1,14 +1,12 @@
 use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::{Fq, FqParameters, MNT6_753};
+use algebra::mnt6_753::{Fq, MNT6_753};
 use crypto_primitives::nizk::groth16::constraints::VerifyingKeyGadget;
 use r1cs_core::SynthesisError;
 use r1cs_std::bits::{boolean::Boolean, uint8::UInt8};
 use r1cs_std::mnt6_753::{G1Gadget, PairingGadget};
-use r1cs_std::ToBitsGadget;
 
-use crate::gadgets::mnt4::{MNT4YToBitGadget, PedersenCommitmentGadget};
-use crate::gadgets::y_to_bit::YToBitGadget;
-use crate::utils::{pad_point_bits, reverse_inner_byte_order};
+use crate::gadgets::mnt4::{PedersenCommitmentGadget, SerializeGadget};
+use crate::utils::reverse_inner_byte_order;
 
 /// This gadget is meant to calculate a commitment in-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
@@ -31,32 +29,31 @@ impl VKCommitmentGadget {
 
         // Serialize the verifying key into bits.
         // Alpha G1
-        let x_bits = vk.alpha_g1.x.to_bits(cs.ns(|| "x to bits: alpha g1"))?;
-        let y_bit = MNT4YToBitGadget::y_to_bit_g1(cs.ns(|| "y to bit: alpha g1"), &vk.alpha_g1)?;
-        bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
+        bits.extend(SerializeGadget::serialize_g1(
+            cs.ns(|| "serialize alpha g1"),
+            &vk.alpha_g1,
+        )?);
         // Beta G2
-        let x_bits = vk.beta_g2.x.to_bits(cs.ns(|| "x to bits: beta g2"))?;
-        let y_bit = MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: beta g2"), &vk.beta_g2)?;
-        bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
+        bits.extend(SerializeGadget::serialize_g2(
+            cs.ns(|| "serialize beta g2"),
+            &vk.beta_g2,
+        )?);
         // Gamma G2
-        let x_bits = vk.gamma_g2.x.to_bits(cs.ns(|| "x to bits: gamma g2"))?;
-        let y_bit = MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: gamma g2"), &vk.gamma_g2)?;
-        bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
+        bits.extend(SerializeGadget::serialize_g2(
+            cs.ns(|| "serialize gamma g2"),
+            &vk.gamma_g2,
+        )?);
         // Delta G2
-        let x_bits = vk.delta_g2.x.to_bits(cs.ns(|| "x to bits: delta g2"))?;
-        let y_bit = MNT4YToBitGadget::y_to_bit_g2(cs.ns(|| "y to bit: delta g2"), &vk.delta_g2)?;
-        bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
+        bits.extend(SerializeGadget::serialize_g2(
+            cs.ns(|| "serialize delta g2"),
+            &vk.delta_g2,
+        )?);
         // Gamma ABC G1
         for i in 0..vk.gamma_abc_g1.len() {
-            let point = &vk.gamma_abc_g1[i];
-            let x_bits = point
-                .x
-                .to_bits(cs.ns(|| format!("x to bits: gamma abc g1: point {}", i)))?;
-            let y_bit = MNT4YToBitGadget::y_to_bit_g1(
-                cs.ns(|| format!("y to bit: gamma abc g1: point {}", i)),
-                point,
-            )?;
-            bits.extend(pad_point_bits::<FqParameters>(x_bits, y_bit));
+            bits.extend(SerializeGadget::serialize_g1(
+                cs.ns(|| format!("serialize gamma abc g1: point {}", i)),
+                &vk.gamma_abc_g1[i],
+            )?);
         }
 
         // Calculate the Pedersen commitment.
@@ -68,14 +65,10 @@ impl VKCommitmentGadget {
         )?;
 
         // Serialize the Pedersen commitment.
-        let x_bits = pedersen_commitment
-            .x
-            .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
-        let greatest_bit = MNT4YToBitGadget::y_to_bit_g1(
-            cs.ns(|| "y to bit: pedersen commitment"),
+        let serialized_bits = SerializeGadget::serialize_g1(
+            cs.ns(|| "serialize pedersen commitment"),
             &pedersen_commitment,
         )?;
-        let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
         // Convert to bytes.
