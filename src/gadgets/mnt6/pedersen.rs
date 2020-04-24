@@ -7,4 +7,5 @@ use crate::gadgets::pedersen::{PedersenCommitmentGadget as PCG, PedersenHashGadg
 
 pub type PedersenCommitmentGadget =
     PCG<<Parameters as MNT4Parameters>::G1Parameters, MNT6Fr, FqGadget>;
+
 pub type PedersenHashGadget = PHG<<Parameters as MNT4Parameters>::G1Parameters, MNT6Fr, FqGadget>;

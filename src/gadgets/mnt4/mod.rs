@@ -3,6 +3,7 @@
 
 pub use check_sig::*;
 pub use macro_block::*;
+pub use merkle_tree::*;
 pub use pedersen::*;
 pub use serialize::*;
 pub use state_commitment::*;

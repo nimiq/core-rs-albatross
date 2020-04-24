@@ -12,7 +12,6 @@ use crate::utils::pad_point_bits;
 pub struct SerializeGadget;
 
 impl SerializeGadget {
-    /// Calculates
     pub fn serialize_g1<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         point: &G1Gadget,
@@ -29,7 +28,6 @@ impl SerializeGadget {
         Ok(bits)
     }
 
-    /// Calculates
     pub fn serialize_g2<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         point: &G2Gadget,
