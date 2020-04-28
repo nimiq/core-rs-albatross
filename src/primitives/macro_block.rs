@@ -99,7 +99,7 @@ impl MacroBlock {
         let sum_generator = sum_generator_g1_mnt6();
 
         // Calculate the Pedersen commitment.
-        let pedersen_commitment = pedersen_commitment(generators.clone(), bits, sum_generator);
+        let pedersen_commitment = pedersen_commitment(bits, generators.clone(), sum_generator);
 
         // Serialize the Pedersen commitment.
         let serialized_commitment = serialize_g1_mnt6(pedersen_commitment);
@@ -129,7 +129,7 @@ impl MacroBlock {
         let generators = pedersen_generators(256);
 
         // Calculate the Pedersen hash.
-        let result = pedersen_hash(generators, bits, sum_generator_g1_mnt6());
+        let result = pedersen_hash(bits, generators, sum_generator_g1_mnt6());
 
         result
     }

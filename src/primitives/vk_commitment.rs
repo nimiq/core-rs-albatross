@@ -31,7 +31,7 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
     let sum_generator = sum_generator_g1_mnt6();
 
     // Calculate the Pedersen commitment.
-    let pedersen_commitment = pedersen_commitment(generators, bits, sum_generator);
+    let pedersen_commitment = pedersen_commitment(bits, generators, sum_generator);
 
     // Serialize the Pedersen commitment.
     let bytes = serialize_g1_mnt6(pedersen_commitment);

@@ -34,8 +34,8 @@ impl<P: SWModelParameters, ConstraintF: PrimeField, F: FieldGadget<P::BaseField,
     /// problematic because the circuit can't handle addition with zero).
     pub fn evaluate<CS: r1cs_core::ConstraintSystem<ConstraintF>>(
         mut cs: CS,
-        generators: &Vec<AffineGadget<P, ConstraintF, F>>,
         input: &Vec<Boolean>,
+        generators: &Vec<AffineGadget<P, ConstraintF, F>>,
         sum_generator: &AffineGadget<P, ConstraintF, F>,
     ) -> Result<AffineGadget<P, ConstraintF, F>, SynthesisError> {
         // Verify that we have enough generators for the input bits.
@@ -94,8 +94,8 @@ impl<P: SWModelParameters, ConstraintF: PrimeField, F: FieldGadget<P::BaseField,
     /// problematic because the circuit can't handle addition with zero).
     pub fn evaluate<CS: r1cs_core::ConstraintSystem<ConstraintF>>(
         mut cs: CS,
-        generators: &Vec<AffineGadget<P, ConstraintF, F>>,
         input: &Vec<Boolean>,
+        generators: &Vec<AffineGadget<P, ConstraintF, F>>,
         sum_generator: &AffineGadget<P, ConstraintF, F>,
     ) -> Result<AffineGadget<P, ConstraintF, F>, SynthesisError> {
         // This is simply the number of bits that each generator can store.

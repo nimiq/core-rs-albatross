@@ -4,11 +4,13 @@
 //! primitive used by one of our zk-SNARKs. They are also used for testing.
 
 pub use macro_block::*;
+pub use merkle_tree::*;
 pub use pedersen::*;
 pub use state_commitment::*;
 pub use vk_commitment::*;
 
 pub mod macro_block;
+pub mod merkle_tree;
 pub mod pedersen;
 pub mod state_commitment;
 pub mod vk_commitment;

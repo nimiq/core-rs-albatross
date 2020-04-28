@@ -95,8 +95,8 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
 /// can't be said of the Pedersen commitment. Also, note that the Pedersen hash is collision-resistant
 /// but it is not pseudo-random.
 pub fn pedersen_hash(
-    generators: Vec<G1Projective>,
     input: Vec<bool>,
+    generators: Vec<G1Projective>,
     sum_generator: G1Projective,
 ) -> G1Projective {
     // Verify that we have enough generators for the input bits.
@@ -126,8 +126,8 @@ pub fn pedersen_hash(
 /// The Pedersen commitment takes the same time/constraints to calculate as the Pedersen hash but,
 /// since it requires fewer generators, it is faster to setup.
 pub fn pedersen_commitment(
-    generators: Vec<G1Projective>,
     input: Vec<bool>,
+    generators: Vec<G1Projective>,
     sum_generator: G1Projective,
 ) -> G1Projective {
     // This is simply the number of bits that each generator can store.

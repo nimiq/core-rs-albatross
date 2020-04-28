@@ -212,8 +212,8 @@ impl MacroBlockGadget {
         // Calculate the Pedersen commitment.
         let pedersen_commitment = PedersenCommitmentGadget::evaluate(
             cs.ns(|| "pedersen commitment"),
-            pedersen_generators,
             &bits,
+            pedersen_generators,
             &sum_generator_g1,
         )?;
 
@@ -261,8 +261,8 @@ impl MacroBlockGadget {
         // Finally feed the bits into the Pedersen hash gadget.
         let pedersen_result = PedersenHashGadget::evaluate(
             &mut cs.ns(|| "crh_evaluation"),
-            pedersen_generators,
             &result,
+            pedersen_generators,
             sum_generator_g1,
         )?;
 

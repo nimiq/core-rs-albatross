@@ -169,12 +169,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
             &sum_generator_g1_var,
         )?;
 
-        for i in 0..self.vk_commitment.len() {
-            vk_commitment_var[i].enforce_equal(
-                cs.ns(|| format!("vk commitment == reference commitment: byte {}", i)),
-                &reference_commitment[i],
-            )?;
-        }
+        vk_commitment_var.enforce_equal(
+            cs.ns(|| "vk commitment == reference commitment"),
+            &reference_commitment,
+        )?;
 
         // Verify equality of initial and intermediate state commitments. If the genesis flag is set to
         // true, it enforces the equality. If it is set to false, it doesn't. This is necessary for
@@ -183,18 +181,11 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
             "Conditionally verify initial and intermediate state commitments"
         });
 
-        for i in 0..self.initial_state_commitment.len() {
-            initial_state_commitment_var[i].conditional_enforce_equal(
-                cs.ns(|| {
-                    format!(
-                        "initial state commitment == intermediate state commitment: byte {}",
-                        i
-                    )
-                }),
-                &intermediate_state_commitment_var[i],
-                &genesis_flag_var,
-            )?;
-        }
+        initial_state_commitment_var.conditional_enforce_equal(
+            cs.ns(|| "initial state commitment == intermediate state commitment"),
+            &intermediate_state_commitment_var,
+            &genesis_flag_var,
+        )?;
 
         // Verify the ZK proof for the Merger Wrapper circuit. If the genesis flag is set to false,
         // it enforces the verification. If it is set to true, it doesn't. This is necessary for

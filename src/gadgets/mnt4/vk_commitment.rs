@@ -59,8 +59,8 @@ impl VKCommitmentGadget {
         // Calculate the Pedersen commitment.
         let pedersen_commitment = PedersenCommitmentGadget::evaluate(
             cs.ns(|| "pedersen commitment"),
-            pedersen_generators,
             &bits,
+            pedersen_generators,
             &sum_generator,
         )?;
 

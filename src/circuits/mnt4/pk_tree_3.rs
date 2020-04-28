@@ -9,7 +9,7 @@ use crate::gadgets::mnt4::{MerkleTreeGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
-///
+/// This is the leaf level of the PKTreeCircuit. See PKTree0Circuit for more details.
 #[derive(Clone)]
 pub struct PKTree3Circuit {
     // Private inputs
@@ -179,8 +179,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
 
         let commit_signer_bitmap_var = commit_signer_bitmap_var[chunk_start..chunk_end].to_vec();
 
-        let mut path_var = position_var.to_bits(cs.ns(|| "get Merkle path from position"))?;
-
+        let mut path_var = position_var.into_bits_le();
         path_var.truncate(3);
 
         // Verify the Merkle proof for the public keys.

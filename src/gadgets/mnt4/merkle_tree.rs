@@ -7,13 +7,22 @@ use r1cs_std::prelude::{CondSelectGadget, EqGadget};
 use crate::gadgets::mnt4::{PedersenCommitmentGadget, SerializeGadget};
 use crate::utils::reverse_inner_byte_order;
 
-/// A Merkle tree gadget.
+/// This gadgets contains utilities to create and verify proofs for Merkle trees. It uses Pedersen
+/// commitments to construct the tree instead of cryptographic hash functions in order to be more
+/// efficient.
 pub struct MerkleTreeGadget;
 
 impl MerkleTreeGadget {
     /// Creates a Merkle tree from the given inputs, as a vector of vectors of Booleans, and outputs
     /// the root. Each vector of Booleans is meant to be one leaf. Each leaf can be of a different
-    /// size.
+    /// size. Number of leaves has to be a power of two.
+    /// The tree is constructed from left to right. For example, if we are given inputs {0, 1, 2, 3}
+    /// then the resulting tree will be:
+    ///                      o
+    ///                    /   \
+    ///                   o     o
+    ///                  / \   / \
+    ///                 0  1  2  3
     pub fn construct<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         inputs: &Vec<Vec<Boolean>>,
@@ -34,8 +43,8 @@ impl MerkleTreeGadget {
 
             let pedersen_commitment = PedersenCommitmentGadget::evaluate(
                 cs.ns(|| format!("pedersen commitment for leaf {}", i)),
-                pedersen_generators,
                 input,
+                pedersen_generators,
                 sum_generator,
             )?;
 
@@ -66,8 +75,8 @@ impl MerkleTreeGadget {
                 // Calculate the parent node.
                 let parent_node = PedersenCommitmentGadget::evaluate(
                     cs.ns(|| format!("calculate parent node {} {}", i, j)),
-                    pedersen_generators,
                     &bits,
+                    pedersen_generators,
                     sum_generator,
                 )?;
 
@@ -92,7 +101,17 @@ impl MerkleTreeGadget {
         Ok(bytes)
     }
 
-    /// Verifies a Merkle proof.
+    /// Verifies a Merkle proof. More specifically, given an input and all of the tree nodes up to
+    /// the root, it checks if the input is part of the Merkle tree or not. The path is simply the
+    /// position of the input leaf in little-endian binary. For example, for the given tree:
+    ///                      o
+    ///                    /   \
+    ///                   o     o
+    ///                  / \   / \
+    ///                 0  1  2  3
+    /// The path for the leaf 2 is simply 01. Another way of thinking about it is that if you go up
+    /// the tree, each time you are the left node it's a zero and if you are the right node it's an
+    /// one.
     pub fn verify<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
         input: &Vec<Boolean>,
@@ -114,8 +133,8 @@ impl MerkleTreeGadget {
         // Calculate the Pedersen commitment for the input.
         let mut result = PedersenCommitmentGadget::evaluate(
             cs.ns(|| "pedersen commitment for input"),
-            pedersen_generators,
             input,
+            pedersen_generators,
             sum_generator,
         )?;
 
@@ -152,8 +171,8 @@ impl MerkleTreeGadget {
             // Calculate the parent node and update result.
             result = PedersenCommitmentGadget::evaluate(
                 cs.ns(|| format!("calculate parent node {}", i)),
-                pedersen_generators,
                 &bits,
+                pedersen_generators,
                 sum_generator,
             )?;
         }

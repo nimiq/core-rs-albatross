@@ -25,7 +25,7 @@ pub fn state_commitment(block_number: u32, public_keys: Vec<G2Projective>) -> Ve
     let sum_generator = sum_generator_g1_mnt6();
 
     // Calculate the Pedersen commitment.
-    let pedersen_commitment = pedersen_commitment(generators, bits, sum_generator);
+    let pedersen_commitment = pedersen_commitment(bits, generators, sum_generator);
 
     // Serialize the Pedersen commitment.
     let bytes = serialize_g1_mnt6(pedersen_commitment);

@@ -127,17 +127,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &sum_generator_g1_var,
         )?;
 
-        for i in 0..self.initial_state_commitment.len() {
-            initial_state_commitment_var[i].enforce_equal(
-                cs.ns(|| {
-                    format!(
-                        "initial state commitment == reference commitment: byte {}",
-                        i
-                    )
-                }),
-                &reference_commitment[i],
-            )?;
-        }
+        initial_state_commitment_var.enforce_equal(
+            cs.ns(|| "initial state commitment == reference commitment"),
+            &reference_commitment,
+        )?;
 
         // Verifying that the block is valid. Indirectly, this also allows us to know the
         // next validator list public keys.
@@ -173,12 +166,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &sum_generator_g1_var,
         )?;
 
-        for i in 0..32 {
-            final_state_commitment_var[i].enforce_equal(
-                cs.ns(|| format!("final state commitment == reference commitment: byte {}", i)),
-                &reference_commitment[i],
-            )?;
-        }
+        final_state_commitment_var.enforce_equal(
+            cs.ns(|| "final state commitment == reference commitment"),
+            &reference_commitment,
+        )?;
 
         end_cost_analysis!(cs, cost);
 
