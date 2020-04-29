@@ -21,7 +21,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
     assert!(!inputs.is_empty());
 
     // Checking that the number of leaves is a power of two.
-    assert!(((inputs.len() & (inputs.len() - 1)) == 0));
+    assert_eq!((inputs.len() & (inputs.len() - 1)), 0);
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.

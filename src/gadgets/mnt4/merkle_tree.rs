@@ -33,7 +33,7 @@ impl MerkleTreeGadget {
         assert!(!inputs.is_empty());
 
         // Checking that the number of leaves is a power of two.
-        assert!(((inputs.len() & (inputs.len() - 1)) == 0));
+        assert_eq!((inputs.len() & (inputs.len() - 1)), 0);
 
         // Calculate the Pedersen commitments for the leaves.
         let mut nodes = Vec::new();

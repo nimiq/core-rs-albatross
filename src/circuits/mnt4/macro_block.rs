@@ -8,7 +8,7 @@ use r1cs_std::prelude::*;
 use crate::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS,
 };
-use crate::gadgets::mnt4::{MacroBlockGadget, StateCommitmentGadget};
+use crate::gadgets::mnt4::MacroBlockGadget;
 use crate::primitives::{pedersen_generators, MacroBlock};
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
@@ -120,19 +120,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // given as a public input.
         next_cost_analysis!(cs, cost, || { "Verify initial state commitment" });
 
-        let reference_commitment = StateCommitmentGadget::evaluate(
-            cs.ns(|| "reference initial state commitment"),
-            &block_number_var,
-            &prev_keys_var,
-            &pedersen_generators_var,
-            &sum_generator_g1_var,
-        )?;
-
-        initial_state_commitment_var.enforce_equal(
-            cs.ns(|| "initial state commitment == reference commitment"),
-            &reference_commitment,
-        )?;
-
         // Verifying that the block is valid. Indirectly, this also allows us to know the
         // next validator list public keys.
         next_cost_analysis!(cs, cost, || "Verify block");
@@ -152,24 +139,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let new_block_number_var = UInt32::addmany(
             cs.ns(|| format!("increment block number")),
             &[block_number_var, epoch_length_var.clone()],
-        )?;
-
-        // Verifying equality for final state commitment. It just checks that the private input is
-        // correct by committing to it and comparing the result with the final state commitment
-        // given as a public input.
-        next_cost_analysis!(cs, cost, || { "Verify final state commitment" });
-
-        let reference_commitment = StateCommitmentGadget::evaluate(
-            cs.ns(|| "reference final state commitment"),
-            &new_block_number_var,
-            &block_var.public_keys,
-            &pedersen_generators_var,
-            &sum_generator_g1_var,
-        )?;
-
-        final_state_commitment_var.enforce_equal(
-            cs.ns(|| "final state commitment == reference commitment"),
-            &reference_commitment,
         )?;
 
         end_cost_analysis!(cs, cost);
