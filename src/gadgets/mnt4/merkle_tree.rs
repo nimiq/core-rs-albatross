@@ -33,7 +33,7 @@ impl MerkleTreeGadget {
         assert!(!inputs.is_empty());
 
         // Checking that the number of leaves is a power of two.
-        assert!(!((inputs.len() & (inputs.len() - 1)) == 0));
+        assert!(((inputs.len() & (inputs.len() - 1)) == 0));
 
         // Calculate the Pedersen commitments for the leaves.
         let mut nodes = Vec::new();
@@ -127,7 +127,7 @@ impl MerkleTreeGadget {
         // Checking that the nodes vector is not empty.
         assert!(!nodes.is_empty());
 
-        // Checking that the inputs vector is not empty.
+        // Checking that there is one node for each path bit.
         assert_eq!(nodes.len(), path.len());
 
         // Calculate the Pedersen commitment for the input.

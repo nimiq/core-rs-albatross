@@ -27,7 +27,7 @@ fn pedersen_hash_works() {
     let generators = pedersen_generators(256);
 
     // Evaluate Pedersen hash using the primitive version.
-    let primitive_out = pedersen_hash(generators.clone(), bits.clone(), sum_generator_g1_mnt6());
+    let primitive_out = pedersen_hash(bits.clone(), generators.clone(), sum_generator_g1_mnt6());
 
     // Convert the result to a G1Gadget for easier comparison.
     let primitive_out_var =
@@ -64,8 +64,8 @@ fn pedersen_hash_works() {
     // Evaluate Pedersen hash using the gadget version.
     let gadget_out = PedersenHashGadget::evaluate(
         cs.ns(|| "evaluate pedersen gadget"),
-        &c_generators,
         &bits_var,
+        &c_generators,
         &sum_generator,
     )
     .unwrap();
@@ -89,7 +89,7 @@ fn pedersen_commitment_works() {
 
     // Evaluate Pedersen commitment using the primitive version.
     let primitive_out =
-        pedersen_commitment(generators.clone(), bits.clone(), sum_generator_g1_mnt6());
+        pedersen_commitment(bits.clone(), generators.clone(), sum_generator_g1_mnt6());
 
     // Convert the result to a G1Gadget for easier comparison.
     let primitive_out_var =
@@ -126,8 +126,8 @@ fn pedersen_commitment_works() {
     // Evaluate Pedersen commitment using the gadget version.
     let gadget_out = PedersenCommitmentGadget::evaluate(
         cs.ns(|| "evaluate pedersen gadget"),
-        &c_generators,
         &bits_var,
+        &c_generators,
         &sum_generator,
     )
     .unwrap();

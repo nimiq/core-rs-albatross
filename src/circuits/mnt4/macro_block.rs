@@ -76,6 +76,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let sum_generator_g2_var =
             G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
 
+        // TODO: Check number of generators.
         let pedersen_generators = pedersen_generators(256);
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
         for i in 0..256 {

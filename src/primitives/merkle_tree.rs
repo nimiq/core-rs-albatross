@@ -6,13 +6,22 @@ use crate::constants::sum_generator_g1_mnt6;
 use crate::primitives::{pedersen_commitment, pedersen_generators};
 use crate::utils::{bytes_to_bits, serialize_g1_mnt6};
 
-///
+/// Creates a Merkle tree from the given inputs, as a vector of vectors of booleans, and outputs
+/// the root. Each vector of booleans is meant to be one leaf. Each leaf can be of a different
+/// size. Number of leaves has to be a power of two.
+/// The tree is constructed from left to right. For example, if we are given inputs {0, 1, 2, 3}
+/// then the resulting tree will be:
+///                      o
+///                    /   \
+///                   o     o
+///                  / \   / \
+///                 0  1  2  3
 pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
     // Checking that the inputs vector is not empty.
     assert!(!inputs.is_empty());
 
     // Checking that the number of leaves is a power of two.
-    assert!(!((inputs.len() & (inputs.len() - 1)) == 0));
+    assert!(((inputs.len() & (inputs.len() - 1)) == 0));
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
@@ -61,6 +70,17 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
     Vec::from(bytes.as_ref())
 }
 
+/// Verifies a Merkle proof. More specifically, given an input and all of the tree nodes up to
+/// the root, it checks if the input is part of the Merkle tree or not. The path is simply the
+/// position of the input leaf in little-endian binary. For example, for the given tree:
+///                      o
+///                    /   \
+///                   o     o
+///                  / \   / \
+///                 0  1  2  3
+/// The path for the leaf 2 is simply 01. Another way of thinking about it is that if you go up
+/// the tree, each time you are the left node it's a zero and if you are the right node it's an
+/// one.
 pub fn merkle_tree_verify(
     input: Vec<bool>,
     nodes: Vec<G1Projective>,
@@ -73,7 +93,7 @@ pub fn merkle_tree_verify(
     // Checking that the nodes vector is not empty.
     assert!(!nodes.is_empty());
 
-    // Checking that the inputs vector is not empty.
+    // Checking that there is one node for each path bit.
     assert_eq!(nodes.len(), path.len());
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
