@@ -15,10 +15,10 @@ impl CheckSigGadget {
     /// e(sig, gen) = e(hash_1, pk_1)*e(hash_2, pk_2)*...*e(hash_n, pk_n)
     pub fn check_signatures<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
-        public_keys: &[G2Gadget],
-        generator: &G2Gadget,
+        public_keys: Vec<&G2Gadget>,
+        hash_points: Vec<&G1Gadget>,
         signature: &G1Gadget,
-        hash_points: &[G1Gadget],
+        generator: &G2Gadget,
     ) -> Result<(), SynthesisError> {
         // Make some initial sanity checks.
         assert_eq!(
@@ -28,12 +28,13 @@ impl CheckSigGadget {
         );
         assert!(hash_points.len() > 1, "Min one message is required");
 
-        // Prepare the aggregated signature elliptic curve point.
-        let sig_p_var: G1PreparedGadget = PairingGadget::prepare_g1(cs.ns(|| "sig_p"), &signature)?;
-
-        // Prepare the generator elliptic curve point.
-        let generator_p_var: G2PreparedGadget =
-            PairingGadget::prepare_g2(cs.ns(|| "generator"), &generator)?;
+        // Prepare all the public key elliptic curve points.
+        let mut pub_key_p_vars = vec![];
+        for (i, public_key) in public_keys.iter().enumerate() {
+            let pub_key_p_var: G2PreparedGadget =
+                PairingGadget::prepare_g2(cs.ns(|| format!("pub_key_p {}", i)), &public_key)?;
+            pub_key_p_vars.push(pub_key_p_var);
+        }
 
         // Prepare all the hash elliptic curve points.
         let mut hash_p_vars = vec![];
@@ -43,13 +44,12 @@ impl CheckSigGadget {
             hash_p_vars.push(hash_p_var);
         }
 
-        // Prepare all the public key elliptic curve points.
-        let mut pub_key_p_vars = vec![];
-        for (i, public_key) in public_keys.iter().enumerate() {
-            let pub_key_p_var: G2PreparedGadget =
-                PairingGadget::prepare_g2(cs.ns(|| format!("pub_key_p {}", i)), &public_key)?;
-            pub_key_p_vars.push(pub_key_p_var);
-        }
+        // Prepare the aggregated signature elliptic curve point.
+        let sig_p_var: G1PreparedGadget = PairingGadget::prepare_g1(cs.ns(|| "sig_p"), &signature)?;
+
+        // Prepare the generator elliptic curve point.
+        let generator_p_var: G2PreparedGadget =
+            PairingGadget::prepare_g2(cs.ns(|| "generator"), &generator)?;
 
         // Calculate the pairing for the left hand side of the verification equation.
         // e(sig, gen)

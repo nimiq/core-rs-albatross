@@ -10,7 +10,6 @@ pub mod rand_gen;
 pub mod utils;
 
 // TODO: Redo the Macro Block Circuit
-// - final pks don't need to be serialized in-circuit. (I only need the commitment to it)
 // TODO: Finish the examples.
 // TODO: Redo tests.
 // Note: ~5m per 1M constraints proving time. 10GB memory per 1M constraints.
