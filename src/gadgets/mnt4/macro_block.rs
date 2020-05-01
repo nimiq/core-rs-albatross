@@ -9,7 +9,7 @@ use crypto_primitives::prf::blake2s::constraints::{
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};
-use r1cs_std::prelude::{AllocGadget, Boolean, FieldGadget, GroupGadget, UInt8};
+use r1cs_std::prelude::{AllocGadget, Boolean, FieldGadget, GroupGadget, UInt32, UInt8};
 use r1cs_std::{Assignment, ToBitsGadget};
 
 use crate::constants::VALIDATOR_SLOTS;
@@ -41,8 +41,10 @@ impl MacroBlockGadget {
     pub fn verify<CS: ConstraintSystem<MNT4Fr>>(
         &self,
         mut cs: CS,
-        // This is the state commitment for the next epoch.
-        state_commitment: &Vec<UInt8>,
+        // This is the commitment for the set of public keys that are owned by the next set of validators.
+        pks_commitment: &Vec<UInt8>,
+        // Simply the number of the macro block.
+        block_number: &UInt32,
         // This is the aggregated public key for the prepare round.
         prepare_agg_pk: &G2Gadget,
         // This is the aggregated public key for the commit round.
@@ -68,7 +70,8 @@ impl MacroBlockGadget {
         let prepare_hash = self.get_hash(
             cs.ns(|| "hash prepare round"),
             Round::Prepare,
-            state_commitment,
+            block_number,
+            pks_commitment,
             sum_generator_g1,
             pedersen_generators,
         )?;
@@ -77,7 +80,8 @@ impl MacroBlockGadget {
         let commit_hash = self.get_hash(
             cs.ns(|| "hash commit round"),
             Round::Commit,
-            state_commitment,
+            block_number,
+            pks_commitment,
             sum_generator_g1,
             pedersen_generators,
         )?;
@@ -100,7 +104,7 @@ impl MacroBlockGadget {
     }
 
     /// A function that calculates the hash for the block from:
-    /// round number || header_hash || state_commitment
+    /// round number || block number || header_hash || pks_commitment
     /// where || means concatenation.
     /// First we use the Pedersen commitment to compress the input. Then we serialize the resulting
     /// EC point and hash it with the Blake2s hash algorithm, getting an output of 256 bits. This is
@@ -111,7 +115,8 @@ impl MacroBlockGadget {
         &self,
         mut cs: CS,
         round: Round,
-        state_commitment: &Vec<UInt8>,
+        block_number: &UInt32,
+        pks_commitment: &Vec<UInt8>,
         sum_generator_g1: &G1Gadget,
         pedersen_generators: &Vec<G1Gadget>,
     ) -> Result<G1Gadget, SynthesisError> {
@@ -125,18 +130,24 @@ impl MacroBlockGadget {
         round_number_bits.reverse();
         bits.append(&mut round_number_bits);
 
+        // The block number comes in little endian all the way.
+        // So, a reverse will put it into big endian.
+        let mut block_number_be = block_number.to_bits_le();
+        block_number_be.reverse();
+        bits.append(&mut block_number_be);
+
         // Append the header hash.
         bits.extend_from_slice(&self.header_hash);
 
         // Convert the state commitment to bits and append it.
-        let mut state_bits = Vec::new();
+        let mut pks_bits = Vec::new();
         let mut byte;
-        for i in 0..state_commitment.len() {
-            byte = state_commitment[i].into_bits_le();
+        for i in 0..pks_commitment.len() {
+            byte = pks_commitment[i].into_bits_le();
             byte.reverse();
-            state_bits.extend(byte);
+            pks_bits.extend(byte);
         }
-        bits.append(&mut state_bits);
+        bits.append(&mut pks_bits);
 
         // Calculate the Pedersen commitment.
         let pedersen_commitment = PedersenCommitmentGadget::evaluate(

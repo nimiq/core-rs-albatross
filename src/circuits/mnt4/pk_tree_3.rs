@@ -77,9 +77,10 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         let sum_generator_g2_var =
             G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
 
-        // TODO: Calculate correct number of generators.
-        let pedersen_generators = pedersen_generators(256);
+        let pedersen_generators = pedersen_generators(195);
+
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
+
         for i in 0..pedersen_generators.len() {
             pedersen_generators_var.push(G1Gadget::alloc_constant(
                 cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
@@ -91,6 +92,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
 
         let mut pks_var = Vec::new();
+
         for i in 0..self.pks.len() {
             pks_var.push(G2Gadget::alloc(
                 cs.ns(|| format!("alloc public keys: key {}", i)),
@@ -99,6 +101,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         }
 
         let mut pks_nodes_var = Vec::new();
+
         for i in 0..self.pks_nodes.len() {
             pks_nodes_var.push(G1Gadget::alloc(
                 cs.ns(|| format!("alloc pks Merkle proof nodes: node {}", i)),
@@ -112,6 +115,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
             })?;
 
         let mut prepare_agg_pk_nodes_var = Vec::new();
+
         for i in 0..self.prepare_agg_pk_nodes.len() {
             prepare_agg_pk_nodes_var.push(G1Gadget::alloc(
                 cs.ns(|| format!("alloc prepare agg pk Merkle proof nodes: node {}", i)),
@@ -125,6 +129,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
             })?;
 
         let mut commit_agg_pk_nodes_var = Vec::new();
+
         for i in 0..self.commit_agg_pk_nodes.len() {
             commit_agg_pk_nodes_var.push(G1Gadget::alloc(
                 cs.ns(|| format!("alloc commit agg pk Merkle proof nodes: node {}", i)),
@@ -180,6 +185,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         let commit_signer_bitmap_var = commit_signer_bitmap_var[chunk_start..chunk_end].to_vec();
 
         let mut path_var = position_var.into_bits_le();
+
         path_var.truncate(3);
 
         // Verify the Merkle proof for the public keys.
@@ -233,7 +239,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         )?;
 
         // Calculate the prepare aggregate public key.
-        let mut sum = sum_generator_g2_var.clone();
+        let mut reference_prep_agg_pk = sum_generator_g2_var.clone();
 
         for (i, (key, included)) in pks_var
             .iter()
@@ -241,7 +247,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
             .enumerate()
         {
             // Calculate a new sum that includes the next public key.
-            let new_sum = sum.add(cs.ns(|| format!("add public key, prepare {}", i)), key)?;
+            let new_sum = reference_prep_agg_pk
+                .add(cs.ns(|| format!("add public key, prepare {}", i)), key)?;
 
             // Choose either the new public key sum or the old public key sum, depending on whether
             // the bitmap indicates that the validator signed or not.
@@ -249,19 +256,14 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
                 cs.ns(|| format!("conditionally add public key, prepare {}", i)),
                 included,
                 &new_sum,
-                &sum,
+                &reference_prep_agg_pk,
             )?;
 
-            sum = cond_sum;
+            reference_prep_agg_pk = cond_sum;
         }
 
-        let reference_prep_agg_pk = sum.sub(
-            cs.ns(|| "finalize prepare aggregate public key"),
-            &sum_generator_g2_var,
-        )?;
-
         // Calculate the commit aggregate public key.
-        let mut sum = sum_generator_g2_var.clone();
+        let mut reference_comm_agg_pk = sum_generator_g2_var.clone();
 
         for (i, (key, included)) in pks_var
             .iter()
@@ -269,7 +271,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
             .enumerate()
         {
             // Calculate a new sum that includes the next public key.
-            let new_sum = sum.add(cs.ns(|| format!("add public key, commit {}", i)), key)?;
+            let new_sum = reference_comm_agg_pk
+                .add(cs.ns(|| format!("add public key, commit {}", i)), key)?;
 
             // Choose either the new public key sum or the old public key sum, depending on whether
             // the bitmap indicates that the validator signed or not.
@@ -277,16 +280,11 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
                 cs.ns(|| format!("conditionally add public key, commit {}", i)),
                 included,
                 &new_sum,
-                &sum,
+                &reference_comm_agg_pk,
             )?;
 
-            sum = cond_sum;
+            reference_comm_agg_pk = cond_sum;
         }
-
-        let reference_comm_agg_pk = sum.sub(
-            cs.ns(|| "finalize commit aggregate public key"),
-            &sum_generator_g2_var,
-        )?;
 
         // Check that both reference aggregate public keys match the ones given as inputs.
         prepare_agg_pk_var.enforce_equal(

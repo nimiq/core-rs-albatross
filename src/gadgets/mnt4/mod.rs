@@ -6,6 +6,7 @@ pub use macro_block::*;
 pub use merkle_tree::*;
 pub use pedersen::*;
 pub use serialize::*;
+pub use state_commitment::*;
 pub use vk_commitment::*;
 pub use y_to_bit::*;
 
@@ -14,5 +15,6 @@ mod macro_block;
 mod merkle_tree;
 mod pedersen;
 mod serialize;
+mod state_commitment;
 mod vk_commitment;
 mod y_to_bit;

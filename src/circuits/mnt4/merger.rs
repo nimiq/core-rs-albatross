@@ -100,9 +100,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         let sum_generator_g1_var =
             G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
 
-        // TODO: Calculate correct number of generators.
-        let pedersen_generators = pedersen_generators(256);
+        let pedersen_generators = pedersen_generators(17);
+
         let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
+
         for i in 0..pedersen_generators.len() {
             pedersen_generators_var.push(G1Gadget::alloc_constant(
                 cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
@@ -194,9 +195,11 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
 
         let mut proof_inputs =
             RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &intermediate_state_commitment_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &vk_commitment_var,
         )?);

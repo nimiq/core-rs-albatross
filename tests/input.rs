@@ -9,13 +9,14 @@ use groth16::{
     create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof, Proof,
     VerifyingKey,
 };
-use nano_sync::gadgets::input::RecursiveInputGadget;
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::alloc::AllocGadget;
 use r1cs_std::bits::uint8::UInt8;
 use r1cs_std::eq::EqGadget;
 use r1cs_std::mnt4_753::PairingGadget;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
+
+use nano_sync::gadgets::input::RecursiveInputGadget;
 
 #[derive(Clone)]
 struct DummyCircuit {

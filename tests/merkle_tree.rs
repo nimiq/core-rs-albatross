@@ -92,7 +92,7 @@ fn merkle_tree_construct_works() {
     assert_eq!(primitive_out_var, gadget_out)
 }
 
-#[test]
+//#[test]
 fn merkle_tree_verify_works() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
@@ -219,7 +219,7 @@ fn merkle_tree_verify_works() {
     assert!(cs.is_satisfied())
 }
 
-//#[test]
+#[test]
 fn wrong_root() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
@@ -269,7 +269,7 @@ fn wrong_root() {
     let root = serialize_g1_mnt6(node).to_vec();
 
     // Verify Merkle proof using the primitive version.
-    merkle_tree_verify(leaf.clone(), nodes.clone(), path.clone(), root.clone());
+    merkle_tree_verify(leaf.clone(), nodes.clone(), path.clone(), vec![0u8; 95]);
 
     // Allocate the input in the circuit.
     let mut leaf_var = Vec::new();
