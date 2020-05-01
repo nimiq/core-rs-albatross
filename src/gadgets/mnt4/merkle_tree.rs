@@ -53,6 +53,7 @@ impl MerkleTreeGadget {
 
         // Calculate the rest of the tree
         let mut next_nodes = Vec::new();
+
         let mut i = 0;
 
         while nodes.len() > 1 {
@@ -83,17 +84,21 @@ impl MerkleTreeGadget {
                 next_nodes.push(parent_node);
             }
             nodes.clear();
+
             nodes.append(&mut next_nodes);
+
             i += 1;
         }
 
         // Serialize the root node.
         let serialized_bits =
             SerializeGadget::serialize_g1(cs.ns(|| "serialize root node"), &nodes[0])?;
+
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
         // Convert to bytes.
         let mut bytes = Vec::new();
+
         for i in 0..serialized_bits.len() / 8 {
             bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
         }
@@ -180,10 +185,12 @@ impl MerkleTreeGadget {
         // Serialize the root node.
         let serialized_bits =
             SerializeGadget::serialize_g1(cs.ns(|| "serialize root node"), &result)?;
+
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
         // Convert to bytes.
         let mut bytes = Vec::new();
+
         for i in 0..serialized_bits.len() / 8 {
             bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
         }

@@ -219,7 +219,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         )?;
 
         // Calculating the prepare aggregate public key. All the chunks come with the generator added,
-        // so we need to subtract in order to get the correct aggregate public key. This is necessary
+        // so we need to subtract it in order to get the correct aggregate public key. This is necessary
         // because we could have a chunk of public keys with no signers, thus resulting in it being
         // zero.
         next_cost_analysis!(cs, cost, || { "Calculate prepare agg pk" });
@@ -244,7 +244,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         )?;
 
         // Calculating the commit aggregate public key. All the chunks come with the generator added,
-        // so we need to subtract in order to get the correct aggregate public key. This is necessary
+        // so we need to subtract it in order to get the correct aggregate public key. This is necessary
         // because we could have a chunk of public keys with no signers, thus resulting in it being
         // zero.
         next_cost_analysis!(cs, cost, || { "Calculate commit agg pk" });

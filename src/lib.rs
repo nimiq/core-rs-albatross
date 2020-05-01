@@ -9,9 +9,8 @@ pub mod primitives;
 pub mod rand_gen;
 pub mod utils;
 
-// TODO: Check formatting and docs for every circuit and gadget.
 // TODO: Finish the examples.
-// TODO: Redo tests.
+// TODO: Redo tests. (Consider having the verifying gadgets return bool)
 // TODO: Change all the vks to constants.
 // Note: ~5m per 1M constraints proving time. 10GB memory per 1M constraints.
 // Note: 819,200 max constraints in the MNT6. Merger circuit has 777,842. Macro Block (with 4 validators)

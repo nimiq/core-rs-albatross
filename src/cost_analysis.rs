@@ -10,6 +10,7 @@ pub mod inner {
     pub use colored::Colorize;
 
     pub static NUM_INDENT: AtomicUsize = AtomicUsize::new(0);
+
     pub const PAD_CHAR: &'static str = "·";
 
     pub struct CostInfo {
@@ -29,7 +30,9 @@ pub mod inner {
             let indent = compute_indent(indent_amount);
 
             println!("{}{:8} {}", indent, start_info, msg);
+
             NUM_INDENT.fetch_add(1, Ordering::Relaxed);
+
             $crate::cost_analysis::inner::CostInfo {
                 msg: msg.to_string(),
                 num_constraints: $cs.num_constraints(),
@@ -72,6 +75,7 @@ pub mod inner {
         ($cs:expr, $cost:expr) => {{
             next_cost_analysis!($cs, $cost, || "");
         }};
+
         ($cs:expr, $cost:expr, $msg:expr) => {{
             end_cost_analysis!($cs, $cost, || "");
             $cost = start_cost_analysis!($cs, $msg);
@@ -80,9 +84,11 @@ pub mod inner {
 
     pub fn compute_indent(indent_amount: usize) -> String {
         let mut indent = String::new();
+
         for _ in 0..indent_amount {
             indent.push_str(&PAD_CHAR.white());
         }
+
         indent
     }
 }
@@ -103,6 +109,7 @@ pub mod inner {
     #[macro_export]
     macro_rules! next_cost_analysis {
         ($cs:expr, $cost:expr) => {};
+
         ($cs:expr, $cost:expr, $msg:expr) => {{
             let _ = $msg;
         }};
@@ -113,6 +120,7 @@ pub mod inner {
         ($cs:expr, $cost:expr) => {{
             let _ = $cost;
         }};
+
         ($cs:expr, $cost:expr, $msg:expr) => {{
             let _ = $msg;
             let _ = $cost;

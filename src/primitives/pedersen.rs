@@ -18,7 +18,9 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
     // We need 96 bytes of output for each generator that we are going to create.
     // The number of rounds is calculated so that we get 96 bytes per generator needed.
     let mut bytes = vec![];
+
     let number_rounds = number * 3;
+
     for i in 0..number_rounds {
         let blake2x = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -35,9 +37,13 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
             // each generator series that we create.
             personalization: [0; 8],
         };
+
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
+
         state.update(&seed);
+
         let mut result = state.finalize().as_bytes().to_vec();
+
         bytes.append(&mut result);
     }
 
@@ -66,7 +72,9 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
         // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
         // However, because of the previous explanation, we need to nullify the whole first two bytes.
         bytes[96 * i] = 0;
+
         bytes[96 * i + 1] = 0;
+
         let mut x_coordinate =
             Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96 * i..96 * (i + 1)]));
 
@@ -74,11 +82,15 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
         // See https://eprint.iacr.org/2009/226.pdf for more details.
         loop {
             let point = G1Affine::get_point_from_x(x_coordinate, y_coordinate);
+
             if point.is_some() {
                 let g1 = point.unwrap().scale_by_cofactor();
+
                 generators.push(g1);
+
                 break;
             }
+
             x_coordinate += &Fq::one();
         }
     }
@@ -138,11 +150,13 @@ pub fn pedersen_commitment(
 
     // Calculate the rounds that are necessary to process the input.
     let normal_rounds = input.len() / capacity;
+
     let bits_last_round = input.len() % capacity;
 
     // Initialize the sum to the generator. Normally it would be zero, but this is necessary because
     // of some complications in the PedersenHashGadget.
     let mut result = sum_generator;
+
     let mut power = generators[0];
 
     // Start calculating the Pedersen commitment.

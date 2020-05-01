@@ -26,11 +26,13 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
     let mut generators_needed = 3; // At least this much is required for the non-leaf nodes.
+
     for i in 0..inputs.len() {
         generators_needed = cmp::max(generators_needed, (inputs[i].len() + 752 - 1) / 752);
     }
 
     let generators = pedersen_generators(generators_needed);
+
     let sum_generator = sum_generator_g1_mnt6();
 
     // Calculate the Pedersen commitments for the leaves.
@@ -62,11 +64,13 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
             next_nodes.push(parent_node);
         }
         nodes.clear();
+
         nodes.append(&mut next_nodes);
     }
 
     // Serialize the root node.
     let bytes = serialize_g1_mnt6(nodes[0]);
+
     Vec::from(bytes.as_ref())
 }
 
@@ -86,7 +90,7 @@ pub fn merkle_tree_verify(
     nodes: Vec<G1Projective>,
     path: Vec<bool>,
     root: Vec<u8>,
-) -> () {
+) -> bool {
     // Checking that the inputs vector is not empty.
     assert!(!input.is_empty());
 
@@ -101,6 +105,7 @@ pub fn merkle_tree_verify(
     let generators_needed = cmp::max(3, (input.len() + 752 - 1) / 752);
 
     let generators = pedersen_generators(generators_needed);
+
     let sum_generator = sum_generator_g1_mnt6();
 
     // Calculate the Pedersen commitments for the input.
@@ -108,7 +113,9 @@ pub fn merkle_tree_verify(
 
     // Calculate the root of the tree using the branch values.
     let mut left_node;
+
     let mut right_node;
+
     for i in 0..nodes.len() {
         // Decide which node is the left or the right one based on the path.
         if path[i] {
@@ -121,8 +128,11 @@ pub fn merkle_tree_verify(
 
         // Serialize the left and right nodes.
         let mut bytes = Vec::new();
+
         bytes.extend_from_slice(serialize_g1_mnt6(left_node).as_ref());
+
         bytes.extend_from_slice(serialize_g1_mnt6(right_node).as_ref());
+
         let bits = bytes_to_bits(&bytes);
 
         // Calculate the parent node and update result.
@@ -131,8 +141,9 @@ pub fn merkle_tree_verify(
 
     // Serialize the root node.
     let bytes = serialize_g1_mnt6(result);
+
     let reference = Vec::from(bytes.as_ref());
 
-    // Check that the calculated root is equal to the given root.
-    assert_eq!(root, reference);
+    // Check if the calculated root is equal to the given root.
+    root == reference
 }

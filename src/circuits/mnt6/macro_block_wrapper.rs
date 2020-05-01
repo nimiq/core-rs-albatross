@@ -92,8 +92,10 @@ impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
 
         // Verify the ZK proof.
         next_cost_analysis!(cs, cost, || { "Verify ZK proof" });
+
         let mut proof_inputs =
             RecursiveInputGadget::to_field_elements::<Fr>(&initial_state_commitment_var)?;
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &final_state_commitment_var,
         )?);

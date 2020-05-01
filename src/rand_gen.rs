@@ -70,6 +70,7 @@ pub fn generate_random_seed() -> Vec<u8> {
     let block_12 = "0000000000000000000eb22a79e5bdc397ba32365471c14a974296d160b387aa";
     let block_13 = "00000000000000000013eae18508584cd7a71b216841ed759698a7d14072cdb6";
     let block_14 = "000000000000000000132006558a816203cb442aeb9162ba1d8f6dac5f0a00ec";
+
     let concatenated = format!(
         "{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
         block_00,
@@ -88,6 +89,7 @@ pub fn generate_random_seed() -> Vec<u8> {
         block_13,
         block_14
     );
+
     let random_bytes = hex::decode(concatenated).unwrap();
 
     // Initialize Blake2s parameters.

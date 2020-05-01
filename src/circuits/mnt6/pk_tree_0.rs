@@ -126,37 +126,47 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
 
         let position_var = UInt8::alloc_input(cs.ns(|| "alloc position"), || Ok(self.position))?;
 
-        // Calculate the position for the left and right child nodes.
+        // Calculate the position for the left and right child nodes. Given the current position P,
+        // the left position L and the right position R are given as:
+        //    L = 2 * P
+        //    R = 2 * P + 1
+        // For efficiency reasons, we actually calculate the positions using bit manipulation.
         next_cost_analysis!(cs, cost, || { "Calculate positions" });
 
         let mut bits = position_var.into_bits_le();
 
         bits.pop();
         bits.insert(0, Boolean::Constant(false));
-        let left_position = UInt8::from_bits_le(&bits);
+        let left_position = vec![UInt8::from_bits_le(&bits)];
 
         bits.remove(0);
         bits.insert(0, Boolean::Constant(true));
-        let right_position = UInt8::from_bits_le(&bits);
+        let right_position = vec![UInt8::from_bits_le(&bits)];
 
         // Verify the ZK proof for the left child node.
         next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
+
         let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&pk_commitment_var)?;
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &prepare_signer_bitmap_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &prepare_agg_pk_commitment_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &commit_signer_bitmap_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &commit_agg_pk_commitment_var,
         )?);
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[
-            left_position,
-        ])?);
+
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &left_position,
+        )?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify left groth16 proof"),
@@ -167,22 +177,28 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
 
         // Verify the ZK proof for the right child node.
         next_cost_analysis!(cs, cost, || { "Verify right ZK proof" });
+
         let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&pk_commitment_var)?;
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &prepare_signer_bitmap_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &prepare_agg_pk_commitment_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &commit_signer_bitmap_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &commit_agg_pk_commitment_var,
         )?);
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[
-            right_position,
-        ])?);
+
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &right_position,
+        )?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify right groth16 proof"),

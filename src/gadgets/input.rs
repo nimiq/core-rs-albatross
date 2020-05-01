@@ -15,8 +15,11 @@ impl RecursiveInputGadget {
         input_bytes: &[UInt8],
     ) -> Result<Vec<Vec<UInt8>>, SynthesisError> {
         let max_size = TargetConstraintF::Params::CAPACITY / 8;
+
         let max_size = max_size as usize;
+
         let bigint_size = TargetConstraintF::BigInt::NUM_LIMBS * 8;
+
         let fes = input_bytes
             .chunks(max_size)
             .map(|chunk| {
@@ -28,6 +31,7 @@ impl RecursiveInputGadget {
                 chunk
             })
             .collect::<Vec<_>>();
+
         Ok(fes)
     }
 }

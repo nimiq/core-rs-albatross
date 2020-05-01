@@ -47,6 +47,7 @@ pub fn sum_generator_g1_mnt4() -> MNT4G1Projective {
     // See https://blake2.net/blake2x.pdf for more details.
     // We need 96 bytes of output for the generator that we are going to create.
     let mut bytes = vec![];
+
     for i in 0..3 {
         let blake2x = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -63,9 +64,13 @@ pub fn sum_generator_g1_mnt4() -> MNT4G1Projective {
             // each sum generator that we create.
             personalization: [1; 8],
         };
+
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
+
         state.update(&seed);
+
         let mut result = state.finalize().as_bytes().to_vec();
+
         bytes.append(&mut result);
     }
 
@@ -89,17 +94,22 @@ pub fn sum_generator_g1_mnt4() -> MNT4G1Projective {
     // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
     // However, because of the previous explanation, we need to nullify the whole first two bytes.
     bytes[0] = 0;
+
     bytes[1] = 0;
+
     let mut x_coordinate = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96]));
 
     // This implements the try-and-increment method of converting an integer to an elliptic curve point.
     // See https://eprint.iacr.org/2009/226.pdf for more details.
     loop {
         let point = MNT4G1Affine::get_point_from_x(x_coordinate, y_coordinate);
+
         if point.is_some() {
             let g1 = point.unwrap().scale_by_cofactor();
+
             return g1;
         }
+
         x_coordinate += &MNT4Fq::one();
     }
 }
@@ -117,6 +127,7 @@ pub fn sum_generator_g2_mnt4() -> MNT4G2Projective {
     // See https://blake2.net/blake2x.pdf for more details.
     // We need 192 bytes of output for the generator that we are going to create.
     let mut bytes = vec![];
+
     for i in 0..6 {
         let blake2x = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -133,9 +144,13 @@ pub fn sum_generator_g2_mnt4() -> MNT4G2Projective {
             // each sum generator that we create.
             personalization: [2; 8],
         };
+
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
+
         state.update(&seed);
+
         let mut result = state.finalize().as_bytes().to_vec();
+
         bytes.append(&mut result);
     }
 
@@ -160,21 +175,29 @@ pub fn sum_generator_g2_mnt4() -> MNT4G2Projective {
     // However, because of the previous explanation, we need to nullify the whole first two bytes.
     // We do this for each of the two prime fields in the x-coordinate.
     bytes[0] = 0;
+
     bytes[1] = 0;
+
     bytes[96] = 0;
+
     bytes[97] = 0;
+
     let c0 = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96]));
+
     let c1 = MNT4Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96..192]));
+
     let mut x_coordinate = MNT4Fq2::new(c0, c1);
 
     // This implements the try-and-increment method of converting an integer to an elliptic curve point.
     // See https://eprint.iacr.org/2009/226.pdf for more details.
     loop {
         let point = MNT4G2Affine::get_point_from_x(x_coordinate, y_coordinate);
+
         if point.is_some() {
             let g2 = point.unwrap().scale_by_cofactor();
             return g2;
         }
+
         x_coordinate += &MNT4Fq2::one();
     }
 }
@@ -192,6 +215,7 @@ pub fn sum_generator_g1_mnt6() -> MNT6G1Projective {
     // See https://blake2.net/blake2x.pdf for more details.
     // We need 96 bytes of output for the generator that we are going to create.
     let mut bytes = vec![];
+
     for i in 0..3 {
         let blake2x = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -208,9 +232,13 @@ pub fn sum_generator_g1_mnt6() -> MNT6G1Projective {
             // each sum generator that we create.
             personalization: [3; 8],
         };
+
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
+
         state.update(&seed);
+
         let mut result = state.finalize().as_bytes().to_vec();
+
         bytes.append(&mut result);
     }
 
@@ -234,17 +262,21 @@ pub fn sum_generator_g1_mnt6() -> MNT6G1Projective {
     // In order to easily read the BigInt from the bytes, we use the first 16 bits as padding.
     // However, because of the previous explanation, we need to nullify the whole first two bytes.
     bytes[0] = 0;
+
     bytes[1] = 0;
+
     let mut x_coordinate = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96]));
 
     // This implements the try-and-increment method of converting an integer to an elliptic curve point.
     // See https://eprint.iacr.org/2009/226.pdf for more details.
     loop {
         let point = MNT6G1Affine::get_point_from_x(x_coordinate, y_coordinate);
+
         if point.is_some() {
             let g1 = point.unwrap().scale_by_cofactor();
             return g1;
         }
+
         x_coordinate += &MNT6Fq::one();
     }
 }
@@ -262,6 +294,7 @@ pub fn sum_generator_g2_mnt6() -> MNT6G2Projective {
     // See https://blake2.net/blake2x.pdf for more details.
     // We need 288 bytes of output for the generator that we are going to create.
     let mut bytes = vec![];
+
     for i in 0..9 {
         let blake2x = Blake2sWithParameterBlock {
             digest_length: 32,
@@ -278,9 +311,13 @@ pub fn sum_generator_g2_mnt6() -> MNT6G2Projective {
             // each sum generator that we create.
             personalization: [4; 8],
         };
+
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
+
         state.update(&seed);
+
         let mut result = state.finalize().as_bytes().to_vec();
+
         bytes.append(&mut result);
     }
 
@@ -305,24 +342,35 @@ pub fn sum_generator_g2_mnt6() -> MNT6G2Projective {
     // However, because of the previous explanation, we need to nullify the whole first two bytes.
     // We do this for each of the three prime fields in the x-coordinate.
     bytes[0] = 0;
+
     bytes[1] = 0;
+
     bytes[96] = 0;
+
     bytes[97] = 0;
+
     bytes[192] = 0;
+
     bytes[193] = 0;
+
     let c0 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[..96]));
+
     let c1 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[96..192]));
+
     let c2 = MNT6Fq::from_repr(big_int_from_bytes_be(&mut &bytes[192..288]));
+
     let mut x_coordinate = MNT6Fq3::new(c0, c1, c2);
 
     // This implements the try-and-increment method of converting an integer to an elliptic curve point.
     // See https://eprint.iacr.org/2009/226.pdf for more details.
     loop {
         let point = MNT6G2Affine::get_point_from_x(x_coordinate, y_coordinate);
+
         if point.is_some() {
             let g2 = point.unwrap().scale_by_cofactor();
             return g2;
         }
+
         x_coordinate += &MNT6Fq3::one();
     }
 }

@@ -98,15 +98,21 @@ impl MacroBlock {
     ) -> G1Projective {
         // Serialize the input into bits.
         let mut bytes = vec![round_number];
+
         bytes.extend_from_slice(&self.header_hash);
+
         bytes.extend_from_slice(&block_number.to_be_bytes());
+
         bytes.extend(&pks_commitment);
+
         let bits = bytes_to_bits(&bytes);
 
         //Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
         // division of x/y is (x+y-1)/y.
         let generators_needed = (bits.len() + 752 - 1) / 752;
+
         let generators = pedersen_generators(generators_needed);
+
         let sum_generator = sum_generator_g1_mnt6();
 
         // Calculate the Pedersen commitment.

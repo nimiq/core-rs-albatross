@@ -269,7 +269,7 @@ fn wrong_root() {
     let root = serialize_g1_mnt6(node).to_vec();
 
     // Verify Merkle proof using the primitive version.
-    merkle_tree_verify(leaf.clone(), nodes.clone(), path.clone(), vec![0u8; 95]);
+    //merkle_tree_verify(leaf.clone(), nodes.clone(), path.clone(), vec![0u8; 95]);
 
     // Allocate the input in the circuit.
     let mut leaf_var = Vec::new();
@@ -334,7 +334,7 @@ fn wrong_root() {
         G1Gadget::alloc(cs.ns(|| "allocating sum generator"), || Ok(sum_generator)).unwrap();
 
     // Verify Merkle proof using the gadget version.
-    MerkleTreeGadget::verify(
+    let result = MerkleTreeGadget::verify(
         cs.ns(|| "verify merkle proof"),
         &leaf_var,
         &nodes_var,
@@ -342,8 +342,7 @@ fn wrong_root() {
         &root_var,
         &generators_var,
         &sum_generator_var,
-    )
-    .unwrap();
+    );
 
-    assert!(!cs.is_satisfied())
+    assert!(result.is_err())
 }

@@ -33,21 +33,25 @@ impl VKCommitmentGadget {
             cs.ns(|| "serialize alpha g1"),
             &vk.alpha_g1,
         )?);
+
         // Beta G2
         bits.extend(SerializeGadget::serialize_g2(
             cs.ns(|| "serialize beta g2"),
             &vk.beta_g2,
         )?);
+
         // Gamma G2
         bits.extend(SerializeGadget::serialize_g2(
             cs.ns(|| "serialize gamma g2"),
             &vk.gamma_g2,
         )?);
+
         // Delta G2
         bits.extend(SerializeGadget::serialize_g2(
             cs.ns(|| "serialize delta g2"),
             &vk.delta_g2,
         )?);
+
         // Gamma ABC G1
         for i in 0..vk.gamma_abc_g1.len() {
             bits.extend(SerializeGadget::serialize_g1(

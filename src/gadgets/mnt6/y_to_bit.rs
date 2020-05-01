@@ -55,6 +55,7 @@ impl YToBitGadget {
         // Enforces the following relation:
         // y_adjusted <= half
         let y_adjusted_bits = &y_adjusted.to_bits(cs.ns(|| "y adjusted to bits"))?;
+
         Boolean::enforce_smaller_or_equal_than::<_, _, Fq, _>(
             cs.ns(|| "enforce y adjusted smaller than modulus minus one div two"),
             y_adjusted_bits,
@@ -64,6 +65,7 @@ impl YToBitGadget {
         // Enforces the following relation:
         // y + y_bit * (-half) = y_adjusted
         let y_bit_lc = y_bit.lc(CS::one(), half_neg);
+
         cs.enforce(
             || "check y bit",
             |lc| lc + (Fq::one(), CS::one()),
@@ -115,6 +117,7 @@ impl YToBitGadget {
         // Enforces the following relation:
         // y_c1_adjusted <= half
         let y_c1_adjusted_bits = &y_c1_adjusted.to_bits(cs.ns(|| "y c1 adjusted to bits"))?;
+
         Boolean::enforce_smaller_or_equal_than::<_, _, Fq, _>(
             cs.ns(|| "enforce y c1 adjusted smaller than modulus minus one div two"),
             y_c1_adjusted_bits,
@@ -124,6 +127,7 @@ impl YToBitGadget {
         // Enforces the following relation:
         // y_c1 + y_c1_bit * (-half) = y_c1_adjusted
         let y_c1_bit_lc = y_c1_bit.lc(CS::one(), half_neg);
+
         cs.enforce(
             || "check y c1 bit",
             |lc| lc + (Fq::one(), CS::one()),
@@ -162,6 +166,7 @@ impl YToBitGadget {
         // Enforces the following relation:
         // y_c0_adjusted <= half
         let y_c0_adjusted_bits = &y_c0_adjusted.to_bits(cs.ns(|| "y c0 adjusted to bits"))?;
+
         Boolean::enforce_smaller_or_equal_than::<_, _, Fq, _>(
             cs.ns(|| "enforce y c0 adjusted smaller than modulus minus one div two"),
             y_c0_adjusted_bits,
@@ -171,6 +176,7 @@ impl YToBitGadget {
         // Enforces the following relation:
         // y_c0 + y_c0_bit * (-half) = y_c0_adjusted
         let y_c0_bit_lc = y_c0_bit.lc(CS::one(), half_neg);
+
         cs.enforce(
             || "check y c0 bit",
             |lc| lc + (Fq::one(), CS::one()),
@@ -226,7 +232,9 @@ impl YToBitGadget {
 
         // ----------------   (y_c1 > half) || (y_c1 == 0 && y_c0 > half)   ----------------
         let cond0 = y_c1_bit;
+
         let cond1 = Boolean::and(cs.ns(|| "y_c1_eq_bit && y_c0_bit"), &y_c1_eq_bit, &y_c0_bit)?;
+
         let y_bit = Boolean::or(cs.ns(|| "cond0 || cond1"), &cond0, &cond1)?;
 
         Ok(y_bit)

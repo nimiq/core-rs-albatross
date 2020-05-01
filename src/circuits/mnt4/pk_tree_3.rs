@@ -189,6 +189,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         path_var.truncate(3);
 
         // Verify the Merkle proof for the public keys.
+        next_cost_analysis!(cs, cost, || { "Verify Merkle proof pks" });
+
         let mut bits: Vec<Boolean> = vec![];
 
         for i in 0..self.pks.len() {
@@ -209,6 +211,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         )?;
 
         // Verify the Merkle proof for the prepare aggregate public key.
+        next_cost_analysis!(cs, cost, || { "Verify Merkle proof prepare agg key" });
+
         let bits = SerializeGadget::serialize_g2(
             cs.ns(|| "serialize prepare agg pk"),
             &prepare_agg_pk_var,
@@ -225,6 +229,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         )?;
 
         // Verify the Merkle proof for the commit aggregate public key.
+        next_cost_analysis!(cs, cost, || { "Verify Merkle proof commit agg key" });
+
         let bits =
             SerializeGadget::serialize_g2(cs.ns(|| "serialize commit agg pk"), &commit_agg_pk_var)?;
 
@@ -239,6 +245,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         )?;
 
         // Calculate the prepare aggregate public key.
+        next_cost_analysis!(cs, cost, || { "Calculate prepare agg key" });
+
         let mut reference_prep_agg_pk = sum_generator_g2_var.clone();
 
         for (i, (key, included)) in pks_var
@@ -263,6 +271,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         }
 
         // Calculate the commit aggregate public key.
+        next_cost_analysis!(cs, cost, || { "Calculate commit agg key" });
+
         let mut reference_comm_agg_pk = sum_generator_g2_var.clone();
 
         for (i, (key, included)) in pks_var
@@ -287,6 +297,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         }
 
         // Check that both reference aggregate public keys match the ones given as inputs.
+        next_cost_analysis!(cs, cost, || { "Verify prepare and commit agg key" });
+
         prepare_agg_pk_var.enforce_equal(
             cs.ns(|| "verify equality prepare agg pk"),
             &reference_prep_agg_pk,

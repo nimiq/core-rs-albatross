@@ -29,8 +29,8 @@ type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
 /// and a verifying key and it produces a proof that there exists two valid SNARK proofs that transforms
 /// the initial state into the final state passing through some intermediate state.
 /// The circuit is composed of two SNARK verifiers in a row. It's used to verify a Merger Wrapper proof
-/// and a Macro Block Wrapper, effectively merging both into a single proof. Evidently, this is needed
-/// for recursive composition of SNARK proofs.
+/// and a Macro Block Wrapper proof, effectively merging both into a single proof. Evidently, this is
+/// needed for recursive composition of SNARK proofs.
 /// This circuit has the verification key for the Macro Block Wrapper hard-coded as a constant, but the
 /// verification key for the Merger Wrapper is given as a private input.
 /// To guarantee that the prover inputs the correct Merger Wrapper verification key, the verifier also

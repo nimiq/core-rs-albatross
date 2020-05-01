@@ -15,12 +15,14 @@ pub trait BeSerialize {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<(), Error> {
         BeSerialize::serialize_with_flags(self, writer, Default::default())
     }
+
     /// Serializes `self` and `flags` into `writer`.
     fn serialize_with_flags<W: WriteBytesExt>(
         &self,
         writer: &mut W,
         _flags: Flags,
     ) -> Result<(), Error>;
+
     fn serialized_size(&self) -> usize;
 }
 
@@ -28,6 +30,7 @@ pub trait BeSerialize {
 pub trait BeDeserialize: Sized {
     /// Reads `Self` from `reader`.
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, Error>;
+
     /// Reads `Self` and `Flags` from `reader`.
     /// Returns empty flags by default.
     fn deserialize_with_flags<R: ReadBytesExt>(reader: &mut R) -> Result<(Self, Flags), Error>;
@@ -304,6 +307,7 @@ impl CustomLengthDeSerialize for BigInteger768 {
         // Only take num_limbs limbs.
         for (i, &limb) in self.as_ref().iter().take(num_limbs).rev().enumerate() {
             let mut limb_to_encode = limb;
+
             // Encode flags into very first u64 at most significant bits.
             if i == 0 {
                 limb_to_encode |= flags.u64_bitmask(byte_offset as u64 * 8);
@@ -329,6 +333,7 @@ impl CustomLengthDeSerialize for BigInteger768 {
         let byte_offset = (num_limbs * 8 - length) % 8;
 
         let mut limbs = [0u64; 12];
+
         for (i, limb) in limbs.iter_mut().take(num_limbs).rev().enumerate() {
             if i == 0 {
                 *limb = read_u64::<_, BigEndian>(reader, byte_offset)?;
@@ -336,6 +341,7 @@ impl CustomLengthDeSerialize for BigInteger768 {
                 *limb = reader.read_u64::<BigEndian>()?;
             }
         }
+
         Ok(BigInteger768::new(limbs))
     }
 
@@ -356,7 +362,9 @@ impl CustomLengthDeSerialize for BigInteger768 {
         let byte_offset = (num_limbs * 8 - length) % 8;
 
         let mut limbs = [0u64; 12];
+
         let mut flags = Default::default();
+
         for (i, limb) in limbs.iter_mut().take(num_limbs).rev().enumerate() {
             // The first limb encodes the flags, so remove them.
             if i == 0 {
@@ -366,6 +374,7 @@ impl CustomLengthDeSerialize for BigInteger768 {
                 *limb = reader.read_u64::<BigEndian>()?;
             }
         }
+
         Ok((BigInteger768::new(limbs), flags))
     }
 }

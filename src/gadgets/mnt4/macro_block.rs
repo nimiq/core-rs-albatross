@@ -26,7 +26,11 @@ pub enum Round {
     Commit = 1,
 }
 
-/// A gadget representing a macro block in Albatross.
+/// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
+///  - The macro block was signed by the prepare and commit aggregate public keys.
+///  - The macro block contains the correct block number and public keys commitment (for the next
+///    validator list).
+///  - There are enough signers.
 pub struct MacroBlockGadget {
     pub header_hash: Vec<Boolean>,
     pub prepare_signature: G1Gadget,
@@ -90,7 +94,9 @@ impl MacroBlockGadget {
         // Note the use of the generator to avoid an error in the sum.
         let mut signature =
             sum_generator_g1.add(cs.ns(|| "add prepare sig"), &self.prepare_signature)?;
+
         signature = signature.add(cs.ns(|| "add commit sig"), &self.commit_signature)?;
+
         signature = signature.sub(cs.ns(|| "finalize sig"), sum_generator_g1)?;
 
         // Verifies the validity of the signatures.
@@ -126,27 +132,35 @@ impl MacroBlockGadget {
         // The round number comes in little endian,
         // which is why we need to reverse the bits to get big endian.
         let round_number = UInt8::constant(round as u8);
+
         let mut round_number_bits = round_number.into_bits_le();
+
         round_number_bits.reverse();
+
         bits.append(&mut round_number_bits);
 
         // The block number comes in little endian all the way.
         // So, a reverse will put it into big endian.
         let mut block_number_be = block_number.to_bits_le();
+
         block_number_be.reverse();
+
         bits.append(&mut block_number_be);
 
         // Append the header hash.
         bits.extend_from_slice(&self.header_hash);
 
-        // Convert the state commitment to bits and append it.
+        // Convert the public keys commitment to bits and append it.
         let mut pks_bits = Vec::new();
+
         let mut byte;
+
         for i in 0..pks_commitment.len() {
             byte = pks_commitment[i].into_bits_le();
             byte.reverse();
             pks_bits.extend(byte);
         }
+
         bits.append(&mut pks_bits);
 
         // Calculate the Pedersen commitment.
@@ -161,10 +175,12 @@ impl MacroBlockGadget {
         let x_bits = pedersen_commitment
             .x
             .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
+
         let greatest_bit = YToBitGadget::y_to_bit_g1(
             cs.ns(|| "y to bit: pedersen commitment"),
             &pedersen_commitment,
         )?;
+
         let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
 
         // Prepare order of booleans for blake2s (it doesn't expect Big-Endian).
@@ -194,6 +210,7 @@ impl MacroBlockGadget {
 
         // Convert to bits.
         let mut result = Vec::new();
+
         for i in 0..8 {
             result.extend(hash[i].to_bits_le());
         }
@@ -278,6 +295,7 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
         };
 
         assert_eq!(value.prepare_signer_bitmap.len(), VALIDATOR_SLOTS);
+
         assert_eq!(value.commit_signer_bitmap.len(), VALIDATOR_SLOTS);
 
         let header_hash =
@@ -335,6 +353,7 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
         };
 
         assert_eq!(value.prepare_signer_bitmap.len(), VALIDATOR_SLOTS);
+
         assert_eq!(value.commit_signer_bitmap.len(), VALIDATOR_SLOTS);
 
         let header_hash =

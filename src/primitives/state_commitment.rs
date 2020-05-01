@@ -23,27 +23,36 @@ pub fn state_commitment(
 
     // Construct the Merkle tree over the public keys.
     let mut bytes: Vec<u8> = Vec::new();
+
     for i in 0..public_keys.len() {
         bytes.extend_from_slice(serialize_g2_mnt6(public_keys[i]).as_ref());
     }
+
     let bits = bytes_to_bits(&bytes);
 
     let mut inputs = Vec::new();
+
     for i in 0..tree_size {
         inputs.push(bits[i * tree_size..(i + 1) * tree_size].to_vec());
     }
+
     let root = merkle_tree_construct(inputs);
 
     // Serialize the block number and the Merkle tree root into bits.
     let mut bytes: Vec<u8> = vec![];
+
     bytes.extend_from_slice(&block_number.to_be_bytes());
+
     bytes.extend(&root);
+
     let bits = bytes_to_bits(&bytes);
 
     //Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
     let generators_needed = (bits.len() + 752 - 1) / 752;
+
     let generators = pedersen_generators(generators_needed);
+
     let sum_generator = sum_generator_g1_mnt6();
 
     // Calculate the Pedersen commitment.
@@ -51,5 +60,6 @@ pub fn state_commitment(
 
     // Serialize the Pedersen commitment.
     let bytes = serialize_g1_mnt6(pedersen_commitment);
+
     Vec::from(bytes.as_ref())
 }

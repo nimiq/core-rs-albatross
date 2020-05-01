@@ -29,17 +29,22 @@ impl StateCommitmentGadget {
         // The block number comes in little endian all the way.
         // So, a reverse will put it into big endian.
         let mut block_number_be = block_number.to_bits_le();
+
         block_number_be.reverse();
+
         bits.extend(block_number_be);
 
-        // Convert the state commitment to bits and append it.
+        // Convert the public keys commitment to bits and append it.
         let mut pks_bits = Vec::new();
+
         let mut byte;
+
         for i in 0..pks_commitment.len() {
             byte = pks_commitment[i].into_bits_le();
             byte.reverse();
             pks_bits.extend(byte);
         }
+
         bits.append(&mut pks_bits);
 
         // Calculate the Pedersen commitment.
@@ -55,10 +60,12 @@ impl StateCommitmentGadget {
             cs.ns(|| "serialize pedersen commitment"),
             &pedersen_commitment,
         )?;
+
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
         // Convert to bytes.
         let mut bytes = Vec::new();
+
         for i in 0..serialized_bits.len() / 8 {
             bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
         }
