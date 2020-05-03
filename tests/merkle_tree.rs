@@ -10,11 +10,12 @@ use rand::RngCore;
 use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::mnt4::MerkleTreeGadget;
 use nano_sync::primitives::{
-    merkle_tree_construct, merkle_tree_verify, pedersen_commitment, pedersen_generators,
+    merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, pedersen_commitment,
+    pedersen_generators,
 };
-use nano_sync::utils::{bytes_to_bits, serialize_g1_mnt6};
+use nano_sync::utils::{byte_from_le_bits, bytes_to_bits, serialize_g1_mnt6};
 
-//#[test]
+#[test]
 fn merkle_tree_construct_works() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
@@ -92,7 +93,7 @@ fn merkle_tree_construct_works() {
     assert_eq!(primitive_out_var, gadget_out)
 }
 
-//#[test]
+#[test]
 fn merkle_tree_verify_works() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
@@ -142,7 +143,12 @@ fn merkle_tree_verify_works() {
     let root = serialize_g1_mnt6(node).to_vec();
 
     // Verify Merkle proof using the primitive version.
-    merkle_tree_verify(leaf.clone(), nodes.clone(), path.clone(), root.clone());
+    assert!(merkle_tree_verify(
+        leaf.clone(),
+        nodes.clone(),
+        path.clone(),
+        root.clone(),
+    ));
 
     // Allocate the input in the circuit.
     let mut leaf_var = Vec::new();
@@ -215,12 +221,38 @@ fn merkle_tree_verify_works() {
         &sum_generator_var,
     )
     .unwrap();
-
-    assert!(cs.is_satisfied())
 }
 
 #[test]
-fn wrong_root() {
+fn merkle_tree_prove_works() {
+    // Create random bits.
+    let rng = &mut test_rng();
+    let mut bytes = [0u8; 128];
+    let mut leaves = Vec::new();
+    for _ in 0..16 {
+        rng.fill_bytes(&mut bytes);
+        leaves.push(bytes_to_bits(&bytes));
+    }
+    let mut byte = [0u8; 1];
+    rng.fill_bytes(&mut byte);
+    let mut path = bytes_to_bits(&byte);
+    path.truncate(4);
+    let position = byte_from_le_bits(&path) as usize;
+
+    // Calculate root.
+    let root = merkle_tree_construct(leaves.clone());
+
+    // Calculate proof.
+    let proof = merkle_tree_prove(leaves.clone(), path.clone());
+
+    // Verify proof.
+    let input = leaves.get(position).unwrap().to_vec();
+
+    assert!(merkle_tree_verify(input, proof, path, root))
+}
+
+//#[test]
+fn verify_wrong_root() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
 

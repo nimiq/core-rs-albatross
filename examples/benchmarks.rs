@@ -4,41 +4,54 @@
 use std::error::Error;
 
 use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::{FqParameters, G2Projective};
+use algebra::mnt6_753::{FqParameters, Fr, G2Projective};
+use algebra_core::fields::Field;
+use algebra_core::{test_rng, ProjectiveCurve};
 use crypto_primitives::prf::blake2s::constraints::blake2s_gadget;
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, Boolean, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use r1cs_std::ToBitsGadget;
+use rand::RngCore;
 
 use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::mnt4::{PedersenCommitmentGadget, YToBitGadget};
-use nano_sync::gadgets::{pad_point_bits, reverse_inner_byte_order};
-use nano_sync::primitives::mnt4::pedersen_generators;
-use nimiq_bls::{KeyPair, SecureGenerate};
+use nano_sync::primitives::pedersen_generators;
+use nano_sync::utils::{pad_point_bits, reverse_inner_byte_order};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Setup keys.
-    let key_pair1 = KeyPair::generate_default_csprng();
-    let keys = vec![key_pair1.public_key.public_key; 1];
+    // Create random points.
+    let rng = &mut test_rng();
+    let mut bytes = [0u8; 96];
+    rng.fill_bytes(&mut bytes[2..]);
+    let sk_1 = Fr::from_random_bytes(&bytes).unwrap();
+    let pk_1 = G2Projective::prime_subgroup_generator().mul(sk_1);
+    let keys = vec![pk_1; 10];
 
-    // All Blake2s.
-    println!("Only Blake2s:");
-    let mut cs = TestConstraintSystem::new();
-    only_blake2s_circuit(cs.ns(|| "circuit 1"), &keys.clone())?;
-    println!("Number of constraints: {}", cs.num_constraints());
+    // // All Blake2s.
+    // println!("Only Blake2s:");
+    // let mut cs = TestConstraintSystem::new();
+    // only_blake2s_circuit(cs.ns(|| "circuit 1"), &keys.clone())?;
+    // println!("Number of constraints: {}", cs.num_constraints());
+    //
+    // // All Pedersen.
+    // println!("Only Pedersen:");
+    // let mut cs = TestConstraintSystem::new();
+    // only_pedersen_circuit(cs.ns(|| "circuit 2"), &keys.clone())?;
+    // println!("Number of constraints: {}", cs.num_constraints());
+    //
+    // // Only serialization.
+    // println!("Only serialization:");
+    // let mut cs = TestConstraintSystem::new();
+    // only_serialize_pks(cs.ns(|| "circuit 3"), &keys.clone())?;
+    // println!("Number of constraints: {}", cs.num_constraints());
 
-    // All Pedersen.
-    println!("Only Pedersen:");
+    // Only alloc.
+    println!("Only allocation:");
     let mut cs = TestConstraintSystem::new();
-    only_pedersen_circuit(cs.ns(|| "circuit 2"), &keys.clone())?;
-    println!("Number of constraints: {}", cs.num_constraints());
-
-    // Only serialization.
-    println!("Only serialization:");
-    let mut cs = TestConstraintSystem::new();
-    only_serialize_pks(cs.ns(|| "circuit 3"), &keys.clone())?;
+    only_alloc(cs.ns(|| "circuit 3"), &keys.clone())?;
     println!("Number of constraints: {}", cs.num_constraints());
 
     Ok(())
@@ -105,8 +118,8 @@ fn only_pedersen_circuit<CS: ConstraintSystem<MNT4Fr>>(
     // Calculate the Pedersen commitment.
     let pedersen_commitment = PedersenCommitmentGadget::evaluate(
         cs.ns(|| "pedersen commitment"),
-        &pedersen_generators_var,
         &bits,
+        &pedersen_generators_var,
         &sum_generator_var,
     )?;
 
@@ -145,6 +158,15 @@ fn only_serialize_pks<CS: ConstraintSystem<MNT4Fr>>(
         let mut serialized_bits = pad_point_bits::<FqParameters>(serialized_bits, greatest_bit);
         bits.append(&mut serialized_bits);
     }
+
+    Ok(())
+}
+
+fn only_alloc<CS: ConstraintSystem<MNT4Fr>>(
+    mut cs: CS,
+    public_keys: &[G2Projective],
+) -> Result<(), SynthesisError> {
+    let keys_var = Vec::<G2Gadget>::alloc(cs.ns(|| "public keys"), || Ok(&public_keys[..]))?;
 
     Ok(())
 }

@@ -118,6 +118,23 @@ pub fn bytes_to_bits(bytes: &[u8]) -> Vec<bool> {
     bits
 }
 
+/// Transforms a vector of little endian bits into a u8.
+pub fn byte_from_le_bits(bits: &[bool]) -> u8 {
+    assert!(bits.len() <= 8);
+
+    let mut byte = 0;
+    let mut base = 1;
+
+    for i in 0..bits.len() {
+        if bits[i] {
+            byte += base;
+        }
+        base *= 2;
+    }
+
+    byte
+}
+
 /// Cretes a BigInteger from an array of bytes in big-endian format.
 pub fn big_int_from_bytes_be<R: std::io::Read>(reader: &mut R) -> BigInteger768 {
     let mut res = [0u64; 12];

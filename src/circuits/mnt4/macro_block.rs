@@ -108,16 +108,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         let sum_generator_g2_var =
             G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
 
-        let pedersen_generators = pedersen_generators(256);
-
-        let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
-
-        for i in 0..256 {
-            pedersen_generators_var.push(G1Gadget::alloc_constant(
-                cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
-                &pedersen_generators[i],
-            )?);
-        }
+        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
+            cs.ns(|| "alloc pedersen_generators"),
+            pedersen_generators(256),
+        )?;
 
         // TODO: This needs to be changed to a constant!
         let vk_var = TheVkGadget::alloc(cs.ns(|| "alloc vk"), || Ok(&self.vk))?;
@@ -125,23 +119,15 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || "Alloc private inputs");
 
-        let mut prepare_agg_pk_chunks_var = Vec::new();
+        let prepare_agg_pk_chunks_var =
+            Vec::<G2Gadget>::alloc(cs.ns(|| "alloc prepare agg pk chunks"), || {
+                Ok(&self.prepare_agg_pk_chunks[..])
+            })?;
 
-        for i in 0..self.prepare_agg_pk_chunks.len() {
-            prepare_agg_pk_chunks_var.push(G2Gadget::alloc(
-                cs.ns(|| format!("alloc prepare agg pk chunks: key {}", i)),
-                || Ok(&self.prepare_agg_pk_chunks[i]),
-            )?);
-        }
-
-        let mut commit_agg_pk_chunks_var = Vec::new();
-
-        for i in 0..self.commit_agg_pk_chunks.len() {
-            commit_agg_pk_chunks_var.push(G2Gadget::alloc(
-                cs.ns(|| format!("alloc commit agg pk chunks: key {}", i)),
-                || Ok(&self.commit_agg_pk_chunks[i]),
-            )?);
-        }
+        let commit_agg_pk_chunks_var =
+            Vec::<G2Gadget>::alloc(cs.ns(|| "alloc commit agg pk chunks"), || {
+                Ok(&self.commit_agg_pk_chunks[..])
+            })?;
 
         let initial_pks_commitment_var = UInt8::alloc_vec(
             cs.ns(|| "alloc initial pks commitment"),

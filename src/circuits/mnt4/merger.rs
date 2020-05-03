@@ -100,16 +100,10 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         let sum_generator_g1_var =
             G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
 
-        let pedersen_generators = pedersen_generators(17);
-
-        let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
-
-        for i in 0..pedersen_generators.len() {
-            pedersen_generators_var.push(G1Gadget::alloc_constant(
-                cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
-                &pedersen_generators[i],
-            )?);
-        }
+        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
+            cs.ns(|| "alloc pedersen_generators"),
+            pedersen_generators(17),
+        )?;
 
         // TODO: This needs to be changed to a constant!
         let vk_macro_block_wrapper_var =

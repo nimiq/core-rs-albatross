@@ -21,7 +21,7 @@ pub struct PKTree3Circuit {
     commit_agg_pk_nodes: Vec<G1Projective>,
 
     // Public inputs
-    pk_commitment: Vec<u8>,
+    pks_commitment: Vec<u8>,
     prepare_signer_bitmap: Vec<u8>,
     prepare_agg_pk_commitment: Vec<u8>,
     commit_signer_bitmap: Vec<u8>,
@@ -37,7 +37,7 @@ impl PKTree3Circuit {
         prepare_agg_pk_nodes: Vec<G1Projective>,
         commit_agg_pk: G2Projective,
         commit_agg_pk_nodes: Vec<G1Projective>,
-        pk_commitment: Vec<u8>,
+        pks_commitment: Vec<u8>,
         prepare_signer_bitmap: Vec<u8>,
         prepare_agg_pk_commitment: Vec<u8>,
         commit_signer_bitmap: Vec<u8>,
@@ -51,7 +51,7 @@ impl PKTree3Circuit {
             prepare_agg_pk_nodes,
             commit_agg_pk,
             commit_agg_pk_nodes,
-            pk_commitment,
+            pks_commitment,
             prepare_signer_bitmap,
             prepare_agg_pk_commitment,
             commit_signer_bitmap,
@@ -77,72 +77,47 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         let sum_generator_g2_var =
             G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
 
-        let pedersen_generators = pedersen_generators(195);
-
-        let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
-
-        for i in 0..pedersen_generators.len() {
-            pedersen_generators_var.push(G1Gadget::alloc_constant(
-                cs.ns(|| format!("alloc pedersen_generators: generator {}", i)),
-                &pedersen_generators[i],
-            )?);
-        }
+        let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
+            cs.ns(|| "alloc pedersen_generators"),
+            pedersen_generators(195),
+        )?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
 
-        let mut pks_var = Vec::new();
+        let pks_var = Vec::<G2Gadget>::alloc(cs.ns(|| "alloc public keys"), || Ok(&self.pks[..]))?;
 
-        for i in 0..self.pks.len() {
-            pks_var.push(G2Gadget::alloc(
-                cs.ns(|| format!("alloc public keys: key {}", i)),
-                || Ok(&self.pks[i]),
-            )?);
-        }
-
-        let mut pks_nodes_var = Vec::new();
-
-        for i in 0..self.pks_nodes.len() {
-            pks_nodes_var.push(G1Gadget::alloc(
-                cs.ns(|| format!("alloc pks Merkle proof nodes: node {}", i)),
-                || Ok(&self.pks_nodes[i]),
-            )?);
-        }
+        let pks_nodes_var =
+            Vec::<G1Gadget>::alloc(cs.ns(|| "alloc pks Merkle proof nodes"), || {
+                Ok(&self.pks_nodes[..])
+            })?;
 
         let prepare_agg_pk_var =
             G2Gadget::alloc(cs.ns(|| "alloc prepare aggregate public key"), || {
                 Ok(&self.prepare_agg_pk)
             })?;
 
-        let mut prepare_agg_pk_nodes_var = Vec::new();
-
-        for i in 0..self.prepare_agg_pk_nodes.len() {
-            prepare_agg_pk_nodes_var.push(G1Gadget::alloc(
-                cs.ns(|| format!("alloc prepare agg pk Merkle proof nodes: node {}", i)),
-                || Ok(&self.prepare_agg_pk_nodes[i]),
-            )?);
-        }
+        let prepare_agg_pk_nodes_var =
+            Vec::<G1Gadget>::alloc(cs.ns(|| "alloc prepare agg pk Merkle proof nodes"), || {
+                Ok(&self.prepare_agg_pk_nodes[..])
+            })?;
 
         let commit_agg_pk_var =
             G2Gadget::alloc(cs.ns(|| "alloc commit aggregate public key"), || {
                 Ok(&self.commit_agg_pk)
             })?;
 
-        let mut commit_agg_pk_nodes_var = Vec::new();
-
-        for i in 0..self.commit_agg_pk_nodes.len() {
-            commit_agg_pk_nodes_var.push(G1Gadget::alloc(
-                cs.ns(|| format!("alloc commit agg pk Merkle proof nodes: node {}", i)),
-                || Ok(&self.commit_agg_pk_nodes[i]),
-            )?);
-        }
+        let commit_agg_pk_nodes_var =
+            Vec::<G1Gadget>::alloc(cs.ns(|| "alloc commit agg pk Merkle proof nodes"), || {
+                Ok(&self.commit_agg_pk_nodes[..])
+            })?;
 
         // Allocate all the public inputs.
         next_cost_analysis!(cs, cost, || { "Alloc public inputs" });
 
         let pk_commitment_var = UInt8::alloc_input_vec(
             cs.ns(|| "alloc public keys commitment"),
-            self.pk_commitment.as_ref(),
+            self.pks_commitment.as_ref(),
         )?;
 
         let prepare_signer_bitmap_var = UInt8::alloc_input_vec(

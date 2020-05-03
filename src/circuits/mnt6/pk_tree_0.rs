@@ -40,7 +40,7 @@ pub struct PKTree0Circuit {
     vk_child: VerifyingKey<MNT4_753>,
 
     // Public inputs
-    pk_commitment: Vec<u8>,
+    pks_commitment: Vec<u8>,
     prepare_signer_bitmap: Vec<u8>,
     prepare_agg_pk_commitment: Vec<u8>,
     commit_signer_bitmap: Vec<u8>,
@@ -53,7 +53,7 @@ impl PKTree0Circuit {
         left_proof: Proof<MNT4_753>,
         right_proof: Proof<MNT4_753>,
         vk_child: VerifyingKey<MNT4_753>,
-        pk_commitment: Vec<u8>,
+        pks_commitment: Vec<u8>,
         prepare_signer_bitmap: Vec<u8>,
         prepare_agg_pk_commitment: Vec<u8>,
         commit_signer_bitmap: Vec<u8>,
@@ -64,7 +64,7 @@ impl PKTree0Circuit {
             left_proof,
             right_proof,
             vk_child,
-            pk_commitment,
+            pks_commitment,
             prepare_signer_bitmap,
             prepare_agg_pk_commitment,
             commit_signer_bitmap,
@@ -101,7 +101,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
 
         let pk_commitment_var = UInt8::alloc_input_vec(
             cs.ns(|| "alloc public keys commitment"),
-            self.pk_commitment.as_ref(),
+            self.pks_commitment.as_ref(),
         )?;
 
         let prepare_signer_bitmap_var = UInt8::alloc_input_vec(
