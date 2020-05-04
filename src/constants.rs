@@ -17,13 +17,19 @@ use crypto_primitives::prf::Blake2sWithParameterBlock;
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
 
+/// This is the depth of the PKTree circuit.
+pub const PK_TREE_DEPTH: usize = 3;
+
+/// This is the number of leaves in the PKTree circuit. It must be equal to 2**PK_TREE_DEPTH.
+pub const PK_TREE_BREADTH: usize = 8;
+
 /// This is the length of one epoch in Albatross. Basically, the difference in the block numbers of
 /// two consecutive macro blocks.
 pub const EPOCH_LENGTH: u32 = 128;
 
 /// This is the number of validator slots in Albatross.
 /// VALIDATOR_SLOTS = MIN_SIGNERS + MAX_NON_SIGNERS
-pub const VALIDATOR_SLOTS: usize = 512;
+pub const VALIDATOR_SLOTS: usize = 64;
 
 /// This is the minimum number of validator slots that must sign a macro block in order to be valid.
 /// MIN_SIGNERS = ceiling( VALIDATOR_SLOTS * 2/3 )

@@ -10,6 +10,7 @@ pub mod rand_gen;
 pub mod utils;
 
 // TODO: Eliminate Macro Block Wrapper.
+// TODO: Increase the PKTree to 32 leaves.
 // TODO: Finish the examples.
 // TODO: Change all the vks to constants.
 // TODO: Redo tests. (Consider having the verifying gadgets return bool)

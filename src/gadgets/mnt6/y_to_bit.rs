@@ -43,7 +43,7 @@ impl YToBitGadget {
                 let half = Fq::modulus_minus_one_div_two();
                 let y_value = point.y.get_value().get()?;
                 if y_value.into_repr() > half {
-                    Ok(y_value - &(Fq::from_repr(half) + &Fq::one()))
+                    Ok(y_value - &Fq::from_repr(half))
                 } else {
                     Ok(y_value)
                 }
@@ -105,7 +105,7 @@ impl YToBitGadget {
                 let half = Fq::modulus_minus_one_div_two();
                 let y_value = point.y.c1.get_value().get()?;
                 if y_value.into_repr() > half {
-                    Ok(y_value - &(Fq::from_repr(half) + &Fq::one()))
+                    Ok(y_value - &Fq::from_repr(half))
                 } else {
                     Ok(y_value)
                 }
@@ -154,7 +154,7 @@ impl YToBitGadget {
                 let half = Fq::modulus_minus_one_div_two();
                 let y_value = point.y.c0.get_value().get()?;
                 if y_value.into_repr() > half {
-                    Ok(y_value - &(Fq::from_repr(half) + &Fq::one()))
+                    Ok(y_value - &Fq::from_repr(half))
                 } else {
                     Ok(y_value)
                 }

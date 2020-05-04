@@ -4,7 +4,9 @@ use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
-use crate::constants::{sum_generator_g1_mnt6, sum_generator_g2_mnt6, VALIDATOR_SLOTS};
+use crate::constants::{
+    sum_generator_g1_mnt6, sum_generator_g2_mnt6, PK_TREE_BREADTH, VALIDATOR_SLOTS,
+};
 use crate::gadgets::mnt4::{MerkleTreeGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
@@ -145,9 +147,8 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         // Process public inputs.
         next_cost_analysis!(cs, cost, || { "Process public inputs" });
 
-        // Note: This assumes that there are 8 leaves in this tree.
-        let chunk_start = VALIDATOR_SLOTS / 8 * (self.position as usize);
-        let chunk_end = VALIDATOR_SLOTS / 8 * (1 + self.position as usize);
+        let chunk_start = VALIDATOR_SLOTS / PK_TREE_BREADTH * (self.position as usize);
+        let chunk_end = VALIDATOR_SLOTS / PK_TREE_BREADTH * (1 + self.position as usize);
 
         let prepare_signer_bitmap_var =
             prepare_signer_bitmap_var.to_bits(cs.ns(|| "prepare signer bitmap to bits"))?;
