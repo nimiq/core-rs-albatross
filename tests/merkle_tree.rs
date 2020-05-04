@@ -1,6 +1,7 @@
 use algebra::mnt4_753::Fr as MNT4Fr;
+use algebra::mnt6_753::G1Projective;
 use algebra::test_rng;
-use r1cs_core::ConstraintSystem;
+use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::bits::boolean::Boolean;
 use r1cs_std::mnt6_753::G1Gadget;
 use r1cs_std::prelude::{AllocGadget, UInt8};
@@ -16,7 +17,7 @@ use nano_sync::primitives::{
 use nano_sync::utils::{byte_from_le_bits, bytes_to_bits, serialize_g1_mnt6};
 
 #[test]
-fn merkle_tree_construct_works() {
+fn construct_works() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
 
@@ -94,10 +95,86 @@ fn merkle_tree_construct_works() {
 }
 
 #[test]
-fn merkle_tree_verify_works() {
-    // Initialize the constraint system.
-    let mut cs = TestConstraintSystem::<MNT4Fr>::new();
+fn prove_works() {
+    // Create random bits.
+    let rng = &mut test_rng();
+    let mut bytes = [0u8; 128];
+    let mut leaves = Vec::new();
+    for _ in 0..16 {
+        rng.fill_bytes(&mut bytes);
+        leaves.push(bytes_to_bits(&bytes));
+    }
+    let mut byte = [0u8; 1];
+    rng.fill_bytes(&mut byte);
+    let mut path = bytes_to_bits(&byte);
+    path.truncate(4);
+    let position = byte_from_le_bits(&path) as usize;
 
+    // Calculate root.
+    let root = merkle_tree_construct(leaves.clone());
+
+    // Calculate proof.
+    let proof = merkle_tree_prove(leaves.clone(), path.clone());
+
+    // Verify proof.
+    let input = leaves.get(position).unwrap().to_vec();
+
+    assert!(merkle_tree_verify(input, proof, path, root))
+}
+
+#[derive(Clone)]
+struct VerifyCircuit {
+    leaf: Vec<bool>,
+    nodes: Vec<G1Projective>,
+    path: Vec<bool>,
+    root: Vec<u8>,
+}
+
+impl ConstraintSynthesizer<MNT4Fr> for VerifyCircuit {
+    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+        // Allocate the input in the circuit.
+        let leaf_var = Vec::<Boolean>::alloc(cs.ns(|| "alloc leaf"), || Ok(self.leaf.as_ref()))?;
+
+        // Allocate the nodes in the circuit.
+        let nodes_var =
+            Vec::<G1Gadget>::alloc(cs.ns(|| "alloc nodes"), || Ok(self.nodes.as_ref()))?;
+
+        // Allocate the path in the circuit.
+        let path_var = Vec::<Boolean>::alloc(cs.ns(|| "alloc path"), || Ok(self.path.as_ref()))?;
+
+        // Allocate the root in the circuit.
+        let root_var = UInt8::alloc_vec(cs.ns(|| "alloc root"), &self.root)?;
+
+        // Allocate the Pedersen generators in the circuit.
+        let generators_var = Vec::<G1Gadget>::alloc_constant(
+            cs.ns(|| "alloc pedersen_generators"),
+            pedersen_generators(3),
+        )?;
+
+        // Allocate the sum generator in the circuit.
+        let sum_generator_var = G1Gadget::alloc_constant(
+            cs.ns(|| "allocating sum generator"),
+            &sum_generator_g1_mnt6(),
+        )?;
+
+        // Verify Merkle proof.
+        MerkleTreeGadget::verify(
+            cs.ns(|| "verify merkle proof"),
+            &leaf_var,
+            &nodes_var,
+            &path_var,
+            &root_var,
+            &generators_var,
+            &sum_generator_var,
+        )
+    }
+}
+
+#[test]
+fn verify_works() {
     // Create random bits.
     let rng = &mut test_rng();
     let mut bytes = [0u8; 128];
@@ -150,112 +227,21 @@ fn merkle_tree_verify_works() {
         root.clone(),
     ));
 
-    // Allocate the input in the circuit.
-    let mut leaf_var = Vec::new();
-    for i in 0..leaf.len() {
-        leaf_var.push(
-            Boolean::alloc(cs.ns(|| format!("allocating leaf bit {}", i)), || {
-                Ok(&leaf[i])
-            })
-            .unwrap(),
-        );
-    }
+    // Test constraint system.
+    let mut test_cs = TestConstraintSystem::new();
+    let circuit = VerifyCircuit {
+        leaf,
+        nodes,
+        path,
+        root,
+    };
+    circuit.generate_constraints(&mut test_cs).unwrap();
 
-    // Allocate the nodes in the circuit.
-    let mut nodes_var = Vec::new();
-    for i in 0..nodes.len() {
-        nodes_var.push(
-            G1Gadget::alloc(&mut cs.ns(|| format!("allocating node {}", i)), || {
-                Ok(&nodes[i])
-            })
-            .unwrap(),
-        );
-    }
-
-    // Allocate the path in the circuit.
-    let mut path_var = Vec::new();
-    for i in 0..path.len() {
-        path_var.push(
-            Boolean::alloc(cs.ns(|| format!("allocating path bit {}", i)), || {
-                Ok(&path[i])
-            })
-            .unwrap(),
-        );
-    }
-
-    // Allocate the root in the circuit.
-    let mut root_var = Vec::new();
-    for i in 0..root.len() {
-        root_var.push(
-            UInt8::alloc(cs.ns(|| format!("allocating root byte {}", i)), || {
-                Ok(&root[i])
-            })
-            .unwrap(),
-        );
-    }
-
-    // Allocate the Pedersen generators in the circuit.
-    let mut generators_var = Vec::new();
-    for i in 0..generators.len() {
-        generators_var.push(
-            G1Gadget::alloc(
-                &mut cs.ns(|| format!("allocating pedersen generator {}", i)),
-                || Ok(&generators[i]),
-            )
-            .unwrap(),
-        );
-    }
-
-    // Allocate the sum generator in the circuit.
-    let sum_generator_var =
-        G1Gadget::alloc(cs.ns(|| "allocating sum generator"), || Ok(sum_generator)).unwrap();
-
-    // Verify Merkle proof using the gadget version.
-    MerkleTreeGadget::verify(
-        cs.ns(|| "verify merkle proof"),
-        &leaf_var,
-        &nodes_var,
-        &path_var,
-        &root_var,
-        &generators_var,
-        &sum_generator_var,
-    )
-    .unwrap();
+    assert!(test_cs.is_satisfied());
 }
 
 #[test]
-fn merkle_tree_prove_works() {
-    // Create random bits.
-    let rng = &mut test_rng();
-    let mut bytes = [0u8; 128];
-    let mut leaves = Vec::new();
-    for _ in 0..16 {
-        rng.fill_bytes(&mut bytes);
-        leaves.push(bytes_to_bits(&bytes));
-    }
-    let mut byte = [0u8; 1];
-    rng.fill_bytes(&mut byte);
-    let mut path = bytes_to_bits(&byte);
-    path.truncate(4);
-    let position = byte_from_le_bits(&path) as usize;
-
-    // Calculate root.
-    let root = merkle_tree_construct(leaves.clone());
-
-    // Calculate proof.
-    let proof = merkle_tree_prove(leaves.clone(), path.clone());
-
-    // Verify proof.
-    let input = leaves.get(position).unwrap().to_vec();
-
-    assert!(merkle_tree_verify(input, proof, path, root))
-}
-
-//#[test]
 fn verify_wrong_root() {
-    // Initialize the constraint system.
-    let mut cs = TestConstraintSystem::<MNT4Fr>::new();
-
     // Create random bits.
     let rng = &mut test_rng();
     let mut bytes = [0u8; 128];
@@ -298,83 +284,29 @@ fn verify_wrong_root() {
         node = pedersen_commitment(bits.clone(), generators.clone(), sum_generator.clone());
         bits.clear();
     }
-    let root = serialize_g1_mnt6(node).to_vec();
 
-    // Verify Merkle proof using the primitive version.
-    //merkle_tree_verify(leaf.clone(), nodes.clone(), path.clone(), vec![0u8; 95]);
-
-    // Allocate the input in the circuit.
-    let mut leaf_var = Vec::new();
-    for i in 0..leaf.len() {
-        leaf_var.push(
-            Boolean::alloc(cs.ns(|| format!("allocating leaf bit {}", i)), || {
-                Ok(&leaf[i])
-            })
-            .unwrap(),
-        );
-    }
-
-    // Allocate the nodes in the circuit.
-    let mut nodes_var = Vec::new();
-    for i in 0..nodes.len() {
-        nodes_var.push(
-            G1Gadget::alloc(&mut cs.ns(|| format!("allocating node {}", i)), || {
-                Ok(&nodes[i])
-            })
-            .unwrap(),
-        );
-    }
-
-    // Allocate the path in the circuit.
-    let mut path_var = Vec::new();
-    for i in 0..path.len() {
-        path_var.push(
-            Boolean::alloc(cs.ns(|| format!("allocating path bit {}", i)), || {
-                Ok(&path[i])
-            })
-            .unwrap(),
-        );
-    }
-
-    // Allocate a wrong root in the circuit.
+    // Create wrong root.
     let mut bytes = [0u8; 95];
     rng.fill_bytes(&mut bytes);
-    let mut root_var = Vec::new();
-    for i in 0..bytes.len() {
-        root_var.push(
-            UInt8::alloc(cs.ns(|| format!("allocating root byte {}", i)), || {
-                Ok(&bytes[i])
-            })
-            .unwrap(),
-        );
-    }
+    let root = bytes.to_vec();
 
-    // Allocate the Pedersen generators in the circuit.
-    let mut generators_var = Vec::new();
-    for i in 0..generators.len() {
-        generators_var.push(
-            G1Gadget::alloc(
-                &mut cs.ns(|| format!("allocating pedersen generator {}", i)),
-                || Ok(&generators[i]),
-            )
-            .unwrap(),
-        );
-    }
+    // Verify Merkle proof using the primitive version.
+    assert!(!merkle_tree_verify(
+        leaf.clone(),
+        nodes.clone(),
+        path.clone(),
+        root.clone(),
+    ));
 
-    // Allocate the sum generator in the circuit.
-    let sum_generator_var =
-        G1Gadget::alloc(cs.ns(|| "allocating sum generator"), || Ok(sum_generator)).unwrap();
+    // Test constraint system.
+    let mut test_cs = TestConstraintSystem::new();
+    let circuit = VerifyCircuit {
+        leaf,
+        nodes,
+        path,
+        root,
+    };
+    circuit.generate_constraints(&mut test_cs).unwrap();
 
-    // Verify Merkle proof using the gadget version.
-    let result = MerkleTreeGadget::verify(
-        cs.ns(|| "verify merkle proof"),
-        &leaf_var,
-        &nodes_var,
-        &path_var,
-        &root_var,
-        &generators_var,
-        &sum_generator_var,
-    );
-
-    assert!(result.is_err())
+    assert!(!test_cs.is_satisfied());
 }
