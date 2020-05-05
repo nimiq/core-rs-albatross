@@ -12,7 +12,7 @@ use algebra_core::{ProjectiveCurve, ToBytes};
 use groth16::{generate_random_parameters, Parameters};
 use rand::RngCore;
 
-use nano_sync::circuits::mnt4::PKTree3Circuit;
+use nano_sync::circuits::mnt4::PKTree5Circuit;
 use nano_sync::constants::{
     sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS,
 };
@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
 
     let params: Parameters<MNT4_753> = {
-        let c = PKTree3Circuit::new(
+        let c = PKTree5Circuit::new(
             pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
             pks_nodes.clone(),
             agg_pk_chunks[0],

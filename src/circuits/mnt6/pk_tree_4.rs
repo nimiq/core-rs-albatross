@@ -1,5 +1,5 @@
-use algebra::mnt4_753::Fr as MNT4Fr;
-use algebra::mnt6_753::{Fq, Fr, MNT6_753};
+use algebra::mnt4_753::{Fq, Fr, MNT4_753};
+use algebra::mnt6_753::Fr as MNT6Fr;
 use crypto_primitives::nizk::groth16::constraints::{
     Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
 };
@@ -7,27 +7,27 @@ use crypto_primitives::nizk::groth16::Groth16;
 use crypto_primitives::NIZKVerifierGadget;
 use groth16::{Proof, VerifyingKey};
 use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
-use r1cs_std::mnt6_753::PairingGadget;
+use r1cs_std::mnt4_753::PairingGadget;
 use r1cs_std::prelude::*;
 
-use crate::circuits::mnt6::PKTree4Circuit;
+use crate::circuits::mnt4::PKTree5Circuit;
 use crate::gadgets::input::RecursiveInputGadget;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 // Renaming some types for convenience. We can change the circuit and elliptic curve of the input
 // proof to the wrapper circuit just by editing these types.
-type TheProofSystem = Groth16<MNT6_753, PKTree4Circuit, Fr>;
-type TheProofGadget = ProofGadget<MNT6_753, Fq, PairingGadget>;
-type TheVkGadget = VerifyingKeyGadget<MNT6_753, Fq, PairingGadget>;
-type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
+type TheProofSystem = Groth16<MNT4_753, PKTree5Circuit, Fr>;
+type TheProofGadget = ProofGadget<MNT4_753, Fq, PairingGadget>;
+type TheVkGadget = VerifyingKeyGadget<MNT4_753, Fq, PairingGadget>;
+type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, Fq, PairingGadget>;
 
-/// This is the first level of the PKTreeCircuit. See PKTree0Circuit for more details.
+/// This is the second level of the PKTreeCircuit. See PKTree0Circuit for more details.
 #[derive(Clone)]
-pub struct PKTree3Circuit {
+pub struct PKTree4Circuit {
     // Private inputs
-    left_proof: Proof<MNT6_753>,
-    right_proof: Proof<MNT6_753>,
-    vk_child: VerifyingKey<MNT6_753>,
+    left_proof: Proof<MNT4_753>,
+    right_proof: Proof<MNT4_753>,
+    vk_child: VerifyingKey<MNT4_753>,
 
     // Public inputs
     pks_commitment: Vec<u8>,
@@ -38,11 +38,11 @@ pub struct PKTree3Circuit {
     position: u8,
 }
 
-impl PKTree3Circuit {
+impl PKTree4Circuit {
     pub fn new(
-        left_proof: Proof<MNT6_753>,
-        right_proof: Proof<MNT6_753>,
-        vk_child: VerifyingKey<MNT6_753>,
+        left_proof: Proof<MNT4_753>,
+        right_proof: Proof<MNT4_753>,
+        vk_child: VerifyingKey<MNT4_753>,
         pks_commitment: Vec<u8>,
         prepare_signer_bitmap: Vec<u8>,
         prepare_agg_pk_commitment: Vec<u8>,
@@ -64,9 +64,9 @@ impl PKTree3Circuit {
     }
 }
 
-impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
+impl ConstraintSynthesizer<MNT6Fr> for PKTree4Circuit {
     /// This function generates the constraints for the circuit.
-    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
+    fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
@@ -135,6 +135,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
 
         // Verify the ZK proof for the left child node.
         next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
+
         let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&pk_commitment_var)?;
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
@@ -166,19 +167,25 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
 
         // Verify the ZK proof for the right child node.
         next_cost_analysis!(cs, cost, || { "Verify right ZK proof" });
+
         let mut proof_inputs = RecursiveInputGadget::to_field_elements::<Fr>(&pk_commitment_var)?;
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &prepare_signer_bitmap_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &prepare_agg_pk_commitment_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &commit_signer_bitmap_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &commit_agg_pk_commitment_var,
         )?);
+
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
             &right_position,
         )?);
