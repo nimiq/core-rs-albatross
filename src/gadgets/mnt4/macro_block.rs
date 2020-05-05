@@ -10,7 +10,7 @@ use crypto_primitives::prf::Blake2sWithParameterBlock;
 use r1cs_core::{ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget};
 use r1cs_std::prelude::{AllocGadget, Boolean, FieldGadget, GroupGadget, UInt32, UInt8};
-use r1cs_std::{Assignment, ToBitsGadget};
+use r1cs_std::ToBitsGadget;
 
 use crate::constants::VALIDATOR_SLOTS;
 use crate::gadgets::mnt4::{
@@ -209,16 +209,19 @@ impl MacroBlockGadget {
         )?;
 
         // Convert to bits.
-        let mut result = Vec::new();
+        let mut hash_bits = Vec::new();
 
-        for i in 0..8 {
-            result.extend(hash[i].to_bits_le());
+        for i in 0..hash.len() {
+            hash_bits.extend(hash[i].to_bits_le());
         }
+
+        // Reverse inner byte order (again).
+        let hash_bits = reverse_inner_byte_order(&hash_bits);
 
         // Finally feed the bits into the Pedersen hash gadget.
         let pedersen_result = PedersenHashGadget::evaluate(
             &mut cs.ns(|| "crh_evaluation"),
-            &result,
+            &hash_bits,
             pedersen_generators,
             sum_generator_g1,
         )?;
@@ -315,17 +318,18 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
                 Ok(&value.prepare_signer_bitmap[..])
             })?;
 
-        let prepare_signature = G1Gadget::alloc(cs.ns(|| "prepare signature"), || {
-            value.prepare_signature.get()
-        })?;
+        let prepare_signature =
+            G1Gadget::alloc(
+                cs.ns(|| "prepare signature"),
+                || Ok(value.prepare_signature),
+            )?;
 
         let commit_signer_bitmap = Vec::<Boolean>::alloc(cs.ns(|| "commit signer bitmap"), || {
             Ok(&value.commit_signer_bitmap[..])
         })?;
 
-        let commit_signature = G1Gadget::alloc(cs.ns(|| "commit signature"), || {
-            value.commit_signature.get()
-        })?;
+        let commit_signature =
+            G1Gadget::alloc(cs.ns(|| "commit signature"), || Ok(value.commit_signature))?;
 
         Ok(MacroBlockGadget {
             header_hash,
@@ -373,18 +377,19 @@ impl AllocGadget<MacroBlock, MNT4Fr> for MacroBlockGadget {
                 Ok(&value.prepare_signer_bitmap[..])
             })?;
 
-        let prepare_signature = G1Gadget::alloc_input(cs.ns(|| "prepare signature"), || {
-            value.prepare_signature.get()
-        })?;
+        let prepare_signature =
+            G1Gadget::alloc_input(
+                cs.ns(|| "prepare signature"),
+                || Ok(value.prepare_signature),
+            )?;
 
         let commit_signer_bitmap =
             Vec::<Boolean>::alloc_input(cs.ns(|| "commit signer bitmap"), || {
                 Ok(&value.commit_signer_bitmap[..])
             })?;
 
-        let commit_signature = G1Gadget::alloc_input(cs.ns(|| "commit signature"), || {
-            value.commit_signature.get()
-        })?;
+        let commit_signature =
+            G1Gadget::alloc_input(cs.ns(|| "commit signature"), || Ok(value.commit_signature))?;
 
         Ok(MacroBlockGadget {
             header_hash,

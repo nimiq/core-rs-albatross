@@ -16,6 +16,68 @@ use nano_sync::primitives::{
 };
 use nano_sync::utils::{byte_from_le_bits, bytes_to_bits, serialize_g1_mnt6};
 
+#[derive(Clone)]
+struct VerifyCircuit {
+    leaf: Vec<bool>,
+    nodes: Vec<G1Projective>,
+    path: Vec<bool>,
+    root: Vec<u8>,
+}
+
+impl VerifyCircuit {
+    pub fn new(leaf: Vec<bool>, nodes: Vec<G1Projective>, path: Vec<bool>, root: Vec<u8>) -> Self {
+        Self {
+            leaf,
+            nodes,
+            path,
+            root,
+        }
+    }
+}
+
+impl ConstraintSynthesizer<MNT4Fr> for VerifyCircuit {
+    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
+        self,
+        cs: &mut CS,
+    ) -> Result<(), SynthesisError> {
+        // Allocate the input in the circuit.
+        let leaf_var = Vec::<Boolean>::alloc(cs.ns(|| "alloc leaf"), || Ok(self.leaf.as_ref()))?;
+
+        // Allocate the nodes in the circuit.
+        let nodes_var =
+            Vec::<G1Gadget>::alloc(cs.ns(|| "alloc nodes"), || Ok(self.nodes.as_ref()))?;
+
+        // Allocate the path in the circuit.
+        let path_var = Vec::<Boolean>::alloc(cs.ns(|| "alloc path"), || Ok(self.path.as_ref()))?;
+
+        // Allocate the root in the circuit.
+        let root_var = UInt8::alloc_vec(cs.ns(|| "alloc root"), &self.root)?;
+
+        // Allocate the Pedersen generators in the circuit.
+        let generators_var = Vec::<G1Gadget>::alloc_constant(
+            cs.ns(|| "alloc pedersen_generators"),
+            pedersen_generators(3),
+        )?;
+
+        // Allocate the sum generator in the circuit.
+        let sum_generator_var = G1Gadget::alloc_constant(
+            cs.ns(|| "allocating sum generator"),
+            &sum_generator_g1_mnt6(),
+        )?;
+
+        // Verify Merkle proof.
+        MerkleTreeGadget::verify(
+            cs.ns(|| "verify merkle proof"),
+            &leaf_var,
+            &nodes_var,
+            &path_var,
+            &root_var,
+            &generators_var,
+            &sum_generator_var,
+        )
+    }
+}
+
 #[test]
 fn construct_works() {
     // Initialize the constraint system.
@@ -122,57 +184,6 @@ fn prove_works() {
     assert!(merkle_tree_verify(input, proof, path, root))
 }
 
-#[derive(Clone)]
-struct VerifyCircuit {
-    leaf: Vec<bool>,
-    nodes: Vec<G1Projective>,
-    path: Vec<bool>,
-    root: Vec<u8>,
-}
-
-impl ConstraintSynthesizer<MNT4Fr> for VerifyCircuit {
-    fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
-        self,
-        cs: &mut CS,
-    ) -> Result<(), SynthesisError> {
-        // Allocate the input in the circuit.
-        let leaf_var = Vec::<Boolean>::alloc(cs.ns(|| "alloc leaf"), || Ok(self.leaf.as_ref()))?;
-
-        // Allocate the nodes in the circuit.
-        let nodes_var =
-            Vec::<G1Gadget>::alloc(cs.ns(|| "alloc nodes"), || Ok(self.nodes.as_ref()))?;
-
-        // Allocate the path in the circuit.
-        let path_var = Vec::<Boolean>::alloc(cs.ns(|| "alloc path"), || Ok(self.path.as_ref()))?;
-
-        // Allocate the root in the circuit.
-        let root_var = UInt8::alloc_vec(cs.ns(|| "alloc root"), &self.root)?;
-
-        // Allocate the Pedersen generators in the circuit.
-        let generators_var = Vec::<G1Gadget>::alloc_constant(
-            cs.ns(|| "alloc pedersen_generators"),
-            pedersen_generators(3),
-        )?;
-
-        // Allocate the sum generator in the circuit.
-        let sum_generator_var = G1Gadget::alloc_constant(
-            cs.ns(|| "allocating sum generator"),
-            &sum_generator_g1_mnt6(),
-        )?;
-
-        // Verify Merkle proof.
-        MerkleTreeGadget::verify(
-            cs.ns(|| "verify merkle proof"),
-            &leaf_var,
-            &nodes_var,
-            &path_var,
-            &root_var,
-            &generators_var,
-            &sum_generator_var,
-        )
-    }
-}
-
 #[test]
 fn verify_works() {
     // Create random bits.
@@ -229,15 +240,13 @@ fn verify_works() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = VerifyCircuit {
-        leaf,
-        nodes,
-        path,
-        root,
-    };
+    let circuit = VerifyCircuit::new(leaf, nodes, path, root);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
-    assert!(test_cs.is_satisfied());
+    if !test_cs.is_satisfied() {
+        println!("Unsatisfied @ {}", test_cs.which_is_unsatisfied().unwrap());
+        assert!(false);
+    }
 }
 
 #[test]
@@ -300,12 +309,7 @@ fn verify_wrong_root() {
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
-    let circuit = VerifyCircuit {
-        leaf,
-        nodes,
-        path,
-        root,
-    };
+    let circuit = VerifyCircuit::new(leaf, nodes, path, root);
     circuit.generate_constraints(&mut test_cs).unwrap();
 
     assert!(!test_cs.is_satisfied());

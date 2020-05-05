@@ -13,7 +13,6 @@ pub mod utils;
 // TODO: Increase the PKTree to 32 leaves.
 // TODO: Finish the examples.
 // TODO: Change all the vks to constants.
-// TODO: Redo tests for the Macro Block gadget.
 // Note: ~5m proving time per 1M constraints. 10GB memory per 1M constraints.
 // Note: 819,200 max constraints in the MNT6. Merger circuit has 777,842. Macro Block (with 4 validators)
 //       has 905,185.

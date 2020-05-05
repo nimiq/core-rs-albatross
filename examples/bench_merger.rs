@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut counter = ConstraintCounter::new();
 
-    c.clone().generate_constraints(&mut counter).unwrap();
+    c.generate_constraints(&mut counter).unwrap();
 
     println!("Number of constraints: {}", counter.num_constraints());
 

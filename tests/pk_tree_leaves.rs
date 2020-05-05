@@ -105,8 +105,6 @@ fn everything_works() {
 
     c.generate_constraints(&mut test_cs).unwrap();
 
-    println!("Number of constraints: {}", test_cs.num_constraints());
-
     if !test_cs.is_satisfied() {
         println!("Unsatisfied @ {}", test_cs.which_is_unsatisfied().unwrap());
         assert!(false);

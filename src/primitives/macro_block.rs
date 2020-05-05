@@ -1,5 +1,6 @@
 use algebra::mnt6_753::{Fr, G1Projective};
 use algebra::ProjectiveCurve;
+use algebra_core::Zero;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 
 use crate::constants::{sum_generator_g1_mnt6, VALIDATOR_SLOTS};
@@ -12,11 +13,11 @@ pub struct MacroBlock {
     /// This is simply the Blake2b hash of the entire macro block header.
     pub header_hash: [u8; 32],
     /// This is the aggregated signature of the signers for this block, for the first round.
-    pub prepare_signature: Option<G1Projective>,
+    pub prepare_signature: G1Projective,
     /// This is a bitmap stating which validators signed this block, for the first round.
     pub prepare_signer_bitmap: Vec<bool>,
     /// This is the aggregated signature of the signers for this block, for the second round.
-    pub commit_signature: Option<G1Projective>,
+    pub commit_signature: G1Projective,
     /// This is a bitmap stating which validators signed this block, for the second round.
     pub commit_signer_bitmap: Vec<bool>,
 }
@@ -26,9 +27,9 @@ impl MacroBlock {
     pub fn without_signatures(header_hash: [u8; 32]) -> Self {
         MacroBlock {
             header_hash,
-            prepare_signature: None,
+            prepare_signature: G1Projective::zero(),
             prepare_signer_bitmap: vec![false; VALIDATOR_SLOTS],
-            commit_signature: None,
+            commit_signature: G1Projective::zero(),
             commit_signer_bitmap: vec![false; VALIDATOR_SLOTS],
         }
     }
@@ -55,7 +56,8 @@ impl MacroBlock {
         // Generates the signature.
         let signature = hash_point.mul(sk);
 
-        self.prepare_signature = Some(signature);
+        // Adds the signature to the aggregated signature on the block.
+        self.prepare_signature += &signature;
 
         // Set the signer id to true.
         self.prepare_signer_bitmap[signer_id] = true;
@@ -76,7 +78,8 @@ impl MacroBlock {
         // Generates the signature.
         let signature = hash_point.mul(sk);
 
-        self.commit_signature = Some(signature);
+        // Adds the signature to the aggregated signature on the block.
+        self.commit_signature += &signature;
 
         // Set the signer id to true.
         self.commit_signer_bitmap[signer_id] = true;
@@ -99,9 +102,9 @@ impl MacroBlock {
         // Serialize the input into bits.
         let mut bytes = vec![round_number];
 
-        bytes.extend_from_slice(&self.header_hash);
-
         bytes.extend_from_slice(&block_number.to_be_bytes());
+
+        bytes.extend_from_slice(&self.header_hash);
 
         bytes.extend(&pks_commitment);
 
@@ -156,9 +159,9 @@ impl Default for MacroBlock {
     fn default() -> Self {
         MacroBlock {
             header_hash: [0; 32],
-            prepare_signature: Some(G1Projective::prime_subgroup_generator()),
+            prepare_signature: G1Projective::prime_subgroup_generator(),
             prepare_signer_bitmap: vec![true; VALIDATOR_SLOTS],
-            commit_signature: Some(G1Projective::prime_subgroup_generator()),
+            commit_signature: G1Projective::prime_subgroup_generator(),
             commit_signer_bitmap: vec![true; VALIDATOR_SLOTS],
         }
     }
