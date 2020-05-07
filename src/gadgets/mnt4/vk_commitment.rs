@@ -73,10 +73,12 @@ impl VKCommitmentGadget {
             cs.ns(|| "serialize pedersen commitment"),
             &pedersen_commitment,
         )?;
+
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 
         // Convert to bytes.
         let mut bytes = Vec::new();
+
         for i in 0..serialized_bits.len() / 8 {
             bytes.push(UInt8::from_bits_le(&serialized_bits[i * 8..(i + 1) * 8]));
         }

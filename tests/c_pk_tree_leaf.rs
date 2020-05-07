@@ -10,12 +10,14 @@ use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
-use nano_sync::circuits::mnt4::PKTree3Circuit;
+use nano_sync::circuits::mnt4::PKTree5Circuit;
 use nano_sync::constants::{
-    sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS,
+    sum_generator_g1_mnt6, sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS,
 };
-use nano_sync::primitives::{merkle_tree_construct, merkle_tree_prove};
-use nano_sync::utils::{bytes_to_bits, serialize_g2_mnt6};
+use nano_sync::primitives::{
+    merkle_tree_construct, merkle_tree_prove, pedersen_commitment, pedersen_generators,
+};
+use nano_sync::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 // When running tests you are advised to set VALIDATOR_SLOTS in constants.rs to a more manageable
 // number. We advise setting VALIDATOR_SLOTS = 64. Even then, you can only run one test at a time or
@@ -49,7 +51,7 @@ fn everything_works() {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
             bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * PK_TREE_BREADTH + j],
+                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
             )));
         }
         pks_bits.push(bits);
@@ -59,42 +61,30 @@ fn everything_works() {
 
     let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
 
-    // Create agg pk commitment and Merkle proof for the given position in the tree.
-    let mut agg_pk_chunks = Vec::new();
+    // Create agg pk commitment for the given position in the tree.
+    let mut agg_pk = sum_generator_g2_mnt6();
 
-    for i in 0..PK_TREE_BREADTH {
-        let mut key = sum_generator_g2_mnt6();
-
-        for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            if bitmap_bits[i * PK_TREE_BREADTH + j] {
-                key = key.add(&pks[i * PK_TREE_BREADTH + j]);
-            }
+    for i in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
+        if bitmap_bits[i] {
+            agg_pk = agg_pk.add(&pks[i]);
         }
-
-        agg_pk_chunks.push(key);
     }
 
-    let mut agg_pk_chunks_bits = Vec::new();
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    for i in 0..agg_pk_chunks.len() {
-        let bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk_chunks[i]));
-        agg_pk_chunks_bits.push(bits);
-    }
+    let pedersen_commitment =
+        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
 
-    let agg_pk_commitment = merkle_tree_construct(agg_pk_chunks_bits.clone());
-
-    let agg_pk_nodes = merkle_tree_prove(agg_pk_chunks_bits, path.clone());
+    let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree3Circuit::new(
+    let c = PKTree5Circuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
+        agg_pk.clone(),
+        agg_pk,
         pks_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
@@ -139,7 +129,7 @@ fn wrong_pks() {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
             bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * PK_TREE_BREADTH + j],
+                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
             )));
         }
         pks_bits.push(bits);
@@ -149,31 +139,21 @@ fn wrong_pks() {
 
     let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
 
-    // Create agg pk commitment and Merkle proof for the given position in the tree.
-    let mut agg_pk_chunks = Vec::new();
+    // Create agg pk commitment for the given position in the tree.
+    let mut agg_pk = sum_generator_g2_mnt6();
 
-    for i in 0..PK_TREE_BREADTH {
-        let mut key = sum_generator_g2_mnt6();
-
-        for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            if bitmap_bits[i * PK_TREE_BREADTH + j] {
-                key = key.add(&pks[i * PK_TREE_BREADTH + j]);
-            }
+    for i in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
+        if bitmap_bits[i] {
+            agg_pk = agg_pk.add(&pks[i]);
         }
-
-        agg_pk_chunks.push(key);
     }
 
-    let mut agg_pk_chunks_bits = Vec::new();
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    for i in 0..agg_pk_chunks.len() {
-        let bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk_chunks[i]));
-        agg_pk_chunks_bits.push(bits);
-    }
+    let pedersen_commitment =
+        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
 
-    let agg_pk_commitment = merkle_tree_construct(agg_pk_chunks_bits.clone());
-
-    let agg_pk_nodes = merkle_tree_prove(agg_pk_chunks_bits, path.clone());
+    let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Create fake public keys.
     let mut bytes = [0u8; 96];
@@ -185,13 +165,11 @@ fn wrong_pks() {
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree3Circuit::new(
+    let c = PKTree5Circuit::new(
         fake_pks.to_vec(),
         pks_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
+        agg_pk.clone(),
+        agg_pk,
         pks_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
@@ -233,7 +211,7 @@ fn wrong_merkle_proof() {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
             bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * PK_TREE_BREADTH + j],
+                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
             )));
         }
         pks_bits.push(bits);
@@ -243,42 +221,30 @@ fn wrong_merkle_proof() {
 
     let _pks_nodes = merkle_tree_prove(pks_bits, path.clone());
 
-    // Create agg pk commitment and Merkle proof for the given position in the tree.
-    let mut agg_pk_chunks = Vec::new();
+    // Create agg pk commitment for the given position in the tree.
+    let mut agg_pk = sum_generator_g2_mnt6();
 
-    for i in 0..PK_TREE_BREADTH {
-        let mut key = sum_generator_g2_mnt6();
-
-        for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            if bitmap_bits[i * PK_TREE_BREADTH + j] {
-                key = key.add(&pks[i * PK_TREE_BREADTH + j]);
-            }
+    for i in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
+        if bitmap_bits[i] {
+            agg_pk = agg_pk.add(&pks[i]);
         }
-
-        agg_pk_chunks.push(key);
     }
 
-    let mut agg_pk_chunks_bits = Vec::new();
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    for i in 0..agg_pk_chunks.len() {
-        let bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk_chunks[i]));
-        agg_pk_chunks_bits.push(bits);
-    }
+    let pedersen_commitment =
+        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
 
-    let agg_pk_commitment = merkle_tree_construct(agg_pk_chunks_bits.clone());
-
-    let agg_pk_nodes = merkle_tree_prove(agg_pk_chunks_bits, path.clone());
+    let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree3Circuit::new(
+    let c = PKTree5Circuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
-        agg_pk_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
+        vec![sum_generator_g1_mnt6(); PK_TREE_DEPTH],
+        agg_pk.clone(),
+        agg_pk,
         pks_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
@@ -320,7 +286,7 @@ fn wrong_agg_pk() {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
             bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * PK_TREE_BREADTH + j],
+                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
             )));
         }
         pks_bits.push(bits);
@@ -330,42 +296,30 @@ fn wrong_agg_pk() {
 
     let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
 
-    // Create agg pk commitment and Merkle proof for the given position in the tree.
-    let mut agg_pk_chunks = Vec::new();
+    // Create agg pk commitment for the given position in the tree.
+    let mut agg_pk = sum_generator_g2_mnt6();
 
-    for i in 0..PK_TREE_BREADTH {
-        let mut key = sum_generator_g2_mnt6();
-
-        for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            if bitmap_bits[i * PK_TREE_BREADTH + j] {
-                key = key.add(&pks[i * PK_TREE_BREADTH + j]);
-            }
+    for i in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
+        if bitmap_bits[i] {
+            agg_pk = agg_pk.add(&pks[i]);
         }
-
-        agg_pk_chunks.push(key);
     }
 
-    let mut agg_pk_chunks_bits = Vec::new();
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    for i in 0..agg_pk_chunks.len() {
-        let bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk_chunks[i]));
-        agg_pk_chunks_bits.push(bits);
-    }
+    let pedersen_commitment =
+        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
 
-    let agg_pk_commitment = merkle_tree_construct(agg_pk_chunks_bits.clone());
-
-    let agg_pk_nodes = merkle_tree_prove(agg_pk_chunks_bits, path.clone());
+    let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree3Circuit::new(
+    let c = PKTree5Circuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
-        agg_pk_chunks[1],
-        agg_pk_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
+        sum_generator_g2_mnt6(),
+        agg_pk,
         pks_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
@@ -407,7 +361,7 @@ fn wrong_commitment() {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
             bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * PK_TREE_BREADTH + j],
+                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
             )));
         }
         pks_bits.push(bits);
@@ -417,42 +371,30 @@ fn wrong_commitment() {
 
     let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
 
-    // Create agg pk commitment and Merkle proof for the given position in the tree.
-    let mut agg_pk_chunks = Vec::new();
+    // Create agg pk commitment for the given position in the tree.
+    let mut agg_pk = sum_generator_g2_mnt6();
 
-    for i in 0..PK_TREE_BREADTH {
-        let mut key = sum_generator_g2_mnt6();
-
-        for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            if bitmap_bits[i * PK_TREE_BREADTH + j] {
-                key = key.add(&pks[i * PK_TREE_BREADTH + j]);
-            }
+    for i in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
+        if bitmap_bits[i] {
+            agg_pk = agg_pk.add(&pks[i]);
         }
-
-        agg_pk_chunks.push(key);
     }
 
-    let mut agg_pk_chunks_bits = Vec::new();
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    for i in 0..agg_pk_chunks.len() {
-        let bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk_chunks[i]));
-        agg_pk_chunks_bits.push(bits);
-    }
+    let pedersen_commitment =
+        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
 
-    let agg_pk_commitment = merkle_tree_construct(agg_pk_chunks_bits.clone());
-
-    let agg_pk_nodes = merkle_tree_prove(agg_pk_chunks_bits, path.clone());
+    let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree3Circuit::new(
+    let c = PKTree5Circuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
+        agg_pk.clone(),
+        agg_pk,
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
@@ -494,7 +436,7 @@ fn wrong_bitmap() {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
             bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * PK_TREE_BREADTH + j],
+                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
             )));
         }
         pks_bits.push(bits);
@@ -504,42 +446,30 @@ fn wrong_bitmap() {
 
     let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
 
-    // Create agg pk commitment and Merkle proof for the given position in the tree.
-    let mut agg_pk_chunks = Vec::new();
+    // Create agg pk commitment for the given position in the tree.
+    let mut agg_pk = sum_generator_g2_mnt6();
 
-    for i in 0..PK_TREE_BREADTH {
-        let mut key = sum_generator_g2_mnt6();
-
-        for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            if bitmap_bits[i * PK_TREE_BREADTH + j] {
-                key = key.add(&pks[i * PK_TREE_BREADTH + j]);
-            }
+    for i in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
+        if bitmap_bits[i] {
+            agg_pk = agg_pk.add(&pks[i]);
         }
-
-        agg_pk_chunks.push(key);
     }
 
-    let mut agg_pk_chunks_bits = Vec::new();
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    for i in 0..agg_pk_chunks.len() {
-        let bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk_chunks[i]));
-        agg_pk_chunks_bits.push(bits);
-    }
+    let pedersen_commitment =
+        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
 
-    let agg_pk_commitment = merkle_tree_construct(agg_pk_chunks_bits.clone());
-
-    let agg_pk_nodes = merkle_tree_prove(agg_pk_chunks_bits, path.clone());
+    let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree3Circuit::new(
+    let c = PKTree5Circuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
+        agg_pk.clone(),
+        agg_pk,
         pks_commitment.clone(),
         [1u8; VALIDATOR_SLOTS].to_vec(),
         agg_pk_commitment.clone(),
@@ -562,9 +492,12 @@ fn wrong_position() {
     let x = Fr::from_random_bytes(&bytes).unwrap();
     let pk = G2Projective::prime_subgroup_generator().mul(x);
 
-    // Create random bitmap.
+    // Create random bitmap. Guarantee that the first and last positions have different
+    // corresponding aggregate public  keys.
     let mut bitmap = [0u8; VALIDATOR_SLOTS / 8];
     rng.fill_bytes(&mut bitmap);
+    bitmap[0] = 0;
+    bitmap[VALIDATOR_SLOTS / 8 - 1] = 255;
     let bitmap_bits = bytes_to_bits(&bitmap);
 
     // Create inputs.
@@ -581,7 +514,7 @@ fn wrong_position() {
         let mut bits = Vec::new();
         for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
             bits.extend(bytes_to_bits(&serialize_g2_mnt6(
-                pks[i * PK_TREE_BREADTH + j],
+                pks[i * VALIDATOR_SLOTS / PK_TREE_BREADTH + j],
             )));
         }
         pks_bits.push(bits);
@@ -591,48 +524,36 @@ fn wrong_position() {
 
     let pks_nodes = merkle_tree_prove(pks_bits, path.clone());
 
-    // Create agg pk commitment and Merkle proof for the given position in the tree.
-    let mut agg_pk_chunks = Vec::new();
+    // Create agg pk commitment for the given position in the tree.
+    let mut agg_pk = sum_generator_g2_mnt6();
 
-    for i in 0..PK_TREE_BREADTH {
-        let mut key = sum_generator_g2_mnt6();
-
-        for j in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
-            if bitmap_bits[i * PK_TREE_BREADTH + j] {
-                key = key.add(&pks[i * PK_TREE_BREADTH + j]);
-            }
+    for i in 0..VALIDATOR_SLOTS / PK_TREE_BREADTH {
+        if bitmap_bits[i] {
+            agg_pk = agg_pk.add(&pks[i]);
         }
-
-        agg_pk_chunks.push(key);
     }
 
-    let mut agg_pk_chunks_bits = Vec::new();
+    let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    for i in 0..agg_pk_chunks.len() {
-        let bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk_chunks[i]));
-        agg_pk_chunks_bits.push(bits);
-    }
+    let pedersen_commitment =
+        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
 
-    let agg_pk_commitment = merkle_tree_construct(agg_pk_chunks_bits.clone());
-
-    let agg_pk_nodes = merkle_tree_prove(agg_pk_chunks_bits, path.clone());
+    let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree3Circuit::new(
+    let c = PKTree5Circuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
-        agg_pk_chunks[0],
-        agg_pk_nodes.clone(),
+        agg_pk.clone(),
+        agg_pk,
         pks_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        1,
+        (PK_TREE_BREADTH - 1) as u8,
     );
 
     c.generate_constraints(&mut test_cs).unwrap();

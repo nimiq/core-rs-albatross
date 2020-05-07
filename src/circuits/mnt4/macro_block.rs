@@ -17,9 +17,10 @@ use crate::constants::{
 };
 use crate::gadgets::input::RecursiveInputGadget;
 use crate::gadgets::mnt4::{
-    MacroBlockGadget, MerkleTreeGadget, SerializeGadget, StateCommitmentGadget,
+    MacroBlockGadget, PedersenCommitmentGadget, SerializeGadget, StateCommitmentGadget,
 };
 use crate::primitives::{pedersen_generators, MacroBlock};
+use crate::utils::reverse_inner_byte_order;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 // Renaming some types for convenience. We can change the circuit and elliptic curve of the input
@@ -229,6 +230,43 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &sum_generator_g2_var,
         )?;
 
+        // Calculating the commitments to each of the prepare aggregate public keys chunks. These
+        // will be given as input to the PKTree SNARK circuit.
+        next_cost_analysis!(cs, cost, || {
+            "Calculate prepare agg pk chunks commitments"
+        });
+
+        let mut prepare_agg_pk_chunks_commitments = Vec::new();
+
+        for i in 0..prepare_agg_pk_chunks_var.len() {
+            let chunk_bits = SerializeGadget::serialize_g2(
+                cs.ns(|| format!("serialize prepare agg pk chunk {}", i)),
+                &prepare_agg_pk_chunks_var[i],
+            )?;
+
+            let pedersen_commitment = PedersenCommitmentGadget::evaluate(
+                cs.ns(|| format!("pedersen commitment prepare agg pk chunk {}", i)),
+                &chunk_bits,
+                &pedersen_generators_var,
+                &sum_generator_g1_var,
+            )?;
+
+            let pedersen_bits = SerializeGadget::serialize_g1(
+                cs.ns(|| format!("serialize pedersen commitment, prepare chunk {}", i)),
+                &pedersen_commitment,
+            )?;
+
+            let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
+
+            let mut commitment = Vec::new();
+
+            for i in 0..pedersen_bits.len() / 8 {
+                commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
+            }
+
+            prepare_agg_pk_chunks_commitments.push(commitment);
+        }
+
         // Calculating the commit aggregate public key. All the chunks come with the generator added,
         // so we need to subtract it in order to get the correct aggregate public key. This is necessary
         // because we could have a chunk of public keys with no signers, thus resulting in it being
@@ -254,43 +292,42 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &sum_generator_g2_var,
         )?;
 
-        // Calculating the Merkle tree over the prepare aggregate public key chunks.
-        next_cost_analysis!(cs, cost, || { "Calculate prepare agg pk commitment" });
+        // Calculating the commitments to each of the commit aggregate public keys chunks. These
+        // will be given as input to the PKTree SNARK circuit.
+        next_cost_analysis!(cs, cost, || {
+            "Calculate commit agg pk chunks commitments"
+        });
 
-        let mut bits = Vec::new();
+        let mut commit_agg_pk_chunks_commitments = Vec::new();
 
-        for i in 0..self.prepare_agg_pk_chunks.len() {
-            bits.push(SerializeGadget::serialize_g2(
-                cs.ns(|| format!("serialize prepare agg pk: chunk {}", i)),
-                &prepare_agg_pk_chunks_var[i],
-            )?);
-        }
-
-        let prepare_agg_pk_commitment = MerkleTreeGadget::construct(
-            cs.ns(|| "calculate prepare agg pk commitment"),
-            &bits,
-            &pedersen_generators_var,
-            &sum_generator_g1_var,
-        )?;
-
-        // Calculating the Merkle tree over the commit aggregate public key chunks.
-        next_cost_analysis!(cs, cost, || { "Calculate commit agg pk commitment" });
-
-        let mut bits = Vec::new();
-
-        for i in 0..self.commit_agg_pk_chunks.len() {
-            bits.push(SerializeGadget::serialize_g2(
-                cs.ns(|| format!("serialize commit agg pk: chunk {}", i)),
+        for i in 0..commit_agg_pk_chunks_var.len() {
+            let chunk_bits = SerializeGadget::serialize_g2(
+                cs.ns(|| format!("serialize commit agg pk chunk {}", i)),
                 &commit_agg_pk_chunks_var[i],
-            )?);
-        }
+            )?;
 
-        let commit_agg_pk_commitment = MerkleTreeGadget::construct(
-            cs.ns(|| "calculate commit agg pk commitment"),
-            &bits,
-            &pedersen_generators_var,
-            &sum_generator_g1_var,
-        )?;
+            let pedersen_commitment = PedersenCommitmentGadget::evaluate(
+                cs.ns(|| format!("pedersen commitment commit agg pk chunk {}", i)),
+                &chunk_bits,
+                &pedersen_generators_var,
+                &sum_generator_g1_var,
+            )?;
+
+            let pedersen_bits = SerializeGadget::serialize_g1(
+                cs.ns(|| format!("serialize pedersen commitment, commit chunk {}", i)),
+                &pedersen_commitment,
+            )?;
+
+            let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
+
+            let mut commitment = Vec::new();
+
+            for i in 0..pedersen_bits.len() / 8 {
+                commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
+            }
+
+            commit_agg_pk_chunks_commitments.push(commitment);
+        }
 
         // Preparing the inputs for the SNARK proof verification. All the inputs need to be Vec<UInt8>,
         // so they need to be converted to such.
@@ -328,7 +365,11 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &prepare_agg_pk_commitment,
+            &prepare_agg_pk_chunks_commitments[0],
+        )?);
+
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &prepare_agg_pk_chunks_commitments[1],
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
@@ -336,7 +377,11 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &commit_agg_pk_commitment,
+            &commit_agg_pk_chunks_commitments[0],
+        )?);
+
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
+            &commit_agg_pk_chunks_commitments[1],
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(

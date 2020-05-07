@@ -5,10 +5,11 @@ use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
 use crate::constants::{
-    sum_generator_g1_mnt6, sum_generator_g2_mnt6, PK_TREE_BREADTH, VALIDATOR_SLOTS,
+    sum_generator_g1_mnt6, sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS,
 };
-use crate::gadgets::mnt4::{MerkleTreeGadget, SerializeGadget};
+use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenCommitmentGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
+use crate::utils::reverse_inner_byte_order;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
 /// This is the leaf level of the PKTreeCircuit. See PKTree0Circuit for more details.
@@ -18,9 +19,7 @@ pub struct PKTree5Circuit {
     pks: Vec<G2Projective>,
     pks_nodes: Vec<G1Projective>,
     prepare_agg_pk: G2Projective,
-    prepare_agg_pk_nodes: Vec<G1Projective>,
     commit_agg_pk: G2Projective,
-    commit_agg_pk_nodes: Vec<G1Projective>,
 
     // Public inputs
     pks_commitment: Vec<u8>,
@@ -36,9 +35,7 @@ impl PKTree5Circuit {
         pks: Vec<G2Projective>,
         pks_nodes: Vec<G1Projective>,
         prepare_agg_pk: G2Projective,
-        prepare_agg_pk_nodes: Vec<G1Projective>,
         commit_agg_pk: G2Projective,
-        commit_agg_pk_nodes: Vec<G1Projective>,
         pks_commitment: Vec<u8>,
         prepare_signer_bitmap: Vec<u8>,
         prepare_agg_pk_commitment: Vec<u8>,
@@ -50,9 +47,7 @@ impl PKTree5Circuit {
             pks,
             pks_nodes,
             prepare_agg_pk,
-            prepare_agg_pk_nodes,
             commit_agg_pk,
-            commit_agg_pk_nodes,
             pks_commitment,
             prepare_signer_bitmap,
             prepare_agg_pk_commitment,
@@ -99,19 +94,9 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
                 Ok(&self.prepare_agg_pk)
             })?;
 
-        let prepare_agg_pk_nodes_var =
-            Vec::<G1Gadget>::alloc(cs.ns(|| "alloc prepare agg pk Merkle proof nodes"), || {
-                Ok(&self.prepare_agg_pk_nodes[..])
-            })?;
-
         let commit_agg_pk_var =
             G2Gadget::alloc(cs.ns(|| "alloc commit aggregate public key"), || {
                 Ok(&self.commit_agg_pk)
-            })?;
-
-        let commit_agg_pk_nodes_var =
-            Vec::<G1Gadget>::alloc(cs.ns(|| "alloc commit agg pk Merkle proof nodes"), || {
-                Ok(&self.commit_agg_pk_nodes[..])
             })?;
 
         // Allocate all the public inputs.
@@ -162,7 +147,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
 
         let mut path_var = position_var.into_bits_le();
 
-        path_var.truncate(3);
+        path_var.truncate(PK_TREE_DEPTH);
 
         // Verify the Merkle proof for the public keys.
         next_cost_analysis!(cs, cost, || { "Verify Merkle proof pks" });
@@ -186,38 +171,72 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
             &sum_generator_g1_var,
         )?;
 
-        // Verify the Merkle proof for the prepare aggregate public key.
-        next_cost_analysis!(cs, cost, || { "Verify Merkle proof prepare agg key" });
+        // Verifying prepare aggregate public key commitment. It just checks that the prepare
+        // aggregate public key given as private input is correct by committing to it and comparing
+        // the result with the prepare aggregate public key commitment given as a public input.
+        next_cost_analysis!(cs, cost, || { "Verify prepare agg pk commitment" });
 
-        let bits = SerializeGadget::serialize_g2(
+        let prepare_agg_pk_bits = SerializeGadget::serialize_g2(
             cs.ns(|| "serialize prepare agg pk"),
             &prepare_agg_pk_var,
         )?;
 
-        MerkleTreeGadget::verify(
-            cs.ns(|| "verify Merkle proof for prepare agg pk"),
-            &bits,
-            &prepare_agg_pk_nodes_var,
-            &path_var,
-            &prepare_agg_pk_commitment_var,
+        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
+            cs.ns(|| "reference prepare agg pk commitment"),
+            &prepare_agg_pk_bits,
             &pedersen_generators_var,
             &sum_generator_g1_var,
         )?;
 
-        // Verify the Merkle proof for the commit aggregate public key.
-        next_cost_analysis!(cs, cost, || { "Verify Merkle proof commit agg key" });
+        let pedersen_bits = SerializeGadget::serialize_g1(
+            cs.ns(|| "serialize prepare pedersen commitment"),
+            &pedersen_commitment,
+        )?;
 
-        let bits =
+        let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
+
+        let mut reference_commitment = Vec::new();
+
+        for i in 0..pedersen_bits.len() / 8 {
+            reference_commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
+        }
+
+        prepare_agg_pk_commitment_var.enforce_equal(
+            cs.ns(|| "prepare agg pk commitment == reference commitment"),
+            &reference_commitment,
+        )?;
+
+        // Verifying commit aggregate public key commitment. It just checks that the commit
+        // aggregate public key given as private input is correct by committing to it and comparing
+        // the result with the commit aggregate public key commitment given as a public input.
+        next_cost_analysis!(cs, cost, || { "Verify commit agg pk commitment" });
+
+        let commit_agg_pk_bits =
             SerializeGadget::serialize_g2(cs.ns(|| "serialize commit agg pk"), &commit_agg_pk_var)?;
 
-        MerkleTreeGadget::verify(
-            cs.ns(|| "verify Merkle proof for commit agg pk"),
-            &bits,
-            &commit_agg_pk_nodes_var,
-            &path_var,
-            &commit_agg_pk_commitment_var,
+        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
+            cs.ns(|| "reference commit agg pk commitment"),
+            &commit_agg_pk_bits,
             &pedersen_generators_var,
             &sum_generator_g1_var,
+        )?;
+
+        let pedersen_bits = SerializeGadget::serialize_g1(
+            cs.ns(|| "serialize commit pedersen commitment"),
+            &pedersen_commitment,
+        )?;
+
+        let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
+
+        let mut reference_commitment = Vec::new();
+
+        for i in 0..pedersen_bits.len() / 8 {
+            reference_commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
+        }
+
+        commit_agg_pk_commitment_var.enforce_equal(
+            cs.ns(|| "commit agg pk commitment == reference commitment"),
+            &reference_commitment,
         )?;
 
         // Calculate the prepare aggregate public key.

@@ -23,15 +23,16 @@ type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, Fq, PairingGadget>;
 
 /// This is the root level of the PKTreeCircuit. This circuit main function is to process the validator's
 /// public keys and "return" the aggregate public keys for the prepare and commit rounds of the Macro
-/// Block. At a high-level, it divides all the computation into 8 chunks so that it can run with a
-/// manageable amount of memory.
-/// It does this by forming a binary tree of recursive SNARKs. Each of the 8 leafs receives Merkle
-/// tree commitments to the public keys list and to the aggregated public keys (each of these trees
-/// also has 8 leafs) in addition to the signer's bitmaps and its position on the tree.
+/// Block. At a high-level, it divides all the computation into 32 chunks so that each chunk uses only
+/// a manageable amount of memory and so can be run on consumer hardware.
+/// It does this by forming a binary tree of recursive SNARKs. Each of the 32 leaves receives Merkle
+/// tree commitments to the public keys list and a commitment to the corresponding aggregate public
+/// keys chunk (there are 32 chunks, one for each leaf) in addition to the signer's bitmaps and the
+/// position of the leaf node on the tree.
 /// Each of the leaves then checks that its specific chunk of the public keys matches the corresponding
 /// chunk of the aggregated public keys.
 /// All of the other upper levels of the recursive SNARK tree just verify SNARK proofs for its child
-/// nodes.
+/// nodes and recursively aggregate the aggregate public keys chunks (no pun intended).
 #[derive(Clone)]
 pub struct PKTree0Circuit {
     // Private inputs
@@ -42,9 +43,11 @@ pub struct PKTree0Circuit {
     // Public inputs
     pks_commitment: Vec<u8>,
     prepare_signer_bitmap: Vec<u8>,
-    prepare_agg_pk_commitment: Vec<u8>,
+    left_prepare_agg_pk_commitment: Vec<u8>,
+    right_prepare_agg_pk_commitment: Vec<u8>,
     commit_signer_bitmap: Vec<u8>,
-    commit_agg_pk_commitment: Vec<u8>,
+    left_commit_agg_pk_commitment: Vec<u8>,
+    right_commit_agg_pk_commitment: Vec<u8>,
     position: u8,
 }
 
@@ -55,9 +58,11 @@ impl PKTree0Circuit {
         vk_child: VerifyingKey<MNT4_753>,
         pks_commitment: Vec<u8>,
         prepare_signer_bitmap: Vec<u8>,
-        prepare_agg_pk_commitment: Vec<u8>,
+        left_prepare_agg_pk_commitment: Vec<u8>,
+        right_prepare_agg_pk_commitment: Vec<u8>,
         commit_signer_bitmap: Vec<u8>,
-        commit_agg_pk_commitment: Vec<u8>,
+        left_commit_agg_pk_commitment: Vec<u8>,
+        right_commit_agg_pk_commitment: Vec<u8>,
         position: u8,
     ) -> Self {
         Self {
@@ -66,9 +71,11 @@ impl PKTree0Circuit {
             vk_child,
             pks_commitment,
             prepare_signer_bitmap,
-            prepare_agg_pk_commitment,
+            left_prepare_agg_pk_commitment,
+            right_prepare_agg_pk_commitment,
             commit_signer_bitmap,
-            commit_agg_pk_commitment,
+            left_commit_agg_pk_commitment,
+            right_commit_agg_pk_commitment,
             position,
         }
     }
@@ -109,9 +116,14 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
             self.prepare_signer_bitmap.as_ref(),
         )?;
 
-        let prepare_agg_pk_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "alloc prepare aggregate pk commitment"),
-            self.prepare_agg_pk_commitment.as_ref(),
+        let left_prepare_agg_pk_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc left prepare aggregate pk commitment"),
+            self.left_prepare_agg_pk_commitment.as_ref(),
+        )?;
+
+        let right_prepare_agg_pk_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc right prepare aggregate pk commitment"),
+            self.right_prepare_agg_pk_commitment.as_ref(),
         )?;
 
         let commit_signer_bitmap_var = UInt8::alloc_input_vec(
@@ -119,9 +131,14 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
             self.commit_signer_bitmap.as_ref(),
         )?;
 
-        let commit_agg_pk_commitment_var = UInt8::alloc_input_vec(
-            cs.ns(|| "alloc commit aggregate pk commitment"),
-            self.commit_agg_pk_commitment.as_ref(),
+        let left_commit_agg_pk_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc left commit aggregate pk commitment"),
+            self.left_commit_agg_pk_commitment.as_ref(),
+        )?;
+
+        let right_commit_agg_pk_commitment_var = UInt8::alloc_input_vec(
+            cs.ns(|| "alloc right commit aggregate pk commitment"),
+            self.right_commit_agg_pk_commitment.as_ref(),
         )?;
 
         let position_var = UInt8::alloc_input(cs.ns(|| "alloc position"), || Ok(self.position))?;
@@ -130,7 +147,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
         // the left position L and the right position R are given as:
         //    L = 2 * P
         //    R = 2 * P + 1
-        // For efficiency reasons, we actually calculate the positions using bit manipulation.
+        // For efficiency reasons, we calculate the positions using bit manipulation.
         next_cost_analysis!(cs, cost, || { "Calculate positions" });
 
         let mut bits = position_var.into_bits_le();
@@ -153,7 +170,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &prepare_agg_pk_commitment_var,
+            &left_prepare_agg_pk_commitment_var,
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
@@ -161,7 +178,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &commit_agg_pk_commitment_var,
+            &left_commit_agg_pk_commitment_var,
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
@@ -185,7 +202,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &prepare_agg_pk_commitment_var,
+            &right_prepare_agg_pk_commitment_var,
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
@@ -193,7 +210,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree0Circuit {
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &commit_agg_pk_commitment_var,
+            &right_commit_agg_pk_commitment_var,
         )?);
 
         proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
