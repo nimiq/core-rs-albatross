@@ -3,27 +3,31 @@
 use std::fs::File;
 use std::{error::Error, time::Instant};
 
-use algebra::mnt4_753::MNT4_753;
-use algebra_core::{test_rng, ToBytes};
-use groth16::{generate_random_parameters, Parameters};
+use algebra::mnt6_753::MNT6_753;
+use algebra_core::{test_rng, ProjectiveCurve, ToBytes};
+use groth16::{generate_random_parameters, Parameters, Proof};
 use rand::RngCore;
 
-use nano_sync::circuits::mnt4::PKTree5Circuit;
-use nano_sync::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
-use nano_sync::utils::{gen_rand_g1_mnt6, gen_rand_g2_mnt6};
+use nano_sync::circuits::mnt6::PKTree4Circuit;
+use nano_sync::constants::VALIDATOR_SLOTS;
+use nano_sync::utils::{gen_rand_g1_mnt4, gen_rand_g2_mnt4};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut test_rng();
 
     // Create dummy inputs.
-    let pks = vec![gen_rand_g2_mnt6(); VALIDATOR_SLOTS / PK_TREE_BREADTH];
+    let left_proof = Proof {
+        a: gen_rand_g1_mnt4().into_affine(),
+        b: gen_rand_g2_mnt4().into_affine(),
+        c: gen_rand_g1_mnt4().into_affine(),
+    };
 
-    let pks_nodes = vec![gen_rand_g1_mnt6(); PK_TREE_DEPTH];
-
-    let prepare_agg_pk = gen_rand_g2_mnt6();
-
-    let commit_agg_pk = gen_rand_g2_mnt6();
+    let right_proof = Proof {
+        a: gen_rand_g1_mnt4().into_affine(),
+        b: gen_rand_g2_mnt4().into_affine(),
+        c: gen_rand_g1_mnt4().into_affine(),
+    };
 
     let mut pks_commitment = [0u8; 95];
     rng.fill_bytes(&mut pks_commitment);
@@ -31,14 +35,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut prepare_signer_bitmap = [0u8; VALIDATOR_SLOTS / 8];
     rng.fill_bytes(&mut prepare_signer_bitmap);
 
-    let mut prepare_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut prepare_agg_pk_commitment);
+    let mut left_prepare_agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut left_prepare_agg_pk_commitment);
+
+    let mut right_prepare_agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut right_prepare_agg_pk_commitment);
 
     let mut commit_signer_bitmap = [0u8; VALIDATOR_SLOTS / 8];
     rng.fill_bytes(&mut commit_signer_bitmap);
 
-    let mut commit_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut commit_agg_pk_commitment);
+    let mut left_commit_agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut left_commit_agg_pk_commitment);
+
+    let mut right_commit_agg_pk_commitment = [0u8; 95];
+    rng.fill_bytes(&mut right_commit_agg_pk_commitment);
 
     let position = 0;
 
@@ -47,20 +57,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let start = Instant::now();
 
-    let params: Parameters<MNT4_753> = {
-        let c = PKTree5Circuit::new(
-            pks,
-            pks_nodes,
-            prepare_agg_pk,
-            commit_agg_pk,
+    let params: Parameters<MNT6_753> = {
+        let c = PKTree4Circuit::new(
+            left_proof,
+            right_proof,
             pks_commitment.to_vec(),
             prepare_signer_bitmap.to_vec(),
-            prepare_agg_pk_commitment.to_vec(),
+            left_prepare_agg_pk_commitment.to_vec(),
+            right_prepare_agg_pk_commitment.to_vec(),
             commit_signer_bitmap.to_vec(),
-            commit_agg_pk_commitment.to_vec(),
+            left_commit_agg_pk_commitment.to_vec(),
+            right_commit_agg_pk_commitment.to_vec(),
             position,
         );
-        generate_random_parameters::<MNT4_753, _, _>(c, rng)?
+        generate_random_parameters::<MNT6_753, _, _>(c, rng)?
     };
 
     println!(
@@ -71,7 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Save verifying key to file.
     println!("Storing verifying key");
 
-    let mut file = File::create("verifying_keys/pk_tree_5.bin")?;
+    let mut file = File::create("verifying_keys/pk_tree_4.bin")?;
 
     ToBytes::write(&params.vk.alpha_g1, &mut file)?;
     ToBytes::write(&params.vk.beta_g2, &mut file)?;
@@ -85,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Save proving key to file.
     println!("Storing proving key");
 
-    let mut file = File::create("proving_keys/pk_tree_5.bin")?;
+    let mut file = File::create("proving_keys/pk_tree_4.bin")?;
 
     ToBytes::write(&params.vk.alpha_g1, &mut file)?;
     ToBytes::write(&params.vk.beta_g2, &mut file)?;

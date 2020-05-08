@@ -25,11 +25,11 @@ pub const PK_TREE_BREADTH: usize = 32;
 
 /// This is the length of one epoch in Albatross. Basically, the difference in the block numbers of
 /// two consecutive macro blocks.
-pub const EPOCH_LENGTH: u32 = 128;
+pub const EPOCH_LENGTH: u32 = 300;
 
 /// This is the number of validator slots in Albatross.
 /// VALIDATOR_SLOTS = MIN_SIGNERS + MAX_NON_SIGNERS
-pub const VALIDATOR_SLOTS: usize = 64;
+pub const VALIDATOR_SLOTS: usize = 512;
 
 /// This is the minimum number of validator slots that must sign a macro block in order to be valid.
 /// MIN_SIGNERS = ceiling( VALIDATOR_SLOTS * 2/3 )

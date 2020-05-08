@@ -1,8 +1,15 @@
-use algebra::mnt4_753::{G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective};
-use algebra::mnt6_753::{G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective};
+use algebra::mnt4_753::{
+    Fr as MNT4Fr, G1Projective as MNT4G1Projective, G2Projective as MNT4G2Projective,
+};
+use algebra::mnt6_753::{
+    Fr as MNT6Fr, G1Projective as MNT6G1Projective, G2Projective as MNT6G2Projective,
+};
 use algebra::{BigInteger768, FpParameters};
+use algebra_core::fields::Field;
 use algebra_core::ProjectiveCurve;
 use r1cs_std::prelude::*;
+use rand::rngs::OsRng;
+use rand::RngCore;
 
 use crate::compression::BeSerialize;
 
@@ -32,6 +39,50 @@ pub fn serialize_g2_mnt6(point: MNT6G2Projective) -> [u8; 285] {
     let mut buffer = [0u8; 285];
     BeSerialize::serialize(&point.into_affine(), &mut &mut buffer[..]).unwrap();
     buffer
+}
+
+/// Creates a random G1 point in the MNT4-753 curve.
+pub fn gen_rand_g1_mnt4() -> MNT4G1Projective {
+    let mut bytes = [0u8; 96];
+    let mut x = None;
+    while x.is_none() {
+        OsRng.fill_bytes(&mut bytes[2..]);
+        x = MNT4Fr::from_random_bytes(&bytes);
+    }
+    MNT4G1Projective::prime_subgroup_generator().mul(x.unwrap())
+}
+
+/// Creates a random G2 point in the MNT4-753 curve.
+pub fn gen_rand_g2_mnt4() -> MNT4G2Projective {
+    let mut bytes = [0u8; 96];
+    let mut x = None;
+    while x.is_none() {
+        OsRng.fill_bytes(&mut bytes[2..]);
+        x = MNT4Fr::from_random_bytes(&bytes);
+    }
+    MNT4G2Projective::prime_subgroup_generator().mul(x.unwrap())
+}
+
+/// Creates a random G1 point in the MNT6-753 curve.
+pub fn gen_rand_g1_mnt6() -> MNT6G1Projective {
+    let mut bytes = [0u8; 96];
+    let mut x = None;
+    while x.is_none() {
+        OsRng.fill_bytes(&mut bytes[2..]);
+        x = MNT6Fr::from_random_bytes(&bytes);
+    }
+    MNT6G1Projective::prime_subgroup_generator().mul(x.unwrap())
+}
+
+/// Creates a random G2 point in the MNT6-753 curve.
+pub fn gen_rand_g2_mnt6() -> MNT6G2Projective {
+    let mut bytes = [0u8; 96];
+    let mut x = None;
+    while x.is_none() {
+        OsRng.fill_bytes(&mut bytes[2..]);
+        x = MNT6Fr::from_random_bytes(&bytes);
+    }
+    MNT6G2Projective::prime_subgroup_generator().mul(x.unwrap())
 }
 
 /// Takes multiple bit representations of a point (Fp/Fp2/Fp3).
@@ -135,7 +186,7 @@ pub fn byte_from_le_bits(bits: &[bool]) -> u8 {
     byte
 }
 
-/// Cretes a BigInteger from an array of bytes in big-endian format.
+/// Creates a BigInteger from an array of bytes in big-endian format.
 pub fn big_int_from_bytes_be<R: std::io::Read>(reader: &mut R) -> BigInteger768 {
     let mut res = [0u64; 12];
 

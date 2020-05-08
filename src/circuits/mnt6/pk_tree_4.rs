@@ -1,5 +1,8 @@
+use std::fs::File;
+
 use algebra::mnt4_753::{Fq, Fr, MNT4_753};
 use algebra::mnt6_753::Fr as MNT6Fr;
+use algebra_core::FromBytes;
 use crypto_primitives::nizk::groth16::constraints::{
     Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
 };
@@ -27,7 +30,6 @@ pub struct PKTree4Circuit {
     // Private inputs
     left_proof: Proof<MNT4_753>,
     right_proof: Proof<MNT4_753>,
-    vk_child: VerifyingKey<MNT4_753>,
 
     // Public inputs
     pks_commitment: Vec<u8>,
@@ -44,7 +46,6 @@ impl PKTree4Circuit {
     pub fn new(
         left_proof: Proof<MNT4_753>,
         right_proof: Proof<MNT4_753>,
-        vk_child: VerifyingKey<MNT4_753>,
         pks_commitment: Vec<u8>,
         prepare_signer_bitmap: Vec<u8>,
         left_prepare_agg_pk_commitment: Vec<u8>,
@@ -57,7 +58,6 @@ impl PKTree4Circuit {
         Self {
             left_proof,
             right_proof,
-            vk_child,
             pks_commitment,
             prepare_signer_bitmap,
             left_prepare_agg_pk_commitment,
@@ -76,12 +76,38 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree4Circuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        // Load the verifying key from file.
+        let mut file = File::open("verifying_keys/pk_tree_5.bin")?;
+
+        let alpha_g1 = FromBytes::read(&mut file)?;
+
+        let beta_g2 = FromBytes::read(&mut file)?;
+
+        let gamma_g2 = FromBytes::read(&mut file)?;
+
+        let delta_g2 = FromBytes::read(&mut file)?;
+
+        let gamma_abc_g1_len: u64 = FromBytes::read(&mut file)?;
+
+        let mut gamma_abc_g1 = vec![];
+
+        for _ in 0..gamma_abc_g1_len {
+            gamma_abc_g1.push(FromBytes::read(&mut file)?);
+        }
+
+        let vk_child = VerifyingKey {
+            alpha_g1,
+            beta_g2,
+            gamma_g2,
+            delta_g2,
+            gamma_abc_g1,
+        };
+
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        // TODO: This needs to be changed to a constant!
-        let vk_child_var = TheVkGadget::alloc(cs.ns(|| "alloc vk child"), || Ok(&self.vk_child))?;
+        let vk_child_var = TheVkGadget::alloc_constant(cs.ns(|| "alloc vk child"), &vk_child)?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });

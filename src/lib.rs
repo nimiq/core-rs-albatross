@@ -11,4 +11,3 @@ pub mod utils;
 
 // TODO: Finish the examples.
 // TODO: Change all the vks to constants.
-// Note: ~5m proving time per 1M constraints. 10GB memory per 1M constraints.
