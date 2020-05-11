@@ -772,8 +772,9 @@ impl Blockchain {
         let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
         while !current.1.on_main_chain {
-            // Macro blocks are final
-            assert_eq!(current.1.head.ty(), BlockType::Micro, "Trying to rebranch across macro block");
+            // A fork can't contain a macro block. We already received that macro block, thus it must be on our
+            // main chain.
+            assert_eq!(current.1.head.ty(), BlockType::Micro, "Fork contains macro block");
 
             let prev_hash = current.1.head.parent_hash().clone();
             let prev_info = self.chain_store
@@ -798,9 +799,18 @@ impl Blockchain {
         // XXX Get rid of the .clone() here.
         current = (state.head_hash.clone(), state.main_chain.clone());
 
+        // Check if ancestor is in current epoch
+        if ancestor.1.head.block_number() < state.macro_head.header.block_number {
+            info!("Ancestor is in finalized epoch");
+            return Err(PushError::InvalidFork);
+        }
+
         while current.0 != ancestor.0 {
             match current.1.head {
-                Block::Macro(_) => unreachable!(),
+                Block::Macro(_) => {
+                    // Macro blocks are final, we can't revert across them. This should be checked before we start reverting
+                    panic!("Trying to rebranch across macro block");
+                },
                 Block::Micro(ref micro_block) => {
                     let prev_hash = micro_block.header.parent_hash.clone();
                     let prev_info = self.chain_store
