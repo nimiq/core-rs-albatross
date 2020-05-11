@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use beserial::Deserialize;
-use nimiq_block_albatross::{Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, ViewChangeProof, SignedViewChange, ViewChange, ViewChangeProofBuilder};
+use nimiq_block_albatross::{Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, ViewChangeProof, SignedViewChange, ViewChange, ViewChangeProofBuilder, MacroExtrinsics};
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult, PushError};
 use nimiq_blockchain_base::AbstractBlockchain;
@@ -53,8 +53,8 @@ impl TemporaryBlockProducer {
         };
 
         let block = if policy::is_macro_block_at(height) {
-            let (proposal, _extrinsics) = self.producer.next_macro_block_proposal(1565713920000 + height as u64 * 2000, 0u32, view_change_proof);
-            Block::Macro(TemporaryBlockProducer::sign_macro_block(proposal))
+            let (proposal, extrinsics) = self.producer.next_macro_block_proposal(1565713920000 + height as u64 * 2000, 0u32, view_change_proof);
+            Block::Macro(TemporaryBlockProducer::finalize_macro_block(proposal, extrinsics))
         } else {
             Block::Micro(self.producer.next_micro_block(vec![], 1565713920000 + height as u64 * 2000, view_number, extra_data, view_change_proof))
         };
@@ -62,7 +62,7 @@ impl TemporaryBlockProducer {
         block
     }
 
-    fn sign_macro_block(proposal: PbftProposal) -> MacroBlock {
+    fn finalize_macro_block(proposal: PbftProposal, extrinsics: MacroExtrinsics) -> MacroBlock {
         let keypair = KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
         let block_hash = proposal.header.hash::<Blake2bHash>();
@@ -85,7 +85,7 @@ impl TemporaryBlockProducer {
         MacroBlock {
             header: proposal.header,
             justification: Some(pbft_proof.build()),
-            extrinsics: None,
+            extrinsics: Some(extrinsics),
         }
     }
 
@@ -213,4 +213,54 @@ fn it_can_rebranch_forks() {
 
     assert_eq!(temp_producer1.push(fork2d), Ok(PushResult::Extended));
     assert_eq!(temp_producer2.push(fork1d), Err(PushError::Orphan));
+}
+
+#[test]
+fn it_cant_rebranch_across_epochs() {
+    // Build forks using two producers.
+    let temp_producer1 = TemporaryBlockProducer::new();
+    let temp_producer2 = TemporaryBlockProducer::new();
+
+    // The number in [_] represents the epoch number
+    //              a
+    // [0] - [0] - [0]
+    //          \- [0] - ... - [0] - [1]
+
+    let ancestor = temp_producer1.next_block(0, vec![]);
+    temp_producer2.push(ancestor.clone());
+
+    let mut previous = ancestor;
+    for _ in 0 .. policy::EPOCH_LENGTH {
+        previous = temp_producer1.next_block(0, vec![]);
+    }
+
+    let fork = temp_producer2.next_block(1, vec![]);
+    assert_eq!(temp_producer1.push(fork), Err(PushError::InvalidFork));
+}
+
+#[test]
+fn it_can_rebranch_at_macro_block() {
+    // Build forks using two producers.
+    let temp_producer1 = TemporaryBlockProducer::new();
+    let temp_producer2 = TemporaryBlockProducer::new();
+
+    // The numbers in [X/Y] represent block_number (X) and view_number (Y):
+    //
+    // [0/0] ... [1/0] - [1/0]
+    //                \- [1/1]
+
+    let mut block;
+    let macro_block = loop {
+        block = temp_producer1.next_block(0, vec![]);
+        temp_producer2.push(block.clone());
+        if let Block::Macro(macro_block) = block {
+            break macro_block;
+        }
+    };
+
+    let fork1 = temp_producer1.next_block(0, vec![]);
+    let fork2 = temp_producer2.next_block(1, vec![]);
+
+    assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Rebranched));
+    assert_eq!(temp_producer2.push(fork1), Ok(PushResult::Ignored));
 }
