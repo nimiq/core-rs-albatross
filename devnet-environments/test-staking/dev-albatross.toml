@@ -5,11 +5,15 @@ timestamp="2019-05-10T23:56:52.776772644+00:00"
 staking_contract = "NQ60 GA6V BV8S YVX1 XGCY 88LR D2K6 G2P4 U9MH"
 # private key for staking contract: 634bae26693d6ff65ecf4b446518c0a8ef510f144dc1257e75f9f0543046dac3
 
-[[stakes]]
-staker_address = "NQ57 UC15 80L7 LHCK DBTB 709R M91Q PRG5 DL00"
+[[validators]]
 reward_address = "NQ57 UC15 80L7 LHCK DBTB 709R M91Q PRG5 DL00"
 balance = 100000000
 # secret_key = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f"
+validator_key = "8dee007dd1af35c79b6abb901a787f1ee97d89cd4b6390987c9f6e2b9a135cdfb075cfc78d0cca37e2dd0eb37eac636d0d8f50c868a23eaca794f6af35213426d284dd6188b4679ab3881e80bcd318969959e60689ca40d1f41e02cd33d81609"
+
+[[stakes]]
+staker_address = "NQ57 UC15 80L7 LHCK DBTB 709R M91Q PRG5 DL00"
+balance = 100000000
 validator_key = "8dee007dd1af35c79b6abb901a787f1ee97d89cd4b6390987c9f6e2b9a135cdfb075cfc78d0cca37e2dd0eb37eac636d0d8f50c868a23eaca794f6af35213426d284dd6188b4679ab3881e80bcd318969959e60689ca40d1f41e02cd33d81609"
 
 [[accounts]]
