@@ -10,4 +10,5 @@ pub mod rand_gen;
 pub mod utils;
 
 // TODO: Finish the examples.
-// TODO: Change all the vks to constants.
+// TODO: Finish the documentation.
+// Note: Params generation took 4408 seconds.

@@ -1,5 +1,8 @@
+use std::fs::File;
+
 use algebra::mnt4_753::{Fq, Fr, MNT4_753};
 use algebra::mnt6_753::Fr as MNT6Fr;
+use algebra_core::CanonicalDeserialize;
 use crypto_primitives::nizk::groth16::constraints::{
     Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
 };
@@ -32,7 +35,6 @@ type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, Fq, PairingGadget>;
 pub struct MergerWrapperCircuit {
     // Private inputs
     proof: Proof<MNT4_753>,
-    vk_merger: VerifyingKey<MNT4_753>,
 
     // Public inputs
     initial_state_commitment: Vec<u8>,
@@ -43,14 +45,12 @@ pub struct MergerWrapperCircuit {
 impl MergerWrapperCircuit {
     pub fn new(
         proof: Proof<MNT4_753>,
-        vk_merger: VerifyingKey<MNT4_753>,
         initial_state_commitment: Vec<u8>,
         final_state_commitment: Vec<u8>,
         vk_commitment: Vec<u8>,
     ) -> Self {
         Self {
             proof,
-            vk_merger,
             initial_state_commitment,
             final_state_commitment,
             vk_commitment,
@@ -64,13 +64,16 @@ impl ConstraintSynthesizer<MNT6Fr> for MergerWrapperCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        // Load the verifying key from file.
+        let mut file = File::open("verifying_keys/merger.bin")?;
+
+        let vk_merger = VerifyingKey::deserialize(&mut file).unwrap();
+
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        // TODO: This needs to be changed to a constant!
-        let vk_merger_var =
-            TheVkGadget::alloc(cs.ns(|| "alloc verifying key"), || Ok(&self.vk_merger))?;
+        let vk_merger_var = TheVkGadget::alloc_constant(cs.ns(|| "alloc vk merger"), &vk_merger)?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });

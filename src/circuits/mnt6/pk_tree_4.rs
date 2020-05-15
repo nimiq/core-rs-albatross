@@ -2,7 +2,7 @@ use std::fs::File;
 
 use algebra::mnt4_753::{Fq, Fr, MNT4_753};
 use algebra::mnt6_753::Fr as MNT6Fr;
-use algebra_core::FromBytes;
+use algebra_core::CanonicalDeserialize;
 use crypto_primitives::nizk::groth16::constraints::{
     Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
 };
@@ -39,7 +39,7 @@ pub struct PKTree4Circuit {
     commit_signer_bitmap: Vec<u8>,
     left_commit_agg_pk_commitment: Vec<u8>,
     right_commit_agg_pk_commitment: Vec<u8>,
-    position: u8,
+    position: Vec<u8>,
 }
 
 impl PKTree4Circuit {
@@ -53,7 +53,7 @@ impl PKTree4Circuit {
         commit_signer_bitmap: Vec<u8>,
         left_commit_agg_pk_commitment: Vec<u8>,
         right_commit_agg_pk_commitment: Vec<u8>,
-        position: u8,
+        position: Vec<u8>,
     ) -> Self {
         Self {
             left_proof,
@@ -79,29 +79,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree4Circuit {
         // Load the verifying key from file.
         let mut file = File::open("verifying_keys/pk_tree_5.bin")?;
 
-        let alpha_g1 = FromBytes::read(&mut file)?;
-
-        let beta_g2 = FromBytes::read(&mut file)?;
-
-        let gamma_g2 = FromBytes::read(&mut file)?;
-
-        let delta_g2 = FromBytes::read(&mut file)?;
-
-        let gamma_abc_g1_len: u64 = FromBytes::read(&mut file)?;
-
-        let mut gamma_abc_g1 = vec![];
-
-        for _ in 0..gamma_abc_g1_len {
-            gamma_abc_g1.push(FromBytes::read(&mut file)?);
-        }
-
-        let vk_child = VerifyingKey {
-            alpha_g1,
-            beta_g2,
-            gamma_g2,
-            delta_g2,
-            gamma_abc_g1,
-        };
+        let vk_child = VerifyingKey::deserialize(&mut file).unwrap();
 
         // Allocate all the constants.
         #[allow(unused_mut)]
@@ -156,7 +134,10 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree4Circuit {
             self.right_commit_agg_pk_commitment.as_ref(),
         )?;
 
-        let position_var = UInt8::alloc_input(cs.ns(|| "alloc position"), || Ok(self.position))?;
+        let position_var =
+            UInt8::alloc_input_vec(cs.ns(|| "alloc position"), self.position.as_ref())?
+                .pop()
+                .unwrap();
 
         // Calculate the position for the left and right child nodes. Given the current position P,
         // the left position L and the right position R are given as:

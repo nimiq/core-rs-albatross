@@ -1,5 +1,8 @@
+use std::fs::File;
+
 use algebra::mnt4_753::Fr as MNT4Fr;
 use algebra::mnt6_753::{Fq, Fr, MNT6_753};
+use algebra_core::CanonicalDeserialize;
 use crypto_primitives::nizk::groth16::constraints::{
     Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
 };
@@ -51,7 +54,6 @@ pub struct MergerCircuit {
     proof_merger_wrapper: Proof<MNT6_753>,
     proof_macro_block_wrapper: Proof<MNT6_753>,
     vk_merger_wrapper: VerifyingKey<MNT6_753>,
-    vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
     intermediate_state_commitment: Vec<u8>,
     genesis_flag: bool,
 
@@ -66,7 +68,6 @@ impl MergerCircuit {
         proof_merger_wrapper: Proof<MNT6_753>,
         proof_macro_block_wrapper: Proof<MNT6_753>,
         vk_merger_wrapper: VerifyingKey<MNT6_753>,
-        vk_macro_block_wrapper: VerifyingKey<MNT6_753>,
         intermediate_state_commitment: Vec<u8>,
         genesis_flag: bool,
         initial_state_commitment: Vec<u8>,
@@ -77,7 +78,6 @@ impl MergerCircuit {
             proof_merger_wrapper,
             proof_macro_block_wrapper,
             vk_merger_wrapper,
-            vk_macro_block_wrapper,
             intermediate_state_commitment,
             genesis_flag,
             initial_state_commitment,
@@ -93,6 +93,11 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        // Load the verifying key from file.
+        let mut file = File::open("verifying_keys/macro_block_wrapper.bin")?;
+
+        let vk_macro_block_wrapper = VerifyingKey::deserialize(&mut file).unwrap();
+
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
@@ -102,14 +107,13 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
 
         let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
             cs.ns(|| "alloc pedersen_generators"),
-            pedersen_generators(17),
+            pedersen_generators(18),
         )?;
 
-        // TODO: This needs to be changed to a constant!
-        let vk_macro_block_wrapper_var =
-            TheVkGadget::alloc(cs.ns(|| "alloc vk macro block wrapper"), || {
-                Ok(&self.vk_macro_block_wrapper)
-            })?;
+        let vk_macro_block_wrapper_var = TheVkGadget::alloc_constant(
+            cs.ns(|| "alloc vk macro block wrapper"),
+            &vk_macro_block_wrapper,
+        )?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });

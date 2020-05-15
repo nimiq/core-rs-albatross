@@ -27,7 +27,7 @@ pub struct PKTree5Circuit {
     prepare_agg_pk_commitment: Vec<u8>,
     commit_signer_bitmap: Vec<u8>,
     commit_agg_pk_commitment: Vec<u8>,
-    position: u8,
+    position: Vec<u8>,
 }
 
 impl PKTree5Circuit {
@@ -41,7 +41,7 @@ impl PKTree5Circuit {
         prepare_agg_pk_commitment: Vec<u8>,
         commit_signer_bitmap: Vec<u8>,
         commit_agg_pk_commitment: Vec<u8>,
-        position: u8,
+        position: Vec<u8>,
     ) -> Self {
         Self {
             pks,
@@ -127,13 +127,16 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
             self.commit_agg_pk_commitment.as_ref(),
         )?;
 
-        let position_var = UInt8::alloc_input(cs.ns(|| "alloc position"), || Ok(self.position))?;
+        let position_var =
+            UInt8::alloc_input_vec(cs.ns(|| "alloc position"), self.position.as_ref())?
+                .pop()
+                .unwrap();
 
         // Process public inputs.
         next_cost_analysis!(cs, cost, || { "Process public inputs" });
 
-        let chunk_start = VALIDATOR_SLOTS / PK_TREE_BREADTH * (self.position as usize);
-        let chunk_end = VALIDATOR_SLOTS / PK_TREE_BREADTH * (1 + self.position as usize);
+        let chunk_start = VALIDATOR_SLOTS / PK_TREE_BREADTH * (self.position[0] as usize);
+        let chunk_end = VALIDATOR_SLOTS / PK_TREE_BREADTH * (1 + self.position[0] as usize);
 
         let prepare_signer_bitmap_var =
             prepare_signer_bitmap_var.to_bits(cs.ns(|| "prepare signer bitmap to bits"))?;

@@ -1,5 +1,8 @@
+use std::fs::File;
+
 use algebra::mnt4_753::Fr as MNT4Fr;
 use algebra::mnt6_753::{Fq, Fr, G2Projective, MNT6_753};
+use algebra_core::CanonicalDeserialize;
 use crypto_primitives::nizk::groth16::constraints::{
     Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
 };
@@ -33,7 +36,6 @@ pub struct PKTree1Circuit {
     right_proof: Proof<MNT6_753>,
     prepare_agg_pk_chunks: Vec<G2Projective>,
     commit_agg_pk_chunks: Vec<G2Projective>,
-    vk_child: VerifyingKey<MNT6_753>,
 
     // Public inputs
     pks_commitment: Vec<u8>,
@@ -41,7 +43,7 @@ pub struct PKTree1Circuit {
     prepare_agg_pk_commitment: Vec<u8>,
     commit_signer_bitmap: Vec<u8>,
     commit_agg_pk_commitment: Vec<u8>,
-    position: u8,
+    position: Vec<u8>,
 }
 
 impl PKTree1Circuit {
@@ -50,18 +52,16 @@ impl PKTree1Circuit {
         right_proof: Proof<MNT6_753>,
         prepare_agg_pk_chunks: Vec<G2Projective>,
         commit_agg_pk_chunks: Vec<G2Projective>,
-        vk_child: VerifyingKey<MNT6_753>,
         pks_commitment: Vec<u8>,
         prepare_signer_bitmap: Vec<u8>,
         prepare_agg_pk_commitment: Vec<u8>,
         commit_signer_bitmap: Vec<u8>,
         commit_agg_pk_commitment: Vec<u8>,
-        position: u8,
+        position: Vec<u8>,
     ) -> Self {
         Self {
             left_proof,
             right_proof,
-            vk_child,
             prepare_agg_pk_chunks,
             commit_agg_pk_chunks,
             pks_commitment,
@@ -80,6 +80,11 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree1Circuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        // Load the verifying key from file.
+        let mut file = File::open("verifying_keys/pk_tree_2.bin")?;
+
+        let vk_child = VerifyingKey::deserialize(&mut file).unwrap();
+
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
@@ -95,8 +100,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree1Circuit {
             pedersen_generators(4),
         )?;
 
-        // TODO: This needs to be changed to a constant!
-        let vk_child_var = TheVkGadget::alloc(cs.ns(|| "alloc vk child"), || Ok(&self.vk_child))?;
+        let vk_child_var = TheVkGadget::alloc_constant(cs.ns(|| "alloc vk child"), &vk_child)?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || { "Alloc private inputs" });
@@ -145,7 +149,10 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree1Circuit {
             self.commit_agg_pk_commitment.as_ref(),
         )?;
 
-        let position_var = UInt8::alloc_input(cs.ns(|| "alloc position"), || Ok(self.position))?;
+        let position_var =
+            UInt8::alloc_input_vec(cs.ns(|| "alloc position"), self.position.as_ref())?
+                .pop()
+                .unwrap();
 
         // Calculating the prepare aggregate public key. All the chunks come with the generator added,
         // so we need to subtract it in order to get the correct aggregate public key. This is necessary

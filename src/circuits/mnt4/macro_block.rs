@@ -1,6 +1,8 @@
+use std::fs::File;
+
 use algebra::mnt4_753::Fr as MNT4Fr;
 use algebra::mnt6_753::{Fq, Fr, G2Projective, MNT6_753};
-use algebra_core::ProjectiveCurve;
+use algebra_core::{CanonicalDeserialize, ProjectiveCurve};
 use crypto_primitives::nizk::groth16::constraints::{
     Groth16VerifierGadget, ProofGadget, VerifyingKeyGadget,
 };
@@ -46,7 +48,6 @@ pub struct MacroBlockCircuit {
     final_pks_commitment: Vec<u8>,
     block: MacroBlock,
     proof: Proof<MNT6_753>,
-    vk: VerifyingKey<MNT6_753>,
 
     // Public inputs
     initial_state_commitment: Vec<u8>,
@@ -62,7 +63,6 @@ impl MacroBlockCircuit {
         final_pks_commitment: Vec<u8>,
         block: MacroBlock,
         proof: Proof<MNT6_753>,
-        vk: VerifyingKey<MNT6_753>,
         initial_state_commitment: Vec<u8>,
         final_state_commitment: Vec<u8>,
     ) -> Self {
@@ -74,7 +74,6 @@ impl MacroBlockCircuit {
             final_pks_commitment,
             block,
             proof,
-            vk,
             initial_state_commitment,
             final_state_commitment,
         }
@@ -87,6 +86,11 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
+        // Load the verifying key from file.
+        let mut file = File::open("verifying_keys/pk_tree_0.bin")?;
+
+        let vk_pk_tree = VerifyingKey::deserialize(&mut file).unwrap();
+
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
@@ -114,8 +118,8 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             pedersen_generators(256),
         )?;
 
-        // TODO: This needs to be changed to a constant!
-        let vk_var = TheVkGadget::alloc(cs.ns(|| "alloc vk"), || Ok(&self.vk))?;
+        let vk_pk_tree_var =
+            TheVkGadget::alloc_constant(cs.ns(|| "alloc vk pk tree"), &vk_pk_tree)?;
 
         // Allocate all the private inputs.
         next_cost_analysis!(cs, cost, || "Alloc private inputs");
@@ -390,7 +394,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
             cs.ns(|| "verify groth16 proof"),
-            &vk_var,
+            &vk_pk_tree_var,
             proof_inputs.iter(),
             &proof_var,
         )?;
