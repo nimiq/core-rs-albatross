@@ -1,4 +1,4 @@
-FROM ubuntu:19.04
+FROM ubuntu:19.10
 RUN apt-get update \
  && apt-get install -y libssl1.1 \
  && rm -rf /var/lib/apt
