@@ -21,6 +21,10 @@ use nano_sync::utils::{
     bytes_to_bits, gen_rand_g1_mnt4, gen_rand_g1_mnt6, gen_rand_g2_mnt4, gen_rand_g2_mnt6,
 };
 
+/// This example generates the parameters (proving and verifying keys) for the entire nano sync
+/// program. It does this by generating the parameters for each circuit, "from bottom to top". The
+/// order is absolutely necessary because each circuit needs a verifying key from the circuit "below"
+/// it. Note that the parameter generation can take longer than one hour, even two on some computers.
 fn main() -> Result<(), Box<dyn Error>> {
     println!("====== Parameter generation for Nano Sync initiated ======");
     let start = Instant::now();
