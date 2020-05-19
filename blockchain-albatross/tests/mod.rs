@@ -1,9 +1,10 @@
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, ViewChangeProof, SignedViewChange, ViewChange, ViewChangeProofBuilder, MacroExtrinsics};
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult, PushError};
+use nimiq_blockchain_albatross::blockchain::{Blockchain, ForkEvent, PushResult, PushError};
 use nimiq_blockchain_base::AbstractBlockchain;
 use nimiq_blockchain_base::Direction;
 use nimiq_bls::{KeyPair, SecretKey};
@@ -263,4 +264,28 @@ fn it_can_rebranch_at_macro_block() {
 
     assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Rebranched));
     assert_eq!(temp_producer2.push(fork1), Ok(PushResult::Ignored));
+}
+
+fn create_fork_proof() {
+    // Build a fork using a producer
+    let producer = TemporaryBlockProducer::new();
+
+    let event1_rc1 = Arc::new(RwLock::new(false));
+    let event1_rc2 = event1_rc1.clone();
+
+    producer.blockchain.fork_notifier.write().register(move |e: &ForkEvent| {        
+        match e {
+            ForkEvent::Detected(_) => *event1_rc2.write().unwrap() = true,
+        }       
+    });
+
+    // Easy rebranch
+    // [0] - [0] - [0] - [0]
+    //          \- [0]
+    let block = producer.next_block(0, vec![]);   
+    let _  = producer.next_block(0, vec![0x48]);
+    let _  = producer.next_block(0, vec![]);
+
+    // Verify that the fork proof was generated
+    assert_eq!(*event1_rc1.read().unwrap(), true);       
 }

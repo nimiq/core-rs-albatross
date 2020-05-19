@@ -120,7 +120,7 @@ impl ChainStore {
                 break chain_info;
             }
 
-            // Get next blokc hash
+            // Get next block hash
             block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
                 Some((_, hash)) => hash,
                 None => return None
@@ -158,6 +158,41 @@ impl ChainStore {
     pub fn get_block_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Option<Block> {
         self.get_chain_info_at(block_height, include_body, txn_option)
             .map(|chain_info| chain_info.head)
+    }
+    pub fn get_blocks_at(&self, block_height: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {
+        let read_txn: ReadTransaction;
+        let txn = match txn_option {
+            Some(txn) => txn,
+            None => {
+                read_txn = ReadTransaction::new(&self.env);
+                &read_txn
+            }
+        };
+
+        // Seek to the first block at the given height.
+        let mut blocks = Vec::new();
+        let mut cursor = txn.cursor(&self.height_idx);
+        let mut block_hash = match cursor.seek_key::<u32, Blake2bHash>(&block_height) {
+            Some(hash) => hash,
+            None => return blocks
+        };
+
+        // Iterate until we find all blocks at the same height.
+        loop {
+            if let Some(block) = self.get_block(&block_hash, include_body, Some(&txn)) {
+                blocks.push(block);
+            } else {
+                break;
+            }
+
+            // Get next block hash
+            block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {
+                Some((_, hash)) => hash,
+                None => break,
+            };
+        }
+
+        blocks
     }
 
     pub fn get_blocks_backward(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, txn_option: Option<&Transaction>) -> Vec<Block> {

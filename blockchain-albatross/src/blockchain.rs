@@ -94,11 +94,16 @@ enum ChainOrdering {
     Unknown,
 }
 
+pub enum ForkEvent {
+    Detected(ForkProof),
+}
+
 pub struct Blockchain {
     pub(crate) env: Environment,
     pub network_id: NetworkId,
     // TODO network_time: Arc<NetworkTime>,
     pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
+    pub fork_notifier: RwLock<Notifier<'static, ForkEvent>>,
     pub chain_store: Arc<ChainStore>,
     pub(crate) state: RwLock<BlockchainState>,
     push_lock: Mutex<()>,
@@ -234,6 +239,7 @@ impl Blockchain {
             network_id,
             //network_time,
             notifier: RwLock::new(Notifier::new()),
+            fork_notifier: RwLock::new(Notifier::new()),
             chain_store,
             state: RwLock::new(BlockchainState {
                 accounts,
@@ -289,6 +295,7 @@ impl Blockchain {
             network_id,
             //network_time,
             notifier: RwLock::new(Notifier::new()),
+            fork_notifier: RwLock::new(Notifier::new()),
             chain_store,
             state: RwLock::new(BlockchainState {
                 accounts,
@@ -590,6 +597,40 @@ impl Blockchain {
                 debug!("Block hash: {}", micro_block.header.hash::<Blake2bHash>());
                 debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+            }
+
+            // Check if there are two blocks in the same slot and with the same height. Since we already
+            // verified the validator for the current slot, this is enough to check for fork proofs.
+            // Count the microblocks after the last macroblock
+            let mut micro_blocks: Vec<Block> = self.chain_store.get_blocks_at(block.block_number(), false, Some(&read_txn));
+
+            // Get the microheader from the block
+            let micro_header1 = &micro_block.header;
+
+            // Get the justification for the block. We asume that the
+            // validator's signature is valid.
+            let justification1 = &micro_block.justification.signature;
+
+            // Get the view number from the block
+            let view_number = block.view_number();
+
+            for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
+            // for micro_block in micro_blocks.iter() {
+                // If there's another microblock set to this view number, we
+                // notify the fork event.
+                if view_number == micro_block.header.view_number {
+                    let micro_header2 = micro_block.header;
+                    let justification2 = micro_block.justification.signature;
+
+                    let proof = ForkProof {
+                        header1:        micro_header1.clone(),
+                        header2:        micro_header2,
+                        justification1: justification1.clone(),
+                        justification2: justification2
+                    };
+
+                    self.fork_notifier.read().notify(ForkEvent::Detected(proof));
+                }
             }
 
             // Validate slash inherents

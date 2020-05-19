@@ -25,4 +25,4 @@ pub mod chain_store;
 pub mod reward_registry;
 pub mod transaction_cache;
 
-pub use blockchain::Blockchain;
+pub use blockchain::{Blockchain, ForkEvent};

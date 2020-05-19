@@ -27,7 +27,7 @@ use block_albatross::{
     ViewChangeProof,
 };
 use block_production_albatross::BlockProducer;
-use blockchain_albatross::Blockchain;
+use blockchain_albatross::{Blockchain, ForkEvent};
 use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use bls::bls12_381::KeyPair;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
@@ -65,6 +65,7 @@ struct ValidatorListeners {
     consensus: ListenerHandle,
     blockchain: ListenerHandle,
     validator_network: ListenerHandle,
+    fork: ListenerHandle,
 }
 
 pub struct Validator {
@@ -180,11 +181,19 @@ impl Validator {
             this.on_block_timeout();
         }, Self::BLOCK_TIMEOUT);
 
+        // Setup event handlers for fork events
+        let weak = Arc::downgrade(this);
+        let fork = this.blockchain.fork_notifier.write().register(move |e: &ForkEvent| {
+            let this = upgrade_weak!(weak);
+            this.on_fork_event(&e);
+        });
+
         // remember listeners for when we drop this validator
         let listeners = ValidatorListeners {
             consensus,
             blockchain,
             validator_network,
+            fork,
         };
         unsafe { this.listeners.replace(Some(listeners)); }
     }
@@ -292,6 +301,15 @@ impl Validator {
                 let transaction = proof_builder.generate().unwrap();
 
                 self.consensus.mempool.push_transaction(transaction.clone());
+            }
+        }
+    }
+
+    fn on_fork_event(&self, event: &ForkEvent) {
+        match event {
+            ForkEvent::Detected(fork_proof) => {
+                let mut state = self.state.write();
+                state.fork_proof_pool.insert(fork_proof.clone());
             }
         }
     }
