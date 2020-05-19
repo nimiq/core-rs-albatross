@@ -404,6 +404,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
                 connections_by_net_address: HashMap::new(),
                 connections_by_subnet: HashMap::new(),
 
+                #[cfg(feature = "metrics")]
                 past_conn_metrics: NetworkMetrics::default(),
 
                 peer_count_ws: 0,
