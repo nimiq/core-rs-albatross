@@ -5,9 +5,9 @@ use std::{error::Error, time::Instant};
 
 use algebra::mnt4_753::MNT4_753;
 use algebra::mnt6_753::MNT6_753;
-use algebra_core::{test_rng, CanonicalSerialize, ProjectiveCurve};
+use algebra_core::{CanonicalSerialize, ProjectiveCurve};
 use groth16::{generate_random_parameters, Parameters, Proof, VerifyingKey};
-use rand::RngCore;
+use rand::{thread_rng, Rng, RngCore};
 
 use nano_sync::circuits::mnt4::{
     MacroBlockCircuit, MergerCircuit, PKTree1Circuit, PKTree3Circuit, PKTree5Circuit,
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_pk_tree_5() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let pks = vec![gen_rand_g2_mnt6(); VALIDATOR_SLOTS / PK_TREE_BREADTH];
@@ -93,7 +93,7 @@ fn gen_params_pk_tree_5() -> Result<(), Box<dyn Error>> {
     let mut commit_agg_pk_commitment = [0u8; 95];
     rng.fill_bytes(&mut commit_agg_pk_commitment);
 
-    let position = vec![0];
+    let position: u8 = rng.gen_range(0, 32);
 
     // Create parameters for our circuit
     println!("Starting parameter generation.");
@@ -111,7 +111,7 @@ fn gen_params_pk_tree_5() -> Result<(), Box<dyn Error>> {
             prepare_agg_pk_commitment.to_vec(),
             commit_signer_bitmap.to_vec(),
             commit_agg_pk_commitment.to_vec(),
-            position,
+            vec![position],
         );
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
@@ -144,7 +144,7 @@ fn gen_params_pk_tree_5() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_pk_tree_4() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -180,7 +180,7 @@ fn gen_params_pk_tree_4() -> Result<(), Box<dyn Error>> {
     let mut right_commit_agg_pk_commitment = [0u8; 95];
     rng.fill_bytes(&mut right_commit_agg_pk_commitment);
 
-    let position = vec![0];
+    let position: u8 = rng.gen_range(0, 32);
 
     // Create parameters for our circuit
     println!("Starting parameter generation.");
@@ -198,7 +198,7 @@ fn gen_params_pk_tree_4() -> Result<(), Box<dyn Error>> {
             commit_signer_bitmap.to_vec(),
             left_commit_agg_pk_commitment.to_vec(),
             right_commit_agg_pk_commitment.to_vec(),
-            position,
+            vec![position],
         );
         generate_random_parameters::<MNT6_753, _, _>(c, rng)?
     };
@@ -231,7 +231,7 @@ fn gen_params_pk_tree_4() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_pk_tree_3() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -271,7 +271,7 @@ fn gen_params_pk_tree_3() -> Result<(), Box<dyn Error>> {
     let mut commit_agg_pk_commitment = [0u8; 95];
     rng.fill_bytes(&mut commit_agg_pk_commitment);
 
-    let position = vec![0];
+    let position: u8 = rng.gen_range(0, 32);
 
     // Create parameters for our circuit
     println!("Starting parameter generation.");
@@ -289,7 +289,7 @@ fn gen_params_pk_tree_3() -> Result<(), Box<dyn Error>> {
             prepare_agg_pk_commitment.to_vec(),
             commit_signer_bitmap.to_vec(),
             commit_agg_pk_commitment.to_vec(),
-            position,
+            vec![position],
         );
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
@@ -322,7 +322,7 @@ fn gen_params_pk_tree_3() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_pk_tree_2() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -358,7 +358,7 @@ fn gen_params_pk_tree_2() -> Result<(), Box<dyn Error>> {
     let mut right_commit_agg_pk_commitment = [0u8; 95];
     rng.fill_bytes(&mut right_commit_agg_pk_commitment);
 
-    let position = vec![0];
+    let position: u8 = rng.gen_range(0, 32);
 
     // Create parameters for our circuit
     println!("Starting parameter generation.");
@@ -376,7 +376,7 @@ fn gen_params_pk_tree_2() -> Result<(), Box<dyn Error>> {
             commit_signer_bitmap.to_vec(),
             left_commit_agg_pk_commitment.to_vec(),
             right_commit_agg_pk_commitment.to_vec(),
-            position,
+            vec![position],
         );
         generate_random_parameters::<MNT6_753, _, _>(c, rng)?
     };
@@ -409,7 +409,7 @@ fn gen_params_pk_tree_2() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_pk_tree_1() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -449,7 +449,7 @@ fn gen_params_pk_tree_1() -> Result<(), Box<dyn Error>> {
     let mut commit_agg_pk_commitment = [0u8; 95];
     rng.fill_bytes(&mut commit_agg_pk_commitment);
 
-    let position = vec![0];
+    let position: u8 = rng.gen_range(0, 32);
 
     // Create parameters for our circuit
     println!("Starting parameter generation.");
@@ -467,7 +467,7 @@ fn gen_params_pk_tree_1() -> Result<(), Box<dyn Error>> {
             prepare_agg_pk_commitment.to_vec(),
             commit_signer_bitmap.to_vec(),
             commit_agg_pk_commitment.to_vec(),
-            position,
+            vec![position],
         );
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
@@ -500,7 +500,7 @@ fn gen_params_pk_tree_1() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_pk_tree_0() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let left_proof = Proof {
@@ -536,7 +536,7 @@ fn gen_params_pk_tree_0() -> Result<(), Box<dyn Error>> {
     let mut right_commit_agg_pk_commitment = [0u8; 95];
     rng.fill_bytes(&mut right_commit_agg_pk_commitment);
 
-    let position = vec![0];
+    let position: u8 = rng.gen_range(0, 32);
 
     // Create parameters for our circuit
     println!("Starting parameter generation.");
@@ -554,7 +554,7 @@ fn gen_params_pk_tree_0() -> Result<(), Box<dyn Error>> {
             commit_signer_bitmap.to_vec(),
             left_commit_agg_pk_commitment.to_vec(),
             right_commit_agg_pk_commitment.to_vec(),
-            position,
+            vec![position],
         );
         generate_random_parameters::<MNT6_753, _, _>(c, rng)?
     };
@@ -587,7 +587,7 @@ fn gen_params_pk_tree_0() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_macro_block() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let mut prepare_agg_pk_chunks = Vec::new();
@@ -603,7 +603,7 @@ fn gen_params_macro_block() -> Result<(), Box<dyn Error>> {
     let mut initial_pks_commitment = [0u8; 95];
     rng.fill_bytes(&mut initial_pks_commitment);
 
-    let initial_block_number = 100;
+    let initial_block_number: u32 = rng.gen_range(0, 1000000);
 
     let mut final_pks_commitment = [0u8; 95];
     rng.fill_bytes(&mut final_pks_commitment);
@@ -691,7 +691,7 @@ fn gen_params_macro_block() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_macro_block_wrapper() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let proof = Proof {
@@ -748,7 +748,7 @@ fn gen_params_macro_block_wrapper() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_merger() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let proof_merger_wrapper = Proof {
@@ -774,7 +774,7 @@ fn gen_params_merger() -> Result<(), Box<dyn Error>> {
     let mut intermediate_state_commitment = [0u8; 95];
     rng.fill_bytes(&mut intermediate_state_commitment);
 
-    let genesis_flag = false;
+    let genesis_flag: bool = rng.gen();
 
     let mut initial_state_commitment = [0u8; 95];
     rng.fill_bytes(&mut initial_state_commitment);
@@ -832,7 +832,7 @@ fn gen_params_merger() -> Result<(), Box<dyn Error>> {
 
 fn gen_params_merger_wrapper() -> Result<(), Box<dyn Error>> {
     // Initialize rng.
-    let rng = &mut test_rng();
+    let rng = &mut thread_rng();
 
     // Create dummy inputs.
     let proof = Proof {

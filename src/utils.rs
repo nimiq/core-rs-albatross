@@ -8,8 +8,7 @@ use algebra::{BigInteger768, FpParameters};
 use algebra_core::fields::Field;
 use algebra_core::ProjectiveCurve;
 use r1cs_std::prelude::*;
-use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::{thread_rng, RngCore};
 
 use crate::compression::BeSerialize;
 
@@ -43,10 +42,11 @@ pub fn serialize_g2_mnt6(point: MNT6G2Projective) -> [u8; 285] {
 
 /// Creates a random G1 point in the MNT4-753 curve.
 pub fn gen_rand_g1_mnt4() -> MNT4G1Projective {
+    let rng = &mut thread_rng();
     let mut bytes = [0u8; 96];
     let mut x = None;
     while x.is_none() {
-        OsRng.fill_bytes(&mut bytes[2..]);
+        rng.fill_bytes(&mut bytes[2..]);
         x = MNT4Fr::from_random_bytes(&bytes);
     }
     MNT4G1Projective::prime_subgroup_generator().mul(x.unwrap())
@@ -54,10 +54,11 @@ pub fn gen_rand_g1_mnt4() -> MNT4G1Projective {
 
 /// Creates a random G2 point in the MNT4-753 curve.
 pub fn gen_rand_g2_mnt4() -> MNT4G2Projective {
+    let rng = &mut thread_rng();
     let mut bytes = [0u8; 96];
     let mut x = None;
     while x.is_none() {
-        OsRng.fill_bytes(&mut bytes[2..]);
+        rng.fill_bytes(&mut bytes[2..]);
         x = MNT4Fr::from_random_bytes(&bytes);
     }
     MNT4G2Projective::prime_subgroup_generator().mul(x.unwrap())
@@ -65,10 +66,11 @@ pub fn gen_rand_g2_mnt4() -> MNT4G2Projective {
 
 /// Creates a random G1 point in the MNT6-753 curve.
 pub fn gen_rand_g1_mnt6() -> MNT6G1Projective {
+    let rng = &mut thread_rng();
     let mut bytes = [0u8; 96];
     let mut x = None;
     while x.is_none() {
-        OsRng.fill_bytes(&mut bytes[2..]);
+        rng.fill_bytes(&mut bytes[2..]);
         x = MNT6Fr::from_random_bytes(&bytes);
     }
     MNT6G1Projective::prime_subgroup_generator().mul(x.unwrap())
@@ -76,10 +78,11 @@ pub fn gen_rand_g1_mnt6() -> MNT6G1Projective {
 
 /// Creates a random G2 point in the MNT6-753 curve.
 pub fn gen_rand_g2_mnt6() -> MNT6G2Projective {
+    let rng = &mut thread_rng();
     let mut bytes = [0u8; 96];
     let mut x = None;
     while x.is_none() {
-        OsRng.fill_bytes(&mut bytes[2..]);
+        rng.fill_bytes(&mut bytes[2..]);
         x = MNT6Fr::from_random_bytes(&bytes);
     }
     MNT6G2Projective::prime_subgroup_generator().mul(x.unwrap())
