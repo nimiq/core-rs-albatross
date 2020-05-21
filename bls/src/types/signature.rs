@@ -3,11 +3,12 @@ use std::fmt;
 use algebra::mnt6_753::G1Projective;
 use algebra_core::curves::ProjectiveCurve;
 
-use crate::compression::BeSerialize;
-use crate::{CompressedSignature, SigHash};
 use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::primitives::{pedersen_generators, pedersen_hash};
 use nano_sync::utils::bytes_to_bits;
+
+use crate::compression::BeSerialize;
+use crate::{CompressedSignature, SigHash};
 
 #[derive(Clone, Copy)]
 pub struct Signature {

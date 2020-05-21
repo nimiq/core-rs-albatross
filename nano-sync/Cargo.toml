@@ -1,55 +1,27 @@
-cargo-features = ["profile-overrides"]
+[package]
+name = "nano-sync"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+description = "Recursive SNARKs for Nimiq's Nano Nodes"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/nimiq/nano-sync"
+edition = "2018"
 
-[workspace]
-members = [
-    "accounts",
-    "accounts/tree-primitives",
-    "beserial",
-    "beserial/beserial_derive",
-    "blockchain",
-    "blockchain-albatross",
-    "blockchain-base",
-    "block-production",
-    "block-production-albatross",
-    "bls",
-    "build-tools",
-    "client",
-    "collections",
-    "consensus",
-    "database",
-    "fixed-unsigned",
-    "handel",
-    "hash",
-    "hash/hash_derive",
-    "keys",
-    "key-derivation",
-    "lib",
-    "macros",
-    "mempool",
-    "messages",
-    "metrics-server",
-    "mnemonic",
-    "nano-sync",
-    "network",
-    "network-primitives",
-    "primitives",
-    "primitives/account",
-    "primitives/block",
-    "primitives/block-albatross",
-    "primitives/block-base",
-    "primitives/transaction",
-    "rpc-server",
-    "tools",
-    "utils",
-    "validator",
-    "vrf",
-    "wallet",
-    "ws-rpc-server",
-]
+[dependencies]
+blake2-rfc = "0.2"
+byteorder = "1.3.4"
+colored = { version = "1.9", optional = true }
+hex = "0.4"
+rand = "0.7"
 
-[profile.dev.package.algebra]
-opt-level = 3
-debug = false
+algebra = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["mnt4_753", "mnt6_753"] }
+algebra-core = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq"}
+crypto-primitives = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["r1cs", "groth16"] }
+groth16 = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["parallel"] }
+r1cs-core = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq" }
+r1cs-std = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["mnt4_753", "mnt6_753"] }
 
-[profile.test.package.nano-sync]
-opt-level = 3
+[features]
+default = []
+cost-analysis = ["colored"]
+print-trace = ["groth16/print-trace"]

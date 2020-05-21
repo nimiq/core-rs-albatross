@@ -3,12 +3,13 @@ use std::io;
 use algebra::mnt6_753::Fr;
 use algebra_core::bytes::{FromBytes, ToBytes};
 
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use nimiq_hash::{Hash, SerializeContent};
+
 use crate::{
     AggregatePublicKey, AggregateSignature, CompressedPublicKey, CompressedSignature, KeyPair,
     PublicKey, SecretKey, Signature,
 };
-use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use nimiq_hash::{Hash, SerializeContent};
 
 impl Serialize for CompressedPublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
