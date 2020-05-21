@@ -3,11 +3,12 @@ use std::io;
 use algebra::mnt6_753::Fr;
 use algebra_core::bytes::{FromBytes, ToBytes};
 
+use crate::{
+    AggregatePublicKey, AggregateSignature, CompressedPublicKey, CompressedSignature, KeyPair,
+    PublicKey, SecretKey, Signature,
+};
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use hash::{Hash, SerializeContent};
-pub use utils::key_rng::{SecureGenerate, SecureRng};
-
-use crate::{AggregatePublicKey, AggregateSignature, CompressedPublicKey, CompressedSignature, KeyPair, PublicKey, SecretKey, Signature};
+use nimiq_hash::{Hash, SerializeContent};
 
 impl Serialize for CompressedPublicKey {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {

@@ -3,8 +3,6 @@ use std::fmt;
 use algebra::mnt6_753::G1Projective;
 use num_traits::Zero;
 
-pub use utils::key_rng::{SecureGenerate, SecureRng};
-
 use crate::Signature;
 
 /// An aggregate signature. Mathematically, it is equivalent to a regular signature. However, we created a new type for it in order to help differentiate between the two use cases.

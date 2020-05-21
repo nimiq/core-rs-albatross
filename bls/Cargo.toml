@@ -1,12 +1,10 @@
 [package]
+name = "nimiq-bls"
+version = "0.1.0"
 authors = ["Jack Grigg <str4d@i2pmail.org>", "The Nimiq Core Development Team <info@nimiq.com>"]
 description = "BLS signatures"
-documentation = "https://github.com/nimiq/bls"
-homepage = "https://github.com/nimiq/bls"
 license = "MIT/Apache-2.0"
-name = "nimiq-bls"
 repository = "https://github.com/nimiq/bls"
-version = "0.1.0"
 edition = "2018"
 
 [dependencies]
@@ -25,6 +23,7 @@ algebra-core = { git = "https://github.com/nimiq/zexe", branch = "nimiq"}
 crypto-primitives = { git = "https://github.com/nimiq/zexe", branch = "nimiq"}
 
 beserial = { path = "../beserial", version = "0.1", optional = true }
+nano-sync = { path = "../nano-sync", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["key-rng"] }
 

@@ -3,8 +3,7 @@ use std::fmt;
 use algebra::mnt6_753::G2Projective;
 use num_traits::Zero;
 
-use hash::Hash;
-pub use utils::key_rng::{SecureGenerate, SecureRng};
+use nimiq_hash::Hash;
 
 use crate::{AggregateSignature, PublicKey, SigHash};
 

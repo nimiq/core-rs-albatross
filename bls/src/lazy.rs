@@ -4,7 +4,7 @@ use parking_lot::{
     MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
 
-use hash::Hash;
+use nimiq_hash::Hash;
 
 use crate::{CompressedPublicKey, PublicKey, SigHash, Signature};
 

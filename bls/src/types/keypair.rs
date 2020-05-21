@@ -1,9 +1,9 @@
 use std::fmt;
 
 use beserial::Serialize;
-use hash::Hash;
-use utils::key_rng::{CryptoRng, Rng};
-pub use utils::key_rng::{SecureGenerate, SecureRng};
+use nimiq_hash::Hash;
+use nimiq_utils::key_rng::SecureGenerate;
+use nimiq_utils::key_rng::{CryptoRng, Rng};
 
 use crate::{PublicKey, SecretKey, SigHash, Signature};
 

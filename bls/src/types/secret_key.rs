@@ -5,9 +5,9 @@ use algebra_core::UniformRand;
 use num_traits::Zero;
 
 use beserial::Serialize;
-use hash::Hash;
-use utils::key_rng::{CryptoRng, Rng};
-pub use utils::key_rng::{SecureGenerate, SecureRng};
+use nimiq_hash::Hash;
+use nimiq_utils::key_rng::SecureGenerate;
+use nimiq_utils::key_rng::{CryptoRng, Rng};
 
 use crate::{SigHash, Signature};
 
@@ -19,8 +19,7 @@ pub struct SecretKey {
 }
 
 impl SecretKey {
-    // TODO: Should this remain as 256 bits or should we increase it to the entire Fr???
-    pub const SIZE: usize = 32;
+    pub const SIZE: usize = 96;
 
     /// Creates a signature given a message.
     pub fn sign<M: Hash>(&self, msg: &M) -> Signature {

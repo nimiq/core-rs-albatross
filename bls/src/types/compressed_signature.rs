@@ -4,8 +4,6 @@ use algebra::mnt6_753::G1Affine;
 use algebra::SerializationError;
 use algebra_core::curves::AffineCurve;
 
-pub use utils::key_rng::{SecureGenerate, SecureRng};
-
 use crate::compression::BeDeserialize;
 use crate::Signature;
 

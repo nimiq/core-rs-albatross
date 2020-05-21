@@ -6,7 +6,6 @@ use algebra_core::curves::AffineCurve;
 
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
-pub use utils::key_rng::{SecureGenerate, SecureRng};
 
 use crate::compression::BeDeserialize;
 use crate::{PublicKey, PublicKeyParseError};
