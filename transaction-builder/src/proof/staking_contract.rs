@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use bls::bls12_381::KeyPair as BlsKeyPair;
+use bls::KeyPair as BlsKeyPair;
 use keys::KeyPair;
 use transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof,
@@ -75,7 +75,7 @@ impl StakingProofBuilder {
     pub fn drop_validator(&mut self, key_pair: &BlsKeyPair) -> &mut Self {
         let signature = key_pair.sign(&self.transaction.serialize_content().as_slice());
         self.proof = Some(OutgoingStakingTransactionProof::DropValidator {
-            validator_key: key_pair.public.compress(),
+            validator_key: key_pair.public_key.compress(),
             signature: signature.compress(),
         });
         self

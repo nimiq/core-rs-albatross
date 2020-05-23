@@ -7,7 +7,7 @@ extern crate nimiq_utils as utils;
 
 use failure::Fail;
 
-use bls::bls12_381::PublicKey as BlsPublicKey;
+use bls::PublicKey as BlsPublicKey;
 use keys::{Address, KeyPair};
 use primitives::account::AccountType;
 use primitives::coin::Coin;

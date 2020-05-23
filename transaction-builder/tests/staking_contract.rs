@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use beserial::{Deserialize, Serialize};
 use nimiq_account::AccountType;
-use nimiq_bls::bls12_381::KeyPair as BlsKeyPair;
+use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::account::staking_contract::{

@@ -1,5 +1,5 @@
 use beserial::{Serialize, SerializingError, WriteBytesExt};
-use bls::bls12_381::{CompressedSignature, KeyPair, PublicKey};
+use bls::{CompressedSignature, KeyPair, PublicKey};
 use keys::Address;
 use transaction::account::staking_contract::{
     IncomingStakingTransactionData, SelfStakingTransactionData,
@@ -96,7 +96,7 @@ impl StakingRecipientBuilder {
     pub fn create_validator(&mut self, key_pair: &KeyPair, reward_address: Address) -> &mut Self {
         self.staking_data = Some(StakingTransaction::IncomingTransaction(
             IncomingStakingTransactionData::CreateValidator {
-                validator_key: key_pair.public.compress(),
+                validator_key: key_pair.public_key.compress(),
                 proof_of_knowledge: StakingRecipientBuilder::generate_proof_of_knowledge(&key_pair),
                 reward_address,
             },
@@ -127,7 +127,7 @@ impl StakingRecipientBuilder {
         self.staking_data = Some(StakingTransaction::IncomingTransaction(
             IncomingStakingTransactionData::UpdateValidator {
                 old_validator_key: old_validator_key.compress(),
-                new_validator_key: new_key_pair.map(|key| key.public.compress()),
+                new_validator_key: new_key_pair.map(|key| key.public_key.compress()),
                 new_proof_of_knowledge: new_key_pair
                     .map(|key| StakingRecipientBuilder::generate_proof_of_knowledge(&key)),
                 new_reward_address,
@@ -218,7 +218,7 @@ impl StakingRecipientBuilder {
 
     /// A method to generate a proof of knowledge of the secret key by signing the public key.
     pub fn generate_proof_of_knowledge(key_pair: &KeyPair) -> CompressedSignature {
-        key_pair.sign(&key_pair.public).compress()
+        key_pair.sign(&key_pair.public_key).compress()
     }
 
     /// This method tries putting together the staking transaction,
@@ -230,7 +230,7 @@ impl StakingRecipientBuilder {
     /// ```
     /// use nimiq_transaction_builder::Recipient;
     /// use nimiq_keys::Address;
-    /// use nimiq_bls::bls12_381::KeyPair;
+    /// use nimiq_bls::KeyPair;
     /// use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// let validator_key_pair = KeyPair::generate_default_csprng();

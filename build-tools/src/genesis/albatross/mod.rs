@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::fs::{OpenOptions, read_to_string};
+use std::fs::{read_to_string, OpenOptions};
 use std::io::Error as IoError;
 use std::path::Path;
 
@@ -11,14 +11,11 @@ use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract
 use accounts::Accounts;
 use beserial::{Serialize, SerializingError};
 use block_albatross::{Block, MacroBlock, MacroExtrinsics, MacroHeader};
-use bls::bls12_381::{
-    PublicKey as BlsPublicKey,
-    SecretKey as BlsSecretKey,
-};
+use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use collections::bitset::BitSet;
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
-use hash::{Blake2bHash, Blake2bHasher, Hash, Hasher};
+use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
 use keys::Address;
 use primitives::coin::Coin;
 use vrf::VrfSeed;
@@ -75,13 +72,11 @@ impl From<VolatileDatabaseError> for GenesisBuilderError {
     }
 }
 
-
 pub struct GenesisInfo {
     pub block: Block,
     pub hash: Blake2bHash,
     pub accounts: Vec<(Address, Account)>,
 }
-
 
 #[derive(Default)]
 pub struct GenesisBuilder {
@@ -115,33 +110,44 @@ impl GenesisBuilder {
         self
     }
 
-    pub fn with_genesis_validator(&mut self, validator_key: BlsPublicKey, reward_address: Address, balance: Coin) -> &mut Self {
+    pub fn with_genesis_validator(
+        &mut self,
+        validator_key: BlsPublicKey,
+        reward_address: Address,
+        balance: Coin,
+    ) -> &mut Self {
         self.validators.push(config::GenesisValidator {
             validator_key,
             reward_address,
-            balance
+            balance,
         });
         self
     }
 
-    pub fn with_genesis_stake(&mut self, staker_address: Address, validator_key: BlsPublicKey, balance: Coin) -> &mut Self {
+    pub fn with_genesis_stake(
+        &mut self,
+        staker_address: Address,
+        validator_key: BlsPublicKey,
+        balance: Coin,
+    ) -> &mut Self {
         self.stakes.push(config::GenesisStake {
             staker_address,
             validator_key,
-            balance
+            balance,
         });
         self
     }
 
     pub fn with_basic_account(&mut self, address: Address, balance: Coin) -> &mut Self {
-        self.accounts.push(config::GenesisAccount {
-            address,
-            balance
-        });
+        self.accounts
+            .push(config::GenesisAccount { address, balance });
         self
     }
 
-    pub fn with_config_file<P: AsRef<Path>>(&mut self, path: P) -> Result<&mut Self, GenesisBuilderError> {
+    pub fn with_config_file<P: AsRef<Path>>(
+        &mut self,
+        path: P,
+    ) -> Result<&mut Self, GenesisBuilderError> {
         let config::GenesisConfig {
             signing_key,
             seed_message,
@@ -167,13 +173,16 @@ impl GenesisBuilder {
         let timestamp = self.timestamp.unwrap_or_else(Utc::now);
 
         // generate seeds
-        let signing_key = self.signing_key.as_ref().ok_or(GenesisBuilderError::NoSigningKey)?;
+        let signing_key = self
+            .signing_key
+            .as_ref()
+            .ok_or(GenesisBuilderError::NoSigningKey)?;
         // random message used as seed for VRF that generates pre-genesis seed
         let seed_message = self.seed_message.clone()
             .unwrap_or_else(|| "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".to_string());
         // pre-genesis seed (used for slot selection)
         let pre_genesis_seed: VrfSeed = signing_key
-            .sign_hash(Blake2bHasher::new().digest(seed_message.as_bytes()))
+            .sign_hash(Blake2sHasher::new().digest(seed_message.as_bytes()))
             .compress()
             .into();
         debug!("Pre genesis seed: {}", pre_genesis_seed);
@@ -196,10 +205,19 @@ impl GenesisBuilder {
 
         // accounts
         let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
-        genesis_accounts.push((Address::clone(self.staking_contract_address.as_ref().ok_or(GenesisBuilderError::NoStakingContractAddress)?), Account::Staking(staking_contract)));
+        genesis_accounts.push((
+            Address::clone(
+                self.staking_contract_address
+                    .as_ref()
+                    .ok_or(GenesisBuilderError::NoStakingContractAddress)?,
+            ),
+            Account::Staking(staking_contract),
+        ));
         for genesis_account in &self.accounts {
             let address = genesis_account.address.clone();
-            let account = Account::Basic(BasicAccount { balance: genesis_account.balance });
+            let account = Account::Basic(BasicAccount {
+                balance: genesis_account.balance,
+            });
             debug!("Adding genesis account: {}: {:?}", address, account);
             genesis_accounts.push((address, account));
         }
@@ -249,18 +267,33 @@ impl GenesisBuilder {
         let mut contract = StakingContract::default();
 
         for validator in self.validators.iter() {
-            contract.create_validator(validator.validator_key.compress(), validator.reward_address.clone(), validator.balance)?;
+            contract.create_validator(
+                validator.validator_key.compress(),
+                validator.reward_address.clone(),
+                validator.balance,
+            )?;
         }
 
         for stake in self.stakes.iter() {
-            contract.stake(stake.staker_address.clone(), stake.balance, &stake.validator_key.compress())?;
+            contract.stake(
+                stake.staker_address.clone(),
+                stake.balance,
+                &stake.validator_key.compress(),
+            )?;
         }
 
         Ok(contract)
     }
 
-    pub fn write_to_files<P: AsRef<Path>>(&self, directory: P) -> Result<Blake2bHash, GenesisBuilderError> {
-        let GenesisInfo { block, hash, accounts } = self.generate()?;
+    pub fn write_to_files<P: AsRef<Path>>(
+        &self,
+        directory: P,
+    ) -> Result<Blake2bHash, GenesisBuilderError> {
+        let GenesisInfo {
+            block,
+            hash,
+            accounts,
+        } = self.generate()?;
 
         debug!("Genesis block: {}", &hash);
         debug!("{:#?}", &block);
@@ -269,12 +302,18 @@ impl GenesisBuilder {
 
         let block_path = directory.as_ref().join("block.dat");
         info!("Writing block to {}", block_path.display());
-        let mut file = OpenOptions::new().create(true).write(true).open(&block_path)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&block_path)?;
         block.serialize(&mut file)?;
 
         let accounts_path = directory.as_ref().join("accounts.dat");
         info!("Writing accounts to {}", accounts_path.display());
-        let mut file = OpenOptions::new().create(true).write(true).open(&accounts_path)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&accounts_path)?;
         AccountsList(accounts).serialize(&mut file)?;
 
         Ok(hash)

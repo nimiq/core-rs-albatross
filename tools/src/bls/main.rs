@@ -1,7 +1,8 @@
 extern crate nimiq_bls as bls;
 
 use beserial::Serialize;
-use bls::{PublicKey, SecretKey, SecureGenerate};
+use bls::{PublicKey, SecretKey};
+use nimiq_utils::key_rng::SecureGenerate;
 
 fn main() {
     let secret_key = SecretKey::generate_default_csprng();

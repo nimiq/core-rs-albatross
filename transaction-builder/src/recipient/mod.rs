@@ -139,7 +139,7 @@ impl Recipient {
     /// ```
     /// use nimiq_transaction_builder::Recipient;
     /// use nimiq_keys::Address;
-    /// use nimiq_bls::bls12_381::KeyPair;
+    /// use nimiq_bls::KeyPair;
     /// use nimiq_utils::key_rng::SecureGenerate;
     ///
     /// let validator_key_pair = KeyPair::generate_default_csprng();

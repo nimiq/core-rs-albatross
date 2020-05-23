@@ -1,9 +1,9 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use bls::bls12_381::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
+use bls::{CompressedPublicKey as BlsPublicKey, CompressedSignature as BlsSignature};
 use keys::Address;
 
-use crate::{AccountType, Transaction, TransactionError};
 use crate::SignatureProof;
+use crate::{AccountType, Transaction, TransactionError};
 
 /// We need to distinguish three types of transactions:
 /// 1. Incoming transactions, which include:
@@ -43,7 +43,8 @@ pub enum IncomingStakingTransactionType {
 impl IncomingStakingTransactionType {
     pub fn is_signalling(&self) -> bool {
         match self {
-            IncomingStakingTransactionType::Stake | IncomingStakingTransactionType::CreateValidator => false,
+            IncomingStakingTransactionType::Stake
+            | IncomingStakingTransactionType::CreateValidator => false,
             _ => true,
         }
     }
@@ -89,8 +90,8 @@ impl IncomingStakingTransactionData {
     pub fn is_signalling(&self) -> bool {
         match self {
             IncomingStakingTransactionData::Stake { .. }
-                | IncomingStakingTransactionData::CreateValidator { .. } => false,
-            _ => true
+            | IncomingStakingTransactionData::CreateValidator { .. } => false,
+            _ => true,
         }
     }
 
@@ -101,13 +102,19 @@ impl IncomingStakingTransactionData {
     pub fn verify(&self, transaction: &Transaction) -> Result<(), TransactionError> {
         match self {
             IncomingStakingTransactionData::CreateValidator {
-                validator_key, proof_of_knowledge, ..
+                validator_key,
+                proof_of_knowledge,
+                ..
             } => {
                 // Check proof of knowledge.
                 verify_proof_of_knowledge(validator_key, proof_of_knowledge)?;
-            },
+            }
             IncomingStakingTransactionData::UpdateValidator {
-                old_validator_key, new_validator_key, new_proof_of_knowledge, signature, new_reward_address
+                old_validator_key,
+                new_validator_key,
+                new_proof_of_knowledge,
+                signature,
+                new_reward_address,
             } => {
                 // Check signature and proof of knowledge.
                 verify_transaction_signature(transaction, old_validator_key, signature)?;
@@ -117,64 +124,62 @@ impl IncomingStakingTransactionData {
                     return Err(TransactionError::InvalidData);
                 }
 
-                if let (Some(new_validator_key), Some(new_proof_of_knowledge)) = (new_validator_key, new_proof_of_knowledge) {
+                if let (Some(new_validator_key), Some(new_proof_of_knowledge)) =
+                    (new_validator_key, new_proof_of_knowledge)
+                {
                     verify_proof_of_knowledge(new_validator_key, new_proof_of_knowledge)?;
                 }
-            },
+            }
             IncomingStakingTransactionData::RetireValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
                 // Check signature.
                 verify_transaction_signature(transaction, validator_key, signature)?;
-            },
+            }
             IncomingStakingTransactionData::ReactivateValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
                 // Check signature.
                 verify_transaction_signature(transaction, validator_key, signature)?;
-            },
+            }
             IncomingStakingTransactionData::UnparkValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
                 // Check signature.
                 verify_transaction_signature(transaction, validator_key, signature)?;
-            },
-            IncomingStakingTransactionData::Stake {
-                ..
-            } => {
+            }
+            IncomingStakingTransactionData::Stake { .. } => {
                 // No checks required.
-            },
+            }
         }
         Ok(())
     }
 
     pub fn set_validator_signature(&mut self, validator_signature: BlsSignature) {
         match self {
-            IncomingStakingTransactionData::UpdateValidator {
-                signature, ..
-            } => {
+            IncomingStakingTransactionData::UpdateValidator { signature, .. } => {
                 *signature = validator_signature;
-            },
-            IncomingStakingTransactionData::RetireValidator {
-                signature, ..
-            } => {
+            }
+            IncomingStakingTransactionData::RetireValidator { signature, .. } => {
                 *signature = validator_signature;
-            },
-            IncomingStakingTransactionData::UnparkValidator {
-                signature, ..
-            } => {
+            }
+            IncomingStakingTransactionData::UnparkValidator { signature, .. } => {
                 *signature = validator_signature;
-            },
-            IncomingStakingTransactionData::ReactivateValidator {
-                signature, ..
-            } => {
+            }
+            IncomingStakingTransactionData::ReactivateValidator { signature, .. } => {
                 *signature = validator_signature;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
-    pub fn set_validator_signature_on_data(data: &[u8], validator_signature: BlsSignature) -> Result<Vec<u8>, SerializingError> {
+    pub fn set_validator_signature_on_data(
+        data: &[u8],
+        validator_signature: BlsSignature,
+    ) -> Result<Vec<u8>, SerializingError> {
         let mut data: IncomingStakingTransactionData = Deserialize::deserialize_from_vec(data)?;
         data.set_validator_signature(validator_signature);
         Ok(data.serialize_to_vec())
@@ -186,21 +191,31 @@ impl Serialize for IncomingStakingTransactionData {
         let mut size = 0;
         match self {
             IncomingStakingTransactionData::CreateValidator {
-                validator_key, proof_of_knowledge, reward_address
+                validator_key,
+                proof_of_knowledge,
+                reward_address,
             } => {
-                size += Serialize::serialize(&IncomingStakingTransactionType::CreateValidator, writer)?;
+                size +=
+                    Serialize::serialize(&IncomingStakingTransactionType::CreateValidator, writer)?;
                 size += Serialize::serialize(validator_key, writer)?;
                 size += Serialize::serialize(proof_of_knowledge, writer)?;
                 size += Serialize::serialize(reward_address, writer)?;
-            },
+            }
             IncomingStakingTransactionData::UpdateValidator {
-                old_validator_key, new_validator_key, new_proof_of_knowledge, new_reward_address, signature
+                old_validator_key,
+                new_validator_key,
+                new_proof_of_knowledge,
+                new_reward_address,
+                signature,
             } => {
-                size += Serialize::serialize(&IncomingStakingTransactionType::UpdateValidator, writer)?;
+                size +=
+                    Serialize::serialize(&IncomingStakingTransactionType::UpdateValidator, writer)?;
                 size += Serialize::serialize(old_validator_key, writer)?;
                 size += Serialize::serialize(&new_validator_key.is_some(), writer)?;
                 size += Serialize::serialize(&new_reward_address.is_some(), writer)?;
-                if let (Some(new_validator_key), Some(new_proof_of_knowledge)) = (new_validator_key, new_proof_of_knowledge) {
+                if let (Some(new_validator_key), Some(new_proof_of_knowledge)) =
+                    (new_validator_key, new_proof_of_knowledge)
+                {
                     size += Serialize::serialize(new_validator_key, writer)?;
                     size += Serialize::serialize(new_proof_of_knowledge, writer)?;
                 }
@@ -208,35 +223,44 @@ impl Serialize for IncomingStakingTransactionData {
                     size += Serialize::serialize(new_reward_address, writer)?;
                 }
                 size += Serialize::serialize(signature, writer)?;
-            },
+            }
             IncomingStakingTransactionData::RetireValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
-                size += Serialize::serialize(&IncomingStakingTransactionType::RetireValidator, writer)?;
+                size +=
+                    Serialize::serialize(&IncomingStakingTransactionType::RetireValidator, writer)?;
                 size += Serialize::serialize(validator_key, writer)?;
                 size += Serialize::serialize(signature, writer)?;
-            },
+            }
             IncomingStakingTransactionData::ReactivateValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
-                size += Serialize::serialize(&IncomingStakingTransactionType::ReactivateValidator, writer)?;
+                size += Serialize::serialize(
+                    &IncomingStakingTransactionType::ReactivateValidator,
+                    writer,
+                )?;
                 size += Serialize::serialize(validator_key, writer)?;
                 size += Serialize::serialize(signature, writer)?;
-            },
+            }
             IncomingStakingTransactionData::UnparkValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
-                size += Serialize::serialize(&IncomingStakingTransactionType::UnparkValidator, writer)?;
+                size +=
+                    Serialize::serialize(&IncomingStakingTransactionType::UnparkValidator, writer)?;
                 size += Serialize::serialize(validator_key, writer)?;
                 size += Serialize::serialize(signature, writer)?;
-            },
+            }
             IncomingStakingTransactionData::Stake {
-                validator_key, staker_address
+                validator_key,
+                staker_address,
             } => {
                 size += Serialize::serialize(&IncomingStakingTransactionType::Stake, writer)?;
                 size += Serialize::serialize(validator_key, writer)?;
                 size += Serialize::serialize(staker_address, writer)?;
-            },
+            }
         }
         Ok(size)
     }
@@ -245,21 +269,31 @@ impl Serialize for IncomingStakingTransactionData {
         let mut size = 0;
         match self {
             IncomingStakingTransactionData::CreateValidator {
-                validator_key, proof_of_knowledge, reward_address
+                validator_key,
+                proof_of_knowledge,
+                reward_address,
             } => {
-                size += Serialize::serialized_size(&IncomingStakingTransactionType::CreateValidator);
+                size +=
+                    Serialize::serialized_size(&IncomingStakingTransactionType::CreateValidator);
                 size += Serialize::serialized_size(validator_key);
                 size += Serialize::serialized_size(proof_of_knowledge);
                 size += Serialize::serialized_size(reward_address);
-            },
+            }
             IncomingStakingTransactionData::UpdateValidator {
-                old_validator_key, new_validator_key, new_proof_of_knowledge, new_reward_address, signature
+                old_validator_key,
+                new_validator_key,
+                new_proof_of_knowledge,
+                new_reward_address,
+                signature,
             } => {
-                size += Serialize::serialized_size(&IncomingStakingTransactionType::UpdateValidator);
+                size +=
+                    Serialize::serialized_size(&IncomingStakingTransactionType::UpdateValidator);
                 size += Serialize::serialized_size(old_validator_key);
                 size += Serialize::serialized_size(&new_validator_key.is_some());
                 size += Serialize::serialized_size(&new_reward_address.is_some());
-                if let (Some(new_validator_key), Some(new_proof_of_knowledge)) = (new_validator_key, new_proof_of_knowledge) {
+                if let (Some(new_validator_key), Some(new_proof_of_knowledge)) =
+                    (new_validator_key, new_proof_of_knowledge)
+                {
                     size += Serialize::serialized_size(new_validator_key);
                     size += Serialize::serialized_size(new_proof_of_knowledge);
                 }
@@ -267,35 +301,43 @@ impl Serialize for IncomingStakingTransactionData {
                     size += Serialize::serialized_size(new_reward_address);
                 }
                 size += Serialize::serialized_size(signature);
-            },
+            }
             IncomingStakingTransactionData::RetireValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
-                size += Serialize::serialized_size(&IncomingStakingTransactionType::RetireValidator);
+                size +=
+                    Serialize::serialized_size(&IncomingStakingTransactionType::RetireValidator);
                 size += Serialize::serialized_size(validator_key);
                 size += Serialize::serialized_size(signature);
-            },
+            }
             IncomingStakingTransactionData::ReactivateValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
-                size += Serialize::serialized_size(&IncomingStakingTransactionType::ReactivateValidator);
+                size += Serialize::serialized_size(
+                    &IncomingStakingTransactionType::ReactivateValidator,
+                );
                 size += Serialize::serialized_size(validator_key);
                 size += Serialize::serialized_size(signature);
-            },
+            }
             IncomingStakingTransactionData::UnparkValidator {
-                validator_key, signature
+                validator_key,
+                signature,
             } => {
-                size += Serialize::serialized_size(&IncomingStakingTransactionType::UnparkValidator);
+                size +=
+                    Serialize::serialized_size(&IncomingStakingTransactionType::UnparkValidator);
                 size += Serialize::serialized_size(validator_key);
                 size += Serialize::serialized_size(signature);
-            },
+            }
             IncomingStakingTransactionData::Stake {
-                validator_key, staker_address
+                validator_key,
+                staker_address,
             } => {
                 size += Serialize::serialized_size(&IncomingStakingTransactionType::Stake);
                 size += Serialize::serialized_size(validator_key);
                 size += Serialize::serialized_size(staker_address);
-            },
+            }
         }
         size
     }
@@ -311,7 +353,7 @@ impl Deserialize for IncomingStakingTransactionData {
                     proof_of_knowledge: Deserialize::deserialize(reader)?,
                     reward_address: Deserialize::deserialize(reader)?,
                 })
-            },
+            }
             IncomingStakingTransactionType::UpdateValidator => {
                 let old_validator_key: BlsPublicKey = Deserialize::deserialize(reader)?;
                 let updates_key: bool = Deserialize::deserialize(reader)?;
@@ -336,7 +378,7 @@ impl Deserialize for IncomingStakingTransactionData {
                     new_reward_address,
                     signature,
                 })
-            },
+            }
             IncomingStakingTransactionType::RetireValidator => {
                 let validator_key = Deserialize::deserialize(reader)?;
                 let signature = Deserialize::deserialize(reader)?;
@@ -344,25 +386,23 @@ impl Deserialize for IncomingStakingTransactionData {
                     validator_key,
                     signature,
                 })
-            },
+            }
             IncomingStakingTransactionType::ReactivateValidator => {
                 Ok(IncomingStakingTransactionData::ReactivateValidator {
                     validator_key: Deserialize::deserialize(reader)?,
                     signature: Deserialize::deserialize(reader)?,
                 })
-            },
+            }
             IncomingStakingTransactionType::UnparkValidator => {
                 Ok(IncomingStakingTransactionData::UnparkValidator {
                     validator_key: Deserialize::deserialize(reader)?,
                     signature: Deserialize::deserialize(reader)?,
                 })
-            },
-            IncomingStakingTransactionType::Stake => {
-                Ok(IncomingStakingTransactionData::Stake {
-                    validator_key: Deserialize::deserialize(reader)?,
-                    staker_address: Deserialize::deserialize(reader)?,
-                })
-            },
+            }
+            IncomingStakingTransactionType::Stake => Ok(IncomingStakingTransactionData::Stake {
+                validator_key: Deserialize::deserialize(reader)?,
+                staker_address: Deserialize::deserialize(reader)?,
+            }),
         }
     }
 }
@@ -392,17 +432,15 @@ impl OutgoingStakingTransactionProof {
         match self {
             OutgoingStakingTransactionProof::DropValidator {
                 validator_key,
-                signature
-            } => {
-                verify_transaction_signature(transaction, validator_key, signature)
-            },
+                signature,
+            } => verify_transaction_signature(transaction, validator_key, signature),
             OutgoingStakingTransactionProof::Unstake(signature_proof) => {
                 if !signature_proof.verify(transaction.serialize_content().as_slice()) {
                     warn!("Invalid signature");
                     return Err(TransactionError::InvalidProof);
                 }
                 Ok(())
-            },
+            }
         }
     }
 }
@@ -413,16 +451,17 @@ impl Serialize for OutgoingStakingTransactionProof {
         match self {
             OutgoingStakingTransactionProof::DropValidator {
                 validator_key,
-                signature
+                signature,
             } => {
-                size += Serialize::serialize(&OutgoingStakingTransactionType::DropValidator, writer)?;
+                size +=
+                    Serialize::serialize(&OutgoingStakingTransactionType::DropValidator, writer)?;
                 size += Serialize::serialize(validator_key, writer)?;
                 size += Serialize::serialize(signature, writer)?;
-            },
+            }
             OutgoingStakingTransactionProof::Unstake(proof) => {
                 size += Serialize::serialize(&OutgoingStakingTransactionType::Unstake, writer)?;
                 size += Serialize::serialize(proof, writer)?;
-            },
+            }
         }
         Ok(size)
     }
@@ -432,16 +471,16 @@ impl Serialize for OutgoingStakingTransactionProof {
         match self {
             OutgoingStakingTransactionProof::DropValidator {
                 validator_key,
-                signature
+                signature,
             } => {
                 size += Serialize::serialized_size(&OutgoingStakingTransactionType::DropValidator);
                 size += Serialize::serialized_size(validator_key);
                 size += Serialize::serialized_size(signature);
-            },
+            }
             OutgoingStakingTransactionProof::Unstake(proof) => {
                 size += Serialize::serialized_size(&OutgoingStakingTransactionType::Unstake);
                 size += Serialize::serialized_size(proof);
-            },
+            }
         }
         size
     }
@@ -456,10 +495,10 @@ impl Deserialize for OutgoingStakingTransactionProof {
                     validator_key: Deserialize::deserialize(reader)?,
                     signature: Deserialize::deserialize(reader)?,
                 })
-            },
-            OutgoingStakingTransactionType::Unstake => {
-                Ok(OutgoingStakingTransactionProof::Unstake(Deserialize::deserialize(reader)?))
-            },
+            }
+            OutgoingStakingTransactionType::Unstake => Ok(
+                OutgoingStakingTransactionProof::Unstake(Deserialize::deserialize(reader)?),
+            ),
         }
     }
 }
@@ -494,11 +533,11 @@ impl Serialize for SelfStakingTransactionData {
             SelfStakingTransactionData::RetireStake(validator_key) => {
                 size += Serialize::serialize(&SelfStakingTransactionType::RetireStake, writer)?;
                 size += Serialize::serialize(validator_key, writer)?;
-            },
+            }
             SelfStakingTransactionData::ReactivateStake(validator_key) => {
                 size += Serialize::serialize(&SelfStakingTransactionType::ReactivateStake, writer)?;
                 size += Serialize::serialize(validator_key, writer)?;
-            },
+            }
         }
         Ok(size)
     }
@@ -509,11 +548,11 @@ impl Serialize for SelfStakingTransactionData {
             SelfStakingTransactionData::RetireStake(validator_key) => {
                 size += Serialize::serialized_size(&SelfStakingTransactionType::RetireStake);
                 size += Serialize::serialized_size(validator_key);
-            },
+            }
             SelfStakingTransactionData::ReactivateStake(validator_key) => {
                 size += Serialize::serialized_size(&SelfStakingTransactionType::ReactivateStake);
                 size += Serialize::serialized_size(validator_key);
-            },
+            }
         }
         size
     }
@@ -527,12 +566,12 @@ impl Deserialize for SelfStakingTransactionData {
                 let validator_key: BlsPublicKey = Deserialize::deserialize(reader)?;
 
                 Ok(SelfStakingTransactionData::RetireStake(validator_key))
-            },
+            }
             SelfStakingTransactionType::ReactivateStake => {
                 let validator_key: BlsPublicKey = Deserialize::deserialize(reader)?;
 
                 Ok(SelfStakingTransactionData::ReactivateStake(validator_key))
-            },
+            }
         }
     }
 }
@@ -549,17 +588,24 @@ pub fn full_parse<T: Deserialize>(mut data: &[u8]) -> Result<T, TransactionError
     Ok(data)
 }
 
-pub fn verify_transaction_signature(transaction: &Transaction, validator_key: &BlsPublicKey, signature: &BlsSignature) -> Result<(), TransactionError> {
-    let key = validator_key.uncompress()
+pub fn verify_transaction_signature(
+    transaction: &Transaction,
+    validator_key: &BlsPublicKey,
+    signature: &BlsSignature,
+) -> Result<(), TransactionError> {
+    let key = validator_key
+        .uncompress()
         .map_err(|_| TransactionError::InvalidProof)?;
-    let sig = signature.uncompress()
+    let sig = signature
+        .uncompress()
         .map_err(|_| TransactionError::InvalidProof)?;
 
     // On incoming transactions, we need to reset the signature first.
     let tx = if transaction.recipient_type == AccountType::Staking {
         let mut tx_without_sig = transaction.clone();
         tx_without_sig.data = IncomingStakingTransactionData::set_validator_signature_on_data(
-            &tx_without_sig.data, BlsSignature::default()
+            &tx_without_sig.data,
+            BlsSignature::default(),
         )?;
         tx_without_sig.serialize_content()
     } else {
@@ -577,11 +623,21 @@ pub fn verify_transaction_signature(transaction: &Transaction, validator_key: &B
 /// where `pk_X` is X's BLS public key, A will be able to sign aggregate messages that are valid for
 /// public keys `pk_B + (pk_A - pk_B) = pk_B`.
 /// Alternatives would be to replace the proof of knowledge by a zero-knowledge proof.
-pub fn verify_proof_of_knowledge(validator_key: &BlsPublicKey, proof_of_knowledge: &BlsSignature) -> Result<(), TransactionError> {
-    if !validator_key.uncompress().map_err(|_| TransactionError::InvalidData)?
-        .verify(validator_key,
-                &proof_of_knowledge.uncompress().map_err(|_| TransactionError::InvalidData)?) {
-        return Err(TransactionError::InvalidData)
+pub fn verify_proof_of_knowledge(
+    validator_key: &BlsPublicKey,
+    proof_of_knowledge: &BlsSignature,
+) -> Result<(), TransactionError> {
+    if !validator_key
+        .uncompress()
+        .map_err(|_| TransactionError::InvalidData)?
+        .verify(
+            validator_key,
+            &proof_of_knowledge
+                .uncompress()
+                .map_err(|_| TransactionError::InvalidData)?,
+        )
+    {
+        return Err(TransactionError::InvalidData);
     }
     Ok(())
 }

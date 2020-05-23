@@ -214,7 +214,7 @@ impl TransactionProofBuilder {
     ///
     /// ```
     /// use nimiq_keys::{Address, KeyPair};
-    /// use nimiq_bls::bls12_381::KeyPair as BlsKeyPair;
+    /// use nimiq_bls::KeyPair as BlsKeyPair;
     /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;
@@ -267,7 +267,7 @@ impl TransactionProofBuilder {
     ///
     /// ```
     /// use nimiq_keys::{Address, KeyPair};
-    /// use nimiq_bls::bls12_381::KeyPair as BlsKeyPair;
+    /// use nimiq_bls::KeyPair as BlsKeyPair;
     /// use nimiq_transaction_builder::{Recipient, TransactionBuilder};
     /// use nimiq_primitives::coin::Coin;
     /// use nimiq_primitives::networks::NetworkId;

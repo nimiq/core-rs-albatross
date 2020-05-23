@@ -5,8 +5,8 @@ use std::io::Write;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use beserial::{Deserialize, Serialize};
-use bls::bls12_381::{CompressedSignature, PublicKey, SecretKey};
-use hash::{Blake2bHash, Blake2bHasher, Hasher};
+use bls::{CompressedSignature, PublicKey, SecretKey};
+use hash::{Blake2sHash, Blake2sHasher, Hasher};
 
 use crate::rng::Rng;
 
@@ -25,7 +25,6 @@ pub enum VrfUseCase {
     RewardDistribution = 4,
 }
 
-
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct VrfSeed {
     signature: CompressedSignature,
@@ -33,11 +32,13 @@ pub struct VrfSeed {
 
 impl VrfSeed {
     pub fn verify(&self, prev_seed: &VrfSeed, public_key: &PublicKey) -> Result<(), VrfError> {
-        let signature = self.signature.uncompress()
+        let signature = self
+            .signature
+            .uncompress()
             .map_err(|_| VrfError::InvalidSignature)?;
 
         // Hash use-case prefix and signature
-        let mut hasher = Blake2bHasher::new();
+        let mut hasher = Blake2sHasher::new();
         hasher.write_u8(VrfUseCase::Seed as u8).unwrap();
         hasher.write_all(prev_seed.signature.as_ref()).unwrap();
 
@@ -49,17 +50,13 @@ impl VrfSeed {
 
     pub fn sign_next(&self, secret_key: &SecretKey) -> Self {
         // Hash use-case prefix and signature
-        let mut hasher = Blake2bHasher::new();
+        let mut hasher = Blake2sHasher::new();
         hasher.write_u8(VrfUseCase::Seed as u8).unwrap();
         hasher.write_all(self.signature.as_ref()).unwrap();
 
         // Sign that hash and contruct new VrfSeed from it
-        let signature = secret_key
-            .sign_hash(hasher.finish())
-            .compress();
-        Self {
-            signature
-        }
+        let signature = secret_key.sign_hash(hasher.finish()).compress();
+        Self { signature }
     }
 
     pub fn rng(&self, use_case: VrfUseCase, round: u32) -> VrfRng {
@@ -69,9 +66,7 @@ impl VrfSeed {
 
 impl From<CompressedSignature> for VrfSeed {
     fn from(signature: CompressedSignature) -> Self {
-        Self {
-            signature
-        }
+        Self { signature }
     }
 }
 
@@ -108,9 +103,9 @@ impl<'s> VrfRng<'s> {
         }
     }
 
-    pub fn next_hash(&mut self) -> Blake2bHash {
+    pub fn next_hash(&mut self) -> Blake2sHash {
         // Hash use-case prefix, round, counter and signature
-        let mut hasher = Blake2bHasher::new();
+        let mut hasher = Blake2sHasher::new();
         hasher.write_u8(self.use_case as u8).unwrap();
         hasher.write_u32::<BigEndian>(self.round).unwrap();
         hasher.write_u64::<BigEndian>(self.counter).unwrap();
@@ -125,9 +120,6 @@ impl<'s> VrfRng<'s> {
 
 impl<'s> Rng for VrfRng<'s> {
     fn next_u64(&mut self) -> u64 {
-        self.next_hash()
-            .as_bytes()
-            .read_u64::<BigEndian>()
-            .unwrap()
+        self.next_hash().as_bytes().read_u64::<BigEndian>().unwrap()
     }
 }

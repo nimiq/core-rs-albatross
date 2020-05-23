@@ -31,6 +31,12 @@ impl SerializeContent for CompressedPublicKey {
 
 impl Hash for CompressedPublicKey {}
 
+impl std::hash::Hash for CompressedPublicKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.public_key.to_vec(), state);
+    }
+}
+
 impl Deserialize for CompressedPublicKey {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let mut bytes = [0u8; CompressedPublicKey::SIZE];
@@ -59,6 +65,12 @@ impl SerializeContent for CompressedSignature {
 }
 
 impl Hash for CompressedSignature {}
+
+impl std::hash::Hash for CompressedSignature {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.signature.to_vec(), state);
+    }
+}
 
 impl Deserialize for CompressedSignature {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {

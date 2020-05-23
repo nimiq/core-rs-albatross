@@ -6,10 +6,13 @@ extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
 
 use beserial::Deserialize;
-use block_albatross::{PbftCommitMessage, PbftPrepareMessage, SignedPbftCommitMessage, SignedViewChange, ViewChange, ViewChangeProofBuilder};
 use block_albatross::signed::Message;
-use bls::bls12_381::KeyPair;
-use bls::bls12_381::lazy::LazyPublicKey;
+use block_albatross::{
+    PbftCommitMessage, PbftPrepareMessage, SignedPbftCommitMessage, SignedViewChange, ViewChange,
+    ViewChangeProofBuilder,
+};
+use bls::lazy::LazyPublicKey;
+use bls::KeyPair;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use nimiq_vrf::VrfSeed;
@@ -18,7 +21,6 @@ use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
 const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
-
 
 #[test]
 fn test_view_change_single_signature() {
@@ -39,8 +41,14 @@ fn test_view_change_single_signature() {
     let view_change_proof = proof_builder.build();
 
     // verify view change proof
-    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(LazyPublicKey::from(key_pair.public), Address::default(), policy::SLOTS)]);
-    view_change_proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS).unwrap();
+    let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(
+        LazyPublicKey::from(key_pair.public),
+        Address::default(),
+        policy::SLOTS,
+    )]);
+    view_change_proof
+        .verify(&view_change, &validators, policy::TWO_THIRD_SLOTS)
+        .unwrap();
 }
 
 #[test]
@@ -51,14 +59,20 @@ fn test_replay() {
     let key_pair = KeyPair::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap();
     // create dummy hash and prepare message
     let block_hash = "foobar".hash::<Blake2bHash>();
-    let prepare = PbftPrepareMessage { block_hash: block_hash.clone() };
+    let prepare = PbftPrepareMessage {
+        block_hash: block_hash.clone(),
+    };
 
     // sign prepare
     let prepare_signature = prepare.sign(&key_pair.secret);
 
     // fake commit
     let commit = PbftCommitMessage { block_hash };
-    let signed_commit = SignedPbftCommitMessage { message: commit, signer_idx: 0, signature: prepare_signature };
+    let signed_commit = SignedPbftCommitMessage {
+        message: commit,
+        signer_idx: 0,
+        signature: prepare_signature,
+    };
 
     // verify commit - this should fail
     assert!(!signed_commit.verify(&key_pair.public));

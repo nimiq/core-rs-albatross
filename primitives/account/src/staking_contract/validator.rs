@@ -6,8 +6,11 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
-use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
+use bls::CompressedPublicKey as BlsPublicKey;
 use keys::Address;
 use primitives::coin::Coin;
 
@@ -22,7 +25,11 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub fn new(initial_balance: Coin, reward_address: Address, validator_key: BlsPublicKey) -> Self {
+    pub fn new(
+        initial_balance: Coin,
+        reward_address: Address,
+        validator_key: BlsPublicKey,
+    ) -> Self {
         Validator {
             balance: initial_balance,
             reward_address,
@@ -31,7 +38,11 @@ impl Validator {
         }
     }
 
-    pub fn update_validator(&self, new_reward_address: Option<Address>, new_validator_key: Option<BlsPublicKey>) -> Self {
+    pub fn update_validator(
+        &self,
+        new_reward_address: Option<Address>,
+        new_validator_key: Option<BlsPublicKey>,
+    ) -> Self {
         let active_stake_by_address = mem::take(self.active_stake_by_address.write().deref_mut());
         Validator {
             balance: self.balance,
@@ -56,12 +67,20 @@ impl Validator {
         let validator = self.with_balance(new_balance);
 
         // We do not need to check for overflows here, because self.balance is always larger.
-        *validator.active_stake_by_address.write().entry(staker_address)
+        *validator
+            .active_stake_by_address
+            .write()
+            .entry(staker_address)
             .or_insert(Coin::ZERO) += stake;
         Ok(validator)
     }
 
-    pub fn sub_stake(&self, staker_address: &Address, value: Coin, not_present_error: AccountError) -> Result<Self, AccountError> {
+    pub fn sub_stake(
+        &self,
+        staker_address: &Address,
+        value: Coin,
+        not_present_error: AccountError,
+    ) -> Result<Self, AccountError> {
         // First update stake entry.
         let mut active_stake_by_address = self.active_stake_by_address.write();
 
@@ -88,7 +107,10 @@ impl Serialize for Validator {
         size += Serialize::serialize(&self.balance, writer)?;
         size += Serialize::serialize(&self.reward_address, writer)?;
         size += Serialize::serialize(&self.validator_key, writer)?;
-        size += SerializeWithLength::serialize::<u32, _>(self.active_stake_by_address.read().deref(), writer)?;
+        size += SerializeWithLength::serialize::<u32, _>(
+            self.active_stake_by_address.read().deref(),
+            writer,
+        )?;
         Ok(size)
     }
 
@@ -97,7 +119,9 @@ impl Serialize for Validator {
         size += Serialize::serialized_size(&self.balance);
         size += Serialize::serialized_size(&self.reward_address);
         size += Serialize::serialized_size(&self.validator_key);
-        size += SerializeWithLength::serialized_size::<u32>(self.active_stake_by_address.read().deref());
+        size += SerializeWithLength::serialized_size::<u32>(
+            self.active_stake_by_address.read().deref(),
+        );
         size
     }
 }
@@ -107,7 +131,8 @@ impl Deserialize for Validator {
         let balance = Deserialize::deserialize(reader)?;
         let reward_address = Deserialize::deserialize(reader)?;
         let validator_key = Deserialize::deserialize(reader)?;
-        let active_stake_by_address: BTreeMap<Address, Coin> = DeserializeWithLength::deserialize::<u32, _>(reader)?;
+        let active_stake_by_address: BTreeMap<Address, Coin> =
+            DeserializeWithLength::deserialize::<u32, _>(reader)?;
         Ok(Validator {
             balance,
             reward_address,
@@ -119,8 +144,7 @@ impl Deserialize for Validator {
 
 impl PartialEq for Validator {
     fn eq(&self, other: &Validator) -> bool {
-        self.validator_key == other.validator_key
-            && self.balance == other.balance
+        self.validator_key == other.validator_key && self.balance == other.balance
     }
 }
 
@@ -135,7 +159,9 @@ impl PartialOrd for Validator {
 impl Ord for Validator {
     // Highest to low balances
     fn cmp(&self, other: &Self) -> Ordering {
-        other.balance.cmp(&self.balance)
+        other
+            .balance
+            .cmp(&self.balance)
             .then_with(|| self.validator_key.cmp(&other.validator_key))
     }
 }
@@ -162,7 +188,7 @@ impl Clone for InactiveValidator {
         InactiveValidator {
             // Do not just copy Arc!
             validator: Arc::new(self.validator.as_ref().clone()),
-            retire_time: self.retire_time
+            retire_time: self.retire_time,
         }
     }
 }
@@ -186,38 +212,39 @@ impl ValidatorEntry {
     pub fn as_validator(&self) -> &Arc<Validator> {
         match self {
             ValidatorEntry::Active(validator, _) => validator,
-            ValidatorEntry::Inactive(validator, _) => &validator.validator
+            ValidatorEntry::Inactive(validator, _) => &validator.validator,
         }
     }
 
     fn replace(&mut self, potential_validator: Result<Arc<Validator>, AccountError>) {
         match potential_validator {
-            Ok(new_validator) => {
-                match self {
-                    ValidatorEntry::Active(ref mut validator, _) => {
-                        *validator = new_validator;
-                    },
-                    ValidatorEntry::Inactive(ref mut validator, _) => {
-                        validator.validator = new_validator;
-                    },
+            Ok(new_validator) => match self {
+                ValidatorEntry::Active(ref mut validator, _) => {
+                    *validator = new_validator;
+                }
+                ValidatorEntry::Inactive(ref mut validator, _) => {
+                    validator.validator = new_validator;
                 }
             },
-            Err(err) => {
-                match self {
-                    ValidatorEntry::Active(_, ref mut error) => {
-                        error.replace(err);
-                    },
-                    ValidatorEntry::Inactive(_, ref mut error) => {
-                        error.replace(err);
-                    },
+            Err(err) => match self {
+                ValidatorEntry::Active(_, ref mut error) => {
+                    error.replace(err);
+                }
+                ValidatorEntry::Inactive(_, ref mut error) => {
+                    error.replace(err);
                 }
             },
         }
     }
 
-    pub fn update_validator(&mut self, new_reward_address: Option<Address>, new_validator_key: Option<BlsPublicKey>) {
+    pub fn update_validator(
+        &mut self,
+        new_reward_address: Option<Address>,
+        new_validator_key: Option<BlsPublicKey>,
+    ) {
         self.replace(Ok(Arc::new(
-            self.as_validator().update_validator(new_reward_address, new_validator_key)
+            self.as_validator()
+                .update_validator(new_reward_address, new_validator_key),
         )))
     }
 
@@ -228,8 +255,15 @@ impl ValidatorEntry {
     }
 
     /// This function will only change the validator entry if sub_stake is successful.
-    pub fn try_sub_stake(&mut self, staker_address: &Address, value: Coin, not_present_error: AccountError) {
-        let new_validator = self.as_validator().sub_stake(staker_address, value, not_present_error);
+    pub fn try_sub_stake(
+        &mut self,
+        staker_address: &Address,
+        value: Coin,
+        not_present_error: AccountError,
+    ) {
+        let new_validator = self
+            .as_validator()
+            .sub_stake(staker_address, value, not_present_error);
         self.replace(new_validator.map(Arc::new));
     }
 }

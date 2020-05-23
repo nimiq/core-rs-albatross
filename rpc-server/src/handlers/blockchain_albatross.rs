@@ -2,14 +2,14 @@ use std::borrow::Borrow;
 use std::convert::TryInto;
 use std::sync::Arc;
 
-use json::{JsonValue, Null, object};
+use json::{object, JsonValue, Null};
 
-use account::Account;
 use account::staking_contract::{InactiveStake, InactiveValidator, Validator};
-use block_albatross::{Block, ForkProof, signed};
+use account::Account;
+use block_albatross::{signed, Block, ForkProof};
 use blockchain_albatross::Blockchain;
 use blockchain_base::AbstractBlockchain;
-use bls::bls12_381::CompressedPublicKey as BlsPublicKey;
+use bls::CompressedPublicKey as BlsPublicKey;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use network_primitives::networks::NetworkInfo;
@@ -70,7 +70,10 @@ impl BlockchainAlbatrossHandler {
     /// ```
     pub(crate) fn get_block_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.generic.block_by_hash(params.get(0).unwrap_or(&Null))?;
-        Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
+        Ok(self.block_to_obj(
+            &block,
+            params.get(1).and_then(|v| v.as_bool()).unwrap_or(false),
+        ))
     }
 
     /// Returns a block object for a block number.
@@ -99,8 +102,13 @@ impl BlockchainAlbatrossHandler {
     /// }
     /// ```
     pub(crate) fn get_block_by_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let block = self.generic.block_by_number(params.get(0).unwrap_or(&Null))?;
-        Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
+        let block = self
+            .generic
+            .block_by_number(params.get(0).unwrap_or(&Null))?;
+        Ok(self.block_to_obj(
+            &block,
+            params.get(1).and_then(|v| v.as_bool()).unwrap_or(false),
+        ))
     }
 
     /// Returns the producer of a block given the block and view number.
@@ -121,8 +129,9 @@ impl BlockchainAlbatrossHandler {
     /// ```
     pub(crate) fn get_slot_at(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // Parse block number argument
-        let block_number = params.get(0)
-            .ok_or_else(|| object!{"message" => "First argument must be block number"})
+        let block_number = params
+            .get(0)
+            .ok_or_else(|| object! {"message" => "First argument must be block number"})
             .and_then(|n| self.generic.parse_block_number(n))?;
 
         // Check if it's not a macro block
@@ -130,27 +139,34 @@ impl BlockchainAlbatrossHandler {
         // TODO: Macro blocks have a slot too. It's just only for the proposal.
         if policy::is_macro_block_at(block_number) {
             // TODO: Macro blocks have a proposer
-            return Err(object!{"message" => "Block is a macro block"});
+            return Err(object! {"message" => "Block is a macro block"});
         }
 
         // Parse view number or use the view number which eventually produced the block
-        let view_number = params.get(1)
-            .map(|param| param.as_u32()
-                .ok_or_else(|| object!{"message" => "Invalid view number"}))
+        let view_number = params
+            .get(1)
+            .map(|param| {
+                param
+                    .as_u32()
+                    .ok_or_else(|| object! {"message" => "Invalid view number"})
+            })
             .transpose()?;
 
         let view_number = if let Some(view_number) = view_number {
             view_number
-        }
-        else {
-            let block = self.blockchain.get_block_at(block_number, true)
-                .ok_or(object!{"message" => "Unknown block"})?;
+        } else {
+            let block = self
+                .blockchain
+                .get_block_at(block_number, true)
+                .ok_or(object! {"message" => "Unknown block"})?;
             block.view_number()
         };
 
         // get slot and slot number
-        let (slot, slot_number) = self.blockchain.get_slot_at(block_number, view_number, None)
-            .ok_or(object!{"message" => "Block number out of range"})?;
+        let (slot, slot_number) = self
+            .blockchain
+            .get_slot_at(block_number, view_number, None)
+            .ok_or(object! {"message" => "Block number out of range"})?;
 
         Ok(Self::slot_to_obj(&slot, slot_number))
     }
@@ -178,13 +194,23 @@ impl BlockchainAlbatrossHandler {
     pub(crate) fn slot_state(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let state = self.blockchain.state();
 
-        let current_slashed_set = JsonValue::Array(state.current_slashed_set().iter()
-            .map(|slot_number| JsonValue::Number(slot_number.into())).collect());
+        let current_slashed_set = JsonValue::Array(
+            state
+                .current_slashed_set()
+                .iter()
+                .map(|slot_number| JsonValue::Number(slot_number.into()))
+                .collect(),
+        );
 
-        let last_slashed_set = JsonValue::Array(state.last_slashed_set().iter()
-            .map(|slot_number| JsonValue::Number(slot_number.into())).collect());
+        let last_slashed_set = JsonValue::Array(
+            state
+                .last_slashed_set()
+                .iter()
+                .map(|slot_number| JsonValue::Number(slot_number.into()))
+                .collect(),
+        );
 
-        Ok(object!{
+        Ok(object! {
             "blockNumber" => state.block_number(),
             "currentSlashedSlotNumbers" => current_slashed_set,
             "lastSlashedSlotNumbers" => last_slashed_set,
@@ -198,7 +224,10 @@ impl BlockchainAlbatrossHandler {
     /// - transaction (string): Hex encoded transaction.
     ///
     /// Returns an info object:
-    pub(crate) fn get_raw_transaction_info(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_raw_transaction_info(
+        &self,
+        _params: &[JsonValue],
+    ) -> Result<JsonValue, JsonValue> {
         /*
         let transaction: Transaction = params.get(0).unwrap_or(&Null).as_str()
             .ok_or_else(|| object!{"message" => "Raw transaction data must be a string"}) // Result<&str, Err>
@@ -260,7 +289,10 @@ impl BlockchainAlbatrossHandler {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_by_hash(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction_by_hash(
+        &self,
+        _params: &[JsonValue],
+    ) -> Result<JsonValue, JsonValue> {
         rpc_not_implemented()
     }
 
@@ -280,7 +312,10 @@ impl BlockchainAlbatrossHandler {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_receipt(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn get_transaction_receipt(
+        &self,
+        _params: &[JsonValue],
+    ) -> Result<JsonValue, JsonValue> {
         /*
         let hash = params.get(0).and_then(JsonValue::as_str)
             .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
@@ -307,23 +342,33 @@ impl BlockchainAlbatrossHandler {
     // Lists all stakes
     pub(crate) fn list_stakes(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let genesis_account = NetworkInfo::from_network_id(self.blockchain.network_id)
-            .validator_registry_address().unwrap();
+            .validator_registry_address()
+            .unwrap();
         let account = self.blockchain.get_account(&genesis_account);
         let contract = match account {
             Account::Staking(c) => c,
             _ => return Err("No contract at staking contract address".into()),
         };
-        let active_validators: Vec<JsonValue> = contract.active_validators_by_key
+        let active_validators: Vec<JsonValue> = contract
+            .active_validators_by_key
             .values()
-            .map(|validator| BlockchainAlbatrossHandler::active_validator_to_obj(validator.borrow()))
+            .map(|validator| {
+                BlockchainAlbatrossHandler::active_validator_to_obj(validator.borrow())
+            })
             .collect();
-        let inactive_validators: Vec<JsonValue> = contract.inactive_validators_by_key
+        let inactive_validators: Vec<JsonValue> = contract
+            .inactive_validators_by_key
             .iter()
-            .map(|(key, validator)| BlockchainAlbatrossHandler::inactive_validator_to_obj(key, validator))
+            .map(|(key, validator)| {
+                BlockchainAlbatrossHandler::inactive_validator_to_obj(key, validator)
+            })
             .collect();
-        let inactive_stakes: Vec<JsonValue> = contract.inactive_stake_by_address
+        let inactive_stakes: Vec<JsonValue> = contract
+            .inactive_stake_by_address
             .iter()
-            .map(|(address, stake)| BlockchainAlbatrossHandler::inactive_stake_to_obj(address, stake))
+            .map(|(address, stake)| {
+                BlockchainAlbatrossHandler::inactive_stake_to_obj(address, stake)
+            })
             .collect();
         Ok(object! {
             "activeValidators" => active_validators,
@@ -335,7 +380,7 @@ impl BlockchainAlbatrossHandler {
     // Helper functions
 
     fn proof_to_object<M: signed::Message>(proof: &signed::AggregateProof<M>) -> JsonValue {
-        object!{
+        object! {
             "signature" => format!("{}", proof.signature),
             "signers" => proof.signers.iter().collect::<Vec<usize>>(),
         }
@@ -349,10 +394,12 @@ impl BlockchainAlbatrossHandler {
             Block::Macro(ref block) => {
                 let slots = block.clone().try_into().ok();
 
-                let justification = block.justification.as_ref()
+                let justification = block
+                    .justification
+                    .as_ref()
                     .map(|pbft_proof| {
                         let validators = block.header.validators.clone().into();
-                        object!{
+                        object! {
                             "votes" => pbft_proof.votes(&validators)
                                 .map(JsonValue::from).unwrap_or(JsonValue::Null),
                             "prepare" => Self::proof_to_object(&pbft_proof.prepare),
@@ -361,11 +408,17 @@ impl BlockchainAlbatrossHandler {
                     })
                     .unwrap_or(JsonValue::Null);
 
-                let slashed_slots = block.extrinsics.as_ref()
+                let slashed_slots = block
+                    .extrinsics
+                    .as_ref()
                     .map(|extrinsics| {
-                        JsonValue::Array(extrinsics.slashed_set.iter()
-                            .map(|slot_number| JsonValue::Number(slot_number.into()))
-                            .collect())
+                        JsonValue::Array(
+                            extrinsics
+                                .slashed_set
+                                .iter()
+                                .map(|slot_number| JsonValue::Number(slot_number.into()))
+                                .collect(),
+                        )
                     })
                     .unwrap_or(JsonValue::Null);
 
@@ -385,9 +438,11 @@ impl BlockchainAlbatrossHandler {
                     "slashedSlots" => slashed_slots,
                     "justification" => justification,
                 }
-            },
+            }
             Block::Micro(ref block) => {
-                let producer = self.blockchain.get_slot_at(block.header.block_number, block.header.view_number, None)
+                let producer = self
+                    .blockchain
+                    .get_slot_at(block.header.block_number, block.header.view_number, None)
                     .map(|(slot, slot_number)| Self::slot_to_obj(&slot, slot_number))
                     .unwrap_or(JsonValue::Null);
 
@@ -427,15 +482,20 @@ impl BlockchainAlbatrossHandler {
     }
 
     fn slots_to_obj(slots: &Slots) -> JsonValue {
-        JsonValue::Array(slots.combined().into_iter()
-            .map(|(slot, first_slot_number)| {
-                object! {
-                    "firstSlotNumber" => first_slot_number,
-                    "numSlots" => slot.validator_slot.num_slots(),
-                    "publicKey" => slot.public_key().to_string(),
-                    "rewardAddress" => slot.reward_address().to_user_friendly_address(),
-                }
-            }).collect())
+        JsonValue::Array(
+            slots
+                .combined()
+                .into_iter()
+                .map(|(slot, first_slot_number)| {
+                    object! {
+                        "firstSlotNumber" => first_slot_number,
+                        "numSlots" => slot.validator_slot.num_slots(),
+                        "publicKey" => slot.public_key().to_string(),
+                        "rewardAddress" => slot.reward_address().to_user_friendly_address(),
+                    }
+                })
+                .collect(),
+        )
     }
 
     fn fork_proof_to_obj(fork_proof: &ForkProof) -> JsonValue {

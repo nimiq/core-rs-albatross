@@ -20,31 +20,28 @@
 ///! * We use *Stake* and *Staker* interchangably here, since they're always identified by the
 ///! * staker address.
 ///!
-
-
 extern crate nimiq_bls as bls;
 extern crate nimiq_keys as keys;
 extern crate nimiq_utils as utils;
 
 extern crate itertools;
 
-use std::slice::Iter;
-use std::vec::IntoIter;
-use std::iter::FromIterator;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::iter::FromIterator;
+use std::slice::Iter;
+use std::vec::IntoIter;
 
-use bitvec::prelude::BitVec;
 use bitvec::order::Msb0;
+use bitvec::prelude::BitVec;
 use itertools::Itertools;
 
-use beserial::{Deserialize, Serialize, ReadBytesExt, WriteBytesExt, SerializingError};
-use bls::bls12_381::lazy::LazyPublicKey;
-use bls::bls12_381::CompressedPublicKey;
+use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use bls::lazy::LazyPublicKey;
+use bls::CompressedPublicKey;
 use keys::Address;
 
 use crate::policy::SLOTS;
-
 
 /// Enum to index a slot.
 ///
@@ -56,7 +53,6 @@ pub enum SlotIndex {
     Slot(u16),
     Band(u16),
 }
-
 
 /// A slot that contains the corresponding validator information.
 ///
@@ -93,9 +89,7 @@ pub struct Slots {
 
 impl Slots {
     pub fn new(validator_slots: ValidatorSlots) -> Self {
-        Slots {
-            validator_slots,
-        }
+        Slots { validator_slots }
     }
 
     pub fn get(&self, idx: SlotIndex) -> Option<Slot> {
@@ -122,7 +116,6 @@ impl Slots {
         combined
     }
 }
-
 
 // Deprecated. Check where we really want this conversion
 #[deprecated]
@@ -175,7 +168,6 @@ pub trait SlotCollection {
     fn len(&self) -> usize;
 }
 
-
 /// Builder for slot collection. You can push individial slots into it and it'll compress them
 /// into a [ValidatorSlots] and [StakeSlots] collection.
 ///
@@ -194,7 +186,9 @@ impl SlotsBuilder {
     /// * `reward_address` - Address where reward will be sent to
     ///
     pub fn push<PK: Into<LazyPublicKey>>(&mut self, public_key: PK, reward_address: &Address) {
-        let (_, num_slots) = self.validators.entry(public_key.into())
+        let (_, num_slots) = self
+            .validators
+            .entry(public_key.into())
             .or_insert_with(|| (reward_address.clone(), 0));
         *num_slots += 1;
     }
@@ -204,7 +198,11 @@ impl SlotsBuilder {
 
         for (public_key, (reward_address, num_slots)) in self.validators {
             // Add validator slots.
-            validator_slots.push(ValidatorSlotBand::new(public_key, reward_address, num_slots));
+            validator_slots.push(ValidatorSlotBand::new(
+                public_key,
+                reward_address,
+                num_slots,
+            ));
         }
 
         let validator_slots = ValidatorSlots::new(validator_slots);
@@ -212,7 +210,6 @@ impl SlotsBuilder {
         Slots::new(validator_slots)
     }
 }
-
 
 /// A validator that owns some slots
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -223,11 +220,15 @@ pub struct ValidatorSlotBand {
 }
 
 impl ValidatorSlotBand {
-    pub fn new<PK: Into<LazyPublicKey>>(public_key: PK, reward_address: Address, num_slots: u16) -> Self {
+    pub fn new<PK: Into<LazyPublicKey>>(
+        public_key: PK,
+        reward_address: Address,
+        num_slots: u16,
+    ) -> Self {
         Self {
             public_key: public_key.into(),
             reward_address,
-            num_slots
+            num_slots,
         }
     }
 
@@ -254,22 +255,23 @@ pub struct ValidatorSlots {
 impl ValidatorSlots {
     pub fn new(bands: Vec<ValidatorSlotBand>) -> Self {
         let index = SlotIndexTable::new(&bands);
-        Self {
-            bands,
-            index,
-        }
+        Self { bands, index }
     }
 
     pub fn get_public_key(&self, idx: SlotIndex) -> Option<&LazyPublicKey> {
         Some(&self.get(idx)?.public_key())
     }
 
-    pub fn find_idx_and_num_slots_by_public_key(&self, public_key: &CompressedPublicKey) -> Option<(u16, u16)> {
-        self.bands.iter()
+    pub fn find_idx_and_num_slots_by_public_key(
+        &self,
+        public_key: &CompressedPublicKey,
+    ) -> Option<(u16, u16)> {
+        self.bands
+            .iter()
             .find_position(|validator| validator.public_key.compressed() == public_key)
             .map(|(idx, validator)| (idx as u16, validator.num_slots))
     }
-    
+
     pub fn iter(&self) -> Iter<ValidatorSlotBand> {
         self.bands.iter()
     }
@@ -316,14 +318,12 @@ impl PartialEq for ValidatorSlots {
 
 impl Eq for ValidatorSlots {}
 
-
 impl Serialize for ValidatorSlots {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
 
         // get slot allocation from collection
-        let allocation = SlotAllocation::from_iter(self.iter()
-            .map(|item| item.num_slots))?;
+        let allocation = SlotAllocation::from_iter(self.iter().map(|item| item.num_slots))?;
         size += Serialize::serialize(&allocation, writer)?;
 
         // serialize collection
@@ -350,7 +350,11 @@ impl Deserialize for ValidatorSlots {
         for num_slots in allocation {
             let public_key: CompressedPublicKey = Deserialize::deserialize(reader)?;
             let reward_address: Address = Deserialize::deserialize(reader)?;
-            validators.push(ValidatorSlotBand::new(public_key, reward_address, num_slots));
+            validators.push(ValidatorSlotBand::new(
+                public_key,
+                reward_address,
+                num_slots,
+            ));
         }
 
         // This invariant should always hold if SlotAllocation is implemented correctly
@@ -359,7 +363,6 @@ impl Deserialize for ValidatorSlots {
         Ok(Self::from_iter(validators))
     }
 }
-
 
 /// Mapping from slot number to [SlotBand].
 ///
@@ -372,7 +375,7 @@ impl Deserialize for ValidatorSlots {
 ///
 #[derive(Clone)]
 struct SlotIndexTable {
-    index: Vec<u16>
+    index: Vec<u16>,
 }
 
 impl SlotIndexTable {
@@ -380,16 +383,14 @@ impl SlotIndexTable {
         let mut index = Vec::with_capacity(SLOTS as usize);
 
         for (i, band) in bands.iter().enumerate() {
-            for _ in 0 .. band.num_slots() {
+            for _ in 0..band.num_slots() {
                 index.push(i as u16);
             }
         }
 
         assert_eq!(index.len(), SLOTS as usize);
 
-        Self {
-            index,
-        }
+        Self { index }
     }
 
     pub fn get(&self, slot_number: u16) -> Option<u16> {
@@ -399,9 +400,7 @@ impl SlotIndexTable {
 
 impl Default for SlotIndexTable {
     fn default() -> Self {
-        Self {
-            index: vec![]
-        }
+        Self { index: vec![] }
     }
 }
 
@@ -410,7 +409,6 @@ impl fmt::Debug for SlotIndexTable {
         write!(f, "SlotIndexTable {{ ... }}")
     }
 }
-
 
 /// A compressed representation of repeated objects. This is used to encode the slot allocation
 /// of something that is a `NumSlotsCollection`
@@ -422,7 +420,7 @@ impl SlotAllocation {
     /// Size in bytes - number of slots divided by 8 and rounded up.
     const SIZE: usize = ((SLOTS as usize) + 8 - 1) / 8;
 
-    pub fn from_iter<I: Iterator<Item=u16>>(iter: I) -> Result<Self, SerializingError> {
+    pub fn from_iter<I: Iterator<Item = u16>>(iter: I) -> Result<Self, SerializingError> {
         let mut bits = BitVec::with_capacity(SLOTS as usize);
         bits.resize(SLOTS as usize, false);
 
@@ -457,8 +455,7 @@ impl SlotAllocation {
                 num_slots.push(count);
                 total += count;
                 count = 1;
-            }
-            else {
+            } else {
                 count += 1;
             }
         }

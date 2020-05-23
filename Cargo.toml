@@ -1,0 +1,57 @@
+cargo-features = [
+  "profile-overrides"
+]
+
+[workspace]
+members = [
+  "accounts",
+  "accounts/tree-primitives",
+  "beserial",
+  "beserial/beserial_derive",
+  "blockchain",
+  "blockchain-albatross",
+  "blockchain-base",
+  "block-production",
+  "block-production-albatross",
+  "bls",
+  "build-tools",
+  "client",
+  "collections",
+  "consensus",
+  "database",
+  "fixed-unsigned",
+  "handel",
+  "hash",
+  "hash/hash_derive",
+  "keys",
+  "key-derivation",
+  "lib",
+  "macros",
+  "mempool",
+  "messages",
+  "metrics-server",
+  "mnemonic",
+  "nano-sync",
+  "network",
+  "network-primitives",
+  "primitives",
+  "primitives/account",
+  "primitives/block",
+  "primitives/block-albatross",
+  "primitives/block-base",
+  "primitives/transaction",
+  "rpc-server",
+  "tools",
+  "transaction-builder",
+  "utils",
+  "validator",
+  "vrf",
+  "wallet",
+  "ws-rpc-server",
+]
+
+[profile.test.package.nimiq-bls]
+opt-level = 3
+
+[profile.test.package.nano-sync]
+opt-level = 3

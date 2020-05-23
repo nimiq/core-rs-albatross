@@ -1,0 +1,11 @@
+/cov
+/target
+**/*.rs.bk
+/.idea
+*.iml
+.DS_Store
+/client/db
+/client/peer_key.dat
+Cargo.lock
+/fixed-unsigned/target
+/devnet-environments/*/build/
