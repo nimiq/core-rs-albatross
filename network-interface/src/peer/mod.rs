@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use beserial::SerializingError;
 use futures::Stream;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::pin::Pin;
 
 use crate::message::Message;
@@ -20,7 +21,7 @@ pub enum SendError {
 }
 
 #[async_trait]
-pub trait Peer: Send + Sync {
+pub trait Peer: Send + Sync + Hash + Eq {
     type Id: Debug;
 
     fn id(&self) -> Self::Id;

@@ -43,7 +43,7 @@ nimiq-vrf = { path = "../vrf", version = "0.1" }
 [dev-dependencies]
 atomic = "0.4"
 
-nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1" }
+nimiq-block-production-albatross = { path = "../block-production-albatross", version = "0.1", features = ["test-utils"] }
 
 [features]
 default = ["transaction-store"]

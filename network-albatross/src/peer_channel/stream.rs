@@ -7,7 +7,6 @@ use parking_lot::RwLock;
 use tokio::prelude::Stream;
 use tungstenite::error::Error as WsError;
 
-use network_interface::message::Message;
 use utils::observer::PassThroughNotifier;
 use utils::unique_ptr::UniquePtr;
 

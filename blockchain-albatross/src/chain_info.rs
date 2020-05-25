@@ -6,6 +6,7 @@ use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
 use primitives::coin::Coin;
 use primitives::policy;
+use transaction::Transaction;
 
 use crate::slots::{apply_slashes, ForkProofInfos, SlashPushError, SlashedSet};
 
@@ -166,6 +167,91 @@ impl IntoDatabaseValue for ChainInfo {
 }
 
 impl FromDatabaseValue for ChainInfo {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        let mut cursor = io::Cursor::new(bytes);
+        Ok(Deserialize::deserialize(&mut cursor)?)
+    }
+}
+
+pub enum EpochTransactions<'a> {
+    Borrowed(&'a [Transaction]),
+    Owned(Vec<Transaction>),
+}
+
+impl<'a> EpochTransactions<'a> {
+    pub fn len(&self) -> u32 {
+        match self {
+            EpochTransactions::Borrowed(txs) => txs.len() as u32,
+            EpochTransactions::Owned(txs) => txs.len() as u32,
+        }
+    }
+}
+
+impl<'a> Serialize for EpochTransactions<'a> {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        size += Serialize::serialize(&self.len(), writer)?;
+        match self {
+            EpochTransactions::Borrowed(txs) => {
+                for tx in txs.iter() {
+                    size += Serialize::serialize(tx, writer)?;
+                }
+            }
+            EpochTransactions::Owned(txs) => {
+                for tx in txs.iter() {
+                    size += Serialize::serialize(tx, writer)?;
+                }
+            }
+        }
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = 0;
+        size += Serialize::serialized_size(&self.len());
+        match self {
+            EpochTransactions::Borrowed(txs) => {
+                for tx in txs.iter() {
+                    size += Serialize::serialized_size(tx);
+                }
+            }
+            EpochTransactions::Owned(txs) => {
+                for tx in txs.iter() {
+                    size += Serialize::serialized_size(tx);
+                }
+            }
+        }
+        size
+    }
+}
+
+impl<'a> Deserialize for EpochTransactions<'a> {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let len: u32 = Deserialize::deserialize(reader)?;
+        let mut txs = vec![];
+
+        for _ in 0..len {
+            txs.push(Deserialize::deserialize(reader)?);
+        }
+
+        Ok(EpochTransactions::Owned(txs))
+    }
+}
+
+impl<'a> IntoDatabaseValue for EpochTransactions<'a> {
+    fn database_byte_size(&self) -> usize {
+        self.serialized_size()
+    }
+
+    fn copy_into_database(&self, mut bytes: &mut [u8]) {
+        Serialize::serialize(&self, &mut bytes).unwrap();
+    }
+}
+
+impl<'a> FromDatabaseValue for EpochTransactions<'a> {
     fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
     where
         Self: Sized,

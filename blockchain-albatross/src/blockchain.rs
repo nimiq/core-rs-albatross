@@ -48,12 +48,6 @@ use crate::transaction_cache::TransactionCache;
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
 pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
-pub type TransactionsIterator = Chain<
-    IntoIter<BlockchainTransaction>,
-    Flatten<
-        Map<Filter<IntoIter<Block>, fn(&Block) -> bool>, fn(Block) -> Vec<BlockchainTransaction>>,
-    >,
->;
 
 pub enum OptionalCheck<T> {
     Some(T),
@@ -534,17 +528,12 @@ impl Blockchain {
         }
 
         if let BlockHeader::Macro(ref header) = header {
-            // in case of an election block make sure it contains validators
+            // In case of an election block make sure it contains validators
             if policy::is_election_block_at(header.block_number) && header.validators.is_none() {
                 return Err(PushError::InvalidSuccessor);
             }
-            // Check if the parent macro hash matches the current macro head hash
-            if header.parent_macro_hash != self.state().macro_head_hash {
-                warn!("Rejecting block - wrong parent macro hash");
-                return Err(PushError::InvalidSuccessor);
-            }
 
-            // check if the parent election hash matches the current election head hash
+            // Check if the parent election hash matches the current election head hash
             if header.parent_election_hash != self.state().election_head_hash {
                 warn!("Rejecting block - wrong parent election hash");
                 return Err(PushError::InvalidSuccessor);
@@ -1402,12 +1391,6 @@ impl Blockchain {
             return Ok(PushResult::Known);
         }
 
-        // We can only accept isolated macro blocks that follow our current macro head.
-        if self.head_hash() != macro_block.header.parent_macro_hash {
-            warn!("Rejecting block - does not follow on our current macro head");
-            return Err(PushError::Orphan);
-        }
-
         if macro_block.is_election_block()
             && self.election_head_hash() != macro_block.header.parent_election_hash
         {
@@ -1425,7 +1408,7 @@ impl Blockchain {
         let prev_info = self
             .chain_store
             .get_chain_info(
-                &macro_block.header.parent_macro_hash,
+                &macro_block.header.parent_election_hash,
                 false,
                 Some(&read_txn),
             )
@@ -1433,17 +1416,6 @@ impl Blockchain {
                 warn!("Rejecting block - unknown predecessor");
                 PushError::Orphan
             })?;
-
-        // Check the block number
-        if policy::macro_block_after(prev_info.head.block_number())
-            != macro_block.header.block_number
-        {
-            warn!(
-                "Rejecting block - wrong block number ({:?})",
-                macro_block.header.block_number
-            );
-            return Err(PushError::InvalidSuccessor);
-        }
 
         // Check the block is the correct election block if it is an election block
         if macro_block.is_election_block()
@@ -1544,6 +1516,48 @@ impl Blockchain {
         let macro_block = chain_info.head.unwrap_macro_ref();
         let is_election_block = macro_block.is_election_block();
 
+        // So far, the block is all good.
+        // Remove any micro blocks in the current epoch if necessary.
+        let blocks_to_revert = self.chain_store.get_blocks_forward(
+            &state.macro_head_hash,
+            policy::EPOCH_LENGTH - 1,
+            true,
+            Some(&txn),
+        );
+        let mut cache_txn = state.transaction_cache.clone();
+        for i in (0..blocks_to_revert.len()).rev() {
+            let block = &blocks_to_revert[i];
+            let micro_block = match block {
+                Block::Micro(block) => block,
+                _ => {
+                    return Err(PushError::BlockchainError(
+                        BlockchainError::InconsistentState,
+                    ))
+                }
+            };
+
+            let prev_view_number = if i == 0 {
+                state.macro_info.head.view_number()
+            } else {
+                blocks_to_revert[i - 1].view_number()
+            };
+            let prev_state_root = if i == 0 {
+                &state.macro_info.head.state_root()
+            } else {
+                blocks_to_revert[i - 1].state_root()
+            };
+
+            self.revert_accounts(&state.accounts, &mut txn, micro_block, prev_view_number)?;
+
+            cache_txn.revert_block(block);
+
+            assert_eq!(
+                prev_state_root,
+                &state.accounts.hash(Some(&txn)),
+                "Failed to revert main chain while rebranching - inconsistent state"
+            );
+        }
+
         // We cannot verify the slashed set, so we need to trust it here.
         // Also, we verified that macro extrinsics have been set in the corresponding push,
         // thus we can unwrap here.
@@ -1630,6 +1644,8 @@ impl Blockchain {
             false,
         );
         self.chain_store.set_head(&mut txn, &block_hash);
+        self.chain_store
+            .put_epoch_transactions(&mut txn, &block_hash, transactions);
 
         // Acquire write lock & commit changes.
         let mut state = self.state.write();
@@ -1656,6 +1672,7 @@ impl Blockchain {
 
         state.main_chain = chain_info;
         state.head_hash = block_hash.clone();
+        state.transaction_cache = cache_txn;
         txn.commit();
 
         // Give up lock before notifying.
@@ -1716,17 +1733,34 @@ impl Blockchain {
     // gets transactions for either an epoch or a batch.
     fn get_transactions(
         &self,
-        index: u32,
+        batch_or_epoch_index: u32,
         for_batch: bool,
         txn_option: Option<&Transaction>,
-    ) -> Option<TransactionsIterator> {
+    ) -> Option<Vec<BlockchainTransaction>> {
+        if !for_batch {
+            // It might be that we synced this epoch via macro block sync.
+            // Therefore, we check this first.
+            let macro_block = policy::macro_block_of(batch_or_epoch_index);
+            if let Some(macro_block_info) =
+                self.chain_store
+                    .get_chain_info_at(macro_block, false, txn_option)
+            {
+                if let Some(txs) = self
+                    .chain_store
+                    .get_epoch_transactions(&macro_block_info.head.hash(), txn_option)
+                {
+                    return Some(txs);
+                }
+            }
+        }
+
+        // Else retrieve transactions normally from micro blocks.
         // first_block_of(_batch) is guaranteed to return a micro block!!!
         let first_block = if for_batch {
-            policy::first_block_of_batch(index)
+            policy::first_block_of_batch(batch_or_epoch_index)
         } else {
-            policy::first_block_of(index)
+            policy::first_block_of(batch_or_epoch_index)
         };
-
         let first_block = self
             .chain_store
             .get_block_at(first_block, true, txn_option)
@@ -1740,12 +1774,7 @@ impl Blockchain {
             })?;
 
         let first_hash = first_block.hash();
-        let iter_first = first_block
-            .unwrap_micro()
-            .extrinsics
-            .unwrap()
-            .transactions
-            .into_iter();
+        let mut txs = first_block.unwrap_micro().extrinsics.unwrap().transactions;
 
         // Excludes current block and macro block.
         let blocks = self.chain_store.get_blocks(
@@ -1782,28 +1811,24 @@ impl Blockchain {
             return None;
         }
 
-        // See: https://users.rust-lang.org/t/difference-between-fn-pointer-and-fn-item/32642/3
-        let iter_tail: Flatten<
-            Map<
-                Filter<IntoIter<Block>, fn(&Block) -> bool>,
-                fn(Block) -> Vec<BlockchainTransaction>,
-            >,
-        > = blocks
-            .into_iter()
-            // blocks need to be filtered as Block::unwrap_transacitons makes use of
-            // Block::unwrap_micro, which panics for non micro blocks.
-            .filter(Block::is_micro as fn(&_) -> _)
-            .map(Block::unwrap_transactions as fn(_) -> _)
-            .flatten();
+        txs.extend(
+            blocks
+                .into_iter()
+                // blocks need to be filtered as Block::unwrap_transacitons makes use of
+                // Block::unwrap_micro, which panics for non micro blocks.
+                .filter(Block::is_micro as fn(&_) -> _)
+                .map(Block::unwrap_transactions as fn(_) -> _)
+                .flatten(),
+        );
 
-        Some(iter_first.chain(iter_tail))
+        Some(txs)
     }
 
     pub fn get_batch_transactions(
         &self,
         batch: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<TransactionsIterator> {
+    ) -> Option<Vec<BlockchainTransaction>> {
         self.get_transactions(batch, true, txn_option)
     }
 
@@ -1811,7 +1836,7 @@ impl Blockchain {
         &self,
         epoch: u32,
         txn_option: Option<&Transaction>,
-    ) -> Option<TransactionsIterator> {
+    ) -> Option<Vec<BlockchainTransaction>> {
         self.get_transactions(epoch, false, txn_option)
     }
 
@@ -1822,6 +1847,7 @@ impl Blockchain {
     ) -> Option<Blake2bHash> {
         let hashes: Vec<Blake2bHash> = self
             .get_batch_transactions(batch, txn_option)?
+            .iter()
             .map(|tx| tx.hash())
             .collect(); // BlockchainTransaction::hash does *not* work here.
 
@@ -2558,7 +2584,7 @@ impl AbstractBlockchain for Blockchain {
         epoch: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<Vec<BlockchainTransaction>> {
-        Blockchain::get_epoch_transactions(self, epoch, txn_option).map(Iterator::collect)
+        Blockchain::get_epoch_transactions(self, epoch, txn_option)
     }
 
     fn get_batch_transactions(
@@ -2566,7 +2592,7 @@ impl AbstractBlockchain for Blockchain {
         batch: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<Vec<BlockchainTransaction>> {
-        Blockchain::get_batch_transactions(self, batch, txn_option).map(Iterator::collect)
+        Blockchain::get_batch_transactions(self, batch, txn_option)
     }
 
     fn validator_registry_address(&self) -> Option<&Address> {

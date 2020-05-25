@@ -16,6 +16,7 @@ use nimiq_network_interface::message::{peek_type, Message};
 use nimiq_network_interface::network::{Network, NetworkEvent};
 use nimiq_network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
 use nimiq_network_interface::peer::{CloseReason, Peer, SendError};
+use std::hash::{Hash, Hasher};
 
 pub type Channels =
     Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
@@ -74,6 +75,20 @@ impl MockPeer {
         }
     }
 }
+
+impl Hash for MockPeer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
+}
+
+impl PartialEq for MockPeer {
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+    }
+}
+
+impl Eq for MockPeer {}
 
 #[async_trait]
 impl Peer for MockPeer {

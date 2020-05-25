@@ -1,3 +1,5 @@
+use bitflags::bitflags;
+use std::convert::TryFrom;
 use std::fmt;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
@@ -10,7 +12,7 @@ use vrf::VrfSeed;
 
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
-use crate::BlockError;
+use crate::{BlockError, MacroExtrinsics, MicroExtrinsics, MicroJustification, PbftProof};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -110,6 +112,24 @@ impl Block {
             Block::Macro(ref block) => BlockHeader::Macro(block.header.clone()),
             Block::Micro(ref block) => BlockHeader::Micro(block.header.clone()),
         }
+    }
+
+    pub fn justification(&self) -> Option<BlockJustification> {
+        // TODO Can we eliminate the clone()s here?
+        Some(match self {
+            Block::Macro(ref block) => {
+                BlockJustification::Macro(block.justification.as_ref()?.clone())
+            }
+            Block::Micro(ref block) => BlockJustification::Micro(block.justification.clone()),
+        })
+    }
+
+    pub fn extrinsics(&self) -> Option<BlockExtrinsics> {
+        // TODO Can we eliminate the clone()s here?
+        Some(match self {
+            Block::Macro(ref block) => BlockExtrinsics::Macro(block.extrinsics.as_ref()?.clone()),
+            Block::Micro(ref block) => BlockExtrinsics::Micro(block.extrinsics.as_ref()?.clone()),
+        })
     }
 
     pub fn transactions(&self) -> Option<&Vec<Transaction>> {
@@ -357,6 +377,102 @@ impl Deserialize for BlockHeader {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BlockJustification {
+    Micro(MicroJustification),
+    Macro(PbftProof),
+}
+
+impl BlockJustification {
+    pub fn ty(&self) -> BlockType {
+        match self {
+            BlockJustification::Macro(_) => BlockType::Macro,
+            BlockJustification::Micro(_) => BlockType::Micro,
+        }
+    }
+}
+
+impl Serialize for BlockJustification {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        size += self.ty().serialize(writer)?;
+        size += match self {
+            BlockJustification::Macro(justification) => justification.serialize(writer)?,
+            BlockJustification::Micro(justification) => justification.serialize(writer)?,
+        };
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = 0;
+        size += self.ty().serialized_size();
+        size += match self {
+            BlockJustification::Macro(justification) => justification.serialized_size(),
+            BlockJustification::Micro(justification) => justification.serialized_size(),
+        };
+        size
+    }
+}
+
+impl Deserialize for BlockJustification {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let ty: BlockType = Deserialize::deserialize(reader)?;
+        let justification = match ty {
+            BlockType::Macro => BlockJustification::Macro(Deserialize::deserialize(reader)?),
+            BlockType::Micro => BlockJustification::Micro(Deserialize::deserialize(reader)?),
+        };
+        Ok(justification)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BlockExtrinsics {
+    Micro(MicroExtrinsics),
+    Macro(MacroExtrinsics),
+}
+
+impl BlockExtrinsics {
+    pub fn ty(&self) -> BlockType {
+        match self {
+            BlockExtrinsics::Macro(_) => BlockType::Macro,
+            BlockExtrinsics::Micro(_) => BlockType::Micro,
+        }
+    }
+}
+
+impl Serialize for BlockExtrinsics {
+    fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+        let mut size = 0;
+        size += self.ty().serialize(writer)?;
+        size += match self {
+            BlockExtrinsics::Macro(extrinsics) => extrinsics.serialize(writer)?,
+            BlockExtrinsics::Micro(extrinsics) => extrinsics.serialize(writer)?,
+        };
+        Ok(size)
+    }
+
+    fn serialized_size(&self) -> usize {
+        let mut size = 0;
+        size += self.ty().serialized_size();
+        size += match self {
+            BlockExtrinsics::Macro(extrinsics) => extrinsics.serialized_size(),
+            BlockExtrinsics::Micro(extrinsics) => extrinsics.serialized_size(),
+        };
+        size
+    }
+}
+
+impl Deserialize for BlockExtrinsics {
+    fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        let ty: BlockType = Deserialize::deserialize(reader)?;
+        let extrinsics = match ty {
+            BlockType::Macro => BlockExtrinsics::Macro(Deserialize::deserialize(reader)?),
+            BlockType::Micro => BlockExtrinsics::Micro(Deserialize::deserialize(reader)?),
+        };
+        Ok(extrinsics)
+    }
+}
+
 impl block_base::Block for Block {
     type Header = BlockHeader;
     type Error = BlockError;
@@ -389,6 +505,109 @@ impl block_base::Block for Block {
         match self {
             Block::Macro(block) => block.extrinsics.is_none(),
             Block::Micro(block) => block.extrinsics.is_none(),
+        }
+    }
+}
+
+bitflags! {
+    #[derive(Default, Serialize, Deserialize)]
+    pub struct BlockComponentFlags: u8 {
+        const HEADER  = 0b0000_0001;
+        const JUSTIFICATION = 0b0000_0010;
+        const EXTRINSICS = 0b0000_0100;
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BlockComponents {
+    header: Option<BlockHeader>,
+    justification: Option<BlockJustification>,
+    extrinsics: Option<BlockExtrinsics>,
+}
+
+impl BlockComponents {
+    pub fn from_block(block: &Block, flags: BlockComponentFlags) -> Self {
+        let header = if flags.contains(BlockComponentFlags::HEADER) {
+            Some(block.header())
+        } else {
+            None
+        };
+
+        let justification = if flags.contains(BlockComponentFlags::JUSTIFICATION) {
+            block.justification()
+        } else {
+            None
+        };
+
+        let extrinsics = if flags.contains(BlockComponentFlags::EXTRINSICS) {
+            block.extrinsics()
+        } else {
+            None
+        };
+
+        BlockComponents {
+            header,
+            justification,
+            extrinsics,
+        }
+    }
+}
+
+impl TryFrom<BlockComponents> for Block {
+    type Error = ();
+
+    fn try_from(value: BlockComponents) -> Result<Self, Self::Error> {
+        match (value.header, value.justification) {
+            (
+                Some(BlockHeader::Micro(micro_header)),
+                Some(BlockJustification::Micro(micro_justification)),
+            ) => {
+                let extrinsics = value
+                    .extrinsics
+                    .map(|ext| {
+                        if let BlockExtrinsics::Micro(micro_ext) = ext {
+                            Ok(micro_ext)
+                        } else {
+                            Err(())
+                        }
+                    })
+                    .transpose()?;
+
+                Ok(Block::Micro(MicroBlock {
+                    header: micro_header,
+                    justification: micro_justification,
+                    extrinsics,
+                }))
+            }
+            (Some(BlockHeader::Macro(macro_header)), macro_justification) => {
+                let justification = macro_justification
+                    .map(|justification| {
+                        if let BlockJustification::Macro(pbft_proof) = justification {
+                            Ok(pbft_proof)
+                        } else {
+                            Err(())
+                        }
+                    })
+                    .transpose()?;
+
+                let extrinsics = value
+                    .extrinsics
+                    .map(|ext| {
+                        if let BlockExtrinsics::Macro(micro_ext) = ext {
+                            Ok(micro_ext)
+                        } else {
+                            Err(())
+                        }
+                    })
+                    .transpose()?;
+
+                Ok(Block::Macro(MacroBlock {
+                    header: macro_header,
+                    justification,
+                    extrinsics,
+                }))
+            }
+            _ => Err(()),
         }
     }
 }

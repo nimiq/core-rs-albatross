@@ -1,6 +1,6 @@
 use futures::{
     channel::oneshot::{channel, Sender},
-    future, StreamExt,
+    future, Future, StreamExt,
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -71,15 +71,18 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
 
     pub async fn request(&self, mut request: Req) -> Result<Res, RequestError> {
         // Lock state, set identifier and send out request. Also add channel to the state.
-        let mut state = self.state.lock();
-        let request_identifier = state.current_request_identifier;
-        state.current_request_identifier += 1;
+        let (request_identifier, receiver) = {
+            let mut state = self.state.lock();
+            let request_identifier = state.current_request_identifier;
+            state.current_request_identifier += 1;
 
-        request.set_request_identifier(request_identifier);
+            request.set_request_identifier(request_identifier);
 
-        let (sender, receiver) = channel();
-        state.responses.insert(request_identifier, sender);
-        drop(state);
+            let (sender, receiver) = channel();
+            state.responses.insert(request_identifier, sender);
+
+            (request_identifier, receiver)
+        };
 
         // TODO: CloseType
         // If sending fails, remove channel and return error.

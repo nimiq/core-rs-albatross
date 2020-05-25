@@ -24,7 +24,10 @@ mod pbft;
 pub mod signed;
 mod view_change;
 
-pub use block::{Block, BlockHeader, BlockType};
+pub use block::{
+    Block, BlockComponentFlags, BlockComponents, BlockExtrinsics, BlockHeader, BlockJustification,
+    BlockType,
+};
 pub use fork_proof::ForkProof;
 pub use macro_block::{MacroBlock, MacroExtrinsics, MacroHeader};
 pub use micro_block::{MicroBlock, MicroExtrinsics, MicroHeader, MicroJustification};

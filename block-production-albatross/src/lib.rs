@@ -367,3 +367,132 @@ impl BlockProducer {
         }
     }
 }
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils {
+    use super::*;
+    use beserial::Deserialize;
+    use block::{
+        PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, SignedPbftCommitMessage,
+        SignedPbftPrepareMessage, SignedViewChange, ViewChange, ViewChangeProofBuilder,
+    };
+    use blockchain_base::PushResult;
+    use bls::lazy::LazyPublicKey;
+    use keys::Address;
+    use nimiq_vrf::VrfSeed;
+    use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
+
+    // Fill epoch with micro blocks
+    pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
+        let init_height = blockchain.head_height();
+        let macro_block_number = policy::macro_block_after(init_height + 1);
+        for i in (init_height + 1)..macro_block_number {
+            let last_micro_block = producer.next_micro_block(
+                blockchain.time.now() + i as u64 * 1000,
+                0,
+                None,
+                vec![],
+                vec![0x42],
+            );
+            assert_eq!(
+                blockchain.push(Block::Micro(last_micro_block)),
+                Ok(PushResult::Extended)
+            );
+        }
+        assert_eq!(blockchain.head_height(), macro_block_number - 1);
+    }
+
+    pub fn sign_macro_block(
+        keypair: &KeyPair,
+        proposal: PbftProposal,
+        extrinsics: Option<MacroExtrinsics>,
+    ) -> MacroBlock {
+        let block_hash = proposal.header.hash::<Blake2bHash>();
+
+        // create signed prepare and commit
+        let prepare = SignedPbftPrepareMessage::from_message(
+            PbftPrepareMessage {
+                block_hash: block_hash.clone(),
+            },
+            &keypair.secret_key,
+            0,
+        );
+        let commit = SignedPbftCommitMessage::from_message(
+            PbftCommitMessage {
+                block_hash: block_hash.clone(),
+            },
+            &keypair.secret_key,
+            0,
+        );
+
+        // create proof
+        let mut pbft_proof = PbftProofBuilder::new();
+        pbft_proof.add_prepare_signature(&keypair.public_key, policy::SLOTS, &prepare);
+        pbft_proof.add_commit_signature(&keypair.public_key, policy::SLOTS, &commit);
+
+        MacroBlock {
+            header: proposal.header,
+            justification: Some(pbft_proof.build()),
+            extrinsics,
+        }
+    }
+
+    pub fn sign_view_change(
+        keypair: &KeyPair,
+        prev_seed: VrfSeed,
+        block_number: u32,
+        new_view_number: u32,
+    ) -> ViewChangeProof {
+        let view_change = ViewChange {
+            block_number,
+            new_view_number,
+            prev_seed,
+        };
+        let signed_view_change =
+            SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0);
+
+        let mut proof_builder = ViewChangeProofBuilder::new();
+        proof_builder.add_signature(&keypair.public_key, policy::SLOTS, &signed_view_change);
+        assert_eq!(
+            proof_builder.verify(&view_change, policy::TWO_THIRD_SLOTS),
+            Ok(())
+        );
+
+        let proof = proof_builder.build();
+        let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(
+            LazyPublicKey::from(keypair.public_key),
+            Address::default(),
+            policy::SLOTS,
+        )]);
+        assert_eq!(
+            proof.verify(&view_change, &validators, policy::TWO_THIRD_SLOTS),
+            Ok(())
+        );
+
+        proof
+    }
+
+    pub fn produce_macro_blocks(
+        num_macro: usize,
+        producer: &BlockProducer,
+        blockchain: &Arc<Blockchain>,
+    ) {
+        for _ in 0..num_macro {
+            fill_micro_blocks(producer, blockchain);
+
+            let next_block_height = blockchain.head_height() + 1;
+            let (proposal, extrinsics) = producer.next_macro_block_proposal(
+                blockchain.time.now() + blockchain.block_number() as u64 * 1000,
+                0u32,
+                None,
+                vec![],
+            );
+
+            let block = sign_macro_block(&producer.validator_key, proposal, Some(extrinsics));
+            assert_eq!(
+                blockchain.push_block(Block::Macro(block)),
+                Ok(PushResult::Extended)
+            );
+        }
+    }
+}

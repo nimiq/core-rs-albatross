@@ -1,7 +1,5 @@
 use tungstenite::protocol::CloseFrame;
 
-use network_interface::message::Message as NimiqMessage;
-
 pub use self::client::nimiq_connect_async;
 pub use self::error::Error;
 pub use self::server::nimiq_accept_async;
