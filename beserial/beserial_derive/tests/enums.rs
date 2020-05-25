@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate beserial_derive;
 
-use beserial::{Deserialize, Serialize, uvar};
+use beserial::{uvar, Deserialize, Serialize};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -28,6 +28,29 @@ enum TestUVar {
     A = 1,
     B = 2164392960,
     C = 9223372036854775807,
+    D,
+}
+
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+enum TestNoDiscriminants {
+    A,
+    B,
+    C,
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+enum TestWithData {
+    A,
+    B(u8, bool),
+    #[beserial(discriminant = 11)]
+    C {
+        test: u16,
+        test2: bool,
+        #[beserial(len_type(u8))]
+        v: Vec<u8>,
+    },
     D,
 }
 
@@ -87,3 +110,53 @@ fn it_can_handle_value_enums_with_repr_uvar() {
     assert_eq!(reserialize_to_num(TestUVar::D), 9223372036854775808.into());
 }
 
+#[test]
+fn it_can_handle_enums_without_discriminants() {
+    fn reserialize(test: TestNoDiscriminants) -> TestNoDiscriminants {
+        let v = Serialize::serialize_to_vec(&test);
+        return Deserialize::deserialize(&mut &v[..]).unwrap();
+    }
+    assert_eq!(reserialize(TestNoDiscriminants::A), TestNoDiscriminants::A);
+    assert_eq!(reserialize(TestNoDiscriminants::B), TestNoDiscriminants::B);
+    assert_eq!(reserialize(TestNoDiscriminants::C), TestNoDiscriminants::C);
+    assert_eq!(Serialize::serialize_to_vec(&TestNoDiscriminants::A)[0], 0);
+    assert_eq!(Serialize::serialize_to_vec(&TestNoDiscriminants::B)[0], 1);
+    assert_eq!(Serialize::serialize_to_vec(&TestNoDiscriminants::C)[0], 2);
+}
+
+#[test]
+fn it_can_handle_enums_with_data() {
+    fn reserialize(test: TestWithData) -> TestWithData {
+        let v = Serialize::serialize_to_vec(&test);
+        return Deserialize::deserialize(&mut &v[..]).unwrap();
+    }
+    assert_eq!(reserialize(TestWithData::A), TestWithData::A);
+    assert_eq!(
+        reserialize(TestWithData::B(5, true)),
+        TestWithData::B(5, true)
+    );
+    assert_eq!(
+        reserialize(TestWithData::C {
+            test: 514,
+            test2: false,
+            v: vec![1],
+        }),
+        TestWithData::C {
+            test: 514,
+            test2: false,
+            v: vec![1],
+        }
+    );
+    assert_eq!(reserialize(TestWithData::D), TestWithData::D);
+    assert_eq!(Serialize::serialize_to_vec(&TestWithData::A)[0], 0);
+    assert_eq!(Serialize::serialize_to_vec(&TestWithData::B(5, true))[0], 1);
+    assert_eq!(
+        Serialize::serialize_to_vec(&TestWithData::C {
+            test: 514,
+            test2: false,
+            v: vec![],
+        })[0],
+        11
+    );
+    assert_eq!(Serialize::serialize_to_vec(&TestWithData::D)[0], 12);
+}
