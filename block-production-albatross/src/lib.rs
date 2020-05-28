@@ -69,7 +69,7 @@ impl BlockProducer {
             .blockchain
             .head()
             .seed()
-            .sign_next(&self.validator_key.secret);
+            .sign_next(&self.validator_key.secret_key);
         let mut txn = self.blockchain.write_transaction();
 
         let mut header = self.next_macro_header(&mut txn, timestamp, view_number, &seed);
@@ -286,7 +286,7 @@ impl BlockProducer {
             .blockchain
             .head()
             .seed()
-            .sign_next(&self.validator_key.secret);
+            .sign_next(&self.validator_key.secret_key);
 
         MicroHeader {
             version: Block::VERSION,

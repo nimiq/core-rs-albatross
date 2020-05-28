@@ -15,7 +15,11 @@ use nano_sync::constants::sum_generator_g1_mnt6;
 use nano_sync::gadgets::mnt4::VKCommitmentGadget;
 use nano_sync::primitives::{pedersen_generators, vk_commitment};
 
+// When running tests you are advised to run only one test at a time or you might run out of RAM.
+// Also they take a long time to run. This is why they have the ignore flag.
+
 #[test]
+#[ignore]
 fn vk_commitment_test() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();

@@ -18,6 +18,9 @@ use r1cs_std::test_constraint_system::TestConstraintSystem;
 
 use nano_sync::gadgets::input::RecursiveInputGadget;
 
+// When running tests you are advised to run only one test at a time or you might run out of RAM.
+// Also they take a long time to run. This is why they have the ignore flag.
+
 #[derive(Clone)]
 struct DummyCircuit {
     input_bytes: Vec<u8>,
@@ -88,6 +91,7 @@ impl ConstraintSynthesizer<<MNT6_753 as PairingEngine>::Fr> for VerifierCircuit 
 }
 
 #[test]
+#[ignore]
 fn recursive_input_is_read_correctly() {
     // Initialize RNG.
     let rng = &mut test_rng();

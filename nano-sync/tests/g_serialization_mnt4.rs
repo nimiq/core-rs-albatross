@@ -13,7 +13,11 @@ use rand::RngCore;
 use nano_sync::gadgets::mnt6::YToBitGadget;
 use nano_sync::utils::{bytes_to_bits, pad_point_bits, serialize_g1_mnt4, serialize_g2_mnt4};
 
+// When running tests you are advised to run only one test at a time or you might run out of RAM.
+// Also they take a long time to run. This is why they have the ignore flag.
+
 #[test]
+#[ignore]
 fn serialization_mnt4_works() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT6Fr>::new();

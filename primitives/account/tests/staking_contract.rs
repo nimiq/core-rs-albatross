@@ -8,7 +8,6 @@ use nimiq_account::{AccountError, AccountTransactionInteraction, AccountType, St
 use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_bls::SecretKey as BlsSecretKey;
-use nimiq_bls::SecureGenerate;
 use nimiq_bls::Signature as BlsSignature;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::coin::Coin;
@@ -19,34 +18,64 @@ use nimiq_transaction::account::staking_contract::{
 };
 use nimiq_transaction::account::AccountTransactionVerification;
 use nimiq_transaction::{SignatureProof, Transaction, TransactionError};
+use nimiq_utils::key_rng::SecureGenerate;
 
 const CONTRACT_1: &str = "00000000000000000000000000000000000000000000000000000000";
-const CONTRACT_2: &str = "0000000023c34600000000010000000023c3460003030303030303030303030303030303030303038dee007dd1af35c79b6abb901a787f1ee97d89cd4b6390987c9f6e2b9a135cdfb075cfc78d0cca37e2dd0eb37eac636d0d8f50c868a23eaca794f6af35213426d284dd6188b4679ab3881e80bcd318969959e60689ca40d1f41e02cd33d81609000000020202020202020202020202020202020202020202000000000bebc2005e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e0000000005f5e10000000000000000000000000000000000";
-const VALIDATOR_KEY: &str = "8dee007dd1af35c79b6abb901a787f1ee97d89cd4b6390987c9f6e2b9a135cdfb075cfc78d0cca37e2dd0eb37eac636d0d8f50c868a23eaca794f6af35213426d284dd6188b4679ab3881e80bcd318969959e60689ca40d1f41e02cd33d81609";
+const CONTRACT_2: &str =
+    "0000000023c34600000000010000000023c34600030303030303030303030303030303030\
+3030303800051c524fec7b96f47af404182bd36b7fab0589a9877f36866726aa0fe50dfb1e90d2b8e1830a67adb2e517878\
+05f40ac92a75e2f2e61bae2d48febd2633a62a99afbbccea250228ccb3f20889cc0b44f1f8c4c2cce9b818aa5c9c9b1b0d1\
+200015223a89b5a6607be3d72192b7467a13c7b1ddb5ca2095089c21cf04fea55df93b653e41f142d5b1a1c32c996428f09\
+4a5ed1546b66a2342f3d76ed84693bfbb543392277b911c4feb9a07ce2c08068e23b77108c12d3a9f388158f2c050d0000c\
+ec7f82298feda3a1c714a567b25006ee8f286c10ae8edcd36140ffac89ec4ebd453fbc9a1ab427e212f12aa22a3e2e880d2\
+34cc205f2b5727130afa40688929fe66e86c994cc770f68293664c77eb141cf0346859e9a96b66e537374fc700000002020\
+2020202020202020202020202020202020202000000000bebc2005e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e000000\
+0005f5e10000000000000000000000000000000000";
+const VALIDATOR_KEY: &str = "800051c524fec7b96f47af404182bd36b7fab0589a9877f36866726aa0fe50dfb1e90d2\
+b8e1830a67adb2e51787805f40ac92a75e2f2e61bae2d48febd2633a62a99afbbccea250228ccb3f20889cc0b44f1f8c4c2c\
+ce9b818aa5c9c9b1b0d1200015223a89b5a6607be3d72192b7467a13c7b1ddb5ca2095089c21cf04fea55df93b653e41f142\
+d5b1a1c32c996428f094a5ed1546b66a2342f3d76ed84693bfbb543392277b911c4feb9a07ce2c08068e23b77108c12d3a9f\
+388158f2c050d0000cec7f82298feda3a1c714a567b25006ee8f286c10ae8edcd36140ffac89ec4ebd453fbc9a1ab427e212\
+f12aa22a3e2e880d234cc205f2b5727130afa40688929fe66e86c994cc770f68293664c77eb141cf0346859e9a96b66e5373\
+74fc7";
 const VALIDATOR_SECRET_KEY: &str =
-    "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
+    "68a9f4fd2ed205bf84da7efa9de53c3e52c408bef9629f3e5b3dc8e0da148a497e5a742e4de561b83f7d77b92c2dd2\
+    301695087b743a0f29d0d7fe70e5e36856b15b0a9c60ac86bac1e2ef43bf294cc76a49eb3abe8f0164562910afbd380\
+    000";
 const STAKER_ADDRESS: &str = "9cd82948650d902d95d52ea2ec91eae6deb0c9fe";
 const STAKER_PRIVATE_KEY: &str = "b410a7a583cbc13ef4f1cbddace30928bcb4f9c13722414bc4a2faaba3f4e187";
 
-// Since we will likely change the BLS scheme in the near future,
-// the following code is still kept as a reference on how to generate the data.
-//#[test]
-//fn generate_contract() {
-//    let key_pair = BlsKeyPair::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap();
-//    let mut contract = StakingContract {
-//        balance: Default::default(),
-//        active_validators_sorted: Default::default(),
-//        active_validators_by_key: Default::default(),
-//        inactive_validators_by_key: Default::default(),
-//        current_epoch_parking: Default::default(),
-//        previous_epoch_parking: Default::default(),
-//        inactive_stake_by_address: Default::default()
-//    };
-//    contract.create_validator(key_pair.public.compress(), Address::from([3u8; 20]), 300_000_000.try_into().unwrap());
-//    contract.stake(Address::from([2u8; 20]), 200_000_000.try_into().unwrap(), &key_pair.public.compress());
-//    contract.stake(Address::from([0x5eu8; 20]), 100_000_000.try_into().unwrap(), &key_pair.public.compress());
-//    assert_eq!(&hex::encode(contract.serialize_to_vec()), "");
-//}
+// The following code is kept as a reference on how to generate the data for the CONTRACT_2 constant.
+// #[test]
+// fn generate_contract() {
+//     let key_pair =
+//         BlsKeyPair::deserialize_from_vec(&hex::decode(VALIDATOR_SECRET_KEY).unwrap()).unwrap();
+//     let mut contract = StakingContract {
+//         balance: Default::default(),
+//         active_validators_sorted: Default::default(),
+//         active_validators_by_key: Default::default(),
+//         inactive_validators_by_key: Default::default(),
+//         current_epoch_parking: Default::default(),
+//         previous_epoch_parking: Default::default(),
+//         inactive_stake_by_address: Default::default(),
+//     };
+//     contract.create_validator(
+//         key_pair.public_key.compress(),
+//         Address::from([3u8; 20]),
+//         300_000_000.try_into().unwrap(),
+//     );
+//     contract.stake(
+//         Address::from([2u8; 20]),
+//         200_000_000.try_into().unwrap(),
+//         &key_pair.public_key.compress(),
+//     );
+//     contract.stake(
+//         Address::from([0x5eu8; 20]),
+//         100_000_000.try_into().unwrap(),
+//         &key_pair.public_key.compress(),
+//     );
+//     assert_eq!(&hex::encode(contract.serialize_to_vec()), "");
+// }
 
 #[test]
 fn it_can_de_serialize_a_staking_contract() {
@@ -140,7 +169,7 @@ fn it_can_verify_validator_and_staking_transaction() {
 
     // Invalid proof of knowledge
     let other_pair = BlsKeyPair::generate(&mut thread_rng());
-    let invalid_pok = other_pair.sign(&keypair.public);
+    let invalid_pok = other_pair.sign(&keypair.public_key);
     let tx = make_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
             validator_key: validator_key.clone(),
@@ -179,14 +208,14 @@ fn it_can_apply_validator_and_staking_transaction() {
     let mut contract = make_empty_contract();
 
     let bls_pair = bls_key_pair();
-    let validator_key = bls_pair.public.compress();
-    let proof_of_knowledge = bls_pair.sign(&bls_pair.public).compress();
+    let validator_key = bls_pair.public_key.compress();
+    let proof_of_knowledge = bls_pair.sign(&bls_pair.public_key).compress();
     let staker_address = Address::from_any_str(STAKER_ADDRESS).unwrap();
 
     // Create validator
     let tx_1 = make_incoming_transaction(
         IncomingStakingTransactionData::CreateValidator {
-            validator_key: bls_pair.public.compress(),
+            validator_key: bls_pair.public_key.compress(),
             proof_of_knowledge: proof_of_knowledge.clone(),
             reward_address: Default::default(),
         },
@@ -350,7 +379,9 @@ fn test_proof_verification(transaction: Transaction) {
                 let bls_pair = BlsKeyPair::from(
                     BlsSecretKey::deserialize_from_vec(
                         &hex::decode(
-                            "59d1283e749367003fd63bb92e5f6914a5845da093adfb91779c2fbc43f8ec6e",
+                            "3a12b799f4fa06f1d777695c8ceeeb3fcd831d3342d1f1c7046b9359888bb4e31\
+                            304d72e819fb685502bad8a7876c7522e4abdf1bd2f4a55306164029e74922a4dd85895\
+                            b9e54d45139d22041e83f477eb8b489c19a41aa0529b8add804d0000",
                         )
                         .unwrap(),
                     )
@@ -411,7 +442,7 @@ fn it_can_apply_retiring_transaction() {
     let key_pair = ed25519_key_pair();
     let staker_address = Address::from(&key_pair);
     let bls_pair = bls_key_pair();
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
 
     // Retire first half of stake
@@ -551,14 +582,14 @@ fn it_can_apply_unstaking_transaction() {
 
     // Block 2: Retire first half of stake
     let tx_1 = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(bls_pair.public.compress()),
+        SelfStakingTransactionData::RetireStake(bls_pair.public_key.compress()),
         50_000_000,
     );
     assert_eq!(contract.commit_outgoing_transaction(&tx_1, 2), Ok(None));
     assert_eq!(contract.commit_incoming_transaction(&tx_1, 2), Ok(None));
     assert_eq!(contract.balance, Coin::from_u64_unchecked(299_999_900));
     assert_eq!(
-        contract.get_active_stake(&bls_pair.public.compress(), &recipient),
+        contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
         Some(Coin::from_u64_unchecked(99_999_900))
     );
     assert_eq!(
@@ -591,7 +622,7 @@ fn it_can_apply_unstaking_transaction() {
     assert_eq!(contract.commit_outgoing_transaction(&tx_3, 40003), Ok(None));
     assert_eq!(contract.balance, Coin::from_u64_unchecked(287_499_900));
     assert_eq!(
-        contract.get_active_stake(&bls_pair.public.compress(), &recipient),
+        contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
         Some(Coin::from_u64_unchecked(99_999_900))
     );
     assert_eq!(
@@ -609,7 +640,7 @@ fn it_can_apply_unstaking_transaction() {
     assert_eq!(contract.commit_outgoing_transaction(&tx_4, 40004), Ok(None));
     assert_eq!(contract.balance, Coin::from_u64_unchecked(274_999_900));
     assert_eq!(
-        contract.get_active_stake(&bls_pair.public.compress(), &recipient),
+        contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
         Some(Coin::from_u64_unchecked(99_999_900))
     );
     assert_eq!(
@@ -628,7 +659,7 @@ fn it_can_apply_unstaking_transaction() {
     );
     assert_eq!(contract.balance, Coin::from_u64_unchecked(287_499_900));
     assert_eq!(
-        contract.get_active_stake(&bls_pair.public.compress(), &recipient),
+        contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
         Some(Coin::from_u64_unchecked(99_999_900))
     );
     assert_eq!(
@@ -642,7 +673,7 @@ fn it_can_apply_unstaking_transaction() {
 
     // New block 40004: Retire second half of stake
     let tx_5 = make_self_transaction(
-        SelfStakingTransactionData::RetireStake(bls_pair.public.compress()),
+        SelfStakingTransactionData::RetireStake(bls_pair.public_key.compress()),
         99_999_800,
     );
     assert_eq!(contract.commit_outgoing_transaction(&tx_5, 40004), Ok(None));
@@ -652,7 +683,7 @@ fn it_can_apply_unstaking_transaction() {
         .unwrap();
     assert_eq!(contract.balance, Coin::from_u64_unchecked(287_499_800));
     assert_eq!(
-        contract.get_active_stake(&bls_pair.public.compress(), &recipient),
+        contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
         None
     );
     assert_eq!(
@@ -723,7 +754,7 @@ fn it_can_apply_unstaking_transaction() {
     assert_eq!(contract.inactive_stake_by_address.len(), 0);
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(
-        contract.get_active_stake(&bls_pair.public.compress(), &recipient),
+        contract.get_active_stake(&bls_pair.public_key.compress(), &recipient),
         Some(Coin::from_u64_unchecked(150_000_000))
     );
 }
@@ -756,7 +787,7 @@ fn it_rejects_invalid_slash_inherents() {
     let bls_pair = bls_key_pair();
     let key_pair = ed25519_key_pair();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
 
     // Invalid inherent
     let mut inherent = Inherent {
@@ -831,7 +862,7 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
     let bls_pair = bls_key_pair();
     let key_pair = ed25519_key_pair();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
 
     // Slash
     let slash = Inherent {
@@ -920,7 +951,7 @@ fn it_can_apply_slashes_after_retire() {
     // finalize
     let key_pair = ed25519_key_pair();
     let bls_pair = bls_key_pair();
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
 
     // Check that transaction cannot have any value
@@ -1020,7 +1051,7 @@ fn it_can_apply_unpark_transactions() {
     let bls_pair = bls_key_pair();
     let key_pair = ed25519_key_pair();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
 
     // Unpark with invalid value
     let unpark = make_signed_incoming_transaction(
@@ -1038,8 +1069,12 @@ fn it_can_apply_unpark_transactions() {
 
     // Unpark with invalid proof
     let priv_key: BlsSecretKey = Deserialize::deserialize(
-        &mut &hex::decode("12434643b255b86c780670ede72500a84de5ce633f674c799e27b09187d5a414")
-            .unwrap()[..],
+        &mut &hex::decode(
+            "3a12b799f4fa06f1d777695c8ceeeb3fcd831d3342d1f1c7046b9359888bb\
+        4e31304d72e819fb685502bad8a7876c7522e4abdf1bd2f4a55306164029e74922a4dd85895b9e54d45139d2204\
+        1e83f477eb8b489c19a41aa0529b8add804d0000",
+        )
+        .unwrap()[..],
     )
     .unwrap();
     let bls_pair2: BlsKeyPair = priv_key.into();
@@ -1077,7 +1112,7 @@ fn it_can_apply_unpark_transactions() {
     // Unpark with address that is not staked
     let unpark = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
-            validator_key: bls_pair2.public.compress(),
+            validator_key: bls_pair2.public_key.compress(),
             signature: Default::default(),
         },
         0,
@@ -1166,7 +1201,7 @@ fn it_can_revert_unpark_transactions() {
     let bls_pair = bls_key_pair();
     let key_pair = ed25519_key_pair();
     let contract = make_sample_contract(&key_pair, &bls_pair);
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
 
     let unpark = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
@@ -1317,7 +1352,7 @@ fn it_can_revert_slash_inherent() {
     let bls_pair = bls_key_pair();
     let key_pair = ed25519_key_pair();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
 
     // Slash
     let slash = Inherent {
@@ -1403,29 +1438,42 @@ fn it_can_revert_slash_inherent() {
 #[test]
 fn it_can_build_a_validator_set() {
     let bls_key1 = bls_key_pair();
-    let validator1 = bls_key1.public.compress();
+    let validator1 = bls_key1.public_key.compress();
     let bls_key2 = BlsKeyPair::from(
         BlsSecretKey::deserialize_from_vec(
-            &hex::decode("12434643b255b86c780670ede72500a84de5ce633f674c799e27b09187d5a414")
-                .unwrap(),
+            &hex::decode(
+                "c37da6085717a01d58f86a091579a625675fdc9cecb6e38404c0c21e8b0b570c38\
+            b0c414d52bd80a2594497e6d51b9a58c2e8d21976c4482ebbee8dcf7b92f7c1988eb075d3c3f5ecad823d6c\
+            37abfd02c20c467493d544a8e1ab1dd367e0100",
+            )
+            .unwrap(),
         )
         .unwrap(),
     );
-    let validator2 = bls_key2.public.compress();
+    let validator2 = bls_key2.public_key.compress();
     let bls_key3 = BlsKeyPair::from(
         BlsSecretKey::deserialize_from_vec(
-            &hex::decode("3f651a48337d8e24edca32b3605e91ce0d43e7311dcdc61ec000b533a6bc907e")
-                .unwrap(),
+            &hex::decode(
+                "3a12b799f4fa06f1d777695c8ceeeb3fcd831d3342d1f1c7046b9359888bb4e313\
+            04d72e819fb685502bad8a7876c7522e4abdf1bd2f4a55306164029e74922a4dd85895b9e54d45139d22041\
+            e83f477eb8b489c19a41aa0529b8add804d0000",
+            )
+            .unwrap(),
         )
         .unwrap(),
     );
-    let validator3 = bls_key3.public.compress();
+    let validator3 = bls_key3.public_key.compress();
     let staker1 = Address::from_any_str("3b4fe0cd29f89011282e7d9d2f4917fadfe90586").unwrap();
     let staker2 = Address::from_any_str("59ed95062ce9322fe66d102f9cde1aadba76a022").unwrap();
     let staker3 = Address::from_any_str("adbfca612387ffab95acfa8a1a1657e5f9b9e4c2").unwrap();
 
     // Create arbitrary BLS signature as seed
-    let seed_vec = hex::decode("ac22bbbf6a315f9e9eb23eca98918a0a5a35e31219b8c3c8b3bd5b71bc7a33371aad8588007e89e95ffe63bd9dce4c27").unwrap();
+    let seed_vec = hex::decode(
+        "000087addb8fd226993eea0bb4866998150283a63bafc916fb8d78\
+    94cebf99be9e1426cd5f5da9266625e73cfea99e20a60425d3cc8692780c370ce4e2f2148656223f2bdd656591b463e\
+    ee1a2b74e48c49e90a55651ca4a5daf79b322b21660",
+    )
+    .unwrap();
     let seed = BlsSignature::deserialize_from_vec(&seed_vec).unwrap();
 
     // Fill contract with one validator without stakes
@@ -1571,15 +1619,19 @@ fn it_can_apply_validator_signalling() {
     let bls_pair = bls_key_pair();
     let key_pair = ed25519_key_pair();
     let mut contract = make_empty_contract();
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
     let bls_pair2 = BlsKeyPair::from(
         BlsSecretKey::deserialize_from_vec(
-            &hex::decode("12434643b255b86c780670ede72500a84de5ce633f674c799e27b09187d5a414")
-                .unwrap(),
+            &hex::decode(
+                "c37da6085717a01d58f86a091579a625675fdc9cecb6e38404c0c21e8b0b570c38\
+            b0c414d52bd80a2594497e6d51b9a58c2e8d21976c4482ebbee8dcf7b92f7c1988eb075d3c3f5ecad823d6c\
+            37abfd02c20c467493d544a8e1ab1dd367e0100",
+            )
+            .unwrap(),
         )
         .unwrap(),
     );
-    let validator_key2 = bls_pair2.public.compress();
+    let validator_key2 = bls_pair2.public_key.compress();
 
     // This test is supposed to test all validator signalling actions.
     // To this end, we:
@@ -1984,7 +2036,7 @@ fn it_can_manage_stake() {
     let bls_pair = bls_key_pair();
     let key_pair = ed25519_key_pair();
     let mut contract = make_empty_contract();
-    let validator_key = bls_pair.public.compress();
+    let validator_key = bls_pair.public_key.compress();
     let staker_address = Address::from(&key_pair);
 
     // This test is supposed to test all actions managing stake.
@@ -2254,12 +2306,16 @@ fn it_can_manage_stake() {
     // Create another validator.
     let bls_pair2 = BlsKeyPair::from(
         BlsSecretKey::deserialize_from_vec(
-            &hex::decode("12434643b255b86c780670ede72500a84de5ce633f674c799e27b09187d5a414")
-                .unwrap(),
+            &hex::decode(
+                "c37da6085717a01d58f86a091579a625675fdc9cecb6e38404c0c21e8b0b570c38\
+            b0c414d52bd80a2594497e6d51b9a58c2e8d21976c4482ebbee8dcf7b92f7c1988eb075d3c3f5ecad823d6c\
+            37abfd02c20c467493d544a8e1ab1dd367e0100",
+            )
+            .unwrap(),
         )
         .unwrap(),
     );
-    let validator_key2 = bls_pair2.public.compress();
+    let validator_key2 = bls_pair2.public_key.compress();
     contract
         .create_validator(
             validator_key2.clone(),
@@ -2891,12 +2947,16 @@ fn it_can_manage_stake() {
     // Create another validator.
     let bls_pair2 = BlsKeyPair::from(
         BlsSecretKey::deserialize_from_vec(
-            &hex::decode("12434643b255b86c780670ede72500a84de5ce633f674c799e27b09187d5a414")
-                .unwrap(),
+            &hex::decode(
+                "c37da6085717a01d58f86a091579a625675fdc9cecb6e38404c0c21e8b0b570c38\
+            b0c414d52bd80a2594497e6d51b9a58c2e8d21976c4482ebbee8dcf7b92f7c1988eb075d3c3f5ecad823d6c\
+            37abfd02c20c467493d544a8e1ab1dd367e0100",
+            )
+            .unwrap(),
         )
         .unwrap(),
     );
-    let validator_key2 = bls_pair2.public.compress();
+    let validator_key2 = bls_pair2.public_key.compress();
     contract
         .create_validator(
             validator_key2.clone(),
@@ -3273,7 +3333,7 @@ fn make_sample_contract(key_pair: &KeyPair, bls_pair: &BlsKeyPair) -> StakingCon
     let mut contract = make_empty_contract();
     contract
         .create_validator(
-            bls_pair.public.compress(),
+            bls_pair.public_key.compress(),
             Address::from(key_pair),
             Coin::from_u64_unchecked(150_000_000),
         )
@@ -3282,7 +3342,7 @@ fn make_sample_contract(key_pair: &KeyPair, bls_pair: &BlsKeyPair) -> StakingCon
         .stake(
             Address::from(key_pair),
             Coin::from_u64_unchecked(150_000_000),
-            &bls_pair.public.compress(),
+            &bls_pair.public_key.compress(),
         )
         .unwrap();
 
@@ -3373,7 +3433,7 @@ fn make_drop_transaction(key_pair: &BlsKeyPair, value: u64) -> Transaction {
         NetworkId::Dummy,
     );
     let proof = OutgoingStakingTransactionProof::DropValidator {
-        validator_key: key_pair.public.compress(),
+        validator_key: key_pair.public_key.compress(),
         signature: key_pair.sign(&tx.serialize_content()).compress(),
     };
     tx.proof = proof.serialize_to_vec();

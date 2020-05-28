@@ -16,6 +16,9 @@ use nano_sync::primitives::{
 };
 use nano_sync::utils::{byte_from_le_bits, bytes_to_bits, serialize_g1_mnt6};
 
+// When running tests you are advised to run only one test at a time or you might run out of RAM.
+// Also they take a long time to run. This is why they have the ignore flag.
+
 #[derive(Clone)]
 struct VerifyCircuit {
     leaf: Vec<bool>,
@@ -79,6 +82,7 @@ impl ConstraintSynthesizer<MNT4Fr> for VerifyCircuit {
 }
 
 #[test]
+#[ignore]
 fn construct_works() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
@@ -157,6 +161,7 @@ fn construct_works() {
 }
 
 #[test]
+#[ignore]
 fn prove_works() {
     // Create random bits.
     let rng = &mut test_rng();
@@ -185,6 +190,7 @@ fn prove_works() {
 }
 
 #[test]
+#[ignore]
 fn verify_works() {
     // Create random bits.
     let rng = &mut test_rng();
@@ -250,6 +256,7 @@ fn verify_works() {
 }
 
 #[test]
+#[ignore]
 fn verify_wrong_root() {
     // Create random bits.
     let rng = &mut test_rng();

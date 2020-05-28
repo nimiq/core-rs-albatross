@@ -20,7 +20,9 @@ use primitives::policy;
 use primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
+const SECRET_KEY: &'static str = "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165\
+a8dadd6e1c553412d5c0f191e83ffc5a4b71bf45df6b5a125ec2c4a9a40643597cb6b5c3b588d55a363f1b56ac839eee4a6\
+ff848180500f2fc29d1c0595f0000";
 
 #[test]
 fn test_view_change_single_signature() {
@@ -35,14 +37,15 @@ fn test_view_change_single_signature() {
     };
 
     // sign view change and build view change proof
-    let signed_message = SignedViewChange::from_message(view_change.clone(), &key_pair.secret, 0);
+    let signed_message =
+        SignedViewChange::from_message(view_change.clone(), &key_pair.secret_key, 0);
     let mut proof_builder = ViewChangeProofBuilder::new();
-    proof_builder.add_signature(&key_pair.public, policy::SLOTS, &signed_message);
+    proof_builder.add_signature(&key_pair.public_key, policy::SLOTS, &signed_message);
     let view_change_proof = proof_builder.build();
 
     // verify view change proof
     let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(
-        LazyPublicKey::from(key_pair.public),
+        LazyPublicKey::from(key_pair.public_key),
         Address::default(),
         policy::SLOTS,
     )]);
@@ -64,7 +67,7 @@ fn test_replay() {
     };
 
     // sign prepare
-    let prepare_signature = prepare.sign(&key_pair.secret);
+    let prepare_signature = prepare.sign(&key_pair.secret_key);
 
     // fake commit
     let commit = PbftCommitMessage { block_hash };
@@ -75,5 +78,5 @@ fn test_replay() {
     };
 
     // verify commit - this should fail
-    assert!(!signed_commit.verify(&key_pair.public));
+    assert!(!signed_commit.verify(&key_pair.public_key));
 }

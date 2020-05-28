@@ -63,6 +63,13 @@ impl PartialEq for SecretKey {
 #[cfg(feature = "beserial")]
 impl fmt::Debug for SecretKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str(&::hex::encode(self.serialize_to_vec()))
+        write!(f, "SecretKey({})", hex::encode(self.serialize_to_vec()))
+    }
+}
+
+#[cfg(feature = "beserial")]
+impl fmt::Display for SecretKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", hex::encode(self.serialize_to_vec()))
     }
 }

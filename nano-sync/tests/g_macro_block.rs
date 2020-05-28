@@ -14,7 +14,8 @@ use nano_sync::constants::{sum_generator_g1_mnt6, MAX_NON_SIGNERS, MIN_SIGNERS, 
 use nano_sync::gadgets::mnt4::{MacroBlockGadget, Round};
 use nano_sync::primitives::{pedersen_generators, MacroBlock};
 
-// When running tests you are advised to set VALIDATOR_SLOTS in constants.rs to a more manageable number, for example 64.
+// When running tests you are advised to run only one test at a time or you might run out of RAM.
+// Also they take a long time to run. This is why they have the ignore flag.
 
 #[derive(Clone)]
 struct DummyCircuit {
@@ -100,6 +101,7 @@ impl ConstraintSynthesizer<MNT4Fr> for DummyCircuit {
 }
 
 #[test]
+#[ignore]
 fn hash_works() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();
@@ -156,6 +158,7 @@ fn hash_works() {
 }
 
 #[test]
+#[ignore]
 fn macro_block_works() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -205,6 +208,7 @@ fn macro_block_works() {
 }
 
 #[test]
+#[ignore]
 fn wrong_prepare_agg_pk() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -251,6 +255,7 @@ fn wrong_prepare_agg_pk() {
 }
 
 #[test]
+#[ignore]
 fn wrong_commit_agg_pk() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -297,6 +302,7 @@ fn wrong_commit_agg_pk() {
 }
 
 #[test]
+#[ignore]
 fn wrong_block_number() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -337,6 +343,7 @@ fn wrong_block_number() {
 }
 
 #[test]
+#[ignore]
 fn wrong_pks_commitment() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -383,6 +390,7 @@ fn wrong_pks_commitment() {
 }
 
 #[test]
+#[ignore]
 fn wrong_header_hash() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -432,6 +440,7 @@ fn wrong_header_hash() {
 }
 
 #[test]
+#[ignore]
 fn wrong_prepare_signature() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -481,6 +490,7 @@ fn wrong_prepare_signature() {
 }
 
 #[test]
+#[ignore]
 fn wrong_commit_signature() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -530,6 +540,7 @@ fn wrong_commit_signature() {
 }
 
 #[test]
+#[ignore]
 fn too_few_signers_prepare() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -577,6 +588,7 @@ fn too_few_signers_prepare() {
 }
 
 #[test]
+#[ignore]
 fn too_few_signers_commit() {
     // Create random keys.
     let rng = &mut test_rng();
@@ -624,6 +636,7 @@ fn too_few_signers_commit() {
 }
 
 #[test]
+#[ignore]
 fn mismatched_signer_sets() {
     // Create random keys.
     let rng = &mut test_rng();

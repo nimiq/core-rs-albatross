@@ -19,11 +19,11 @@ use nano_sync::primitives::{
 };
 use nano_sync::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
-// When running tests you are advised to set VALIDATOR_SLOTS in constants.rs to a more manageable
-// number. We advise setting VALIDATOR_SLOTS = 64. Even then, you can only run one test at a time or
-// you'll run out of RAM.
+// When running tests you are advised to run only one test at a time or you might run out of RAM.
+// Also they take a long time to run. This is why they have the ignore flag.
 
 #[test]
+#[ignore]
 fn everything_works() {
     // Create random public key.
     let rng = &mut test_rng();
@@ -90,7 +90,7 @@ fn everything_works() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        position,
+        vec![position],
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -102,6 +102,7 @@ fn everything_works() {
 }
 
 #[test]
+#[ignore]
 fn wrong_pks() {
     // Create random public key.
     let rng = &mut test_rng();
@@ -175,7 +176,7 @@ fn wrong_pks() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        position,
+        vec![position],
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -184,6 +185,7 @@ fn wrong_pks() {
 }
 
 #[test]
+#[ignore]
 fn wrong_merkle_proof() {
     // Create random public key.
     let rng = &mut test_rng();
@@ -250,7 +252,7 @@ fn wrong_merkle_proof() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        position,
+        vec![position],
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -259,6 +261,7 @@ fn wrong_merkle_proof() {
 }
 
 #[test]
+#[ignore]
 fn wrong_agg_pk() {
     // Create random public key.
     let rng = &mut test_rng();
@@ -325,7 +328,7 @@ fn wrong_agg_pk() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        position,
+        vec![position],
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -334,6 +337,7 @@ fn wrong_agg_pk() {
 }
 
 #[test]
+#[ignore]
 fn wrong_commitment() {
     // Create random public key.
     let rng = &mut test_rng();
@@ -400,7 +404,7 @@ fn wrong_commitment() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        position,
+        vec![position],
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -409,6 +413,7 @@ fn wrong_commitment() {
 }
 
 #[test]
+#[ignore]
 fn wrong_bitmap() {
     // Create random public key.
     let rng = &mut test_rng();
@@ -475,7 +480,7 @@ fn wrong_bitmap() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        position,
+        vec![position],
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -484,6 +489,7 @@ fn wrong_bitmap() {
 }
 
 #[test]
+#[ignore]
 fn wrong_position() {
     // Create random public key.
     let rng = &mut test_rng();
@@ -553,7 +559,7 @@ fn wrong_position() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        (PK_TREE_BREADTH - 1) as u8,
+        vec![(PK_TREE_BREADTH - 1) as u8],
     );
 
     c.generate_constraints(&mut test_cs).unwrap();

@@ -71,9 +71,12 @@ mod test {
     use bls;
 
     fn create_multisig() -> MultiSignature {
-        let raw_key =
-            hex::decode("03480bdb948113a00dc9afbc83699944c23aa1005fa4f62c654517912adfa1cf")
-                .unwrap();
+        let raw_key = hex::decode(
+            "1b9e470e0deb06fe55774bb2cf499b411f55265c10d8d78742078381803451e058c88\
+            391431799462edde4c7872649964137d8e03cd618dd4a25690c56ffd7f42fb7ae8049d29f38d569598b38d4\
+            39f69107cc0b6f4ecd00a250c74409510100",
+        )
+        .unwrap();
         let key_pair = bls::KeyPair::deserialize_from_vec(&raw_key).unwrap();
         let signature = key_pair.sign(&"foobar");
         IndividualSignature::new(signature, 1).as_multisig()
@@ -86,7 +89,7 @@ mod test {
         let update_2: LevelUpdate = Deserialize::deserialize_from_vec(&data).unwrap();
 
         assert_eq!(data.len(), update.serialized_size());
-        assert_eq!(update.serialized_size(), 61);
+        assert_eq!(update.serialized_size(), 109);
         assert!(update_2.individual.is_none());
         assert_eq!(update_2.level, 2);
         assert_eq!(update_2.origin, 3);
@@ -95,6 +98,6 @@ mod test {
     #[test]
     fn test_serialize_deserialize_with_message() {
         let update = LevelUpdate::new(create_multisig(), None, 2, 3).with_tag(42u64);
-        assert_eq!(update.serialized_size(), 61 + 8);
+        assert_eq!(update.serialized_size(), 109 + 8);
     }
 }

@@ -3,7 +3,7 @@ use algebra::mnt6_753::{Fr, G2Projective};
 use algebra_core::fields::Field;
 use algebra_core::{test_rng, ProjectiveCurve};
 use r1cs_core::ConstraintSystem;
-use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
+use r1cs_std::mnt6_753::G1Gadget;
 use r1cs_std::prelude::{AllocGadget, UInt32, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
@@ -13,7 +13,11 @@ use nano_sync::gadgets::mnt4::StateCommitmentGadget;
 use nano_sync::primitives::{merkle_tree_construct, pedersen_generators, state_commitment};
 use nano_sync::utils::{bytes_to_bits, serialize_g2_mnt6};
 
+// When running tests you are advised to run only one test at a time or you might run out of RAM.
+// Also they take a long time to run. This is why they have the ignore flag.
+
 #[test]
+#[ignore]
 fn state_commitment_works() {
     // Initialize the constraint system.
     let mut cs = TestConstraintSystem::<MNT4Fr>::new();

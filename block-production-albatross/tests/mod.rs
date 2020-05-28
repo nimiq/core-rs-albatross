@@ -22,7 +22,10 @@ use nimiq_primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
+const SECRET_KEY: &'static str =
+    "8e44b45f308dae1e2d4390a0f96cea993960d4178550c62aeaba88e9e168d165a8dadd6e1c553412d5c0f191e83ffc\
+    5a4b71bf45df6b5a125ec2c4a9a40643597cb6b5c3b588d55a363f1b56ac839eee4a6ff848180500f2fc29d1c0595f0\
+    000";
 
 #[test]
 fn it_can_produce_micro_blocks() {
@@ -110,21 +113,21 @@ fn sign_macro_block(proposal: PbftProposal, extrinsics: Option<MacroExtrinsics>)
         PbftPrepareMessage {
             block_hash: block_hash.clone(),
         },
-        &keypair.secret,
+        &keypair.secret_key,
         0,
     );
     let commit = SignedPbftCommitMessage::from_message(
         PbftCommitMessage {
             block_hash: block_hash.clone(),
         },
-        &keypair.secret,
+        &keypair.secret_key,
         0,
     );
 
     // create proof
     let mut pbft_proof = PbftProofBuilder::new();
-    pbft_proof.add_prepare_signature(&keypair.public, policy::SLOTS, &prepare);
-    pbft_proof.add_commit_signature(&keypair.public, policy::SLOTS, &commit);
+    pbft_proof.add_prepare_signature(&keypair.public_key, policy::SLOTS, &prepare);
+    pbft_proof.add_commit_signature(&keypair.public_key, policy::SLOTS, &commit);
 
     MacroBlock {
         header: proposal.header,
@@ -147,10 +150,10 @@ fn sign_view_change(
         prev_seed,
     };
     let signed_view_change =
-        SignedViewChange::from_message(view_change.clone(), &keypair.secret, 0);
+        SignedViewChange::from_message(view_change.clone(), &keypair.secret_key, 0);
 
     let mut proof_builder = ViewChangeProofBuilder::new();
-    proof_builder.add_signature(&keypair.public, policy::SLOTS, &signed_view_change);
+    proof_builder.add_signature(&keypair.public_key, policy::SLOTS, &signed_view_change);
     assert_eq!(
         proof_builder.verify(&view_change, policy::TWO_THIRD_SLOTS),
         Ok(())
@@ -158,7 +161,7 @@ fn sign_view_change(
 
     let proof = proof_builder.build();
     let validators = ValidatorSlots::new(vec![ValidatorSlotBand::new(
-        LazyPublicKey::from(keypair.public),
+        LazyPublicKey::from(keypair.public_key),
         Address::default(),
         policy::SLOTS,
     )]);
