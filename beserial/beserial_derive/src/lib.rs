@@ -1,5 +1,82 @@
 #![recursion_limit = "128"]
 
+//! This crate allows to automatically derive Serialize and Deserialize implementations for beserial.
+//!
+//! While the derivation for basic structs works simply by adding `#[derive(Serialize, Deserialize)]`,
+//! there are multiple advanced options possible.
+//!
+//! ## (De-)serializing structs
+//! If the struct contains fields that have an unknown size (such as `Vec`) and these implement
+//! `SerializeWithLength` and `DeserializeWithLength`, automatic derivation is still possible.
+//! You can add the `#[beserial(len_type(X))]` attribute to the field and specify how the length
+//! should be encoded (`u8`, `u16`, or `u32`).
+//!
+//! Other field options are:
+//! - `#[beserial(skip)]` skips this field during (de-)serialization and relies on `Default` instead
+//! - `#[beserial(skip(default = X))]` same as `skip` but allows to give a custom default value literal
+//! - `#[beserial(len_type(X))]` see above, allows to derive (de-)serialization for fields
+//!   implementing `(De-)SerializeWithLength`
+//! - `#[beserial(len_type(X, limit = Y))]` same as `len_type` but allows to specify a custom
+//!   limit on the length during deserialization
+//!
+//! ## (De-)serializing enums
+//! Enums are a special case as they require a discriminant for each enum case.
+//! For the derivation to know how the discriminant should be encoded, it is required that
+//! the enum itself has a `#[repr(X)]` attribute or `#[beserial(uvar)]`.
+//!
+//! An enum with `#[repr(u8)]`, for example, will encode the enum case as a `u8`.
+//! Given `#[beserial(uvar)]`, the discriminant will be encoded as a variable sized unsigned int.
+//!
+//! By default, the discriminant starts at 0 for the first case and increases by 1.
+//! For enums that do not carry any data, you can specify the discriminant directly
+//! as long as the enum implements `Copy`:
+//! ```
+//! # #[macro_use] extern crate beserial_derive;
+//! # fn main() {
+//! use beserial::{Serialize, Deserialize};
+//! #[derive(Serialize, Deserialize, Copy, Clone)]
+//! #[repr(u8)]
+//! enum Foo {
+//!     A = 1,
+//!     B = 5,
+//! }
+//! # }
+//! ```
+//!
+//! For enums carrying data, you can specify the discriminant via `#[beserial(discriminant = X)]`:
+//! ```
+//! # #[macro_use] extern crate beserial_derive;
+//! # fn main() {
+//! use beserial::{Serialize, Deserialize};
+//! #[derive(Serialize, Deserialize)]
+//! #[repr(u8)]
+//! enum Foo {
+//!     #[beserial(discriminant = 1)]
+//!     A(bool),
+//!     #[beserial(discriminant = 5)]
+//!     B(u8),
+//! }
+//! # }
+//! ```
+//!
+//! *Note:* Fields in data-carrying enums are allowed to have the same options as available in structs.
+//! This means that you can create enum cases that carry a `Vec` and you can specify the `len_type`
+//! for this `Vec`.
+//! ```
+//! # #[macro_use] extern crate beserial_derive;
+//! # fn main() {
+//! use beserial::{Serialize, Deserialize};
+//! #[derive(Serialize, Deserialize)]
+//! #[repr(u8)]
+//! enum Foo {
+//!     #[beserial(discriminant = 1)]
+//!     A(#[beserial(len_type(u8, limit = 2))] Vec<u16>),
+//!     #[beserial(discriminant = 5)]
+//!     B(u8),
+//! }
+//! # }
+//! ```
+
 extern crate proc_macro;
 
 use proc_macro2::{Span, TokenStream};
@@ -10,7 +87,7 @@ use quote::quote;
 enum FieldAttribute {
     Uvar,
     Skip(Option<syn::Lit>),
-    LenType(syn::Ident),
+    LenType(syn::Ident, Option<usize>),
     Discriminant(u64),
 }
 
@@ -35,20 +112,49 @@ fn parse_field_attribs(attrs: &[syn::Attribute]) -> Option<FieldAttribute> {
                             // something nested with item(_)
                             Meta::List(ref meta_list) => {
                                 if cmp_ident(&meta_list.path, "len_type") {
+                                    // len_type accepts the len type (mandatory) and a limit
+                                    let mut len_type = None;
+                                    let mut limit = None;
                                     for nested in meta_list.nested.iter() {
                                         if let syn::NestedMeta::Meta(ref item) = nested {
-                                            if let Meta::Path(value) = item {
-                                                if !cmp_ident(value, "u8")
-                                                    && !cmp_ident(value, "u16")
-                                                    && !cmp_ident(value, "u32")
-                                                {
-                                                    panic!("beserial(len_type) must be one of [u8, u16, u32], but was {:?}", value);
+                                            match item {
+                                                Meta::Path(value) => {
+                                                    if !cmp_ident(value, "u8")
+                                                        && !cmp_ident(value, "u16")
+                                                        && !cmp_ident(value, "u32")
+                                                    {
+                                                        panic!("beserial(len_type) must be one of [u8, u16, u32], but was {:?}", value);
+                                                    }
+                                                    len_type =
+                                                        Some(value.get_ident().cloned().unwrap());
                                                 }
-                                                return Some(FieldAttribute::LenType(
-                                                    value.get_ident().cloned().unwrap(),
-                                                ));
+                                                Meta::NameValue(name_value) => {
+                                                    if !cmp_ident(&name_value.path, "limit") {
+                                                        panic!("beserial(len_type) can only have an additional limit attribute, but was {:?}", name_value);
+                                                    }
+                                                    // We do have something like beserial(discriminant = 123).
+                                                    // Parse discriminant.
+                                                    if let syn::Lit::Int(lit_int) = &name_value.lit
+                                                    {
+                                                        if let Ok(l) =
+                                                            lit_int.base10_parse::<usize>()
+                                                        {
+                                                            limit = Some(l);
+                                                        } else {
+                                                            panic!(
+                                                                "limit cannot be parsed as usize"
+                                                            );
+                                                        }
+                                                    } else {
+                                                        panic!("non-integer limit");
+                                                    }
+                                                }
+                                                _ => {}
                                             }
                                         }
+                                    }
+                                    if let Some(len_type) = len_type {
+                                        return Some(FieldAttribute::LenType(len_type, limit));
                                     }
                                 }
                                 if cmp_ident(&meta_list.path, "skip") {
@@ -142,13 +248,22 @@ fn enum_has_data_attached(enum_def: &syn::DataEnum) -> bool {
         .any(|variant| variant.fields != syn::Fields::Unit)
 }
 
-fn expr_from_value(value: u64) -> syn::Expr {
+fn expr_from_u64(value: u64) -> syn::Expr {
     let lit_int = syn::LitInt::new(&value.to_string(), Span::call_site());
     let expr_lit = syn::ExprLit {
         attrs: vec![],
         lit: syn::Lit::Int(lit_int),
     };
     syn::Expr::from(expr_lit)
+}
+
+fn expr_from_limit(limit: &Option<usize>) -> TokenStream {
+    match limit {
+        None => quote! { None },
+        Some(limit) => {
+            quote! { Some(#limit) }
+        }
+    }
 }
 
 fn int_to_correct_type(value: TokenStream, ty: &syn::Ident, uvar: bool) -> TokenStream {
@@ -173,7 +288,7 @@ fn impl_serialize_field(
 ) -> Option<(TokenStream, TokenStream)> {
     let len_type = match parse_field_attribs(&field.attrs) {
         Some(FieldAttribute::Skip(_)) => return None,
-        Some(FieldAttribute::LenType(ty)) => Some(ty),
+        Some(FieldAttribute::LenType(ty, _)) => Some(ty),
         _ => None,
     };
 
@@ -263,7 +378,7 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
                     };
                     first = false;
 
-                    let discriminant_expr = expr_from_value(discriminant);
+                    let discriminant_expr = expr_from_u64(discriminant);
                     let discriminant_ts =
                         int_to_correct_type(quote! { #discriminant_expr }, &ty, uvar);
                     let variant_ident = &variant.ident;
@@ -415,8 +530,9 @@ fn impl_deserialize_field(field: &syn::Field) -> TokenStream {
         }
 
         // tuple field with len_type
-        (None, Some(FieldAttribute::LenType(ty))) => {
-            quote! { ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, }
+        (None, Some(FieldAttribute::LenType(ty, limit))) => {
+            let limit = expr_from_limit(limit);
+            quote! { ::beserial::DeserializeWithLength::deserialize_with_limit::<#ty,R>(reader, #limit)?, }
         }
         // tuple field without len_type
         (None, None) => {
@@ -424,8 +540,9 @@ fn impl_deserialize_field(field: &syn::Field) -> TokenStream {
         }
 
         // struct field with len_type
-        (Some(ident), Some(FieldAttribute::LenType(ty))) => {
-            quote! { #ident: ::beserial::DeserializeWithLength::deserialize::<#ty,R>(reader)?, }
+        (Some(ident), Some(FieldAttribute::LenType(ty, limit))) => {
+            let limit = expr_from_limit(limit);
+            quote! { #ident: ::beserial::DeserializeWithLength::deserialize_with_limit::<#ty,R>(reader, #limit)?, }
         }
         // struct field without len_type
         (Some(ident), None) => {
@@ -466,7 +583,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
 
             // Deserialization works more generically.
             // We have to build a match anyway.
-            let mut discriminant = expr_from_value(0);
+            let mut discriminant = expr_from_u64(0);
             let mut first = true;
             let mut match_cases = Vec::<TokenStream>::new();
             let has_data = enum_has_data_attached(data_enum);
@@ -480,13 +597,13 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
                 if has_data {
                     match parse_field_attribs(&variant.attrs) {
                         // Some(FieldAttribute::Skip(_)) => continue, // For now, we do not allow skipping inside an enum.
-                        Some(FieldAttribute::Discriminant(d)) => discriminant = expr_from_value(d),
+                        Some(FieldAttribute::Discriminant(d)) => discriminant = expr_from_u64(d),
                         _ => {
                             // Only increase discriminant if we are not looking at the first variant.
                             if !first {
                                 if let syn::Expr::Lit(ref expr_lit) = discriminant {
                                     if let syn::Lit::Int(lit_int) = &expr_lit.lit {
-                                        discriminant = expr_from_value(
+                                        discriminant = expr_from_u64(
                                             lit_int.base10_parse::<u64>().map(|x| x + 1).unwrap(),
                                         );
                                     } else {
@@ -506,7 +623,7 @@ fn impl_deserialize(ast: &syn::DeriveInput) -> TokenStream {
                             if !first {
                                 if let syn::Expr::Lit(ref expr_lit) = discriminant {
                                     if let syn::Lit::Int(lit_int) = &expr_lit.lit {
-                                        discriminant = expr_from_value(
+                                        discriminant = expr_from_u64(
                                             lit_int.base10_parse::<u64>().map(|x| x + 1).unwrap(),
                                         );
                                     } else {

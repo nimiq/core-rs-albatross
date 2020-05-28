@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate beserial_derive;
 
-use beserial::{uvar, Deserialize, Serialize};
+use beserial::{uvar, Deserialize, Serialize, SerializingError};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -48,7 +48,7 @@ enum TestWithData {
     C {
         test: u16,
         test2: bool,
-        #[beserial(len_type(u8))]
+        #[beserial(len_type(u8, limit = 2))]
         v: Vec<u8>,
     },
     D,
@@ -159,4 +159,15 @@ fn it_can_handle_enums_with_data() {
         11
     );
     assert_eq!(Serialize::serialize_to_vec(&TestWithData::D)[0], 12);
+
+    // Limit
+    let v = Serialize::serialize_to_vec(&TestWithData::C {
+        test: 514,
+        test2: false,
+        v: vec![1, 2, 3],
+    });
+    assert_eq!(
+        TestWithData::deserialize_from_vec(&mut &v[..]),
+        Err(SerializingError::LimitExceeded)
+    );
 }
