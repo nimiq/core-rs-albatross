@@ -145,7 +145,7 @@ impl Recipient {
     /// let validator_key_pair = KeyPair::generate_default_csprng();
     ///
     /// let staking_contract = Address::from_any_str("NQ25 B7NR A1HC V4R2 YRKD 20PR RPGS MNV7 D812").unwrap();
-    /// let validator_key = validator_key_pair.public;
+    /// let validator_key = validator_key_pair.public_key;
     /// let mut recipient_builder = Recipient::new_staking_builder(staking_contract);
     /// recipient_builder.stake(&validator_key, None);
     /// let recipient = recipient_builder.generate();

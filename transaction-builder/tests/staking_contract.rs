@@ -273,7 +273,10 @@ fn it_can_verify_validator_transactions() {
 }
 
 fn bls_key_pair() -> BlsKeyPair {
-    const BLS_PRIVKEY: &str = "30a891c851e27600fefa7b0a84eac9caa645c98f2790e715fa09e49cb34fd73c";
+    const BLS_PRIVKEY: &str =
+        "93ded88af373537a2fad738892ae29cf012bb27875cb66af9278991acbcb8e44f414\
+    9c27fe9d62a31ae8537fc4891e935e1303c511091095c0ad083a1cfc0f5f223c394c2d5109288e639cde0692facc9fd\
+    221a806c0003835db99b423360000";
     BlsKeyPair::from_secret(
         &Deserialize::deserialize(&mut &hex::decode(BLS_PRIVKEY).unwrap()[..]).unwrap(),
     )

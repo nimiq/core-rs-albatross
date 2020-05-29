@@ -226,7 +226,7 @@ impl TransactionProofBuilder {
     ///
     /// let sender_address = Address::from(&key_pair.public);
     /// let mut recipient = Recipient::new_staking_builder(staking_contract_address);
-    /// recipient.update_validator(&bls_key_pair.public, None, Some(sender_address.clone()));
+    /// recipient.update_validator(&bls_key_pair.public_key, None, Some(sender_address.clone()));
     ///
     /// let tx_builder = TransactionBuilder::with_required(
     ///     sender_address,
