@@ -53,7 +53,7 @@ before_script:
 script:
   - if [[ -n ${RUN_CLIPPY:+x} ]] && [[ -z ${NO_CLIPPY+x} ]]; then cargo clippy --all-features; fi
   - if [[ -n ${TEST_CRATES:+x} ]]; then echo $TEST_CRATES; fi
-  - if [[ -n ${TEST_CRATES:+x} ]]; then cargo test --verbose --all-features $TEST_CRATES; fi
+  - if [[ -n ${TEST_CRATES:+x} ]]; then travis_wait 60 cargo test --release --verbose --all-features $TEST_CRATES; fi
 
 # Don't cache registry as it accumulates dead weight as dependencies are updated
 # Also downloading this from crates.io is probably faster as downloading from travis cache
