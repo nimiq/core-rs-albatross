@@ -284,8 +284,7 @@ pub(crate) fn obj_to_transaction(obj: &JsonValue, current_height: u32, network_i
         .ok_or_else(|| object! {"message" => "Invalid transaction value"})?)
         .map_err(|_| object! {"message" => "Invalid transaction value"})?;
 
-    // FIXME Wrong fee
-    let fee = Coin::try_from(obj["value"].as_u64()
+    let fee = Coin::try_from(obj["fee"].as_u64()
         .ok_or_else(|| object! {"message" => "Invalid transaction fee"})?)
         .map_err(|_| object! {"message" => "Invalid transaction fee"})?;
 
