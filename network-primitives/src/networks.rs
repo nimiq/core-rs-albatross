@@ -153,7 +153,7 @@ lazy_static! {
             network_id: NetworkId::DevAlbatross,
             name: "dev-albatross",
             seed_peers: vec![
-                //create_seed_peer_addr_ws("albatross.nimiq.dev", 8444, "5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377"),
+                create_seed_peer_addr_ws("seed1.validators.devnet.nimiq.dev", 8443, "5af4c3f30998573e8d3476cd0e0543bf7adba576ef321342e41c2bccc246c377")
             ],
             seed_lists: vec![],
             genesis: include!(concat!(env!("OUT_DIR"), "/genesis/dev-albatross/genesis.rs")),
