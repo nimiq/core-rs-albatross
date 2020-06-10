@@ -307,6 +307,9 @@ impl Validator {
                 state.slots = Some(slots);
                 state.status = ValidatorStatus::Active;
 
+                // Drop the lock before notifying
+                drop(state);
+
                 // Notify validator network that we have finality and update epoch-related state
                 // (i.e. set the validator ID)
                 self.validator_network.reset_epoch(Some(pk_idx as usize));
@@ -316,6 +319,9 @@ impl Validator {
                 state.pk_idx = None;
                 state.slots = None;
                 state.status = if self.is_potential_validator() { ValidatorStatus::Potential } else { ValidatorStatus::Synced };
+
+                // Drop the lock before notifying
+                drop(state);
 
                 // Notify validator network that we have finality and update epoch-related state
                 // (i.e. remove the validator ID)

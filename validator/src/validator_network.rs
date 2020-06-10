@@ -435,6 +435,10 @@ impl ValidatorNetwork {
 
             if votes > votes_before {
                 debug!("View change progress: {}", fmt_vote_progress(aggregation.votes()));
+
+                // Drop the lock before notifying
+                drop(state);
+
                 self.notifier.read().notify(ValidatorNetworkEvent::ViewChangeUpdate(Box::new(ViewChangeUpdateEvent {
                     view_change,
                     votes
@@ -455,6 +459,9 @@ impl ValidatorNetwork {
             // Insert into view change map
             let mut state = RwLockUpgradableReadGuard::upgrade(state);
             state.view_changes.insert(view_change.clone(), aggregation);
+
+            // Drop the lock before notifying
+            drop(state);
 
             self.notifier.read().notify(ValidatorNetworkEvent::ViewChangeUpdate(Box::new(ViewChangeUpdateEvent {
                 view_change,
