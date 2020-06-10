@@ -15,6 +15,7 @@ use primitives::account::AccountType;
 use primitives::coin::Coin;
 use transaction::account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData};
 use transaction::Transaction;
+use validator::validator::Validator;
 
 use crate::handler::Method;
 use crate::handlers::mempool::MempoolHandler;
@@ -23,6 +24,7 @@ use crate::handlers::wallet::UnlockedWalletManager;
 
 pub struct MempoolAlbatrossHandler {
     pub mempool: Arc<Mempool<Blockchain>>,
+    pub validator: Option<Arc<Validator>>,
     pub unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     generic: MempoolHandler<AlbatrossConsensusProtocol>,
 }
@@ -30,10 +32,12 @@ pub struct MempoolAlbatrossHandler {
 impl MempoolAlbatrossHandler {
     pub fn new(
         mempool: Arc<Mempool<Blockchain>>,
+        validator: Option<Arc<Validator>>,
         unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
     ) -> Self {
         Self {
             mempool: Arc::clone(&mempool),
+            validator,
             unlocked_wallets: unlocked_wallets.as_ref().map(Arc::clone),
             generic: MempoolHandler::new(mempool, unlocked_wallets),
         }
@@ -55,7 +59,7 @@ impl MempoolAlbatrossHandler {
     /// - amount: Initial staking amount in Luna
     /// - fee: Fee for transaction in Luna
     pub(crate) fn create_validator(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let sender_address = Self::parse_address(params.get(0).unwrap_or(&Null), "reward")?;
+        let sender_address = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
         let validator_key = params.get(1)
             .and_then(JsonValue::as_str)
             .ok_or_else(|| object! {"message" => "Invalid validator key"})
@@ -101,6 +105,61 @@ impl MempoolAlbatrossHandler {
         );
 
         debug!("Transaction data: {:#?}", staking_data);
+
+        let unlocked_wallets = self.unlocked_wallets.as_ref()
+            .ok_or_else(|| object! {"message" => "No wallets"})?;
+        let unlocked_wallets = unlocked_wallets.read();
+        let wallet_account = unlocked_wallets.get(&tx.sender)
+            .ok_or_else(|| object! {"message" => "Sender account is locked"})?;
+        wallet_account.sign_transaction(&mut tx);
+
+        self.generic.push_transaction(tx)
+    }
+
+    /// Reactivate validator
+    /// Parameters:
+    /// - sender_address: NIM address used to create this transaction
+    /// - validator_key: Public key of validator (BLS)
+    /// - fee: Fee for transaction in Luna
+    pub(crate) fn reactivate_validator(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        let sender_address = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
+        let validator_key = params.get(1)
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| object! {"message" => "Invalid validator key"})
+            .and_then(|it| hex::decode(it)
+                .map_err(|_| object! {"message" => "Validator key must be hex-encoded"}))
+            .and_then(|it| CompressedPublicKey::deserialize_from_vec(&it)
+                .map_err(|_| object! {"message" => "Invalid public key"}))?;
+        let fee = params.get(2)
+            .and_then(JsonValue::as_u64)
+            .unwrap_or(0)
+            .try_into()
+            .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
+
+        let network_id = self.mempool.network_id();
+        let staking_contract = NetworkInfo::from_network_id(network_id)
+            .validator_registry_address().unwrap();
+
+        let staking_data = IncomingStakingTransactionData::ReactivateValidator {
+            validator_key,
+            signature: CompressedSignature::default(), // Placeholder for real signature
+        };
+
+        let mut tx = Transaction::new_signalling(
+            sender_address, AccountType::Basic,    // sender
+            staking_contract.clone(), AccountType::Staking, // recipient
+            Coin::ZERO, fee,                       // amount, fee
+            staking_data.serialize_to_vec(),       // data
+            self.mempool.current_height(),         // validity_start_height
+            network_id,                            // network_id
+        );
+
+        let signature = self.validator.as_ref().unwrap().validator_key.sign(&tx).compress();
+        tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(
+            &tx.data, signature
+        ).unwrap();
+
+        // debug!("Transaction data: {:#?}", IncomingStakingTransactionData::deserialize(&mut tx.data)?);
 
         let unlocked_wallets = self.unlocked_wallets.as_ref()
             .ok_or_else(|| object! {"message" => "No wallets"})?;
@@ -271,6 +330,7 @@ impl Module for MempoolAlbatrossHandler {
         "mempoolContent" => generic.mempool_content,
         "mempool" => generic.mempool,
         "createValidator" => create_validator,
+        "reactivateValidator" => reactivate_validator,
         "stake" => stake,
         "retire" => retire,
         "unstake" => unstake,
