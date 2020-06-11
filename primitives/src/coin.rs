@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
 use std::io;
-use std::ops::{Add, AddAssign, Sub, SubAssign, Div, Rem};
+use std::ops::{Add, AddAssign, Div, Rem, Sub, SubAssign};
 use std::str::FromStr;
 
 use failure::Fail;
@@ -15,7 +15,7 @@ pub struct Coin(u64);
 impl Coin {
     pub const ZERO: Coin = Coin(0u64);
 
-    // How many Lunas fit in once Coin
+    // How many Lunas fit in one Coin
     pub const LUNAS_PER_COIN: u64 = 100_000u64;
     pub const FRAC_DIGITS: u32 = 5u32;
 
@@ -28,7 +28,7 @@ impl Coin {
     }
 
     // NOTE: We implement a trait that does this, but we don't always want to have to import
-    // a whole create to check if a coin value is zero.
+    // a whole trait to check if a coin value is zero.
     pub fn is_zero(&self) -> bool {
         self.0 == 0
     }
@@ -60,7 +60,9 @@ impl Coin {
 
 impl From<Coin> for u64 {
     #[inline]
-    fn from(coin: Coin) -> Self { coin.0 }
+    fn from(coin: Coin) -> Self {
+        coin.0
+    }
 }
 
 impl TryFrom<u64> for Coin {
@@ -142,9 +144,13 @@ impl fmt::Display for Coin {
         let frac_part = self.0 % Coin::LUNAS_PER_COIN;
         if frac_part == 0 {
             write!(f, "{}", self.0 / Coin::LUNAS_PER_COIN)
-        }
-        else {
-            write!(f, "{}.{:05}", self.0 / Coin::LUNAS_PER_COIN, self.0 % Coin::LUNAS_PER_COIN)
+        } else {
+            write!(
+                f,
+                "{}.{:05}",
+                self.0 / Coin::LUNAS_PER_COIN,
+                self.0 % Coin::LUNAS_PER_COIN
+            )
         }
     }
 }
@@ -186,7 +192,6 @@ pub enum CoinParseError {
     Overflow,
 }
 
-
 impl FromStr for Coin {
     type Err = CoinParseError;
 
@@ -194,40 +199,48 @@ impl FromStr for Coin {
         // NOTE: I would like to use a RegEx here, but this needs a crate - Janosch
         let split: Vec<&str> = s.split('.').collect();
 
-        // check that string is either 1 part or 2 parts seperated by a `.`
+        // Check that string is either 1 part or 2 parts separated by a `.`
         if split.len() != 1 && split.len() != 2 {
             return Err(CoinParseError::InvalidString);
         }
-        // try to parse integer part
+        // Try to parse integer part
         // TODO: Do we accept int_part == "" as being 0?
-        let int_part = split[0].parse::<u64>().map_err(|_| CoinParseError::InvalidString)?;
-        // try to parse fractional part, if available
+        let int_part = split[0]
+            .parse::<u64>()
+            .map_err(|_| CoinParseError::InvalidString)?;
+
+        // Try to parse fractional part, if available
         // TODO: Do we accept frac_part == "" as being 0?
         let frac_part = if split.len() == 2 {
-            // check that number of digits doesn't overflow MAX_VALUE of u8
+            // Check that number of digits doesn't overflow MAX_VALUE of u8
             if split[1].len() > (std::u8::MAX as usize) {
                 return Err(CoinParseError::TooManyFractionalDigits);
             }
-            // check how many digits we have in the fraction and multiply by 10^(DIGITS - n)
+            // Check how many digits we have in the fraction and multiply by 10^(DIGITS - n)
             // This cast is safe, since we checked that it doesn't overflow an u8
             let frac_len = split[1].len() as u32;
             if frac_len > Coin::FRAC_DIGITS {
                 Err(CoinParseError::TooManyFractionalDigits)
-            }
-            else {
+            } else {
                 Ok(10u64.pow(Coin::FRAC_DIGITS - frac_len))
-            }? * split[1].parse::<u64>().map_err(|_| CoinParseError::InvalidString)?
-        }
-        else { 0u64 };
-        // check that digits out of our precision (5 digits) are all 0
+            }? * split[1]
+                .parse::<u64>()
+                .map_err(|_| CoinParseError::InvalidString)?
+        } else {
+            0u64
+        };
+
+        // Check that digits out of our precision (5 digits) are all 0
         if frac_part / Coin::LUNAS_PER_COIN > 0 {
             return Err(CoinParseError::TooManyFractionalDigits);
         }
 
-        // multiply int_part with LUNAS_PER_COIN and add frac_part
+        // Multiply int_part with LUNAS_PER_COIN and add frac_part
         let value = int_part
-            .checked_mul(Coin::LUNAS_PER_COIN).ok_or(CoinParseError::Overflow)?
-            .checked_add(frac_part).ok_or(CoinParseError::Overflow)?;
+            .checked_mul(Coin::LUNAS_PER_COIN)
+            .ok_or(CoinParseError::Overflow)?
+            .checked_add(frac_part)
+            .ok_or(CoinParseError::Overflow)?;
 
         Ok(Coin::try_from(value)?)
     }

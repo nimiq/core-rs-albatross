@@ -17,7 +17,7 @@
 ///!
 ///! # Notes
 ///!
-///! * We use *Stake* and *Staker* interchangably here, since they're always identified by the
+///! * We use *Stake* and *Staker* interchangeably here, since they're always identified by the
 ///! * staker address.
 ///!
 extern crate nimiq_bls as bls;
@@ -136,7 +136,7 @@ pub trait SlotCollection {
     /// The kind of [SlotBand] that is stored in this collection.
     type SlotBand: SlotBand;
 
-    /// The total number of slots. This is contant is should always be [policy::SLOTS]
+    /// The total number of slots. This is constant is should always be [policy::SLOTS]
     const TOTAL_SLOTS: u16;
 
     fn get_band_number_by_slot_number(&self, slot_number: u16) -> Option<u16>;
@@ -168,9 +168,8 @@ pub trait SlotCollection {
     fn len(&self) -> usize;
 }
 
-/// Builder for slot collection. You can push individial slots into it and it'll compress them
+/// Builder for slot collection. You can push individual slots into it and it'll compress them
 /// into a [ValidatorSlots] and [StakeSlots] collection.
-///
 #[derive(Clone, Debug, Default)]
 pub struct SlotsBuilder {
     /// Maps validator key -> (reward address, number of slots)

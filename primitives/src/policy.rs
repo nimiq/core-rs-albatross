@@ -121,8 +121,8 @@ pub const SLOTS: u16 = 512;
 /// ceil(x/y) = (x+y-1)/y
 pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3 - 1) / 3;
 
-// Length of epoch including macro block
-pub const EPOCH_LENGTH: u32 = 128;
+/// Length of epoch including macro block
+pub const EPOCH_LENGTH: u32 = 128; // TODO: Set.
 
 /// Minimum stake in units
 pub const MIN_STAKE: u64 = 1;
