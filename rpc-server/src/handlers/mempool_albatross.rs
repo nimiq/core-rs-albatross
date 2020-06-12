@@ -122,6 +122,9 @@ impl MempoolAlbatrossHandler {
     /// - validator_key: Public key of validator (BLS)
     /// - fee: Fee for transaction in Luna
     pub(crate) fn reactivate_validator(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        // Make sure a validator object is available
+        let validator = self.validator.as_ref().ok_or_else(|| object! {"message" => "No validator configured"})?;
+
         let sender_address = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
         let validator_key = params.get(1)
             .and_then(JsonValue::as_str)
@@ -154,7 +157,7 @@ impl MempoolAlbatrossHandler {
             network_id,                            // network_id
         );
 
-        let signature = self.validator.as_ref().unwrap().validator_key.sign(&tx).compress();
+        let signature = validator.validator_key.sign(&tx).compress();
         tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(
             &tx.data, signature
         ).unwrap();
