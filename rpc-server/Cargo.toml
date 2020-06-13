@@ -46,6 +46,7 @@ nimiq-network = { path = "../network", version = "0.1", features = ["metrics"] }
 nimiq-network-primitives = { path = "../network-primitives", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-transaction-builder = { path = "../transaction-builder", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["merkle", "time", "otp"] }
 nimiq-validator = { path = "../validator", version = "0.1", optional = true}
 nimiq-wallet = { path = "../wallet", version = "0.1" }

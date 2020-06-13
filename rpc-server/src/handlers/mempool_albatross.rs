@@ -16,6 +16,7 @@ use primitives::coin::Coin;
 use transaction::account::staking_contract::{IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData};
 use transaction::Transaction;
 use validator::validator::Validator;
+use nimiq_transaction_builder::{Recipient, TransactionBuilder, recipient::staking_contract::StakingRecipientBuilder};
 
 use crate::handler::Method;
 use crate::handlers::mempool::MempoolHandler;
@@ -118,176 +119,104 @@ impl MempoolAlbatrossHandler {
 
     /// Retire validator
     /// Parameters:
-    /// - sender_address: NIM address used to create this transaction
-    /// - validator_key: Public key of validator (BLS)
+    /// - sender: NIM address used to create this transaction
     /// - fee: Fee for transaction in Luna
     pub(crate) fn retire_validator(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // Make sure a validator object is available
         let validator = self.validator.as_ref().ok_or_else(|| object! {"message" => "No validator configured"})?;
 
-        let sender_address = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
-        let validator_key = params.get(1)
-            .and_then(JsonValue::as_str)
-            .ok_or_else(|| object! {"message" => "Invalid validator key"})
-            .and_then(|it| hex::decode(it)
-                .map_err(|_| object! {"message" => "Validator key must be hex-encoded"}))
-            .and_then(|it| CompressedPublicKey::deserialize_from_vec(&it)
-                .map_err(|_| object! {"message" => "Invalid public key"}))?;
-        let fee = params.get(2)
+        let sender = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
+        let fee = params.get(1)
             .and_then(JsonValue::as_u64)
             .unwrap_or(0)
             .try_into()
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
-        let network_id = self.mempool.network_id();
-        let staking_contract = NetworkInfo::from_network_id(network_id)
+        let staking_contract = NetworkInfo::from_network_id(self.mempool.network_id())
             .validator_registry_address().unwrap();
 
-        let staking_data = IncomingStakingTransactionData::RetireValidator {
-            validator_key,
-            signature: CompressedSignature::default(), // Placeholder for real signature
-        };
+        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        recipient.retire_validator(&validator.validator_key.public);
 
-        let mut tx = Transaction::new_signalling(
-            sender_address, AccountType::Basic,    // sender
-            staking_contract.clone(), AccountType::Staking, // recipient
-            Coin::ZERO, fee,                       // amount, fee
-            staking_data.serialize_to_vec(),       // data
-            self.mempool.current_height(),         // validity_start_height
-            network_id,                            // network_id
-        );
-
-        let signature = validator.validator_key.sign(&tx).compress();
-        tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(
-            &tx.data, signature
-        ).unwrap();
-
-        // debug!("Transaction data: {:#?}", IncomingStakingTransactionData::deserialize(&mut tx.data)?);
-
-        let unlocked_wallets = self.unlocked_wallets.as_ref()
-            .ok_or_else(|| object! {"message" => "No wallets"})?;
-        let unlocked_wallets = unlocked_wallets.read();
-        let wallet_account = unlocked_wallets.get(&tx.sender)
-            .ok_or_else(|| object! {"message" => "Sender account is locked"})?;
-        wallet_account.sign_transaction(&mut tx);
-
+        let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
         self.generic.push_transaction(tx)
     }
 
     /// Reactivate validator
     /// Parameters:
-    /// - sender_address: NIM address used to create this transaction
-    /// - validator_key: Public key of validator (BLS)
-    /// - fee: Fee for transaction in Luna
+    /// - sender: NIM address used to create this transaction
+    /// - [fee]: Fee for transaction in Luna
     pub(crate) fn reactivate_validator(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // Make sure a validator object is available
         let validator = self.validator.as_ref().ok_or_else(|| object! {"message" => "No validator configured"})?;
 
-        let sender_address = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
-        let validator_key = params.get(1)
-            .and_then(JsonValue::as_str)
-            .ok_or_else(|| object! {"message" => "Invalid validator key"})
-            .and_then(|it| hex::decode(it)
-                .map_err(|_| object! {"message" => "Validator key must be hex-encoded"}))
-            .and_then(|it| CompressedPublicKey::deserialize_from_vec(&it)
-                .map_err(|_| object! {"message" => "Invalid public key"}))?;
-        let fee = params.get(2)
+        let sender = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
+        let fee = params.get(1)
             .and_then(JsonValue::as_u64)
             .unwrap_or(0)
             .try_into()
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
-        let network_id = self.mempool.network_id();
-        let staking_contract = NetworkInfo::from_network_id(network_id)
+        let staking_contract = NetworkInfo::from_network_id(self.mempool.network_id())
             .validator_registry_address().unwrap();
 
-        let staking_data = IncomingStakingTransactionData::ReactivateValidator {
-            validator_key,
-            signature: CompressedSignature::default(), // Placeholder for real signature
-        };
+        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        recipient.reactivate_validator(&validator.validator_key.public);
 
-        let mut tx = Transaction::new_signalling(
-            sender_address, AccountType::Basic,    // sender
-            staking_contract.clone(), AccountType::Staking, // recipient
-            Coin::ZERO, fee,                       // amount, fee
-            staking_data.serialize_to_vec(),       // data
-            self.mempool.current_height(),         // validity_start_height
-            network_id,                            // network_id
-        );
-
-        let signature = validator.validator_key.sign(&tx).compress();
-        tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(
-            &tx.data, signature
-        ).unwrap();
-
-        // debug!("Transaction data: {:#?}", IncomingStakingTransactionData::deserialize(&mut tx.data)?);
-
-        let unlocked_wallets = self.unlocked_wallets.as_ref()
-            .ok_or_else(|| object! {"message" => "No wallets"})?;
-        let unlocked_wallets = unlocked_wallets.read();
-        let wallet_account = unlocked_wallets.get(&tx.sender)
-            .ok_or_else(|| object! {"message" => "Sender account is locked"})?;
-        wallet_account.sign_transaction(&mut tx);
-
+        let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
         self.generic.push_transaction(tx)
     }
 
     /// Unpark validator
     /// Parameters:
-    /// - sender_address: NIM address used to create this transaction
-    /// - validator_key: Public key of validator (BLS)
+    /// - sender: NIM address used to create this transaction
     /// - fee: Fee for transaction in Luna
     pub(crate) fn unpark_validator(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // Make sure a validator object is available
         let validator = self.validator.as_ref().ok_or_else(|| object! {"message" => "No validator configured"})?;
 
-        let sender_address = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
-        let validator_key = params.get(1)
-            .and_then(JsonValue::as_str)
-            .ok_or_else(|| object! {"message" => "Invalid validator key"})
-            .and_then(|it| hex::decode(it)
-                .map_err(|_| object! {"message" => "Validator key must be hex-encoded"}))
-            .and_then(|it| CompressedPublicKey::deserialize_from_vec(&it)
-                .map_err(|_| object! {"message" => "Invalid public key"}))?;
-        let fee = params.get(2)
+        let sender = Self::parse_address(params.get(0).unwrap_or(&Null), "sender")?;
+        let fee = params.get(1)
             .and_then(JsonValue::as_u64)
             .unwrap_or(0)
             .try_into()
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
-        let network_id = self.mempool.network_id();
-        let staking_contract = NetworkInfo::from_network_id(network_id)
+        let staking_contract = NetworkInfo::from_network_id(self.mempool.network_id())
             .validator_registry_address().unwrap();
 
-        let staking_data = IncomingStakingTransactionData::UnparkValidator {
-            validator_key,
-            signature: CompressedSignature::default(), // Placeholder for real signature
-        };
+        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        recipient.unpark_validator(&validator.validator_key.public);
 
-        let mut tx = Transaction::new_signalling(
-            sender_address, AccountType::Basic,    // sender
-            staking_contract.clone(), AccountType::Staking, // recipient
-            Coin::ZERO, fee,                       // amount, fee
-            staking_data.serialize_to_vec(),       // data
-            self.mempool.current_height(),         // validity_start_height
-            network_id,                            // network_id
-        );
+        let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
+        self.generic.push_transaction(tx)
+    }
 
-        let signature = validator.validator_key.sign(&tx).compress();
-        tx.data = IncomingStakingTransactionData::set_validator_signature_on_data(
-            &tx.data, signature
-        ).unwrap();
-
-        // debug!("Transaction data: {:#?}", IncomingStakingTransactionData::deserialize(&mut tx.data)?);
-
+    fn build_validator_signalling_transaction(&self,
+        sender: Address,
+        recipient: StakingRecipientBuilder,
+        fee: Coin
+    ) -> Result<Transaction, JsonValue> {
         let unlocked_wallets = self.unlocked_wallets.as_ref()
             .ok_or_else(|| object! {"message" => "No wallets"})?;
         let unlocked_wallets = unlocked_wallets.read();
-        let wallet_account = unlocked_wallets.get(&tx.sender)
+        let wallet_account = unlocked_wallets.get(&sender)
             .ok_or_else(|| object! {"message" => "Sender account is locked"})?;
-        wallet_account.sign_transaction(&mut tx);
 
-        self.generic.push_transaction(tx)
+        let mut tx_builder = TransactionBuilder::new();
+        tx_builder
+            .with_sender(sender)
+            .with_value(Coin::ZERO)
+            .with_fee(fee)
+            .with_network_id(self.mempool.network_id())
+            .with_validity_start_height(self.mempool.current_height())
+            .with_recipient(recipient.generate().unwrap());
+
+        let mut proof_builder = tx_builder.generate().unwrap().unwrap_signalling();
+        proof_builder.sign_with_validator_key_pair(&self.validator.as_ref().unwrap().validator_key);
+        let mut proof_builder = proof_builder.generate().unwrap().unwrap_basic();
+        proof_builder.sign_with_key_pair(&wallet_account.key_pair);
+        proof_builder.generate().ok_or_else(|| object! {"message" => "Failed to construct transaction"})
     }
 
     /// Stakes NIM
