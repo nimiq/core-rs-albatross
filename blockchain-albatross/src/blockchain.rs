@@ -1327,11 +1327,19 @@ impl Blockchain {
         };
 
         // Gets slots collection from either the cached ones, or from the macro block.
+        // Note: We need to handle the case where `state.block_number()` is at a macro block (so `state.current_slots`
+        // was already updated by it, pushing this epoch's slots to `state.previous_slots` and deleting previous'
+        // epoch's slots).
         let slots_owned;
         let slots = if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) {
-            state.current_slots.as_ref().expect("Missing current epoch's slots")
+            if policy::is_macro_block_at(state.block_number()) {
+                state.previous_slots.as_ref()
+                    .unwrap_or_else(|| panic!("Missing epoch's slots for block {}.{}", block_number, view_number))
+            } else {
+                state.current_slots.as_ref().expect("Missing current epoch's slots")
+            }
         }
-        else if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1 {
+        else if !policy::is_macro_block_at(state.block_number()) && policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1 {
             state.previous_slots.as_ref()
                 .unwrap_or_else(|| panic!("Missing previous epoch's slots for block {}.{}", block_number, view_number))
         }
