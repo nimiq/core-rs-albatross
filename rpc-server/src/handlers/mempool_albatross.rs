@@ -51,6 +51,13 @@ impl MempoolAlbatrossHandler {
                 .map_err(|_| object! {"message" => format!("Invalid {} address", kind)}))
     }
 
+    fn get_staking_contract_recipient(&self) -> StakingRecipientBuilder {
+        let staking_contract = NetworkInfo::from_network_id(self.mempool.network_id())
+            .validator_registry_address().unwrap();
+
+        Recipient::new_staking_builder(staking_contract.clone())
+    }
+
     /// Create validator
     /// Parameters:
     /// - sender_address: NIM address used to create this transaction
@@ -132,10 +139,7 @@ impl MempoolAlbatrossHandler {
             .try_into()
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
-        let staking_contract = NetworkInfo::from_network_id(self.mempool.network_id())
-            .validator_registry_address().unwrap();
-
-        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        let mut recipient = self.get_staking_contract_recipient();
         recipient.retire_validator(&validator.validator_key.public);
 
         let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
@@ -157,10 +161,7 @@ impl MempoolAlbatrossHandler {
             .try_into()
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
-        let staking_contract = NetworkInfo::from_network_id(self.mempool.network_id())
-            .validator_registry_address().unwrap();
-
-        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        let mut recipient = self.get_staking_contract_recipient();
         recipient.reactivate_validator(&validator.validator_key.public);
 
         let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
@@ -182,10 +183,7 @@ impl MempoolAlbatrossHandler {
             .try_into()
             .map_err(|e| object! {"message" => format!("Invalid fee: {}", e)})?;
 
-        let staking_contract = NetworkInfo::from_network_id(self.mempool.network_id())
-            .validator_registry_address().unwrap();
-
-        let mut recipient = Recipient::new_staking_builder(staking_contract.clone());
+        let mut recipient = self.get_staking_contract_recipient();
         recipient.unpark_validator(&validator.validator_key.public);
 
         let tx = self.build_validator_signalling_transaction(sender, recipient, fee)?;
