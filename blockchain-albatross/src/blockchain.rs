@@ -813,10 +813,6 @@ impl Blockchain {
         let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
         while !current.1.on_main_chain {
-            // A fork can't contain a macro block. We already received that macro block, thus it must be on our
-            // main chain.
-            assert_eq!(current.1.head.ty(), BlockType::Micro, "Fork contains macro block");
-
             let prev_hash = current.1.head.parent_hash().clone();
             let prev_info = self.chain_store
                 .get_chain_info(&prev_hash, true, Some(&read_txn))
