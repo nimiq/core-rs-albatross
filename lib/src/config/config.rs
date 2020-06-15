@@ -125,8 +125,8 @@ pub struct ValidatorConfig {
     validator_wallet_key: Option<keys::KeyPair>,
 }
 
+#[cfg(feature="validator")]
 impl ValidatorConfig {
-    #[cfg(feature="validator")]
     pub fn validator_wallet_key(self) -> Result<Option<keys::KeyPair>, Error> {
         Ok(self.validator_wallet_key)
     }
