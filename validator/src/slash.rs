@@ -1,6 +1,6 @@
-use block_albatross::{ForkProof, Block, MicroBlock};
-use std::collections::HashSet;
 use beserial::Serialize;
+use block_albatross::{Block, ForkProof, MacroBlock, MacroHeader, MicroBlock};
+use std::collections::HashSet;
 
 #[derive(Default)]
 pub struct ForkProofPool {
@@ -25,16 +25,35 @@ impl ForkProofPool {
 
     /// Applies a block to the pool, removing processed fork proofs.
     pub fn apply_block(&mut self, block: &Block) {
-        if let Block::Micro(MicroBlock { extrinsics: Some(extrinsics), .. }) = block {
-            for fork_proof in extrinsics.fork_proofs.iter() {
-                self.fork_proofs.remove(fork_proof);
+        match block {
+            Block::Micro(MicroBlock {
+                extrinsics: Some(extrinsics),
+                ..
+            }) => {
+                for fork_proof in extrinsics.fork_proofs.iter() {
+                    self.fork_proofs.remove(fork_proof);
+                }
             }
+            Block::Macro(MacroBlock {
+                header: MacroHeader { block_number, .. },
+                ..
+            }) => {
+                // After a macro block, remove all fork proofs that would not be valid anymore
+                // from now on.
+                self.fork_proofs
+                    .retain(|proof| proof.is_valid_at(*block_number + 1));
+            }
+            _ => {}
         }
     }
 
     /// Reverts a block, re-adding fork proofs.
     pub fn revert_block(&mut self, block: &Block) {
-        if let Block::Micro(MicroBlock { extrinsics: Some(extrinsics), .. }) = block {
+        if let Block::Micro(MicroBlock {
+            extrinsics: Some(extrinsics),
+            ..
+        }) = block
+        {
             for fork_proof in extrinsics.fork_proofs.iter() {
                 self.fork_proofs.insert(fork_proof.clone());
             }
