@@ -4,6 +4,8 @@ use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use parking_lot::RwLock;
+use tokio;
+use futures::future;
 
 use account::Account;
 use block_albatross::{
@@ -331,7 +333,13 @@ impl Validator {
                 proof_builder.sign_with_key_pair(validator_wallet_key);
                 let transaction = proof_builder.generate().unwrap();
 
-                self.consensus.mempool.push_transaction(transaction.clone());
+                let weak = self.self_weak.clone();
+                tokio::spawn(future::lazy(move || {
+                    if let Some(this) = Weak::upgrade(&weak) {
+                        this.consensus.mempool.push_transaction(transaction.clone());
+                    }
+                    Ok(())
+                }));
             }
         }
     }
