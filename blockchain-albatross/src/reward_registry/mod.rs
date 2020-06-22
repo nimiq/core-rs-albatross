@@ -1,3 +1,5 @@
+mod reward_pot;
+
 use std::borrow::Cow;
 use std::io;
 use std::sync::Arc;
@@ -16,13 +18,11 @@ use primitives::coin::Coin;
 use primitives::policy;
 use primitives::slot::{Slot, SlotIndex, Slots};
 use transaction::Transaction as BlockchainTransaction;
-use vrf::rng::Rng;
 use vrf::VrfUseCase;
 
 use crate::chain_store::ChainStore;
 use crate::reward_registry::reward_pot::RewardPot;
-
-mod reward_pot;
+use vrf::rng::Rng;
 
 pub struct SlashRegistry {
     env: Environment,
@@ -76,7 +76,6 @@ impl SlashRegistry {
             SlashRegistry::SLASH_REGISTRY_DB_NAME.to_string(),
             DatabaseFlags::UINT_KEYS,
         );
-
         let reward_pot = RewardPot::new(env.clone());
 
         Self {
