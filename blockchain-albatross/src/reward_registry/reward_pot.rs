@@ -20,24 +20,6 @@ impl RewardPot {
         Self { env, reward_pot }
     }
 
-    pub(super) fn commit_macro_block(&self, block: &MacroBlock, txn: &mut WriteTransaction) {
-        // TODO: Do we want to check that reward corresponds to the value in the MacroExtrinsics?
-        let mut current_reward = RewardPot::reward_for_macro_block(block);
-
-        // Add to current reward pot of epoch.
-        current_reward += Coin::from_u64_unchecked(
-            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
-                .unwrap_or(0),
-        );
-
-        txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
-        txn.put(
-            &self.reward_pot,
-            Self::PREVIOUS_EPOCH_KEY,
-            &u64::from(current_reward),
-        );
-    }
-
     pub(super) fn commit_epoch(
         &self,
         block_number: u32,
@@ -64,6 +46,25 @@ impl RewardPot {
             &self.reward_pot,
             Self::PREVIOUS_EPOCH_KEY,
             &u64::from(reward),
+        );
+    }
+
+    pub(super) fn commit_macro_block(&self, block: &MacroBlock, txn: &mut WriteTransaction) {
+        // TODO: Do we want to check that reward corresponds to the value in the MacroExtrinsics?
+        // TODO: Calculate reward here?
+        let mut current_reward = RewardPot::reward_for_macro_block(block);
+
+        // Add to current reward pot of epoch.
+        current_reward += Coin::from_u64_unchecked(
+            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
+                .unwrap_or(0),
+        );
+
+        txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
+        txn.put(
+            &self.reward_pot,
+            Self::PREVIOUS_EPOCH_KEY,
+            &u64::from(current_reward),
         );
     }
 
@@ -100,6 +101,10 @@ impl RewardPot {
         );
     }
 
+    fn reward_for_macro_block(block: &MacroBlock) -> Coin {
+        policy::block_reward_at(block.header.block_number)
+    }
+
     fn reward_for_micro_block(block: &MicroBlock) -> Coin {
         // Block reward
         let mut reward = policy::block_reward_at(block.header.block_number);
@@ -111,10 +116,6 @@ impl RewardPot {
         }
 
         reward
-    }
-
-    fn reward_for_macro_block(block: &MacroBlock) -> Coin {
-        policy::block_reward_at(block.header.block_number)
     }
 
     pub fn current_reward_pot(&self) -> Coin {

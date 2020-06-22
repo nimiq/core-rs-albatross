@@ -31,7 +31,7 @@ pub struct SlashRegistry {
     reward_pot: RewardPot,
 }
 
-// TODO Better error messages
+// TODO: Better error messages
 #[derive(Debug, Fail)]
 pub enum SlashPushError {
     #[fail(display = "Redundant fork proofs in block")]
@@ -66,7 +66,7 @@ struct BlockDescriptor {
     prev_epoch_state: BitSet,
 }
 
-// TODO Pass in active validator set + seed through parameters
+// TODO: Pass in active validator set + seed through parameters
 //      or always load from chain store?
 impl SlashRegistry {
     const SLASH_REGISTRY_DB_NAME: &'static str = "SlashRegistry";
@@ -151,8 +151,10 @@ impl SlashRegistry {
 
         // Lookup slash state.
         let mut cursor = txn.cursor(&self.slash_registry_db);
+
         // Move cursor to first entry with a block number >= ours (or end of the database).
         let _: Option<(u32, BlockDescriptor)> = cursor.seek_range_key(&block_number);
+
         // Then move cursor back by one.
         let last_change: Option<(u32, BlockDescriptor)> = cursor.prev();
 

@@ -20,10 +20,15 @@ use block::{
     Block, MacroBlock, MacroExtrinsics, MacroHeader, MicroBlock, MicroExtrinsics, MicroHeader,
     PbftProposal, ViewChangeProof, ViewChanges,
 };
+use block::{
+    Block, MacroBlock, MacroExtrinsics, MacroHeader, MicroBlock, MicroExtrinsics, MicroHeader,
+    PbftProposal, ViewChangeProof, ViewChanges,
+};
 use blockchain::blockchain::Blockchain;
 use blockchain::reward_registry::SlashedSetSelector;
+use blockchain::reward_registry::SlashedSetSelector;
 use blockchain_base::AbstractBlockchain;
-use bls::KeyPair;
+use bls::bls12_381::KeyPair;
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
@@ -222,7 +227,7 @@ impl BlockProducer {
 
         let mut inherents = self
             .blockchain
-            .finalize_last_epoch(&self.blockchain.state(), &header);
+            .finalize_previous_epoch(&self.blockchain.state(), &header);
 
         // Add slashes for view changes.
         let view_changes = ViewChanges::new(

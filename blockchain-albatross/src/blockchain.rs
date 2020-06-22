@@ -12,6 +12,7 @@ use parking_lot::{
 
 use account::inherent::AccountInherentInteraction;
 use account::{Account, Inherent, InherentType};
+use account::{Account, Inherent, InherentType};
 use accounts::Accounts;
 use beserial::Serialize;
 use block::{
@@ -1902,7 +1903,7 @@ impl Blockchain {
         RwLockReadGuard::map(guard, |s| s.last_validators().unwrap())
     }
 
-    pub fn finalize_last_epoch(
+    pub fn finalize_previous_epoch(
         &self,
         state: &BlockchainState,
         macro_header: &MacroHeader,
@@ -1974,10 +1975,18 @@ impl Blockchain {
             first_slot_number = last_slot_number;
 
             // Compute reward from slot reward and number of eligible slots.
-            let reward = slot_reward
+            let mut reward = slot_reward
                 .checked_mul(num_eligible_slots as u64)
                 .expect("Overflow in reward");
 
+            // We always give the reward remainder to the validator that owns the first slot. There
+            // is no need to distribute the reward randomly since the slots are already distributed
+            // randomly. Furthermore, the remainder is always small (at most SLOTS - 1 Lunas).
+            if first_slot_number == 0 {
+                reward += remainder;
+            }
+
+            // Create inherent for the reward
             let inherent = Inherent {
                 ty: InherentType::Reward,
                 target: validator_slot.reward_address().clone(),
@@ -1995,11 +2004,13 @@ impl Blockchain {
                     "{} can't accept epoch reward {}",
                     inherent.target, inherent.value
                 );
-                remainder += reward;
             } else {
                 num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
                 inherents.push(inherent);
             }
+
+            // Update first_slot_number for next iteration
+            first_slot_number = last_slot_number;
         }
 
         // Check that number of accepted inherents is equal to length of the map that gives us the
@@ -2008,17 +2019,6 @@ impl Blockchain {
             inherents.len(),
             num_eligible_slots_for_accepted_inherent.len()
         );
-
-        // Get RNG from last block's seed and build lookup table based on number of eligible slots
-        let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution, 0);
-        let lookup = AliasMethod::new(num_eligible_slots_for_accepted_inherent);
-
-        // Randomly distribute remainder over accepting slots.
-        while !remainder.is_zero() {
-            let index = lookup.sample(&mut rng);
-            inherents[index].value += Coin::from_u64_unchecked(1);
-            remainder -= Coin::from_u64_unchecked(1);
-        }
 
         // Push finalize epoch inherent for automatically retiring inactive/malicious validators.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
