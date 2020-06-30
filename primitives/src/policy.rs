@@ -112,11 +112,11 @@ pub fn block_reward_at(block_height: u32) -> Coin {
 /// Number of micro blocks to wait for unstaking after next macro block.
 pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.
 
-/// Number of available slots
+/// Number of available validator slots. Note that a single validator may own several validator slots.
 pub const SLOTS: u16 = 512;
 
-/// Calculates ceil(2 * SLOTS / 3) which is the minimum number of validators necessary to produce a
-/// macro block, a view change and other actions.   
+/// Calculates ceil(SLOTS*2/3) which is the minimum number of validators necessary to produce a
+/// macro block, a view change and other actions.
 /// We use the following formula for the ceiling division:
 /// ceil(x/y) = (x+y-1)/y
 pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3 - 1) / 3;
@@ -124,19 +124,23 @@ pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3 - 1) / 3;
 /// Length of epoch including macro block
 pub const EPOCH_LENGTH: u32 = 128; // TODO: Set.
 
-/// Minimum stake in units
+/// Minimum stake for stakers in Lunas (1 NIM = 100,000 Lunas).
+/// A staker is someone who delegates their stake to a validator.
 pub const MIN_STAKE: u64 = 1;
 
-/// Minimum initial_stake for validators in units
+/// Minimum initial stake for validators in Lunas (1 NIM = 100,000 Lunas).
+/// A validator is someone who actually participates in block production. They are akin to miners
+/// in proof-of-work.
 pub const MIN_VALIDATOR_STAKE: u64 = 100_000_000;
 
-/// Returns the height of the next macro block after given `block_height`
+/// Returns the number (height) of the next macro block after a given block number (height).
 #[inline]
 pub fn macro_block_after(block_number: u32) -> u32 {
     (block_number / EPOCH_LENGTH + 1) * EPOCH_LENGTH
 }
 
-/// Returns the height of the preceding macro block before given `block_number`
+/// Returns the number (height) of the preceding macro block before a given block number (height).
+/// If the given block number is a macro block, it returns the macro block before it.
 #[inline]
 pub fn macro_block_before(block_number: u32) -> u32 {
     if block_number == 0 {
@@ -145,43 +149,52 @@ pub fn macro_block_before(block_number: u32) -> u32 {
     (block_number - 1) / EPOCH_LENGTH * EPOCH_LENGTH
 }
 
-#[inline]
-pub fn epoch_at(block_number: u32) -> u32 {
-    (block_number + EPOCH_LENGTH - 1) / EPOCH_LENGTH
-}
-
-#[inline]
-pub fn epoch_index_at(block_number: u32) -> u32 {
-    (block_number + EPOCH_LENGTH - 1) % EPOCH_LENGTH
-}
-
-#[inline]
-pub fn is_macro_block_at(block_number: u32) -> bool {
-    epoch_index_at(block_number) == EPOCH_LENGTH - 1
-}
-
+/// Returns the number (height) of the last macro block at a given block number (height).
+/// If the given block number is a macro block, then it returns that block number.
 #[inline]
 pub fn last_macro_block(block_number: u32) -> u32 {
     block_number / EPOCH_LENGTH * EPOCH_LENGTH
 }
 
+/// Returns the epoch number at a given block number (height).
 #[inline]
-pub fn is_micro_block_at(block_height: u32) -> bool {
-    !is_macro_block_at(block_height)
+pub fn epoch_at(block_number: u32) -> u32 {
+    (block_number + EPOCH_LENGTH - 1) / EPOCH_LENGTH
 }
 
-pub fn successive_micro_blocks(a: u32, b: u32) -> bool {
-    a + 1 == b || (a + 2 == b && is_macro_block_at(a + 1))
+/// Returns the epoch index at a given block number. The epoch index is the number of a block relative
+/// to the the epoch it is in. For example, the first block of any epoch always has an epoch index of 0.
+#[inline]
+pub fn epoch_index_at(block_number: u32) -> u32 {
+    (block_number + EPOCH_LENGTH - 1) % EPOCH_LENGTH
 }
 
+/// Returns a boolean expressing if the block at a given block number (height) is a macro block.
+#[inline]
+pub fn is_macro_block_at(block_number: u32) -> bool {
+    epoch_index_at(block_number) == EPOCH_LENGTH - 1
+}
+
+/// Returns a boolean expressing if the block at a given block number (height) is a micro block.
+#[inline]
+pub fn is_micro_block_at(block_number: u32) -> bool {
+    epoch_index_at(block_number) != EPOCH_LENGTH - 1
+}
+
+/// Returns the block number of the first block of the given epoch (which is always a micro block).
 pub fn first_block_of(epoch: u32) -> u32 {
     if epoch == 0 {
         panic!("Called first_block_of for epoch 0");
     }
-    epoch * EPOCH_LENGTH - EPOCH_LENGTH + 1
+    (epoch - 1) * EPOCH_LENGTH + 1
 }
 
-/// First block in reward registry (first block of previous epoch)
+/// Returns the block number of the macro block of the given epoch (which is always the last block).
+pub fn macro_block_of(epoch: u32) -> u32 {
+    epoch * EPOCH_LENGTH
+}
+
+/// First block in reward registry (first block of previous epoch).
 /// Returns `0u32` during epoch 0 (genesis) and 1.
 pub fn first_block_of_registry(epoch: u32) -> u32 {
     if epoch <= 1 {
@@ -191,8 +204,27 @@ pub fn first_block_of_registry(epoch: u32) -> u32 {
     }
 }
 
-pub fn macro_block_of(epoch: u32) -> u32 {
-    epoch * EPOCH_LENGTH
+/// This is the number of Lunas (1 NIM = 100,000 Lunas) created by second at the genesis of the
+/// Nimiq 2.0 chain. The velocity then decreases following the formula:
+/// Supply_velocity (t) = Initial_supply_velocity * e^(- Supply_decay * t)
+/// Where e is the exponential function and t is the time in seconds since the genesis block.
+pub const INITIAL_SUPPLY_VELOCITY: f64 = 875_000.0;
+
+/// The supply decay is a constant that is calculated so that the supply velocity decreases at a
+/// steady 1.47% per year.
+pub const SUPPLY_DECAY: f64 = 4.692821935e-10;
+
+/// Returns the supply at a given time (as Unix time) in Lunas (1 NIM = 100,000 Lunas). It is
+/// calculated using the following formula:
+/// Supply (t) = Genesis_supply + Initial_supply_velocity / Supply_decay * (1 - e^(- Supply_decay * t))
+/// Where e is the exponential function, t is the time in seconds since the genesis block and
+/// Genesis_supply is the supply at the genesis of the Nimiq 2.0 chain.
+pub fn supply_at(genesis_supply: u64, genesis_time: u64, current_time: u64) -> u64 {
+    let t = (current_time - genesis_time) as f64;
+
+    let exponent = -SUPPLY_DECAY * t;
+
+    genesis_supply + (INITIAL_SUPPLY_VELOCITY / SUPPLY_DECAY * (1.0 - exponent.exp())) as u64
 }
 
 #[cfg(test)]
