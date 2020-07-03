@@ -47,33 +47,8 @@ pub struct MacroHeader {
 pub struct MacroExtrinsics {
     /// The final list of slashes from the previous epoch.
     pub slashed_set: BitSet,
-}
-
-#[derive(Clone, Debug, Fail)]
-pub enum IntoSlotsError {
-    #[fail(display = "Extrinsics missing in macro block")]
-    MissingExtrinsics,
-}
-
-impl TryInto<Slots> for MacroBlock {
-    type Error = IntoSlotsError;
-
-    fn try_into(self) -> Result<Slots, Self::Error> {
-        let validator_slots = self.header.validators;
-
-        Ok(Slots::new(validator_slots))
-    }
-}
-
-// CHECKME: Check for performance
-impl MacroExtrinsics {
-    pub fn from_slashed_set(slashed_set: BitSet) -> Self {
-        MacroExtrinsics { slashed_set }
-    }
-}
-
-impl signed::Message for MacroHeader {
-    const PREFIX: u8 = signed::PREFIX_PBFT_PROPOSAL;
+    #[beserial(len_type(u8))]
+    pub extra_data: Vec<u8>,
 }
 
 impl MacroBlock {
@@ -87,6 +62,20 @@ impl MacroBlock {
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
     }
+}
+
+// CHECKME: Check for performance
+impl MacroExtrinsics {
+    pub fn from_slashed_set(slashed_set: BitSet) -> Self {
+        MacroExtrinsics {
+            slashed_set,
+            extra_data: vec![],
+        }
+    }
+}
+
+impl signed::Message for MacroHeader {
+    const PREFIX: u8 = signed::PREFIX_PBFT_PROPOSAL;
 }
 
 impl SerializeContent for MacroHeader {
@@ -115,5 +104,21 @@ impl fmt::Display for MacroBlock {
             "[#{}, view {}, type Macro]",
             self.header.block_number, self.header.view_number
         )
+    }
+}
+
+#[derive(Clone, Debug, Fail)]
+pub enum IntoSlotsError {
+    #[fail(display = "Extrinsics missing in macro block")]
+    MissingExtrinsics,
+}
+
+impl TryInto<Slots> for MacroBlock {
+    type Error = IntoSlotsError;
+
+    fn try_into(self) -> Result<Slots, Self::Error> {
+        let validator_slots = self.header.validators;
+
+        Ok(Slots::new(validator_slots))
     }
 }

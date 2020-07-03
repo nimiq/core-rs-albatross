@@ -2,6 +2,7 @@ use block::{MacroBlock, MicroBlock};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use primitives::coin::Coin;
 use primitives::policy;
+use std::convert::TryInto;
 use transaction::Transaction as BlockchainTransaction;
 
 pub struct RewardPot {
@@ -113,13 +114,24 @@ impl RewardPot {
 
         // Check if this is the genesis block.
         if block.header.block_number == 0 {
-            // TODO: Missing the genesis supply.
+            // Get the supply from the extra_data field of the genesis block. We assume that the
+            // first 8 bytes of the extra_data field will have the supply as a big-endian byte array.
+            let extrinsics = block.extrinsics.as_ref().unwrap();
+
+            let bytes = extrinsics.extra_data[..8]
+                .try_into()
+                .expect("slice has wrong size");
+
+            let supply = u64::from_be_bytes(bytes);
+
+            // Set the genesis supply to be the current supply.
+            txn.put(&self.reward_pot, Self::GENESIS_SUPPLY_KEY, &supply);
 
             // Set the genesis time to be the current time.
             txn.put(&self.reward_pot, Self::GENESIS_TIME_KEY, &timestamp);
 
             // Initialize the tuple to have current_reward = 0 and new_supply = genesis_supply.
-            tuple = (0, 0);
+            tuple = (0, supply);
         } else {
             // Calculate the reward for the macro block (which corresponds to the coinbase) and the
             // new supply.
