@@ -10,127 +10,208 @@ pub struct RewardPot {
 }
 
 impl RewardPot {
+    /// The database name.
     const REWARD_POT_DB_NAME: &'static str = "RewardPot";
-    const CURRENT_EPOCH_KEY: &'static str = "curr";
-    const PREVIOUS_EPOCH_KEY: &'static str = "prev";
 
+    /// The reward for the current epoch.
+    const CURRENT_REWARD_KEY: &'static str = "curr_reward";
+
+    /// The reward for the previous epoch.
+    const PREVIOUS_REWARD_KEY: &'static str = "prev_reward";
+
+    /// The current supply.
+    const SUPPLY_KEY: &'static str = "supply";
+
+    /// The supply at the genesis block.
+    const GENESIS_SUPPLY_KEY: &'static str = "gen_supply";
+
+    /// The time at the genesis block.
+    const GENESIS_TIME_KEY: &'static str = "gen_time";
+
+    /// Creates a new RewardPot database.
     pub fn new(env: Environment) -> Self {
         let reward_pot = env.open_database(RewardPot::REWARD_POT_DB_NAME.to_string());
 
         Self { env, reward_pot }
     }
 
+    /// Returns the reward for the current epoch.
+    pub fn current_reward(&self) -> Coin {
+        let txn = ReadTransaction::new(&self.env);
+
+        Coin::from_u64_unchecked(
+            txn.get(&self.reward_pot, Self::CURRENT_REWARD_KEY)
+                .unwrap_or(0),
+        )
+    }
+
+    /// Returns the reward for the previous epoch.
+    pub fn previous_reward(&self) -> Coin {
+        let txn = ReadTransaction::new(&self.env);
+
+        Coin::from_u64_unchecked(
+            txn.get(&self.reward_pot, Self::PREVIOUS_REWARD_KEY)
+                .unwrap_or(0),
+        )
+    }
+
+    /// Returns the current supply.
+    pub fn supply(&self) -> Coin {
+        let txn = ReadTransaction::new(&self.env);
+
+        Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::SUPPLY_KEY).unwrap_or(0))
+    }
+
+    /// Updates the RewardPot database for an entire epoch. All we need is the timestamp (to calculate
+    /// the coinbase) and the transaction list (to calculate the transaction fees).
+    /// This function is used for the Macro Sync feature.
     pub(super) fn commit_epoch(
         &self,
-        block_number: u32,
+        timestamp: u64,
         transactions: &[BlockchainTransaction],
         txn: &mut WriteTransaction,
     ) {
-        assert!(policy::is_macro_block_at(block_number));
-        let epoch = policy::epoch_at(block_number);
+        // Start reward at zero.
+        let mut reward = 0;
 
-        let mut reward = Coin::ZERO;
+        // Calculate the reward for the macro block (which corresponds to the coinbase) and the new
+        // supply.
+        let (macro_block_reward, new_supply) = self.reward_for_macro_block(timestamp, txn);
 
-        // All blocks of the epoch.
-        for block_number in policy::first_block_of(epoch)..=block_number {
-            reward += policy::block_reward_at(block_number);
-        }
+        // Update the reward.
+        reward += macro_block_reward;
 
-        // All transactions.
+        // Add all the transaction fees to the reward.
         for transaction in transactions {
-            reward += transaction.fee;
+            reward += u64::from(transaction.fee);
         }
 
-        txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
+        // Set the current reward to zero.
+        txn.put(&self.reward_pot, Self::CURRENT_REWARD_KEY, &0u64);
+
+        // Set the previous reward to the newly calculated reward.
         txn.put(
             &self.reward_pot,
-            Self::PREVIOUS_EPOCH_KEY,
+            Self::PREVIOUS_REWARD_KEY,
             &u64::from(reward),
         );
+
+        // Set the supply to the newly calculated supply.
+        txn.put(&self.reward_pot, Self::SUPPLY_KEY, &new_supply);
     }
 
+    /// Updates the RewardPot database for a macro block. It takes the whole macro block as input
+    /// but all we need is the timestamp. If the macro block is the genesis block, then it will set
+    /// the GENESIS_SUPPLY and GENESIS_TIME constants.
+    /// This function is used for normal block syncing.
     pub(super) fn commit_macro_block(&self, block: &MacroBlock, txn: &mut WriteTransaction) {
-        // TODO: Do we want to check that reward corresponds to the value in the MacroExtrinsics?
-        // TODO: Calculate reward here?
-        let mut current_reward = RewardPot::reward_for_macro_block(block);
+        // This is supposed to be the tuple (current_reward, new_supply).
+        let tuple: (u64, u64);
 
-        // Add to current reward pot of epoch.
-        current_reward += Coin::from_u64_unchecked(
-            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
-                .unwrap_or(0),
-        );
+        // Get the timestamp from the block.
+        let timestamp = block.header.timestamp;
 
-        txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
-        txn.put(
-            &self.reward_pot,
-            Self::PREVIOUS_EPOCH_KEY,
-            &u64::from(current_reward),
-        );
-    }
+        // Check if this is the genesis block.
+        if block.header.block_number == 0 {
+            // TODO: Missing the genesis supply.
 
-    pub(super) fn commit_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
-        // The total reward of a block is composed of the block reward and transaction fees.
-        let mut reward = RewardPot::reward_for_micro_block(block);
+            // Set the genesis time to be the current time.
+            txn.put(&self.reward_pot, Self::GENESIS_TIME_KEY, &timestamp);
 
-        // Add to current reward pot of epoch.
-        reward += Coin::from_u64_unchecked(
-            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
-                .unwrap_or(0),
-        );
-        txn.put(
-            &self.reward_pot,
-            Self::CURRENT_EPOCH_KEY,
-            &u64::from(reward),
-        );
-    }
-
-    pub(super) fn revert_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
-        // The total reward of a block is composed of the block reward and transaction fees.
-        let mut reward = Coin::from_u64_unchecked(
-            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
-                .unwrap_or(0),
-        );
-
-        // Add to current reward pot of epoch.
-        reward -= RewardPot::reward_for_micro_block(block);
-
-        txn.put(
-            &self.reward_pot,
-            Self::CURRENT_EPOCH_KEY,
-            &u64::from(reward),
-        );
-    }
-
-    fn reward_for_macro_block(block: &MacroBlock) -> Coin {
-        policy::block_reward_at(block.header.block_number)
-    }
-
-    fn reward_for_micro_block(block: &MicroBlock) -> Coin {
-        // Block reward
-        let mut reward = policy::block_reward_at(block.header.block_number);
-
-        // Transaction fees
-        let extrinsics = block.extrinsics.as_ref().unwrap();
-        for transaction in extrinsics.transactions.iter() {
-            reward += transaction.fee;
+            // Initialize the tuple to have current_reward = 0 and new_supply = genesis_supply.
+            tuple = (0, 0);
+        } else {
+            // Calculate the reward for the macro block (which corresponds to the coinbase) and the
+            // new supply.
+            tuple = self.reward_for_macro_block(timestamp, txn);
         }
 
-        reward
+        // Set the current reward to zero.
+        txn.put(&self.reward_pot, Self::CURRENT_REWARD_KEY, &0u64);
+
+        // Set the previous reward to the newly calculated reward.
+        txn.put(&self.reward_pot, Self::PREVIOUS_REWARD_KEY, &tuple.0);
+
+        // Set the supply to the newly calculated supply.
+        txn.put(&self.reward_pot, Self::SUPPLY_KEY, &tuple.1);
     }
 
-    pub fn current_reward_pot(&self) -> Coin {
-        let txn = ReadTransaction::new(&self.env);
-        Coin::from_u64_unchecked(
-            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
-                .unwrap_or(0),
-        )
+    /// Updates the RewardPot database for a micro block. It takes the whole micro block as input
+    /// since we need all the transactions in it.
+    /// This function is used for normal block syncing.
+    pub(super) fn commit_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
+        // Get the current reward from the RewardPot database.
+        let mut current_reward = txn
+            .get(&self.reward_pot, Self::CURRENT_REWARD_KEY)
+            .unwrap_or(0);
+
+        // Get the transactions from the block.
+        let extrinsics = block.extrinsics.as_ref().unwrap();
+
+        // Add all the transaction fees to the current reward.
+        for transaction in extrinsics.transactions.iter() {
+            current_reward += u64::from(transaction.fee);
+        }
+
+        // Set the current reward to the newly calculated reward.
+        txn.put(&self.reward_pot, Self::CURRENT_REWARD_KEY, &current_reward);
     }
 
-    pub fn previous_reward_pot(&self) -> Coin {
-        let txn = ReadTransaction::new(&self.env);
-        Coin::from_u64_unchecked(
-            txn.get(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY)
-                .unwrap_or(0),
-        )
+    /// Rollbacks the RewardPot database for a micro block. It takes the whole micro block as input
+    /// since we need all the transactions in it.
+    /// This function is used for normal block syncing.
+    pub(super) fn revert_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
+        // Get the current reward from the RewardPot database.
+        let mut current_reward = txn
+            .get(&self.reward_pot, Self::CURRENT_REWARD_KEY)
+            .unwrap_or(0);
+
+        // Get the transactions from the block.
+        let extrinsics = block.extrinsics.as_ref().unwrap();
+
+        // Subtract all the transaction fees from the current reward.
+        for transaction in extrinsics.transactions.iter() {
+            current_reward -= u64::from(transaction.fee);
+        }
+
+        // Set the current reward to the newly calculated reward.
+        txn.put(&self.reward_pot, Self::CURRENT_REWARD_KEY, &current_reward);
+    }
+
+    /// Calculates the reward for a macro block (which is just the coinbase) and the new supply after
+    /// the end of the corresponding epoch. All it needs is the timestamp of the macro block.
+    pub(super) fn reward_for_macro_block(
+        &self,
+        timestamp: u64,
+        txn: &mut WriteTransaction,
+    ) -> (u64, u64) {
+        // Get the current reward from the RewardPot database.
+        let mut reward = txn
+            .get(&self.reward_pot, Self::CURRENT_REWARD_KEY)
+            .unwrap_or(0);
+
+        // Get the genesis supply from the RewardPot database.
+        let gen_supply = txn
+            .get(&self.reward_pot, Self::GENESIS_SUPPLY_KEY)
+            .unwrap_or(0);
+
+        // Get the genesis time from the RewardPot database.
+        let gen_time = txn
+            .get(&self.reward_pot, Self::GENESIS_TIME_KEY)
+            .unwrap_or(0);
+
+        // Get the current supply from the RewardPot database.
+        let current_supply = txn.get(&self.reward_pot, Self::SUPPLY_KEY).unwrap_or(0);
+
+        // Calculate what the new supply should be using the supply curve formula from the
+        // policy file.
+        let new_supply = policy::supply_at(gen_supply, gen_time, timestamp);
+
+        // Calculate the reward (coinbase) as the difference between the new supply and the
+        // current supply.
+        reward += new_supply - current_supply;
+
+        // Return the reward and the new supply.
+        (reward, new_supply)
     }
 }

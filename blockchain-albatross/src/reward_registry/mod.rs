@@ -76,6 +76,7 @@ impl SlashRegistry {
             SlashRegistry::SLASH_REGISTRY_DB_NAME.to_string(),
             DatabaseFlags::UINT_KEYS,
         );
+
         let reward_pot = RewardPot::new(env.clone());
 
         Self {
@@ -87,13 +88,18 @@ impl SlashRegistry {
     }
 
     #[inline]
-    pub fn current_reward_pot(&self) -> Coin {
-        self.reward_pot.current_reward_pot()
+    pub fn current_reward(&self) -> Coin {
+        self.reward_pot.current_reward()
     }
 
     #[inline]
-    pub fn previous_reward_pot(&self) -> Coin {
-        self.reward_pot.previous_reward_pot()
+    pub fn previous_reward(&self) -> Coin {
+        self.reward_pot.previous_reward()
+    }
+
+    #[inline]
+    pub fn previous_supply(&self) -> Coin {
+        self.reward_pot.supply()
     }
 
     /// Register slashes of block
@@ -125,11 +131,11 @@ impl SlashRegistry {
         &self,
         txn: &mut WriteTransaction,
         block_number: u32,
+        timestamp: u64,
         transactions: &[BlockchainTransaction],
         view_change_slashed_slots: &BitSet,
     ) -> Result<(), SlashPushError> {
-        self.reward_pot
-            .commit_epoch(block_number, transactions, txn);
+        self.reward_pot.commit_epoch(timestamp, transactions, txn);
 
         // Just put the whole epochs slashed set at the macro blocks position.
         // We don't have slash info for the current epoch though.
@@ -141,6 +147,7 @@ impl SlashRegistry {
 
         // Put descriptor into database.
         txn.put(&self.slash_registry_db, &block_number, &descriptor);
+
         self.gc(txn, policy::epoch_at(block_number));
 
         Ok(())

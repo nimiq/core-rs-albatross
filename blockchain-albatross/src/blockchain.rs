@@ -12,7 +12,6 @@ use parking_lot::{
 
 use account::inherent::AccountInherentInteraction;
 use account::{Account, Inherent, InherentType};
-use account::{Account, Inherent, InherentType};
 use accounts::Accounts;
 use beserial::Serialize;
 use block::{
@@ -38,7 +37,7 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::merkle;
 use utils::observer::{Listener, ListenerHandle, Notifier};
-use vrf::{AliasMethod, VrfSeed, VrfUseCase};
+use vrf::VrfSeed;
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
@@ -132,7 +131,7 @@ pub struct BlockchainState {
     macro_head_hash: Blake2bHash,
 
     // TODO: Instead of Option, we could use a Cell here and use replace on it. That way we know
-    // at compile-time that there is always a valid value in there.
+    //       at compile-time that there is always a valid value in there.
     current_slots: Option<Slots>,
     previous_slots: Option<Slots>,
 }
@@ -1217,7 +1216,7 @@ impl Blockchain {
         match block {
             Block::Macro(ref macro_block) => {
                 // We can rely on `state` here, since we cannot revert macro blocks.
-                let mut inherents = self.finalize_last_epoch(state, &macro_block.header);
+                let mut inherents = self.finalize_previous_epoch(state, &macro_block.header);
 
                 // Add slashes for view changes.
                 let view_changes = ViewChanges::new(
@@ -1442,8 +1441,12 @@ impl Blockchain {
         push_lock: MutexGuard<()>,
     ) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(&self.env);
+
         let state = self.state.read();
+
         let block_number = chain_info.head.block_number();
+
+        let timestamp = chain_info.head.timestamp();
 
         let macro_block = chain_info.head.unwrap_macro_ref();
 
@@ -1452,10 +1455,14 @@ impl Blockchain {
         // thus we can unwrap here.
         let slashed_set = macro_block.extrinsics.as_ref().unwrap().slashed_set.clone();
 
-        let result =
-            state
-                .reward_registry
-                .commit_epoch(&mut txn, block_number, transactions, &slashed_set);
+        let result = state.reward_registry.commit_epoch(
+            &mut txn,
+            block_number,
+            timestamp,
+            transactions,
+            &slashed_set,
+        );
+
         if let Err(e) = result {
             warn!("Rejecting block - slash commit failed: {:?}", e);
             return Err(PushError::InvalidSuccessor);
@@ -1468,7 +1475,7 @@ impl Blockchain {
             .as_ref()
             .expect("Slots for last epoch are missing");
         let mut inherents = self.inherents_from_slashed_set(&slashed_set, slots);
-        inherents.append(&mut self.finalize_last_epoch(&state, &macro_block.header));
+        inherents.append(&mut self.finalize_previous_epoch(&state, &macro_block.header));
 
         // Commit epoch to AccountsTree.
         let receipts = state.accounts.commit(
@@ -1929,26 +1936,23 @@ impl Blockchain {
             .reward_registry
             .slashed_set(epoch, SlashedSetSelector::All, None);
 
-        // Total reward for this epoch
-        // TODO: Compute reward from the epoch we are in and add the remainder from last epoch
-        let reward_pot: Coin = state.reward_registry.previous_reward_pot();
+        // Total reward for the previous epoch
+        let reward_pot: Coin = state.reward_registry.previous_reward();
 
-        // Number of slots that are eligible for a reward. That is the total number minus all
-        // slashed slots
-        let num_eligible = (policy::SLOTS as u64) - (slashed_set.len() as u64);
+        // Distribute reward between all slots and calculate the remainder
+        let slot_reward = reward_pot / policy::SLOTS as u64;
+        let remainder = reward_pot % policy::SLOTS as u64;
 
-        // Distribute reward between all slots
-        let slot_reward = reward_pot / num_eligible;
-        let mut remainder = reward_pot % num_eligible;
-
-        // The first slot number of the current stake
+        // The first slot number of the current validator
         let mut first_slot_number = 0;
-        // Peekable iterator to collect slashed slots for stake
+
+        // Peekable iterator to collect slashed slots for validator
         let mut slashed_set_iter = slashed_set.iter().peekable();
 
         // All accepted inherents.
         let mut inherents = Vec::new();
-        // Remember the number of eligible slots a stake had (that was able to accept the inherent)
+
+        // Remember the number of eligible slots that a validator had (that was able to accept the inherent)
         let mut num_eligible_slots_for_accepted_inherent = Vec::new();
 
         // Compute inherents
@@ -1958,11 +1962,11 @@ impl Blockchain {
             // `last_slot_number`.
             let last_slot_number = first_slot_number + validator_slot.num_slots();
 
-            // Compute the number of slashes for this stake slot band.
+            // Compute the number of slashes for this validator slot band.
             let mut num_eligible_slots = validator_slot.num_slots();
             while let Some(next_slashed_slot) = slashed_set_iter.peek() {
                 let next_slashed_slot = *next_slashed_slot as u16;
-                assert!(next_slashed_slot > first_slot_number);
+                assert!(next_slashed_slot >= first_slot_number);
                 if next_slashed_slot < last_slot_number {
                     assert!(num_eligible_slots > 0);
                     num_eligible_slots -= 1;
@@ -1970,9 +1974,6 @@ impl Blockchain {
                     break;
                 }
             }
-
-            // Update first_slot_number for next iteration
-            first_slot_number = last_slot_number;
 
             // Compute reward from slot reward and number of eligible slots.
             let mut reward = slot_reward

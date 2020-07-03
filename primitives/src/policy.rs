@@ -1,12 +1,15 @@
+use std::cmp;
 use std::convert::TryInto;
 
-#[cfg(feature = "coin")]
-use crate::coin::Coin;
-use fixed_unsigned::types::FixedUnsigned10;
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use num_traits::pow;
 use parking_lot::RwLock;
+
+use fixed_unsigned::types::FixedUnsigned10;
+
+#[cfg(feature = "coin")]
+use crate::coin::Coin;
 
 lazy_static! {
     /// The highest (easiest) block PoW target.
@@ -220,17 +223,23 @@ pub const SUPPLY_DECAY: f64 = 4.692821935e-10;
 /// Where e is the exponential function, t is the time in seconds since the genesis block and
 /// Genesis_supply is the supply at the genesis of the Nimiq 2.0 chain.
 pub fn supply_at(genesis_supply: u64, genesis_time: u64, current_time: u64) -> u64 {
+    assert!(current_time >= genesis_time);
+
     let t = (current_time - genesis_time) as f64;
 
     let exponent = -SUPPLY_DECAY * t;
 
-    genesis_supply + (INITIAL_SUPPLY_VELOCITY / SUPPLY_DECAY * (1.0 - exponent.exp())) as u64
+    let supply =
+        genesis_supply + (INITIAL_SUPPLY_VELOCITY / SUPPLY_DECAY * (1.0 - exponent.exp())) as u64;
+
+    cmp::min(supply, TOTAL_SUPPLY)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::convert::TryFrom;
+
+    use super::*;
 
     #[test]
     fn it_correctly_computes_block_reward() {
