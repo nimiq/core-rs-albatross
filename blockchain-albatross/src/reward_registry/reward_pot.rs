@@ -4,6 +4,7 @@ use block::{MacroBlock, MicroBlock};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use primitives::coin::Coin;
 use primitives::policy;
+use std::convert::TryInto;
 use transaction::Transaction as BlockchainTransaction;
 
 /// This struct is meant to calculate and keep track of the rewards for the current and previous
