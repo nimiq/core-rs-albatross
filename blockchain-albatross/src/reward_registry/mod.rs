@@ -76,6 +76,7 @@ impl SlashRegistry {
             SlashRegistry::SLASH_REGISTRY_DB_NAME.to_string(),
             DatabaseFlags::UINT_KEYS,
         );
+
         let reward_pot = RewardPot::new(env.clone());
 
         Self {
