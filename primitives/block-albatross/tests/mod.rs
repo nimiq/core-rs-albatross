@@ -89,6 +89,7 @@ fn it_can_convert_macro_block_into_slots() {
         justification: None,
         extrinsics: Some(MacroExtrinsics {
             slashed_set: BitSet::new(),
+            extra_data: vec![],
         }),
     };
 
