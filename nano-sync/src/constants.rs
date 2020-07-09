@@ -17,11 +17,14 @@ use crypto_primitives::prf::Blake2sWithParameterBlock;
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
 
+/// This is the number of bits that each point in the elliptic curves MNT4-768 and MNT6-768 can store.
+pub const POINT_CAPACITY: usize = 752;
+
 /// This is the depth of the PKTree circuit.
 pub const PK_TREE_DEPTH: usize = 5;
 
-/// This is the number of leaves in the PKTree circuit. It must be equal to 2**PK_TREE_DEPTH.
-pub const PK_TREE_BREADTH: usize = 32;
+/// This is the number of leaves in the PKTree circuit.
+pub const PK_TREE_BREADTH: usize = 2_usize.pow(PK_TREE_DEPTH as u32);
 
 /// This is the length of one epoch in Albatross. Basically, the difference in the block numbers of
 /// two consecutive macro blocks.

@@ -3,11 +3,12 @@ use algebra_core::{Group, One, PrimeField};
 use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 
+use crate::constants::POINT_CAPACITY;
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
 
 /// This is the function for creating generators in the G1 group for the MNT6-753 curve. These
-/// generators are meant to be use for the Pedersen hash and the Pedersen commitment functions.
+/// generators are meant to be used for the Pedersen hash function.
 pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
     // This gets a verifiably random seed. Whenever we use this seed we need to set the personalization
     // field on the Blake2X to an unique value. See below.
@@ -35,7 +36,7 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
             salt: [1; 8],
             // This needs to be set to an unique value, since we want a different random stream for
             // each generator series that we create.
-            personalization: [0; 8],
+            personalization: [5; 8],
         };
 
         let mut state = Blake2s::with_parameter_block(&blake2x.parameters());
@@ -98,84 +99,45 @@ pub fn pedersen_generators(number: usize) -> Vec<G1Projective> {
     generators
 }
 
-/// Calculates the Pedersen hash. Given a vector of generators G_i and a vector of bits b_i, the
-/// hash is calculated like so:
-/// H = G_0 + b_1 * G_1 + b_2 * G_2 + ... + b_n * G_n
-/// where G_0 is a sum generator that is used to avoid that the sum starts at zero (which is
-/// problematic because the circuit can't handle addition with zero).
-/// The Pedersen hash guarantees that the exponent of the resulting point H is not known, the same
-/// can't be said of the Pedersen commitment. Also, note that the Pedersen hash is collision-resistant
-/// but it is not pseudo-random.
-pub fn pedersen_hash(
-    input: Vec<bool>,
-    generators: Vec<G1Projective>,
-    sum_generator: G1Projective,
-) -> G1Projective {
-    // Verify that we have enough generators for the input bits.
-    assert!(generators.len() >= input.len());
-
-    // Initialize the sum to the generator. Normally it would be zero, but this is necessary because
-    // of some complications in the PedersenHashGadget.
-    let mut result = sum_generator;
-
-    // Calculate the hash by adding a generator whenever the corresponding bit is set to 1.
-    for i in 0..input.len() {
-        if input[i] {
-            result += &generators[i];
-        }
-    }
-
-    result
-}
-
-/// Calculates the Pedersen commitment. Given a vector of bits b_i we divide the vector into chunks
+/// Calculates the Pedersen hash. Given a vector of bits b_i we divide the vector into chunks
 /// of 752 bits and convert them into scalars like so:
 /// s = b_0 * 2^0 + b_1 * 2^1 + ... + b_750 * 2^750 + b_751 * 2^751
 /// We then calculate the commitment like so:
-/// C = G_0 + s_1 * G_1 + ... + s_n * G_n
+/// H = G_0 + s_1 * G_1 + ... + s_n * G_n
 /// where G_0 is a sum generator that is used to avoid that the sum starts at zero (which is
 /// problematic because the circuit can't handle addition with zero).
-/// The Pedersen commitment takes the same time/constraints to calculate as the Pedersen hash but,
-/// since it requires fewer generators, it is faster to setup.
-pub fn pedersen_commitment(
-    input: Vec<bool>,
-    generators: Vec<G1Projective>,
-    sum_generator: G1Projective,
-) -> G1Projective {
-    // This is simply the number of bits that each generator can store.
-    let capacity = 752;
-
+pub fn pedersen_hash(input: Vec<bool>, generators: Vec<G1Projective>) -> G1Projective {
     // Check that the input can be stored using the available generators.
-    assert!(generators.len() * capacity >= input.len());
+    assert!((generators.len() - 1) * POINT_CAPACITY >= input.len());
 
     // Calculate the rounds that are necessary to process the input.
-    let normal_rounds = input.len() / capacity;
+    let normal_rounds = input.len() / POINT_CAPACITY;
 
-    let bits_last_round = input.len() % capacity;
+    let bits_last_round = input.len() % POINT_CAPACITY;
 
     // Initialize the sum to the generator. Normally it would be zero, but this is necessary because
     // of some complications in the PedersenHashGadget.
-    let mut result = sum_generator;
+    let mut result = generators[0];
 
-    let mut power = generators[0];
+    let mut power = generators[1];
 
-    // Start calculating the Pedersen commitment.
+    // Start calculating the Pedersen hash.
     for i in 0..normal_rounds {
         // We multiply each generator by the corresponding scalar formed from 752 bits of input. This
         // is the double-and-add method for EC point multiplication.
         // (https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication#Double-and-add)
-        for k in 0..capacity {
-            if input[i * capacity + k] {
+        for k in 0..POINT_CAPACITY {
+            if input[i * POINT_CAPACITY + k] {
                 result += power;
             }
             power.double_in_place();
         }
-        power = generators[i + 1];
+        power = generators[i + 2];
     }
 
     // Begin the final point multiplication. For this one we don't use all 752 bits.
     for k in 0..bits_last_round {
-        if input[normal_rounds * capacity + k] {
+        if input[normal_rounds * POINT_CAPACITY + k] {
             result += power;
         }
         power.double_in_place();

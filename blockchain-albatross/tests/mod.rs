@@ -18,7 +18,7 @@ mod signed;
 mod macro_block_sync;
 
 /// Secret key of validator. Tests run with `network-primitives/src/genesis/unit-albatross.toml`
-const SECRET_KEY: &'static str = "49ea68eb6b8afdf4ca4d4c0a0b295c76ca85225293693bc30e755476492b707f";
+const SECRET_KEY: &'static str = "67e61d8b2d2c87171e05bbb8577cd1c6d18e9c80315e1cf5b0069ac1b3d61050adfeed213660dae0b029c8cdbf9e40154fea3fa0a64b31c7befca572b3ce2399345b592fe8dde406cacec05cef1c70dbf6694aeec068675942783a4e11b80100";
 
 struct TemporaryBlockProducer {
     env: Environment,
@@ -71,17 +71,17 @@ impl TemporaryBlockProducer {
         // create signed prepare and commit
         let prepare = SignedPbftPrepareMessage::from_message(
             PbftPrepareMessage { block_hash: block_hash.clone() },
-            &keypair.secret,
+            &keypair.secret_key,
             0);
         let commit = SignedPbftCommitMessage::from_message(
             PbftCommitMessage { block_hash: block_hash.clone() },
-            &keypair.secret,
+            &keypair.secret_key,
             0);
 
         // create proof
         let mut pbft_proof = PbftProofBuilder::new();
-        pbft_proof.add_prepare_signature(&keypair.public, policy::SLOTS, &prepare);
-        pbft_proof.add_commit_signature(&keypair.public, policy::SLOTS, &commit);
+        pbft_proof.add_prepare_signature(&keypair.public_key, policy::SLOTS, &prepare);
+        pbft_proof.add_commit_signature(&keypair.public_key, policy::SLOTS, &commit);
 
         MacroBlock {
             header: proposal.header,
@@ -102,12 +102,12 @@ impl TemporaryBlockProducer {
         // create signed prepare and commit
         let view_change = SignedViewChange::from_message(
             view_change,
-            &keypair.secret,
+            &keypair.secret_key,
             0);
 
         // create proof
         let mut view_change_proof = ViewChangeProofBuilder::new();
-        view_change_proof.add_signature(&keypair.public, policy::SLOTS, &view_change);
+        view_change_proof.add_signature(&keypair.public_key, policy::SLOTS, &view_change);
         view_change_proof.build()
     }
 }

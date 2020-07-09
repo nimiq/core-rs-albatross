@@ -14,7 +14,6 @@ use r1cs_std::mnt6_753::{G1Gadget, PairingGadget};
 use r1cs_std::prelude::*;
 
 use crate::circuits::mnt6::{MacroBlockWrapperCircuit, MergerWrapperCircuit};
-use crate::constants::sum_generator_g1_mnt6;
 use crate::gadgets::input::RecursiveInputGadget;
 use crate::gadgets::mnt4::VKCommitmentGadget;
 use crate::primitives::pedersen_generators;
@@ -29,7 +28,7 @@ type TheVkGadget = VerifyingKeyGadget<MNT6_753, Fq, PairingGadget>;
 type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
 
 /// This is the merger circuit. It takes as inputs an initial state commitment, a final state commitment
-/// and a verifying key and it produces a proof that there exists two valid SNARK proofs that transforms
+/// and a verifying key and it produces a proof that there exist two valid SNARK proofs that transform
 /// the initial state into the final state passing through some intermediate state.
 /// The circuit is composed of two SNARK verifiers in a row. It's used to verify a Merger Wrapper proof
 /// and a Macro Block Wrapper proof, effectively merging both into a single proof. Evidently, this is
@@ -50,6 +49,9 @@ type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
 /// and intermediate states must be equal by definition.
 #[derive(Clone)]
 pub struct MergerCircuit {
+    // Path to the verifying key file. Not an input to the SNARK circuit.
+    vk_file: &'static str,
+
     // Private inputs
     proof_merger_wrapper: Proof<MNT6_753>,
     proof_macro_block_wrapper: Proof<MNT6_753>,
@@ -65,6 +67,7 @@ pub struct MergerCircuit {
 
 impl MergerCircuit {
     pub fn new(
+        vk_file: &'static str,
         proof_merger_wrapper: Proof<MNT6_753>,
         proof_macro_block_wrapper: Proof<MNT6_753>,
         vk_merger_wrapper: VerifyingKey<MNT6_753>,
@@ -75,6 +78,7 @@ impl MergerCircuit {
         vk_commitment: Vec<u8>,
     ) -> Self {
         Self {
+            vk_file,
             proof_merger_wrapper,
             proof_macro_block_wrapper,
             vk_merger_wrapper,
@@ -94,7 +98,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/macro_block_wrapper.bin")?;
+        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
         let vk_macro_block_wrapper = VerifyingKey::deserialize(&mut file).unwrap();
 
@@ -102,12 +106,9 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        let sum_generator_g1_var =
-            G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
-
         let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
             cs.ns(|| "alloc pedersen_generators"),
-            pedersen_generators(18),
+            pedersen_generators(19),
         )?;
 
         let vk_macro_block_wrapper_var = TheVkGadget::alloc_constant(
@@ -165,7 +166,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MergerCircuit {
             cs.ns(|| "reference vk commitment"),
             &vk_merger_wrapper_var,
             &pedersen_generators_var,
-            &sum_generator_g1_var,
         )?;
 
         vk_commitment_var.enforce_equal(

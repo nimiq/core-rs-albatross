@@ -4,7 +4,8 @@ use algebra::mnt6_753::G1Affine;
 use algebra::SerializationError;
 use algebra_core::curves::AffineCurve;
 
-use crate::compression::BeDeserialize;
+use nimiq_nano_sync::compression::BeDeserialize;
+
 use crate::Signature;
 
 /// The serialized compressed form of a signature.
@@ -56,7 +57,7 @@ impl PartialOrd<CompressedSignature> for CompressedSignature {
 impl Default for CompressedSignature {
     fn default() -> Self {
         CompressedSignature {
-            signature: [0u8; 96],
+            signature: [0u8; CompressedSignature::SIZE],
         }
     }
 }

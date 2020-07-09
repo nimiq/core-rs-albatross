@@ -13,24 +13,30 @@ use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{FqGadget, G1Gadget, G2Gadget, PairingGadget};
 use r1cs_std::prelude::*;
 
-use crate::circuits::mnt6::PKTree0Circuit;
+use crate::circuits::mnt4::PKTreeLeafCircuit as LeafMNT4;
+use crate::circuits::mnt4::PKTreeNodeCircuit as NodeMNT4;
+use crate::circuits::mnt6::PKTreeNodeCircuit as NodeMNT6;
 use crate::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, EPOCH_LENGTH, MAX_NON_SIGNERS, VALIDATOR_SLOTS,
 };
 use crate::gadgets::input::RecursiveInputGadget;
 use crate::gadgets::mnt4::{
-    MacroBlockGadget, PedersenCommitmentGadget, SerializeGadget, StateCommitmentGadget,
+    MacroBlockGadget, PedersenHashGadget, SerializeGadget, StateCommitmentGadget,
 };
 use crate::primitives::{pedersen_generators, MacroBlock};
 use crate::utils::reverse_inner_byte_order;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
-// Renaming some types for convenience. We can change the circuit and elliptic curve of the input
-// proof to the wrapper circuit just by editing these types.
-type TheProofSystem = Groth16<MNT6_753, PKTree0Circuit, Fr>;
+// Renaming some types for convenience.
+type TheProofSystem = Groth16<MNT6_753, PKTreeCircuit, Fr>;
 type TheProofGadget = ProofGadget<MNT6_753, Fq, PairingGadget>;
 type TheVkGadget = VerifyingKeyGadget<MNT6_753, Fq, PairingGadget>;
 type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
+
+// This type defines the shape of our PK Tree. Of course it must have levels of alternating curves
+// and end with a leaf node. But we can decide the depth of it. In this case we have chosen a depth
+// of 5, giving us a total of 32 leaves.
+type PKTreeCircuit = NodeMNT6<NodeMNT4<NodeMNT6<NodeMNT4<NodeMNT6<LeafMNT4>>>>>;
 
 /// This is the macro block circuit. It takes as inputs an initial state commitment and final state commitment
 /// and it produces a proof that there exists a valid macro block that transforms the initial state
@@ -40,6 +46,9 @@ type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
 /// public keys with the public keys of the new validator list.
 #[derive(Clone)]
 pub struct MacroBlockCircuit {
+    // Path to the verifying key file. Not an input to the SNARK circuit.
+    vk_file: &'static str,
+
     // Private inputs
     prepare_agg_pk_chunks: Vec<G2Projective>,
     commit_agg_pk_chunks: Vec<G2Projective>,
@@ -56,6 +65,7 @@ pub struct MacroBlockCircuit {
 
 impl MacroBlockCircuit {
     pub fn new(
+        vk_file: &'static str,
         prepare_agg_pk_chunks: Vec<G2Projective>,
         commit_agg_pk_chunks: Vec<G2Projective>,
         initial_pks_commitment: Vec<u8>,
@@ -67,6 +77,7 @@ impl MacroBlockCircuit {
         final_state_commitment: Vec<u8>,
     ) -> Self {
         Self {
+            vk_file,
             prepare_agg_pk_chunks,
             commit_agg_pk_chunks,
             initial_pks_commitment,
@@ -87,7 +98,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/pk_tree_0.bin")?;
+        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
         let vk_pk_tree = VerifyingKey::deserialize(&mut file).unwrap();
 
@@ -115,7 +126,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
 
         let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
             cs.ns(|| "alloc pedersen_generators"),
-            pedersen_generators(256),
+            pedersen_generators(5),
         )?;
 
         let vk_pk_tree_var =
@@ -177,7 +188,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &initial_block_number_var,
             &initial_pks_commitment_var,
             &pedersen_generators_var,
-            &sum_generator_g1_var,
         )?;
 
         initial_state_commitment_var.enforce_equal(
@@ -201,7 +211,6 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
             &final_block_number_var,
             &final_pks_commitment_var,
             &pedersen_generators_var,
-            &sum_generator_g1_var,
         )?;
 
         final_state_commitment_var.enforce_equal(
@@ -235,7 +244,7 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
         )?;
 
         // Calculating the commitments to each of the prepare aggregate public keys chunks. These
-        // will be given as input to the PKTree SNARK circuit.
+        // will be given as inputs to the PKTree SNARK circuit.
         next_cost_analysis!(cs, cost, || {
             "Calculate prepare agg pk chunks commitments"
         });
@@ -248,16 +257,15 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
                 &prepare_agg_pk_chunks_var[i],
             )?;
 
-            let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-                cs.ns(|| format!("pedersen commitment prepare agg pk chunk {}", i)),
+            let pedersen_hash = PedersenHashGadget::evaluate(
+                cs.ns(|| format!("pedersen hash prepare agg pk chunk {}", i)),
                 &chunk_bits,
                 &pedersen_generators_var,
-                &sum_generator_g1_var,
             )?;
 
             let pedersen_bits = SerializeGadget::serialize_g1(
-                cs.ns(|| format!("serialize pedersen commitment, prepare chunk {}", i)),
-                &pedersen_commitment,
+                cs.ns(|| format!("serialize pedersen hash, prepare chunk {}", i)),
+                &pedersen_hash,
             )?;
 
             let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
@@ -310,16 +318,15 @@ impl ConstraintSynthesizer<MNT4Fr> for MacroBlockCircuit {
                 &commit_agg_pk_chunks_var[i],
             )?;
 
-            let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-                cs.ns(|| format!("pedersen commitment commit agg pk chunk {}", i)),
+            let pedersen_hash = PedersenHashGadget::evaluate(
+                cs.ns(|| format!("pedersen hash commit agg pk chunk {}", i)),
                 &chunk_bits,
                 &pedersen_generators_var,
-                &sum_generator_g1_var,
             )?;
 
             let pedersen_bits = SerializeGadget::serialize_g1(
-                cs.ns(|| format!("serialize pedersen commitment, commit chunk {}", i)),
-                &pedersen_commitment,
+                cs.ns(|| format!("serialize pedersen hash, commit chunk {}", i)),
+                &pedersen_hash,
             )?;
 
             let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);

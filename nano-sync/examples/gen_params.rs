@@ -1,23 +1,25 @@
 #![allow(dead_code)]
 
-use std::fs::File;
+use std::fs::{DirBuilder, File};
+use std::path::Path;
 use std::{error::Error, time::Instant};
 
-use algebra::mnt4_753::MNT4_753;
-use algebra::mnt6_753::MNT6_753;
-use algebra_core::{CanonicalSerialize, ProjectiveCurve};
+use algebra::mnt4_753::{Fr as MNT4Fr, MNT4_753};
+use algebra::mnt6_753::{Fr as MNT6Fr, MNT6_753};
+use algebra_core::{CanonicalSerialize, PairingEngine, ProjectiveCurve};
 use groth16::{generate_random_parameters, Parameters, Proof, VerifyingKey};
+use r1cs_core::ConstraintSynthesizer;
 use rand::{thread_rng, Rng, RngCore};
 
-use nano_sync::circuits::mnt4::{
-    MacroBlockCircuit, MergerCircuit, PKTree1Circuit, PKTree3Circuit, PKTree5Circuit,
+use nimiq_nano_sync::circuits::mnt4::{
+    MacroBlockCircuit, MergerCircuit, PKTreeLeafCircuit as LeafMNT4, PKTreeNodeCircuit as NodeMNT4,
 };
-use nano_sync::circuits::mnt6::{
-    MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTree0Circuit, PKTree2Circuit, PKTree4Circuit,
+use nimiq_nano_sync::circuits::mnt6::{
+    MacroBlockWrapperCircuit, MergerWrapperCircuit, PKTreeNodeCircuit as NodeMNT6,
 };
-use nano_sync::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
-use nano_sync::primitives::MacroBlock;
-use nano_sync::utils::{
+use nimiq_nano_sync::constants::{PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
+use nimiq_nano_sync::primitives::MacroBlock;
+use nimiq_nano_sync::utils::{
     bytes_to_bits, gen_rand_g1_mnt4, gen_rand_g1_mnt6, gen_rand_g2_mnt4, gen_rand_g2_mnt6,
 };
 
@@ -30,34 +32,39 @@ fn main() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
 
     println!("====== PK Tree 5 Circuit ======");
-    gen_params_pk_tree_5()?;
+    gen_params_pk_tree_leaf("pk_tree_5.bin")?;
 
     println!("====== PK Tree 4 Circuit ======");
-    gen_params_pk_tree_4()?;
+    type Tree4 = LeafMNT4;
+    gen_params_pk_tree_node_mnt6::<Tree4>("pk_tree_5.bin", "pk_tree_4.bin")?;
 
     println!("====== PK Tree 3 Circuit ======");
-    gen_params_pk_tree_3()?;
+    type Tree3 = NodeMNT6<LeafMNT4>;
+    gen_params_pk_tree_node_mnt4::<Tree3>("pk_tree_4.bin", "pk_tree_3.bin")?;
 
     println!("====== PK Tree 2 Circuit ======");
-    gen_params_pk_tree_2()?;
+    type Tree2 = NodeMNT4<NodeMNT6<LeafMNT4>>;
+    gen_params_pk_tree_node_mnt6::<Tree2>("pk_tree_3.bin", "pk_tree_2.bin")?;
 
     println!("====== PK Tree 1 Circuit ======");
-    gen_params_pk_tree_1()?;
+    type Tree1 = NodeMNT6<NodeMNT4<NodeMNT6<LeafMNT4>>>;
+    gen_params_pk_tree_node_mnt4::<Tree1>("pk_tree_2.bin", "pk_tree_1.bin")?;
 
     println!("====== PK Tree 0 Circuit ======");
-    gen_params_pk_tree_0()?;
+    type Tree0 = NodeMNT4<NodeMNT6<NodeMNT4<NodeMNT6<LeafMNT4>>>>;
+    gen_params_pk_tree_node_mnt6::<Tree0>("pk_tree_1.bin", "pk_tree_0.bin")?;
 
     println!("====== Macro Block Circuit ======");
-    gen_params_macro_block()?;
+    gen_params_macro_block("pk_tree_0.bin", "macro_block.bin")?;
 
     println!("====== Macro Block Wrapper Circuit ======");
-    gen_params_macro_block_wrapper()?;
+    gen_params_macro_block_wrapper("macro_block.bin", "macro_block_wrapper.bin")?;
 
     println!("====== Merger Circuit ======");
-    gen_params_merger()?;
+    gen_params_merger("macro_block_wrapper.bin", "merger.bin")?;
 
     println!("====== Merger Wrapper Circuit ======");
-    gen_params_merger_wrapper()?;
+    gen_params_merger_wrapper("merger.bin", "merger_wrapper.bin")?;
 
     println!("====== Parameter generation for Nano Sync finished ======");
     println!("Total time elapsed: {:?} seconds", start.elapsed());
@@ -65,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn gen_params_pk_tree_5() -> Result<(), Box<dyn Error>> {
+fn gen_params_pk_tree_leaf(name: &str) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -101,7 +108,7 @@ fn gen_params_pk_tree_5() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
 
     let params: Parameters<MNT4_753> = {
-        let c = PKTree5Circuit::new(
+        let c = LeafMNT4::new(
             pks,
             pks_nodes,
             prepare_agg_pk,
@@ -117,32 +124,18 @@ fn gen_params_pk_tree_5() -> Result<(), Box<dyn Error>> {
     };
 
     println!(
-        "Parameter generation finished. It took {:?} seconds",
+        "Parameter generation finished. It took {:?} seconds.",
         start.elapsed()
     );
 
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/pk_tree_5.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/pk_tree_5.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
+    // Save keys to file.
+    to_file(params, name)
 }
 
-fn gen_params_pk_tree_4() -> Result<(), Box<dyn Error>> {
+fn gen_params_pk_tree_node_mnt6<SubCircuit: ConstraintSynthesizer<MNT4Fr>>(
+    vk_file: &'static str,
+    name: &str,
+) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -188,7 +181,8 @@ fn gen_params_pk_tree_4() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
 
     let params: Parameters<MNT6_753> = {
-        let c = PKTree4Circuit::new(
+        let c = NodeMNT6::<SubCircuit>::new(
+            vk_file,
             left_proof,
             right_proof,
             pks_commitment.to_vec(),
@@ -204,32 +198,18 @@ fn gen_params_pk_tree_4() -> Result<(), Box<dyn Error>> {
     };
 
     println!(
-        "Parameter generation finished. It took {:?} seconds",
+        "Parameter generation finished. It took {:?} seconds.",
         start.elapsed()
     );
 
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/pk_tree_4.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/pk_tree_4.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
+    // Save keys to file.
+    to_file(params, name)
 }
 
-fn gen_params_pk_tree_3() -> Result<(), Box<dyn Error>> {
+fn gen_params_pk_tree_node_mnt4<SubCircuit: ConstraintSynthesizer<MNT6Fr>>(
+    vk_file: &'static str,
+    name: &str,
+) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -279,7 +259,8 @@ fn gen_params_pk_tree_3() -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
 
     let params: Parameters<MNT4_753> = {
-        let c = PKTree3Circuit::new(
+        let c = NodeMNT4::<SubCircuit>::new(
+            vk_file,
             left_proof,
             right_proof,
             prepare_agg_pk_chunks,
@@ -295,297 +276,15 @@ fn gen_params_pk_tree_3() -> Result<(), Box<dyn Error>> {
     };
 
     println!(
-        "Parameter generation finished. It took {:?} seconds",
+        "Parameter generation finished. It took {:?} seconds.",
         start.elapsed()
     );
 
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/pk_tree_3.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/pk_tree_3.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
+    // Save keys to file.
+    to_file(params, name)
 }
 
-fn gen_params_pk_tree_2() -> Result<(), Box<dyn Error>> {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
-    // Create dummy inputs.
-    let left_proof = Proof {
-        a: gen_rand_g1_mnt4().into_affine(),
-        b: gen_rand_g2_mnt4().into_affine(),
-        c: gen_rand_g1_mnt4().into_affine(),
-    };
-
-    let right_proof = Proof {
-        a: gen_rand_g1_mnt4().into_affine(),
-        b: gen_rand_g2_mnt4().into_affine(),
-        c: gen_rand_g1_mnt4().into_affine(),
-    };
-
-    let mut pks_commitment = [0u8; 95];
-    rng.fill_bytes(&mut pks_commitment);
-
-    let mut prepare_signer_bitmap = [0u8; VALIDATOR_SLOTS / 8];
-    rng.fill_bytes(&mut prepare_signer_bitmap);
-
-    let mut left_prepare_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut left_prepare_agg_pk_commitment);
-
-    let mut right_prepare_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut right_prepare_agg_pk_commitment);
-
-    let mut commit_signer_bitmap = [0u8; VALIDATOR_SLOTS / 8];
-    rng.fill_bytes(&mut commit_signer_bitmap);
-
-    let mut left_commit_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut left_commit_agg_pk_commitment);
-
-    let mut right_commit_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut right_commit_agg_pk_commitment);
-
-    let position: u8 = rng.gen_range(0, 32);
-
-    // Create parameters for our circuit
-    println!("Starting parameter generation.");
-
-    let start = Instant::now();
-
-    let params: Parameters<MNT6_753> = {
-        let c = PKTree2Circuit::new(
-            left_proof,
-            right_proof,
-            pks_commitment.to_vec(),
-            prepare_signer_bitmap.to_vec(),
-            left_prepare_agg_pk_commitment.to_vec(),
-            right_prepare_agg_pk_commitment.to_vec(),
-            commit_signer_bitmap.to_vec(),
-            left_commit_agg_pk_commitment.to_vec(),
-            right_commit_agg_pk_commitment.to_vec(),
-            vec![position],
-        );
-        generate_random_parameters::<MNT6_753, _, _>(c, rng)?
-    };
-
-    println!(
-        "Parameter generation finished. It took {:?} seconds",
-        start.elapsed()
-    );
-
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/pk_tree_2.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/pk_tree_2.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
-}
-
-fn gen_params_pk_tree_1() -> Result<(), Box<dyn Error>> {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
-    // Create dummy inputs.
-    let left_proof = Proof {
-        a: gen_rand_g1_mnt6().into_affine(),
-        b: gen_rand_g2_mnt6().into_affine(),
-        c: gen_rand_g1_mnt6().into_affine(),
-    };
-
-    let right_proof = Proof {
-        a: gen_rand_g1_mnt6().into_affine(),
-        b: gen_rand_g2_mnt6().into_affine(),
-        c: gen_rand_g1_mnt6().into_affine(),
-    };
-
-    let mut prepare_agg_pk_chunks = Vec::new();
-    for _ in 0..4 {
-        prepare_agg_pk_chunks.push(gen_rand_g2_mnt6());
-    }
-
-    let mut commit_agg_pk_chunks = Vec::new();
-    for _ in 0..4 {
-        commit_agg_pk_chunks.push(gen_rand_g2_mnt6());
-    }
-
-    let mut pks_commitment = [0u8; 95];
-    rng.fill_bytes(&mut pks_commitment);
-
-    let mut prepare_signer_bitmap = [0u8; VALIDATOR_SLOTS / 8];
-    rng.fill_bytes(&mut prepare_signer_bitmap);
-
-    let mut prepare_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut prepare_agg_pk_commitment);
-
-    let mut commit_signer_bitmap = [0u8; VALIDATOR_SLOTS / 8];
-    rng.fill_bytes(&mut commit_signer_bitmap);
-
-    let mut commit_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut commit_agg_pk_commitment);
-
-    let position: u8 = rng.gen_range(0, 32);
-
-    // Create parameters for our circuit
-    println!("Starting parameter generation.");
-
-    let start = Instant::now();
-
-    let params: Parameters<MNT4_753> = {
-        let c = PKTree1Circuit::new(
-            left_proof,
-            right_proof,
-            prepare_agg_pk_chunks,
-            commit_agg_pk_chunks,
-            pks_commitment.to_vec(),
-            prepare_signer_bitmap.to_vec(),
-            prepare_agg_pk_commitment.to_vec(),
-            commit_signer_bitmap.to_vec(),
-            commit_agg_pk_commitment.to_vec(),
-            vec![position],
-        );
-        generate_random_parameters::<MNT4_753, _, _>(c, rng)?
-    };
-
-    println!(
-        "Parameter generation finished. It took {:?} seconds",
-        start.elapsed()
-    );
-
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/pk_tree_1.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/pk_tree_1.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
-}
-
-fn gen_params_pk_tree_0() -> Result<(), Box<dyn Error>> {
-    // Initialize rng.
-    let rng = &mut thread_rng();
-
-    // Create dummy inputs.
-    let left_proof = Proof {
-        a: gen_rand_g1_mnt4().into_affine(),
-        b: gen_rand_g2_mnt4().into_affine(),
-        c: gen_rand_g1_mnt4().into_affine(),
-    };
-
-    let right_proof = Proof {
-        a: gen_rand_g1_mnt4().into_affine(),
-        b: gen_rand_g2_mnt4().into_affine(),
-        c: gen_rand_g1_mnt4().into_affine(),
-    };
-
-    let mut pks_commitment = [0u8; 95];
-    rng.fill_bytes(&mut pks_commitment);
-
-    let mut prepare_signer_bitmap = [0u8; VALIDATOR_SLOTS / 8];
-    rng.fill_bytes(&mut prepare_signer_bitmap);
-
-    let mut left_prepare_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut left_prepare_agg_pk_commitment);
-
-    let mut right_prepare_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut right_prepare_agg_pk_commitment);
-
-    let mut commit_signer_bitmap = [0u8; VALIDATOR_SLOTS / 8];
-    rng.fill_bytes(&mut commit_signer_bitmap);
-
-    let mut left_commit_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut left_commit_agg_pk_commitment);
-
-    let mut right_commit_agg_pk_commitment = [0u8; 95];
-    rng.fill_bytes(&mut right_commit_agg_pk_commitment);
-
-    let position: u8 = rng.gen_range(0, 32);
-
-    // Create parameters for our circuit
-    println!("Starting parameter generation.");
-
-    let start = Instant::now();
-
-    let params: Parameters<MNT6_753> = {
-        let c = PKTree0Circuit::new(
-            left_proof,
-            right_proof,
-            pks_commitment.to_vec(),
-            prepare_signer_bitmap.to_vec(),
-            left_prepare_agg_pk_commitment.to_vec(),
-            right_prepare_agg_pk_commitment.to_vec(),
-            commit_signer_bitmap.to_vec(),
-            left_commit_agg_pk_commitment.to_vec(),
-            right_commit_agg_pk_commitment.to_vec(),
-            vec![position],
-        );
-        generate_random_parameters::<MNT6_753, _, _>(c, rng)?
-    };
-
-    println!(
-        "Parameter generation finished. It took {:?} seconds",
-        start.elapsed()
-    );
-
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/pk_tree_0.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/pk_tree_0.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
-}
-
-fn gen_params_macro_block() -> Result<(), Box<dyn Error>> {
+fn gen_params_macro_block(vk_file: &'static str, name: &str) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -650,6 +349,7 @@ fn gen_params_macro_block() -> Result<(), Box<dyn Error>> {
 
     let params: Parameters<MNT4_753> = {
         let c = MacroBlockCircuit::new(
+            vk_file,
             prepare_agg_pk_chunks,
             commit_agg_pk_chunks,
             initial_pks_commitment.to_vec(),
@@ -664,32 +364,15 @@ fn gen_params_macro_block() -> Result<(), Box<dyn Error>> {
     };
 
     println!(
-        "Parameter generation finished. It took {:?} seconds",
+        "Parameter generation finished. It took {:?} seconds.",
         start.elapsed()
     );
 
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/macro_block.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/macro_block.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
+    // Save keys to file.
+    to_file(params, name)
 }
 
-fn gen_params_macro_block_wrapper() -> Result<(), Box<dyn Error>> {
+fn gen_params_macro_block_wrapper(vk_file: &'static str, name: &str) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -713,6 +396,7 @@ fn gen_params_macro_block_wrapper() -> Result<(), Box<dyn Error>> {
 
     let params: Parameters<MNT6_753> = {
         let c = MacroBlockWrapperCircuit::new(
+            vk_file,
             proof,
             initial_state_commitment.to_vec(),
             final_state_commitment.to_vec(),
@@ -721,32 +405,15 @@ fn gen_params_macro_block_wrapper() -> Result<(), Box<dyn Error>> {
     };
 
     println!(
-        "Parameter generation finished. It took {:?} seconds",
+        "Parameter generation finished. It took {:?} seconds.",
         start.elapsed()
     );
 
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/macro_block_wrapper.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/macro_block_wrapper.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
+    // Save keys to file.
+    to_file(params, name)
 }
 
-fn gen_params_merger() -> Result<(), Box<dyn Error>> {
+fn gen_params_merger(vk_file: &'static str, name: &str) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -792,6 +459,7 @@ fn gen_params_merger() -> Result<(), Box<dyn Error>> {
 
     let params: Parameters<MNT4_753> = {
         let c = MergerCircuit::new(
+            vk_file,
             proof_merger_wrapper,
             proof_macro_block_wrapper,
             vk_merger_wrapper,
@@ -805,32 +473,15 @@ fn gen_params_merger() -> Result<(), Box<dyn Error>> {
     };
 
     println!(
-        "Parameter generation finished. It took {:?} seconds",
+        "Parameter generation finished. It took {:?} seconds.",
         start.elapsed()
     );
 
-    // Save verifying key to file.
-    println!("Storing verifying key");
-
-    let mut file = File::create("verifying_keys/merger.bin")?;
-
-    params.vk.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    // Save proving key to file.
-    println!("Storing proving key");
-
-    let mut file = File::create("proving_keys/merger.bin")?;
-
-    params.serialize(&mut file)?;
-
-    file.sync_all()?;
-
-    Ok(())
+    // Save keys to file.
+    to_file(params, name)
 }
 
-fn gen_params_merger_wrapper() -> Result<(), Box<dyn Error>> {
+fn gen_params_merger_wrapper(vk_file: &'static str, name: &str) -> Result<(), Box<dyn Error>> {
     // Initialize rng.
     let rng = &mut thread_rng();
 
@@ -857,6 +508,7 @@ fn gen_params_merger_wrapper() -> Result<(), Box<dyn Error>> {
 
     let params: Parameters<MNT6_753> = {
         let c = MergerWrapperCircuit::new(
+            vk_file,
             proof,
             initial_state_commitment.to_vec(),
             final_state_commitment.to_vec(),
@@ -866,23 +518,36 @@ fn gen_params_merger_wrapper() -> Result<(), Box<dyn Error>> {
     };
 
     println!(
-        "Parameter generation finished. It took {:?} seconds",
+        "Parameter generation finished. It took {:?} seconds.",
         start.elapsed()
     );
 
-    // Save verifying key to file.
-    println!("Storing verifying key");
+    // Save keys to file.
+    to_file(params, name)
+}
 
-    let mut file = File::create("verifying_keys/merger_wrapper.bin")?;
+fn to_file<T: PairingEngine>(params: Parameters<T>, name: &str) -> Result<(), Box<dyn Error>> {
+    // Save verifying key to file.
+    println!("Storing verifying key.");
+
+    if !Path::new("verifying_keys/").is_dir() {
+        DirBuilder::new().create("verifying_keys/").unwrap();
+    }
+
+    let mut file = File::create(format!("verifying_keys/{}", name))?;
 
     params.vk.serialize(&mut file)?;
 
     file.sync_all()?;
 
     // Save proving key to file.
-    println!("Storing proving key");
+    println!("Storing proving key.");
 
-    let mut file = File::create("proving_keys/merger_wrapper.bin")?;
+    if !Path::new("proving_keys/").is_dir() {
+        DirBuilder::new().create("proving_keys/").unwrap();
+    }
+
+    let mut file = File::create(format!("proving_keys/{}", name))?;
 
     params.serialize(&mut file)?;
 

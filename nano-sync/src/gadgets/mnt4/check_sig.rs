@@ -3,7 +3,7 @@ use r1cs_core::SynthesisError;
 use r1cs_std::mnt6_753::{G1Gadget, G1PreparedGadget, G2Gadget, G2PreparedGadget, PairingGadget};
 use r1cs_std::{eq::EqGadget, fields::FieldGadget, pairing::PairingGadget as PG};
 
-/// This gadget checks that a given BLS signature is correct. But it only works if given the hash
+/// This gadget checks that a given BLS signature is correct. But it only works when given the hash
 /// point, it does not have functionality to transform a message into the hash point.
 pub struct CheckSigGadget;
 
@@ -15,8 +15,8 @@ impl CheckSigGadget {
     /// e(sig, gen) = e(hash_1, pk_1) * e(hash_2, pk_2) * ... * e(hash_n, pk_n)
     pub fn check_signatures<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         mut cs: CS,
-        public_keys: Vec<&G2Gadget>,
-        hash_points: Vec<&G1Gadget>,
+        public_keys: &[&G2Gadget],
+        hash_points: &[&G1Gadget],
         signature: &G1Gadget,
         generator: &G2Gadget,
     ) -> Result<(), SynthesisError> {
@@ -34,7 +34,7 @@ impl CheckSigGadget {
 
         for (i, public_key) in public_keys.iter().enumerate() {
             let pub_key_p_var: G2PreparedGadget =
-                PairingGadget::prepare_g2(cs.ns(|| format!("pub_key_p {}", i)), &public_key)?;
+                PairingGadget::prepare_g2(cs.ns(|| format!("pub_key_p {}", i)), public_key)?;
             pub_key_p_vars.push(pub_key_p_var);
         }
 
@@ -43,7 +43,7 @@ impl CheckSigGadget {
 
         for (i, hash_point) in hash_points.iter().enumerate() {
             let hash_p_var: G1PreparedGadget =
-                PairingGadget::prepare_g1(cs.ns(|| format!("hash_p {}", i)), &hash_point)?;
+                PairingGadget::prepare_g1(cs.ns(|| format!("hash_p {}", i)), hash_point)?;
             hash_p_vars.push(hash_p_var);
         }
 

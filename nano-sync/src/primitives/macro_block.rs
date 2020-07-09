@@ -3,8 +3,8 @@ use algebra::ProjectiveCurve;
 use algebra_core::Zero;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 
-use crate::constants::{sum_generator_g1_mnt6, VALIDATOR_SLOTS};
-use crate::primitives::{pedersen_commitment, pedersen_generators, pedersen_hash};
+use crate::constants::{POINT_CAPACITY, VALIDATOR_SLOTS};
+use crate::primitives::{pedersen_generators, pedersen_hash};
 use crate::utils::{bytes_to_bits, serialize_g1_mnt6};
 
 /// A struct representing a macro block in Albatross.
@@ -110,19 +110,17 @@ impl MacroBlock {
 
         let bits = bytes_to_bits(&bytes);
 
-        //Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
+        // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
         // division of x/y is (x+y-1)/y.
-        let generators_needed = (bits.len() + 752 - 1) / 752;
+        let generators_needed = (bits.len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1;
 
         let generators = pedersen_generators(generators_needed);
 
-        let sum_generator = sum_generator_g1_mnt6();
-
         // Calculate the Pedersen commitment.
-        let pedersen_commitment = pedersen_commitment(bits, generators.clone(), sum_generator);
+        let first_hash = pedersen_hash(bits, generators.clone());
 
         // Serialize the Pedersen commitment.
-        let serialized_commitment = serialize_g1_mnt6(pedersen_commitment);
+        let serialized_commitment = serialize_g1_mnt6(first_hash);
 
         // Initialize Blake2s parameters.
         let blake2s = Blake2sWithParameterBlock {
@@ -140,18 +138,15 @@ impl MacroBlock {
         };
 
         // Calculate the Blake2s hash.
-        let hash = blake2s.evaluate(&serialized_commitment);
+        let second_hash = blake2s.evaluate(&serialized_commitment);
 
         // Convert to bits.
-        let bits = bytes_to_bits(&hash);
-
-        // Get the generators for the Pedersen hash.
-        let generators = pedersen_generators(256);
+        let bits = bytes_to_bits(&second_hash);
 
         // Calculate the Pedersen hash.
-        let result = pedersen_hash(bits, generators, sum_generator_g1_mnt6());
+        let third_hash = pedersen_hash(bits, generators);
 
-        result
+        third_hash
     }
 }
 

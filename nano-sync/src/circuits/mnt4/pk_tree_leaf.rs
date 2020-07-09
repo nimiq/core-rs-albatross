@@ -4,17 +4,26 @@ use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{G1Gadget, G2Gadget};
 use r1cs_std::prelude::*;
 
-use crate::constants::{
-    sum_generator_g1_mnt6, sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS,
-};
-use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenCommitmentGadget, SerializeGadget};
+use crate::constants::{sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS};
+use crate::gadgets::mnt4::{MerkleTreeGadget, PedersenHashGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
 use crate::utils::reverse_inner_byte_order;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
-/// This is the leaf level of the PKTreeCircuit. See PKTree0Circuit for more details.
+/// This is the leaf subcircuit of the PKTreeCircuit. This circuit main function is to process the
+/// validator's public keys and "return" the aggregate public keys for the prepare and commit rounds
+/// of the Macro Block. At a high-level, it divides all the computation into 2^n parts, where n
+/// is the depth of the tree, so that each part uses only a manageable amount of memory and can be
+/// run on consumer hardware.
+/// It does this by forming a binary tree of recursive SNARKs. Each of the 2^n leaves receives
+/// Merkle tree commitments to the public keys list and a commitment to the corresponding aggregate
+/// public keys chunk (there are 2^n chunks, one for each leaf) in addition to the signer's
+/// bitmaps and the position of the leaf node on the tree. Each of the leaves then checks that its
+/// specific chunk of the public keys matches the corresponding chunk of the aggregated public keys.
+/// All of the other upper levels of the recursive SNARK tree just verify SNARK proofs for its child
+/// nodes and recursively aggregate the aggregate public keys chunks (no pun intended).
 #[derive(Clone)]
-pub struct PKTree5Circuit {
+pub struct PKTreeLeafCircuit {
     // Private inputs
     pks: Vec<G2Projective>,
     pks_nodes: Vec<G1Projective>,
@@ -30,7 +39,7 @@ pub struct PKTree5Circuit {
     position: Vec<u8>,
 }
 
-impl PKTree5Circuit {
+impl PKTreeLeafCircuit {
     pub fn new(
         pks: Vec<G2Projective>,
         pks_nodes: Vec<G1Projective>,
@@ -58,7 +67,7 @@ impl PKTree5Circuit {
     }
 }
 
-impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
+impl ConstraintSynthesizer<MNT4Fr> for PKTreeLeafCircuit {
     /// This function generates the constraints for the circuit.
     fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
         self,
@@ -67,9 +76,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
         // Allocate all the constants.
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
-
-        let sum_generator_g1_var =
-            G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
 
         let sum_generator_g2_var =
             G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
@@ -148,11 +154,18 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
 
         let commit_signer_bitmap_var = commit_signer_bitmap_var[chunk_start..chunk_end].to_vec();
 
+        // We take the position, turn it into bits and keep only the first PK_TREE_DEPTH bits. The
+        // resulting bits represent in effect the path in the PK Merkle tree from our current
+        // position to the root. See MerkleTreeGadget for more details.
         let mut path_var = position_var.into_bits_le();
 
         path_var.truncate(PK_TREE_DEPTH);
 
-        // Verify the Merkle proof for the public keys.
+        // Verify the Merkle proof for the public keys. To reiterate, this Merkle tree has 2^n
+        // leaves (where n is the PK_TREE_DEPTH constant) and each of the leaves consists of several
+        // public keys serialized and concatenated together. Each leaf contains exactly
+        // VALIDATOR_SLOTS/2^n public keys, so that the entire Merkle tree contains all of the
+        // public keys list.
         next_cost_analysis!(cs, cost, || { "Verify Merkle proof pks" });
 
         let mut bits: Vec<Boolean> = vec![];
@@ -171,7 +184,6 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
             &path_var,
             &pk_commitment_var,
             &pedersen_generators_var,
-            &sum_generator_g1_var,
         )?;
 
         // Verifying prepare aggregate public key commitment. It just checks that the prepare
@@ -184,22 +196,22 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
             &prepare_agg_pk_var,
         )?;
 
-        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
+        let pedersen_hash = PedersenHashGadget::evaluate(
             cs.ns(|| "reference prepare agg pk commitment"),
             &prepare_agg_pk_bits,
             &pedersen_generators_var,
-            &sum_generator_g1_var,
         )?;
 
         let pedersen_bits = SerializeGadget::serialize_g1(
-            cs.ns(|| "serialize prepare pedersen commitment"),
-            &pedersen_commitment,
+            cs.ns(|| "serialize prepare pedersen hash"),
+            &pedersen_hash,
         )?;
 
         let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
 
         let mut reference_commitment = Vec::new();
 
+        // Convert pedersen_bits, which is a Vector of Booleans, into a Vector of UInt8s.
         for i in 0..pedersen_bits.len() / 8 {
             reference_commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
         }
@@ -217,22 +229,22 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree5Circuit {
         let commit_agg_pk_bits =
             SerializeGadget::serialize_g2(cs.ns(|| "serialize commit agg pk"), &commit_agg_pk_var)?;
 
-        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
+        let pedersen_hash = PedersenHashGadget::evaluate(
             cs.ns(|| "reference commit agg pk commitment"),
             &commit_agg_pk_bits,
             &pedersen_generators_var,
-            &sum_generator_g1_var,
         )?;
 
         let pedersen_bits = SerializeGadget::serialize_g1(
-            cs.ns(|| "serialize commit pedersen commitment"),
-            &pedersen_commitment,
+            cs.ns(|| "serialize commit pedersen hash"),
+            &pedersen_hash,
         )?;
 
         let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
 
         let mut reference_commitment = Vec::new();
 
+        // Convert pedersen_bits, which is a Vector of Booleans, into a Vector of UInt8s.
         for i in 0..pedersen_bits.len() / 8 {
             reference_commitment.push(UInt8::from_bits_le(&pedersen_bits[i * 8..(i + 1) * 8]));
         }

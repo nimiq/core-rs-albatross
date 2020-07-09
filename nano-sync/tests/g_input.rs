@@ -16,7 +16,7 @@ use r1cs_std::eq::EqGadget;
 use r1cs_std::mnt4_753::PairingGadget;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 
-use nano_sync::gadgets::input::RecursiveInputGadget;
+use nimiq_nano_sync::gadgets::input::RecursiveInputGadget;
 
 // When running tests you are advised to run only one test at a time or you might run out of RAM.
 // Also they take a long time to run. This is why they have the ignore flag.

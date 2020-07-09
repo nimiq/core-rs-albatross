@@ -11,9 +11,8 @@ use r1cs_std::prelude::{AllocGadget, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
-use nano_sync::constants::sum_generator_g1_mnt6;
-use nano_sync::gadgets::mnt4::VKCommitmentGadget;
-use nano_sync::primitives::{pedersen_generators, vk_commitment};
+use nimiq_nano_sync::gadgets::mnt4::VKCommitmentGadget;
+use nimiq_nano_sync::primitives::{pedersen_generators, vk_commitment};
 
 // When running tests you are advised to run only one test at a time or you might run out of RAM.
 // Also they take a long time to run. This is why they have the ignore flag.
@@ -47,31 +46,8 @@ fn vk_commitment_test() {
             .into_affine(),
     ];
 
-    // Allocate the random input in the circuit.
-    let vk_var: VerifyingKeyGadget<MNT6_753, Fq, PairingGadget> =
-        VerifyingKeyGadget::alloc(cs.ns(|| "alloc vk"), || Ok(vk.clone())).unwrap();
-
-    // Allocate the generators
-    let sum_generator = sum_generator_g1_mnt6();
-
-    let sum_generator_var =
-        G1Gadget::alloc(cs.ns(|| "sum generator"), || Ok(sum_generator)).unwrap();
-
-    let generators = pedersen_generators(256);
-
-    let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
-    for i in 0..generators.len() {
-        pedersen_generators_var.push(
-            G1Gadget::alloc(
-                cs.ns(|| format!("pedersen_generators: generator {}", i)),
-                || Ok(generators[i]),
-            )
-            .unwrap(),
-        );
-    }
-
     // Evaluate state commitment using the primitive version.
-    let primitive_out = vk_commitment(vk);
+    let primitive_out = vk_commitment(vk.clone());
 
     // Convert the result to a UInt8 for easier comparison.
     let mut primitive_out_var: Vec<UInt8> = Vec::new();
@@ -85,12 +61,29 @@ fn vk_commitment_test() {
         );
     }
 
+    // Allocate the random input in the circuit.
+    let vk_var: VerifyingKeyGadget<MNT6_753, Fq, PairingGadget> =
+        VerifyingKeyGadget::alloc(cs.ns(|| "alloc vk"), || Ok(vk.clone())).unwrap();
+
+    // Allocate the generators.
+    let generators = pedersen_generators(14);
+
+    let mut pedersen_generators_var: Vec<G1Gadget> = Vec::new();
+    for i in 0..generators.len() {
+        pedersen_generators_var.push(
+            G1Gadget::alloc(
+                cs.ns(|| format!("pedersen_generators: generator {}", i)),
+                || Ok(generators[i]),
+            )
+            .unwrap(),
+        );
+    }
+
     // Evaluate state commitment using the gadget version.
     let gadget_out = VKCommitmentGadget::evaluate(
         cs.ns(|| "evaluate vk commitment gadget"),
         &vk_var,
         &pedersen_generators_var,
-        &sum_generator_var,
     )
     .unwrap();
 

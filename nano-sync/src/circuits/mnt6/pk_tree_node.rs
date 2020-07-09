@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::marker::PhantomData;
 
 use algebra::mnt4_753::{Fq, Fr, MNT4_753};
 use algebra::mnt6_753::Fr as MNT6Fr;
@@ -13,20 +14,25 @@ use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::mnt4_753::PairingGadget;
 use r1cs_std::prelude::*;
 
-use crate::circuits::mnt4::PKTree3Circuit;
 use crate::gadgets::input::RecursiveInputGadget;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
-// Renaming some types for convenience. We can change the circuit and elliptic curve of the input
-// proof to the wrapper circuit just by editing these types.
-type TheProofSystem = Groth16<MNT4_753, PKTree3Circuit, Fr>;
+// Renaming some types for convenience.
+type TheProofSystem<T> = Groth16<MNT4_753, T, Fr>;
 type TheProofGadget = ProofGadget<MNT4_753, Fq, PairingGadget>;
 type TheVkGadget = VerifyingKeyGadget<MNT4_753, Fq, PairingGadget>;
 type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, Fq, PairingGadget>;
 
-/// This is the second level of the PKTreeCircuit. See PKTree0Circuit for more details.
+/// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
+/// It is different from the other node subcircuit on the MNT4 curve in that it doesn't recalculate
+/// the aggregate public key commitments, it just passes them on to the next level.
 #[derive(Clone)]
-pub struct PKTree2Circuit {
+pub struct PKTreeNodeCircuit<SubCircuit> {
+    _subcircuit: PhantomData<SubCircuit>,
+
+    // Path to the verifying key file. Not an input to the SNARK circuit.
+    vk_file: &'static str,
+
     // Private inputs
     left_proof: Proof<MNT4_753>,
     right_proof: Proof<MNT4_753>,
@@ -42,8 +48,9 @@ pub struct PKTree2Circuit {
     position: Vec<u8>,
 }
 
-impl PKTree2Circuit {
+impl<SubCircuit> PKTreeNodeCircuit<SubCircuit> {
     pub fn new(
+        vk_file: &'static str,
         left_proof: Proof<MNT4_753>,
         right_proof: Proof<MNT4_753>,
         pks_commitment: Vec<u8>,
@@ -56,6 +63,8 @@ impl PKTree2Circuit {
         position: Vec<u8>,
     ) -> Self {
         Self {
+            _subcircuit: PhantomData,
+            vk_file,
             left_proof,
             right_proof,
             pks_commitment,
@@ -70,14 +79,16 @@ impl PKTree2Circuit {
     }
 }
 
-impl ConstraintSynthesizer<MNT6Fr> for PKTree2Circuit {
+impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT6Fr>
+    for PKTreeNodeCircuit<SubCircuit>
+{
     /// This function generates the constraints for the circuit.
     fn generate_constraints<CS: ConstraintSystem<MNT6Fr>>(
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/pk_tree_3.bin")?;
+        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
         let vk_child = VerifyingKey::deserialize(&mut file).unwrap();
 
@@ -146,12 +157,15 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree2Circuit {
         // For efficiency reasons, we calculate the positions using bit manipulation.
         next_cost_analysis!(cs, cost, || { "Calculate positions" });
 
+        // Get P.
         let mut bits = position_var.into_bits_le();
 
+        // Calculate P << 1, which is equivalent to calculating 2 * P.
         bits.pop();
         bits.insert(0, Boolean::Constant(false));
         let left_position = vec![UInt8::from_bits_le(&bits)];
 
+        // bits is currently P << 1 = L. Calculate L & 1, which is equivalent to L + 1.
         bits.remove(0);
         bits.insert(0, Boolean::Constant(true));
         let right_position = vec![UInt8::from_bits_le(&bits)];
@@ -181,7 +195,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree2Circuit {
             &left_position,
         )?);
 
-        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
+        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
             cs.ns(|| "verify left groth16 proof"),
             &vk_child_var,
             proof_inputs.iter(),
@@ -213,7 +227,7 @@ impl ConstraintSynthesizer<MNT6Fr> for PKTree2Circuit {
             &right_position,
         )?);
 
-        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
+        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
             cs.ns(|| "verify right groth16 proof"),
             &vk_child_var,
             proof_inputs.iter(),

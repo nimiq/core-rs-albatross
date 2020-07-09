@@ -2,14 +2,14 @@ use algebra::mnt6_753::MNT6_753;
 use algebra_core::AffineCurve;
 use groth16::VerifyingKey;
 
-use crate::constants::sum_generator_g1_mnt6;
-use crate::primitives::{pedersen_commitment, pedersen_generators};
+use crate::constants::POINT_CAPACITY;
+use crate::primitives::{pedersen_generators, pedersen_hash};
 use crate::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// This function is meant to calculate a commitment off-circuit for a verifying key of a SNARK in the
 /// MNT6-753 curve. This means we can open this commitment inside of a circuit in the MNT4-753 curve
 /// and we can use it to verify a SNARK proof inside that circuit.
-/// We calculate it by first serializing the verifying key and feeding it to the Pedersen commitment
+/// We calculate it by first serializing the verifying key and feeding it to the Pedersen hash
 /// function, then we serialize the output and convert it to bytes. This provides an efficient way
 /// of compressing the state and representing it across different curves.
 pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
@@ -30,19 +30,17 @@ pub fn vk_commitment(vk: VerifyingKey<MNT6_753>) -> Vec<u8> {
 
     let bits = bytes_to_bits(&bytes);
 
-    //Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
+    // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let generators_needed = (bits.len() + 752 - 1) / 752;
+    let generators_needed = (bits.len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1;
 
     let generators = pedersen_generators(generators_needed);
 
-    let sum_generator = sum_generator_g1_mnt6();
-
-    // Calculate the Pedersen commitment.
-    let pedersen_commitment = pedersen_commitment(bits, generators, sum_generator);
+    // Calculate the Pedersen hash.
+    let hash = pedersen_hash(bits, generators);
 
     // Serialize the Pedersen commitment.
-    let bytes = serialize_g1_mnt6(pedersen_commitment);
+    let bytes = serialize_g1_mnt6(hash);
 
     Vec::from(bytes.as_ref())
 }

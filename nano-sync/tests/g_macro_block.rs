@@ -10,9 +10,11 @@ use r1cs_std::prelude::{AllocGadget, UInt32, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
-use nano_sync::constants::{sum_generator_g1_mnt6, MAX_NON_SIGNERS, MIN_SIGNERS, VALIDATOR_SLOTS};
-use nano_sync::gadgets::mnt4::{MacroBlockGadget, Round};
-use nano_sync::primitives::{pedersen_generators, MacroBlock};
+use nimiq_nano_sync::constants::{
+    sum_generator_g1_mnt6, MAX_NON_SIGNERS, MIN_SIGNERS, VALIDATOR_SLOTS,
+};
+use nimiq_nano_sync::gadgets::mnt4::{MacroBlockGadget, Round};
+use nimiq_nano_sync::primitives::{pedersen_generators, MacroBlock};
 
 // When running tests you are advised to run only one test at a time or you might run out of RAM.
 // Also they take a long time to run. This is why they have the ignore flag.
@@ -132,13 +134,9 @@ fn hash_works() {
     let pks_commitment_var =
         UInt8::alloc_vec(cs.ns(|| "alloc pks commitment"), &pks_commitment).unwrap();
 
-    let sum_generator_g1_var =
-        G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())
-            .unwrap();
-
     let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
         cs.ns(|| "alloc pedersen_generators"),
-        pedersen_generators(256),
+        pedersen_generators(3),
     )
     .unwrap();
 
@@ -149,7 +147,6 @@ fn hash_works() {
             Round::Commit,
             &block_number_var,
             &pks_commitment_var,
-            &sum_generator_g1_var,
             &pedersen_generators_var,
         )
         .unwrap();

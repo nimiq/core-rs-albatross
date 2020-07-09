@@ -1,13 +1,13 @@
 use algebra::mnt6_753::G2Projective;
 
-use crate::constants::sum_generator_g1_mnt6;
-use crate::primitives::{merkle_tree_construct, pedersen_commitment, pedersen_generators};
+use crate::constants::POINT_CAPACITY;
+use crate::primitives::{merkle_tree_construct, pedersen_generators, pedersen_hash};
 use crate::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 /// This gadget is meant to calculate the "state commitment" off-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public
 /// keys. We calculate it by first creating a Merkle tree from the public keys. Then we serialize the
-/// block number and the Merkle tree root and feed it to the Pedersen commitment function. Lastly we
+/// block number and the Merkle tree root and feed it to the Pedersen hash function. Lastly we
 /// serialize the output and convert it to bytes. This provides an efficient way of compressing the
 /// state and representing it across different curves.
 pub fn state_commitment(
@@ -47,19 +47,17 @@ pub fn state_commitment(
 
     let bits = bytes_to_bits(&bytes);
 
-    //Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
+    // Calculate the Pedersen generators and the sum generator. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let generators_needed = (bits.len() + 752 - 1) / 752;
+    let generators_needed = (bits.len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1;
 
     let generators = pedersen_generators(generators_needed);
 
-    let sum_generator = sum_generator_g1_mnt6();
+    // Calculate the Pedersen hash.
+    let hash = pedersen_hash(bits, generators);
 
-    // Calculate the Pedersen commitment.
-    let pedersen_commitment = pedersen_commitment(bits, generators, sum_generator);
-
-    // Serialize the Pedersen commitment.
-    let bytes = serialize_g1_mnt6(pedersen_commitment);
+    // Serialize the Pedersen hash.
+    let bytes = serialize_g1_mnt6(hash);
 
     Vec::from(bytes.as_ref())
 }

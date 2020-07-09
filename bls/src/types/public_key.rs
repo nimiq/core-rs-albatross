@@ -6,8 +6,8 @@ use log::error;
 use num_traits::Zero;
 
 use nimiq_hash::Hash;
+use nimiq_nano_sync::compression::BeSerialize;
 
-use crate::compression::BeSerialize;
 use crate::{CompressedPublicKey, SecretKey, SigHash, Signature};
 
 #[derive(Clone, Copy)]
@@ -61,7 +61,7 @@ impl PublicKey {
     /// one bit indicating the sign of the y-coordinate
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedPublicKey {
-        let mut buffer = [0u8; 288];
+        let mut buffer = [0u8; CompressedPublicKey::SIZE];
         BeSerialize::serialize(&self.public_key.into_affine(), &mut &mut buffer[..]).unwrap();
         CompressedPublicKey { public_key: buffer }
     }

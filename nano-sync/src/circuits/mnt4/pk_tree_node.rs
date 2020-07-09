@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::marker::PhantomData;
 
 use algebra::mnt4_753::Fr as MNT4Fr;
 use algebra::mnt6_753::{Fq, Fr, G2Projective, MNT6_753};
@@ -13,24 +14,29 @@ use r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 use r1cs_std::mnt6_753::{G1Gadget, G2Gadget, PairingGadget};
 use r1cs_std::prelude::*;
 
-use crate::circuits::mnt6::PKTree4Circuit;
-use crate::constants::{sum_generator_g1_mnt6, sum_generator_g2_mnt6};
+use crate::constants::sum_generator_g2_mnt6;
 use crate::gadgets::input::RecursiveInputGadget;
-use crate::gadgets::mnt4::{PedersenCommitmentGadget, SerializeGadget};
+use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::primitives::pedersen_generators;
 use crate::utils::reverse_inner_byte_order;
 use crate::{end_cost_analysis, next_cost_analysis, start_cost_analysis};
 
-// Renaming some types for convenience. We can change the circuit and elliptic curve of the input
-// proof to the wrapper circuit just by editing these types.
-type TheProofSystem = Groth16<MNT6_753, PKTree4Circuit, Fr>;
+// Renaming some types for convenience.
+type TheProofSystem<T> = Groth16<MNT6_753, T, Fr>;
 type TheProofGadget = ProofGadget<MNT6_753, Fq, PairingGadget>;
 type TheVkGadget = VerifyingKeyGadget<MNT6_753, Fq, PairingGadget>;
 type TheVerifierGadget = Groth16VerifierGadget<MNT6_753, Fq, PairingGadget>;
 
-/// This is the third level of the PKTreeCircuit. See PKTree0Circuit for more details.
+/// This is the node subcircuit of the PKTreeCircuit. See PKTreeLeafCircuit for more details.
+/// It is different from the other node subcircuit on the MNT6 curve in that it does recalculate
+/// the aggregate public key commitments.
 #[derive(Clone)]
-pub struct PKTree3Circuit {
+pub struct PKTreeNodeCircuit<SubCircuit> {
+    _subcircuit: PhantomData<SubCircuit>,
+
+    // Path to the verifying key file. Not an input to the SNARK circuit.
+    vk_file: &'static str,
+
     // Private inputs
     left_proof: Proof<MNT6_753>,
     right_proof: Proof<MNT6_753>,
@@ -46,8 +52,9 @@ pub struct PKTree3Circuit {
     position: Vec<u8>,
 }
 
-impl PKTree3Circuit {
+impl<SubCircuit> PKTreeNodeCircuit<SubCircuit> {
     pub fn new(
+        vk_file: &'static str,
         left_proof: Proof<MNT6_753>,
         right_proof: Proof<MNT6_753>,
         prepare_agg_pk_chunks: Vec<G2Projective>,
@@ -60,6 +67,8 @@ impl PKTree3Circuit {
         position: Vec<u8>,
     ) -> Self {
         Self {
+            _subcircuit: PhantomData,
+            vk_file,
             left_proof,
             right_proof,
             prepare_agg_pk_chunks,
@@ -74,14 +83,16 @@ impl PKTree3Circuit {
     }
 }
 
-impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
+impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
+    for PKTreeNodeCircuit<SubCircuit>
+{
     /// This function generates the constraints for the circuit.
     fn generate_constraints<CS: ConstraintSystem<MNT4Fr>>(
         self,
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/pk_tree_4.bin")?;
+        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
         let vk_child = VerifyingKey::deserialize(&mut file).unwrap();
 
@@ -89,15 +100,12 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         #[allow(unused_mut)]
         let mut cost = start_cost_analysis!(cs, || "Alloc constants");
 
-        let sum_generator_g1_var =
-            G1Gadget::alloc_constant(cs.ns(|| "alloc sum generator g1"), &sum_generator_g1_mnt6())?;
-
         let sum_generator_g2_var =
             G2Gadget::alloc_constant(cs.ns(|| "alloc sum generator g2"), &sum_generator_g2_mnt6())?;
 
         let pedersen_generators_var = Vec::<G1Gadget>::alloc_constant(
             cs.ns(|| "alloc pedersen_generators"),
-            pedersen_generators(4),
+            pedersen_generators(5),
         )?;
 
         let vk_child_var = TheVkGadget::alloc_constant(cs.ns(|| "alloc vk child"), &vk_child)?;
@@ -182,16 +190,15 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         let prepare_agg_pk_bits =
             SerializeGadget::serialize_g2(cs.ns(|| "serialize prepare agg pk"), &prepare_agg_pk)?;
 
-        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-            cs.ns(|| "prepare agg pk pedersen commitment"),
+        let pedersen_hash = PedersenHashGadget::evaluate(
+            cs.ns(|| "prepare agg pk pedersen hash"),
             &prepare_agg_pk_bits,
             &pedersen_generators_var,
-            &sum_generator_g1_var,
         )?;
 
         let pedersen_bits = SerializeGadget::serialize_g1(
-            cs.ns(|| "serialize prepare pedersen commitment"),
-            &pedersen_commitment,
+            cs.ns(|| "serialize prepare pedersen hash"),
+            &pedersen_hash,
         )?;
 
         let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
@@ -221,16 +228,15 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
                 &prepare_agg_pk_chunks_var[i],
             )?;
 
-            let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-                cs.ns(|| format!("pedersen commitment prepare agg pk chunk {}", i)),
+            let pedersen_hash = PedersenHashGadget::evaluate(
+                cs.ns(|| format!("pedersen hash prepare agg pk chunk {}", i)),
                 &chunk_bits,
                 &pedersen_generators_var,
-                &sum_generator_g1_var,
             )?;
 
             let pedersen_bits = SerializeGadget::serialize_g1(
-                cs.ns(|| format!("serialize pedersen commitment, prepare chunk {}", i)),
-                &pedersen_commitment,
+                cs.ns(|| format!("serialize pedersen hash, prepare chunk {}", i)),
+                &pedersen_hash,
             )?;
 
             let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
@@ -272,16 +278,15 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         let commit_agg_pk_bits =
             SerializeGadget::serialize_g2(cs.ns(|| "serialize commit agg pk"), &commit_agg_pk)?;
 
-        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-            cs.ns(|| "commit agg pk pedersen commitment"),
+        let pedersen_hash = PedersenHashGadget::evaluate(
+            cs.ns(|| "commit agg pk pedersen hash"),
             &commit_agg_pk_bits,
             &pedersen_generators_var,
-            &sum_generator_g1_var,
         )?;
 
         let pedersen_bits = SerializeGadget::serialize_g1(
-            cs.ns(|| "serialize commit pedersen commitment"),
-            &pedersen_commitment,
+            cs.ns(|| "serialize commit pedersen hash"),
+            &pedersen_hash,
         )?;
 
         let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
@@ -311,16 +316,15 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
                 &commit_agg_pk_chunks_var[i],
             )?;
 
-            let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-                cs.ns(|| format!("pedersen commitment commit agg pk chunk {}", i)),
+            let pedersen_hash = PedersenHashGadget::evaluate(
+                cs.ns(|| format!("pedersen hash commit agg pk chunk {}", i)),
                 &chunk_bits,
                 &pedersen_generators_var,
-                &sum_generator_g1_var,
             )?;
 
             let pedersen_bits = SerializeGadget::serialize_g1(
-                cs.ns(|| format!("serialize pedersen commitment, commit chunk {}", i)),
-                &pedersen_commitment,
+                cs.ns(|| format!("serialize pedersen hash, commit chunk {}", i)),
+                &pedersen_hash,
             )?;
 
             let pedersen_bits = reverse_inner_byte_order(&pedersen_bits[..]);
@@ -341,12 +345,15 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
         // For efficiency reasons, we actually calculate the positions using bit manipulation.
         next_cost_analysis!(cs, cost, || { "Calculate positions" });
 
+        // Get P.
         let mut bits = position_var.into_bits_le();
 
+        // Calculate P << 1, which is equivalent to calculating 2 * P.
         bits.pop();
         bits.insert(0, Boolean::Constant(false));
         let left_position = vec![UInt8::from_bits_le(&bits)];
 
+        // bits is currently P << 1 = L. Calculate L & 1, which is equivalent to L + 1.
         bits.remove(0);
         bits.insert(0, Boolean::Constant(true));
         let right_position = vec![UInt8::from_bits_le(&bits)];
@@ -383,7 +390,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
             &left_position,
         )?);
 
-        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
+        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
             cs.ns(|| "verify left groth16 proof"),
             &vk_child_var,
             proof_inputs.iter(),
@@ -422,7 +429,7 @@ impl ConstraintSynthesizer<MNT4Fr> for PKTree3Circuit {
             &right_position,
         )?);
 
-        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem, Fq>>::check_verify(
+        <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
             cs.ns(|| "verify right groth16 proof"),
             &vk_child_var,
             proof_inputs.iter(),

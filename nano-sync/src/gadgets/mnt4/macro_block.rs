@@ -13,9 +13,7 @@ use r1cs_std::prelude::{AllocGadget, Boolean, FieldGadget, GroupGadget, UInt32, 
 use r1cs_std::ToBitsGadget;
 
 use crate::constants::VALIDATOR_SLOTS;
-use crate::gadgets::mnt4::{
-    CheckSigGadget, PedersenCommitmentGadget, PedersenHashGadget, YToBitGadget,
-};
+use crate::gadgets::mnt4::{CheckSigGadget, PedersenHashGadget, YToBitGadget};
 use crate::primitives::MacroBlock;
 use crate::utils::{pad_point_bits, reverse_inner_byte_order};
 
@@ -27,10 +25,10 @@ pub enum Round {
 }
 
 /// A gadget that contains utilities to verify the validity of a macro block. Mainly it checks that:
-///  - The macro block was signed by the prepare and commit aggregate public keys.
-///  - The macro block contains the correct block number and public keys commitment (for the next
-///    validator list).
-///  - There are enough signers.
+///  1. The macro block was signed by the prepare and commit aggregate public keys.
+///  2. The macro block contains the correct block number and public keys commitment (for the next
+///     validator list).
+///  3. There are enough signers.
 pub struct MacroBlockGadget {
     pub header_hash: Vec<Boolean>,
     pub prepare_signature: G1Gadget,
@@ -64,7 +62,7 @@ impl MacroBlockGadget {
         // So, this generator is needed to do running sums. Instead of starting at zero, we start
         // with the generator and subtract it at the end of the running sum.
         sum_generator_g1: &G1Gadget,
-        // These are just the generators for the Pedersen commitment and hash gadgets.
+        // These are just the generators for the Pedersen hash gadget.
         pedersen_generators: &Vec<G1Gadget>,
     ) -> Result<(), SynthesisError> {
         // Verify that there are enough signers.
@@ -76,7 +74,6 @@ impl MacroBlockGadget {
             Round::Prepare,
             block_number,
             pks_commitment,
-            sum_generator_g1,
             pedersen_generators,
         )?;
 
@@ -86,7 +83,6 @@ impl MacroBlockGadget {
             Round::Commit,
             block_number,
             pks_commitment,
-            sum_generator_g1,
             pedersen_generators,
         )?;
 
@@ -102,8 +98,8 @@ impl MacroBlockGadget {
         // Verifies the validity of the signatures.
         CheckSigGadget::check_signatures(
             cs.ns(|| "check signatures"),
-            vec![prepare_agg_pk, commit_agg_pk],
-            vec![&prepare_hash, &commit_hash],
+            &[prepare_agg_pk, commit_agg_pk],
+            &[&prepare_hash, &commit_hash],
             &signature,
             sig_generator,
         )
@@ -112,10 +108,10 @@ impl MacroBlockGadget {
     /// A function that calculates the hash for the block from:
     /// round number || block number || header_hash || pks_commitment
     /// where || means concatenation.
-    /// First we use the Pedersen commitment to compress the input. Then we serialize the resulting
+    /// First we use the Pedersen hash function to compress the input. Then we serialize the resulting
     /// EC point and hash it with the Blake2s hash algorithm, getting an output of 256 bits. This is
-    /// necessary because the Pedersen commitment is not pseudo-random and we need pseudo-randomness
-    /// for the BLS signature scheme. Finally we use the Pedersen hash algorithm on those 256 bits
+    /// necessary because the Pedersen hash is not pseudo-random and we need pseudo-randomness
+    /// for the BLS signature scheme. Finally we use the Pedersen hash again on those 256 bits
     /// to obtain a single EC point.
     pub fn get_hash<CS: r1cs_core::ConstraintSystem<MNT4Fr>>(
         &self,
@@ -123,7 +119,6 @@ impl MacroBlockGadget {
         round: Round,
         block_number: &UInt32,
         pks_commitment: &Vec<UInt8>,
-        sum_generator_g1: &G1Gadget,
         pedersen_generators: &Vec<G1Gadget>,
     ) -> Result<G1Gadget, SynthesisError> {
         // Initialize Boolean vector.
@@ -163,23 +158,15 @@ impl MacroBlockGadget {
 
         bits.append(&mut pks_bits);
 
-        // Calculate the Pedersen commitment.
-        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-            cs.ns(|| "pedersen commitment"),
-            &bits,
-            pedersen_generators,
-            &sum_generator_g1,
-        )?;
+        // Calculate the first hash using Pedersen.
+        let first_hash =
+            PedersenHashGadget::evaluate(cs.ns(|| "first hash"), &bits, pedersen_generators)?;
 
-        // Serialize the Pedersen commitment.
-        let x_bits = pedersen_commitment
-            .x
-            .to_bits(cs.ns(|| "x to bits: pedersen commitment"))?;
+        // Serialize the Pedersen hash.
+        let x_bits = first_hash.x.to_bits(cs.ns(|| "x to bits: pedersen hash"))?;
 
-        let greatest_bit = YToBitGadget::y_to_bit_g1(
-            cs.ns(|| "y to bit: pedersen commitment"),
-            &pedersen_commitment,
-        )?;
+        let greatest_bit =
+            YToBitGadget::y_to_bit_g1(cs.ns(|| "y to bit: pedersen hash"), &first_hash)?;
 
         let serialized_bits = pad_point_bits::<FqParameters>(x_bits, greatest_bit);
 
@@ -201,9 +188,9 @@ impl MacroBlockGadget {
             personalization: [0; 8],
         };
 
-        // Calculate Blake2s hash.
-        let hash = blake2s_gadget_with_parameters(
-            cs.ns(|| "blake2s hash from serialized bits"),
+        // Calculate second hash using Blake2s.
+        let second_hash = blake2s_gadget_with_parameters(
+            cs.ns(|| "second hash"),
             &serialized_bits,
             &blake2s_parameters.parameters(),
         )?;
@@ -211,22 +198,21 @@ impl MacroBlockGadget {
         // Convert to bits.
         let mut hash_bits = Vec::new();
 
-        for i in 0..hash.len() {
-            hash_bits.extend(hash[i].to_bits_le());
+        for i in 0..second_hash.len() {
+            hash_bits.extend(second_hash[i].to_bits_le());
         }
 
         // Reverse inner byte order (again).
         let hash_bits = reverse_inner_byte_order(&hash_bits);
 
-        // Finally feed the bits into the Pedersen hash gadget.
-        let pedersen_result = PedersenHashGadget::evaluate(
-            &mut cs.ns(|| "crh_evaluation"),
+        // Finally feed the bits into the Pedersen hash to calculate the third hash.
+        let third_hash = PedersenHashGadget::evaluate(
+            &mut cs.ns(|| "third hash"),
             &hash_bits,
             pedersen_generators,
-            sum_generator_g1,
         )?;
 
-        Ok(pedersen_result)
+        Ok(third_hash)
     }
 
     /// A function that checks if there are enough signers and if every signer in the commit round

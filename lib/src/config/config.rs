@@ -1,28 +1,28 @@
 use std::convert::TryFrom;
 use std::fmt::Display;
-use std::path::{Path, PathBuf};
 use std::net::IpAddr;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use derive_builder::Builder;
 use enum_display_derive::Display;
 use url::Url;
 
-#[cfg(feature="validator")]
-use bls::SecureGenerate;
-#[cfg(feature="validator")]
-use bls::bls12_381::KeyPair as BlsKeyPair;
-use database::Environment;
-use database::lmdb::{LmdbEnvironment, open as LmdbFlags};
+#[cfg(feature = "validator")]
+use bls::KeyPair as BlsKeyPair;
+use database::lmdb::{open as LmdbFlags, LmdbEnvironment};
 use database::volatile::VolatileEnvironment;
+use database::Environment;
+use keys::PublicKey;
 use mempool::filter::Rules as MempoolRules;
 use mempool::MempoolConfig;
 use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
-use network_primitives::address::{NetAddress, SeedList, PeerUri};
+use network_primitives::address::{NetAddress, PeerUri, SeedList};
 use primitives::networks::NetworkId;
+#[cfg(feature = "validator")]
+use utils::key_rng::SecureGenerate;
 use utils::key_store::Error as KeyStoreError;
 use utils::key_store::KeyStore;
-use keys::PublicKey;
 
 use crate::client::Client;
 use crate::config::command_line::CommandLine;
@@ -32,7 +32,6 @@ use crate::config::consts;
 use crate::config::paths;
 use crate::config::user_agent::UserAgent;
 use crate::error::Error;
-
 
 /// The consensus type
 ///
@@ -55,7 +54,6 @@ impl Default for ConsensusConfig {
         Self::Full
     }
 }
-
 
 /// Contains which protocol to use and the configuration needed for that protocol.
 ///
@@ -117,7 +115,7 @@ pub enum ProtocolConfig {
     Rtc,
 }
 
-#[cfg(feature="validator")]
+#[cfg(feature = "validator")]
 #[derive(Debug, Clone)]
 pub struct ValidatorConfig {
     // TODO
@@ -125,7 +123,7 @@ pub struct ValidatorConfig {
     validator_wallet_key: Option<keys::KeyPair>,
 }
 
-#[cfg(feature="validator")]
+#[cfg(feature = "validator")]
 impl ValidatorConfig {
     pub fn validator_wallet_key(self) -> Result<Option<keys::KeyPair>, Error> {
         Ok(self.validator_wallet_key)
@@ -181,16 +179,16 @@ impl Default for FileStorageConfig {
 #[builder(setter(into))]
 pub struct DatabaseConfig {
     /// Initial database size. Default: 50 MB
-    #[builder(default="50 * 1024 * 1024")]
+    #[builder(default = "50 * 1024 * 1024")]
     size: usize,
 
     /// Max number of DBs. Recommended: 10
-    #[builder(default="10")]
+    #[builder(default = "10")]
     max_dbs: u32,
 
     /// Additional LMDB flags
-    #[builder(default="LmdbFlags::NOMETASYNC")]
-    flags: LmdbFlags::Flags
+    #[builder(default = "LmdbFlags::NOMETASYNC")]
+    flags: LmdbFlags::Flags,
 }
 
 impl Default for DatabaseConfig {
@@ -261,21 +259,32 @@ impl StorageConfig {
     ///
     /// Returns a `Result` which is either a `Environment` or a `Error`.
     ///
-    pub fn database(&self, network_id: NetworkId, consensus: ConsensusConfig, db_config: DatabaseConfig) -> Result<Environment, Error> {
+    pub fn database(
+        &self,
+        network_id: NetworkId,
+        consensus: ConsensusConfig,
+        db_config: DatabaseConfig,
+    ) -> Result<Environment, Error> {
         let db_name = format!("{}-{}-consensus", network_id, consensus).to_lowercase();
         info!("Opening database: {}", db_name);
 
         Ok(match self {
             StorageConfig::Volatile => {
                 VolatileEnvironment::new_with_lmdb_flags(db_config.max_dbs, db_config.flags)?
-            },
+            }
             StorageConfig::Filesystem(file_storage) => {
                 let db_path = file_storage.database_parent.join(db_name);
-                let db_path = db_path.to_str()
-                    .ok_or_else(|| Error::config_error(format!("Failed to convert database path to string: {}", db_path.display())))?
+                let db_path = db_path
+                    .to_str()
+                    .ok_or_else(|| {
+                        Error::config_error(format!(
+                            "Failed to convert database path to string: {}",
+                            db_path.display()
+                        ))
+                    })?
                     .to_string();
                 LmdbEnvironment::new(&db_path, db_config.size, db_config.max_dbs, db_config.flags)?
-            },
+            }
             _ => return Err(self.not_available()),
         })
     }
@@ -283,37 +292,47 @@ impl StorageConfig {
     pub(crate) fn init_key_store(&self, network_config: &mut NetworkConfig) -> Result<(), Error> {
         // TODO: Move this out of here and load keys from database
         match self {
-            StorageConfig::Volatile => {
-                network_config.init_volatile()
-            },
+            StorageConfig::Volatile => network_config.init_volatile(),
             StorageConfig::Filesystem(file_storage) => {
-                let key_path = file_storage.peer_key.to_str()
-                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of peer key to string: {}", file_storage.peer_key.display())))?
+                let key_path = file_storage
+                    .peer_key
+                    .to_str()
+                    .ok_or_else(|| {
+                        Error::config_error(format!(
+                            "Failed to convert path of peer key to string: {}",
+                            file_storage.peer_key.display()
+                        ))
+                    })?
                     .to_string();
                 let key_store = KeyStore::new(key_path.clone());
-                network_config.init_persistent(&key_store)
-                    .map_err(|e| {
-                        warn!("Failed to initialize network config: {}", e);
-                        warn!("Does the peer key file exist? {}", key_path);
-                        e
-                    })?;
+                network_config.init_persistent(&key_store).map_err(|e| {
+                    warn!("Failed to initialize network config: {}", e);
+                    warn!("Does the peer key file exist? {}", key_path);
+                    e
+                })?;
             }
             _ => return Err(self.not_available()),
         }
         Ok(())
     }
 
-    #[cfg(feature="validator")]
+    #[cfg(feature = "validator")]
     pub(crate) fn validator_key(&self) -> Result<BlsKeyPair, Error> {
         Ok(match self {
-            StorageConfig::Volatile => {
-                BlsKeyPair::generate_default_csprng()
-            },
+            StorageConfig::Volatile => BlsKeyPair::generate_default_csprng(),
             StorageConfig::Filesystem(file_storage) => {
-                let key_path = file_storage.validator_key.as_ref()
+                let key_path = file_storage
+                    .validator_key
+                    .as_ref()
                     .ok_or_else(|| Error::config_error("No path for validator key specified"))?;
-                let key_path = key_path.to_str()
-                    .ok_or_else(|| Error::config_error(format!("Failed to convert path of validator key to string: {}", key_path.display())))?
+                let key_path = key_path
+                    .to_str()
+                    .ok_or_else(|| {
+                        Error::config_error(format!(
+                            "Failed to convert path of validator key to string: {}",
+                            key_path.display()
+                        ))
+                    })?
                     .to_string();
                 let key_store = KeyStore::new(key_path);
                 match key_store.load_key() {
@@ -321,10 +340,10 @@ impl StorageConfig {
                         let validator_key = BlsKeyPair::generate_default_csprng();
                         key_store.save_key(&validator_key)?;
                         Ok(validator_key)
-                    },
+                    }
                     res => res,
                 }?
-            },
+            }
             _ => return Err(self.not_available()),
         })
     }
@@ -368,7 +387,7 @@ impl Credentials {
     }
 }
 
-#[cfg(feature="rpc-server")]
+#[cfg(feature = "rpc-server")]
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
 pub struct RpcServerConfig {
@@ -383,7 +402,7 @@ pub struct RpcServerConfig {
     ///
     /// Default: `8648`
     ///
-    #[builder(default="consts::RPC_DEFAULT_PORT")]
+    #[builder(default = "consts::RPC_DEFAULT_PORT")]
     pub port: u16,
 
     /// TODO
@@ -405,7 +424,7 @@ pub struct RpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
-#[cfg(feature="ws-rpc-server")]
+#[cfg(feature = "ws-rpc-server")]
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
 pub struct WsRpcServerConfig {
@@ -420,7 +439,7 @@ pub struct WsRpcServerConfig {
     ///
     /// Default: `8648`
     ///
-    #[builder(default="consts::WS_RPC_DEFAULT_PORT")]
+    #[builder(default = "consts::WS_RPC_DEFAULT_PORT")]
     pub port: u16,
 
     /// If specified, require HTTP basic auth with these credentials
@@ -428,7 +447,7 @@ pub struct WsRpcServerConfig {
     pub credentials: Option<Credentials>,
 }
 
-#[cfg(feature="metrics-server")]
+#[cfg(feature = "metrics-server")]
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
 pub struct MetricsServerConfig {
@@ -443,7 +462,7 @@ pub struct MetricsServerConfig {
     ///
     /// Default: `8649`
     ///
-    #[builder(default="consts::METRICS_DEFAULT_PORT")]
+    #[builder(default = "consts::METRICS_DEFAULT_PORT")]
     pub port: u16,
 
     /// If specified, require HTTP basic auth with these credentials
@@ -458,7 +477,7 @@ pub struct MetricsServerConfig {
 /// * Make this implement `IntoFuture<Item=Client, Err=Error>` so you can just do
 ///   `tokio::spawn(config.and_then(|client| [...]));`
 #[derive(Clone, Debug, Builder)]
-#[builder(setter(into), build_fn(private, name="build_internal"))]
+#[builder(setter(into), build_fn(private, name = "build_internal"))]
 pub struct ClientConfig {
     /// Determines which consensus protocol to use.
     ///
@@ -489,7 +508,7 @@ pub struct ClientConfig {
     ///
     /// Default is `DevAlbatross`
     ///
-    #[builder(default="NetworkId::DevAlbatross")]
+    #[builder(default = "NetworkId::DevAlbatross")]
     pub network: NetworkId,
 
     /// This configuration is needed if your node runs behind a reverse proxy.
@@ -519,25 +538,25 @@ pub struct ClientConfig {
 
     /// The optional validator configuration
     ///
-    #[cfg(feature="validator")]
+    #[cfg(feature = "validator")]
     #[builder(default, setter(custom))]
     pub validator: Option<ValidatorConfig>,
 
     /// The optional validator configuration
     ///
-    #[cfg(feature="rpc-server")]
+    #[cfg(feature = "rpc-server")]
     #[builder(default)]
     pub rpc_server: Option<RpcServerConfig>,
 
     /// The optional Websocket RPC configuration
     ///
-    #[cfg(feature="ws-rpc-server")]
+    #[cfg(feature = "ws-rpc-server")]
     #[builder(default)]
     pub ws_rpc_server: Option<WsRpcServerConfig>,
 
     /// The optional metrics server configuration
     ///
-    #[cfg(feature="metrics-server")]
+    #[cfg(feature = "metrics-server")]
     #[builder(default)]
     pub metrics_server: Option<MetricsServerConfig>,
 }
@@ -564,15 +583,13 @@ impl ClientConfigBuilder {
         // `String` to an actual Error.
         // We could also put some validation here.
 
-        self.build_internal()
-            .map_err(Error::config_error)
+        self.build_internal().map_err(Error::config_error)
     }
 
     /// Short cut to build the config and instantiate the client
     ///
     pub fn instantiate_client(&self) -> Result<Client, Error> {
-        self.build()?
-            .instantiate_client()
+        self.build()?.instantiate_client()
     }
 
     /// Sets the network ID to the Albatross DevNet
@@ -630,7 +647,7 @@ impl ClientConfigBuilder {
     pub fn ws<H: Into<String>, P: Into<Option<u16>>>(&mut self, host: H, port: P) -> &mut Self {
         self.protocol(ProtocolConfig::Ws {
             host: host.into(),
-            port: port.into().unwrap_or(consts::WS_DEFAULT_PORT)
+            port: port.into().unwrap_or(consts::WS_DEFAULT_PORT),
         })
     }
 
@@ -641,7 +658,13 @@ impl ClientConfigBuilder {
     /// * `host` - The hostname at which the client is accepting connections.
     /// * `port` - The port on which the client is accepting connections.
     ///
-    pub fn wss<H: Into<String>, P: Into<Option<u16>>, K: Into<PathBuf>, Q: Into<String>>(&mut self, host: H, port: P, pkcs12_key_file: K, pkcs12_passphrase: Q) -> &mut Self {
+    pub fn wss<H: Into<String>, P: Into<Option<u16>>, K: Into<PathBuf>, Q: Into<String>>(
+        &mut self,
+        host: H,
+        port: P,
+        pkcs12_key_file: K,
+        pkcs12_passphrase: Q,
+    ) -> &mut Self {
         self.protocol(ProtocolConfig::Wss {
             host: host.into(),
             port: port.into().unwrap_or(consts::WS_DEFAULT_PORT),
@@ -660,7 +683,13 @@ impl ClientConfigBuilder {
     /// * `address` - Address on which the reverse proxy is listening for incoming connections
     /// * `termination` - TODO
     ///
-    pub fn reverse_proxy(&mut self, port: u16, header: String, address: NetAddress, with_tls_termination: bool) -> &mut Self {
+    pub fn reverse_proxy(
+        &mut self,
+        port: u16,
+        header: String,
+        address: NetAddress,
+        with_tls_termination: bool,
+    ) -> &mut Self {
         self.reverse_proxy = Some(Some(ReverseProxyConfig {
             port,
             header,
@@ -678,7 +707,10 @@ impl ClientConfigBuilder {
 
     /// Sets the mempool filter rules
     pub fn mempool(&mut self, filter_rules: MempoolRules, filter_limit: usize) -> &mut Self {
-        self.mempool = Some(MempoolConfig { filter_rules, filter_limit });
+        self.mempool = Some(MempoolConfig {
+            filter_rules,
+            filter_limit,
+        });
         self
     }
 
@@ -701,10 +733,10 @@ impl ClientConfigBuilder {
 
     /// Sets the validator config. Since there is no configuration for validators (except key file)
     /// yet, this will just enable the validator.
-    #[cfg(feature="validator")]
+    #[cfg(feature = "validator")]
     pub fn validator(&mut self) -> &mut Self {
         self.validator = Some(Some(ValidatorConfig {
-            validator_wallet_key: None
+            validator_wallet_key: None,
         }));
         self
     }
@@ -715,30 +747,48 @@ impl ClientConfigBuilder {
         self.protocol(match config_file.network.protocol {
             config_file::Protocol::Dumb => ProtocolConfig::Dumb,
             config_file::Protocol::Ws => ProtocolConfig::Ws {
-                host: config_file.network.host.clone()
+                host: config_file
+                    .network
+                    .host
+                    .clone()
                     .ok_or_else(|| Error::config_error("Hostname not set."))?
                     .clone(),
-                port: config_file.network.port.clone()
+                port: config_file
+                    .network
+                    .port
+                    .clone()
                     .unwrap_or(consts::WS_DEFAULT_PORT),
             },
             config_file::Protocol::Wss => {
-                let tls = config_file.network.tls.as_ref()
+                let tls = config_file
+                    .network
+                    .tls
+                    .as_ref()
                     .ok_or_else(|| Error::config_error("[tls] section missing."))?
                     .clone();
                 ProtocolConfig::Wss {
-                    host: config_file.network.host.clone()
+                    host: config_file
+                        .network
+                        .host
+                        .clone()
                         .ok_or_else(|| Error::config_error("Hostname not set."))?,
-                    port: config_file.network.port.clone()
+                    port: config_file
+                        .network
+                        .port
+                        .clone()
                         .unwrap_or(consts::WS_DEFAULT_PORT),
                     pkcs12_key_file: PathBuf::from(tls.identity_file),
                     pkcs12_passphrase: tls.identity_password,
                 }
-            },
+            }
             config_file::Protocol::Rtc => ProtocolConfig::Rtc,
         });
 
         // Configure user agent
-        config_file.network.user_agent.as_ref()
+        config_file
+            .network
+            .user_agent
+            .as_ref()
             .map(|user_agent| self.user_agent(user_agent.clone()));
 
         // Configure consensus
@@ -749,54 +799,59 @@ impl ClientConfigBuilder {
 
         // Configure storage config.
         let mut file_storage = FileStorageConfig::default();
-        config_file.database.path.as_ref()
-            .map(|path| {
-                file_storage.database_parent = PathBuf::from(path);
-            });
-        config_file.peer_key_file.as_ref()
-            .map(|path| {
-                file_storage.peer_key = PathBuf::from(path);
-            });
-        config_file.validator.as_ref()
-            .map(|validator_config| {
-                validator_config.key_file.as_ref()
-                    .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path)));
-            });
+        config_file.database.path.as_ref().map(|path| {
+            file_storage.database_parent = PathBuf::from(path);
+        });
+        config_file.peer_key_file.as_ref().map(|path| {
+            file_storage.peer_key = PathBuf::from(path);
+        });
+        config_file.validator.as_ref().map(|validator_config| {
+            validator_config
+                .key_file
+                .as_ref()
+                .map(|key_path| file_storage.validator_key = Some(PathBuf::from(key_path)));
+        });
         self.storage = Some(file_storage.into());
 
         // Configure database
         self.database(config_file.database.clone());
 
         // Configure reverse proxy config
-        config_file.reverse_proxy.as_ref()
-            .map(|reverse_proxy| {
-                self.reverse_proxy = Some(Some(reverse_proxy.clone().into()));
-            });
+        config_file.reverse_proxy.as_ref().map(|reverse_proxy| {
+            self.reverse_proxy = Some(Some(reverse_proxy.clone().into()));
+        });
 
         // Configure RPC server
-        #[cfg(feature="rpc-server")] {
+        #[cfg(feature = "rpc-server")]
+        {
             if let Some(rpc_config) = &config_file.rpc_server {
-                let bind_to = rpc_config.bind.as_ref()
+                let bind_to = rpc_config
+                    .bind
+                    .as_ref()
                     .and_then(|addr| addr.into_ip_address());
 
                 let allow_ips = if rpc_config.allowip.is_empty() {
                     None
-                }
-                else {
-                    let result = rpc_config.allowip.iter().map(|s| {
-                        s.parse::<IpAddr>().map_err({
-                            |e| Error::config_error(format!("Invalid IP: {}", e))
+                } else {
+                    let result = rpc_config
+                        .allowip
+                        .iter()
+                        .map(|s| {
+                            s.parse::<IpAddr>()
+                                .map_err({ |e| Error::config_error(format!("Invalid IP: {}", e)) })
                         })
-                    }).collect::<Result<Vec<IpAddr>, Error>>();
+                        .collect::<Result<Vec<IpAddr>, Error>>();
                     Some(result?)
                 };
 
                 let credentials = match (&rpc_config.username, &rpc_config.password) {
-                    (Some(u), Some(p)) => {
-                        Some(Credentials::new(u.clone(), p.clone()))
-                    },
+                    (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
                     (None, None) => None,
-                    _ => return Err(Error::config_error("Either both username and password have to be set or none."))
+                    _ => {
+                        return Err(Error::config_error(
+                            "Either both username and password have to be set or none.",
+                        ))
+                    }
                 };
 
                 self.rpc_server = Some(Some(RpcServerConfig {
@@ -811,17 +866,22 @@ impl ClientConfigBuilder {
         }
 
         // Configure Websocket RPC server
-        #[cfg(feature="ws-rpc-server")] {
+        #[cfg(feature = "ws-rpc-server")]
+        {
             if let Some(ws_rpc_config) = &config_file.ws_rpc_server {
-                let bind_to = ws_rpc_config.bind.as_ref()
+                let bind_to = ws_rpc_config
+                    .bind
+                    .as_ref()
                     .and_then(|addr| addr.into_ip_address());
 
                 let credentials = match (&ws_rpc_config.username, &ws_rpc_config.password) {
-                    (Some(u), Some(p)) => {
-                        Some(Credentials::new(u.clone(), p.clone()))
-                    },
+                    (Some(u), Some(p)) => Some(Credentials::new(u.clone(), p.clone())),
                     (None, None) => None,
-                    _ => return Err(Error::config_error("Either both username and password have to be set or none."))
+                    _ => {
+                        return Err(Error::config_error(
+                            "Either both username and password have to be set or none.",
+                        ))
+                    }
                 };
 
                 self.ws_rpc_server = Some(Some(WsRpcServerConfig {
@@ -833,14 +893,18 @@ impl ClientConfigBuilder {
         }
 
         // Configure metrics server
-        #[cfg(feature="metrics-server")] {
+        #[cfg(feature = "metrics-server")]
+        {
             if let Some(metrics_config) = &config_file.metrics_server {
-                let bind_to = metrics_config.bind.as_ref()
+                let bind_to = metrics_config
+                    .bind
+                    .as_ref()
                     .and_then(|addr| addr.into_ip_address());
 
-                let credentials = metrics_config.password.as_ref().map(|password| {
-                    Credentials::new("metrics", password)
-                });
+                let credentials = metrics_config
+                    .password
+                    .as_ref()
+                    .map(|password| Credentials::new("metrics", password));
 
                 self.metrics_server = Some(Some(MetricsServerConfig {
                     bind_to,
@@ -852,26 +916,39 @@ impl ClientConfigBuilder {
 
         // Configure custom seeds
         for seed in &config_file.network.seed_nodes {
-            self.seed(Seed::try_from(seed.clone())
-                .map_err(|e| Error::config_error(format!("Invalid seed: {:?}: {}", seed, e)))?);
+            self.seed(
+                Seed::try_from(seed.clone())
+                    .map_err(|e| Error::config_error(format!("Invalid seed: {:?}: {}", seed, e)))?,
+            );
         }
 
         // Configure validator
-        #[cfg(feature="validator")] {
+        #[cfg(feature = "validator")]
+        {
             if config_file.validator.is_some() {
-                let wallet_private_key = config_file.validator.as_ref()
+                let wallet_private_key = config_file
+                    .validator
+                    .as_ref()
                     .map(|settings| settings.clone().wallet_private_key)
                     .expect("Failed to load validator settings");
 
-                let wallet_key = wallet_private_key.map(|config_private_key| {
-                    Some(keys::KeyPair::from(
-                        keys::PrivateKey::from_str(&config_private_key)
-                            .map_err(|e| Error::config_error(format!("Invalid wallet private key: {:?}: {}", &config_private_key, e))).ok()?
-                    ))
-                }).unwrap_or_else(|| None);
+                let wallet_key = wallet_private_key
+                    .map(|config_private_key| {
+                        Some(keys::KeyPair::from(
+                            keys::PrivateKey::from_str(&config_private_key)
+                                .map_err(|e| {
+                                    Error::config_error(format!(
+                                        "Invalid wallet private key: {:?}: {}",
+                                        &config_private_key, e
+                                    ))
+                                })
+                                .ok()?,
+                        ))
+                    })
+                    .unwrap_or_else(|| None);
 
                 self.validator = Some(Some(ValidatorConfig {
-                    validator_wallet_key: wallet_key
+                    validator_wallet_key: wallet_key,
                 }));
             }
         }
@@ -895,12 +972,14 @@ impl ClientConfigBuilder {
             match &mut self.protocol {
                 Some(ProtocolConfig::Ws { port, .. }) => *port = new_port,
                 Some(ProtocolConfig::Wss { port, .. }) => *port = new_port,
-                _ => () // just ignore this. or return an error?
+                _ => (), // just ignore this. or return an error?
             }
         });
 
         // Set consensus type
-        command_line.consensus_type.map(|consensus| self.consensus(consensus));
+        command_line
+            .consensus_type
+            .map(|consensus| self.consensus(consensus));
 
         // Set network ID
         command_line.network.map(|network| self.network(network));

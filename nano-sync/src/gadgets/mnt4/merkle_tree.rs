@@ -4,11 +4,11 @@ use r1cs_std::bits::{boolean::Boolean, uint8::UInt8};
 use r1cs_std::mnt6_753::G1Gadget;
 use r1cs_std::prelude::{CondSelectGadget, EqGadget};
 
-use crate::gadgets::mnt4::{PedersenCommitmentGadget, SerializeGadget};
+use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::utils::reverse_inner_byte_order;
 
 /// This gadgets contains utilities to create and verify proofs for Merkle trees. It uses Pedersen
-/// commitments to construct the tree instead of cryptographic hash functions in order to be more
+/// hashes to construct the tree instead of cryptographic hash functions in order to be more
 /// efficient.
 pub struct MerkleTreeGadget;
 
@@ -27,7 +27,6 @@ impl MerkleTreeGadget {
         mut cs: CS,
         inputs: &Vec<Vec<Boolean>>,
         pedersen_generators: &Vec<G1Gadget>,
-        sum_generator: &G1Gadget,
     ) -> Result<Vec<UInt8>, SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!inputs.is_empty());
@@ -35,20 +34,18 @@ impl MerkleTreeGadget {
         // Checking that the number of leaves is a power of two.
         assert_eq!((inputs.len() & (inputs.len() - 1)), 0);
 
-        // Calculate the Pedersen commitments for the leaves.
+        // Calculate the Pedersen hashes for the leaves.
         let mut nodes = Vec::new();
 
         for i in 0..inputs.len() {
             let input = &inputs[i];
-
-            let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-                cs.ns(|| format!("pedersen commitment for leaf {}", i)),
+            let pedersen_hash = PedersenHashGadget::evaluate(
+                cs.ns(|| format!("pedersen hash for leaf {}", i)),
                 input,
                 pedersen_generators,
-                sum_generator,
             )?;
 
-            nodes.push(pedersen_commitment);
+            nodes.push(pedersen_hash);
         }
 
         // Calculate the rest of the tree
@@ -74,11 +71,10 @@ impl MerkleTreeGadget {
                 )?);
 
                 // Calculate the parent node.
-                let parent_node = PedersenCommitmentGadget::evaluate(
+                let parent_node = PedersenHashGadget::evaluate(
                     cs.ns(|| format!("calculate parent node {} {}", i, j)),
                     &bits,
                     pedersen_generators,
-                    sum_generator,
                 )?;
 
                 next_nodes.push(parent_node);
@@ -124,7 +120,6 @@ impl MerkleTreeGadget {
         path: &Vec<Boolean>,
         root: &Vec<UInt8>,
         pedersen_generators: &Vec<G1Gadget>,
-        sum_generator: &G1Gadget,
     ) -> Result<(), SynthesisError> {
         // Checking that the inputs vector is not empty.
         assert!(!input.is_empty());
@@ -135,12 +130,11 @@ impl MerkleTreeGadget {
         // Checking that there is one node for each path bit.
         assert_eq!(nodes.len(), path.len());
 
-        // Calculate the Pedersen commitment for the input.
-        let mut result = PedersenCommitmentGadget::evaluate(
-            cs.ns(|| "pedersen commitment for input"),
+        // Calculate the Pedersen hash for the input.
+        let mut result = PedersenHashGadget::evaluate(
+            cs.ns(|| "pedersen hash for input"),
             input,
             pedersen_generators,
-            sum_generator,
         )?;
 
         // Calculate the root of the tree using the branch values.
@@ -174,11 +168,10 @@ impl MerkleTreeGadget {
             )?);
 
             // Calculate the parent node and update result.
-            result = PedersenCommitmentGadget::evaluate(
+            result = PedersenHashGadget::evaluate(
                 cs.ns(|| format!("calculate parent node {}", i)),
                 &bits,
                 pedersen_generators,
-                sum_generator,
             )?;
         }
 

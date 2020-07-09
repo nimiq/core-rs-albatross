@@ -3,13 +3,13 @@ use r1cs_core::SynthesisError;
 use r1cs_std::bits::{boolean::Boolean, uint32::UInt32, uint8::UInt8};
 use r1cs_std::mnt6_753::G1Gadget;
 
-use crate::gadgets::mnt4::{PedersenCommitmentGadget, SerializeGadget};
+use crate::gadgets::mnt4::{PedersenHashGadget, SerializeGadget};
 use crate::utils::reverse_inner_byte_order;
 
 /// This gadget is meant to calculate the "state commitment" in-circuit, which is simply a commitment,
 /// for a given block, of the block number concatenated with the root of a Merkle tree over the public
 /// keys. We don't calculate the Merkle tree from the public keys. We just serialize the block number
-/// and the Merkle tree root and feed it to the Pedersen commitment function. Then we serialize the
+/// and the Merkle tree root and feed it to the Pedersen hash function. Then we serialize the
 /// output and convert it to bytes. This provides an efficient way of compressing the state and
 /// representing it across different curves.
 pub struct StateCommitmentGadget;
@@ -21,7 +21,6 @@ impl StateCommitmentGadget {
         block_number: &UInt32,
         pks_commitment: &Vec<UInt8>,
         pedersen_generators: &Vec<G1Gadget>,
-        sum_generator: &G1Gadget,
     ) -> Result<Vec<UInt8>, SynthesisError> {
         // Initialize Boolean vector.
         let mut bits: Vec<Boolean> = vec![];
@@ -47,19 +46,16 @@ impl StateCommitmentGadget {
 
         bits.append(&mut pks_bits);
 
-        // Calculate the Pedersen commitment.
-        let pedersen_commitment = PedersenCommitmentGadget::evaluate(
-            cs.ns(|| "pedersen commitment"),
+        // Calculate the Pedersen hash.
+        let hash = PedersenHashGadget::evaluate(
+            cs.ns(|| "calculate pedersen hash"),
             &bits,
             pedersen_generators,
-            &sum_generator,
         )?;
 
-        // Serialize the Pedersen commitment.
-        let serialized_bits = SerializeGadget::serialize_g1(
-            cs.ns(|| "serialize pedersen commitment"),
-            &pedersen_commitment,
-        )?;
+        // Serialize the Pedersen hash.
+        let serialized_bits =
+            SerializeGadget::serialize_g1(cs.ns(|| "serialize pedersen hash"), &hash)?;
 
         let serialized_bits = reverse_inner_byte_order(&serialized_bits[..]);
 

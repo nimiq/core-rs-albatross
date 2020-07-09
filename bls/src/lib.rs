@@ -3,9 +3,6 @@
 use nimiq_hash::Blake2sHash;
 pub use types::*;
 
-// Implements big-endian compression
-pub mod compression;
-
 // Implements several serialization-related types
 #[cfg(feature = "beserial")]
 pub mod serialization;

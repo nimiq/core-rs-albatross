@@ -2,8 +2,8 @@ use std::cmp;
 
 use algebra::mnt6_753::G1Projective;
 
-use crate::constants::sum_generator_g1_mnt6;
-use crate::primitives::{pedersen_commitment, pedersen_generators};
+use crate::constants::POINT_CAPACITY;
+use crate::primitives::{pedersen_generators, pedersen_hash};
 use crate::utils::{byte_from_le_bits, bytes_to_bits, serialize_g1_mnt6};
 
 /// Creates a Merkle tree from the given inputs, as a vector of vectors of booleans, and outputs
@@ -25,22 +25,23 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let mut generators_needed = 3; // At least this much is required for the non-leaf nodes.
+    let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
 
     for i in 0..inputs.len() {
-        generators_needed = cmp::max(generators_needed, (inputs[i].len() + 752 - 1) / 752);
+        generators_needed = cmp::max(
+            generators_needed,
+            (inputs[i].len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1,
+        );
     }
 
     let generators = pedersen_generators(generators_needed);
 
-    let sum_generator = sum_generator_g1_mnt6();
-
-    // Calculate the Pedersen commitments for the leaves.
+    // Calculate the Pedersen hashes for the leaves.
     let mut nodes = Vec::new();
 
     for input in inputs {
-        let pedersen_commitment = pedersen_commitment(input, generators.clone(), sum_generator);
-        nodes.push(pedersen_commitment);
+        let hash = pedersen_hash(input, generators.clone());
+        nodes.push(hash);
     }
 
     // Calculate the rest of the tree
@@ -59,7 +60,7 @@ pub fn merkle_tree_construct(inputs: Vec<Vec<bool>>) -> Vec<u8> {
 
             // Calculate the parent node.
             let bits = bytes_to_bits(&bytes);
-            let parent_node = pedersen_commitment(bits, generators.clone(), sum_generator);
+            let parent_node = pedersen_hash(bits, generators.clone());
 
             next_nodes.push(parent_node);
         }
@@ -102,14 +103,12 @@ pub fn merkle_tree_verify(
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let generators_needed = cmp::max(3, (input.len() + 752 - 1) / 752);
+    let generators_needed = cmp::max(4, (input.len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1);
 
     let generators = pedersen_generators(generators_needed);
 
-    let sum_generator = sum_generator_g1_mnt6();
-
-    // Calculate the Pedersen commitments for the input.
-    let mut result = pedersen_commitment(input, generators.clone(), sum_generator);
+    // Calculate the Pedersen hashes for the input.
+    let mut result = pedersen_hash(input, generators.clone());
 
     // Calculate the root of the tree using the branch values.
     let mut left_node;
@@ -136,7 +135,7 @@ pub fn merkle_tree_verify(
         let bits = bytes_to_bits(&bytes);
 
         // Calculate the parent node and update result.
-        result = pedersen_commitment(bits, generators.clone(), sum_generator);
+        result = pedersen_hash(bits, generators.clone());
     }
 
     // Serialize the root node.
@@ -151,7 +150,7 @@ pub fn merkle_tree_verify(
 /// Creates a Merkle proof given all the leaf nodes and the path to the node for which we want the
 /// proof. Basically, it just constructs the whole tree while storing all the intermediate nodes
 /// needed for the Merkle proof. It does not output either the root or the input leaf node since
-/// these are assumed to be already known bu the verifier.
+/// these are assumed to be already known by the verifier.
 /// The path is simply the position of the input leaf in little-endian binary. For example, for the
 /// given tree:
 ///                      o
@@ -174,22 +173,23 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
 
     // Calculate the required number of Pedersen generators. The formula used for the ceiling
     // division of x/y is (x+y-1)/y.
-    let mut generators_needed = 3; // At least this much is required for the non-leaf nodes.
+    let mut generators_needed = 4; // At least this much is required for the non-leaf nodes.
 
     for i in 0..inputs.len() {
-        generators_needed = cmp::max(generators_needed, (inputs[i].len() + 752 - 1) / 752);
+        generators_needed = cmp::max(
+            generators_needed,
+            (inputs[i].len() + POINT_CAPACITY - 1) / POINT_CAPACITY + 1,
+        );
     }
 
     let generators = pedersen_generators(generators_needed);
 
-    let sum_generator = sum_generator_g1_mnt6();
-
-    // Calculate the Pedersen commitments for the leaves.
+    // Calculate the Pedersen hashes for the leaves.
     let mut nodes = Vec::new();
 
     for input in inputs {
-        let pedersen_commitment = pedersen_commitment(input, generators.clone(), sum_generator);
-        nodes.push(pedersen_commitment);
+        let hash = pedersen_hash(input, generators.clone());
+        nodes.push(hash);
     }
 
     // Calculate the rest of the tree
@@ -224,7 +224,7 @@ pub fn merkle_tree_prove(inputs: Vec<Vec<bool>>, path: Vec<bool>) -> Vec<G1Proje
 
             // Calculate the parent node.
             let bits = bytes_to_bits(&bytes);
-            let parent_node = pedersen_commitment(bits, generators.clone(), sum_generator);
+            let parent_node = pedersen_hash(bits, generators.clone());
 
             next_nodes.push(parent_node.clone());
         }

@@ -10,14 +10,14 @@ use r1cs_core::ConstraintSynthesizer;
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
-use nano_sync::circuits::mnt4::PKTree5Circuit;
-use nano_sync::constants::{
+use nimiq_nano_sync::circuits::mnt4::PKTreeLeafCircuit;
+use nimiq_nano_sync::constants::{
     sum_generator_g1_mnt6, sum_generator_g2_mnt6, PK_TREE_BREADTH, PK_TREE_DEPTH, VALIDATOR_SLOTS,
 };
-use nano_sync::primitives::{
-    merkle_tree_construct, merkle_tree_prove, pedersen_commitment, pedersen_generators,
+use nimiq_nano_sync::primitives::{
+    merkle_tree_construct, merkle_tree_prove, pedersen_generators, pedersen_hash,
 };
-use nano_sync::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
+use nimiq_nano_sync::utils::{bytes_to_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 // When running tests you are advised to run only one test at a time or you might run out of RAM.
 // Also they take a long time to run. This is why they have the ignore flag.
@@ -72,15 +72,14 @@ fn everything_works() {
 
     let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    let pedersen_commitment =
-        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
+    let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
     let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree5Circuit::new(
+    let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
         agg_pk.clone(),
@@ -151,8 +150,7 @@ fn wrong_pks() {
 
     let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    let pedersen_commitment =
-        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
+    let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
     let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
@@ -166,7 +164,7 @@ fn wrong_pks() {
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree5Circuit::new(
+    let c = PKTreeLeafCircuit::new(
         fake_pks.to_vec(),
         pks_nodes.clone(),
         agg_pk.clone(),
@@ -234,15 +232,14 @@ fn wrong_merkle_proof() {
 
     let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    let pedersen_commitment =
-        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
+    let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
     let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree5Circuit::new(
+    let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         vec![sum_generator_g1_mnt6(); PK_TREE_DEPTH],
         agg_pk.clone(),
@@ -310,15 +307,14 @@ fn wrong_agg_pk() {
 
     let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    let pedersen_commitment =
-        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
+    let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
     let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree5Circuit::new(
+    let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
         sum_generator_g2_mnt6(),
@@ -386,15 +382,14 @@ fn wrong_commitment() {
 
     let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    let pedersen_commitment =
-        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
+    let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
     let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree5Circuit::new(
+    let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
         agg_pk.clone(),
@@ -462,15 +457,14 @@ fn wrong_bitmap() {
 
     let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    let pedersen_commitment =
-        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
+    let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
     let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree5Circuit::new(
+    let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
         agg_pk.clone(),
@@ -541,15 +535,14 @@ fn wrong_position() {
 
     let agg_pk_bits = bytes_to_bits(&serialize_g2_mnt6(agg_pk.clone()));
 
-    let pedersen_commitment =
-        pedersen_commitment(agg_pk_bits, pedersen_generators(5), sum_generator_g1_mnt6());
+    let pedersen_commitment = pedersen_hash(agg_pk_bits, pedersen_generators(5));
 
     let agg_pk_commitment = serialize_g1_mnt6(pedersen_commitment).to_vec();
 
     // Test constraint system.
     let mut test_cs = TestConstraintSystem::new();
 
-    let c = PKTree5Circuit::new(
+    let c = PKTreeLeafCircuit::new(
         pks[0..VALIDATOR_SLOTS / PK_TREE_BREADTH].to_vec(),
         pks_nodes.clone(),
         agg_pk.clone(),

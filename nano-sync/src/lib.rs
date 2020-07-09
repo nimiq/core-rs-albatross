@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![feature(const_int_pow)]
 
 pub mod circuits;
 pub mod compression;

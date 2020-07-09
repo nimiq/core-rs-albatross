@@ -33,6 +33,9 @@ type TheVerifierGadget = Groth16VerifierGadget<MNT4_753, Fq, PairingGadget>;
 /// verification key hard-coded as a constant.
 #[derive(Clone)]
 pub struct MacroBlockWrapperCircuit {
+    // Path to the verifying key file. Not an input to the SNARK circuit.
+    vk_file: &'static str,
+
     // Private inputs
     proof: Proof<MNT4_753>,
 
@@ -43,11 +46,13 @@ pub struct MacroBlockWrapperCircuit {
 
 impl MacroBlockWrapperCircuit {
     pub fn new(
+        vk_file: &'static str,
         proof: Proof<MNT4_753>,
         initial_state_commitment: Vec<u8>,
         final_state_commitment: Vec<u8>,
     ) -> Self {
         Self {
+            vk_file,
             proof,
             initial_state_commitment,
             final_state_commitment,
@@ -62,7 +67,7 @@ impl ConstraintSynthesizer<MNT6Fr> for MacroBlockWrapperCircuit {
         cs: &mut CS,
     ) -> Result<(), SynthesisError> {
         // Load the verifying key from file.
-        let mut file = File::open("verifying_keys/macro_block.bin")?;
+        let mut file = File::open(format!("verifying_keys/{}", &self.vk_file))?;
 
         let vk_macro_block = VerifyingKey::deserialize(&mut file).unwrap();
 

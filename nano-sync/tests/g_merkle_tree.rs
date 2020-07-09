@@ -8,13 +8,12 @@ use r1cs_std::prelude::{AllocGadget, UInt8};
 use r1cs_std::test_constraint_system::TestConstraintSystem;
 use rand::RngCore;
 
-use nano_sync::constants::sum_generator_g1_mnt6;
-use nano_sync::gadgets::mnt4::MerkleTreeGadget;
-use nano_sync::primitives::{
-    merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, pedersen_commitment,
-    pedersen_generators,
+use nimiq_nano_sync::gadgets::mnt4::MerkleTreeGadget;
+use nimiq_nano_sync::primitives::{
+    merkle_tree_construct, merkle_tree_prove, merkle_tree_verify, pedersen_generators,
+    pedersen_hash,
 };
-use nano_sync::utils::{byte_from_le_bits, bytes_to_bits, serialize_g1_mnt6};
+use nimiq_nano_sync::utils::{byte_from_le_bits, bytes_to_bits, serialize_g1_mnt6};
 
 // When running tests you are advised to run only one test at a time or you might run out of RAM.
 // Also they take a long time to run. This is why they have the ignore flag.
@@ -59,13 +58,7 @@ impl ConstraintSynthesizer<MNT4Fr> for VerifyCircuit {
         // Allocate the Pedersen generators in the circuit.
         let generators_var = Vec::<G1Gadget>::alloc_constant(
             cs.ns(|| "alloc pedersen_generators"),
-            pedersen_generators(3),
-        )?;
-
-        // Allocate the sum generator in the circuit.
-        let sum_generator_var = G1Gadget::alloc_constant(
-            cs.ns(|| "allocating sum generator"),
-            &sum_generator_g1_mnt6(),
+            pedersen_generators(4),
         )?;
 
         // Verify Merkle proof.
@@ -76,7 +69,6 @@ impl ConstraintSynthesizer<MNT4Fr> for VerifyCircuit {
             &path_var,
             &root_var,
             &generators_var,
-            &sum_generator_var,
         )
     }
 }
@@ -131,7 +123,7 @@ fn construct_works() {
     }
 
     // Generate and allocate the Pedersen generators in the circuit.
-    let generators = pedersen_generators(3);
+    let generators = pedersen_generators(4);
     let mut c_generators = Vec::new();
     for i in 0..generators.len() {
         let base = G1Gadget::alloc(
@@ -142,18 +134,11 @@ fn construct_works() {
         c_generators.push(base);
     }
 
-    // Allocate the sum generator in the circuit.
-    let sum_generator = G1Gadget::alloc(cs.ns(|| "allocating sum generator"), || {
-        Ok(sum_generator_g1_mnt6())
-    })
-    .unwrap();
-
     // Construct Merkle tree using the gadget version.
     let gadget_out = MerkleTreeGadget::construct(
         cs.ns(|| "evaluate pedersen gadget"),
         &leaves_var,
         &c_generators,
-        &sum_generator,
     )
     .unwrap();
 
@@ -198,23 +183,21 @@ fn verify_works() {
     rng.fill_bytes(&mut bytes);
     let leaf = bytes_to_bits(&bytes);
 
-    // Generate the generators for the Pedersen commitment.
-    let generators = pedersen_generators(3);
-    let sum_generator = sum_generator_g1_mnt6();
+    // Generate the generators for the Pedersen hash.
+    let generators = pedersen_generators(4);
 
     // Create fake Merkle tree branch.
     let path = vec![false, true, false, true];
     let mut bytes = [0u8; 95];
     let mut nodes = Vec::new();
     let mut bits = Vec::new();
-    let mut node = pedersen_commitment(leaf.clone(), generators.clone(), sum_generator.clone());
+
+    let mut node = pedersen_hash(leaf.clone(), generators.clone());
+
     for i in 0..4 {
         rng.fill_bytes(&mut bytes);
-        let other_node = pedersen_commitment(
-            bytes_to_bits(&bytes),
-            generators.clone(),
-            sum_generator_g1_mnt6(),
-        );
+        let other_node = pedersen_hash(bytes_to_bits(&bytes), generators.clone());
+
         if path[i] {
             bits.extend_from_slice(
                 bytes_to_bits(serialize_g1_mnt6(other_node.clone()).as_ref()).as_ref(),
@@ -230,10 +213,12 @@ fn verify_works() {
                 bytes_to_bits(serialize_g1_mnt6(other_node.clone()).as_ref()).as_ref(),
             );
         }
+
         nodes.push(other_node);
-        node = pedersen_commitment(bits.clone(), generators.clone(), sum_generator.clone());
+        node = pedersen_hash(bits.clone(), generators.clone());
         bits.clear();
     }
+
     let root = serialize_g1_mnt6(node).to_vec();
 
     // Verify Merkle proof using the primitive version.
@@ -264,23 +249,21 @@ fn verify_wrong_root() {
     rng.fill_bytes(&mut bytes);
     let leaf = bytes_to_bits(&bytes);
 
-    // Generate the generators for the Pedersen commitment.
-    let generators = pedersen_generators(3);
-    let sum_generator = sum_generator_g1_mnt6();
+    // Generate the generators for the Pedersen hash.
+    let generators = pedersen_generators(4);
 
     // Create fake Merkle tree branch.
     let path = vec![false, true, false, true];
     let mut bytes = [0u8; 95];
     let mut nodes = Vec::new();
     let mut bits = Vec::new();
-    let mut node = pedersen_commitment(leaf.clone(), generators.clone(), sum_generator.clone());
+
+    let mut node = pedersen_hash(leaf.clone(), generators.clone());
+
     for i in 0..4 {
         rng.fill_bytes(&mut bytes);
-        let other_node = pedersen_commitment(
-            bytes_to_bits(&bytes),
-            generators.clone(),
-            sum_generator_g1_mnt6(),
-        );
+        let other_node = pedersen_hash(bytes_to_bits(&bytes), generators.clone());
+
         if path[i] {
             bits.extend_from_slice(
                 bytes_to_bits(serialize_g1_mnt6(other_node.clone()).as_ref()).as_ref(),
@@ -296,8 +279,9 @@ fn verify_wrong_root() {
                 bytes_to_bits(serialize_g1_mnt6(other_node.clone()).as_ref()).as_ref(),
             );
         }
+
         nodes.push(other_node);
-        node = pedersen_commitment(bits.clone(), generators.clone(), sum_generator.clone());
+        node = pedersen_hash(bits.clone(), generators.clone());
         bits.clear();
     }
 

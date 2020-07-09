@@ -10,8 +10,8 @@ use r1cs_std::test_constraint_system::TestConstraintSystem;
 use r1cs_std::ToBitsGadget;
 use rand::RngCore;
 
-use nano_sync::gadgets::mnt4::YToBitGadget;
-use nano_sync::utils::{bytes_to_bits, pad_point_bits, serialize_g1_mnt6, serialize_g2_mnt6};
+use nimiq_nano_sync::gadgets::mnt4::YToBitGadget;
+use nimiq_nano_sync::utils::{bytes_to_bits, pad_point_bits, serialize_g1_mnt6, serialize_g2_mnt6};
 
 // When running tests you are advised to run only one test at a time or you might run out of RAM.
 // Also they take a long time to run. This is why they have the ignore flag.

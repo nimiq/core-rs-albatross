@@ -3,11 +3,10 @@ use std::fmt;
 use algebra::mnt6_753::G1Projective;
 use algebra_core::curves::ProjectiveCurve;
 
-use nano_sync::constants::sum_generator_g1_mnt6;
-use nano_sync::primitives::{pedersen_generators, pedersen_hash};
-use nano_sync::utils::bytes_to_bits;
+use nimiq_nano_sync::compression::BeSerialize;
+use nimiq_nano_sync::primitives::{pedersen_generators, pedersen_hash};
+use nimiq_nano_sync::utils::bytes_to_bits;
 
-use crate::compression::BeSerialize;
 use crate::{CompressedSignature, SigHash};
 
 #[derive(Clone, Copy)]
@@ -20,15 +19,17 @@ pub struct Signature {
 impl Signature {
     /// Maps an hash to a elliptic curve point in the G1 group, it is known as "hash-to-curve". It
     /// is required to create signatures. We use the Pedersen hash to create the EC point.
+    /// Note that the Pedersen hash does not provide pseudo-randomness, which is needed for the BLS
+    /// signature scheme to be secure. So, we assume that the input hash is already pseudo-random.
     pub fn hash_to_g1(hash: SigHash) -> G1Projective {
         // Transform the hash into bits.
         let bits = bytes_to_bits(hash.as_bytes());
 
         // Get the generators for the Pedersen hash.
-        let generators = pedersen_generators(256);
+        let generators = pedersen_generators(2);
 
         // Calculate the Pedersen hash.
-        let point = pedersen_hash(bits, generators, sum_generator_g1_mnt6());
+        let point = pedersen_hash(bits, generators);
 
         point
     }
@@ -38,7 +39,7 @@ impl Signature {
     /// one bit indicating the sign of the y-coordinate
     /// and one bit indicating if it is the "point-at-infinity".
     pub fn compress(&self) -> CompressedSignature {
-        let mut buffer = [0u8; 96];
+        let mut buffer = [0u8; CompressedSignature::SIZE];
         BeSerialize::serialize(&self.signature.into_affine(), &mut &mut buffer[..]).unwrap();
         CompressedSignature { signature: buffer }
     }
