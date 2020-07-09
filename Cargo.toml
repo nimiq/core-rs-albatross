@@ -33,6 +33,7 @@ members = [
   "mnemonic",
   "nano-sync",
   "network",
+  "network-interface",
   "network-primitives",
   "primitives",
   "primitives/account",
