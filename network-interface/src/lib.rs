@@ -2,9 +2,7 @@ use async_trait::async_trait;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use futures::{
     channel::oneshot::{channel, Sender},
-    future,
-    stream::select_all,
-    Stream, StreamExt,
+    future, stream, Stream, StreamExt, TryFutureExt,
 };
 use nimiq_network_primitives::address::PeerId;
 use parking_lot::Mutex;
@@ -15,7 +13,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::{task::spawn, time::timeout};
 
-pub trait Message: Serialize + Deserialize + Send {
+pub trait Message: Serialize + Deserialize + Send + Sync {
     const TYPE_ID: u64;
 
     // Does CRC stuff and is called by network
@@ -54,10 +52,22 @@ pub enum SendError {
 }
 
 #[async_trait]
-pub trait Peer {
+pub trait Peer: Send + Sync {
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError>;
+    async fn send_or_close<T: Message, F: FnOnce(&SendError) -> CloseReason + Send>(
+        &self,
+        msg: &T,
+        f: F,
+    ) -> Result<(), SendError> {
+        if let Err(e) = self.send(msg).await {
+            self.close(f(&e)).await;
+            Err(e)
+        } else {
+            Ok(())
+        }
+    }
     fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>>;
-    fn close(&self, ty: CloseReason);
+    async fn close(&self, ty: CloseReason);
 }
 
 #[async_trait]
@@ -67,10 +77,15 @@ pub trait Network {
     fn get_peers(&self) -> &[Arc<Self::PeerType>];
     fn get_peer(&self, peer_id: PeerId) -> &Arc<Self::PeerType>;
 
-    //    async fn broadcast<T: Message>(&self, msg: &T) {
-    //        self.get_peers().iter().map(|peer| peer.send(msg).) // TODO: Close connection
-    //    }
-    //
+    async fn broadcast<T: Message>(&self, msg: &T) {
+        future::join_all(self.get_peers().iter().map(|peer| {
+            // TODO: Close reason
+            peer.send_or_close(msg, |_| CloseReason::Other)
+                .unwrap_or_else(|_| ())
+        }))
+        .await;
+    }
+
     //    // TODO: What if new peers join?
     //    fn receive_from_all<'a, T: Message + 'a>(&self) -> Pin<Box<dyn Stream<Item = T> + Send + 'a>> {
     //        select_all(self.get_peers().iter().map(|peer| peer.receive::<T>())).boxed()
@@ -91,6 +106,12 @@ pub struct RequestResponse<P: Peer, Req: RequestMessage, Res: ResponseMessage> {
     state: Arc<Mutex<RequestResponseState<Res>>>,
     timeout: Duration,
     _req_type: PhantomData<Req>,
+}
+
+pub enum RequestError {
+    Timeout,
+    SendError(SendError),
+    ReceiveError,
 }
 
 // Probably not really `Message` as types, but something that has a request identifier.
@@ -129,18 +150,29 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
         }
     }
 
-    pub async fn request(&self, mut request: Req) -> Option<Res> {
+    pub async fn request(&self, mut request: Req) -> Result<Res, RequestError> {
         // Lock state, set identifier and send out request. Also add channel to the state.
         let mut state = self.state.lock();
         let request_identifier = state.current_request_identifier;
         state.current_request_identifier += 1;
 
         request.set_request_identifier(request_identifier);
-        self.peer.send(&request);
 
         let (sender, receiver) = channel();
         state.responses.insert(request_identifier, sender);
         drop(state);
+
+        // TODO: CloseType
+        // If sending fails, remove channel and return error.
+        if let Err(e) = self
+            .peer
+            .send_or_close(&request, |_| CloseReason::Other)
+            .await
+        {
+            let mut state = self.state.lock();
+            state.responses.remove(&request_identifier);
+            return Err(RequestError::SendError(e));
+        }
 
         // Now we only have to wait for the response.
         let response = timeout(self.timeout, receiver).await;
@@ -149,9 +181,14 @@ impl<P: Peer, Req: RequestMessage, Res: ResponseMessage + 'static> RequestRespon
         if let Err(_) = response {
             let mut state = self.state.lock();
             state.responses.remove(&request_identifier);
+            return Err(RequestError::Timeout);
         }
 
         // Flatten response.
-        response.ok().map(|inner| inner.ok()).flatten()
+        response
+            .ok()
+            .map(|inner| inner.ok())
+            .flatten()
+            .ok_or(RequestError::ReceiveError)
     }
 }
