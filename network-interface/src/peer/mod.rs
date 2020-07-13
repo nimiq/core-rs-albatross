@@ -5,6 +5,8 @@ use std::pin::Pin;
 
 use crate::message::Message;
 
+pub mod dispatch;
+
 pub enum CloseReason {
     Other,
 }

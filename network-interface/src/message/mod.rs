@@ -19,10 +19,7 @@ pub trait Message: Serialize + Deserialize + Send + Sync {
     ) -> Result<usize, SerializingError> {
         let mut size = 0;
         let ty = uvar::from(Self::TYPE_ID);
-
-        let mut serialized_size = 4 + 4 + 4; // magic + serialized_size + checksum
-        serialized_size += ty.serialized_size() as u32;
-        serialized_size += self.serialized_size() as u32;
+        let serialized_size = self.serialized_message_size() as u32;
 
         let mut v = Vec::with_capacity(serialized_size as usize);
         size += MAGIC.serialize(&mut v)?;
@@ -44,6 +41,13 @@ pub trait Message: Serialize + Deserialize + Send + Sync {
 
         writer.write_all(v.as_slice())?;
         Ok(size)
+    }
+
+    fn serialized_message_size(&self) -> usize {
+        let mut serialized_size = 4 + 4 + 4; // magic + serialized_size + checksum
+        serialized_size += uvar::from(Self::TYPE_ID).serialized_size();
+        serialized_size += self.serialized_size();
+        serialized_size
     }
 
     fn deserialize_message<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
