@@ -89,7 +89,7 @@ fn everything_works() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        vec![position],
+        position,
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -174,7 +174,7 @@ fn wrong_pks() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        vec![position],
+        position,
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -249,7 +249,7 @@ fn wrong_merkle_proof() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        vec![position],
+        position,
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -324,7 +324,7 @@ fn wrong_agg_pk() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        vec![position],
+        position,
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -399,7 +399,7 @@ fn wrong_commitment() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        vec![position],
+        position,
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -474,7 +474,7 @@ fn wrong_bitmap() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        vec![position],
+        position,
     );
 
     c.generate_constraints(&mut test_cs).unwrap();
@@ -552,7 +552,7 @@ fn wrong_position() {
         agg_pk_commitment.clone(),
         bitmap.to_vec(),
         agg_pk_commitment.clone(),
-        vec![(PK_TREE_BREADTH - 1) as u8],
+        (PK_TREE_BREADTH - 1) as u8,
     );
 
     c.generate_constraints(&mut test_cs).unwrap();

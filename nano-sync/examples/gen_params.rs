@@ -118,7 +118,7 @@ fn gen_params_pk_tree_leaf(name: &str) -> Result<(), Box<dyn Error>> {
             prepare_agg_pk_commitment.to_vec(),
             commit_signer_bitmap.to_vec(),
             commit_agg_pk_commitment.to_vec(),
-            vec![position],
+            position,
         );
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };
@@ -192,7 +192,7 @@ fn gen_params_pk_tree_node_mnt6<SubCircuit: ConstraintSynthesizer<MNT4Fr>>(
             commit_signer_bitmap.to_vec(),
             left_commit_agg_pk_commitment.to_vec(),
             right_commit_agg_pk_commitment.to_vec(),
-            vec![position],
+            position,
         );
         generate_random_parameters::<MNT6_753, _, _>(c, rng)?
     };
@@ -270,7 +270,7 @@ fn gen_params_pk_tree_node_mnt4<SubCircuit: ConstraintSynthesizer<MNT6Fr>>(
             prepare_agg_pk_commitment.to_vec(),
             commit_signer_bitmap.to_vec(),
             commit_agg_pk_commitment.to_vec(),
-            vec![position],
+            position,
         );
         generate_random_parameters::<MNT4_753, _, _>(c, rng)?
     };

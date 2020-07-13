@@ -49,7 +49,7 @@ pub struct PKTreeNodeCircuit<SubCircuit> {
     prepare_agg_pk_commitment: Vec<u8>,
     commit_signer_bitmap: Vec<u8>,
     commit_agg_pk_commitment: Vec<u8>,
-    position: Vec<u8>,
+    position: u8,
 }
 
 impl<SubCircuit> PKTreeNodeCircuit<SubCircuit> {
@@ -64,7 +64,7 @@ impl<SubCircuit> PKTreeNodeCircuit<SubCircuit> {
         prepare_agg_pk_commitment: Vec<u8>,
         commit_signer_bitmap: Vec<u8>,
         commit_agg_pk_commitment: Vec<u8>,
-        position: Vec<u8>,
+        position: u8,
     ) -> Self {
         Self {
             _subcircuit: PhantomData,
@@ -157,10 +157,9 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
             self.commit_agg_pk_commitment.as_ref(),
         )?;
 
-        let position_var =
-            UInt8::alloc_input_vec(cs.ns(|| "alloc position"), self.position.as_ref())?
-                .pop()
-                .unwrap();
+        let position_var = UInt8::alloc_input_vec(cs.ns(|| "alloc position"), &[self.position])?
+            .pop()
+            .unwrap();
 
         // Calculating the prepare aggregate public key. All the chunks come with the generator added,
         // so we need to subtract it in order to get the correct aggregate public key. This is necessary
@@ -351,12 +350,12 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
         // Calculate P << 1, which is equivalent to calculating 2 * P.
         bits.pop();
         bits.insert(0, Boolean::Constant(false));
-        let left_position = vec![UInt8::from_bits_le(&bits)];
+        let left_position = UInt8::from_bits_le(&bits);
 
         // bits is currently P << 1 = L. Calculate L & 1, which is equivalent to L + 1.
         bits.remove(0);
         bits.insert(0, Boolean::Constant(true));
-        let right_position = vec![UInt8::from_bits_le(&bits)];
+        let right_position = UInt8::from_bits_le(&bits);
 
         // Verify the ZK proof for the left child node.
         next_cost_analysis!(cs, cost, || { "Verify left ZK proof" });
@@ -386,9 +385,9 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
             &commit_agg_pk_chunks_commitments[1],
         )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &left_position,
-        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[
+            left_position,
+        ])?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
             cs.ns(|| "verify left groth16 proof"),
@@ -425,9 +424,9 @@ impl<SubCircuit: ConstraintSynthesizer<Fr>> ConstraintSynthesizer<MNT4Fr>
             &commit_agg_pk_chunks_commitments[3],
         )?);
 
-        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(
-            &right_position,
-        )?);
+        proof_inputs.append(&mut RecursiveInputGadget::to_field_elements::<Fr>(&[
+            right_position,
+        ])?);
 
         <TheVerifierGadget as NIZKVerifierGadget<TheProofSystem<SubCircuit>, Fq>>::check_verify(
             cs.ns(|| "verify right groth16 proof"),
