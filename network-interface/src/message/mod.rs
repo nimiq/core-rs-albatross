@@ -1,7 +1,7 @@
 use beserial::{uvar, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use nimiq_utils::crc::Crc32Computer;
 use std::io;
-use std::io::Read;
+use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use crate::message::crc::ReaderComputeCrc32;
 
@@ -18,10 +18,15 @@ pub trait Message: Serialize + Deserialize + Send + Sync {
         writer: &mut W,
     ) -> Result<usize, SerializingError> {
         let mut size = 0;
-        let serialized_size: u32 = self.serialized_size() as u32;
+        let ty = uvar::from(Self::TYPE_ID);
+
+        let mut serialized_size = 4 + 4 + 4; // magic + serialized_size + checksum
+        serialized_size += ty.serialized_size() as u32;
+        serialized_size += self.serialized_size() as u32;
+
         let mut v = Vec::with_capacity(serialized_size as usize);
         size += MAGIC.serialize(&mut v)?;
-        size += uvar::from(Self::TYPE_ID).serialize(&mut v)?;
+        size += ty.serialize(&mut v)?;
         size += serialized_size.serialize(&mut v)?;
         let checksum_start = v.len();
         size += 0u32.serialize(&mut v)?; // crc32 placeholder
@@ -60,8 +65,6 @@ pub trait Message: Serialize + Deserialize + Send + Sync {
         crc32_reader.at_checksum = true;
         let checksum: u32 = Deserialize::deserialize(&mut crc32_reader)?;
         crc32_reader.at_checksum = false;
-        // Reset length counter.
-        crc32_reader.length = 0;
 
         let message: Self = Deserialize::deserialize(&mut crc32_reader)?;
 
@@ -90,6 +93,30 @@ pub trait Message: Serialize + Deserialize + Send + Sync {
         }
 
         Ok(message)
+    }
+
+    fn peek_type(buffer: &[u8]) -> Result<u64, SerializingError> {
+        let mut c = Cursor::new(buffer);
+
+        // skip 4 bytes of magic
+        c.seek(SeekFrom::Start(4))?;
+
+        let ty = uvar::deserialize(&mut c)?;
+
+        Ok(u64::from(ty))
+    }
+
+    fn peek_length(buffer: &[u8]) -> Result<usize, SerializingError> {
+        let mut c = Cursor::new(buffer);
+
+        // skip 4 bytes of magic
+        c.seek(SeekFrom::Start(4))?;
+
+        // skip type (uvar)
+        let _ = uvar::deserialize(&mut c)?;
+        let n = u32::deserialize(&mut c)?;
+
+        Ok(n as usize)
     }
 }
 
