@@ -9,7 +9,7 @@ mod crc;
 
 const MAGIC: u32 = 0x4204_2042;
 
-pub trait Message: Serialize + Deserialize + Send + Sync {
+pub trait Message: Serialize + Deserialize + Send + Sync + 'static {
     const TYPE_ID: u64;
 
     // Does CRC stuff and is called by network
@@ -98,30 +98,30 @@ pub trait Message: Serialize + Deserialize + Send + Sync {
 
         Ok(message)
     }
+}
 
-    fn peek_type(buffer: &[u8]) -> Result<u64, SerializingError> {
-        let mut c = Cursor::new(buffer);
+pub fn peek_type(buffer: &[u8]) -> Result<u64, SerializingError> {
+    let mut c = Cursor::new(buffer);
 
-        // skip 4 bytes of magic
-        c.seek(SeekFrom::Start(4))?;
+    // skip 4 bytes of magic
+    c.seek(SeekFrom::Start(4))?;
 
-        let ty = uvar::deserialize(&mut c)?;
+    let ty = uvar::deserialize(&mut c)?;
 
-        Ok(u64::from(ty))
-    }
+    Ok(u64::from(ty))
+}
 
-    fn peek_length(buffer: &[u8]) -> Result<usize, SerializingError> {
-        let mut c = Cursor::new(buffer);
+pub fn peek_length(buffer: &[u8]) -> Result<usize, SerializingError> {
+    let mut c = Cursor::new(buffer);
 
-        // skip 4 bytes of magic
-        c.seek(SeekFrom::Start(4))?;
+    // skip 4 bytes of magic
+    c.seek(SeekFrom::Start(4))?;
 
-        // skip type (uvar)
-        let _ = uvar::deserialize(&mut c)?;
-        let n = u32::deserialize(&mut c)?;
+    // skip type (uvar)
+    let _ = uvar::deserialize(&mut c)?;
+    let n = u32::deserialize(&mut c)?;
 
-        Ok(n as usize)
-    }
+    Ok(n as usize)
 }
 
 pub trait RequestMessage: Message {

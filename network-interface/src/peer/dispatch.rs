@@ -30,11 +30,11 @@ impl From<SerializingError> for DispatchError {
     }
 }
 
-pub fn bounded_dispatch<M: Message + 'static>(
+pub fn bounded_dispatch<M: Message>(
     buffer: usize,
 ) -> (
-    Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError>>>,
-    Pin<Box<dyn Stream<Item = M>>>,
+    Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>,
+    Pin<Box<dyn Stream<Item = M> + Send>>,
 ) {
     let (tx, rx) = channel(buffer);
 
@@ -46,9 +46,9 @@ pub fn bounded_dispatch<M: Message + 'static>(
     )
 }
 
-pub fn unbounded_dispatch<M: Message + 'static>() -> (
-    Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError>>>,
-    Pin<Box<dyn Stream<Item = M>>>,
+pub fn unbounded_dispatch<M: Message>() -> (
+    Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>,
+    Pin<Box<dyn Stream<Item = M> + Send>>,
 ) {
     let (tx, rx) = unbounded();
 

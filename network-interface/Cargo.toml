@@ -23,5 +23,4 @@ parking_lot = "0.11"
 tokio = { version = "0.2", features = ["time", "rt-core", "sync", "stream"] }
 
 beserial = { path = "../beserial", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["address"] }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["crc"] }

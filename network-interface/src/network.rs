@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use futures::stream::{FusedStream, SelectAll};
 use futures::task::{Context, Poll};
 use futures::{future, stream, Stream, StreamExt, TryFutureExt};
-use nimiq_network_primitives::address::PeerId;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
@@ -26,9 +25,10 @@ impl<P> Clone for NetworkEvent<P> {
 #[async_trait]
 pub trait Network {
     type PeerType: Peer + 'static;
+    type PeerId;
 
-    fn get_peers(&self) -> &[Arc<Self::PeerType>];
-    fn get_peer(&self, peer_id: PeerId) -> &Arc<Self::PeerType>;
+    fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
+    fn get_peer(&self, peer_id: &Self::PeerId) -> Option<Arc<Self::PeerType>>;
 
     fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>>;
 
