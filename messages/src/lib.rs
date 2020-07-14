@@ -12,6 +12,7 @@ extern crate nimiq_handel as handel;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_macros as macros;
+extern crate nimiq_network_interface as network_interface;
 extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
@@ -41,6 +42,7 @@ use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
 use macros::create_typed_array;
+use network_interface::message::Message as MessageInterface;
 use network_primitives::address::{PeerAddress, PeerId};
 use network_primitives::protocol::ProtocolFlags;
 use network_primitives::services::ServiceFlags;
@@ -629,6 +631,28 @@ impl Serialize for Message {
             Message::EpochTransactions(epoch_transactions) => epoch_transactions.serialized_size(),
         };
         size
+    }
+}
+
+impl MessageInterface for Message {
+    const TYPE_ID: u64 = 0;
+
+    fn serialize_message<W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
+        self.serialize(writer)
+    }
+
+    fn serialized_message_size(&self) -> usize {
+        let mut serialized_size = 4 + 4 + 4; // magic + serialized_size + checksum
+        serialized_size += self.ty().serialized_size();
+        serialized_size += self.serialized_size();
+        serialized_size
+    }
+
+    fn deserialize_message<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+        Deserialize::deserialize(reader)
     }
 }
 
