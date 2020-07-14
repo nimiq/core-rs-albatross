@@ -2,7 +2,7 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::iter::{Chain, Flatten, Map};
+use std::iter::{Flatten, Map};
 use std::sync::Arc;
 use std::vec::IntoIter;
 
@@ -39,71 +39,15 @@ use utils::merkle;
 use utils::observer::{Listener, ListenerHandle, Notifier};
 use vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
+use crate::blockchain::{
+    BlockchainEvent, BlockchainState, ChainOrdering, OptionalCheck, PushError, PushResult,
+    TransactionsIterator,
+};
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::reward_registry::{EpochStateError, SlashRegistry, SlashedSetSelector};
 use crate::transaction_cache::TransactionCache;
-
-pub type PushResult = blockchain_base::PushResult;
-pub type PushError = blockchain_base::PushError<BlockError>;
-pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
-pub type TransactionsIterator = Chain<
-    IntoIter<BlockchainTransaction>,
-    Flatten<Map<IntoIter<Block>, fn(Block) -> Vec<BlockchainTransaction>>>,
->;
-
-pub enum OptionalCheck<T> {
-    Some(T),
-    None,
-    Skip,
-}
-
-impl<T> OptionalCheck<T> {
-    pub fn is_some(&self) -> bool {
-        if let OptionalCheck::Some(_) = self {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn is_none(&self) -> bool {
-        if let OptionalCheck::None = self {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn is_skip(&self) -> bool {
-        if let OptionalCheck::Skip = self {
-            true
-        } else {
-            false
-        }
-    }
-}
-
-impl<T> From<Option<T>> for OptionalCheck<T> {
-    fn from(opt: Option<T>) -> Self {
-        match opt {
-            Some(t) => OptionalCheck::Some(t),
-            None => OptionalCheck::None,
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-enum ChainOrdering {
-    Extend,
-    Better,
-    Inferior,
-    Unknown,
-}
-
-pub enum ForkEvent {
-    Detected(ForkProof),
-}
+use crate::ForkEvent;
 
 pub struct Blockchain {
     pub(crate) env: Environment,
@@ -117,75 +61,6 @@ pub struct Blockchain {
 
     #[cfg(feature = "metrics")]
     metrics: BlockchainMetrics,
-}
-
-pub struct BlockchainState {
-    pub accounts: Accounts,
-    pub transaction_cache: TransactionCache,
-    pub reward_registry: SlashRegistry,
-
-    pub(crate) main_chain: ChainInfo,
-    head_hash: Blake2bHash,
-
-    macro_head: MacroBlock,
-    macro_head_hash: Blake2bHash,
-
-    // TODO: Instead of Option, we could use a Cell here and use replace on it. That way we know
-    //       at compile-time that there is always a valid value in there.
-    current_slots: Option<Slots>,
-    previous_slots: Option<Slots>,
-}
-
-impl BlockchainState {
-    pub fn accounts(&self) -> &Accounts {
-        &self.accounts
-    }
-
-    pub fn transaction_cache(&self) -> &TransactionCache {
-        &self.transaction_cache
-    }
-
-    pub fn block_number(&self) -> u32 {
-        self.main_chain.head.block_number()
-    }
-
-    pub fn current_slots(&self) -> Option<&Slots> {
-        self.current_slots.as_ref()
-    }
-
-    pub fn last_slots(&self) -> Option<&Slots> {
-        self.previous_slots.as_ref()
-    }
-
-    pub fn current_validators(&self) -> Option<&ValidatorSlots> {
-        Some(&self.current_slots.as_ref()?.validator_slots)
-    }
-
-    pub fn last_validators(&self) -> Option<&ValidatorSlots> {
-        Some(&self.previous_slots.as_ref()?.validator_slots)
-    }
-
-    /// This includes fork proof slashes and view changes.
-    pub fn current_slashed_set(&self) -> BitSet {
-        self.reward_registry.slashed_set(
-            policy::epoch_at(self.block_number()),
-            SlashedSetSelector::All,
-            None,
-        )
-    }
-
-    /// This includes fork proof slashes and view changes.
-    pub fn last_slashed_set(&self) -> BitSet {
-        self.reward_registry.slashed_set(
-            policy::epoch_at(self.block_number()) - 1,
-            SlashedSetSelector::All,
-            None,
-        )
-    }
-
-    pub fn reward_registry(&self) -> &SlashRegistry {
-        &self.reward_registry
-    }
 }
 
 impl Blockchain {
@@ -741,7 +616,7 @@ impl Blockchain {
                         header1: micro_header1.clone(),
                         header2: micro_header2,
                         justification1: justification1.clone(),
-                        justification2: justification2,
+                        justification2,
                     };
 
                     self.fork_notifier.read().notify(ForkEvent::Detected(proof));
@@ -1052,7 +927,7 @@ impl Blockchain {
 
                     state
                         .reward_registry
-                        .revert_block(&mut write_txn, &current.1.head)
+                        .revert_micro_block(&mut write_txn, &current.1.head)
                         .unwrap();
 
                     cache_txn.revert_block(&current.1.head);
