@@ -25,6 +25,7 @@ extern crate tokio;
 
 pub mod aggregation;
 pub mod config;
+pub mod contribution;
 pub mod evaluator;
 pub mod identity;
 pub mod level;
