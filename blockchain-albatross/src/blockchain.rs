@@ -1924,7 +1924,7 @@ impl Blockchain {
         }
 
         // Get validator slots
-        // NOTE: Field `last_slots` is expected to be always set.
+        // NOTE: Field `previous_slots` is expected to be always set.
         let validator_slots = &state
             .previous_slots
             .as_ref()
@@ -1955,6 +1955,11 @@ impl Blockchain {
         // Remember the number of eligible slots that a validator had (that was able to accept the inherent)
         let mut num_eligible_slots_for_accepted_inherent = Vec::new();
 
+        // Remember the total amount of reward must be burned. The reward for a slot is burned
+        // either because the slot was slashed or because the corresponding validator was unable to
+        // accept the inherent.
+        let mut burned_reward = Coin::ZERO;
+
         // Compute inherents
         for validator_slot in validator_slots.iter() {
             // The interval of slot numbers for the current slot band is
@@ -1964,20 +1969,28 @@ impl Blockchain {
 
             // Compute the number of slashes for this validator slot band.
             let mut num_eligible_slots = validator_slot.num_slots();
+            let mut num_slashed_slots = 0;
+
             while let Some(next_slashed_slot) = slashed_set_iter.peek() {
                 let next_slashed_slot = *next_slashed_slot as u16;
                 assert!(next_slashed_slot >= first_slot_number);
                 if next_slashed_slot < last_slot_number {
                     assert!(num_eligible_slots > 0);
                     num_eligible_slots -= 1;
+                    num_slashed_slots += 1;
                 } else {
                     break;
                 }
             }
 
-            // Compute reward from slot reward and number of eligible slots.
+            // Compute reward from slot reward and number of eligible slots. Also update the burned
+            // reward from the number of slashed slots.
             let mut reward = slot_reward
                 .checked_mul(num_eligible_slots as u64)
+                .expect("Overflow in reward");
+
+            burned_reward += slot_reward
+                .checked_mul(num_slashed_slots as u64)
                 .expect("Overflow in reward");
 
             // We always give the reward remainder to the validator that owns the first slot. There
@@ -1995,8 +2008,10 @@ impl Blockchain {
                 data: vec![],
             };
 
-            // Test whether account will accept inherent.
+            // Test whether account will accept inherent. If it can't then the reward will be
+            // burned.
             let account = state.accounts.get(&inherent.target, None);
+
             if account
                 .check_inherent(&inherent, macro_header.block_number)
                 .is_err()
@@ -2005,6 +2020,7 @@ impl Blockchain {
                     "{} can't accept epoch reward {}",
                     inherent.target, inherent.value
                 );
+                burned_reward += reward;
             } else {
                 num_eligible_slots_for_accepted_inherent.push(num_eligible_slots);
                 inherents.push(inherent);
@@ -2015,16 +2031,28 @@ impl Blockchain {
         }
 
         // Check that number of accepted inherents is equal to length of the map that gives us the
-        // corresponding number of slots for that staker.
+        // corresponding number of slots for that staker (which should be equal to the number of
+        // validator that will receive rewards).
         assert_eq!(
             inherents.len(),
             num_eligible_slots_for_accepted_inherent.len()
         );
 
+        // Create the inherent for the burned reward.
+        let inherent = Inherent {
+            ty: InherentType::Reward,
+            target: Address::burn_address(),
+            value: burned_reward,
+            data: vec![],
+        };
+
+        inherents.push(inherent);
+
         // Push finalize epoch inherent for automatically retiring inactive/malicious validators.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
             .expect("No ValidatorRegistry");
+
         inherents.push(Inherent {
             ty: InherentType::FinalizeEpoch,
             target: validator_registry.clone(),

@@ -117,6 +117,15 @@ impl Address {
             .or_else(|_| Address::from_str(s))
             .map_err(|_| AddressParseError::UnknownFormat)
     }
+
+    /// Returns the "burn address". This is an address for which it is extremely unlikely (basically
+    /// impossible) that anyone knows the corresponding private key. Consequently this address can
+    /// be used to "burn" coins (and is regularly used by Team Nimiq to do so).
+    /// To be clear, it's IMPOSSIBLE for ANYONE to use the funds sent to this address.
+    pub fn burn_address() -> Address {
+        // We use unwrap here because we know this will not produce an error.
+        Self::from_user_friendly_address("NQ07 0000 0000 0000 0000 0000 0000 0000 0000").unwrap()
+    }
 }
 
 impl From<Blake2bHash> for Address {
