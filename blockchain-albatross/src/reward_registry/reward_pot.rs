@@ -1,10 +1,21 @@
+use std::convert::TryInto;
+
 use block::{MacroBlock, MicroBlock};
 use database::{Database, Environment, ReadTransaction, WriteTransaction};
 use primitives::coin::Coin;
 use primitives::policy;
-use std::convert::TryInto;
 use transaction::Transaction as BlockchainTransaction;
 
+/// This struct is meant to calculate and keep track of the rewards for the current and previous
+/// epochs. We need to remember the reward for the previous epoch because we only distribute rewards
+/// for a given epoch on the subsequent epoch.
+/// It also keeps track of the current supply, which is defined as all the coins that were ever
+/// created (even if those coins were later burned), at the time of the last macro block (the end of
+/// the previous epoch). We need the current supply in order to calculate the coinbase for the
+/// rewards.
+/// Finally, it also stores the timestamp and the supply of when the genesis block was created. We
+/// need both these values to calculate the supply at any given time, which in turn we need to
+/// calculate the coinbase.
 pub struct RewardPot {
     env: Environment,
     reward_pot: Database,

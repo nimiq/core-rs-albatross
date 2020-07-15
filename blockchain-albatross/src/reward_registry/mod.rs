@@ -1,5 +1,3 @@
-mod reward_pot;
-
 use std::borrow::Cow;
 use std::io;
 use std::sync::Arc;
@@ -18,11 +16,13 @@ use primitives::coin::Coin;
 use primitives::policy;
 use primitives::slot::{Slot, SlotIndex, Slots};
 use transaction::Transaction as BlockchainTransaction;
+use vrf::rng::Rng;
 use vrf::VrfUseCase;
 
 use crate::chain_store::ChainStore;
 use crate::reward_registry::reward_pot::RewardPot;
-use vrf::rng::Rng;
+
+mod reward_pot;
 
 pub struct SlashRegistry {
     env: Environment,

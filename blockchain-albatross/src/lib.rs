@@ -2,7 +2,6 @@
 extern crate beserial_derive;
 #[macro_use]
 extern crate log;
-
 extern crate nimiq_account as account;
 extern crate nimiq_accounts as accounts;
 extern crate nimiq_block_albatross as block;
@@ -19,10 +18,10 @@ extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
+pub use blockchain::{Blockchain, ForkEvent};
+
 pub mod blockchain;
 pub mod chain_info;
 pub mod chain_store;
 pub mod reward_registry;
 pub mod transaction_cache;
-
-pub use blockchain::{Blockchain, ForkEvent};

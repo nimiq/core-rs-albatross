@@ -121,7 +121,7 @@ impl StakingContract {
 
         debug!("Select validators: num_slots = {}", policy::SLOTS);
 
-        // NOTE: `active_stake_sorted` is sorted from highest to lowest stake. `LookupTable`
+        // NOTE: `active_validators_sorted` is sorted from highest to lowest stake. `LookupTable`
         // expects the reverse ordering.
         for validator in self.active_validators_sorted.iter() {
             potential_validators.push(Arc::clone(validator));

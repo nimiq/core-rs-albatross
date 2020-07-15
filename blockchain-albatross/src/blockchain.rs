@@ -37,7 +37,7 @@ use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::merkle;
 use utils::observer::{Listener, ListenerHandle, Notifier};
-use vrf::VrfSeed;
+use vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
@@ -1985,20 +1985,13 @@ impl Blockchain {
 
             // Compute reward from slot reward and number of eligible slots. Also update the burned
             // reward from the number of slashed slots.
-            let mut reward = slot_reward
+            let reward = slot_reward
                 .checked_mul(num_eligible_slots as u64)
                 .expect("Overflow in reward");
 
             burned_reward += slot_reward
                 .checked_mul(num_slashed_slots as u64)
                 .expect("Overflow in reward");
-
-            // We always give the reward remainder to the validator that owns the first slot. There
-            // is no need to distribute the reward randomly since the slots are already distributed
-            // randomly. Furthermore, the remainder is always small (at most SLOTS - 1 Lunas).
-            if first_slot_number == 0 {
-                reward += remainder;
-            }
 
             // Create inherent for the reward
             let inherent = Inherent {
@@ -2037,6 +2030,15 @@ impl Blockchain {
             inherents.len(),
             num_eligible_slots_for_accepted_inherent.len()
         );
+
+        // Get RNG from last block's seed and build lookup table based on number of eligible slots
+        let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution, 0);
+        let lookup = AliasMethod::new(num_eligible_slots_for_accepted_inherent);
+
+        // Randomly give remainder to one accepting slot. We don't bother to distribute it over all
+        // accepting slots because the remainder is always at most SLOTS - 1 Lunas.
+        let index = lookup.sample(&mut rng);
+        inherents[index].value += remainder;
 
         // Create the inherent for the burned reward.
         let inherent = Inherent {
