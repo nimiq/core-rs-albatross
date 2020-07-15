@@ -3,9 +3,9 @@ use primitives::account::AccountType;
 use primitives::coin::Coin;
 use primitives::policy;
 
-use crate::{Transaction, TransactionError, TransactionFlags};
 use crate::account::AccountTransactionVerification;
 use crate::SignatureProof;
+use crate::{Transaction, TransactionError, TransactionFlags};
 
 pub use self::structs::*;
 
@@ -17,7 +17,10 @@ impl AccountTransactionVerification for StakingContractVerifier {
     fn verify_incoming_transaction(transaction: &Transaction) -> Result<(), TransactionError> {
         assert_eq!(transaction.recipient_type, AccountType::Staking);
 
-        if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+        if transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION)
+        {
             warn!("Contract creation not allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
@@ -46,15 +49,15 @@ impl AccountTransactionVerification for StakingContractVerifier {
                         warn!("Stake value below minimum");
                         return Err(TransactionError::InvalidForRecipient);
                     }
-                },
+                }
                 IncomingStakingTransactionData::CreateValidator { .. } => {
                     // Implicitly checks that value > 0.
                     if transaction.value < Coin::from_u64_unchecked(policy::MIN_VALIDATOR_STAKE) {
                         warn!("Validator stake value below minimum");
                         return Err(TransactionError::InvalidForRecipient);
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         } else {
             if transaction.flags.contains(TransactionFlags::SIGNALLING) {
@@ -82,7 +85,8 @@ impl AccountTransactionVerification for StakingContractVerifier {
         // with a special proof field structure.
         if transaction.sender == transaction.recipient {
             // Verify signature.
-            let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
+            let signature_proof: SignatureProof =
+                Deserialize::deserialize(&mut &transaction.proof[..])?;
             if !signature_proof.verify(transaction.serialize_content().as_slice()) {
                 warn!("Invalid signature");
                 return Err(TransactionError::InvalidProof);

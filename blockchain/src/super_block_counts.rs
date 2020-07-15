@@ -1,14 +1,16 @@
-use std::io;
 use std::fmt;
+use std::io;
 
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use database::{FromDatabaseValue, IntoDatabaseValue};
-use beserial::{Deserialize, Serialize, DeserializeWithLength, SerializeWithLength, SerializingError, ReadBytesExt, WriteBytesExt};
-
 
 /// Keeps track of the number of superblocks at each level
 #[derive(Clone)]
 pub struct SuperBlockCounts {
-    counts: Vec<u32>
+    counts: Vec<u32>,
 }
 
 impl SuperBlockCounts {
@@ -39,7 +41,12 @@ impl SuperBlockCounts {
         // NOTE: The `counts` vector must already be longer, otherwise the non-existing entry counts as 0, which we can't substract
         assert!((depth as usize) < self.counts.len());
         for i in 0..=(depth as usize) {
-            self.counts[i] = self.counts[i].checked_sub(1).unwrap_or_else(|| panic!("Superblock count for level {} is already 0 and can't be decreased", i));
+            self.counts[i] = self.counts[i].checked_sub(1).unwrap_or_else(|| {
+                panic!(
+                    "Superblock count for level {} is already 0 and can't be decreased",
+                    i
+                )
+            });
         }
     }
 
@@ -59,8 +66,11 @@ impl SuperBlockCounts {
 
     /// Returns the super block count at `depth`
     pub fn get(&self, depth: u8) -> u32 {
-        if (depth as usize) < self.counts.len() { self.counts[depth as usize] }
-        else { 0 } // If the entry is not allocated it the vector it is 0.
+        if (depth as usize) < self.counts.len() {
+            self.counts[depth as usize]
+        } else {
+            0
+        } // If the entry is not allocated it the vector it is 0.
     }
 
     pub fn get_candidate_depth(&self, m: u32) -> u8 {
@@ -103,11 +113,10 @@ impl PartialEq for SuperBlockCounts {
             .zip(&other.counts)
             .all(|(&left, right)| left == *right)
 
-        && // then get the remainder which is in one of the both `Vec`s
-        if self.counts.len() < other.counts.len() { &other.counts[self.counts.len()..] }
-        else { &self.counts[other.counts.len()..] }.iter()
-            // and check that those items are 0
-            .all(|count| *count == 0)
+            && // then get the remainder which is in one of the both `Vec`s
+            if self.counts.len() < other.counts.len() { &other.counts[self.counts.len()..] } else { &self.counts[other.counts.len()..] }.iter()
+                // and check that those items are 0
+                .all(|count| *count == 0)
     }
 }
 
@@ -131,7 +140,11 @@ impl fmt::Debug for SuperBlockCounts {
 
 impl From<Vec<u32>> for SuperBlockCounts {
     fn from(counts: Vec<u32>) -> SuperBlockCounts {
-        assert!(counts.len() < Self::NUM_COUNTS, "Vector must not be larger than {} items.", Self::NUM_COUNTS);
+        assert!(
+            counts.len() < Self::NUM_COUNTS,
+            "Vector must not be larger than {} items.",
+            Self::NUM_COUNTS
+        );
         SuperBlockCounts { counts }
     }
 }
@@ -148,10 +161,11 @@ impl Serialize for SuperBlockCounts {
 
 impl Deserialize for SuperBlockCounts {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        Ok(SuperBlockCounts { counts: DeserializeWithLength::deserialize::<u8, R>(reader)? })
+        Ok(SuperBlockCounts {
+            counts: DeserializeWithLength::deserialize::<u8, R>(reader)?,
+        })
     }
 }
-
 
 impl IntoDatabaseValue for SuperBlockCounts {
     fn database_byte_size(&self) -> usize {
@@ -164,7 +178,10 @@ impl IntoDatabaseValue for SuperBlockCounts {
 }
 
 impl FromDatabaseValue for SuperBlockCounts {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
     }

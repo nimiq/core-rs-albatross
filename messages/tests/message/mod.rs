@@ -20,15 +20,17 @@ const GET_CHAIN_PROOF_MESSAGE: &str = "42042042280000000d0cc9e55d";
 const CHAIN_PROOF_MESSAGE: &str = "4204204229000000a54744732f00010001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009d5b7130fdd19427406f1d477788ec1f866c650b2eff550afb3505b1435681bbbfacd81c643767f3bf1bf642c97b4efd33daeff2b0d341c613344ae706eedb381f010000000000010000000000018d5800000000";
 const GET_ACCOUNTS_PROOF_MESSAGE: &str = "420420422a000000570169b3b4324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf000291e9240f415223982edc345532630710e94a7f5287298cc2f31fba73181ea2a9e6ef10dce21ed95e";
 const ACCOUNTS_PROOF_MESSAGE_WPROOF: &str = "420420422b00000269694947d7324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf010007ff2830303131313131313131313131313131313131313131313131313131313131313131313131313131000000000000000019ff283030323030303030303030303030303030303030303030303030303030303030303030303030303000000000000000052aff283030323232323232323232323232323232323232323232323232323232323232323232323232323200000000000000005d00033030320225303030303030303030303030303030303030303030303030303030303030303030303030304f4c455662cdbcb30bcc2719dc7184cc30aa01ece81e5a8070f0a2e2f37f5f6b2532323232323232323232323232323232323232323232323232323232323232323232323232d2d93f95e11fc480f2cddb6b3a38e457e24bce6df5c5f470b2501acd5d61e12bff283030333333333333333333333333333333333333333333333333333333333333333333333333333300000000000000000100023030032631313131313131313131313131313131313131313131313131313131313131313131313131314a222c2f95a2f733d51ddea9ea7f6f0bc8f66f7ff4a3c7cc26ae99c4dcc5e28a0132b4e74f0d8054d535e1cb108fab3772a4e19729777b51d4640665a2da6ec7588e263333333333333333333333333333333333333333333333333333333333333333333333333333516c248e6df72f9ffdcc6be8bda172077a8f2de2956bf54d21cffdb77d4c8b02000001023030de17952823fba92b774b125dd808c270dccf1fe3b9c80b1050516ece11c787bb";
-const ACCOUNTS_PROOF_MESSAGE_WOPROOF: &str = "420420422b0000002e3fb4ef97324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf00";
+const ACCOUNTS_PROOF_MESSAGE_WOPROOF: &str =
+    "420420422b0000002e3fb4ef97324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf00";
 const GET_ACCOUNTS_TREE_CHUNK_MESSAGE: &str = "420420422c00000030078e5b06324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf026161";
 const ACCOUNTS_TREE_CHUNK_MESSAGE_WCHUNK: &str = "420420422d000003040452ff83324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf010003ff2830303131313131313131313131313131313131313131313131313131313131313131313131313131000000000000000019ff2830303333333333333333333333333333333333333333333333333333333333333333333333333333000000000000000001ff283030323030303030303030303030303030303030303030303030303030303030303030303030303000000000000000052a0007ff2830303131313131313131313131313131313131313131313131313131313131313131313131313131000000000000000019ff283030323030303030303030303030303030303030303030303030303030303030303030303030303000000000000000052aff283030323232323232323232323232323232323232323232323232323232323232323232323232323200000000000000005d00033030320225303030303030303030303030303030303030303030303030303030303030303030303030304f4c455662cdbcb30bcc2719dc7184cc30aa01ece81e5a8070f0a2e2f37f5f6b2532323232323232323232323232323232323232323232323232323232323232323232323232d2d93f95e11fc480f2cddb6b3a38e457e24bce6df5c5f470b2501acd5d61e12bff283030333333333333333333333333333333333333333333333333333333333333333333333333333300000000000000000100023030032631313131313131313131313131313131313131313131313131313131313131313131313131314a222c2f95a2f733d51ddea9ea7f6f0bc8f66f7ff4a3c7cc26ae99c4dcc5e28a0132b4e74f0d8054d535e1cb108fab3772a4e19729777b51d4640665a2da6ec7588e263333333333333333333333333333333333333333333333333333333333333333333333333333516c248e6df72f9ffdcc6be8bda172077a8f2de2956bf54d21cffdb77d4c8b02000001023030de17952823fba92b774b125dd808c270dccf1fe3b9c80b1050516ece11c787bb";
-const ACCOUNTS_TREE_CHUNK_MESSAGE_WOCHUNK: &str = "420420422d0000002e4fc3f971324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf00";
+const ACCOUNTS_TREE_CHUNK_MESSAGE_WOCHUNK: &str =
+    "420420422d0000002e4fc3f971324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf00";
 const GET_TRANSACTIONS_PROOF_MESSAGE: &str = "420420422f000000571ee934b2324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf000291e9240f415223982edc345532630710e94a7f5287298cc2f31fba73181ea2a9e6ef10dce21ed95e";
 const TRANSACTIONS_PROOF_MESSAGE: &str = "420420423000000182f5f51fe9f9347cc2f81185fd812553d4c4291b8238c26662290c6455ed5f7c30d11fc2c20100010036532fa4cfc4fd660cd9a7a47a167f879f70fc035faced450d09dabc9d47883f7bc82251b2cf9e0da7051f019bbc776da86e89c000000000000077ec000000000000008a0006b4362a5f5abecd5f1dec75d61c81f37605e85f57b993a54bcc21d973a3dd7e75531e4c0ae91b89528f16c1d141ee3b82dd079a795f135e34d01f63be6a32ff7b246506000d40222a020006591c95f4c6ccb08db78234d76aaacdc681afb5f145fbe7c37f0adcc353e42b01181e78ee20c210f6109549e32abc8855102c6d68f087c9a4a132575fbbf8b30fc7e36e4e6c9d36c1b0420090370ae55ce5c781c7029c202f22d8c6afe0125ea14994103db5ca1ceed184b6a4ace228a6f5a727338b043eef2026eff9bc9178494606874a59eafd9cc5384bbbd084f0dcce1d59be6371d4708ac5727d218c409b0f494558ffdddd6004502f0bc7c3555a76e953426a2fa2488b9367f0d49a6e71";
-const GET_TRANSACTION_RECEIPTS_MESSAGE: &str = "42042042310000002525dc96f691e9240f415223982edc345532630710e94a7f5200000000";
+const GET_TRANSACTION_RECEIPTS_MESSAGE: &str =
+    "42042042310000002525dc96f691e9240f415223982edc345532630710e94a7f5200000000";
 const GET_BLOCK_PROOF_MESSAGE: &str = "42042042330000004d3f619793324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cfb8b37c1d034e371c7a3b834f9476a746eb62259ff9558ab715b4bff79ebf58e1";
-
 
 static MESSAGES: &'static [&str] = &[
     VERSION_MESSAGE,
@@ -44,7 +46,7 @@ static MESSAGES: &'static [&str] = &[
     GET_ADDR_MESSAGE,
     PING_MESSAGE,
     PONG_MESSAGE,
-//    SUBSCRIBE_MESSAGE, // FIXME: HashSets don't preserve insertion order and addresses on SubscribeMsg are stored in a HashSet
+    //    SUBSCRIBE_MESSAGE, // FIXME: HashSets don't preserve insertion order and addresses on SubscribeMsg are stored in a HashSet
     GET_CHAIN_PROOF_MESSAGE,
     CHAIN_PROOF_MESSAGE,
     ACCOUNTS_PROOF_MESSAGE_WPROOF,
@@ -56,71 +58,98 @@ static MESSAGES: &'static [&str] = &[
     TRANSACTIONS_PROOF_MESSAGE,
     GET_TRANSACTION_RECEIPTS_MESSAGE,
     GET_BLOCK_PROOF_MESSAGE,
-//    BLOCK_PROOF_MESSAGE,
-    SIGNAL_MESSAGE
+    //    BLOCK_PROOF_MESSAGE,
+    SIGNAL_MESSAGE,
 ];
 
 #[test]
 fn parse_version_message() {
     let vec = ::hex::decode(VERSION_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Version(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Version(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_inv_message() {
     let vec = ::hex::decode(INV_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Inv(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Inv(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_get_data_message() {
     let vec = ::hex::decode(GET_DATA_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::GetData(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::GetData(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_block_message() {
     let vec = ::hex::decode(BLOCK_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Block(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Block(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_header_message() {
     let vec = ::hex::decode(HEADER_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Header(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Header(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_tx_message() {
     let vec = ::hex::decode(TX_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Tx(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Tx(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_get_blocks_message() {
     let vec = ::hex::decode(GET_BLOCKS_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::GetBlocks(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::GetBlocks(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_mempool_message() {
     let vec = ::hex::decode(MEMPOOL_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Mempool => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Mempool => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_reject_message() {
     let vec = ::hex::decode(REJECT_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Reject(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Reject(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 //#[test]
@@ -135,50 +164,70 @@ fn parse_reject_message() {
 fn parse_addr_message() {
     let vec = ::hex::decode(ADDR_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Addr(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Addr(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_get_addr_message() {
     let vec = ::hex::decode(GET_ADDR_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::GetAddr(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::GetAddr(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_ping_message() {
     let vec = ::hex::decode(PING_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Ping(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Ping(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_pong_message() {
     let vec = ::hex::decode(PONG_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Pong(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Pong(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
-
 
 #[test]
 fn parse_subscribe_message() {
     let vec = ::hex::decode(SUBSCRIBE_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Subscribe(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Subscribe(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_get_chain_proof_message() {
     let vec = ::hex::decode(GET_CHAIN_PROOF_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::GetChainProof => assert!(true), _ => assert!(false) };
+    match message {
+        Message::GetChainProof => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_chain_proof_message() {
     let vec = ::hex::decode(CHAIN_PROOF_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::ChainProof(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::ChainProof(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
@@ -188,8 +237,8 @@ fn parse_get_accounts_proof_message() {
     match message {
         Message::GetAccountsProof(get_accounts_proof_message) => {
             assert_eq!(get_accounts_proof_message.addresses.len(), 2);
-        },
-        _ => assert!(false)
+        }
+        _ => assert!(false),
     };
 }
 
@@ -201,8 +250,8 @@ fn parse_accounts_proof_message_wproof() {
         Message::AccountsProof(accounts_proof_message) => {
             assert!(accounts_proof_message.proof.is_some());
             assert!(accounts_proof_message.proof.unwrap().verify());
-        },
-        _ => assert!(false)
+        }
+        _ => assert!(false),
     };
 }
 
@@ -213,8 +262,8 @@ fn parse_accounts_proof_message_woproof() {
     match message {
         Message::AccountsProof(accounts_proof_message) => {
             assert!(accounts_proof_message.proof.is_none());
-        },
-        _ => assert!(false)
+        }
+        _ => assert!(false),
     };
 }
 
@@ -225,8 +274,8 @@ fn parse_accounts_tree_chunk_message_woproof() {
     match message {
         Message::GetAccountsTreeChunk(get_accounts_tree_chunk_message) => {
             assert!(get_accounts_tree_chunk_message.start_prefix == "aa");
-        },
-        _ => assert!(false)
+        }
+        _ => assert!(false),
     };
 }
 
@@ -237,8 +286,8 @@ fn parse_accounts_tree_chunk_message_wchunk() {
     match message {
         Message::AccountsTreeChunk(accounts_tree_chunk_message) => {
             assert!(accounts_tree_chunk_message.chunk.is_some());
-        },
-        _ => assert!(false)
+        }
+        _ => assert!(false),
     };
 }
 
@@ -249,8 +298,8 @@ fn parse_accounts_tree_chunk_message_wochunk() {
     match message {
         Message::AccountsTreeChunk(accounts_tree_chunk_message) => {
             assert!(accounts_tree_chunk_message.chunk.is_none());
-        },
-        _ => assert!(false)
+        }
+        _ => assert!(false),
     };
 }
 
@@ -261,8 +310,8 @@ fn parse_get_transactions_proof_message() {
     match message {
         Message::GetTransactionsProof(get_transactions_proof_message) => {
             assert_eq!(get_transactions_proof_message.addresses.len(), 2);
-        },
-        _ => assert!(false)
+        }
+        _ => assert!(false),
     };
 }
 
@@ -272,7 +321,7 @@ fn parse_transactions_proof_message() {
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
     match message {
         Message::TransactionsProof(_) => assert!(true),
-        _ => assert!(false)
+        _ => assert!(false),
     };
 }
 
@@ -280,21 +329,30 @@ fn parse_transactions_proof_message() {
 fn parse_get_transaction_receipts_message() {
     let vec = ::hex::decode(GET_TRANSACTION_RECEIPTS_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::GetTransactionReceipts(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::GetTransactionReceipts(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_get_block_proof() {
     let vec = ::hex::decode(GET_BLOCK_PROOF_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::GetBlockProof(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::GetBlockProof(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]
 fn parse_signal() {
     let vec = ::hex::decode(SIGNAL_MESSAGE).unwrap();
     let message: Message = Deserialize::deserialize(&mut &vec[..]).unwrap();
-    match message { Message::Signal(_) => assert!(true), _ => assert!(false) };
+    match message {
+        Message::Signal(_) => assert!(true),
+        _ => assert!(false),
+    };
 }
 
 #[test]

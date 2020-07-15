@@ -1221,7 +1221,7 @@ fn it_can_revert_unpark_transactions() {
         parked_in_current.revert_incoming_transaction(
             &unpark,
             2,
-            incoming_receipt.unwrap().as_ref()
+            incoming_receipt.unwrap().as_ref(),
         ),
         Ok(())
     );
@@ -1258,7 +1258,7 @@ fn it_can_revert_unpark_transactions() {
         parked_in_previous.revert_incoming_transaction(
             &unpark,
             2,
-            incoming_receipt.unwrap().as_ref()
+            incoming_receipt.unwrap().as_ref(),
         ),
         Ok(())
     );
@@ -1428,9 +1428,9 @@ fn it_can_build_a_validator_set() {
             &hex::decode(
                 "ad544a120adee180dd638876bd423b984e3ba6bad8af0006beb72da1db1f617c371195340c896ffca6e2a6ef7205df012f7586107b58c454fffdecba1d2186804b965213f8c1a671868db31820f698aa5893102b2970da04b6be8b4d2ab50100",
             )
-            .unwrap(),
+                .unwrap(),
         )
-        .unwrap(),
+            .unwrap(),
     );
     let validator2 = bls_key2.public_key.compress();
     let bls_key3 = BlsKeyPair::from(
@@ -1438,9 +1438,9 @@ fn it_can_build_a_validator_set() {
             &hex::decode(
                 "f61bd4751bf4a480b6ccf66cf0ac8d707cb5afaad5d26eca496bbc9762b9dc8cc2efaab2d0abf94edf2d8d3211113dd4ab487fb042697a8e515c62f76a2119f7af3bb247d01cea7f699d60d09fe50eb4eda6b33313e88c3929c397c3dcaa0000",
             )
-            .unwrap(),
+                .unwrap(),
         )
-        .unwrap(),
+            .unwrap(),
     );
     let validator3 = bls_key3.public_key.compress();
     let staker1 = Address::from_any_str("3b4fe0cd29f89011282e7d9d2f4917fadfe90586").unwrap();
@@ -1451,7 +1451,7 @@ fn it_can_build_a_validator_set() {
     let seed_vec = hex::decode(
         "01737df5f635123d5c8d74d3ed56a0f3ddbda0418b6b3369bd0904d03b549d03ab4f71008ebbd0ff721203766a63352246ad22c1586a973b690ade6330704175d4188bdf7862182d421ca90b5dd8822cb7b98444ae2d7537533c32f2191a8700",
     )
-    .unwrap();
+        .unwrap();
     let seed = BlsSignature::deserialize_from_vec(&seed_vec).unwrap();
 
     // Fill contract with one validator without stakes

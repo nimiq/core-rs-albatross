@@ -6,7 +6,6 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
 
-
 #[proc_macro_derive(SerializeContent, attributes(beserial))]
 pub fn derive_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -29,4 +28,3 @@ fn impl_serialize_content(ast: &syn::DeriveInput) -> TokenStream {
     };
     gen
 }
-

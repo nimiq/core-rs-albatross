@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Number of peers contacted during an update at each level
@@ -14,9 +13,7 @@ pub struct Config {
 
     /// How many peers are contacted at each level
     pub peer_count: usize,
-
 }
-
 
 impl Default for Config {
     fn default() -> Self {

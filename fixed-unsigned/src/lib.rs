@@ -15,13 +15,11 @@ use std::str::FromStr;
 /// Not all traits you would expect for a number are implemented. Some things are implemented
 /// just to work with Nimiq.
 ///
-
 use num_bigint::BigUint;
 use num_traits::identities::{One, Zero};
 use num_traits::ToPrimitive;
 
 pub mod types;
-
 
 /// Maximum number of digits a decimal number can have in a `u64`
 const U64_MAX_DIGITS: u64 = 19u64;
@@ -44,7 +42,8 @@ pub trait RoundingMode {
 
 /// Round half up - i.e. 0.4 -> 0 and 0.5 -> 1
 pub struct RoundHalfUp {}
-impl RoundingMode for RoundHalfUp{
+
+impl RoundingMode for RoundHalfUp {
     #[inline]
     fn round(int_value: BigUint, carrier: u8) -> BigUint {
         int_value + if carrier >= 5u8 { 1u64 } else { 0u64 }
@@ -53,14 +52,13 @@ impl RoundingMode for RoundHalfUp{
 
 /// Round down - i.e. truncate
 pub struct RoundDown {}
+
 impl RoundingMode for RoundDown {
     #[inline]
     fn round(int_value: BigUint, _: u8) -> BigUint {
         int_value
     }
 }
-
-
 
 /// Error returned when a string representation can't be parse into a FixedUnsigned.
 /// TODO: Attach string to it for error message
@@ -87,17 +85,22 @@ impl Error for ParseError {
 /// provides the constant `FixedScale::SCALE`.
 #[derive(Clone)]
 pub struct FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     int_value: BigUint,
-    scale: PhantomData<S>
+    scale: PhantomData<S>,
 }
 
 impl<S> FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn new(int_value: BigUint) -> Self {
-        Self { int_value, scale: PhantomData }
+        Self {
+            int_value,
+            scale: PhantomData,
+        }
     }
 
     /// Scales up a `BigUint` by `scale`
@@ -186,7 +189,7 @@ impl<S> FixedUnsigned<S>
         for (i, d) in digits.iter().enumerate() {
             match decimal_place {
                 Some(dp) if dp == i => string.push('.'),
-                _ => ()
+                _ => (),
             }
             // This unwrap is safe, because we to_radix_be only gives us digits in the right radix
             let c = from_digit(u32::from(*d), u32::from(radix)).unwrap();
@@ -211,11 +214,10 @@ impl<S> FixedUnsigned<S>
         for (i, c) in string.chars().enumerate() {
             if c == '.' {
                 if decimal_place.is_some() {
-                    return Err(ParseError(String::from(string)))
+                    return Err(ParseError(String::from(string)));
                 }
                 decimal_place = Some(i)
-            }
-            else {
+            } else {
                 digits.push(c.to_digit(u32::from(radix)).unwrap() as u8)
             }
         }
@@ -231,11 +233,9 @@ impl<S> FixedUnsigned<S>
         // scale the unscaled `int_value` to the correct scale
         let int_value = if scale < S::SCALE {
             Self::scale_up(int_value, S::SCALE - scale)
-        }
-        else if scale > S::SCALE {
+        } else if scale > S::SCALE {
             Self::scale_down::<RoundDown>(int_value, scale - S::SCALE)
-        }
-        else {
+        } else {
             int_value
         };
         Ok(Self::new(int_value))
@@ -264,7 +264,7 @@ impl<S> FixedUnsigned<S>
 
     pub fn bytes(&self) -> usize {
         let bits = self.bits();
-        bits / 8 + if bits % 8 == 0 {0} else {1}
+        bits / 8 + if bits % 8 == 0 { 0 } else { 1 }
     }
 
     /// Adds two `BigUint`s interpreted as `FixedUnsigned<S>` and returns the result.
@@ -295,16 +295,16 @@ impl<S> FixedUnsigned<S>
     /// Convert from scale `S` to scale `T`.
     pub fn into_scale<T: FixedScale, R: RoundingMode>(self) -> FixedUnsigned<T> {
         FixedUnsigned::<T>::new(if S::SCALE < T::SCALE {
-            Self::scale_up(self.int_value,T::SCALE - S::SCALE)
-        }
-        else {
+            Self::scale_up(self.int_value, T::SCALE - S::SCALE)
+        } else {
             Self::scale_down::<R>(self.int_value, S::SCALE - T::SCALE)
         })
     }
 }
 
 impl<S> Add for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Output = Self;
 
@@ -314,7 +314,8 @@ impl<S> Add for FixedUnsigned<S>
 }
 
 impl<'a, 'b, S> Add<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Output = FixedUnsigned<S>;
 
@@ -324,7 +325,8 @@ impl<'a, 'b, S> Add<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
 }
 
 impl<S> AddAssign for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn add_assign(&mut self, rhs: Self) {
         self.int_value = FixedUnsigned::<S>::add(&(self.int_value), &(rhs.int_value))
@@ -332,7 +334,8 @@ impl<S> AddAssign for FixedUnsigned<S>
 }
 
 impl<S> Sub for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Output = Self;
 
@@ -342,17 +345,19 @@ impl<S> Sub for FixedUnsigned<S>
 }
 
 impl<'a, 'b, S> Sub<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Output = FixedUnsigned<S>;
 
-    fn sub(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
+    fn sub(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S> {
         FixedUnsigned::new(FixedUnsigned::<S>::sub(&(self.int_value), &(rhs.int_value)))
     }
 }
 
 impl<S> SubAssign for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn sub_assign(&mut self, rhs: Self) {
         self.int_value = FixedUnsigned::<S>::sub(&(self.int_value), &(rhs.int_value))
@@ -360,7 +365,8 @@ impl<S> SubAssign for FixedUnsigned<S>
 }
 
 impl<S> Mul for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Output = Self;
 
@@ -370,17 +376,19 @@ impl<S> Mul for FixedUnsigned<S>
 }
 
 impl<'a, 'b, S> Mul<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Output = FixedUnsigned<S>;
 
-    fn mul(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
+    fn mul(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S> {
         FixedUnsigned::new(FixedUnsigned::<S>::mul(&(self.int_value), &(rhs.int_value)))
     }
 }
 
 impl<S> MulAssign for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn mul_assign(&mut self, rhs: Self) {
         self.int_value = FixedUnsigned::<S>::mul(&(self.int_value), &(rhs.int_value))
@@ -388,7 +396,8 @@ impl<S> MulAssign for FixedUnsigned<S>
 }
 
 impl<S> Div for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Output = Self;
 
@@ -398,17 +407,19 @@ impl<S> Div for FixedUnsigned<S>
 }
 
 impl<'a, 'b, S> Div<&'b FixedUnsigned<S>> for &'a FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Output = FixedUnsigned<S>;
 
-    fn div(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S>  {
+    fn div(self, rhs: &'b FixedUnsigned<S>) -> FixedUnsigned<S> {
         FixedUnsigned::new(FixedUnsigned::<S>::div(&(self.int_value), &(rhs.int_value)))
     }
 }
 
 impl<S> DivAssign for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn div_assign(&mut self, rhs: Self) {
         self.int_value = FixedUnsigned::<S>::div(&(self.int_value), &(rhs.int_value))
@@ -416,7 +427,8 @@ impl<S> DivAssign for FixedUnsigned<S>
 }
 
 impl<S> PartialEq for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn eq(&self, other: &Self) -> bool {
         self.int_value.eq(&other.int_value)
@@ -424,21 +436,19 @@ impl<S> PartialEq for FixedUnsigned<S>
 }
 
 impl<S> Hash for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.int_value.hash(state)
     }
 }
 
-impl<S> Eq for FixedUnsigned<S>
-    where S: FixedScale
-{
-
-}
+impl<S> Eq for FixedUnsigned<S> where S: FixedScale {}
 
 impl<S> PartialOrd for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.int_value.partial_cmp(&other.int_value)
@@ -446,7 +456,8 @@ impl<S> PartialOrd for FixedUnsigned<S>
 }
 
 impl<S> Ord for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.int_value.cmp(&other.int_value)
@@ -466,7 +477,8 @@ impl<S> ToString for FixedUnsigned<S>
 */
 
 impl<S> FromStr for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     type Err = ParseError;
 
@@ -476,15 +488,22 @@ impl<S> FromStr for FixedUnsigned<S>
 }
 
 impl<S> fmt::Debug for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FixedUnsigned({}, scale={})", self.to_radix_string(10, false), S::SCALE)
+        write!(
+            f,
+            "FixedUnsigned({}, scale={})",
+            self.to_radix_string(10, false),
+            S::SCALE
+        )
     }
 }
 
 impl<S> fmt::Display for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_radix_string(10, false))
@@ -492,7 +511,8 @@ impl<S> fmt::Display for FixedUnsigned<S>
 }
 
 impl<S> From<BigUint> for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn from(int_value: BigUint) -> Self {
         Self::from_biguint(int_value)
@@ -536,7 +556,8 @@ impl<S: FixedScale> From<u8> for FixedUnsigned<S> {
 }
 
 impl<S> Zero for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn zero() -> Self {
         Self::new(BigUint::zero())
@@ -548,7 +569,8 @@ impl<S> Zero for FixedUnsigned<S>
 }
 
 impl<S> One for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn one() -> Self {
         Self::from(1u64)
@@ -556,7 +578,8 @@ impl<S> One for FixedUnsigned<S>
 }
 
 impl<S> Default for FixedUnsigned<S>
-    where S: FixedScale
+where
+    S: FixedScale,
 {
     fn default() -> Self {
         Self::zero()

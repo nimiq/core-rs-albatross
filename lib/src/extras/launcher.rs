@@ -1,3 +1,7 @@
+#[cfg(feature = "panic")]
+extern crate log_panics;
+
+use url::Url;
 
 /// # ToDo
 ///
@@ -10,20 +14,14 @@
 /// * parse command line?
 /// * start tokio runtime and pass in the config struct
 ///
-
 #[cfg(feature = "deadlock")]
 use crate::extras::deadlock::initialize_deadlock_detection;
 #[cfg(feature = "logging")]
 use crate::extras::logging::initialize_logging;
-use url::Url;
-#[cfg(feature = "panic")]
-extern crate log_panics;
-
 
 pub fn go() -> Launcher {
     Launcher::default()
 }
-
 
 // TODO: Move into panic
 #[derive(Debug, Default)]

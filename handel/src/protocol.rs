@@ -2,14 +2,13 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use crate::identity::IdentityRegistry;
-use crate::verifier::Verifier;
-use crate::store::SignatureStore;
 use crate::evaluator::Evaluator;
-use crate::partitioner::Partitioner;
+use crate::identity::IdentityRegistry;
 use crate::multisig::Signature;
+use crate::partitioner::Partitioner;
 use crate::sender::Sender;
-
+use crate::store::SignatureStore;
+use crate::verifier::Verifier;
 
 pub trait Protocol: Send + Sync + 'static {
     // TODO: Some of those traits can be directly move into `Protocol`. Others should not be part of

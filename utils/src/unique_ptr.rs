@@ -1,5 +1,5 @@
-use std::ops::Deref;
 use std::cmp::Ordering;
+use std::ops::Deref;
 
 #[derive(Debug)]
 pub struct UniquePtr<T>(*const T);

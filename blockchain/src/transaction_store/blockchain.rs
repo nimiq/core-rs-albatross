@@ -1,7 +1,7 @@
+use database::ReadTransaction;
 use hash::Blake2bHash;
 use keys::Address;
 use transaction::TransactionReceipt;
-use database::ReadTransaction;
 
 use crate::blockchain::Blockchain;
 use crate::transaction_store::TransactionInfo;
@@ -17,17 +17,31 @@ impl From<TransactionInfo> for TransactionReceipt {
 }
 
 impl Blockchain {
-    pub fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt> {
+    pub fn get_transaction_receipts_by_address(
+        &self,
+        address: &Address,
+        sender_limit: usize,
+        recipient_limit: usize,
+    ) -> Vec<TransactionReceipt> {
         let mut receipts;
 
         let txn = ReadTransaction::new(&self.env);
-        receipts = self.transaction_store.get_by_sender(address, sender_limit, Some(&txn));
-        receipts.extend(self.transaction_store.get_by_recipient(address, recipient_limit, Some(&txn)));
+        receipts = self
+            .transaction_store
+            .get_by_sender(address, sender_limit, Some(&txn));
+        receipts.extend(self.transaction_store.get_by_recipient(
+            address,
+            recipient_limit,
+            Some(&txn),
+        ));
 
         receipts.drain(..).map(TransactionReceipt::from).collect()
     }
 
-    pub fn get_transaction_info_by_hash(&self, transaction_hash: &Blake2bHash) -> Option<TransactionInfo> {
+    pub fn get_transaction_info_by_hash(
+        &self,
+        transaction_hash: &Blake2bHash,
+    ) -> Option<TransactionInfo> {
         self.transaction_store.get_by_hash(transaction_hash, None)
     }
 }

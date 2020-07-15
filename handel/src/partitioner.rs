@@ -4,7 +4,6 @@ use utils::math::log2;
 
 use crate::multisig::MultiSignature;
 
-
 /// Errors that can happen during partitioning
 #[derive(Clone, Debug, Fail, PartialEq)]
 pub enum PartitioningError {
@@ -13,7 +12,6 @@ pub enum PartitioningError {
     #[fail(display = "Empty level: {}", level)]
     EmptyLevel { level: usize },
 }
-
 
 pub trait Partitioner {
     /// Number of levels
@@ -33,7 +31,6 @@ pub trait Partitioner {
     fn combine(&self, signatures: Vec<&MultiSignature>, level: usize) -> Option<MultiSignature>;
 }
 
-
 /// The next level is always double the size of the current level
 #[derive(Clone, Debug)]
 pub struct BinomialPartitioner {
@@ -44,7 +41,7 @@ pub struct BinomialPartitioner {
     num_ids: usize,
 
     /// The number of levels
-    num_levels: usize
+    num_levels: usize,
 }
 
 impl BinomialPartitioner {
@@ -78,12 +75,10 @@ impl Partitioner for BinomialPartitioner {
 
     fn range(&self, level: usize) -> Result<RangeInclusive<usize>, PartitioningError> {
         if level == 0 {
-            Ok(self.node_id ..= self.node_id)
-        }
-        else if level >= self.num_levels {
+            Ok(self.node_id..=self.node_id)
+        } else if level >= self.num_levels {
             Err(PartitioningError::InvalidLevel { level })
-        }
-        else {
+        } else {
             // mask for bits which cover the range
             let m = (1 << (level - 1)) - 1;
             // bit that must be flipped
@@ -94,9 +89,8 @@ impl Partitioner for BinomialPartitioner {
 
             if min > max {
                 Err(PartitioningError::EmptyLevel { level })
-            }
-            else {
-                Ok(min ..= max)
+            } else {
+                Ok(min..=max)
             }
         }
     }
@@ -107,17 +101,15 @@ impl Partitioner for BinomialPartitioner {
         let mut combined = (*signatures.first()?).clone();
 
         for signature in signatures.iter().skip(1) {
-            combined.add_multisig(signature)
+            combined
+                .add_multisig(signature)
                 .unwrap_or_else(|e| panic!("Failed to combine signatures: {}", e));
         }
 
         //debug!("Combined signature: {:?}", combined);
         Some(combined)
     }
-
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -149,7 +141,10 @@ mod tests {
         assert_eq!(partitioner.range(1), Ok(2..=2), "Level 1");
         assert_eq!(partitioner.range(2), Ok(0..=1), "Level 2");
         assert_eq!(partitioner.range(3), Ok(4..=7), "Level 3");
-        assert_eq!(partitioner.range(4), Err(PartitioningError::InvalidLevel { level: 4 }));
+        assert_eq!(
+            partitioner.range(4),
+            Err(PartitioningError::InvalidLevel { level: 4 })
+        );
     }
 
     #[test]

@@ -1,8 +1,8 @@
+use nimiq_block::{Block, Difficulty};
 use nimiq_blockchain::{chain_info::ChainInfo, chain_store::ChainStore};
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_network_primitives::networks::{NetworkInfo, NetworkId};
-use nimiq_block::{Difficulty, Block};
+use nimiq_network_primitives::networks::{NetworkId, NetworkInfo};
 
 #[test]
 fn it_can_store_the_chain_head() {
@@ -22,7 +22,9 @@ fn it_can_store_the_chain_head() {
 fn it_can_store_chain_info_with_body() {
     let env = VolatileEnvironment::new(3).unwrap();
     let store = ChainStore::new(env.clone());
-    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let genesis_hash = genesis_block.header.hash();
     let chain_info = ChainInfo::initial(genesis_block);
     assert!(chain_info.head.body.is_some());
@@ -33,17 +35,31 @@ fn it_can_store_chain_info_with_body() {
 
     let mut chain_info_no_body = chain_info.clone();
     chain_info_no_body.head.body = None;
-    assert_eq!(store.get_chain_info(&genesis_hash, true, None).unwrap(), chain_info);
-    assert_eq!(store.get_chain_info(&genesis_hash, false, None).unwrap(), chain_info_no_body);
-    assert_eq!(store.get_block(&genesis_hash, true, None).unwrap(), chain_info.head);
-    assert_eq!(store.get_block(&genesis_hash, false, None).unwrap(), chain_info_no_body.head);
+    assert_eq!(
+        store.get_chain_info(&genesis_hash, true, None).unwrap(),
+        chain_info
+    );
+    assert_eq!(
+        store.get_chain_info(&genesis_hash, false, None).unwrap(),
+        chain_info_no_body
+    );
+    assert_eq!(
+        store.get_block(&genesis_hash, true, None).unwrap(),
+        chain_info.head
+    );
+    assert_eq!(
+        store.get_block(&genesis_hash, false, None).unwrap(),
+        chain_info_no_body.head
+    );
 }
 
 #[test]
 fn it_can_store_chain_info_without_body() {
     let env = VolatileEnvironment::new(3).unwrap();
     let store = ChainStore::new(env.clone());
-    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let genesis_block = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let genesis_hash = genesis_block.header.hash();
     let chain_info = ChainInfo::initial(genesis_block);
 
@@ -53,9 +69,18 @@ fn it_can_store_chain_info_without_body() {
 
     let mut chain_info_no_body = chain_info.clone();
     chain_info_no_body.head.body = None;
-    assert_eq!(store.get_chain_info(&genesis_hash, false, None).unwrap(), chain_info_no_body);
-    assert_eq!(store.get_chain_info(&genesis_hash, true, None).unwrap(), chain_info_no_body);
-    assert_eq!(store.get_block(&genesis_hash, false, None).unwrap(), chain_info_no_body.head);
+    assert_eq!(
+        store.get_chain_info(&genesis_hash, false, None).unwrap(),
+        chain_info_no_body
+    );
+    assert_eq!(
+        store.get_chain_info(&genesis_hash, true, None).unwrap(),
+        chain_info_no_body
+    );
+    assert_eq!(
+        store.get_block(&genesis_hash, false, None).unwrap(),
+        chain_info_no_body.head
+    );
     assert_eq!(store.get_block(&genesis_hash, true, None), None);
 }
 
@@ -64,7 +89,9 @@ fn it_can_retrieve_chain_info_by_height() {
     let env = VolatileEnvironment::new(3).unwrap();
     let store = ChainStore::new(env.clone());
 
-    let block1 = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let block1 = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let hash1 = block1.header.hash::<Blake2bHash>();
     let info1 = ChainInfo::initial(block1.clone());
 
@@ -99,13 +126,22 @@ fn it_can_retrieve_chain_info_by_height() {
     info2_no_body.head.body = None;
 
     assert_eq!(store.get_chain_info_at(1, true, None).unwrap(), info1);
-    assert_eq!(store.get_chain_info_at(5, false, None).unwrap(), info2_no_body);
-    assert_eq!(store.get_chain_info_at(5, true, None).unwrap(), info2_no_body);
+    assert_eq!(
+        store.get_chain_info_at(5, false, None).unwrap(),
+        info2_no_body
+    );
+    assert_eq!(
+        store.get_chain_info_at(5, true, None).unwrap(),
+        info2_no_body
+    );
     assert_eq!(store.get_chain_info_at(28883, true, None).unwrap(), info3_2);
 
     let mut info3_2_no_body = info3_2.clone();
     info3_2_no_body.head.body = None;
-    assert_eq!(store.get_chain_info_at(28883, false, None).unwrap(), info3_2_no_body);
+    assert_eq!(
+        store.get_chain_info_at(28883, false, None).unwrap(),
+        info3_2_no_body
+    );
 }
 
 #[test]
@@ -114,8 +150,15 @@ fn it_can_get_blocks_backward() {
     let store = ChainStore::new(env.clone());
 
     let mut txn = WriteTransaction::new(&env);
-    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
-    store.put_chain_info(&mut txn, &block.header.hash::<Blake2bHash>(), &ChainInfo::initial(block.clone()), true);
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
+    store.put_chain_info(
+        &mut txn,
+        &block.header.hash::<Blake2bHash>(),
+        &ChainInfo::initial(block.clone()),
+        true,
+    );
 
     for _ in 0..20 {
         let mut b = block.clone();
@@ -202,7 +245,12 @@ fn it_can_get_blocks_forward() {
     }
     txn.commit();
 
-    let second_block_hash = chain_infos.first().unwrap().main_chain_successor.as_ref().unwrap();
+    let second_block_hash = chain_infos
+        .first()
+        .unwrap()
+        .main_chain_successor
+        .as_ref()
+        .unwrap();
 
     let mut blocks = store.get_blocks_forward(second_block_hash, 10, true, None);
     assert_eq!(blocks.len(), 10);
@@ -256,7 +304,9 @@ fn it_can_remove_chain_info() {
     let env = VolatileEnvironment::new(3).unwrap();
     let store = ChainStore::new(env.clone());
 
-    let block1 = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let block1 = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let hash1 = block1.header.hash::<Blake2bHash>();
     let info1 = ChainInfo::initial(block1.clone());
 

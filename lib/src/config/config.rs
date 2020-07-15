@@ -850,7 +850,7 @@ impl ClientConfigBuilder {
                     _ => {
                         return Err(Error::config_error(
                             "Either both username and password have to be set or none.",
-                        ))
+                        ));
                     }
                 };
 
@@ -880,7 +880,7 @@ impl ClientConfigBuilder {
                     _ => {
                         return Err(Error::config_error(
                             "Either both username and password have to be set or none.",
-                        ))
+                        ));
                     }
                 };
 

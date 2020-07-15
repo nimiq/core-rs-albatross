@@ -25,7 +25,9 @@ impl ServiceFlags {
         self.contains(ServiceFlags::NANO)
     }
 
-    pub fn is_validator(self) -> bool { self.contains(ServiceFlags::VALIDATOR) }
+    pub fn is_validator(self) -> bool {
+        self.contains(ServiceFlags::VALIDATOR)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,10 +38,7 @@ pub struct Services {
 
 impl Services {
     pub fn new(provided: ServiceFlags, accepted: ServiceFlags) -> Self {
-        Services {
-            provided,
-            accepted
-        }
+        Services { provided, accepted }
     }
 
     pub fn full() -> Self {

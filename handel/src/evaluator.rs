@@ -2,18 +2,15 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use crate::multisig::Signature;
 use crate::identity::WeightRegistry;
-use crate::store::SignatureStore;
+use crate::multisig::Signature;
 use crate::partitioner::Partitioner;
-
-
+use crate::store::SignatureStore;
 
 pub trait Evaluator {
     fn evaluate(&self, signature: &Signature, level: usize) -> usize;
     fn is_final(&self, signature: &Signature) -> bool;
 }
-
 
 /// Every signature counts as a single vote
 pub struct SingleVote<S: SignatureStore, P: Partitioner> {
@@ -45,12 +42,10 @@ impl<S: SignatureStore, P: Partitioner> Evaluator for SingleVote<S, P> {
     fn is_final(&self, signature: &Signature) -> bool {
         match signature {
             Signature::Individual(_) => self.threshold <= 1,
-            Signature::Multi(multisig) => multisig.len() >= self.threshold
+            Signature::Multi(multisig) => multisig.len() >= self.threshold,
         }
     }
 }
-
-
 
 /// A signature counts as it was signed N times, where N is the signers weight
 ///
@@ -59,11 +54,16 @@ pub struct WeightedVote<S: SignatureStore, I: WeightRegistry, P: Partitioner> {
     store: Arc<RwLock<S>>,
     pub weights: Arc<I>,
     partitioner: Arc<P>,
-    pub threshold: usize
+    pub threshold: usize,
 }
 
 impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> WeightedVote<S, I, P> {
-    pub fn new(store: Arc<RwLock<S>>, weights: Arc<I>, partitioner: Arc<P>, threshold: usize) -> Self {
+    pub fn new(
+        store: Arc<RwLock<S>>,
+        weights: Arc<I>,
+        partitioner: Arc<P>,
+        threshold: usize,
+    ) -> Self {
         Self {
             store,
             weights,
@@ -83,10 +83,17 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
 
         // check if we already know this individual signature
         if let Signature::Individual(individual) = signature {
-            if store.individual_signature(level, individual.signer).is_some() {
+            if store
+                .individual_signature(level, individual.signer)
+                .is_some()
+            {
                 // If we already know it for this level, score it as 0
-                trace!("Individual signature from peer {} for level {} already known", level, individual.signer);
-                return 0
+                trace!(
+                    "Individual signature from peer {} for level {} already known",
+                    level,
+                    individual.signer
+                );
+                return 0;
             }
         }
 
@@ -106,7 +113,9 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
 
             // check if the best signature is better than the new one
             let best_is_better = match signature {
-                Signature::Individual(individual) => best_signature.signers.contains(individual.signer),
+                Signature::Individual(individual) => {
+                    best_signature.signers.contains(individual.signer)
+                }
                 Signature::Multi(multisig) => best_signature.signers.is_superset(&multisig.signers),
             };
             if best_is_better {
@@ -125,8 +134,8 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
                 let mut individuals = store.individual_verified(level).clone();
                 individuals.insert(individual.signer);
                 individuals
-            },
-            Signature::Multi(multisig) => multisig.signers.clone()
+            }
+            Signature::Multi(multisig) => multisig.signers.clone(),
         };
 
         // compute bitset of signers combined with all (verified) individual signatures that we have
@@ -138,22 +147,29 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
             if signers.intersection_size(&best_signature.signers) > 0 {
                 // can't merge
                 let new_total = with_individuals.len();
-                (new_total, new_total.saturating_sub(best_signature.len()), new_total - signers.len())
-            }
-            else {
+                (
+                    new_total,
+                    new_total.saturating_sub(best_signature.len()),
+                    new_total - signers.len(),
+                )
+            } else {
                 let final_sig = &with_individuals | &best_signature.signers;
                 let new_total = final_sig.len();
                 let combined_sigs = (final_sig ^ (&best_signature.signers | &signers)).len();
                 (new_total, new_total - best_signature.len(), combined_sigs)
             }
-        }
-        else {
+        } else {
             // best is the new signature with the individual signatures
             let new_total = with_individuals.len();
             (new_total, new_total, new_total - signers.len())
         };
 
-        trace!("new_total={}, added_sigs={}, combined_sigs={}", new_total, added_sigs, combined_sigs);
+        trace!(
+            "new_total={}, added_sigs={}, combined_sigs={}",
+            new_total,
+            added_sigs,
+            combined_sigs
+        );
 
         // compute score
         // TODO: Remove magic numbers! What do they mean? I don't think this is discussed in the paper.
@@ -163,20 +179,24 @@ impl<S: SignatureStore, I: WeightRegistry, P: Partitioner> Evaluator for Weighte
                 Signature::Individual(_) => 1,
                 Signature::Multi(_) => 0,
             }
-        }
-        else if new_total == to_receive {
+        } else if new_total == to_receive {
             1_000_000 - level * 10 - combined_sigs
-        }
-        else {
+        } else {
             100_000 - level * 100 + added_sigs * 10 - combined_sigs
         }
     }
 
     fn is_final(&self, signature: &Signature) -> bool {
-        let votes = self.weights.signature_weight(signature)
+        let votes = self
+            .weights
+            .signature_weight(signature)
             .unwrap_or_else(|| panic!("Missing weights for signature: {:?}", signature));
 
-        trace!("is_final(): votes={}, final={}", votes, votes >= self.threshold);
+        trace!(
+            "is_final(): votes={}, final={}",
+            votes,
+            votes >= self.threshold
+        );
         votes >= self.threshold
     }
 }

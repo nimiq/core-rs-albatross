@@ -1,5 +1,5 @@
-use std::iter::Peekable;
 use std::cmp::Ordering;
+use std::iter::Peekable;
 
 /// An iterator that alternates between two iterators.
 ///
@@ -47,9 +47,10 @@ enum ChainState {
     OnlyB,
 }
 
-impl<A, B> Iterator for Alternate<A, B> where
+impl<A, B> Iterator for Alternate<A, B>
+where
     A: Iterator,
-    B: Iterator<Item = A::Item>
+    B: Iterator<Item = A::Item>,
 {
     type Item = A::Item;
 
@@ -60,7 +61,7 @@ impl<A, B> Iterator for Alternate<A, B> where
                 elt @ Some(..) => {
                     self.state = ChainState::BothB;
                     elt
-                },
+                }
                 None => {
                     self.state = ChainState::OnlyB;
                     self.b.next()
@@ -70,7 +71,7 @@ impl<A, B> Iterator for Alternate<A, B> where
                 elt @ Some(..) => {
                     self.state = ChainState::BothA;
                     elt
-                },
+                }
                 None => {
                     self.state = ChainState::OnlyA;
                     self.a.next()
@@ -90,7 +91,7 @@ impl<A, B> Iterator for Alternate<A, B> where
 
         let upper = match (a_upper, b_upper) {
             (Some(x), Some(y)) => x.checked_add(y),
-            _ => None
+            _ => None,
         };
 
         (lower, upper)
@@ -107,7 +108,8 @@ impl<A, B> Iterator for Alternate<A, B> where
 }
 
 /// An iterator that merges two iterators, removing duplicates.
-pub struct Merge<L, R, C> where
+pub struct Merge<L, R, C>
+where
     L: Iterator,
     R: Iterator<Item = L::Item>,
     C: Fn(&L::Item, &R::Item) -> Ordering,
@@ -117,7 +119,8 @@ pub struct Merge<L, R, C> where
     cmp: C,
 }
 
-impl<L, R, C> Merge<L, R, C> where
+impl<L, R, C> Merge<L, R, C>
+where
     L: Iterator,
     R: Iterator<Item = L::Item>,
     C: Fn(&L::Item, &R::Item) -> Ordering,
@@ -131,7 +134,8 @@ impl<L, R, C> Merge<L, R, C> where
     }
 }
 
-impl<L, R, C> Iterator for Merge<L, R, C> where
+impl<L, R, C> Iterator for Merge<L, R, C>
+where
     L: Iterator,
     R: Iterator<Item = L::Item>,
     C: Fn(&L::Item, &R::Item) -> Ordering,
@@ -140,17 +144,20 @@ impl<L, R, C> Iterator for Merge<L, R, C> where
 
     fn next(&mut self) -> Option<Self::Item> {
         let ordering = match (self.left.peek(), self.right.peek()) {
-            (Some(l), Some(r))  => Some((self.cmp)(l, r)),
-            (Some(_), None)     => Some(Ordering::Less),
-            (None, Some(_))     => Some(Ordering::Greater),
-            (None, None)        => None,
+            (Some(l), Some(r)) => Some((self.cmp)(l, r)),
+            (Some(_), None) => Some(Ordering::Less),
+            (None, Some(_)) => Some(Ordering::Greater),
+            (None, None) => None,
         };
 
         match ordering {
-            Some(Ordering::Less)    => self.left.next(),
+            Some(Ordering::Less) => self.left.next(),
             Some(Ordering::Greater) => self.right.next(),
-            Some(Ordering::Equal)   => { self.left.next(); self.right.next() },
-            None                    => None,
+            Some(Ordering::Equal) => {
+                self.left.next();
+                self.right.next()
+            }
+            None => None,
         }
     }
 }

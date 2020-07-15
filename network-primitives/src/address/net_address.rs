@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::net::AddrParseError;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
 use failure::Fail;
@@ -22,7 +22,7 @@ impl NetAddress {
             NetAddress::IPv4(_) => NetAddressType::IPv4,
             NetAddress::IPv6(_) => NetAddressType::IPv6,
             NetAddress::Unspecified => NetAddressType::Unspecified,
-            NetAddress::Unknown => NetAddressType::Unknown
+            NetAddress::Unknown => NetAddressType::Unknown,
         }
     }
 
@@ -33,15 +33,15 @@ impl NetAddress {
                 let mut masked_ip = [0u8; 4];
                 masked_ip.copy_from_slice(&masked[..]);
                 NetAddress::IPv4(masked_ip.into())
-            },
+            }
             NetAddress::IPv6(ref ip) => {
                 let masked = ip_to_subnet(&ip.octets(), bit_count);
                 let mut masked_ip = [0u8; 16];
                 masked_ip.copy_from_slice(&masked[..]);
                 NetAddress::IPv6(masked_ip.into())
-            },
+            }
             NetAddress::Unspecified => NetAddress::Unspecified,
-            NetAddress::Unknown => NetAddress::Unknown
+            NetAddress::Unknown => NetAddress::Unknown,
         }
     }
 
@@ -59,7 +59,7 @@ impl NetAddress {
         match self {
             NetAddress::IPv4(addr) => Some(IpAddr::V4(addr)),
             NetAddress::IPv6(addr) => Some(IpAddr::V6(addr)),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -91,14 +91,14 @@ impl Deserialize for NetAddress {
                 let mut ip = [0u8; 4];
                 reader.read_exact(&mut ip)?;
                 Ok(NetAddress::IPv4(Ipv4Addr::from(ip)))
-            },
+            }
             NetAddressType::IPv6 => {
                 let mut ip = [0u8; 16];
                 reader.read_exact(&mut ip)?;
                 Ok(NetAddress::IPv6(Ipv6Addr::from(ip)))
-            },
+            }
             NetAddressType::Unspecified => Ok(NetAddress::Unspecified),
-            NetAddressType::Unknown => Ok(NetAddress::Unknown)
+            NetAddressType::Unknown => Ok(NetAddress::Unknown),
         }
     }
 }
@@ -111,7 +111,7 @@ impl Serialize for NetAddress {
             NetAddress::IPv4(ipv4) => writer.write(&ipv4.octets())?,
             NetAddress::IPv6(ipv6) => writer.write(&ipv6.octets())?,
             NetAddress::Unspecified => 0,
-            NetAddress::Unknown => 0
+            NetAddress::Unknown => 0,
         };
         Ok(size)
     }
@@ -123,7 +123,7 @@ impl Serialize for NetAddress {
             NetAddress::IPv4(_) => 4,
             NetAddress::IPv6(_) => 16,
             NetAddress::Unspecified => 0,
-            NetAddress::Unknown => 0
+            NetAddress::Unknown => 0,
         };
         size
     }

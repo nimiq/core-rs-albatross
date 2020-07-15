@@ -1,6 +1,4 @@
-use beserial::{Deserialize, Serialize, DeserializeWithLength, SerializeWithLength, uvar};
-
-
+use beserial::{uvar, Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 
 #[test]
 fn it_correctly_serializes_and_deserializes_uvar() {
@@ -60,9 +58,10 @@ fn it_serializes_and_deserializes_box() {
 
 #[test]
 fn it_serializes_and_deserializes_vec() {
-    let vec = vec![1,4,7,4,3,6,9,9,4];
+    let vec = vec![1, 4, 7, 4, 3, 6, 9, 9, 4];
     let serialized = SerializeWithLength::serialize_to_vec::<u8>(&vec);
-    let deserialized: Vec<i32> = DeserializeWithLength::deserialize_from_vec::<u8>(&serialized).unwrap();
+    let deserialized: Vec<i32> =
+        DeserializeWithLength::deserialize_from_vec::<u8>(&serialized).unwrap();
     assert_eq!(deserialized, vec);
 }
 

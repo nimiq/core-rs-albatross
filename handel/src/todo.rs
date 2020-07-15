@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
-use crate::multisig::Signature;
 use crate::evaluator::Evaluator;
-
+use crate::multisig::Signature;
 
 #[derive(Clone, Debug)]
 struct TodoItem {
@@ -36,10 +35,7 @@ impl<E: Evaluator> TodoList<E> {
 
     pub fn put(&self, signature: Signature, level: usize) {
         trace!("Putting {:?} (level {}) into TODO list", signature, level);
-        self.list.write().push(TodoItem {
-            signature,
-            level
-        });
+        self.list.write().push(TodoItem { signature, level });
     }
 
     pub fn get_best(&self) -> Option<(Signature, usize, usize)> {
@@ -61,8 +57,7 @@ impl<E: Evaluator> TodoList<E> {
             let mut list = RwLockUpgradableReadGuard::upgrade(list);
             let best_todo = list.swap_remove(best_i);
             Some((best_todo.signature, best_todo.level, best_score))
-        }
-        else {
+        } else {
             None
         }
     }

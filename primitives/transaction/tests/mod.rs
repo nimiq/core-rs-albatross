@@ -1,4 +1,5 @@
 use std::convert::{TryFrom, TryInto};
+
 use hex;
 
 use beserial::{Deserialize, Serialize, SerializingError};
@@ -17,9 +18,15 @@ fn it_can_deserialize_extended_transaction() {
     let v: Vec<u8> = hex::decode(EXTENDED_TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
     assert_eq!(t.data, Vec::new());
-    assert_eq!(t.sender, Address::from(&hex::decode("4a88aaad038f9b8248865c4b9249efc554960e16").unwrap()[..]));
+    assert_eq!(
+        t.sender,
+        Address::from(&hex::decode("4a88aaad038f9b8248865c4b9249efc554960e16").unwrap()[..])
+    );
     assert_eq!(t.sender_type, AccountType::Basic);
-    assert_eq!(t.recipient, Address::from(&hex::decode("ad25610feb43d75307763d3f010822a757027429").unwrap()[..]));
+    assert_eq!(
+        t.recipient,
+        Address::from(&hex::decode("ad25610feb43d75307763d3f010822a757027429").unwrap()[..])
+    );
     assert_eq!(t.recipient_type, AccountType::Basic);
     assert_eq!(t.value, Coin::try_from(8000000000000u64).unwrap());
     assert_eq!(t.fee, Coin::ZERO);
@@ -51,9 +58,15 @@ fn it_can_deserialize_basic_transaction() {
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
     let t: Transaction = Deserialize::deserialize(&mut &v[..]).unwrap();
     assert_eq!(t.data, Vec::new());
-    assert_eq!(t.sender, Address::from(&hex::decode("b02b9d9fcfa1a60dabe65165ded66a26983404dc").unwrap()[..]));
+    assert_eq!(
+        t.sender,
+        Address::from(&hex::decode("b02b9d9fcfa1a60dabe65165ded66a26983404dc").unwrap()[..])
+    );
     assert_eq!(t.sender_type, AccountType::Basic);
-    assert_eq!(t.recipient, Address::from(&hex::decode("754d1260f15bea0e8fb07ab18f45301483599e34").unwrap()[..]));
+    assert_eq!(
+        t.recipient,
+        Address::from(&hex::decode("754d1260f15bea0e8fb07ab18f45301483599e34").unwrap()[..])
+    );
     assert_eq!(t.recipient_type, AccountType::Basic);
     assert_eq!(t.value, 50000u64.try_into().unwrap());
     assert_eq!(t.fee, 138u64.try_into().unwrap());

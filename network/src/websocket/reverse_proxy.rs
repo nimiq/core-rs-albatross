@@ -75,23 +75,26 @@ impl<'a> Callback for &'a ReverseProxyCallback {
                     body: None,
                 })?; // Take first value from list.
                 let str_value = str_value.trim();
-                trace!("Remote peer address (according to headers): {:?}", str_value);
+                trace!(
+                    "Remote peer address (according to headers): {:?}",
+                    str_value
+                );
                 let net_address = NetAddress::from_str(str_value)
                     .map_err(|_|
-                         ErrorResponse {
-                             error_code: StatusCode::INTERNAL_SERVER_ERROR,
-                             headers: None,
-                             body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
-                         }
+                        ErrorResponse {
+                            error_code: StatusCode::INTERNAL_SERVER_ERROR,
+                            headers: None,
+                            body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
+                        }
                     )?;
                 self.remote_address.lock().replace(net_address);
             } else {
                 error!("The reverse proxy 'header' parameter is missing");
                 return Err(ErrorResponse {
-                        error_code: StatusCode::INTERNAL_SERVER_ERROR,
-                        headers: None,
-                        body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
-                    });
+                    error_code: StatusCode::INTERNAL_SERVER_ERROR,
+                    headers: None,
+                    body: Some("Expected header to contain the real IP from the connecting client: closing the connection".to_string()),
+                });
             }
         }
         Ok(None)

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use json::{JsonValue, Null, object};
+use json::{object, JsonValue, Null};
 
 use beserial::{Deserialize, Serialize};
 use block::Block;
@@ -11,9 +11,9 @@ use nimiq_blockchain::Blockchain;
 use transaction::{Transaction, TransactionReceipt};
 
 use crate::handler::Method;
-use crate::handlers::Module;
 use crate::handlers::blockchain::{parse_hash, BlockchainHandler};
 use crate::handlers::mempool::{transaction_to_obj, TransactionContext};
+use crate::handlers::Module;
 use crate::rpc_not_implemented;
 
 pub struct BlockchainNimiqHandler {
@@ -58,7 +58,10 @@ impl BlockchainNimiqHandler {
     /// ```
     pub(crate) fn get_block_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.generic.block_by_hash(params.get(0).unwrap_or(&Null))?;
-        Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
+        Ok(self.block_to_obj(
+            &block,
+            params.get(1).and_then(|v| v.as_bool()).unwrap_or(false),
+        ))
     }
 
     /// Returns a block object for a block number.
@@ -87,8 +90,13 @@ impl BlockchainNimiqHandler {
     /// }
     /// ```
     pub(crate) fn get_block_by_number(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let block = self.generic.block_by_number(params.get(0).unwrap_or(&Null))?;
-        Ok(self.block_to_obj(&block, params.get(1).and_then(|v| v.as_bool()).unwrap_or(false)))
+        let block = self
+            .generic
+            .block_by_number(params.get(0).unwrap_or(&Null))?;
+        Ok(self.block_to_obj(
+            &block,
+            params.get(1).and_then(|v| v.as_bool()).unwrap_or(false),
+        ))
     }
 
     // Transactions
@@ -98,24 +106,38 @@ impl BlockchainNimiqHandler {
     /// - transaction (string): Hex encoded transaction.
     ///
     /// Returns an info object:
-    pub(crate) fn get_raw_transaction_info(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let transaction: Transaction = params.get(0).unwrap_or(&Null).as_str()
-            .ok_or_else(|| object!{"message" => "Raw transaction data must be a string"}) // Result<&str, Err>
-            .and_then(|s| hex::decode(s)
-                .map_err(|_| object!{"message" => "Raw transaction data must be hex-encoded"})) // Result<Vec<u8>, Err>
-            .and_then(|b| Deserialize::deserialize_from_vec(&b)
-                .map_err(|_| object!{"message" => "Invalid transaction data"}))?;
+    pub(crate) fn get_raw_transaction_info(
+        &self,
+        params: &[JsonValue],
+    ) -> Result<JsonValue, JsonValue> {
+        let transaction: Transaction = params
+            .get(0)
+            .unwrap_or(&Null)
+            .as_str()
+            .ok_or_else(|| object! {"message" => "Raw transaction data must be a string"}) // Result<&str, Err>
+            .and_then(|s| {
+                hex::decode(s)
+                    .map_err(|_| object! {"message" => "Raw transaction data must be hex-encoded"})
+            }) // Result<Vec<u8>, Err>
+            .and_then(|b| {
+                Deserialize::deserialize_from_vec(&b)
+                    .map_err(|_| object! {"message" => "Invalid transaction data"})
+            })?;
 
-        let (transaction, valid, in_mempool) =
-            if let Ok(live_transaction) = self.get_transaction_by_hash_helper(&transaction.hash::<Blake2bHash>()) {
-                let confirmations = live_transaction["confirmations"].as_u32()
-                    .expect("Function didn't return transaction with confirmation number");
-                (live_transaction, true, confirmations == 0)
-            }
-            else {
-                (transaction_to_obj(&transaction, None, None),
-                 transaction.verify(self.blockchain.network_id).is_ok(), false)
-            };
+        let (transaction, valid, in_mempool) = if let Ok(live_transaction) =
+            self.get_transaction_by_hash_helper(&transaction.hash::<Blake2bHash>())
+        {
+            let confirmations = live_transaction["confirmations"]
+                .as_u32()
+                .expect("Function didn't return transaction with confirmation number");
+            (live_transaction, true, confirmations == 0)
+        } else {
+            (
+                transaction_to_obj(&transaction, None, None),
+                transaction.verify(self.blockchain.network_id).is_ok(),
+                false,
+            )
+        };
 
         // Insert `valid` and `in_mempool` into `transaction` object.
         match transaction {
@@ -124,7 +146,7 @@ impl BlockchainNimiqHandler {
                 o.insert("valid", JsonValue::Boolean(valid));
                 o.insert("inMempool", JsonValue::Boolean(in_mempool));
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         };
 
         rpc_not_implemented()
@@ -158,9 +180,13 @@ impl BlockchainNimiqHandler {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_by_hash(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        params.get(0)
-            .ok_or(object!{"message" => "First argument must be hash"})
+    pub(crate) fn get_transaction_by_hash(
+        &self,
+        params: &[JsonValue],
+    ) -> Result<JsonValue, JsonValue> {
+        params
+            .get(0)
+            .ok_or(object! {"message" => "First argument must be hash"})
             .and_then(parse_hash)
             .and_then(|h| self.get_transaction_by_hash_helper(&h))
     }
@@ -181,23 +207,36 @@ impl BlockchainNimiqHandler {
     ///     transactionIndex: number,
     /// }
     /// ```
-    pub(crate) fn get_transaction_receipt(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let hash = params.get(0).and_then(JsonValue::as_str)
-            .ok_or_else(|| object!{"message" => "Invalid transaction hash"})
-            .and_then(|s| Blake2bHash::from_str(s)
-                .map_err(|_| object!{"message" => "Invalid transaction hash"}))?;
+    pub(crate) fn get_transaction_receipt(
+        &self,
+        params: &[JsonValue],
+    ) -> Result<JsonValue, JsonValue> {
+        let hash = params
+            .get(0)
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| object! {"message" => "Invalid transaction hash"})
+            .and_then(|s| {
+                Blake2bHash::from_str(s)
+                    .map_err(|_| object! {"message" => "Invalid transaction hash"})
+            })?;
 
-        let transaction_info = self.blockchain.get_transaction_info_by_hash(&hash)
-            .ok_or_else(|| object!{"message" => "Transaction not found"})?;
+        let transaction_info = self
+            .blockchain
+            .get_transaction_info_by_hash(&hash)
+            .ok_or_else(|| object! {"message" => "Transaction not found"})?;
 
         // Get block which contains the transaction. If we don't find the block (for what reason?),
         // return an error
-        let block = self.blockchain.get_block(&transaction_info.block_hash, false, true);
+        let block = self
+            .blockchain
+            .get_block(&transaction_info.block_hash, false, true);
 
         let transaction_index = transaction_info.index;
-        Ok(self.transaction_receipt_to_obj(&transaction_info.into(),
-                                           Some(transaction_index),
-                                           block.as_ref()))
+        Ok(self.transaction_receipt_to_obj(
+            &transaction_info.into(),
+            Some(transaction_index),
+            block.as_ref(),
+        ))
     }
 
     // Helper functions
@@ -205,7 +244,7 @@ impl BlockchainNimiqHandler {
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
         let hash = block.header.hash::<Blake2bHash>().to_hex();
         let height = self.blockchain.height();
-        object!{
+        object! {
             "number" => block.header.height,
             "hash" => hash.clone(),
             "pow" => block.header.hash::<Argon2dHash>().to_hex(),
@@ -236,19 +275,29 @@ impl BlockchainNimiqHandler {
     fn get_transaction_by_hash_helper(&self, hash: &Blake2bHash) -> Result<JsonValue, JsonValue> {
         // Get transaction info, which includes Block hash, transaction hash, and transaction index.
         // Return an error if the transaction doesn't exist.
-        let transaction_info = self.blockchain.get_transaction_info_by_hash(hash)
-            .ok_or_else(|| object!{"message" => "Transaction not found"})?;
+        let transaction_info = self
+            .blockchain
+            .get_transaction_info_by_hash(hash)
+            .ok_or_else(|| object! {"message" => "Transaction not found"})?;
 
         // Get block which contains the transaction. If we don't find the block (for what reason?),
         // return an error
-        let block = self.blockchain.get_block(&transaction_info.block_hash, false, true)
-            .ok_or_else(|| object!{"message" => "Block not found"})?;
+        let block = self
+            .blockchain
+            .get_block(&transaction_info.block_hash, false, true)
+            .ok_or_else(|| object! {"message" => "Block not found"})?;
 
-        self.generic.get_transaction_by_block_and_index(&block, transaction_info.index)
+        self.generic
+            .get_transaction_by_block_and_index(&block, transaction_info.index)
     }
 
-    fn transaction_receipt_to_obj(&self, receipt: &TransactionReceipt, index: Option<u16>, block: Option<&Block>) -> JsonValue {
-        object!{
+    fn transaction_receipt_to_obj(
+        &self,
+        receipt: &TransactionReceipt,
+        index: Option<u16>,
+        block: Option<&Block>,
+    ) -> JsonValue {
+        object! {
             "transactionHash" => receipt.transaction_hash.to_hex(),
             "blockNumber" => receipt.block_height,
             "blockHash" => receipt.block_hash.to_hex(),

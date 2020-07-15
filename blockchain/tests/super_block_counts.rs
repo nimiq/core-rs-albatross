@@ -1,6 +1,5 @@
-use nimiq_blockchain::super_block_counts::SuperBlockCounts;
 use beserial::{Deserialize, Serialize};
-
+use nimiq_blockchain::super_block_counts::SuperBlockCounts;
 
 fn assert_range(sbc: &SuperBlockCounts, left: u8, right: u8, expected: u32) {
     for i in left..=right {
@@ -10,7 +9,12 @@ fn assert_range(sbc: &SuperBlockCounts, left: u8, right: u8, expected: u32) {
 
 #[test]
 pub fn test_zero() {
-    assert_range(&SuperBlockCounts::zero(), 0, (SuperBlockCounts::NUM_COUNTS - 1) as u8, 0);
+    assert_range(
+        &SuperBlockCounts::zero(),
+        0,
+        (SuperBlockCounts::NUM_COUNTS - 1) as u8,
+        0,
+    );
 }
 
 #[test]
@@ -19,7 +23,6 @@ pub fn test_add() {
     sbc.add(5);
     assert_range(&sbc, 0, 5, 1);
 }
-
 
 #[test]
 pub fn test_add2() {
@@ -34,7 +37,6 @@ pub fn test_add2() {
     assert_range(&sbc, 8, 13, 1);
 }
 
-
 #[test]
 pub fn test_subtract() {
     let mut sbc = SuperBlockCounts::zero();
@@ -43,7 +45,6 @@ pub fn test_subtract() {
     assert_range(&sbc, 0, 5, 0);
     assert_range(&sbc, 6, 15, 1);
 }
-
 
 #[test]
 pub fn test_subtract2() {
@@ -59,7 +60,6 @@ pub fn test_subtract2() {
     assert_range(&sbc, 8, 13, 2);
     assert_range(&sbc, 14, 15, 3);
 }
-
 
 #[test]
 pub fn test_get_candidate_depth() {
@@ -79,7 +79,10 @@ pub fn test_get_candidate_depth() {
 pub fn test_serialize_empty() {
     let sbc = SuperBlockCounts::zero();
     let expected = "00";
-    assert_eq!(Serialize::serialize_to_vec(&sbc), hex::decode(expected).unwrap());
+    assert_eq!(
+        Serialize::serialize_to_vec(&sbc),
+        hex::decode(expected).unwrap()
+    );
 }
 
 #[test]
@@ -88,7 +91,10 @@ pub fn test_serialize_count() {
     sbc.add(0);
 
     let expected = "0100000001";
-    assert_eq!(Serialize::serialize_to_vec(&sbc), hex::decode(expected).unwrap());
+    assert_eq!(
+        Serialize::serialize_to_vec(&sbc),
+        hex::decode(expected).unwrap()
+    );
 }
 
 #[test]
@@ -100,7 +106,10 @@ pub fn test_serialize_counts() {
     sbc.add(7);
     sbc.add(5);
     let expected = "0e0000000300000003000000030000000300000003000000030000000200000002000000010000000100000001000000010000000100000001";
-    assert_eq!(Serialize::serialize_to_vec(&sbc), hex::decode(expected).unwrap());
+    assert_eq!(
+        Serialize::serialize_to_vec(&sbc),
+        hex::decode(expected).unwrap()
+    );
 }
 
 #[test]

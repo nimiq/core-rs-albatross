@@ -3,8 +3,11 @@ use std::os::raw::c_uint;
 
 use beserial::{Deserialize, Serialize};
 use block::Block;
-use database::{Database, DatabaseFlags, Environment, FromDatabaseValue, IntoDatabaseValue, ReadTransaction, Transaction, WriteTransaction};
 use database::cursor::ReadCursor;
+use database::{
+    Database, DatabaseFlags, Environment, FromDatabaseValue, IntoDatabaseValue, ReadTransaction,
+    Transaction, WriteTransaction,
+};
 use hash::Blake2bHash;
 use hash::Hash;
 use keys::Address;
@@ -21,7 +24,10 @@ pub struct TransactionInfo {
 }
 
 impl FromDatabaseValue for TransactionInfo {
-    fn copy_from_database(bytes: &[u8]) -> Result<Self, io::Error> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> Result<Self, io::Error>
+    where
+        Self: Sized,
+    {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
     }
@@ -40,21 +46,26 @@ impl IntoDatabaseValue for TransactionInfo {
 impl TransactionInfo {
     pub fn from_block(block: &Block) -> Vec<(&NimiqTransaction, TransactionInfo)> {
         let mut transactions = Vec::with_capacity(
-            block.body.as_ref()
+            block
+                .body
+                .as_ref()
                 .map(|body| body.transactions.len())
-                .unwrap_or_default()
+                .unwrap_or_default(),
         );
 
         let block_hash: Blake2bHash = block.header.hash();
 
         if let Some(ref body) = block.body {
             for (index, tx) in body.transactions.iter().enumerate() {
-                transactions.push((tx, TransactionInfo {
-                    transaction_hash: tx.hash(),
-                    block_hash: block_hash.clone(),
-                    block_height: block.header.height,
-                    index: index as u16,
-                }));
+                transactions.push((
+                    tx,
+                    TransactionInfo {
+                        transaction_hash: tx.hash(),
+                        block_hash: block_hash.clone(),
+                        block_height: block.header.height,
+                        index: index as u16,
+                    },
+                ));
             }
         }
 
@@ -82,41 +93,61 @@ impl TransactionStore {
     pub fn new(env: Environment) -> Self {
         let transaction_db = env.open_database_with_flags(
             Self::TRANSACTION_DB_NAME.to_string(),
-            DatabaseFlags::UINT_KEYS
+            DatabaseFlags::UINT_KEYS,
         );
         let sender_idx = env.open_database_with_flags(
             Self::SENDER_IDX_NAME.to_string(),
-            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES | DatabaseFlags::DUP_UINT_VALUES
+            DatabaseFlags::DUPLICATE_KEYS
+                | DatabaseFlags::DUP_FIXED_SIZE_VALUES
+                | DatabaseFlags::DUP_UINT_VALUES,
         );
         let recipient_idx = env.open_database_with_flags(
             Self::RECIPIENT_IDX_NAME.to_string(),
-            DatabaseFlags::DUPLICATE_KEYS | DatabaseFlags::DUP_FIXED_SIZE_VALUES | DatabaseFlags::DUP_UINT_VALUES
+            DatabaseFlags::DUPLICATE_KEYS
+                | DatabaseFlags::DUP_FIXED_SIZE_VALUES
+                | DatabaseFlags::DUP_UINT_VALUES,
         );
-        let transaction_hash_idx = env.open_database(
-            Self::TRANSACTION_HASH_IDX_NAME.to_string()
-        );
-        TransactionStore { env, transaction_db, sender_idx, recipient_idx, transaction_hash_idx }
+        let transaction_hash_idx = env.open_database(Self::TRANSACTION_HASH_IDX_NAME.to_string());
+        TransactionStore {
+            env,
+            transaction_db,
+            sender_idx,
+            recipient_idx,
+            transaction_hash_idx,
+        }
     }
 
     fn get_head(&self, txn_option: Option<&Transaction>) -> c_uint {
         match txn_option {
             Some(txn) => txn.get(&self.transaction_db, &TransactionStore::HEAD_KEY),
-            None => ReadTransaction::new(&self.env).get(&self.transaction_db, &TransactionStore::HEAD_KEY)
-        }.unwrap_or(Self::HEAD_DEFAULT)
+            None => ReadTransaction::new(&self.env)
+                .get(&self.transaction_db, &TransactionStore::HEAD_KEY),
+        }
+        .unwrap_or(Self::HEAD_DEFAULT)
     }
 
     fn set_head(&self, txn: &mut WriteTransaction, id: c_uint) {
         txn.put(&self.transaction_db, &TransactionStore::HEAD_KEY, &id);
     }
 
-    fn get_id(&self, transaction_hash: &Blake2bHash, txn_option: Option<&Transaction>) -> Option<c_uint> {
+    fn get_id(
+        &self,
+        transaction_hash: &Blake2bHash,
+        txn_option: Option<&Transaction>,
+    ) -> Option<c_uint> {
         match txn_option {
             Some(txn) => txn.get(&self.transaction_hash_idx, transaction_hash),
-            None => ReadTransaction::new(&self.env).get(&self.transaction_hash_idx, transaction_hash)
+            None => {
+                ReadTransaction::new(&self.env).get(&self.transaction_hash_idx, transaction_hash)
+            }
         }
     }
 
-    pub fn get_by_hash(&self, transaction_hash: &Blake2bHash, txn_option: Option<&Transaction>) -> Option<TransactionInfo> {
+    pub fn get_by_hash(
+        &self,
+        transaction_hash: &Blake2bHash,
+        txn_option: Option<&Transaction>,
+    ) -> Option<TransactionInfo> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -130,7 +161,13 @@ impl TransactionStore {
         txn.get(&self.transaction_db, &index)
     }
 
-    fn get_by_address(&self, database: &Database, address: &Address, limit: usize, txn: &Transaction) -> Vec<TransactionInfo> {
+    fn get_by_address(
+        &self,
+        database: &Database,
+        address: &Address,
+        limit: usize,
+        txn: &Transaction,
+    ) -> Vec<TransactionInfo> {
         let mut transactions = Vec::new();
 
         // Shortcut for a 0 limit.
@@ -149,7 +186,8 @@ impl TransactionStore {
 
         let mut id: Option<c_uint> = cursor.last_duplicate();
         while let Some(index) = id {
-            let info = txn.get(&self.transaction_db, &index)
+            let info = txn
+                .get(&self.transaction_db, &index)
                 .expect("Corrupted store: TransactionInfo referenced from index not found");
             transactions.push(info);
 
@@ -158,13 +196,20 @@ impl TransactionStore {
                 break;
             }
 
-            id = cursor.prev_duplicate().map(|(_, value): (Address, c_uint)| value);
+            id = cursor
+                .prev_duplicate()
+                .map(|(_, value): (Address, c_uint)| value);
         }
 
         transactions
     }
 
-    pub fn get_by_sender(&self, sender: &Address, limit: usize, txn_option: Option<&Transaction>) -> Vec<TransactionInfo> {
+    pub fn get_by_sender(
+        &self,
+        sender: &Address,
+        limit: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<TransactionInfo> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -177,7 +222,12 @@ impl TransactionStore {
         self.get_by_address(&self.sender_idx, sender, limit, txn)
     }
 
-    pub fn get_by_recipient(&self, recipient: &Address, limit: usize, txn_option: Option<&Transaction>) -> Vec<TransactionInfo> {
+    pub fn get_by_recipient(
+        &self,
+        recipient: &Address,
+        limit: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<TransactionInfo> {
         let read_txn: ReadTransaction;
         let txn = match txn_option {
             Some(txn) => txn,
@@ -196,7 +246,11 @@ impl TransactionStore {
         let mut current_id = self.get_head(Some(txn));
         for (tx, info) in transactions.iter() {
             txn.put_reserve(&self.transaction_db, &current_id, info);
-            txn.put(&self.transaction_hash_idx, &info.transaction_hash, &current_id);
+            txn.put(
+                &self.transaction_hash_idx,
+                &info.transaction_hash,
+                &current_id,
+            );
             txn.put(&self.sender_idx, &tx.sender, &current_id);
             txn.put(&self.recipient_idx, &tx.recipient, &current_id);
             current_id += 1;
@@ -267,7 +321,7 @@ mod tests {
             transaction_hash: Blake2bHash::default(),
             block_hash: Blake2bHash::default(),
             block_height: 1337,
-            index: 12
+            index: 12,
         };
 
         {
@@ -283,7 +337,12 @@ mod tests {
         }
 
         let txn = ReadTransaction::new(&env);
-        assert_eq!(store.get_by_address(&store.sender_idx, &address, 0, &txn).len(), 0);
+        assert_eq!(
+            store
+                .get_by_address(&store.sender_idx, &address, 0, &txn)
+                .len(),
+            0
+        );
 
         // 1 transaction.
         let txs = store.get_by_address(&store.sender_idx, &address, 1, &txn);

@@ -67,9 +67,7 @@ pub struct Iter<'a, T: 'a> {
 
 impl<'a, T: 'a + fmt::Debug> fmt::Debug for Iter<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("Iter")
-            .field(&self.len)
-            .finish()
+        f.debug_tuple("Iter").field(&self.len).finish()
     }
 }
 
@@ -110,9 +108,7 @@ pub struct IntoIter<T> {
 
 impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("IntoIter")
-            .field(&self.list)
-            .finish()
+        f.debug_tuple("IntoIter").field(&self.list).finish()
     }
 }
 
@@ -225,36 +221,36 @@ impl<T> LinkedList<T> {
         self.len -= 1;
     }
 
-//    /// Moves a node to the back of the list.
-//    ///
-//    /// Warning: this will not check that the provided node belongs to the current list.
-//    #[inline]
-//    pub(super) unsafe fn move_back(&mut self, node_box: &NonNull<Node<T>>) {
-//        let mut node_box = node_box.clone();
-//        let node = node_box.as_mut();
-//
-//        match node.next {
-//            Some(mut next) => next.as_mut().prev = node.prev.clone(),
-//            // this node is already the tail node
-//            None => return,
-//        };
-//
-//        match node.prev {
-//            Some(mut prev) => prev.as_mut().next = node.next.clone(),
-//            // this node is the head node
-//            None => self.head = node.next.clone(),
-//        };
-//
-//        node.next = None;
-//        node.prev = self.tail;
-//
-//        match self.tail {
-//            None => self.head = Some(node_box),
-//            Some(mut tail) => tail.as_mut().next = Some(node_box),
-//        }
-//
-//        self.tail = Some(node_box);
-//    }
+    //    /// Moves a node to the back of the list.
+    //    ///
+    //    /// Warning: this will not check that the provided node belongs to the current list.
+    //    #[inline]
+    //    pub(super) unsafe fn move_back(&mut self, node_box: &NonNull<Node<T>>) {
+    //        let mut node_box = node_box.clone();
+    //        let node = node_box.as_mut();
+    //
+    //        match node.next {
+    //            Some(mut next) => next.as_mut().prev = node.prev.clone(),
+    //            // this node is already the tail node
+    //            None => return,
+    //        };
+    //
+    //        match node.prev {
+    //            Some(mut prev) => prev.as_mut().next = node.next.clone(),
+    //            // this node is the head node
+    //            None => self.head = node.next.clone(),
+    //        };
+    //
+    //        node.next = None;
+    //        node.prev = self.tail;
+    //
+    //        match self.tail {
+    //            None => self.head = Some(node_box),
+    //            Some(mut tail) => tail.as_mut().next = Some(node_box),
+    //        }
+    //
+    //        self.tail = Some(node_box);
+    //    }
 }
 
 impl<T> Default for LinkedList<T> {
@@ -481,7 +477,8 @@ impl<T> LinkedList<T> {
     /// assert_eq!(list.contains(&10), false);
     /// ```
     pub fn contains(&self, x: &T) -> bool
-        where T: PartialEq<T>
+    where
+        T: PartialEq<T>,
     {
         self.iter().any(|e| e == x)
     }
@@ -502,9 +499,7 @@ impl<T> LinkedList<T> {
     /// ```
     #[inline]
     pub fn front(&self) -> Option<&T> {
-        unsafe {
-            self.head.as_ref().map(|node| &node.as_ref().element)
-        }
+        unsafe { self.head.as_ref().map(|node| &node.as_ref().element) }
     }
 
     /// Provides a mutable reference to the front element, or `None` if the list
@@ -522,16 +517,14 @@ impl<T> LinkedList<T> {
     /// assert_eq!(dl.front(), Some(&1));
     ///
     /// match dl.front_mut() {
-    ///     None => {},
+    ///     None => {}
     ///     Some(x) => *x = 5,
     /// }
     /// assert_eq!(dl.front(), Some(&5));
     /// ```
     #[inline]
     pub fn front_mut(&mut self) -> Option<&mut T> {
-        unsafe {
-            self.head.as_mut().map(|node| &mut node.as_mut().element)
-        }
+        unsafe { self.head.as_mut().map(|node| &mut node.as_mut().element) }
     }
 
     /// Provides a reference to the back element, or `None` if the list is
@@ -550,9 +543,7 @@ impl<T> LinkedList<T> {
     /// ```
     #[inline]
     pub fn back(&self) -> Option<&T> {
-        unsafe {
-            self.tail.as_ref().map(|node| &node.as_ref().element)
-        }
+        unsafe { self.tail.as_ref().map(|node| &node.as_ref().element) }
     }
 
     /// Provides a mutable reference to the back element, or `None` if the list
@@ -570,16 +561,14 @@ impl<T> LinkedList<T> {
     /// assert_eq!(dl.back(), Some(&1));
     ///
     /// match dl.back_mut() {
-    ///     None => {},
+    ///     None => {}
     ///     Some(x) => *x = 5,
     /// }
     /// assert_eq!(dl.back(), Some(&5));
     /// ```
     #[inline]
     pub fn back_mut(&mut self) -> Option<&mut T> {
-        unsafe {
-            self.tail.as_mut().map(|node| &mut node.as_mut().element)
-        }
+        unsafe { self.tail.as_mut().map(|node| &mut node.as_mut().element) }
     }
 
     /// Adds an element first in the list.
@@ -766,7 +755,8 @@ impl<T> LinkedList<T> {
     /// assert_eq!(odds.into_iter().collect::<Vec<_>>(), vec![1, 3, 5, 9, 11, 13, 15]);
     /// ```
     pub fn drain_filter<F>(&mut self, filter: F) -> DrainFilter<T, F>
-        where F: FnMut(&mut T) -> bool
+    where
+        F: FnMut(&mut T) -> bool,
     {
         // avoid borrow issues.
         let it = self.head;
@@ -948,16 +938,15 @@ impl<'a, T> IterMut<'a, T> {
         if self.len == 0 {
             None
         } else {
-            unsafe {
-                self.head.as_mut().map(|node| &mut node.as_mut().element)
-            }
+            unsafe { self.head.as_mut().map(|node| &mut node.as_mut().element) }
         }
     }
 }
 
 /// An iterator produced by calling `drain_filter` on LinkedList.
 pub struct DrainFilter<'a, T: 'a, F: 'a>
-    where F: FnMut(&mut T) -> bool,
+where
+    F: FnMut(&mut T) -> bool,
 {
     list: &'a mut LinkedList<T>,
     it: Option<NonNull<Node<T>>>,
@@ -967,7 +956,8 @@ pub struct DrainFilter<'a, T: 'a, F: 'a>
 }
 
 impl<'a, T, F> Iterator for DrainFilter<'a, T, F>
-    where F: FnMut(&mut T) -> bool,
+where
+    F: FnMut(&mut T) -> bool,
 {
     type Item = T;
 
@@ -993,7 +983,8 @@ impl<'a, T, F> Iterator for DrainFilter<'a, T, F>
 }
 
 impl<'a, T, F> Drop for DrainFilter<'a, T, F>
-    where F: FnMut(&mut T) -> bool,
+where
+    F: FnMut(&mut T) -> bool,
 {
     fn drop(&mut self) {
         self.for_each(drop);
@@ -1001,12 +992,11 @@ impl<'a, T, F> Drop for DrainFilter<'a, T, F>
 }
 
 impl<'a, T: 'a + fmt::Debug, F> fmt::Debug for DrainFilter<'a, T, F>
-    where F: FnMut(&mut T) -> bool
+where
+    F: FnMut(&mut T) -> bool,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("DrainFilter")
-            .field(&self.list)
-            .finish()
+        f.debug_tuple("DrainFilter").field(&self.list).finish()
     }
 }
 
@@ -1159,7 +1149,7 @@ mod tests {
     use std::thread;
     use std::vec::Vec;
 
-    use rand::{RngCore, thread_rng};
+    use rand::{thread_rng, RngCore};
 
     use super::{LinkedList, Node};
 
@@ -1293,8 +1283,10 @@ mod tests {
         }
         check_links(&m);
         assert_eq!(m.len(), 3 + len * 2);
-        assert_eq!(m.into_iter().collect::<Vec<_>>(),
-                   [-2, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1]);
+        assert_eq!(
+            m.into_iter().collect::<Vec<_>>(),
+            [-2, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1]
+        );
     }
 
     #[test]
@@ -1306,9 +1298,9 @@ mod tests {
             let a: &[_] = &[&1, &2, &3];
             assert_eq!(a, &*n.iter().collect::<Vec<_>>());
         })
-            .join()
-            .ok()
-            .unwrap();
+        .join()
+        .ok()
+        .unwrap();
     }
 
     #[test]

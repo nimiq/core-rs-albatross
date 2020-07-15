@@ -1,10 +1,11 @@
 use std::convert::TryInto;
+
 use hex;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_block::*;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
+use nimiq_block::*;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 
@@ -19,17 +20,32 @@ fn it_can_deserialize_genesis_block() {
     let v: Vec<u8> = hex::decode(GENESIS_BLOCK).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
     assert_eq!(block.header.version, 1);
-    assert_eq!(block.header.prev_hash, Blake2bHash::from("0000000000000000000000000000000000000000000000000000000000000000"));
-    assert_eq!(block.header.interlink_hash, Blake2bHash::from("0000000000000000000000000000000000000000000000000000000000000000"));
-    assert_eq!(block.header.body_hash, Blake2bHash::from("7cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a"));
-    assert_eq!(block.header.accounts_hash, Blake2bHash::from("1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c"));
+    assert_eq!(
+        block.header.prev_hash,
+        Blake2bHash::from("0000000000000000000000000000000000000000000000000000000000000000")
+    );
+    assert_eq!(
+        block.header.interlink_hash,
+        Blake2bHash::from("0000000000000000000000000000000000000000000000000000000000000000")
+    );
+    assert_eq!(
+        block.header.body_hash,
+        Blake2bHash::from("7cda9a7fdf06655905ae5dbd9c535451471b078fa6f3df0e287e5b0fb47a573a")
+    );
+    assert_eq!(
+        block.header.accounts_hash,
+        Blake2bHash::from("1fefd44f1fa97185fda21e957545c97dc7643fa7e4efdd86e0aa4244d1e0bc5c")
+    );
     assert_eq!(block.header.n_bits, 0x1f010000.into());
     assert_eq!(block.header.height, 1);
     assert_eq!(block.header.timestamp, 1523727000);
     assert_eq!(block.header.nonce, 137689);
     assert_eq!(block.interlink.len(), 0);
     if let Option::Some(ref body) = block.body {
-        assert_eq!(body.miner, Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..]));
+        assert_eq!(
+            body.miner,
+            Address::from(&hex::decode("0000000000000000000000000000000000000000").unwrap()[..])
+        );
         assert_eq!(
             body.extra_data,
             "love ai amor mohabbat hubun cinta lyubov bhalabasa amour kauna pi'ara liebe eshq upendo prema amore katresnan sarang anpu prema yeu".as_bytes().to_vec()
@@ -56,27 +72,57 @@ fn it_can_deserialize_block_108273() {
     let v: Vec<u8> = hex::decode(BLOCK_108273).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
     assert_eq!(block.header.version, 1);
-    assert_eq!(block.header.prev_hash, Blake2bHash::from("2c2709b842ffd5d822fb881235a9981dcb4f031562437bbff4641d09e5bfcd11"));
-    assert_eq!(block.header.interlink_hash, Blake2bHash::from("b14f16b209ac32a3d909adcc759b2c53f8f9f478df7dcb74101c57448af2993f"));
-    assert_eq!(block.header.body_hash, Blake2bHash::from("8026c8d5f600afa7c0cea5d2163acbd97ba96de9d1cc82007840c06451b6894b"));
-    assert_eq!(block.header.accounts_hash, Blake2bHash::from("913cfeb96831cda39e7a49b5c6af7fb3a5c0b86fd544c78e653e275b7e180f79"));
+    assert_eq!(
+        block.header.prev_hash,
+        Blake2bHash::from("2c2709b842ffd5d822fb881235a9981dcb4f031562437bbff4641d09e5bfcd11")
+    );
+    assert_eq!(
+        block.header.interlink_hash,
+        Blake2bHash::from("b14f16b209ac32a3d909adcc759b2c53f8f9f478df7dcb74101c57448af2993f")
+    );
+    assert_eq!(
+        block.header.body_hash,
+        Blake2bHash::from("8026c8d5f600afa7c0cea5d2163acbd97ba96de9d1cc82007840c06451b6894b")
+    );
+    assert_eq!(
+        block.header.accounts_hash,
+        Blake2bHash::from("913cfeb96831cda39e7a49b5c6af7fb3a5c0b86fd544c78e653e275b7e180f79")
+    );
     assert_eq!(block.header.n_bits, 471912076.into());
     assert_eq!(block.header.height, 108273);
     assert_eq!(block.header.timestamp, 1530218988);
     assert_eq!(block.header.nonce, 2536036144);
     assert_eq!(block.interlink.len(), 17);
     if let Option::Some(ref body) = block.body {
-        assert_eq!(body.miner, Address::from(&hex::decode("432715a84417723b0889b22b6917de391ab2fa48").unwrap()[..]));
-        assert_eq!(body.extra_data, hex::decode("736b79706f6f6c2d7368312d32").unwrap());
+        assert_eq!(
+            body.miner,
+            Address::from(&hex::decode("432715a84417723b0889b22b6917de391ab2fa48").unwrap()[..])
+        );
+        assert_eq!(
+            body.extra_data,
+            hex::decode("736b79706f6f6c2d7368312d32").unwrap()
+        );
         assert_eq!(body.transactions.len(), 2);
         assert_eq!(body.receipts.len(), 0);
-        assert_eq!(body.transactions[0].sender, Address::from(&hex::decode("8a3eed6de76d21fe6f5ef1a1a8f0f2c2c070c4f3").unwrap()[..]));
-        assert_eq!(body.transactions[0].recipient, Address::from(&hex::decode("47d18f75e7bc7036e0bb496252acd74f0bf8c645").unwrap()[..]));
+        assert_eq!(
+            body.transactions[0].sender,
+            Address::from(&hex::decode("8a3eed6de76d21fe6f5ef1a1a8f0f2c2c070c4f3").unwrap()[..])
+        );
+        assert_eq!(
+            body.transactions[0].recipient,
+            Address::from(&hex::decode("47d18f75e7bc7036e0bb496252acd74f0bf8c645").unwrap()[..])
+        );
         assert_eq!(body.transactions[0].value, 3300000.try_into().unwrap());
         assert_eq!(body.transactions[0].fee, Coin::ZERO);
         assert_eq!(body.transactions[0].validity_start_height, 108271);
-        assert_eq!(body.transactions[1].sender, Address::from(&hex::decode("2dcf5d9271c2e80680c17d6d66b8a3f0f03f734a").unwrap()[..]));
-        assert_eq!(body.transactions[1].recipient, Address::from(&hex::decode("c1fb2d53a6d7e0011e85c7f81f5b7a76088c154a").unwrap()[..]));
+        assert_eq!(
+            body.transactions[1].sender,
+            Address::from(&hex::decode("2dcf5d9271c2e80680c17d6d66b8a3f0f03f734a").unwrap()[..])
+        );
+        assert_eq!(
+            body.transactions[1].recipient,
+            Address::from(&hex::decode("c1fb2d53a6d7e0011e85c7f81f5b7a76088c154a").unwrap()[..])
+        );
         assert_eq!(body.transactions[1].value, 837520.try_into().unwrap());
         assert_eq!(body.transactions[1].fee, Coin::ZERO);
         assert_eq!(body.transactions[1].validity_start_height, 108271);
@@ -105,58 +151,105 @@ fn it_can_serialize_block_169500() {
     assert_eq!(hex::encode(v2), BLOCK_169500);
 }
 
-
 #[test]
 fn verify_accepts_genesis_block() {
     let v: Vec<u8> = hex::decode(GENESIS_BLOCK).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()).is_ok());
+    assert!(block
+        .verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        )
+        .is_ok());
 }
 
 #[test]
 fn verify_accepts_block_108273() {
     let v: Vec<u8> = hex::decode(BLOCK_108273).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()).is_ok());
+    assert!(block
+        .verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        )
+        .is_ok());
 }
 
 #[test]
 fn verify_accepts_block_169500() {
     let v: Vec<u8> = hex::decode(BLOCK_169500).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()).is_ok());
+    assert!(block
+        .verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        )
+        .is_ok());
 }
 
 #[test]
 fn verify_accepts_block_67795() {
     let v: Vec<u8> = hex::decode(BLOCK_67795).unwrap();
     let block: Block = Deserialize::deserialize(&mut &v[..]).unwrap();
-    assert!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()).is_ok());
+    assert!(block
+        .verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        )
+        .is_ok());
 }
 
 #[test]
 fn verify_rejects_unsupported_block_versions() {
-    let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
+    let mut block: Block =
+        Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     block.header.version = 69;
-    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()), Err(BlockError::UnsupportedVersion));
+    assert_eq!(
+        block.verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        ),
+        Err(BlockError::UnsupportedVersion)
+    );
 }
 
 #[test]
 fn verify_rejects_blocks_from_the_future() {
     let block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
-    assert_eq!(block.verify(block.header.timestamp_in_millis() - 2000 * 1000, NetworkId::Main, GENESIS_HASH.into()), Err(BlockError::FromTheFuture));
+    assert_eq!(
+        block.verify(
+            block.header.timestamp_in_millis() - 2000 * 1000,
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        ),
+        Err(BlockError::FromTheFuture)
+    );
 }
 
 #[test]
 fn verify_rejects_invalid_pow() {
-    let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
+    let mut block: Block =
+        Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     block.header.nonce = 1;
-    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()), Err(BlockError::InvalidPoW));
+    assert_eq!(
+        block.verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        ),
+        Err(BlockError::InvalidPoW)
+    );
 }
 
 #[test]
 fn verify_rejects_excessive_size() {
-    let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
+    let mut block: Block =
+        Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     {
         let body = block.body.as_mut().unwrap();
         let tx = body.transactions[0].clone();
@@ -164,37 +257,67 @@ fn verify_rejects_excessive_size() {
             body.transactions.push(tx.clone());
         }
     }
-    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()), Err(BlockError::SizeExceeded));
+    assert_eq!(
+        block.verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        ),
+        Err(BlockError::SizeExceeded)
+    );
 }
 
 #[test]
 fn verify_rejects_mismatched_interlink_hash() {
-    let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
+    let mut block: Block =
+        Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     block.header.interlink_hash = Blake2bHash::from([1u8; Blake2bHash::SIZE]);
     block.header.n_bits = 0x1f010000u32.into();
     block.header.nonce = 31675;
-    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()), Err(BlockError::InterlinkHashMismatch));
+    assert_eq!(
+        block.verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        ),
+        Err(BlockError::InterlinkHashMismatch)
+    );
 }
 
 #[test]
 fn verify_rejects_mismatched_body_hash() {
-    let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
+    let mut block: Block =
+        Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     block.header.body_hash = Blake2bHash::from([1u8; Blake2bHash::SIZE]);
     block.header.n_bits = 0x1f010000u32.into();
     block.header.nonce = 41771;
-    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()), Err(BlockError::BodyHashMismatch));
+    assert_eq!(
+        block.verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        ),
+        Err(BlockError::BodyHashMismatch)
+    );
 }
 
 #[test]
 fn verify_rejects_invalid_body() {
-    let mut block: Block = Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
+    let mut block: Block =
+        Block::deserialize_from_vec(&hex::decode(BLOCK_169500).unwrap()).unwrap();
     {
         let body = block.body.as_mut().unwrap();
         body.transactions[0].validity_start_height = 5;
     }
-    assert_eq!(block.verify(block.header.timestamp_in_millis(), NetworkId::Main, GENESIS_HASH.into()), Err(BlockError::ExpiredTransaction));
+    assert_eq!(
+        block.verify(
+            block.header.timestamp_in_millis(),
+            NetworkId::Main,
+            GENESIS_HASH.into()
+        ),
+        Err(BlockError::ExpiredTransaction)
+    );
 }
-
 
 #[test]
 fn it_correctly_identifies_immediate_successors() {
@@ -215,7 +338,6 @@ fn it_correctly_identifies_immediate_successors() {
     assert!(!block2.is_immediate_successor_of(&block1));
 }
 
-
 const TEST_BLOCK_LVL0: &str = "0001fafd3f1cc800309cb931081257b4e7edb0f9ea400187c550fd9141447ea086a56233a563441dad209cf3a31c37e185590734268721847871bfc089e77e9c5cd7477356533240dcbe035562dd48f8c1ffa4254ad2186fb994fdb5adc8ea75e4412a3e9c43ff3a5e14e0f7ab5d11e766caa58ee2d03f3a3aea30a42af8813d0a921e400000000000020000003c0002a8040470324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf011be440919634a6fe3ba5f8a7181fe4bb8212c13c00000100dbb5d09e18649a4bed123ce7e517d1207c6c794be21248e8461efd47393dd66c1be440919634a6fe3ba5f8a7181fe4bb8212c13c0000000002a04c690000000001502634000000010403003f4176e96ef20a71ad00207d7678ad02c3dff13656c345da0ce0712fa41140d629f61553aeab232c28acc214fd1648429a4bfb3385ae4052e870599434030000";
 const TEST_BLOCK_LVL2: &str = "0001fafd3f1cc800309cb931081257b4e7edb0f9ea400187c550fd9141447ea086a56233a563441dad209cf3a31c37e185590734268721847871bfc089e77e9c5cd7477356533240dcbe035562dd48f8c1ffa4254ad2186fb994fdb5adc8ea75e4412a3e9c43ff3a5e14e0f7ab5d11e766caa58ee2d03f3a3aea30a42af8813d0a921e400000000000020000003c000aff4c0470324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf011be440919634a6fe3ba5f8a7181fe4bb8212c13c00000100dbb5d09e18649a4bed123ce7e517d1207c6c794be21248e8461efd47393dd66c1be440919634a6fe3ba5f8a7181fe4bb8212c13c0000000002a04c690000000001502634000000010403003f4176e96ef20a71ad00207d7678ad02c3dff13656c345da0ce0712fa41140d629f61553aeab232c28acc214fd1648429a4bfb3385ae4052e870599434030000";
 const DUMMY_HASH: &str = "324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf";
@@ -227,7 +349,15 @@ fn next_interlink_is_correct_1() {
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
-    let expected = BlockInterlink::new(vec![block_hash.clone(), dummy_hash.clone(), dummy_hash.clone(), dummy_hash], &block_hash);
+    let expected = BlockInterlink::new(
+        vec![
+            block_hash.clone(),
+            dummy_hash.clone(),
+            dummy_hash.clone(),
+            dummy_hash,
+        ],
+        &block_hash,
+    );
     assert_eq!(interlink, expected);
 }
 
@@ -238,7 +368,15 @@ fn next_interlink_is_correct_2() {
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
-    let expected = BlockInterlink::new(vec![block_hash.clone(), block_hash.clone(), block_hash.clone(), dummy_hash], &block_hash);
+    let expected = BlockInterlink::new(
+        vec![
+            block_hash.clone(),
+            block_hash.clone(),
+            block_hash.clone(),
+            dummy_hash,
+        ],
+        &block_hash,
+    );
     assert_eq!(interlink, expected);
 }
 
@@ -249,7 +387,16 @@ fn next_interlink_is_correct_3() {
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
-    let expected = BlockInterlink::new(vec![block_hash.clone(), block_hash.clone(), dummy_hash.clone(), dummy_hash.clone(), dummy_hash], &block_hash);
+    let expected = BlockInterlink::new(
+        vec![
+            block_hash.clone(),
+            block_hash.clone(),
+            dummy_hash.clone(),
+            dummy_hash.clone(),
+            dummy_hash,
+        ],
+        &block_hash,
+    );
     assert_eq!(interlink, expected);
 }
 
@@ -260,7 +407,16 @@ fn next_interlink_is_correct_4() {
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
-    let expected = BlockInterlink::new(vec![block_hash.clone(), block_hash.clone(), block_hash.clone(), block_hash.clone(), dummy_hash], &block_hash);
+    let expected = BlockInterlink::new(
+        vec![
+            block_hash.clone(),
+            block_hash.clone(),
+            block_hash.clone(),
+            block_hash.clone(),
+            dummy_hash,
+        ],
+        &block_hash,
+    );
     assert_eq!(interlink, expected);
 }
 
@@ -271,7 +427,10 @@ fn next_interlink_is_correct_5() {
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
-    let expected = BlockInterlink::new(vec![dummy_hash.clone(), dummy_hash.clone(), dummy_hash], &block_hash);
+    let expected = BlockInterlink::new(
+        vec![dummy_hash.clone(), dummy_hash.clone(), dummy_hash],
+        &block_hash,
+    );
     assert_eq!(interlink, expected);
 }
 
@@ -282,7 +441,10 @@ fn next_interlink_is_correct_6() {
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
-    let expected = BlockInterlink::new(vec![block_hash.clone(), block_hash.clone(), dummy_hash], &block_hash);
+    let expected = BlockInterlink::new(
+        vec![block_hash.clone(), block_hash.clone(), dummy_hash],
+        &block_hash,
+    );
     assert_eq!(interlink, expected);
 }
 
@@ -293,7 +455,17 @@ fn next_interlink_is_correct_7() {
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
-    let expected = BlockInterlink::new(vec![block_hash.clone(), block_hash.clone(), block_hash.clone(), dummy_hash.clone(), dummy_hash.clone(), dummy_hash], &block_hash);
+    let expected = BlockInterlink::new(
+        vec![
+            block_hash.clone(),
+            block_hash.clone(),
+            block_hash.clone(),
+            dummy_hash.clone(),
+            dummy_hash.clone(),
+            dummy_hash,
+        ],
+        &block_hash,
+    );
     assert_eq!(interlink, expected);
 }
 
@@ -304,7 +476,17 @@ fn next_interlink_is_correct_8() {
 
     let dummy_hash = Blake2bHash::from(DUMMY_HASH);
     let block_hash = block.header.hash::<Blake2bHash>();
-    let expected = BlockInterlink::new(vec![block_hash.clone(), block_hash.clone(), block_hash.clone(), block_hash.clone(), block_hash.clone(), dummy_hash], &block_hash);
+    let expected = BlockInterlink::new(
+        vec![
+            block_hash.clone(),
+            block_hash.clone(),
+            block_hash.clone(),
+            block_hash.clone(),
+            block_hash.clone(),
+            dummy_hash,
+        ],
+        &block_hash,
+    );
     assert_eq!(interlink, expected);
 }
 

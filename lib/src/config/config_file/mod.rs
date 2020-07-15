@@ -1,36 +1,33 @@
-mod serialization;
-
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::str::FromStr;
-use std::convert::TryFrom;
 
-use log::LevelFilter;
-use url::Url;
-use hex::FromHex;
 use failure::Fail;
+use hex::FromHex;
+use log::LevelFilter;
 use serde_derive::Deserialize;
+use url::Url;
 
-use network_primitives::{address, protocol};
+use keys::PublicKey;
+use mempool::filter::{MempoolFilter, Rules as MempoolRules};
+use mempool::MempoolConfig;
+use network::network_config::{ReverseProxyConfig, Seed as NetworkSeed};
 use network_primitives::address::peer_uri::PeerUriError;
 use network_primitives::networks::NetworkId;
-use network::network_config::{ReverseProxyConfig, Seed as NetworkSeed};
+use network_primitives::{address, protocol};
 use primitives::coin::Coin;
-use keys::PublicKey;
-use mempool::{MempoolConfig};
-use mempool::filter::{Rules as MempoolRules, MempoolFilter};
 
+use crate::config::command_line::CommandLine;
 use crate::config::config_file::serialization::*;
 use crate::config::{config, consts, paths};
-use crate::config::command_line::CommandLine;
 use crate::error::Error;
 
+mod serialization;
 
 // TODO: We have to make more settings `Option`s, so that they can use the `ConfigBuilder`'s
 // default and don't overwrite a setting even though it's not set in the config file.
-
-
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -89,7 +86,7 @@ impl ConfigFile {
         // If the path was set by the command line, only try this path
         if let Some(command_line) = command_line_opt {
             if let Some(path) = &command_line.config {
-                return Self::from_file(path)
+                return Self::from_file(path);
             }
         }
 
@@ -98,7 +95,11 @@ impl ConfigFile {
         if !path_example.exists() {
             info!("Creating example config at: {}", path_example.display());
             if let Err(e) = std::fs::write(&path_example, Self::EXAMPLE_CONFIG) {
-                warn!("Failed to create example config file: {}: {}", e, path_example.display());
+                warn!(
+                    "Failed to create example config file: {}: {}",
+                    e,
+                    path_example.display()
+                );
             }
         }
 
@@ -107,7 +108,7 @@ impl ConfigFile {
         if !path.exists() {
             let msg = format!("Config file not found. Please create one. An example config file can be found at: {}", path.display());
             warn!("{}", msg);
-            return Err(Error::config_error(&msg))
+            return Err(Error::config_error(&msg));
         }
 
         // load config
@@ -169,7 +170,7 @@ pub enum Seed {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SeedUri {
-    pub uri: String
+    pub uri: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -178,14 +179,14 @@ pub struct SeedInfo {
     pub host: String,
     pub port: Option<u16>,
     pub public_key: Option<String>,
-    pub peer_id: Option<String>
+    pub peer_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SeedList {
     pub list: String,
-    pub public_key: Option<String>
+    pub public_key: Option<String>,
 }
 
 impl TryFrom<Seed> for NetworkSeed {
@@ -195,14 +196,23 @@ impl TryFrom<Seed> for NetworkSeed {
         Ok(match seed {
             Seed::Uri(SeedUri { uri }) => {
                 NetworkSeed::Peer(Box::new(address::PeerUri::from_str(&uri)?))
-            },
-            Seed::Info(SeedInfo { host, port, public_key, peer_id }) => {
+            }
+            Seed::Info(SeedInfo {
+                host,
+                port,
+                public_key,
+                peer_id,
+            }) => {
                 // TODO: Implement this without having to instantiate a PeerUri
-                NetworkSeed::Peer(Box::new(address::PeerUri::new_wss(host, port, peer_id, public_key)))
-            },
+                NetworkSeed::Peer(Box::new(address::PeerUri::new_wss(
+                    host, port, peer_id, public_key,
+                )))
+            }
             Seed::List(SeedList { list, public_key }) => {
-                NetworkSeed::List(Box::new(address::SeedList::new(Url::from_str(&list)?, public_key
-                    .map(PublicKey::from_hex).transpose()?)))
+                NetworkSeed::List(Box::new(address::SeedList::new(
+                    Url::from_str(&list)?,
+                    public_key.map(PublicKey::from_hex).transpose()?,
+                )))
             }
         })
     }
@@ -233,7 +243,6 @@ impl From<Protocol> for protocol::Protocol {
         }
     }
 }
-
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -276,7 +285,7 @@ impl FromStr for ConsensusType {
         Ok(match s.to_lowercase().as_str() {
             "full" => Self::Full,
             "macro-sync" => Self::MacroSync,
-            _ => return Err(ConsensusTypeParseError(s.to_string()))
+            _ => return Err(ConsensusTypeParseError(s.to_string())),
         })
     }
 }
@@ -317,7 +326,7 @@ impl FromStr for Network {
             "dev" => Network::Dev,
             "test-albatross" => Network::TestAlbatross,
             "dev-albatross" => Network::DevAlbatross,
-            _ => return Err(())
+            _ => return Err(()),
         })
     }
 }
@@ -333,7 +342,6 @@ impl From<Network> for NetworkId {
         }
     }
 }
-
 
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
@@ -352,7 +360,6 @@ pub struct RpcServerSettings {
     pub password: Option<String>,
 }
 
-
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct WsRpcServerSettings {
@@ -363,7 +370,6 @@ pub struct WsRpcServerSettings {
     pub username: Option<String>,
     pub password: Option<String>,
 }
-
 
 #[derive(Clone, Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
@@ -409,7 +415,7 @@ pub struct LogSettings {
     #[serde(default)]
     #[serde(deserialize_with = "deserialize_tags")]
     pub tags: HashMap<String, LevelFilter>,
-    #[serde(default="LogSettings::default_statistics_interval")]
+    #[serde(default = "LogSettings::default_statistics_interval")]
     pub statistics: u64,
     #[serde(default)]
     pub file: Option<String>,
@@ -501,11 +507,10 @@ pub struct MempoolFilterSettings {
 impl From<MempoolSettings> for MempoolConfig {
     fn from(mempool: MempoolSettings) -> Self {
         Self {
-            filter_limit: mempool.blacklist_limit
+            filter_limit: mempool
+                .blacklist_limit
                 .unwrap_or(MempoolFilter::DEFAULT_BLACKLIST_SIZE),
-            filter_rules: mempool.filter
-                .map(MempoolRules::from)
-                .unwrap_or_default(),
+            filter_rules: mempool.filter.map(MempoolRules::from).unwrap_or_default(),
         }
     }
 }

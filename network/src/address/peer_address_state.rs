@@ -4,13 +4,11 @@ use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use network_primitives::address::{
-    net_address::NetAddress,
-    peer_address::PeerAddress
-};
+use network_primitives::address::{net_address::NetAddress, peer_address::PeerAddress};
+use network_primitives::protocol::Protocol;
+
 use crate::connection::close_type::CloseType;
 use crate::peer_channel::PeerChannel;
-use network_primitives::protocol::Protocol;
 
 pub struct PeerAddressInfo {
     pub peer_address: Arc<PeerAddress>,
@@ -44,13 +42,12 @@ impl PeerAddressInfo {
         match self.peer_address.protocol() {
             Protocol::Rtc => super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC,
             Protocol::Ws | Protocol::Wss => super::peer_address_book::MAX_FAILED_ATTEMPTS_WS,
-            _ => 0
+            _ => 0,
         }
     }
 
     pub fn close(&mut self, ty: CloseType) {
-        *self.close_types.entry(ty)
-            .or_insert(0) += 1;
+        *self.close_types.entry(ty).or_insert(0) += 1;
 
         if self.state == PeerAddressState::Banned {
             return;
@@ -72,13 +69,13 @@ pub enum PeerAddressState {
     Established = 2,
     Tried = 3,
     Failed = 4,
-    Banned = 5
+    Banned = 5,
 }
 
 pub struct SignalRouter {
     peer_address: Arc<PeerAddress>,
     pub best_route: Option<SignalRouteInfo>,
-    routes: HashSet<SignalRouteInfo>
+    routes: HashSet<SignalRouteInfo>,
 }
 
 impl SignalRouter {
@@ -86,12 +83,17 @@ impl SignalRouter {
         SignalRouter {
             peer_address,
             best_route: None,
-            routes: HashSet::new()
+            routes: HashSet::new(),
         }
     }
 
     /// Adds a new route and returns whether we have a new best route
-    pub fn add_route(&mut self, signal_channel: Arc<PeerChannel>, distance: u8, timestamp: u64) -> bool {
+    pub fn add_route(
+        &mut self,
+        signal_channel: Arc<PeerChannel>,
+        distance: u8,
+        timestamp: u64,
+    ) -> bool {
         let mut new_route = SignalRouteInfo::new(signal_channel, distance, timestamp);
         // SignalRouteInfo matches only on signal_channel, so this will get us the old route with the same channel
         let old_route = self.routes.get(&new_route);
@@ -103,9 +105,11 @@ impl SignalRouter {
         self.routes.replace(new_route.clone());
 
         let is_new_best = match &self.best_route {
-            Some(route) => new_route.score() > route.score()
-                || (new_route.score() == route.score() && timestamp > route.timestamp),
-            None => true
+            Some(route) => {
+                new_route.score() > route.score()
+                    || (new_route.score() == route.score() && timestamp > route.timestamp)
+            }
+            None => true,
         };
         if is_new_best {
             if let Some(ref mut peer_addr_mut) = Arc::get_mut(&mut self.peer_address) {
@@ -151,11 +155,13 @@ impl SignalRouter {
         for route in self.routes.iter() {
             match best_route {
                 Some(ref mut best_route) => {
-                    if route.score() > best_route.score() ||
-                     (route.score() == best_route.score() && route.timestamp > best_route.timestamp) {
+                    if route.score() > best_route.score()
+                        || (route.score() == best_route.score()
+                            && route.timestamp > best_route.timestamp)
+                    {
                         *best_route = route.clone()
                     }
-                },
+                }
                 None => best_route = Some(route.clone()),
             }
         }
@@ -177,7 +183,7 @@ pub struct SignalRouteInfo {
     failed_attempts: u32,
     pub timestamp: u64,
     pub signal_channel: Arc<PeerChannel>,
-    distance: u8
+    distance: u8,
 }
 
 impl SignalRouteInfo {
@@ -187,12 +193,13 @@ impl SignalRouteInfo {
             failed_attempts: 0,
             timestamp,
             signal_channel,
-            distance
+            distance,
         }
     }
 
     pub fn score(&self) -> u32 {
-        u32::from((super::peer_address_book::MAX_DISTANCE - self.distance) / 2) * (1 - self.failed_attempts / super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC)
+        u32::from((super::peer_address_book::MAX_DISTANCE - self.distance) / 2)
+            * (1 - self.failed_attempts / super::peer_address_book::MAX_FAILED_ATTEMPTS_RTC)
     }
 }
 
@@ -200,9 +207,9 @@ impl PartialEq for SignalRouteInfo {
     fn eq(&self, other: &SignalRouteInfo) -> bool {
         // We consider signal route infos to be equal if their signal_channel is equal
         self.signal_channel == other.signal_channel
-            /* failed_attempts is ignored */
-            /* timestamp is ignored */
-            /* distance is ignored */
+        /* failed_attempts is ignored */
+        /* timestamp is ignored */
+        /* distance is ignored */
     }
 }
 

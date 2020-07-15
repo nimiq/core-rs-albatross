@@ -1,19 +1,19 @@
 use std::cmp::Ordering;
-use std::io;
 use std::fmt;
+use std::io;
 use std::str::FromStr;
 
-use hex::FromHex;
 use ed25519_dalek;
+use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-
-use crate::{PrivateKey, Signature};
 use hash::{Hash, SerializeContent};
+
 use crate::errors::{KeysError, ParseError};
+use crate::{PrivateKey, Signature};
 
 #[derive(Default, Eq, PartialEq, Clone, Copy)]
-pub struct PublicKey(pub(in super) ed25519_dalek::PublicKey);
+pub struct PublicKey(pub(super) ed25519_dalek::PublicKey);
 
 impl PublicKey {
     pub const SIZE: usize = 32;
@@ -23,14 +23,20 @@ impl PublicKey {
     }
 
     #[inline]
-    pub fn as_bytes(&self) -> &[u8; PublicKey::SIZE] { self.0.as_bytes() }
+    pub fn as_bytes(&self) -> &[u8; PublicKey::SIZE] {
+        self.0.as_bytes()
+    }
 
     #[inline]
-    pub(crate) fn as_dalek(&self) -> &ed25519_dalek::PublicKey { &self.0 }
+    pub(crate) fn as_dalek(&self) -> &ed25519_dalek::PublicKey {
+        &self.0
+    }
 
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
-        Ok(PublicKey(ed25519_dalek::PublicKey::from_bytes(bytes).map_err(KeysError)?))
+        Ok(PublicKey(
+            ed25519_dalek::PublicKey::from_bytes(bytes).map_err(KeysError)?,
+        ))
     }
 
     pub fn to_hex(&self) -> String {
@@ -117,10 +123,11 @@ impl Serialize for PublicKey {
 }
 
 impl SerializeContent for PublicKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
 // This is a different Hash than the std Hash.
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for PublicKey { }
-
+impl Hash for PublicKey {}

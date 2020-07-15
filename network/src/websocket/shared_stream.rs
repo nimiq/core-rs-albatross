@@ -3,15 +3,15 @@ use std::sync::Arc;
 
 use futures::prelude::*;
 
-use utils::locking::MultiLock;
 use network_primitives::address::net_address::NetAddress;
+use utils::locking::MultiLock;
 
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::websocket::error::Error;
+use crate::websocket::public_state::PublicStreamInfo;
 use crate::websocket::Message;
 use crate::websocket::NimiqMessageStream;
-use crate::websocket::public_state::PublicStreamInfo;
 
 #[derive(Clone, Debug)]
 pub struct SharedNimiqMessageStream {
@@ -60,9 +60,7 @@ impl Sink for SharedNimiqMessageStream {
     type SinkItem = Message;
     type SinkError = Error;
 
-    fn start_send(&mut self, item: Self::SinkItem)
-                  -> StartSend<Self::SinkItem, Self::SinkError>
-    {
+    fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
         match self.inner.poll_lock() {
             Async::Ready(mut inner) => inner.start_send(item),
             Async::NotReady => Ok(AsyncSink::NotReady(item)),

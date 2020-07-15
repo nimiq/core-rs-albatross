@@ -1,4 +1,3 @@
-
 const fn num_bits<T>() -> usize {
     std::mem::size_of::<T>() * 8
 }

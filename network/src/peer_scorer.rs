@@ -1,20 +1,16 @@
 use std::{sync::Arc, time::Duration};
 
-use rand::Rng;
+use parking_lot::RwLockReadGuard;
 use rand::rngs::OsRng;
+use rand::Rng;
 
 use blockchain_base::AbstractBlockchain;
-use network_primitives::{
-    address::peer_address::PeerAddress,
-    protocol::Protocol,
-};
 use network_primitives::services::ServiceFlags;
+use network_primitives::{address::peer_address::PeerAddress, protocol::Protocol};
 
+use crate::address::peer_address_book::PeerAddressBookState;
 use crate::{
-    address::{
-        peer_address_book::PeerAddressBook,
-        peer_address_state::PeerAddressState,
-    },
+    address::{peer_address_book::PeerAddressBook, peer_address_state::PeerAddressState},
     connection::{
         close_type::CloseType,
         connection_info::{ConnectionInfo, ConnectionState},
@@ -23,8 +19,6 @@ use crate::{
     },
     network_config::NetworkConfig,
 };
-use crate::address::peer_address_book::PeerAddressBookState;
-use parking_lot::RwLockReadGuard;
 
 pub type Score = f64;
 
@@ -36,26 +30,35 @@ pub struct PeerScorer<B: AbstractBlockchain + 'static> {
 }
 
 impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
-    const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 1; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
+    const PEER_COUNT_MIN_FULL_WS_OUTBOUND: usize = 1;
+    // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
     const PEER_COUNT_MIN_OUTBOUND: usize = 6; // FIXME: this is fixed to the "node.js" value since we don't support browsers in the Rust impl yet
 
     const PICK_SELECTION_SIZE: usize = 100;
 
-    const MIN_AGE_FULL: Duration = Duration::from_secs(5 * 60); // 5 minutes
+    const MIN_AGE_FULL: Duration = Duration::from_secs(5 * 60);
+    // 5 minutes
     const BEST_AGE_FULL: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
 
-    const MIN_AGE_LIGHT: Duration = Duration::from_secs(2 * 60); // 2 minutes
-    const BEST_AGE_LIGHT: Duration = Duration::from_secs(15 * 60); // 15 minutes
+    const MIN_AGE_LIGHT: Duration = Duration::from_secs(2 * 60);
+    // 2 minutes
+    const BEST_AGE_LIGHT: Duration = Duration::from_secs(15 * 60);
+    // 15 minutes
     const MAX_AGE_LIGHT: Duration = Duration::from_secs(6 * 60 * 60); // 6 hours
 
-    const MIN_AGE_NANO: Duration = Duration::from_secs(60); // 1 minute
-    const BEST_AGE_NANO: Duration = Duration::from_secs(5 * 60); // 5 minutes
+    const MIN_AGE_NANO: Duration = Duration::from_secs(60);
+    // 1 minute
+    const BEST_AGE_NANO: Duration = Duration::from_secs(5 * 60);
+    // 5 minutes
     const MAX_AGE_NANO: Duration = Duration::from_secs(30 * 60); // 30 minutes
 
     const BEST_PROTOCOL_WS_DISTRIBUTION: f64 = 0.15; // 15%
 
-
-    pub fn new(network_config: Arc<NetworkConfig>, addresses: Arc<PeerAddressBook>, connections: Arc<ConnectionPool<B>>) -> Self {
+    pub fn new(
+        network_config: Arc<NetworkConfig>,
+        addresses: Arc<PeerAddressBook>,
+        connections: Arc<ConnectionPool<B>>,
+    ) -> Self {
         PeerScorer {
             network_config,
             addresses,
@@ -72,18 +75,24 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
         if candidates.is_empty() {
             return None;
         }
-        candidates.sort_by(|a, b| { a.1.cmp(&b.1) });
+        candidates.sort_by(|a, b| a.1.cmp(&b.1));
         let rand_ind = OsRng.gen_range(0, usize::min(Self::PICK_SELECTION_SIZE, candidates.len()));
         match candidates.get(rand_ind) {
             Some((peer_address, _)) => Some(Arc::clone(peer_address)),
-            None => None
+            None => None,
         }
     }
 
-    fn find_candidates(&self, num_candidates: usize, allow_bad_peers: bool) -> Vec<(Arc<PeerAddress>, i32)> {
+    fn find_candidates(
+        &self,
+        num_candidates: usize,
+        allow_bad_peers: bool,
+    ) -> Vec<(Arc<PeerAddress>, i32)> {
         let addresses_state = self.addresses.state();
-        let address_iterator = addresses_state.address_iter_for_protocol_mask(self.network_config.protocol_mask());
-        let num_addresses = addresses_state.known_addresses_nr_for_protocol_mask(self.network_config.protocol_mask());
+        let address_iterator =
+            addresses_state.address_iter_for_protocol_mask(self.network_config.protocol_mask());
+        let num_addresses = addresses_state
+            .known_addresses_nr_for_protocol_mask(self.network_config.protocol_mask());
 
         let (start_index, end_index) = if num_addresses > num_candidates {
             let start = OsRng.gen_range(0, num_addresses);
@@ -95,13 +104,19 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
 
         let mut candidates = Vec::new();
         for (index, address) in address_iterator.enumerate() {
-            if !overflow && index < start_index { continue; }
-            if !overflow && index >= end_index { break; }
-            if overflow && (index >= end_index && index < start_index) { continue; }
+            if !overflow && index < start_index {
+                continue;
+            }
+            if !overflow && index >= end_index {
+                break;
+            }
+            if overflow && (index >= end_index && index < start_index) {
+                continue;
+            }
 
             let score = self.score_address(address, allow_bad_peers, &addresses_state);
             if score >= 0 {
-                candidates.push( (Arc::clone(address), score));
+                candidates.push((Arc::clone(address), score));
                 if candidates.len() >= num_candidates {
                     break;
                 }
@@ -110,7 +125,12 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
         candidates
     }
 
-    fn score_address(&self, peer_address: &Arc<PeerAddress>, allow_bad_peers: bool, address_state: &RwLockReadGuard<PeerAddressBookState>) -> i32 {
+    fn score_address(
+        &self,
+        peer_address: &Arc<PeerAddress>,
+        allow_bad_peers: bool,
+        address_state: &RwLockReadGuard<PeerAddressBookState>,
+    ) -> i32 {
         let peer_address_sopt = address_state.get_info(peer_address);
         match peer_address_sopt {
             None => 0,
@@ -121,7 +141,9 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
                 }
 
                 // Filter addresses not matching our accepted services.
-                if (peer_address.services & self.network_config.services().accepted) == ServiceFlags::NONE {
+                if (peer_address.services & self.network_config.services().accepted)
+                    == ServiceFlags::NONE
+                {
                     return -1;
                 }
 
@@ -131,12 +153,18 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
                 }
 
                 // A channel to that peer address is CONNECTING, CONNECTED, NEGOTIATING OR ESTABLISHED
-                if self.connections.state().get_connection_by_peer_address(peer_address).is_some() {
+                if self
+                    .connections
+                    .state()
+                    .get_connection_by_peer_address(peer_address)
+                    .is_some()
+                {
                     return -1;
                 }
 
                 // If we need more good peers, only allow good peers unless allowBadPeers is true.
-                if self.needs_good_peers() && (!self.is_good_peer(peer_address) && !allow_bad_peers) {
+                if self.needs_good_peers() && (!self.is_good_peer(peer_address) && !allow_bad_peers)
+                {
                     return -1;
                 }
 
@@ -147,9 +175,11 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
                     PeerAddressState::New | PeerAddressState::Tried => score,
                     PeerAddressState::Failed => {
                         // Don't pick failed addresses when they have failed the maximum number of times.
-                        (1 - ((peer_address_info.failed_attempts + 1) as i32 / peer_address_info.max_failed_attempts() as i32)) * score
-                    },
-                    _ => -1
+                        (1 - ((peer_address_info.failed_attempts + 1) as i32
+                            / peer_address_info.max_failed_attempts() as i32))
+                            * score
+                    }
+                    _ => -1,
                 }
             }
         }
@@ -160,7 +190,8 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
     }
 
     pub fn needs_good_peers(&self) -> bool {
-        self.connections.state().get_peer_count_full_ws_outbound() < Self::PEER_COUNT_MIN_FULL_WS_OUTBOUND
+        self.connections.state().get_peer_count_full_ws_outbound()
+            < Self::PEER_COUNT_MIN_FULL_WS_OUTBOUND
     }
 
     pub fn needs_more_peers(&self) -> bool {
@@ -168,21 +199,26 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
     }
 
     pub fn is_good_peer(&self, peer_address: &Arc<PeerAddress>) -> bool {
-        peer_address.services.is_full_node() && (peer_address.protocol() == Protocol::Ws || peer_address.protocol() == Protocol::Wss)
+        peer_address.services.is_full_node()
+            && (peer_address.protocol() == Protocol::Ws || peer_address.protocol() == Protocol::Wss)
     }
 
     pub fn score_connections(&mut self) {
         let mut connection_scores: Vec<(ConnectionId, Score)> = Vec::new();
 
         let state = self.connections.state();
-        let distribution: f64 = (state.peer_count_ws as f64 + state.peer_count_wss as f64) / state.peer_count() as f64;
+        let distribution: f64 =
+            (state.peer_count_ws as f64 + state.peer_count_wss as f64) / state.peer_count() as f64;
         let peer_count_full_ws_outbound = state.get_peer_count_full_ws_outbound();
         let connections: Vec<(ConnectionId, &ConnectionInfo<B>)> = state.id_and_connection_iter();
 
         for connection in connections {
             if connection.1.state() == ConnectionState::Established
-                && connection.1.age_established() > self.get_min_age(connection.1.peer_address().expect("No peer address")) {
-                let score = Self::score_connection(connection.1, distribution, peer_count_full_ws_outbound);
+                && connection.1.age_established()
+                    > self.get_min_age(connection.1.peer_address().expect("No peer address"))
+            {
+                let score =
+                    Self::score_connection(connection.1, distribution, peer_count_full_ws_outbound);
                 connection_scores.push((connection.0, score));
             }
         }
@@ -193,30 +229,49 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
 
     pub fn recycle_connections(&mut self, mut count: u32, ty: CloseType, reason: &str) {
         while count > 0 && !self.connection_scores.is_empty() {
-            let connection_id = self.connection_scores.pop().map(|(connection_id, _)| connection_id).unwrap();
+            let connection_id = self
+                .connection_scores
+                .pop()
+                .map(|(connection_id, _)| connection_id)
+                .unwrap();
             let state = self.connections.state();
-            let connection_info = state.get_connection(connection_id).expect("Missing connection");
+            let connection_info = state
+                .get_connection(connection_id)
+                .expect("Missing connection");
 
             if connection_info.state() == ConnectionState::Established {
-                connection_info.peer_channel().expect("Missing PeerChannel").close(ty); // FIXME: what about `reason`?
+                connection_info
+                    .peer_channel()
+                    .expect("Missing PeerChannel")
+                    .close(ty); // FIXME: what about `reason`?
                 debug!("Closed connection with reason: {}", reason);
                 count -= 1;
             }
         }
     }
 
-    fn score_connection(connection_info: &ConnectionInfo<B>, distribution: f64, peer_count_full_ws_outbound: usize) -> Score {
+    fn score_connection(
+        connection_info: &ConnectionInfo<B>,
+        distribution: f64,
+        peer_count_full_ws_outbound: usize,
+    ) -> Score {
         // Connection age
         let score_age = Self::score_connection_age(connection_info);
 
         // Connection type (inbound/outbound)
-        let score_outbound = if connection_info.network_connection().expect("Missing network connection").outbound() {
+        let score_outbound = if connection_info
+            .network_connection()
+            .expect("Missing network connection")
+            .outbound()
+        {
             0.0
         } else {
             1.0
         };
 
-        let peer_address = connection_info.peer_address().expect("Missing peer address");
+        let peer_address = connection_info
+            .peer_address()
+            .expect("Missing peer address");
 
         // Node type (full/light/nano)
         let score_type: Score;
@@ -232,39 +287,63 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
         let score_protocol: Score = match peer_address.protocol() {
             Protocol::Wss | Protocol::Ws => {
                 // Boost WebSocket score when low on WebSocket connections.
-                if distribution < Self::BEST_PROTOCOL_WS_DISTRIBUTION || peer_count_full_ws_outbound <= Self::PEER_COUNT_MIN_FULL_WS_OUTBOUND {
+                if distribution < Self::BEST_PROTOCOL_WS_DISTRIBUTION
+                    || peer_count_full_ws_outbound <= Self::PEER_COUNT_MIN_FULL_WS_OUTBOUND
+                {
                     1.0
                 } else {
                     0.6
                 }
-            },
+            }
             Protocol::Rtc => 0.3,
             Protocol::Dumb => 0.0,
         };
 
         // Connection speed, based on ping-pong latency median
         let median_latency = connection_info.statistics().latency_median();
-        let score_speed: f64 = if median_latency > 0.0 && median_latency < NetworkAgent::<B>::PING_TIMEOUT.as_secs() as f64 {
+        let score_speed: f64 = if median_latency > 0.0
+            && median_latency < NetworkAgent::<B>::PING_TIMEOUT.as_secs() as f64
+        {
             1.0 - median_latency / NetworkAgent::<B>::PING_TIMEOUT.as_secs() as f64
-        } else { 0.0 };
+        } else {
+            0.0
+        };
 
-        0.15 * score_age + 0.25 * score_outbound + 0.2 * score_type + 0.2 * score_protocol + 0.2 * score_speed
+        0.15 * score_age
+            + 0.25 * score_outbound
+            + 0.2 * score_type
+            + 0.2 * score_protocol
+            + 0.2 * score_speed
     }
 
     fn score_by_age(age: u128, best_age: u128, max_age: u128) -> Score {
-        f64::max(f64::min(1. - (age as f64 - best_age as f64) / max_age as f64, 1.), 0.)
+        f64::max(
+            f64::min(1. - (age as f64 - best_age as f64) / max_age as f64, 1.),
+            0.,
+        )
     }
 
     fn score_connection_age(connection_info: &ConnectionInfo<B>) -> Score {
         let age = connection_info.age_established().as_millis();
-        let services = connection_info.peer_address().expect("No peer address").services;
+        let services = connection_info
+            .peer_address()
+            .expect("No peer address")
+            .services;
 
         if services.is_full_node() {
             (age as f64 / (2.0 * (Self::BEST_AGE_FULL.as_millis()) as f64) + 0.5) as Score
         } else if services.is_light_node() {
-            Self::score_by_age(age, Self::BEST_AGE_LIGHT.as_millis(), Self::MAX_AGE_LIGHT.as_millis()) as Score
+            Self::score_by_age(
+                age,
+                Self::BEST_AGE_LIGHT.as_millis(),
+                Self::MAX_AGE_LIGHT.as_millis(),
+            ) as Score
         } else {
-            Self::score_by_age(age, Self::BEST_AGE_NANO.as_millis(), Self::MAX_AGE_NANO.as_millis()) as Score
+            Self::score_by_age(
+                age,
+                Self::BEST_AGE_NANO.as_millis(),
+                Self::MAX_AGE_NANO.as_millis(),
+            ) as Score
         }
     }
 
@@ -280,9 +359,15 @@ impl<B: AbstractBlockchain + 'static> PeerScorer<B> {
 
     pub fn lowest_connection_score(&mut self) -> Option<Score> {
         while !self.connection_scores.is_empty() {
-            let connection_id = self.connection_scores.last().map(|(connection_id, _)| *connection_id).unwrap();
+            let connection_id = self
+                .connection_scores
+                .last()
+                .map(|(connection_id, _)| *connection_id)
+                .unwrap();
             let state = self.connections.state();
-            let connection_info = state.get_connection(connection_id).expect("Missing connection");
+            let connection_info = state
+                .get_connection(connection_id)
+                .expect("Missing connection");
 
             if connection_info.state() == ConnectionState::Established {
                 self.connection_scores.pop();

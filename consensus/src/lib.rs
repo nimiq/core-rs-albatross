@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate log;
-
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_block_base as block_base;
 extern crate nimiq_blockchain as blockchain;
@@ -18,15 +17,15 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 
-pub mod consensus;
-pub mod consensus_agent;
-pub mod inventory;
-pub mod error;
-mod accounts_chunk_cache;
-mod protocol;
-
 pub use self::consensus::{Consensus, ConsensusEvent};
 pub use self::error::Error;
-pub use self::protocol::nimiq::NimiqConsensusProtocol;
 pub use self::protocol::albatross::AlbatrossConsensusProtocol;
+pub use self::protocol::nimiq::NimiqConsensusProtocol;
 pub use self::protocol::ConsensusProtocol;
+
+mod accounts_chunk_cache;
+pub mod consensus;
+pub mod consensus_agent;
+pub mod error;
+pub mod inventory;
+mod protocol;

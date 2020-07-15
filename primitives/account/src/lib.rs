@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate beserial_derive;
+extern crate lazy_static;
 #[macro_use]
 extern crate log;
-extern crate lazy_static;
 extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
@@ -413,7 +413,8 @@ pub enum Receipt {
     PrunedAccount(PrunedAccount),
     Transaction {
         index: u16,
-        sender: bool, // A bit inefficient.
+        sender: bool,
+        // A bit inefficient.
         data: Vec<u8>,
     },
     Inherent {

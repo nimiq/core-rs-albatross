@@ -1,5 +1,5 @@
-use futures::sync::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
 use futures::stream::Stream;
+use futures::sync::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::{future, Future};
 
 pub trait Forward {
@@ -28,7 +28,7 @@ struct Consumer<F: Forward> {
 }
 
 impl<F: Forward> Consumer<F> {
-    fn consume(&self, item: F::ItemType) ->  impl Future<Item = (), Error = ()> {
+    fn consume(&self, item: F::ItemType) -> impl Future<Item = (), Error = ()> {
         self.f.forward(item);
         future::ok(())
     }

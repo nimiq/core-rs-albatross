@@ -1,9 +1,9 @@
 #[macro_use]
-extern crate log;
+extern crate beserial_derive;
 #[macro_use]
 extern crate failure;
 #[macro_use]
-extern crate beserial_derive;
+extern crate log;
 extern crate nimiq_account as account;
 extern crate nimiq_block_base as block_base;
 extern crate nimiq_bls as bls;
@@ -16,22 +16,27 @@ extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
+pub use block::{Block, BlockHeader, BlockType};
+pub use fork_proof::ForkProof;
+pub use macro_block::{MacroBlock, MacroExtrinsics, MacroHeader};
+pub use micro_block::{MicroBlock, MicroExtrinsics, MicroHeader, MicroJustification};
+pub use pbft::{
+    PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProofBuilder, PbftProposal,
+    SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
+};
+pub use view_change::{
+    SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder, ViewChanges,
+};
+
+use crate::transaction::TransactionError;
+
 mod block;
+mod fork_proof;
 mod macro_block;
 mod micro_block;
 mod pbft;
-mod fork_proof;
-mod view_change;
 pub mod signed;
-
-pub use block::{Block, BlockType, BlockHeader};
-pub use macro_block::{MacroBlock, MacroHeader, MacroExtrinsics};
-pub use micro_block::{MicroBlock, MicroHeader, MicroJustification, MicroExtrinsics};
-pub use view_change::{ViewChange, SignedViewChange, ViewChangeProof, ViewChangeProofBuilder, ViewChanges};
-pub use fork_proof::ForkProof;
-pub use pbft::{PbftPrepareMessage, PbftCommitMessage, PbftProofBuilder, PbftProof, SignedPbftPrepareMessage, SignedPbftCommitMessage, SignedPbftProposal, PbftProposal};
-
-use crate::transaction::TransactionError;
+mod view_change;
 
 #[derive(Clone, PartialEq, Eq, Debug, Fail)]
 pub enum BlockError {
@@ -56,7 +61,6 @@ pub enum BlockError {
     DuplicateForkProof,
     #[fail(display = "Fork proofs incorrectly ordered")]
     ForkProofsNotOrdered,
-
 
     #[fail(display = "Duplicate transaction in block")]
     DuplicateTransaction,

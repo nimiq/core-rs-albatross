@@ -16,16 +16,22 @@ use hash::Blake2bHash;
 use macros::upgrade_weak;
 use network::connection::close_type::CloseType;
 use network::peer::Peer;
-use network_messages::{EpochTransactionsMessage, GetBlocksDirection, GetBlocksMessage, GetEpochTransactionsMessage};
+use network_messages::{
+    EpochTransactionsMessage, GetBlocksDirection, GetBlocksMessage, GetEpochTransactionsMessage,
+};
 use primitives::policy;
 use transaction::Transaction;
 use utils::merkle::partial::PartialMerkleProofResult;
 use utils::mutable_once::MutableOnce;
-use utils::observer::{PassThroughListener, PassThroughNotifier, weak_listener};
+use utils::observer::{weak_listener, PassThroughListener, PassThroughNotifier};
 use utils::timers::Timers;
 
 pub trait SyncProtocol<B: AbstractBlockchain>: Send + Sync {
-    fn new(blockchain: Arc<B>, block_queue: Arc<RwLock<BlockQueue<B>>>, peer: Arc<Peer>) -> Arc<Self>;
+    fn new(
+        blockchain: Arc<B>,
+        block_queue: Arc<RwLock<BlockQueue<B>>>,
+        peer: Arc<Peer>,
+    ) -> Arc<Self>;
     fn initiate_sync(&self) {}
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash>;
     fn request_blocks(&self, locators: Vec<Blake2bHash>, max_results: u16);
@@ -33,7 +39,10 @@ pub trait SyncProtocol<B: AbstractBlockchain>: Send + Sync {
     fn on_epoch_transactions(&self, epoch_transactions: EpochTransactionsMessage);
     fn on_no_new_objects_announced(&self) {}
     fn on_all_objects_received(&self) {}
-    fn register_listener<L: PassThroughListener<SyncEvent<<B::Block as Block>::Error>> + 'static>(&self, listener: L);
+    fn register_listener<L: PassThroughListener<SyncEvent<<B::Block as Block>::Error>> + 'static>(
+        &self,
+        listener: L,
+    );
     fn deregister_listener(&self);
     fn notify(&self, event: SyncEvent<<B::Block as Block>::Error>);
 }
@@ -52,7 +61,11 @@ pub struct FullSync<B: AbstractBlockchain> {
 }
 
 impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
-    fn new(blockchain: Arc<B>, block_queue: Arc<RwLock<BlockQueue<B>>>, peer: Arc<Peer>) -> Arc<Self> {
+    fn new(
+        blockchain: Arc<B>,
+        block_queue: Arc<RwLock<BlockQueue<B>>>,
+        peer: Arc<Peer>,
+    ) -> Arc<Self> {
         let this = Arc::new(Self {
             blockchain,
             block_queue,
@@ -83,15 +96,27 @@ impl<B: AbstractBlockchain> SyncProtocol<B> for FullSync<B> {
     }
 
     fn on_block(&self, block: B::Block) {
-        self.block_queue.write().push(block, Weak::clone(&self.self_weak));
+        self.block_queue
+            .write()
+            .push(block, Weak::clone(&self.self_weak));
     }
 
     fn on_epoch_transactions(&self, _epoch_transactions: EpochTransactionsMessage) {
-        warn!("We didn't expect any epoch transactions from {} - discarding and closing the channel", self.peer.peer_address());
-        self.peer.channel.close(CloseType::UnexpectedEpochTransactions);
+        warn!(
+            "We didn't expect any epoch transactions from {} - discarding and closing the channel",
+            self.peer.peer_address()
+        );
+        self.peer
+            .channel
+            .close(CloseType::UnexpectedEpochTransactions);
     }
 
-    fn register_listener<L: PassThroughListener<SyncEvent<<B::Block as Block>::Error>> + 'static>(&self, listener: L) {
+    fn register_listener<
+        L: PassThroughListener<SyncEvent<<B::Block as Block>::Error>> + 'static,
+    >(
+        &self,
+        listener: L,
+    ) {
         self.notifier.write().register(listener)
     }
 
@@ -144,7 +169,7 @@ impl MacroBlockSyncState {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum MacroBlockSyncTimer {
-    EpochTransactions(u32)
+    EpochTransactions(u32),
 }
 
 pub struct MacroBlockSync {
@@ -164,8 +189,12 @@ impl MacroBlockSync {
         self.state.write().processing_epoch = false;
 
         let hash = block.hash();
-        let result = self.blockchain.push_isolated_macro_block(block, transactions);
-        self.notifier.read().notify(SyncEvent::BlockProcessed(hash, result));
+        let result = self
+            .blockchain
+            .push_isolated_macro_block(block, transactions);
+        self.notifier
+            .read()
+            .notify(SyncEvent::BlockProcessed(hash, result));
 
         self.start_processing();
     }
@@ -180,14 +209,22 @@ impl MacroBlockSync {
 
             // Set timeout.
             let weak = self.self_weak.clone();
-            self.timers.set_delay(MacroBlockSyncTimer::EpochTransactions(epoch), move || {
-                let this = upgrade_weak!(weak);
-                // TODO: What should happen if we don't receive any response?
-                // For now, just drop the connection with that peer.
-                this.peer.channel.close(CloseType::GetEpochTransactionsTimeout);
-            }, Self::REQUEST_TIMEOUT);
+            self.timers.set_delay(
+                MacroBlockSyncTimer::EpochTransactions(epoch),
+                move || {
+                    let this = upgrade_weak!(weak);
+                    // TODO: What should happen if we don't receive any response?
+                    // For now, just drop the connection with that peer.
+                    this.peer
+                        .channel
+                        .close(CloseType::GetEpochTransactionsTimeout);
+                },
+                Self::REQUEST_TIMEOUT,
+            );
 
-            self.peer.channel.send_or_close(GetEpochTransactionsMessage::new(epoch));
+            self.peer
+                .channel
+                .send_or_close(GetEpochTransactionsMessage::new(epoch));
         }
     }
 
@@ -197,7 +234,11 @@ impl MacroBlockSync {
 }
 
 impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
-    fn new(blockchain: Arc<AlbatrossBlockchain>, _: Arc<RwLock<BlockQueue<AlbatrossBlockchain>>>, peer: Arc<Peer>) -> Arc<Self> {
+    fn new(
+        blockchain: Arc<AlbatrossBlockchain>,
+        _: Arc<RwLock<BlockQueue<AlbatrossBlockchain>>>,
+        peer: Arc<Peer>,
+    ) -> Arc<Self> {
         let this = Arc::new(Self {
             peer,
             blockchain,
@@ -215,9 +256,9 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
 
         {
             let mut close_notifier = this.peer.channel.close_notifier.write();
-            close_notifier.register(weak_listener(
-                Arc::downgrade(&this),
-                |this, _| this.on_close()));
+            close_notifier.register(weak_listener(Arc::downgrade(&this), |this, _| {
+                this.on_close()
+            }));
         }
 
         this
@@ -236,16 +277,10 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
 
     fn request_blocks(&self, locators: Vec<Blake2bHash>, max_results: u16) {
         let message = match self.state.read().phase {
-            MacroBlockSyncPhase::MacroBlocks => GetBlocksMessage::new_with_macro(
-                locators,
-                max_results,
-                GetBlocksDirection::Forward,
-            ),
-            _ => GetBlocksMessage::new(
-                locators,
-                max_results,
-                GetBlocksDirection::Forward,
-            ),
+            MacroBlockSyncPhase::MacroBlocks => {
+                GetBlocksMessage::new_with_macro(locators, max_results, GetBlocksDirection::Forward)
+            }
+            _ => GetBlocksMessage::new(locators, max_results, GetBlocksDirection::Forward),
         };
         self.peer.channel.send_or_close(message);
     }
@@ -259,10 +294,12 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
                 state.block_cache.push_back(block);
                 drop(state);
                 self.start_processing();
-            },
+            }
             _ => {
                 let result = self.blockchain.push(block);
-                self.notifier.read().notify(SyncEvent::BlockProcessed(hash, result));
+                self.notifier
+                    .read()
+                    .notify(SyncEvent::BlockProcessed(hash, result));
             }
         }
     }
@@ -279,17 +316,21 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
             Some(AlbatrossBlock::Macro(ref macro_block)) => {
                 if policy::epoch_at(macro_block.header.block_number) != epoch_transactions.epoch {
                     warn!("We didn't expect any transactions for epoch {} from {} - discarding and closing the channel", epoch_transactions.epoch, self.peer.peer_address());
-                    self.peer.channel.close(CloseType::UnexpectedEpochTransactions);
+                    self.peer
+                        .channel
+                        .close(CloseType::UnexpectedEpochTransactions);
                     return;
                 }
 
                 expected_root = macro_block.header.transactions_root.clone();
-            },
+            }
             None => {
                 warn!("We didn't expect any transactions for epoch {} from {} - discarding and closing the channel", epoch_transactions.epoch, self.peer.peer_address());
-                self.peer.channel.close(CloseType::UnexpectedEpochTransactions);
+                self.peer
+                    .channel
+                    .close(CloseType::UnexpectedEpochTransactions);
                 return;
-            },
+            }
             _ => unreachable!(),
         }
 
@@ -308,7 +349,10 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
                 state.previous_result = Some(result);
 
                 if proof.is_empty() {
-                    self.timers.clear_delay(&MacroBlockSyncTimer::EpochTransactions(epoch_transactions.epoch));
+                    self.timers
+                        .clear_delay(&MacroBlockSyncTimer::EpochTransactions(
+                            epoch_transactions.epoch,
+                        ));
 
                     let transactions = mem::replace(&mut state.transactions_cache, Vec::new());
                     state.previous_result = None;
@@ -320,19 +364,25 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
                 } else {
                     // Reset delay to allow for more time.
                     let weak = self.self_weak.clone();
-                    self.timers.reset_delay(MacroBlockSyncTimer::EpochTransactions(epoch_transactions.epoch), move || {
-                        let this = upgrade_weak!(weak);
-                        // TODO: What should happen if we don't receive any response?
-                        // For now, just drop the connection with that peer.
-                        this.peer.channel.close(CloseType::GetEpochTransactionsTimeout);
-                    }, Self::REQUEST_TIMEOUT);
+                    self.timers.reset_delay(
+                        MacroBlockSyncTimer::EpochTransactions(epoch_transactions.epoch),
+                        move || {
+                            let this = upgrade_weak!(weak);
+                            // TODO: What should happen if we don't receive any response?
+                            // For now, just drop the connection with that peer.
+                            this.peer
+                                .channel
+                                .close(CloseType::GetEpochTransactionsTimeout);
+                        },
+                        Self::REQUEST_TIMEOUT,
+                    );
                 }
-            },
+            }
             Err(e) => {
                 warn!("We received an invalid merkle proof ({:?}) from {} - discarding and closing the channel", e, self.peer.peer_address());
                 self.peer.channel.close(CloseType::InvalidEpochTransactions);
                 return;
-            },
+            }
         }
     }
 
@@ -341,15 +391,20 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
         match state.phase {
             MacroBlockSyncPhase::MacroBlocks => {
                 state.phase = MacroBlockSyncPhase::MicroBlocks;
-            },
+            }
             MacroBlockSyncPhase::MicroBlocks => {
                 state.phase = MacroBlockSyncPhase::Finished;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
-    fn register_listener<L: PassThroughListener<SyncEvent<<AlbatrossBlock as Block>::Error>> + 'static>(&self, listener: L) {
+    fn register_listener<
+        L: PassThroughListener<SyncEvent<<AlbatrossBlock as Block>::Error>> + 'static,
+    >(
+        &self,
+        listener: L,
+    ) {
         self.notifier.write().register(listener)
     }
 
@@ -361,7 +416,6 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
         self.notifier.read().notify(event)
     }
 }
-
 
 pub struct BlockQueue<B: AbstractBlockchain> {
     blockchain: Arc<B>,
@@ -397,14 +451,28 @@ impl<B: AbstractBlockchain> BlockQueue<B> {
             self.push_buffered();
         } else if block_height > head_height + Self::WINDOW_MAX {
             // Block outside of buffer window
-            warn!("Discarding block #{} outside of buffer window (max {})", block_height, head_height + Self::WINDOW_MAX);
+            warn!(
+                "Discarding block #{} outside of buffer window (max {})",
+                block_height,
+                head_height + Self::WINDOW_MAX
+            );
             let agent = upgrade_weak!(agent);
-            agent.notify(SyncEvent::BlockProcessed(block.hash(), Err(PushError::Orphan)));
+            agent.notify(SyncEvent::BlockProcessed(
+                block.hash(),
+                Err(PushError::Orphan),
+            ));
         } else if self.buffer.len() >= Self::BUFFER_MAX {
             // Block inside buffer window, but buffer is full
-            warn!("Discarding block #{}, buffer full (max {})", block_height, self.buffer.len());
+            warn!(
+                "Discarding block #{}, buffer full (max {})",
+                block_height,
+                self.buffer.len()
+            );
             let agent = upgrade_weak!(agent);
-            agent.notify(SyncEvent::BlockProcessed(block.hash(), Err(PushError::Orphan)));
+            agent.notify(SyncEvent::BlockProcessed(
+                block.hash(),
+                Err(PushError::Orphan),
+            ));
         } else {
             // Block inside buffer window
             self.insert_into_buffer(block, agent);
@@ -432,9 +500,16 @@ impl<B: AbstractBlockchain> BlockQueue<B> {
     }
 
     fn push_buffered(&mut self) {
-        while self.buffer.front().map_or(false, |entry| entry.0.height() <= self.blockchain.head_height() + 1) {
+        while self.buffer.front().map_or(false, |entry| {
+            entry.0.height() <= self.blockchain.head_height() + 1
+        }) {
             let entry = self.buffer.pop_front().unwrap();
-            trace!("Pushing buffered block #{} (currently at #{}, {} blocks left)", entry.0.height(), self.blockchain.head_height(), self.buffer.len());
+            trace!(
+                "Pushing buffered block #{} (currently at #{}, {} blocks left)",
+                entry.0.height(),
+                self.blockchain.head_height(),
+                self.buffer.len()
+            );
             self.push_block(entry.0, entry.1);
         }
     }
@@ -451,7 +526,12 @@ impl<B: AbstractBlockchain> BlockQueue<B> {
             }
             index += 1;
         }
-        trace!("Buffering block #{} at index {} (currently at #{}) ", block.height(), index, self.blockchain.head_height());
+        trace!(
+            "Buffering block #{} at index {} (currently at #{}) ",
+            block.height(),
+            index,
+            self.blockchain.head_height()
+        );
         self.buffer.insert(index, (block, agent));
     }
 }

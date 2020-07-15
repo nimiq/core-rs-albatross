@@ -2,14 +2,14 @@ use std::fmt::Display;
 use std::io;
 use std::sync::Arc;
 
-use futures::{future, Future, stream, stream::Stream};
-use hyper::{Body, Request, Response, StatusCode};
-use hyper::Chunk;
-use hyper::header::{AUTHORIZATION, WWW_AUTHENTICATE, LOCATION};
 use base64::encode;
+use futures::IntoFuture;
+use futures::{future, stream, stream::Stream, Future};
+use hyper::header::{AUTHORIZATION, LOCATION, WWW_AUTHENTICATE};
+use hyper::Chunk;
+use hyper::{Body, Request, Response, StatusCode};
 
 use crate::server::attributes::{CachedAttributes, VecAttributes};
-use futures::IntoFuture;
 
 pub mod attributes;
 
@@ -31,12 +31,27 @@ impl<W: io::Write + Into<Chunk>> MetricsSerializer<W> {
 
     #[inline]
     pub fn metric<K: Display, V: Display>(&mut self, key: K, value: V) -> Result<(), io::Error> {
-        writeln!(self.writer, "{}{{{}}} {}", key, self.common_attributes, value)
+        writeln!(
+            self.writer,
+            "{}{{{}}} {}",
+            key, self.common_attributes, value
+        )
     }
 
     #[inline]
-    pub fn metric_with_attributes<K: Display, V: Display, A: Into<VecAttributes>>(&mut self, key: K, value: V, attributes: A) -> Result<(), io::Error> {
-        writeln!(self.writer, "{}{{{}}} {}", key, &self.common_attributes + attributes.into(), value)
+    pub fn metric_with_attributes<K: Display, V: Display, A: Into<VecAttributes>>(
+        &mut self,
+        key: K,
+        value: V,
+        attributes: A,
+    ) -> Result<(), io::Error> {
+        writeln!(
+            self.writer,
+            "{}{{{}}} {}",
+            key,
+            &self.common_attributes + attributes.into(),
+            value
+        )
     }
 }
 
@@ -47,7 +62,10 @@ impl<W: io::Write + Into<Chunk>> From<MetricsSerializer<W>> for Chunk {
 }
 
 pub trait Metrics: Send + Sync {
-    fn metrics(&self, serializer: &mut MetricsSerializer<SerializationType>) -> Result<(), io::Error>;
+    fn metrics(
+        &self,
+        serializer: &mut MetricsSerializer<SerializationType>,
+    ) -> Result<(), io::Error>;
 }
 
 #[derive(Debug)]
@@ -74,7 +92,12 @@ pub struct MetricsServer {
 
 impl MetricsServer {
     #[inline]
-    pub fn new<A: Into<CachedAttributes>>(metrics: Vec<Arc<dyn Metrics>>, common_attributes: A, username: Option<String>, password: Option<String>) -> Self {
+    pub fn new<A: Into<CachedAttributes>>(
+        metrics: Vec<Arc<dyn Metrics>>,
+        common_attributes: A,
+        username: Option<String>,
+        password: Option<String>,
+    ) -> Self {
         MetricsServer {
             metrics,
             common_attributes: common_attributes.into(),
@@ -86,29 +109,34 @@ impl MetricsServer {
     pub fn serve(&self) -> Body {
         let metrics = self.metrics.clone();
         let attributes = self.common_attributes.clone();
-        let stream = stream::iter_ok::<_, io::Error>(metrics)
-            .map(move |metrics| {
-                let mut serializer = MetricsSerializer::new(attributes.clone(), Vec::new());
-                match metrics.metrics(&mut serializer) {
-                    Ok(()) => Chunk::from(serializer),
-                    Err(e) => {
-                        // TODO: Properly handle errors.
-                        warn!("Metrics error: {}", e);
-                        Chunk::default()
-                    }
+        let stream = stream::iter_ok::<_, io::Error>(metrics).map(move |metrics| {
+            let mut serializer = MetricsSerializer::new(attributes.clone(), Vec::new());
+            match metrics.metrics(&mut serializer) {
+                Ok(()) => Chunk::from(serializer),
+                Err(e) => {
+                    // TODO: Properly handle errors.
+                    warn!("Metrics error: {}", e);
+                    Chunk::default()
                 }
-            });
+            }
+        });
 
         Body::wrap_stream(stream)
     }
 }
 
 fn check_auth(req: &Request<Body>, username: &Option<String>, password: &Option<String>) -> bool {
-    match (username, password, req.headers().get(AUTHORIZATION).and_then(|header| header.to_str().ok())) {
+    match (
+        username,
+        password,
+        req.headers()
+            .get(AUTHORIZATION)
+            .and_then(|header| header.to_str().ok()),
+    ) {
         (None, None, _) => true,
         (Some(ref username), Some(ref password), Some(authorization)) => {
             authorization == format!("Basic {}", encode(&format!("{}:{}", username, password)))
-        },
+        }
         _ => false,
     }
 }
@@ -127,9 +155,12 @@ impl hyper::service::Service for MetricsServer {
     type ReqBody = Body;
     type ResBody = Body;
     type Error = hyper::Error;
-    type Future = Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>;
+    type Future = Box<dyn Future<Item = Response<Body>, Error = hyper::Error> + Send>;
 
-    fn call(&mut self, req: Request<<Self as hyper::service::Service>::ReqBody>) -> <Self as hyper::service::Service>::Future {
+    fn call(
+        &mut self,
+        req: Request<<Self as hyper::service::Service>::ReqBody>,
+    ) -> <Self as hyper::service::Service>::Future {
         // Check URI.
         if req.uri() != "/metrics" {
             return Box::new(future::ok(
@@ -137,7 +168,7 @@ impl hyper::service::Service for MetricsServer {
                     .status(StatusCode::MOVED_PERMANENTLY)
                     .header(LOCATION, "/metrics")
                     .body(Body::empty())
-                    .unwrap()
+                    .unwrap(),
             ));
         }
 

@@ -19,6 +19,7 @@ pub struct PbftProposal {
     pub header: MacroHeader,
     pub view_change: Option<ViewChangeProof>,
 }
+
 pub type SignedPbftProposal = SignedMessage<PbftProposal>;
 
 impl Message for PbftProposal {

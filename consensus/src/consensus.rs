@@ -12,7 +12,7 @@ use rand::thread_rng;
 use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use database::Environment;
 use macros::upgrade_weak;
-use mempool::{Mempool, MempoolEvent, MempoolConfig};
+use mempool::{Mempool, MempoolConfig, MempoolEvent};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
@@ -22,7 +22,7 @@ use utils::observer::Notifier;
 use utils::timers::Timers;
 
 use crate::accounts_chunk_cache::AccountsChunkCache;
-use crate::consensus_agent::{ConsensusAgent, ConsensusAgentEvent, sync::BlockQueue};
+use crate::consensus_agent::{sync::BlockQueue, ConsensusAgent, ConsensusAgentEvent};
 use crate::error::Error;
 use crate::inventory::InventoryManager;
 use crate::protocol::ConsensusProtocol;
@@ -71,11 +71,25 @@ impl<P: ConsensusProtocol> Consensus<P> {
     const MIN_FULL_NODES: usize = 0;
     const SYNC_THROTTLE: Duration = Duration::from_millis(1500);
 
-    pub fn new(env: Environment, network_id: NetworkId, network_config: NetworkConfig, mempool_config: MempoolConfig) -> Result<Arc<Self>, Error> {
+    pub fn new(
+        env: Environment,
+        network_id: NetworkId,
+        network_config: NetworkConfig,
+        mempool_config: MempoolConfig,
+    ) -> Result<Arc<Self>, Error> {
         let network_time = Arc::new(NetworkTime::new());
-        let blockchain = Arc::new(<P::Blockchain as AbstractBlockchain>::new(env.clone(), network_id, Arc::clone(&network_time))?);
+        let blockchain = Arc::new(<P::Blockchain as AbstractBlockchain>::new(
+            env.clone(),
+            network_id,
+            Arc::clone(&network_time),
+        )?);
         let mempool = Mempool::new(Arc::clone(&blockchain), mempool_config);
-        let network = Network::new(Arc::clone(&blockchain), network_config, network_time, network_id)?;
+        let network = Network::new(
+            Arc::clone(&blockchain),
+            network_config,
+            network_time,
+            network_id,
+        )?;
         let accounts_chunk_cache = AccountsChunkCache::new(env.clone(), Arc::clone(&blockchain));
         let block_queue = BlockQueue::new(Arc::clone(&blockchain));
 
@@ -108,34 +122,50 @@ impl<P: ConsensusProtocol> Consensus<P> {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
         let weak = Arc::downgrade(this);
-        this.network.notifier.write().register(move |e: &NetworkEvent| {
-            let this = upgrade_weak!(weak);
-            match e {
-                NetworkEvent::PeerJoined(peer) => this.on_peer_joined(Arc::clone(peer)),
-                NetworkEvent::PeerLeft(peer) => this.on_peer_left(Arc::clone(peer)),
-                _ => {}
-            }
-        });
+        this.network
+            .notifier
+            .write()
+            .register(move |e: &NetworkEvent| {
+                let this = upgrade_weak!(weak);
+                match e {
+                    NetworkEvent::PeerJoined(peer) => this.on_peer_joined(Arc::clone(peer)),
+                    NetworkEvent::PeerLeft(peer) => this.on_peer_left(Arc::clone(peer)),
+                    _ => {}
+                }
+            });
 
         // Relay new (verified) transactions to peers.
         let weak = Arc::downgrade(this);
-        this.mempool.notifier.write().register(move |e: &MempoolEvent| {
-            let this = upgrade_weak!(weak);
-            match e {
-                MempoolEvent::TransactionAdded(_, transaction) => this.on_transaction_added(transaction),
-                // TODO: Relay on restore?
-                MempoolEvent::TransactionRestored(transaction) => this.on_transaction_added(transaction),
-                MempoolEvent::TransactionEvicted(transaction) => this.on_transaction_removed(transaction),
-                MempoolEvent::TransactionMined(transaction) => this.on_transaction_removed(transaction),
-            }
-        });
+        this.mempool
+            .notifier
+            .write()
+            .register(move |e: &MempoolEvent| {
+                let this = upgrade_weak!(weak);
+                match e {
+                    MempoolEvent::TransactionAdded(_, transaction) => {
+                        this.on_transaction_added(transaction)
+                    }
+                    // TODO: Relay on restore?
+                    MempoolEvent::TransactionRestored(transaction) => {
+                        this.on_transaction_added(transaction)
+                    }
+                    MempoolEvent::TransactionEvicted(transaction) => {
+                        this.on_transaction_removed(transaction)
+                    }
+                    MempoolEvent::TransactionMined(transaction) => {
+                        this.on_transaction_removed(transaction)
+                    }
+                }
+            });
 
         // Notify peers when our blockchain head changes.
         let weak = Arc::downgrade(this);
-        this.blockchain.register_listener(move |e: &BlockchainEvent<<P::Blockchain as AbstractBlockchain>::Block>| {
-            let this = upgrade_weak!(weak);
-            this.on_blockchain_event(e);
-        });
+        this.blockchain.register_listener(
+            move |e: &BlockchainEvent<<P::Blockchain as AbstractBlockchain>::Block>| {
+                let this = upgrade_weak!(weak);
+                this.on_blockchain_event(e);
+            },
+        );
     }
 
     fn on_peer_joined(&self, peer: Arc<Peer>) {
@@ -146,24 +176,34 @@ impl<P: ConsensusProtocol> Consensus<P> {
             Arc::clone(&self.inv_mgr),
             Arc::clone(&self.accounts_chunk_cache),
             Arc::clone(&self.block_queue),
-            Arc::clone(&peer));
+            Arc::clone(&peer),
+        );
 
         let weak = Weak::clone(&self.self_weak);
         let peer_arc_moved = Arc::clone(&peer);
-        agent.notifier.write().register(move |e: &ConsensusAgentEvent| {
-            let this = upgrade_weak!(weak);
-            match e {
-                ConsensusAgentEvent::Synced => this.on_peer_synced(peer_arc_moved.clone()),
-                ConsensusAgentEvent::OutOfSync => this.on_peer_out_of_sync(peer_arc_moved.clone()),
-            }
-        });
+        agent
+            .notifier
+            .write()
+            .register(move |e: &ConsensusAgentEvent| {
+                let this = upgrade_weak!(weak);
+                match e {
+                    ConsensusAgentEvent::Synced => this.on_peer_synced(peer_arc_moved.clone()),
+                    ConsensusAgentEvent::OutOfSync => {
+                        this.on_peer_out_of_sync(peer_arc_moved.clone())
+                    }
+                }
+            });
 
         // If no more peers connect within the specified timeout, start syncing.
         let weak = Weak::clone(&self.self_weak);
-        self.timers.reset_delay(ConsensusTimer::Sync, move || {
-            let this = upgrade_weak!(weak);
-            this.sync_blockchain();
-        }, Self::SYNC_THROTTLE);
+        self.timers.reset_delay(
+            ConsensusTimer::Sync,
+            move || {
+                let this = upgrade_weak!(weak);
+                this.sync_blockchain();
+            },
+            Self::SYNC_THROTTLE,
+        );
 
         self.state.write().agents.insert(peer, agent);
     }
@@ -176,7 +216,11 @@ impl<P: ConsensusProtocol> Consensus<P> {
             state.agents.remove(&peer);
 
             // Reset syncPeer if it left during the sync.
-            if state.sync_peer.as_ref().map_or(false, |sync_peer| sync_peer == &peer) {
+            if state
+                .sync_peer
+                .as_ref()
+                .map_or(false, |sync_peer| sync_peer == &peer)
+            {
                 debug!("Peer {} left during sync", peer.peer_address());
                 state.sync_peer = None;
                 drop(state);
@@ -192,7 +236,11 @@ impl<P: ConsensusProtocol> Consensus<P> {
         // Reset syncPeer if we finished syncing with it.
         {
             let mut state = self.state.write();
-            if state.sync_peer.as_ref().map_or(false, |sync_peer| sync_peer == &peer) {
+            if state
+                .sync_peer
+                .as_ref()
+                .map_or(false, |sync_peer| sync_peer == &peer)
+            {
                 debug!("Finished sync with peer {}", peer.peer_address());
                 state.sync_peer = None;
             }
@@ -206,7 +254,10 @@ impl<P: ConsensusProtocol> Consensus<P> {
         self.sync_blockchain();
     }
 
-    fn on_blockchain_event(&self, event: &BlockchainEvent<<P::Blockchain as AbstractBlockchain>::Block>) {
+    fn on_blockchain_event(
+        &self,
+        event: &BlockchainEvent<<P::Blockchain as AbstractBlockchain>::Block>,
+    ) {
         let state = self.state.read();
 
         let blocks: Vec<&<P::Blockchain as AbstractBlockchain>::Block>;
@@ -216,18 +267,17 @@ impl<P: ConsensusProtocol> Consensus<P> {
                 // This implicitly takes the lock on the blockchain state.
                 block = self.blockchain.head_block();
                 blocks = vec![&block];
-            },
+            }
             BlockchainEvent::Rebranched(_, ref adopted_blocks) => {
                 blocks = adopted_blocks.iter().map(|(_, block)| block).collect();
-            },
+            }
         }
 
         // print block height
         let height = self.blockchain.head_height();
         if height % 100 == 0 {
             info!("Now at block #{}", height);
-        }
-        else {
+        } else {
             trace!("Now at block #{}", height);
         }
 
@@ -270,14 +320,17 @@ impl<P: ConsensusProtocol> Consensus<P> {
         }
 
         let mut num_synced_full_nodes: usize = 0;
-        let candidates: Vec<&Arc<ConsensusAgent<P>>> = state.agents.values()
+        let candidates: Vec<&Arc<ConsensusAgent<P>>> = state
+            .agents
+            .values()
             .filter(|&agent| {
                 let synced = agent.synced();
                 if synced && agent.peer.peer_address().services.is_full_node() {
                     num_synced_full_nodes += 1;
                 }
                 !synced
-            }).collect();
+            })
+            .collect();
 
         // Choose a random peer which we aren't sync'd with yet.
         let mut rng = thread_rng();
@@ -308,8 +361,15 @@ impl<P: ConsensusProtocol> Consensus<P> {
             // Report consensus-established if we are connected to the minimum number of full nodes.
             if num_synced_full_nodes >= Self::MIN_FULL_NODES {
                 if !state.established {
-                    info!("Synced with all connected peers ({}), consensus established", state.agents.len());
-                    info!("Blockchain at block #{} [{}]", self.blockchain.head_height(), self.blockchain.head_hash());
+                    info!(
+                        "Synced with all connected peers ({}), consensus established",
+                        state.agents.len()
+                    );
+                    info!(
+                        "Blockchain at block #{} [{}]",
+                        self.blockchain.head_height(),
+                        self.blockchain.head_hash()
+                    );
 
                     state.established = true;
                     drop(state);

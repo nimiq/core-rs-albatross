@@ -6,22 +6,22 @@ use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGu
 
 use account::Account;
 use accounts::Accounts;
-use block::{Block, BlockError, Difficulty, Target, TargetCompact};
 use block::proof::ChainProof;
-use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
+use block::{Block, BlockError, Difficulty, Target, TargetCompact};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
+use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
-use fixed_unsigned::RoundHalfUp;
 use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
+use fixed_unsigned::RoundHalfUp;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use transaction::{TransactionReceipt, TransactionsProof};
 use transaction::Transaction as BlockchainTransaction;
+use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle, Notifier};
@@ -77,21 +77,33 @@ impl BlockchainState {
 }
 
 impl Blockchain {
-    pub fn new(env: Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+    pub fn new(
+        env: Environment,
+        network_id: NetworkId,
+        network_time: Arc<NetworkTime>,
+    ) -> Result<Self, BlockchainError> {
         let chain_store = ChainStore::new(env.clone());
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => Blockchain::load(env, network_time, network_id, chain_store, head_hash)?,
-            None => Blockchain::init(env, network_time, network_id, chain_store)?
+            Some(head_hash) => {
+                Blockchain::load(env, network_time, network_id, chain_store, head_hash)?
+            }
+            None => Blockchain::init(env, network_time, network_id, chain_store)?,
         })
     }
 
-    fn load(env: Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore, head_hash: Blake2bHash) -> Result<Self, BlockchainError> {
+    fn load(
+        env: Environment,
+        network_time: Arc<NetworkTime>,
+        network_id: NetworkId,
+        chain_store: ChainStore,
+        head_hash: Blake2bHash,
+    ) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
 
         if !genesis_info.map(|i| i.on_main_chain).unwrap_or(false) {
-            return Err(BlockchainError::InvalidGenesisBlock)
+            return Err(BlockchainError::InvalidGenesisBlock);
         }
 
         // Load main chain from store.
@@ -107,12 +119,20 @@ impl Blockchain {
 
         // Initialize TransactionCache.
         let mut transaction_cache = TransactionCache::new();
-        let blocks = chain_store.get_blocks_backward(&head_hash, transaction_cache.missing_blocks() - 1, true, None);
+        let blocks = chain_store.get_blocks_backward(
+            &head_hash,
+            transaction_cache.missing_blocks() - 1,
+            true,
+            None,
+        );
         for block in blocks.iter().rev() {
             transaction_cache.push_block(block);
         }
         transaction_cache.push_block(&main_chain.head);
-        assert_eq!(transaction_cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.header.height));
+        assert_eq!(
+            transaction_cache.missing_blocks(),
+            policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(main_chain.head.header.height)
+        );
 
         #[cfg(feature = "transaction-store")]
         let transaction_store = TransactionStore::new(env.clone());
@@ -140,7 +160,12 @@ impl Blockchain {
         })
     }
 
-    fn init(env: Environment, network_time: Arc<NetworkTime>, network_id: NetworkId, chain_store: ChainStore) -> Result<Self, BlockchainError> {
+    fn init(
+        env: Environment,
+        network_time: Arc<NetworkTime>,
+        network_id: NetworkId,
+        chain_store: ChainStore,
+    ) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_block = network_info.genesis_block::<Block>();
@@ -157,11 +182,19 @@ impl Blockchain {
         let genesis_transactions = &genesis_block.body.as_ref().unwrap().transactions;
         let genesis_inherents = vec![genesis_block.get_reward_inherent()];
         accounts
-            .commit(&mut txn, genesis_transactions, &genesis_inherents, genesis_header.height)
+            .commit(
+                &mut txn,
+                genesis_transactions,
+                &genesis_inherents,
+                genesis_header.height,
+            )
             .expect("Failed to commit genesis block body");
 
-        assert_eq!(accounts.hash(Some(&txn)), genesis_header.accounts_hash,
-                   "Genesis AccountHash mismatch");
+        assert_eq!(
+            accounts.hash(Some(&txn)),
+            genesis_header.accounts_hash,
+            "Genesis AccountHash mismatch"
+        );
 
         // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
@@ -202,7 +235,9 @@ impl Blockchain {
         assert!(block.body.is_some(), "Block body expected");
 
         // Check (sort of) intrinsic block invariants.
-        let genesis_hash = NetworkInfo::from_network_id(self.network_id).genesis_hash().clone();
+        let genesis_hash = NetworkInfo::from_network_id(self.network_id)
+            .genesis_hash()
+            .clone();
         if let Err(e) = block.verify(self.network_time.now(), self.network_id, genesis_hash) {
             warn!("Rejecting block - verification failed ({:?})", e);
             #[cfg(feature = "metrics")]
@@ -215,14 +250,20 @@ impl Blockchain {
 
         // Check if we already know this block.
         let hash: Blake2bHash = block.header.hash();
-        if self.chain_store.get_chain_info(&hash, false, None).is_some() {
+        if self
+            .chain_store
+            .get_chain_info(&hash, false, None)
+            .is_some()
+        {
             #[cfg(feature = "metrics")]
             self.metrics.note_known_block();
             return Ok(PushResult::Known);
         }
 
         // Check if the block's immediate predecessor is part of the chain.
-        let prev_info_opt = self.chain_store.get_chain_info(&block.header.prev_hash, false, None);
+        let prev_info_opt = self
+            .chain_store
+            .get_chain_info(&block.header.prev_hash, false, None);
         if prev_info_opt.is_none() {
             warn!("Rejecting block - unknown predecessor");
             #[cfg(feature = "metrics")]
@@ -245,7 +286,7 @@ impl Blockchain {
             warn!("Rejecting block - difficulty mismatch");
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
-            return Err(PushError::from_block_error(BlockError::DifficultyMismatch))
+            return Err(PushError::from_block_error(BlockError::DifficultyMismatch));
         }
 
         // Block looks good, create ChainInfo.
@@ -263,9 +304,13 @@ impl Blockchain {
         }
 
         // Otherwise, we are creating/extending a fork. Store ChainInfo.
-        debug!("Creating/extending fork with block {}, height #{}, total_difficulty {}", hash, chain_info.head.header.height, chain_info.total_difficulty);
+        debug!(
+            "Creating/extending fork with block {}, height #{}, total_difficulty {}",
+            hash, chain_info.head.header.height, chain_info.total_difficulty
+        );
         let mut txn = WriteTransaction::new(&self.env);
-        self.chain_store.put_chain_info(&mut txn, &hash, &chain_info, true);
+        self.chain_store
+            .put_chain_info(&mut txn, &hash, &chain_info, true);
         txn.commit();
 
         #[cfg(feature = "metrics")]
@@ -273,7 +318,12 @@ impl Blockchain {
         Ok(PushResult::Forked)
     }
 
-    fn extend(&self, block_hash: Blake2bHash, mut chain_info: ChainInfo, mut prev_info: ChainInfo) -> Result<PushResult, PushError> {
+    fn extend(
+        &self,
+        block_hash: Blake2bHash,
+        mut chain_info: ChainInfo,
+        mut prev_info: ChainInfo,
+    ) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(&self.env);
         {
             let state = self.state.read();
@@ -300,8 +350,14 @@ impl Blockchain {
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(block_hash.clone());
 
-        self.chain_store.put_chain_info(&mut txn, &block_hash, &chain_info, true);
-        self.chain_store.put_chain_info(&mut txn, &chain_info.head.header.prev_hash, &prev_info, false);
+        self.chain_store
+            .put_chain_info(&mut txn, &block_hash, &chain_info, true);
+        self.chain_store.put_chain_info(
+            &mut txn,
+            &chain_info.head.header.prev_hash,
+            &prev_info,
+            false,
+        );
         self.chain_store.set_head(&mut txn, &block_hash);
 
         {
@@ -334,8 +390,15 @@ impl Blockchain {
         Ok(PushResult::Extended)
     }
 
-    fn rebranch(&self, block_hash: Blake2bHash, chain_info: ChainInfo) -> Result<PushResult, PushError> {
-        debug!("Rebranching to fork {}, height #{}, total_difficulty {}", block_hash, chain_info.head.header.height, chain_info.total_difficulty);
+    fn rebranch(
+        &self,
+        block_hash: Blake2bHash,
+        chain_info: ChainInfo,
+    ) -> Result<PushResult, PushError> {
+        debug!(
+            "Rebranching to fork {}, height #{}, total_difficulty {}",
+            block_hash, chain_info.head.header.height, chain_info.total_difficulty
+        );
 
         // Find the common ancestor between our current main chain and the fork chain.
         // Walk up the fork chain until we find a block that is part of the main chain.
@@ -346,7 +409,8 @@ impl Blockchain {
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
         while !current.1.on_main_chain {
             let prev_hash = current.1.head.header.prev_hash.clone();
-            let prev_info = self.chain_store
+            let prev_info = self
+                .chain_store
                 .get_chain_info(&prev_hash, true, Some(&read_txn))
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
@@ -354,7 +418,12 @@ impl Blockchain {
             current = (prev_hash, prev_info);
         }
 
-        debug!("Found common ancestor {} at height #{}, {} blocks up", current.0, current.1.head.header.height, fork_chain.len());
+        debug!(
+            "Found common ancestor {} at height #{}, {} blocks up",
+            current.0,
+            current.1.head.header.height,
+            fork_chain.len()
+        );
 
         // Revert AccountsTree & TransactionCache to the common ancestor state.
         let mut revert_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
@@ -375,12 +444,18 @@ impl Blockchain {
                 cache_txn.revert_block(&current.1.head);
 
                 let prev_hash = current.1.head.header.prev_hash.clone();
-                let prev_info = self.chain_store
+                let prev_info = self
+                    .chain_store
                     .get_chain_info(&prev_hash, true, Some(&read_txn))
-                    .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
+                    .expect(
+                        "Corrupted store: Failed to find main chain predecessor while rebranching",
+                    );
 
-                assert_eq!(prev_info.head.header.accounts_hash, state.accounts.hash(Some(&write_txn)),
-                           "Failed to revert main chain while rebranching - inconsistent state");
+                assert_eq!(
+                    prev_info.head.header.accounts_hash,
+                    state.accounts.hash(Some(&write_txn)),
+                    "Failed to revert main chain while rebranching - inconsistent state"
+                );
 
                 revert_chain.push(current);
                 current = (prev_hash, prev_info);
@@ -393,11 +468,19 @@ impl Blockchain {
             } else {
                 cache_txn.tail_hash()
             };
-            let blocks = self.chain_store.get_blocks_backward(&start_hash, cache_txn.missing_blocks(), true, Some(&read_txn));
+            let blocks = self.chain_store.get_blocks_backward(
+                &start_hash,
+                cache_txn.missing_blocks(),
+                true,
+                Some(&read_txn),
+            );
             for block in blocks.iter() {
                 cache_txn.prepend_block(block);
             }
-            assert_eq!(cache_txn.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.header.height));
+            assert_eq!(
+                cache_txn.missing_blocks(),
+                policy::TRANSACTION_VALIDITY_WINDOW.saturating_sub(ancestor.1.head.header.height)
+            );
 
             // Check each fork block against TransactionCache & commit to AccountsTree.
             let mut fork_iter = fork_chain.iter().rev();
@@ -415,7 +498,11 @@ impl Blockchain {
                     // Delete invalid fork blocks from store.
                     let mut write_txn = WriteTransaction::new(&self.env);
                     for block in vec![fork_block].into_iter().chain(fork_iter) {
-                        self.chain_store.remove_chain_info(&mut write_txn, &block.0, block.1.head.header.height)
+                        self.chain_store.remove_chain_info(
+                            &mut write_txn,
+                            &block.0,
+                            block.1.head.header.height,
+                        )
                     }
                     write_txn.commit();
 
@@ -441,15 +528,22 @@ impl Blockchain {
             for reverted_block in revert_chain.iter_mut() {
                 reverted_block.1.on_main_chain = false;
                 reverted_block.1.main_chain_successor = None;
-                self.chain_store.put_chain_info(&mut write_txn, &reverted_block.0, &reverted_block.1, false);
+                self.chain_store.put_chain_info(
+                    &mut write_txn,
+                    &reverted_block.0,
+                    &reverted_block.1,
+                    false,
+                );
 
                 #[cfg(feature = "transaction-store")]
-                self.transaction_store.remove(&reverted_block.1.head, &mut write_txn);
+                self.transaction_store
+                    .remove(&reverted_block.1.head, &mut write_txn);
             }
 
             // Update the mainChainSuccessor of the common ancestor block.
             ancestor.1.main_chain_successor = Some(fork_chain.last().unwrap().0.clone());
-            self.chain_store.put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
+            self.chain_store
+                .put_chain_info(&mut write_txn, &ancestor.0, &ancestor.1, false);
 
             // Set onMainChain flag / mainChainSuccessor on the fork.
             for i in (0..fork_chain.len()).rev() {
@@ -464,10 +558,16 @@ impl Blockchain {
                 fork_block.1.main_chain_successor = main_chain_successor;
 
                 // Include the body of the new block (at position 0).
-                self.chain_store.put_chain_info(&mut write_txn, &fork_block.0, &fork_block.1, i == 0);
+                self.chain_store.put_chain_info(
+                    &mut write_txn,
+                    &fork_block.0,
+                    &fork_block.1,
+                    i == 0,
+                );
 
                 #[cfg(feature = "transaction-store")]
-                self.transaction_store.put(&fork_block.1.head, &mut write_txn);
+                self.transaction_store
+                    .put(&fork_block.1.head, &mut write_txn);
             }
 
             // Commit transaction & update head.
@@ -498,12 +598,23 @@ impl Blockchain {
         Ok(PushResult::Rebranched)
     }
 
-    fn commit_accounts(&self, accounts: &Accounts, txn: &mut WriteTransaction, block: &Block) -> Result<(), PushError> {
+    fn commit_accounts(
+        &self,
+        accounts: &Accounts,
+        txn: &mut WriteTransaction,
+        block: &Block,
+    ) -> Result<(), PushError> {
         let header = &block.header;
         let body = block.body.as_ref().unwrap();
 
         // Commit block to AccountsTree.
-        let mut receipts = accounts.commit(txn, &body.transactions, &[block.get_reward_inherent()], header.height)
+        let mut receipts = accounts
+            .commit(
+                txn,
+                &body.transactions,
+                &[block.get_reward_inherent()],
+                header.height,
+            )
             .map_err(PushError::AccountsError)?;
 
         // Verify accounts hash.
@@ -524,11 +635,20 @@ impl Blockchain {
         let header = &block.header;
         let body = block.body.as_ref().unwrap();
 
-        assert_eq!(header.accounts_hash, accounts.hash(Some(&txn)),
-            "Failed to revert - inconsistent state");
+        assert_eq!(
+            header.accounts_hash,
+            accounts.hash(Some(&txn)),
+            "Failed to revert - inconsistent state"
+        );
 
         // Revert AccountsTree.
-        if let Err(e) = accounts.revert(txn, &body.transactions, &[block.get_reward_inherent()], header.height, &body.receipts) {
+        if let Err(e) = accounts.revert(
+            txn,
+            &body.transactions,
+            &[block.get_reward_inherent()],
+            header.height,
+            &body.receipts,
+        ) {
             panic!("Failed to revert - {}", e);
         }
     }
@@ -539,18 +659,26 @@ impl Blockchain {
         let chain_info;
         let head_info = match head_hash {
             Some(hash) => {
-                chain_info = self.chain_store
+                chain_info = self
+                    .chain_store
                     .get_chain_info(hash, false, None)
                     .expect("Failed to compute next target - unknown head_hash");
                 &chain_info
             }
-            None => &state.main_chain
+            None => &state.main_chain,
         };
 
-        let tail_height = 1u32.max(head_info.head.header.height.saturating_sub(policy::DIFFICULTY_BLOCK_WINDOW));
+        let tail_height = 1u32.max(
+            head_info
+                .head
+                .header
+                .height
+                .saturating_sub(policy::DIFFICULTY_BLOCK_WINDOW),
+        );
         let tail_info;
         if head_info.on_main_chain {
-            tail_info = self.chain_store
+            tail_info = self
+                .chain_store
                 .get_chain_info_at(tail_height, false, None)
                 .expect("Failed to compute next target - tail block not found");
         } else {
@@ -560,16 +688,21 @@ impl Blockchain {
             // XXX Mimic do ... while {} loop control flow.
             while {
                 // Loop condition
-                prev_info = self.chain_store
+                prev_info = self
+                    .chain_store
                     .get_chain_info(&prev_hash, false, None)
                     .expect("Failed to compute next target - fork predecessor not found");
                 prev_hash = prev_info.head.header.prev_hash.clone();
 
                 i < policy::DIFFICULTY_BLOCK_WINDOW && !prev_info.on_main_chain
-            } { /* Loop body */ i += 1; }
+            } {
+                /* Loop body */
+                i += 1;
+            }
 
             if prev_info.on_main_chain && prev_info.head.header.height > tail_height {
-                tail_info = self.chain_store
+                tail_info = self
+                    .chain_store
                     .get_chain_info_at(tail_height, false, None)
                     .expect("Failed to compute next target - tail block not found");
             } else {
@@ -579,9 +712,11 @@ impl Blockchain {
 
         let head = &head_info.head.header;
         let tail = &tail_info.head.header;
-        assert!(head.height - tail.height == policy::DIFFICULTY_BLOCK_WINDOW
-            || (head.height <= policy::DIFFICULTY_BLOCK_WINDOW && tail.height == 1),
-            "Failed to compute next target - invalid head/tail block");
+        assert!(
+            head.height - tail.height == policy::DIFFICULTY_BLOCK_WINDOW
+                || (head.height <= policy::DIFFICULTY_BLOCK_WINDOW && tail.height == 1),
+            "Failed to compute next target - invalid head/tail block"
+        );
 
         let mut delta_total_difficulty = &head_info.total_difficulty - &tail_info.total_difficulty;
         let mut actual_time = head.timestamp - tail.timestamp;
@@ -603,13 +738,16 @@ impl Blockchain {
             .min(policy::DIFFICULTY_MAX_ADJUSTMENT_FACTOR);
 
         // Compute the next target.
-        let average_difficulty: Difficulty = delta_total_difficulty / policy::DIFFICULTY_BLOCK_WINDOW;
-        let average_target: FixedUnsigned10 = &*policy::BLOCK_TARGET_MAX / &average_difficulty.into(); // Do not use Difficulty -> Target conversion here to preserve precision.
+        let average_difficulty: Difficulty =
+            delta_total_difficulty / policy::DIFFICULTY_BLOCK_WINDOW;
+        let average_target: FixedUnsigned10 =
+            &*policy::BLOCK_TARGET_MAX / &average_difficulty.into(); // Do not use Difficulty -> Target conversion here to preserve precision.
 
         // `bignumber.js` returns 26 decimal places when multiplying a `BigNumber` with 10 decimal
         // places and a `BigNumber` from a `Number` (which then has 16 decimal places).
-        let mut next_target = (average_target.into_scale::<FixedScale26, RoundHalfUp>() * FixedUnsigned26::from(adjustment))
-            .into_scale::<FixedScale10, RoundHalfUp>();
+        let mut next_target = (average_target.into_scale::<FixedScale26, RoundHalfUp>()
+            * FixedUnsigned26::from(adjustment))
+        .into_scale::<FixedScale10, RoundHalfUp>();
 
         // Make sure the target is below or equal the maximum allowed target (difficulty 1).
         // Also enforce a minimum target of 1.
@@ -637,7 +775,7 @@ impl Blockchain {
                 Some(block) => {
                     hash = block.header.prev_hash.clone();
                     locators.push(hash.clone());
-                },
+                }
                 None => break,
             }
         }
@@ -679,15 +817,22 @@ impl Blockchain {
     pub fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
         match self.chain_store.get_chain_info(hash, false, None) {
             Some(chain_info) => include_forks || chain_info.on_main_chain,
-            None => false
+            None => false,
         }
     }
 
     pub fn get_block_at(&self, height: u32, include_body: bool) -> Option<Block> {
-        self.chain_store.get_chain_info_at(height, include_body, None).map(|chain_info| chain_info.head)
+        self.chain_store
+            .get_chain_info_at(height, include_body, None)
+            .map(|chain_info| chain_info.head)
     }
 
-    pub fn get_block(&self, hash: &Blake2bHash, include_forks: bool, include_body: bool) -> Option<Block> {
+    pub fn get_block(
+        &self,
+        hash: &Blake2bHash,
+        include_forks: bool,
+        include_body: bool,
+    ) -> Option<Block> {
         let chain_info_opt = self.chain_store.get_chain_info(hash, include_body, None);
         if let Some(chain_info) = chain_info_opt {
             if chain_info.on_main_chain || include_forks {
@@ -697,8 +842,15 @@ impl Blockchain {
         None
     }
 
-    pub fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Block> {
-        self.chain_store.get_blocks(start_block_hash, count, include_body, direction, None)
+    pub fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+    ) -> Vec<Block> {
+        self.chain_store
+            .get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
     pub fn head_hash(&self) -> Blake2bHash {
@@ -730,7 +882,11 @@ impl Blockchain {
 impl AbstractBlockchain for Blockchain {
     type Block = Block;
 
-    fn new(env: Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError> {
+    fn new(
+        env: Environment,
+        network_id: NetworkId,
+        network_time: Arc<NetworkTime>,
+    ) -> Result<Self, BlockchainError> {
         Blockchain::new(env, network_id, network_time)
     }
 
@@ -767,7 +923,13 @@ impl AbstractBlockchain for Blockchain {
         self.get_block_locators(max_count)
     }
 
-    fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Self::Block> {
+    fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+    ) -> Vec<Self::Block> {
         self.get_blocks(start_block_hash, count, include_body, direction)
     }
 
@@ -779,22 +941,38 @@ impl AbstractBlockchain for Blockchain {
         self.contains(hash, include_forks)
     }
 
-    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof<Account>> {
+    fn get_accounts_proof(
+        &self,
+        block_hash: &Blake2bHash,
+        addresses: &[Address],
+    ) -> Option<AccountsProof<Account>> {
         self.get_accounts_proof(block_hash, addresses)
     }
 
-    fn get_transactions_proof(&self, block_hash: &Blake2bHash, addresses: &HashSet<Address>) -> Option<TransactionsProof> {
+    fn get_transactions_proof(
+        &self,
+        block_hash: &Blake2bHash,
+        addresses: &HashSet<Address>,
+    ) -> Option<TransactionsProof> {
         self.get_transactions_proof(block_hash, addresses)
     }
 
-    fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt> {
+    fn get_transaction_receipts_by_address(
+        &self,
+        address: &Address,
+        sender_limit: usize,
+        recipient_limit: usize,
+    ) -> Vec<TransactionReceipt> {
         #[cfg(feature = "transaction-store")]
         return self.get_transaction_receipts_by_address(address, sender_limit, recipient_limit);
         #[cfg(not(feature = "transaction-store"))]
         Vec::new()
     }
 
-    fn register_listener<T: Listener<BlockchainEvent> + 'static>(&self, listener: T) -> ListenerHandle {
+    fn register_listener<T: Listener<BlockchainEvent> + 'static>(
+        &self,
+        listener: T,
+    ) -> ListenerHandle {
         self.notifier.write().register(listener)
     }
 
@@ -814,13 +992,27 @@ impl AbstractBlockchain for Blockchain {
         self.head_hash_from_store(txn)
     }
 
-    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk<Account>> {
-        self.state.read().accounts.get_chunk(prefix, size, txn_option)
+    fn get_accounts_chunk(
+        &self,
+        prefix: &str,
+        size: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Option<AccountsTreeChunk<Account>> {
+        self.state
+            .read()
+            .accounts
+            .get_chunk(prefix, size, txn_option)
     }
 
-    fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>> {
+    fn get_epoch_transactions(
+        &self,
+        epoch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>> {
         // We just return transactions of block n.
-        self.chain_store.get_chain_info_at(epoch, true, txn_option).and_then( |chain_info| chain_info.head.body.map(|body| body.transactions))
+        self.chain_store
+            .get_chain_info_at(epoch, true, txn_option)
+            .and_then(|chain_info| chain_info.head.body.map(|body| body.transactions))
     }
 
     fn validator_registry_address(&self) -> Option<&Address> {

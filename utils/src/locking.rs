@@ -1,7 +1,8 @@
-use std::sync::Arc;
-use parking_lot::{Mutex, MutexGuard};
-use futures::{Async, Future, Poll};
 use std::mem;
+use std::sync::Arc;
+
+use futures::{Async, Future, Poll};
+use parking_lot::{Mutex, MutexGuard};
 
 #[derive(Debug)]
 pub struct MultiLock<T> {
@@ -49,9 +50,7 @@ impl<T> MultiLock<T> {
     ///
     /// Note that the returned future will never resolve to an error.
     pub fn lock(self) -> MultiLockAcquire<T> {
-        MultiLockAcquire {
-            inner: Some(self),
-        }
+        MultiLockAcquire { inner: Some(self) }
     }
 
     unsafe fn force_unlock(&self) {
@@ -63,7 +62,7 @@ impl<T> Clone for MultiLock<T> {
     #[inline]
     fn clone(&self) -> Self {
         MultiLock {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
@@ -80,13 +79,20 @@ impl<T> Future for MultiLockAcquire<T> {
     type Error = ();
 
     fn poll(&mut self) -> Poll<MultiLockAcquired<T>, ()> {
-        match self.inner.as_ref().expect("cannot poll after Ready").poll_lock() {
+        match self
+            .inner
+            .as_ref()
+            .expect("cannot poll after Ready")
+            .poll_lock()
+        {
             Async::Ready(r) => {
                 mem::forget(r);
-            },
+            }
             Async::NotReady => return Ok(Async::NotReady),
         }
-        Ok(Async::Ready(MultiLockAcquired { inner: self.inner.take() }))
+        Ok(Async::Ready(MultiLockAcquired {
+            inner: self.inner.take(),
+        }))
     }
 }
 

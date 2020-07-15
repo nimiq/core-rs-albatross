@@ -21,16 +21,22 @@ use std::fmt::Display;
 use std::io;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+use bitflags::bitflags;
 use parking_lot::RwLock;
-use rand::Rng;
 use rand::rngs::OsRng;
+use rand::Rng;
 
 use account::Account;
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, uvar, WriteBytesExt};
-use bitflags::bitflags;
-use block::{Block, BlockHeader};
+use beserial::{
+    uvar, Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use block::proof::ChainProof;
-use block_albatross::{Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, PbftCommitMessage, PbftPrepareMessage, SignedPbftProposal, ViewChange, ViewChangeProof};
+use block::{Block, BlockHeader};
+use block_albatross::{
+    Block as BlockAlbatross, BlockHeader as BlockHeaderAlbatross, ForkProof, PbftCommitMessage,
+    PbftPrepareMessage, SignedPbftProposal, ViewChange, ViewChangeProof,
+};
 use handel::update::LevelUpdateMessage;
 use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
@@ -146,18 +152,18 @@ impl Display for MessageType {
             Self::VerAck => write!(f, "verack"),
 
             // Albatross
-            Self::BlockAlbatross  => write!(f, "block-albatross"),
-            Self::HeaderAlbatross  => write!(f, "header-albatross"),
-            Self::ViewChange  => write!(f, "view-change"),
-            Self::ViewChangeProof  => write!(f, "view-change-proof"),
-            Self::ForkProof  => write!(f, "fork-proof"),
-            Self::ValidatorInfo  => write!(f, "validator-info"),
-            Self::PbftProposal  => write!(f, "pbft-proposal"),
-            Self::PbftPrepare  => write!(f, "pbft-prepare"),
-            Self::PbftCommit  => write!(f, "pbft-commit"),
-            Self::GetMacroBlocks  => write!(f, "get-macro-blocks"),
-            Self::GetEpochTransactions  => write!(f, "get-epoch-transactions"),
-            Self::EpochTransactions  => write!(f, "epoch-transactions"),
+            Self::BlockAlbatross => write!(f, "block-albatross"),
+            Self::HeaderAlbatross => write!(f, "header-albatross"),
+            Self::ViewChange => write!(f, "view-change"),
+            Self::ViewChangeProof => write!(f, "view-change-proof"),
+            Self::ForkProof => write!(f, "fork-proof"),
+            Self::ValidatorInfo => write!(f, "validator-info"),
+            Self::PbftProposal => write!(f, "pbft-proposal"),
+            Self::PbftPrepare => write!(f, "pbft-prepare"),
+            Self::PbftCommit => write!(f, "pbft-commit"),
+            Self::GetMacroBlocks => write!(f, "get-macro-blocks"),
+            Self::GetEpochTransactions => write!(f, "get-epoch-transactions"),
+            Self::EpochTransactions => write!(f, "epoch-transactions"),
         }
     }
 }
@@ -310,9 +316,8 @@ impl Deserialize for Message {
                         // We're at the checksum, so'll just ignore it
                         let zeros = [0u8; 4];
                         self.crc32.update(&zeros);
-                    }
-                    else {
-                        self.crc32.update(&buf[.. size]);
+                    } else {
+                        self.crc32.update(&buf[..size]);
                     }
                 }
                 Ok(size)
@@ -334,50 +339,130 @@ impl Deserialize for Message {
 
         let message: Message = match ty {
             MessageType::Version => Message::Version(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::Inv => Message::Inv(DeserializeWithLength::deserialize_with_limit::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT))?),
-            MessageType::GetData => Message::GetData(DeserializeWithLength::deserialize_with_limit::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT))?),
-            MessageType::GetHeader => Message::GetHeader(DeserializeWithLength::deserialize_with_limit::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT))?),
-            MessageType::NotFound => Message::NotFound(DeserializeWithLength::deserialize_with_limit::<u16, ReaderComputeCrc32<R>>(&mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT))?),
+            MessageType::Inv => Message::Inv(DeserializeWithLength::deserialize_with_limit::<
+                u16,
+                ReaderComputeCrc32<R>,
+            >(
+                &mut crc32_reader,
+                Some(InvVector::VECTORS_MAX_COUNT),
+            )?),
+            MessageType::GetData => {
+                Message::GetData(DeserializeWithLength::deserialize_with_limit::<
+                    u16,
+                    ReaderComputeCrc32<R>,
+                >(
+                    &mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT)
+                )?)
+            }
+            MessageType::GetHeader => {
+                Message::GetHeader(DeserializeWithLength::deserialize_with_limit::<
+                    u16,
+                    ReaderComputeCrc32<R>,
+                >(
+                    &mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT)
+                )?)
+            }
+            MessageType::NotFound => {
+                Message::NotFound(DeserializeWithLength::deserialize_with_limit::<
+                    u16,
+                    ReaderComputeCrc32<R>,
+                >(
+                    &mut crc32_reader, Some(InvVector::VECTORS_MAX_COUNT)
+                )?)
+            }
             MessageType::Block => Message::Block(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Header => Message::Header(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Tx => Message::Tx(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetBlocks => Message::GetBlocks(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::GetBlocks => {
+                Message::GetBlocks(Deserialize::deserialize(&mut crc32_reader)?)
+            }
             MessageType::Mempool => Message::Mempool,
             MessageType::Reject => Message::Reject(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::Subscribe => Message::Subscribe(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::Subscribe => {
+                Message::Subscribe(Deserialize::deserialize(&mut crc32_reader)?)
+            }
             MessageType::Addr => Message::Addr(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::GetAddr => Message::GetAddr(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Ping => Message::Ping(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Pong => Message::Pong(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::Signal => Message::Signal(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::GetChainProof => Message::GetChainProof,
-            MessageType::ChainProof => Message::ChainProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetAccountsProof => Message::GetAccountsProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::AccountsProof => Message::AccountsProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetAccountsTreeChunk => Message::GetAccountsTreeChunk(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::AccountsTreeChunk => Message::AccountsTreeChunk(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetTransactionsProof => Message::GetTransactionsProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::TransactionsProof => Message::TransactionsProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetTransactionReceipts => Message::GetTransactionReceipts(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::TransactionReceipts => Message::TransactionReceipts(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetBlockProof => Message::GetBlockProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::BlockProof => Message::BlockProof(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::ChainProof => {
+                Message::ChainProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetAccountsProof => {
+                Message::GetAccountsProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::AccountsProof => {
+                Message::AccountsProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetAccountsTreeChunk => {
+                Message::GetAccountsTreeChunk(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::AccountsTreeChunk => {
+                Message::AccountsTreeChunk(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetTransactionsProof => {
+                Message::GetTransactionsProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::TransactionsProof => {
+                Message::TransactionsProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetTransactionReceipts => {
+                Message::GetTransactionReceipts(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::TransactionReceipts => {
+                Message::TransactionReceipts(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetBlockProof => {
+                Message::GetBlockProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::BlockProof => {
+                Message::BlockProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
             MessageType::GetHead => Message::GetHead,
             MessageType::Head => Message::Head(Deserialize::deserialize(&mut crc32_reader)?),
             MessageType::VerAck => Message::VerAck(Deserialize::deserialize(&mut crc32_reader)?),
             // Albatross
-            MessageType::BlockAlbatross => Message::BlockAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::HeaderAlbatross => Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::ValidatorInfo => Message::ValidatorInfo(DeserializeWithLength::deserialize::<u8, ReaderComputeCrc32<R>>(&mut crc32_reader)?),
-            MessageType::ForkProof => Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::ViewChange => Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::ViewChangeProof => Message::ViewChangeProof(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::PbftProposal => Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::PbftPrepare => Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::PbftCommit => Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetMacroBlocks => Message::GetMacroBlocks(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::GetEpochTransactions => Message::GetEpochTransactions(Deserialize::deserialize(&mut crc32_reader)?),
-            MessageType::EpochTransactions => Message::EpochTransactions(Deserialize::deserialize(&mut crc32_reader)?),
+            MessageType::BlockAlbatross => {
+                Message::BlockAlbatross(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::HeaderAlbatross => {
+                Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::ValidatorInfo => {
+                Message::ValidatorInfo(DeserializeWithLength::deserialize::<
+                    u8,
+                    ReaderComputeCrc32<R>,
+                >(&mut crc32_reader)?)
+            }
+            MessageType::ForkProof => {
+                Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::ViewChange => {
+                Message::ViewChange(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::ViewChangeProof => {
+                Message::ViewChangeProof(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::PbftProposal => {
+                Message::PbftProposal(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::PbftPrepare => {
+                Message::PbftPrepare(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::PbftCommit => {
+                Message::PbftCommit(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetMacroBlocks => {
+                Message::GetMacroBlocks(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::GetEpochTransactions => {
+                Message::GetEpochTransactions(Deserialize::deserialize(&mut crc32_reader)?)
+            }
+            MessageType::EpochTransactions => {
+                Message::EpochTransactions(Deserialize::deserialize(&mut crc32_reader)?)
+            }
         };
 
         // XXX Consume any leftover bytes in the message before computing the checksum.
@@ -386,7 +471,11 @@ impl Deserialize for Message {
 
         let crc_comp = crc32_reader.crc32.result();
         if crc_comp != checksum {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "Message deserialization: Bad checksum").into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Message deserialization: Bad checksum",
+            )
+            .into());
         }
 
         Ok(message)
@@ -395,7 +484,7 @@ impl Deserialize for Message {
 
 impl Serialize for Message {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
-        let mut size= 0;
+        let mut size = 0;
         let serialized_size: u32 = self.serialized_size() as u32;
         let mut v = Vec::with_capacity(serialized_size as usize);
         size += MAGIC.serialize(&mut v)?;
@@ -424,10 +513,18 @@ impl Serialize for Message {
             Message::Signal(signal_message) => signal_message.serialize(&mut v)?,
             Message::GetChainProof => 0,
             Message::ChainProof(msg) => msg.serialize(&mut v)?,
-            Message::GetAccountsProof(get_accounts_proof_message) => get_accounts_proof_message.serialize(&mut v)?,
-            Message::AccountsProof(accounts_proof_message) => accounts_proof_message.serialize(&mut v)?,
-            Message::GetAccountsTreeChunk(get_accounts_tree_chunk_message) => get_accounts_tree_chunk_message.serialize(&mut v)?,
-            Message::AccountsTreeChunk(accounts_tree_chunk_message) => accounts_tree_chunk_message.serialize(&mut v)?,
+            Message::GetAccountsProof(get_accounts_proof_message) => {
+                get_accounts_proof_message.serialize(&mut v)?
+            }
+            Message::AccountsProof(accounts_proof_message) => {
+                accounts_proof_message.serialize(&mut v)?
+            }
+            Message::GetAccountsTreeChunk(get_accounts_tree_chunk_message) => {
+                get_accounts_tree_chunk_message.serialize(&mut v)?
+            }
+            Message::AccountsTreeChunk(accounts_tree_chunk_message) => {
+                accounts_tree_chunk_message.serialize(&mut v)?
+            }
             Message::GetTransactionsProof(msg) => msg.serialize(&mut v)?,
             Message::TransactionsProof(msg) => msg.serialize(&mut v)?,
             Message::GetTransactionReceipts(msg) => msg.serialize(&mut v)?,
@@ -442,19 +539,28 @@ impl Serialize for Message {
             Message::HeaderAlbatross(header) => header.serialize(&mut v)?,
             Message::ViewChange(view_change_message) => view_change_message.serialize(&mut v)?,
             Message::ViewChangeProof(view_change_proof) => view_change_proof.serialize(&mut v)?,
-            Message::ValidatorInfo(validator_infos) => validator_infos.serialize::<u8, Vec<u8>>(&mut v)?,
+            Message::ValidatorInfo(validator_infos) => {
+                validator_infos.serialize::<u8, Vec<u8>>(&mut v)?
+            }
             Message::ForkProof(fork_proof) => fork_proof.serialize(&mut v)?,
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
             Message::PbftCommit(pbft_commit) => pbft_commit.serialize(&mut v)?,
             Message::GetMacroBlocks(get_blocks_message) => get_blocks_message.serialize(&mut v)?,
-            Message::GetEpochTransactions(get_epoch_transactions) => get_epoch_transactions.serialize(&mut v)?,
-            Message::EpochTransactions(epoch_transactions) => epoch_transactions.serialize(&mut v)?,
+            Message::GetEpochTransactions(get_epoch_transactions) => {
+                get_epoch_transactions.serialize(&mut v)?
+            }
+            Message::EpochTransactions(epoch_transactions) => {
+                epoch_transactions.serialize(&mut v)?
+            }
         };
 
         // write checksum to placeholder
         let mut v_crc = Vec::with_capacity(4);
-        Crc32Computer::default().update(v.as_slice()).result().serialize(&mut v_crc)?;
+        Crc32Computer::default()
+            .update(v.as_slice())
+            .result()
+            .serialize(&mut v_crc)?;
 
         v[checksum_start..(4 + checksum_start)].clone_from_slice(&v_crc[..4]);
 
@@ -485,10 +591,18 @@ impl Serialize for Message {
             Message::Signal(signal_message) => signal_message.serialized_size(),
             Message::GetChainProof => 0,
             Message::ChainProof(chain_proof_message) => chain_proof_message.serialized_size(),
-            Message::GetAccountsProof(get_accounts_proof_message) => get_accounts_proof_message.serialized_size(),
-            Message::AccountsProof(accounts_proof_message) => accounts_proof_message.serialized_size(),
-            Message::GetAccountsTreeChunk(get_accounts_tree_chunk_message) => get_accounts_tree_chunk_message.serialized_size(),
-            Message::AccountsTreeChunk(accounts_tree_chunk_message) => accounts_tree_chunk_message.serialized_size(),
+            Message::GetAccountsProof(get_accounts_proof_message) => {
+                get_accounts_proof_message.serialized_size()
+            }
+            Message::AccountsProof(accounts_proof_message) => {
+                accounts_proof_message.serialized_size()
+            }
+            Message::GetAccountsTreeChunk(get_accounts_tree_chunk_message) => {
+                get_accounts_tree_chunk_message.serialized_size()
+            }
+            Message::AccountsTreeChunk(accounts_tree_chunk_message) => {
+                accounts_tree_chunk_message.serialized_size()
+            }
             Message::GetTransactionsProof(msg) => msg.serialized_size(),
             Message::TransactionsProof(msg) => msg.serialized_size(),
             Message::GetTransactionReceipts(msg) => msg.serialized_size(),
@@ -509,7 +623,9 @@ impl Serialize for Message {
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialized_size(),
             Message::PbftCommit(pbft_commit) => pbft_commit.serialized_size(),
             Message::GetMacroBlocks(get_blocks_message) => get_blocks_message.serialized_size(),
-            Message::GetEpochTransactions(get_epoch_transactions) => get_epoch_transactions.serialized_size(),
+            Message::GetEpochTransactions(get_epoch_transactions) => {
+                get_epoch_transactions.serialized_size()
+            }
             Message::EpochTransactions(epoch_transactions) => epoch_transactions.serialized_size(),
         };
         size
@@ -544,7 +660,8 @@ pub struct MessageNotifier {
     pub accounts_proof: RwLock<PassThroughNotifier<'static, AccountsProofMessage>>,
     pub get_transactions_proof: RwLock<PassThroughNotifier<'static, GetTransactionsProofMessage>>,
     pub transactions_proof: RwLock<PassThroughNotifier<'static, TransactionsProofMessage>>,
-    pub get_transaction_receipts: RwLock<PassThroughNotifier<'static, GetTransactionReceiptsMessage>>,
+    pub get_transaction_receipts:
+        RwLock<PassThroughNotifier<'static, GetTransactionReceiptsMessage>>,
     pub transaction_receipts: RwLock<PassThroughNotifier<'static, TransactionReceiptsMessage>>,
     pub get_block_proof: RwLock<PassThroughNotifier<'static, GetBlockProofMessage>>,
     pub block_proof: RwLock<PassThroughNotifier<'static, BlockProofMessage>>,
@@ -557,7 +674,7 @@ pub struct MessageNotifier {
     pub fork_proof: RwLock<PassThroughNotifier<'static, ForkProof>>,
     pub view_change: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<ViewChange>>>,
     pub view_change_proof: RwLock<PassThroughNotifier<'static, ViewChangeProofMessage>>,
-    pub pbft_proposal:  RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
+    pub pbft_proposal: RwLock<PassThroughNotifier<'static, SignedPbftProposal>>,
     pub pbft_prepare: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftPrepareMessage>>>,
     pub pbft_commit: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<PbftCommitMessage>>>,
     pub get_macro_blocks: RwLock<PassThroughNotifier<'static, GetBlocksMessage>>,
@@ -598,7 +715,9 @@ impl MessageNotifier {
             Message::AccountsTreeChunk(msg) => self.accounts_tree_chunk.read().notify(*msg),
             Message::GetTransactionsProof(msg) => self.get_transactions_proof.read().notify(*msg),
             Message::TransactionsProof(msg) => self.transactions_proof.read().notify(*msg),
-            Message::GetTransactionReceipts(msg) => self.get_transaction_receipts.read().notify(*msg),
+            Message::GetTransactionReceipts(msg) => {
+                self.get_transaction_receipts.read().notify(*msg)
+            }
             Message::TransactionReceipts(msg) => self.transaction_receipts.read().notify(*msg),
             Message::GetBlockProof(msg) => self.get_block_proof.read().notify(*msg),
             Message::BlockProof(msg) => self.block_proof.read().notify(*msg),
@@ -607,9 +726,13 @@ impl MessageNotifier {
             // Albatross
             Message::BlockAlbatross(block) => self.block_albatross.read().notify(*block),
             Message::HeaderAlbatross(header) => self.header_albatross.read().notify(*header),
-            Message::ValidatorInfo(validator_info) => self.validator_info.read().notify(validator_info),
+            Message::ValidatorInfo(validator_info) => {
+                self.validator_info.read().notify(validator_info)
+            }
             Message::ViewChange(view_change) => self.view_change.read().notify(*view_change),
-            Message::ViewChangeProof(view_change_proof) => self.view_change_proof.read().notify(*view_change_proof),
+            Message::ViewChangeProof(view_change_proof) => {
+                self.view_change_proof.read().notify(*view_change_proof)
+            }
             Message::ForkProof(fork_proof) => self.fork_proof.read().notify(*fork_proof),
             Message::PbftProposal(proposal) => self.pbft_proposal.read().notify(*proposal),
             Message::PbftPrepare(prepare) => self.pbft_prepare.read().notify(*prepare),
@@ -621,21 +744,33 @@ impl MessageNotifier {
     }
 }
 
-
 pub trait MessageAdapter<B: block_base::Block> {
-    fn register_block_listener<T: PassThroughListener<B> + 'static>(notifier: &MessageNotifier, listener: T);
-    fn register_header_listener<T: PassThroughListener<B::Header> + 'static>(notifier: &MessageNotifier, listener: T);
+    fn register_block_listener<T: PassThroughListener<B> + 'static>(
+        notifier: &MessageNotifier,
+        listener: T,
+    );
+    fn register_header_listener<T: PassThroughListener<B::Header> + 'static>(
+        notifier: &MessageNotifier,
+        listener: T,
+    );
     fn new_block_message(block: B) -> Message;
     fn new_header_message(header: B::Header) -> Message;
 }
 
 pub struct NimiqMessageAdapter {}
+
 impl MessageAdapter<Block> for NimiqMessageAdapter {
-    fn register_block_listener<T: PassThroughListener<Block> + 'static>(notifier: &MessageNotifier, listener: T) {
+    fn register_block_listener<T: PassThroughListener<Block> + 'static>(
+        notifier: &MessageNotifier,
+        listener: T,
+    ) {
         notifier.block.write().register(listener)
     }
 
-    fn register_header_listener<T: PassThroughListener<BlockHeader> + 'static>(notifier: &MessageNotifier, listener: T) {
+    fn register_header_listener<T: PassThroughListener<BlockHeader> + 'static>(
+        notifier: &MessageNotifier,
+        listener: T,
+    ) {
         notifier.header.write().register(listener)
     }
 
@@ -649,12 +784,19 @@ impl MessageAdapter<Block> for NimiqMessageAdapter {
 }
 
 pub struct AlbatrossMessageAdapter {}
+
 impl MessageAdapter<BlockAlbatross> for AlbatrossMessageAdapter {
-    fn register_block_listener<T: PassThroughListener<BlockAlbatross> + 'static>(notifier: &MessageNotifier, listener: T) {
+    fn register_block_listener<T: PassThroughListener<BlockAlbatross> + 'static>(
+        notifier: &MessageNotifier,
+        listener: T,
+    ) {
         notifier.block_albatross.write().register(listener)
     }
 
-    fn register_header_listener<T: PassThroughListener<BlockHeaderAlbatross> + 'static>(notifier: &MessageNotifier, listener: T) {
+    fn register_header_listener<T: PassThroughListener<BlockHeaderAlbatross> + 'static>(
+        notifier: &MessageNotifier,
+        listener: T,
+    ) {
         notifier.header_albatross.write().register(listener)
     }
 
@@ -666,7 +808,6 @@ impl MessageAdapter<BlockAlbatross> for AlbatrossMessageAdapter {
         Message::HeaderAlbatross(Box::new(header))
     }
 }
-
 
 create_typed_array!(ChallengeNonce, u8, 32);
 
@@ -700,7 +841,7 @@ impl Deserialize for VersionMessage {
                 Ok(user_agent) => Some(user_agent),
                 Err(SerializingError::IoError(std::io::ErrorKind::UnexpectedEof, _)) => None,
                 Err(e) => return Err(e),
-            }
+            },
         })
     }
 }
@@ -734,14 +875,20 @@ impl Serialize for VersionMessage {
 }
 
 impl VersionMessage {
-    pub fn new(peer_address: PeerAddress, head_hash: Blake2bHash, genesis_hash: Blake2bHash, challenge_nonce: ChallengeNonce, user_agent: Option<String>) -> Message {
+    pub fn new(
+        peer_address: PeerAddress,
+        head_hash: Blake2bHash,
+        genesis_hash: Blake2bHash,
+        challenge_nonce: ChallengeNonce,
+        user_agent: Option<String>,
+    ) -> Message {
         Message::Version(Box::new(Self {
             version: version::CODE,
             peer_address,
             genesis_hash,
             head_hash,
             challenge_nonce,
-            user_agent
+            user_agent,
         }))
     }
 }
@@ -759,6 +906,7 @@ pub struct InvVector {
     pub ty: InvVectorType,
     pub hash: Blake2bHash,
 }
+
 impl InvVector {
     pub const VECTORS_MAX_COUNT: usize = 1000;
 
@@ -780,11 +928,12 @@ pub struct TxMessage {
     pub transaction: Transaction,
     pub accounts_proof: Option<AccountsProof<Account>>,
 }
+
 impl TxMessage {
     pub fn new(transaction: Transaction) -> Message {
         Message::Tx(Box::new(Self {
             transaction,
-            accounts_proof: None
+            accounts_proof: None,
         }))
     }
 }
@@ -803,10 +952,15 @@ pub struct GetBlocksMessage {
     pub max_inv_size: u16,
     pub direction: GetBlocksDirection,
 }
+
 impl GetBlocksMessage {
     pub const LOCATORS_MAX_COUNT: usize = 128;
 
-    pub fn new(locators: Vec<Blake2bHash>, max_inv_size: u16, direction: GetBlocksDirection) -> Message {
+    pub fn new(
+        locators: Vec<Blake2bHash>,
+        max_inv_size: u16,
+        direction: GetBlocksDirection,
+    ) -> Message {
         Message::GetBlocks(Box::new(Self {
             locators,
             max_inv_size,
@@ -814,7 +968,11 @@ impl GetBlocksMessage {
         }))
     }
 
-    pub fn new_with_macro(locators: Vec<Blake2bHash>, max_inv_size: u16, direction: GetBlocksDirection) -> Message {
+    pub fn new_with_macro(
+        locators: Vec<Blake2bHash>,
+        max_inv_size: u16,
+        direction: GetBlocksDirection,
+    ) -> Message {
         Message::GetMacroBlocks(Box::new(Self {
             locators,
             max_inv_size,
@@ -845,7 +1003,12 @@ pub struct RejectMessage {
 }
 
 impl RejectMessage {
-    pub fn new(message_type: MessageType, code: RejectMessageCode, reason: String, extra_data: Option<Vec<u8>>) -> Message {
+    pub fn new(
+        message_type: MessageType,
+        code: RejectMessageCode,
+        reason: String,
+        extra_data: Option<Vec<u8>>,
+    ) -> Message {
         Message::Reject(Box::new(Self {
             message_type,
             code,
@@ -858,14 +1021,12 @@ impl RejectMessage {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AddrMessage {
     #[beserial(len_type(u16))]
-    pub addresses: Vec<PeerAddress>
+    pub addresses: Vec<PeerAddress>,
 }
 
 impl AddrMessage {
     pub fn new(addresses: Vec<PeerAddress>) -> Message {
-        Message::Addr(Box::new(Self {
-            addresses
-        }))
+        Message::Addr(Box::new(Self { addresses }))
     }
 }
 
@@ -877,11 +1038,15 @@ pub struct GetAddrMessage {
 }
 
 impl GetAddrMessage {
-    pub fn new(protocol_mask: ProtocolFlags, service_mask: ServiceFlags, max_results: Option<u16>) -> Message {
+    pub fn new(
+        protocol_mask: ProtocolFlags,
+        service_mask: ServiceFlags,
+        max_results: Option<u16>,
+    ) -> Message {
         Message::GetAddr(Box::new(Self {
             protocol_mask,
             service_mask,
-            max_results
+            max_results,
         }))
     }
 }
@@ -949,8 +1114,16 @@ impl Deserialize for SignalMessage {
         let ttl = Deserialize::deserialize(reader)?;
         let flags = SignalMessageFlags::from_bits_truncate(Deserialize::deserialize(reader)?);
         let payload: Vec<u8> = DeserializeWithLength::deserialize::<u16, R>(reader)?;
-        let sender_public_key = if !payload.is_empty() { Some(Deserialize::deserialize(reader)?) } else { None };
-        let signature = if !payload.is_empty() { Some(Deserialize::deserialize(reader)?) } else { None };
+        let sender_public_key = if !payload.is_empty() {
+            Some(Deserialize::deserialize(reader)?)
+        } else {
+            None
+        };
+        let signature = if !payload.is_empty() {
+            Some(Deserialize::deserialize(reader)?)
+        } else {
+            None
+        };
 
         Ok(SignalMessage {
             sender_id,
@@ -991,7 +1164,11 @@ impl Serialize for SignalMessage {
         size += SerializeWithLength::serialized_size::<u16>(&self.payload);
         if !self.payload.is_empty() {
             size += Serialize::serialized_size(&self.sender_public_key.unwrap());
-            size += self.signature.as_ref().map(Serialize::serialized_size).unwrap();
+            size += self
+                .signature
+                .as_ref()
+                .map(Serialize::serialized_size)
+                .unwrap();
         }
         size
     }
@@ -1001,7 +1178,7 @@ impl Serialize for SignalMessage {
 pub struct GetAccountsProofMessage {
     pub block_hash: Blake2bHash,
     #[beserial(len_type(u16))]
-    pub addresses: Vec<Address>
+    pub addresses: Vec<Address>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1012,10 +1189,7 @@ pub struct AccountsProofMessage {
 
 impl AccountsProofMessage {
     pub fn new(block_hash: Blake2bHash, proof: Option<AccountsProof<Account>>) -> Message {
-        Message::AccountsProof(Box::new(AccountsProofMessage {
-            block_hash,
-            proof,
-        }))
+        Message::AccountsProof(Box::new(AccountsProofMessage { block_hash, proof }))
     }
 }
 
@@ -1038,7 +1212,9 @@ impl AccountsTreeChunkData {
     pub fn into_serialized(self) -> Self {
         match self {
             data @ AccountsTreeChunkData::Serialized(_) => data,
-            AccountsTreeChunkData::Structured(chunk) => AccountsTreeChunkData::Serialized(chunk.serialize_to_vec()),
+            AccountsTreeChunkData::Structured(chunk) => {
+                AccountsTreeChunkData::Serialized(chunk.serialize_to_vec())
+            }
         }
     }
 }
@@ -1049,28 +1225,24 @@ impl Serialize for AccountsTreeChunkData {
             AccountsTreeChunkData::Serialized(ref buf) => {
                 writer.write_all(buf.as_slice())?;
                 Ok(buf.len())
-            },
-            AccountsTreeChunkData::Structured(ref chunk) => {
-                chunk.serialize(writer)
-            },
+            }
+            AccountsTreeChunkData::Structured(ref chunk) => chunk.serialize(writer),
         }
     }
 
     fn serialized_size(&self) -> usize {
         match self {
-            AccountsTreeChunkData::Serialized(ref buf) => {
-                buf.len()
-            },
-            AccountsTreeChunkData::Structured(ref chunk) => {
-                chunk.serialized_size()
-            },
+            AccountsTreeChunkData::Serialized(ref buf) => buf.len(),
+            AccountsTreeChunkData::Structured(ref chunk) => chunk.serialized_size(),
         }
     }
 }
 
 impl Deserialize for AccountsTreeChunkData {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
-        Ok(AccountsTreeChunkData::Structured(Deserialize::deserialize(reader)?))
+        Ok(AccountsTreeChunkData::Structured(Deserialize::deserialize(
+            reader,
+        )?))
     }
 }
 
@@ -1084,7 +1256,7 @@ pub struct AccountsTreeChunkMessage {
 pub struct GetTransactionsProofMessage {
     pub block_hash: Blake2bHash,
     #[beserial(len_type(u16))]
-    pub addresses: Vec<Address>
+    pub addresses: Vec<Address>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1124,9 +1296,7 @@ impl TransactionReceiptsMessage {
     }
 
     pub fn empty() -> Message {
-        Message::TransactionReceipts(Box::new(TransactionReceiptsMessage {
-            receipts: None,
-        }))
+        Message::TransactionReceipts(Box::new(TransactionReceiptsMessage { receipts: None }))
     }
 }
 
@@ -1144,15 +1314,11 @@ pub struct BlockProofMessage {
 
 impl BlockProofMessage {
     pub fn new(proof: Option<Vec<Block>>) -> Message {
-        Message::BlockProof(Box::new(BlockProofMessage {
-            proof,
-        }))
+        Message::BlockProof(Box::new(BlockProofMessage { proof }))
     }
 
     pub fn empty() -> Message {
-        Message::BlockProof(Box::new(BlockProofMessage {
-            proof: None,
-        }))
+        Message::BlockProof(Box::new(BlockProofMessage { proof: None }))
     }
 }
 
@@ -1163,7 +1329,11 @@ pub struct VerAckMessage {
 }
 
 impl VerAckMessage {
-    pub fn new(peer_id: &PeerId, peer_challenge_nonce: &ChallengeNonce, key_pair: &KeyPair) -> Message {
+    pub fn new(
+        peer_id: &PeerId,
+        peer_challenge_nonce: &ChallengeNonce,
+        key_pair: &KeyPair,
+    ) -> Message {
         let mut data = peer_id.serialize_to_vec();
         peer_challenge_nonce.serialize(&mut data).unwrap();
         let signature = key_pair.sign(&data[..]);
@@ -1184,11 +1354,10 @@ pub struct ViewChangeProofMessage {
 pub struct GetEpochTransactionsMessage {
     pub epoch: u32,
 }
+
 impl GetEpochTransactionsMessage {
     pub fn new(epoch: u32) -> Message {
-        Message::GetEpochTransactions(Box::new(Self {
-            epoch,
-        }))
+        Message::GetEpochTransactions(Box::new(Self { epoch }))
     }
 }
 
@@ -1199,10 +1368,15 @@ pub struct EpochTransactionsMessage {
     pub transactions: Vec<Transaction>,
     pub tx_proof: Blake2bPartialMerkleProof,
 }
+
 impl EpochTransactionsMessage {
     pub const MAX_TRANSACTIONS: usize = 1000;
 
-    pub fn new(epoch: u32, transactions: Vec<Transaction>, tx_proof: Blake2bPartialMerkleProof) -> Message {
+    pub fn new(
+        epoch: u32,
+        transactions: Vec<Transaction>,
+        tx_proof: Blake2bPartialMerkleProof,
+    ) -> Message {
         Message::EpochTransactions(Box::new(Self {
             epoch,
             transactions,

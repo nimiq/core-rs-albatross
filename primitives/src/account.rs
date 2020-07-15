@@ -1,7 +1,8 @@
 use std::fmt::Display;
 
-use beserial::{Deserialize, Serialize};
 use enum_display_derive::Display;
+
+use beserial::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize, Display)]
 #[repr(u8)]
@@ -19,7 +20,7 @@ impl AccountType {
             1 => Some(AccountType::Vesting),
             2 => Some(AccountType::HTLC),
             3 => Some(AccountType::Staking),
-            _ => None
+            _ => None,
         }
     }
 }

@@ -111,6 +111,7 @@ const BLAKE2B_LENGTH: usize = 32;
 create_typed_array!(Blake2bHash, u8, BLAKE2B_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2bHash, BLAKE2B_LENGTH);
 pub struct Blake2bHasher(Blake2b);
+
 impl HashOutput for Blake2bHash {
     type Builder = Blake2bHasher;
 
@@ -160,6 +161,7 @@ const BLAKE2S_LENGTH: usize = 32;
 create_typed_array!(Blake2sHash, u8, BLAKE2S_LENGTH);
 add_hex_io_fns_typed_arr!(Blake2sHash, BLAKE2S_LENGTH);
 pub struct Blake2sHasher(Blake2s);
+
 impl HashOutput for Blake2sHash {
     type Builder = Blake2sHasher;
 
@@ -214,6 +216,7 @@ pub struct Argon2dHasher {
     buf: Vec<u8>,
     config: argon2::Config<'static>,
 }
+
 impl HashOutput for Argon2dHash {
     type Builder = Argon2dHasher;
 
@@ -278,6 +281,7 @@ const SHA256_LENGTH: usize = 32;
 create_typed_array!(Sha256Hash, u8, SHA256_LENGTH);
 add_hex_io_fns_typed_arr!(Sha256Hash, SHA256_LENGTH);
 pub struct Sha256Hasher(Sha256);
+
 impl HashOutput for Sha256Hash {
     type Builder = Sha256Hasher;
 
@@ -331,6 +335,7 @@ impl<'a> SerializeContent for &'a [u8] {
         Ok(self.len())
     }
 }
+
 impl<'a> Hash for &'a [u8] {}
 
 impl<'a> SerializeContent for &'a str {
@@ -340,6 +345,7 @@ impl<'a> SerializeContent for &'a str {
         Ok(b.len())
     }
 }
+
 impl<'a> Hash for &'a str {}
 
 impl SerializeContent for String {
@@ -349,4 +355,5 @@ impl SerializeContent for String {
         Ok(b.len())
     }
 }
+
 impl Hash for String {}

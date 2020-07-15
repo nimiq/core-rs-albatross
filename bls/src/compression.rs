@@ -1,5 +1,3 @@
-use std::io::Error;
-
 use algebra::mnt6_753::{Fq, Fq3};
 use algebra::short_weierstrass_jacobian::GroupAffine;
 use algebra::BigInteger768;
@@ -7,6 +5,7 @@ use algebra_core::curves::models::SWModelParameters;
 use algebra_core::fields::PrimeField;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use num_traits::Zero;
+use std::io::Error;
 
 /// Serializer in big endian format.
 pub trait BeSerialize {

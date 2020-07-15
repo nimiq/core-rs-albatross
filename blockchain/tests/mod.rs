@@ -16,7 +16,11 @@ mod transaction_cache;
 mod transaction_store;
 
 pub fn mine_header(header: &mut BlockHeader) {
-    println!("Mining block at height {} with difficulty {}", header.height, Difficulty::from(header.n_bits));
+    println!(
+        "Mining block at height {} with difficulty {}",
+        header.height,
+        Difficulty::from(header.n_bits)
+    );
     while !header.verify_proof_of_work() {
         header.nonce += 1;
         if header.nonce % 10000 == 0 {
@@ -50,7 +54,7 @@ impl<'bc> BlockBuilder<'bc> {
                 n_bits: 0.into(),
                 height: 0,
                 timestamp: 0,
-                nonce: 0
+                nonce: 0,
             },
             interlink: None,
             body: BlockBody {
@@ -58,7 +62,7 @@ impl<'bc> BlockBuilder<'bc> {
                 extra_data: Vec::new(),
                 transactions: Vec::new(),
                 receipts: Receipts::default(),
-            }
+            },
         }
     }
 
@@ -136,19 +140,24 @@ impl<'bc> BlockBuilder<'bc> {
         }
 
         let info = NetworkInfo::from_network_id(self.blockchain.network_id);
-        self.header.interlink_hash = self.interlink.as_ref().unwrap().hash(info.genesis_hash().clone());
+        self.header.interlink_hash = self
+            .interlink
+            .as_ref()
+            .unwrap()
+            .hash(info.genesis_hash().clone());
 
         // XXX Use default accounts hash if body fails to apply.
         let state = self.blockchain.state();
         let inherents = vec![self.body.get_reward_inherent(self.header.height)];
-        self.header.accounts_hash = state.accounts()
+        self.header.accounts_hash = state
+            .accounts()
             .hash_with(&self.body.transactions, &inherents, self.header.height)
             .unwrap_or([0u8; Blake2bHash::SIZE].into());
 
         Block {
             header: self.header,
             interlink: self.interlink.unwrap(),
-            body: Some(self.body)
+            body: Some(self.body),
         }
     }
 

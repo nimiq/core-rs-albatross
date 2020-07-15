@@ -1,94 +1,125 @@
-extern crate nimiq_transaction as transaction;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_transaction as transaction;
 
 use std::io::stdin;
 use std::process::exit;
 use std::str::FromStr;
-use failure::Fail;
-use clap::{App, Arg, crate_version, crate_authors, crate_description};
-use keys::{PrivateKey, KeyPair, Address};
-use transaction::Transaction;
-use beserial::{Serialize, Deserialize};
-use failure::Error;
-use primitives::coin::Coin;
 
+use clap::{crate_authors, crate_description, crate_version, App, Arg};
+use failure::Error;
+use failure::Fail;
+
+use beserial::{Deserialize, Serialize};
+use keys::{Address, KeyPair, PrivateKey};
+use primitives::coin::Coin;
+use primitives::networks::NetworkId;
+use transaction::Transaction;
 
 fn run_app() -> Result<(), Error> {
     let matches = App::new("Sign transaction")
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
-        .arg(Arg::with_name("secret_key")
-            .short("k")
-            .long("secret-key")
-            .value_name("SECRET_KEY")
-            .help("Specify the secret key to be used to sign the transaction.")
-            .takes_value(true))
-        .arg(Arg::with_name("tx_from_stdin")
-            .long("stdin")
-            .help("Read transaction as hex from STDIN")
-            .takes_value(false))
-        .arg(Arg::with_name("from_address")
-            .short("f")
-            .long("from")
-            .value_name("ADDRESS")
-            .help("Send transaction from ADDRESS.")
-            .takes_value(true))
-        .arg(Arg::with_name("to_address")
-            .short("t")
-            .long("to")
-            .value_name("ADDRESS")
-            .help("Send transaction to ADDRESS.")
-            .takes_value(true))
-        .arg(Arg::with_name("value")
-            .short("v")
-            .long("value")
-            .value_name("VALUE")
-            .help("Send transaction with VALUE amount.")
-            .takes_value(true))
-        .arg(Arg::with_name("fee")
-            .short("F")
-            .long("fee")
-            .value_name("VALUE")
-            .help("Send transaction with VALUE fee.")
-            .takes_value(true))
-        .arg(Arg::with_name("validity_start_height")
-            .short("V")
-            .long("validity-start-height")
-            .value_name("HEIGHT")
-            .help("Set validity start height")
-            .takes_value(true))
-        .arg(Arg::with_name("network_id")
-            .short("N")
-            .long("network")
-            .value_name("NETWORK")
-            .help("Set network ID")
-            .takes_value(true))
+        .arg(
+            Arg::with_name("secret_key")
+                .short("k")
+                .long("secret-key")
+                .value_name("SECRET_KEY")
+                .help("Specify the secret key to be used to sign the transaction.")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("tx_from_stdin")
+                .long("stdin")
+                .help("Read transaction as hex from STDIN")
+                .takes_value(false),
+        )
+        .arg(
+            Arg::with_name("from_address")
+                .short("f")
+                .long("from")
+                .value_name("ADDRESS")
+                .help("Send transaction from ADDRESS.")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("to_address")
+                .short("t")
+                .long("to")
+                .value_name("ADDRESS")
+                .help("Send transaction to ADDRESS.")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("value")
+                .short("v")
+                .long("value")
+                .value_name("VALUE")
+                .help("Send transaction with VALUE amount.")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("fee")
+                .short("F")
+                .long("fee")
+                .value_name("VALUE")
+                .help("Send transaction with VALUE fee.")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("validity_start_height")
+                .short("V")
+                .long("validity-start-height")
+                .value_name("HEIGHT")
+                .help("Set validity start height")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("network_id")
+                .short("N")
+                .long("network")
+                .value_name("NETWORK")
+                .help("Set network ID")
+                .takes_value(true),
+        )
         .get_matches();
 
     // read transaction either from arguments or stdin
     let tx = if matches.is_present("tx_from_stdin") {
-        let mut line= String::new();
+        let mut line = String::new();
         stdin().read_line(&mut line)?;
         Transaction::deserialize_from_vec(&hex::decode(&line)?)?
-    }
-    else {
-        let from_address = Address::from_user_friendly_address(matches.value_of("from_address")
-            .ok_or(AppError::SenderAddress)?)?;
-        let to_address = Address::from_user_friendly_address(matches.value_of("to_address")
-            .ok_or(AppError::RecipientAddress)?)?;
-        let value = Coin::from_str(matches.value_of("value")
-            .ok_or(AppError::Value)?)?;
-        let fee = Coin::from_str(matches.value_of("fee")
-            .ok_or(AppError::Fee)?)?;
-        let validity_start_height= u32::from_str(matches.value_of("validity_start_height")
-            .ok_or(AppError::ValidityStartHeight)?)?;
+    } else {
+        let from_address = Address::from_user_friendly_address(
+            matches
+                .value_of("from_address")
+                .ok_or(AppError::SenderAddress)?,
+        )?;
+        let to_address = Address::from_user_friendly_address(
+            matches
+                .value_of("to_address")
+                .ok_or(AppError::RecipientAddress)?,
+        )?;
+        let value = Coin::from_str(matches.value_of("value").ok_or(AppError::Value)?)?;
+        let fee = Coin::from_str(matches.value_of("fee").ok_or(AppError::Fee)?)?;
+        let validity_start_height = u32::from_str(
+            matches
+                .value_of("validity_start_height")
+                .ok_or(AppError::ValidityStartHeight)?,
+        )?;
         let network_id = match matches.value_of("network") {
             Some(s) => NetworkId::from_str(s)?,
-            None => NetworkId::Main
+            None => NetworkId::Main,
         };
-        Transaction::new_basic(from_address, to_address, value, fee, validity_start_height, network_id)
+        Transaction::new_basic(
+            from_address,
+            to_address,
+            value,
+            fee,
+            validity_start_height,
+            network_id,
+        )
     };
 
     // sign transaction
@@ -99,8 +130,7 @@ fn run_app() -> Result<(), Error> {
         let raw_signature = signature.serialize_to_vec();
         println!("{}", hex::encode(&raw_signature));
         Ok(())
-    }
-    else {
+    } else {
         Err(AppError::SecretKey.into())
     }
 }
@@ -115,10 +145,6 @@ fn main() {
     });
 }
 
-
-use primitives::networks::NetworkId;
-
-
 #[derive(Debug, Fail)]
 enum AppError {
     #[fail(display = "Secret key is missing")]
@@ -132,5 +158,5 @@ enum AppError {
     #[fail(display = "Transaction fee is missing")]
     Fee,
     #[fail(display = "Validity start height is missing")]
-    ValidityStartHeight
+    ValidityStartHeight,
 }

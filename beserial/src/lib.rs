@@ -2,20 +2,19 @@ use std::collections::btree_map::BTreeMap;
 use std::collections::HashSet;
 use std::hash::BuildHasher;
 use std::ops::Deref;
+use std::sync::Arc;
 
 pub use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 use failure::Fail;
 pub use num::{FromPrimitive, ToPrimitive};
 
 pub use crate::types::uvar;
-use std::sync::Arc;
 
-mod types;
 #[cfg(feature = "bitvec")]
 mod bitvec;
 #[cfg(feature = "net")]
 mod net;
-
+mod types;
 
 // Base traits
 
@@ -96,7 +95,10 @@ macro_rules! primitive_serialize {
         }
 
         impl Serialize for $t {
-            fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+            fn serialize<W: WriteBytesExt>(
+                &self,
+                writer: &mut W,
+            ) -> Result<usize, SerializingError> {
                 writer.$w::<BigEndian>(*self)?;
                 Ok(self.serialized_size())
             }
@@ -111,7 +113,6 @@ macro_rules! primitive_serialize {
 primitive_serialize!(u16, 2, read_u16, write_u16);
 primitive_serialize!(u32, 4, read_u32, write_u32);
 primitive_serialize!(u64, 8, read_u64, write_u64);
-
 
 // Implementation for i8 and i16/32/64 (big endian)
 
@@ -139,15 +140,20 @@ primitive_serialize!(i64, 8, read_i64, write_i64);
 // Unit
 
 impl Deserialize for () {
-    fn deserialize<R: ReadBytesExt>(_reader: &mut R) -> Result<Self, SerializingError> { Ok(()) }
+    fn deserialize<R: ReadBytesExt>(_reader: &mut R) -> Result<Self, SerializingError> {
+        Ok(())
+    }
 }
 
 impl Serialize for () {
-    fn serialize<W: WriteBytesExt>(&self, _writer: &mut W) -> Result<usize, SerializingError> { Ok(0) }
+    fn serialize<W: WriteBytesExt>(&self, _writer: &mut W) -> Result<usize, SerializingError> {
+        Ok(0)
+    }
 
-    fn serialized_size(&self) -> usize { 0 }
+    fn serialized_size(&self) -> usize {
+        0
+    }
 }
-
 
 // Boolean
 
@@ -172,18 +178,23 @@ impl Serialize for bool {
     }
 }
 
-
 // String
 
 impl DeserializeWithLength for String {
-    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
         let vec: Vec<u8> = DeserializeWithLength::deserialize_with_limit::<D, R>(reader, limit)?;
         String::from_utf8(vec).or(Err(SerializingError::InvalidEncoding))
     }
 }
 
 impl SerializeWithLength for String {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
         self.as_bytes().to_vec().serialize::<S, W>(writer)
     }
 
@@ -195,17 +206,27 @@ impl SerializeWithLength for String {
 // Vectors
 
 pub trait DeserializeWithLength: Sized {
-    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
+    fn deserialize<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+    ) -> Result<Self, SerializingError> {
         Self::deserialize_with_limit::<D, _>(reader, None)
     }
-    fn deserialize_from_vec<D: Deserialize + num::ToPrimitive>(v: &[u8]) -> Result<Self, SerializingError> {
+    fn deserialize_from_vec<D: Deserialize + num::ToPrimitive>(
+        v: &[u8],
+    ) -> Result<Self, SerializingError> {
         Self::deserialize::<D, _>(&mut &v[..])
     }
-    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError>;
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError>;
 }
 
 pub trait SerializeWithLength {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError>;
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError>;
     fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize;
     fn serialize_to_vec<S: Serialize + num::FromPrimitive>(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(self.serialized_size::<S>());
@@ -215,7 +236,10 @@ pub trait SerializeWithLength {
 }
 
 impl<T: Deserialize> DeserializeWithLength for Vec<T> {
-    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
         let len: D = Deserialize::deserialize(reader)?;
         let len_u = len.to_usize().unwrap();
 
@@ -233,7 +257,10 @@ impl<T: Deserialize> DeserializeWithLength for Vec<T> {
 }
 
 impl<T: Serialize> SerializeWithLength for Vec<T> {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
         let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
         for t in self {
             size += t.serialize(writer)?;
@@ -289,10 +316,14 @@ impl<T: Serialize> Serialize for Arc<T> {
 // HashSets
 
 impl<T, H> DeserializeWithLength for HashSet<T, H>
-    where T: Deserialize + std::cmp::Eq + std::hash::Hash,
-          H: BuildHasher + Default
+where
+    T: Deserialize + std::cmp::Eq + std::hash::Hash,
+    H: BuildHasher + Default,
 {
-    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
         let len: D = Deserialize::deserialize(reader)?;
         let len_u = len.to_usize().unwrap();
 
@@ -310,10 +341,14 @@ impl<T, H> DeserializeWithLength for HashSet<T, H>
 }
 
 impl<T, H> SerializeWithLength for HashSet<T, H>
-    where T: Serialize + std::cmp::Eq + std::hash::Hash + std::cmp::Ord,
-          H: BuildHasher
+where
+    T: Serialize + std::cmp::Eq + std::hash::Hash + std::cmp::Ord,
+    H: BuildHasher,
 {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
         let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
 
         let mut v = self.iter().collect::<Vec<&T>>();
@@ -337,10 +372,14 @@ impl<T, H> SerializeWithLength for HashSet<T, H>
 // BTreeMaps
 
 impl<K, V> DeserializeWithLength for BTreeMap<K, V>
-    where K: Deserialize + Ord,
-        V: Deserialize
+where
+    K: Deserialize + Ord,
+    V: Deserialize,
 {
-    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
         let len: D = Deserialize::deserialize(reader)?;
         let len_u = len.to_usize().unwrap();
 
@@ -358,10 +397,14 @@ impl<K, V> DeserializeWithLength for BTreeMap<K, V>
 }
 
 impl<K, V> SerializeWithLength for BTreeMap<K, V>
-    where K: Serialize + Ord,
-          V: Serialize
+where
+    K: Serialize + Ord,
+    V: Serialize,
 {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
         let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
         for (k, v) in self {
             size += k.serialize(writer)?;
@@ -404,11 +447,16 @@ impl<T: Deserialize> Deserialize for Option<T> {
 }
 
 impl<T: DeserializeWithLength> DeserializeWithLength for Option<T> {
-    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
         let is_present: u8 = Deserialize::deserialize(reader)?;
         match is_present {
             0 => Ok(Option::None),
-            1 => Ok(Option::Some(DeserializeWithLength::deserialize_with_limit::<D, R>(reader, limit)?)),
+            1 => Ok(Option::Some(
+                DeserializeWithLength::deserialize_with_limit::<D, R>(reader, limit)?,
+            )),
             _ => Err(SerializingError::InvalidValue),
         }
     }
@@ -421,37 +469,36 @@ impl<T: Serialize> Serialize for Option<T> {
                 1u8.serialize(writer)?;
                 Ok(one.serialize(writer)? + 1)
             }
-            Option::None => {
-                0u8.serialize(writer)
-            }
+            Option::None => 0u8.serialize(writer),
         }
     }
 
     fn serialized_size(&self) -> usize {
         match self {
             Option::Some(one) => 1 + Serialize::serialized_size(one),
-            Option::None => 1
+            Option::None => 1,
         }
     }
 }
 
 impl<T: SerializeWithLength> SerializeWithLength for Option<T> {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
         match self {
             Option::Some(one) => {
                 1u8.serialize(writer)?;
                 Ok(SerializeWithLength::serialize::<S, W>(one, writer)? + 1)
             }
-            Option::None => {
-                0u8.serialize(writer)
-            }
+            Option::None => 0u8.serialize(writer),
         }
     }
 
     fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
         match self {
             Option::Some(one) => 1 + SerializeWithLength::serialized_size::<S>(one),
-            Option::None => 1
+            Option::None => 1,
         }
     }
 }

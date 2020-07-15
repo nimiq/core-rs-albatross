@@ -1,18 +1,22 @@
-use beserial::{Serialize, Deserialize, SerializingError};
-use lazy_static::lazy_static;
-use primitives::coin::{Coin, CoinParseError};
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 
+use lazy_static::lazy_static;
+
+use beserial::{Deserialize, Serialize, SerializingError};
+use primitives::coin::{Coin, CoinParseError};
 
 struct NonFailingTest {
     data: &'static str,
-    coin: Coin
+    coin: Coin,
 }
 
 impl NonFailingTest {
     pub fn new(data: &'static str, value: u64) -> NonFailingTest {
-        NonFailingTest { data, coin: value.try_into().unwrap() }
+        NonFailingTest {
+            data,
+            coin: value.try_into().unwrap(),
+        }
     }
 }
 
@@ -28,7 +32,6 @@ lazy_static! {
     ];
 }
 
-
 #[test]
 fn test_non_failing() {
     for test_case in NON_FAILING_TESTS.iter() {
@@ -41,15 +44,13 @@ fn test_non_failing() {
 #[test]
 fn test_serialize_out_of_bounds() {
     let vec = hex::decode("0020000000000000").unwrap();
-    let res:Result<Coin, SerializingError> = Deserialize::deserialize(&mut &vec[..]);
+    let res: Result<Coin, SerializingError> = Deserialize::deserialize(&mut &vec[..]);
     match res {
         Ok(coin) => assert!(false, "Instead of failing, got {}", coin),
-        Err(err) => {
-            match err {
-                SerializingError::IoError(_, _) => (),
-                _ => assert!(false, "Expected to fail with IoError, but got {}", err)
-            }
-        }
+        Err(err) => match err {
+            SerializingError::IoError(_, _) => (),
+            _ => assert!(false, "Expected to fail with IoError, but got {}", err),
+        },
     }
 }
 
@@ -59,12 +60,10 @@ fn test_deserialize_out_of_bounds() {
     let res = Serialize::serialize(&Coin::from_u64_unchecked(9007199254740992), &mut vec);
     match res {
         Ok(_) => assert!(false, "Didn't fail"),
-        Err(err) => {
-            match err {
-                SerializingError::Overflow => (),
-                _ => assert!(false, "Expected to fail with Overflow, but got {}", err)
-            }
-        }
+        Err(err) => match err {
+            SerializingError::Overflow => (),
+            _ => assert!(false, "Expected to fail with Overflow, but got {}", err),
+        },
     }
 }
 
@@ -91,9 +90,6 @@ fn test_format_zero() {
     let s = format!("{}", Coin::try_from(0u64).unwrap());
     assert_eq!("0", s);
 }
-
-
-
 
 #[test]
 fn test_parse_valid_one_part() {
@@ -132,8 +128,8 @@ fn test_parse_empty_string() {
         Ok(_) => assert!(false, "Expected error"),
         Err(e) => match e {
             CoinParseError::InvalidString => (),
-            _ => assert!(false, "Expected CoinParseError::InvalidString")
-        }
+            _ => assert!(false, "Expected CoinParseError::InvalidString"),
+        },
     }
 }
 
@@ -144,8 +140,8 @@ fn test_parse_too_many_dots() {
         Ok(_) => assert!(false, "Expected error"),
         Err(e) => match e {
             CoinParseError::InvalidString => (),
-            _ => assert!(false, "Expected CoinParseError::InvalidString")
-        }
+            _ => assert!(false, "Expected CoinParseError::InvalidString"),
+        },
     }
 }
 
@@ -156,8 +152,8 @@ fn test_parse_too_many_frac_digits() {
         Ok(_) => assert!(false, "Expected error"),
         Err(e) => match e {
             CoinParseError::TooManyFractionalDigits => (),
-            _ => assert!(false, "Expected CoinParseError::TooManyFractionalDigits")
-        }
+            _ => assert!(false, "Expected CoinParseError::TooManyFractionalDigits"),
+        },
     }
 }
 
@@ -167,8 +163,10 @@ fn test_parse_too_many_frac_digits() {
 fn test_parse_frac_more_zeros() {
     let coin = Coin::from_str("1234.56789000");
     match &coin {
-        Err(e) => { println!("{:#}", e); },
-        _ => ()
+        Err(e) => {
+            println!("{:#}", e);
+        }
+        _ => (),
     };
 
     assert!(coin.is_err());
@@ -196,11 +194,10 @@ fn test_int_part_overflow() {
         Ok(_) => assert!(false, "Expected error"),
         Err(e) => match e {
             CoinParseError::Overflow => (),
-            _ => assert!(false, "Expected CoinParseError::Overflow")
-        }
+            _ => assert!(false, "Expected CoinParseError::Overflow"),
+        },
     }
 }
-
 
 // Max safe value in fractional format: 90071992547.40991
 #[test]
@@ -208,12 +205,10 @@ fn test_frac_part_overflow() {
     let coin = Coin::from_str("90071992547.40992");
     match coin {
         Ok(_) => assert!(false, "Expected error"),
-        Err(e) => {
-            match e {
-                CoinParseError::Overflow => (),
-                _ => assert!(false, "Expected CoinParseError::Overflow")
-            }
-        }
+        Err(e) => match e {
+            CoinParseError::Overflow => (),
+            _ => assert!(false, "Expected CoinParseError::Overflow"),
+        },
     }
 }
 
@@ -230,8 +225,8 @@ fn test_empty_int_part() {
         Ok(_) => assert!(false, "Expected error"),
         Err(e) => match e {
             CoinParseError::InvalidString => (),
-            _ => assert!(false, "Expected CoinParseError::InvalidString")
-        }
+            _ => assert!(false, "Expected CoinParseError::InvalidString"),
+        },
     }
 }
 
@@ -242,8 +237,8 @@ fn test_empty_frac_part() {
         Ok(_) => assert!(false, "Expected error"),
         Err(e) => match e {
             CoinParseError::InvalidString => (),
-            _ => assert!(false, "Expected CoinParseError::InvalidString")
-        }
+            _ => assert!(false, "Expected CoinParseError::InvalidString"),
+        },
     }
 }
 

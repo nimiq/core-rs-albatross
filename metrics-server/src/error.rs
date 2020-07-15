@@ -1,5 +1,6 @@
-use failure::Fail;
 use std::io::Error as IoError;
+
+use failure::Fail;
 use native_tls::Error as NativeTlsError;
 
 #[derive(Fail, Debug)]

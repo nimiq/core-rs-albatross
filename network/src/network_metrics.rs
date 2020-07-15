@@ -1,8 +1,8 @@
-use std::{fmt, fmt::Display};
 use std::collections::HashMap;
 use std::default::Default;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::{fmt, fmt::Display};
 
 use blockchain_base::AbstractBlockchain;
 use network_messages::MessageType;
@@ -128,7 +128,13 @@ impl MessageMetrics {
         for (&k, &v) in map.iter() {
             let occurrences = AtomicUsize::new(v.0);
             let processing_time = AtomicUsize::new(v.1);
-            metrics.messages.insert(k, MessageStatistics{occurrences, processing_time});
+            metrics.messages.insert(
+                k,
+                MessageStatistics {
+                    occurrences,
+                    processing_time,
+                },
+            );
         }
 
         metrics
@@ -145,7 +151,7 @@ impl MessageMetrics {
     }
 
     #[inline]
-    pub fn message_types(&self) -> impl Iterator<Item=&MessageType> {
+    pub fn message_types(&self) -> impl Iterator<Item = &MessageType> {
         self.messages.keys()
     }
 
@@ -212,11 +218,10 @@ pub struct PeerMetrics {
 impl PeerMetrics {
     fn add_peer<P: Into<PeerProtocol>>(&mut self, protocol: P, state: ConnectionState) {
         let protocol: PeerProtocol = protocol.into();
-        *self.peers.entry((protocol, state))
-            .or_insert(0) += 1;
+        *self.peers.entry((protocol, state)).or_insert(0) += 1;
     }
 
-    pub fn peer_metrics(&self) -> impl Iterator<Item=(&(PeerProtocol, ConnectionState), &usize)> {
+    pub fn peer_metrics(&self) -> impl Iterator<Item = (&(PeerProtocol, ConnectionState), &usize)> {
         self.peers.iter()
     }
 }
@@ -260,12 +265,16 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
         // Construct message metrics.
         for m in message_metrics.iter() {
             for &ty in m.message_types() {
-                let entry = messages.entry(ty).or_insert((0,0));
+                let entry = messages.entry(ty).or_insert((0, 0));
                 entry.0 += m.message_occurrences(ty).unwrap_or(0);
                 entry.1 += m.message_processing_time(ty).unwrap_or(0);
             }
         }
 
-        (MessageMetrics::from_map(messages), NetworkMetrics::new(bytes_received, bytes_sent), peer_metrics)
+        (
+            MessageMetrics::from_map(messages),
+            NetworkMetrics::new(bytes_received, bytes_sent),
+            peer_metrics,
+        )
     }
 }

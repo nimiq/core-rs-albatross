@@ -1,27 +1,28 @@
 #![allow(dead_code)]
 
-use nimiq_keys::{PrivateKey,PublicKey,Signature,KeyPair};
-use nimiq_keys::multisig::{RandomSecret,Commitment,PartialSignature};
+use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
 use hex;
-use nimiq_keys::multisig::*;
 use sha2::Digest;
 
+use nimiq_keys::multisig::*;
+use nimiq_keys::multisig::{Commitment, PartialSignature, RandomSecret};
+use nimiq_keys::{KeyPair, PrivateKey, PublicKey, Signature};
+
 struct StrTestVector {
-    priv_keys: &'static[&'static str],
-    pub_keys: &'static[&'static str],
+    priv_keys: &'static [&'static str],
+    pub_keys: &'static [&'static str],
     pub_keys_hash: &'static str,
-    delinearized_priv_keys: &'static[&'static str],
-    delinearized_pub_keys: &'static[&'static str],
-    secrets: &'static[&'static str],
-    commitments: &'static[&'static str],
+    delinearized_priv_keys: &'static [&'static str],
+    delinearized_pub_keys: &'static [&'static str],
+    secrets: &'static [&'static str],
+    commitments: &'static [&'static str],
     agg_pub_key: &'static str,
     agg_commitment: &'static str,
-    partial_signatures: &'static[&'static str],
+    partial_signatures: &'static [&'static str],
     agg_signature: &'static str,
     signature: &'static str,
-    message: &'static str
+    message: &'static str,
 }
 
 struct TestVector {
@@ -37,59 +38,65 @@ struct TestVector {
     partial_signatures: Vec<PartialSignature>,
     agg_signature: PartialSignature,
     signature: Signature,
-    message: Vec<u8>
+    message: Vec<u8>,
 }
 
 macro_rules! from_hex {
-    ($hex: expr, $len: expr, $call: path) => {
-        {
-            $call(from_hex!($hex, $len))
-        }
-    };
-    ($hex: expr, $len: expr) => {
-        {
-            let bytes = hex::decode($hex).unwrap();
-            let mut fixed_bytes = [0u8; $len];
-            fixed_bytes.copy_from_slice(bytes.as_slice());
-            fixed_bytes
-        }
-    };
+    ($hex: expr, $len: expr, $call: path) => {{
+        $call(from_hex!($hex, $len))
+    }};
+    ($hex: expr, $len: expr) => {{
+        let bytes = hex::decode($hex).unwrap();
+        let mut fixed_bytes = [0u8; $len];
+        fixed_bytes.copy_from_slice(bytes.as_slice());
+        fixed_bytes
+    }};
 }
 
 macro_rules! from_hex_vec {
-    ($vec: expr, $len: expr, $call: path) => {
-        {
-            $vec.iter().map(|item| {
-                from_hex!(item, $len, $call)
-            }).collect()
-        }
-    };
-    ($vec: expr, $len: expr) => {
-        {
-            $vec.iter().map(|item| {
-                from_hex!(item, $len)
-            })
-        }
-    };
+    ($vec: expr, $len: expr, $call: path) => {{
+        $vec.iter()
+            .map(|item| from_hex!(item, $len, $call))
+            .collect()
+    }};
+    ($vec: expr, $len: expr) => {{
+        $vec.iter().map(|item| from_hex!(item, $len))
+    }};
 }
 
 impl TestVector {
     fn from_str(v: &StrTestVector) -> TestVector {
-        let priv_keys: Vec<PrivateKey> = from_hex_vec!(v.priv_keys, PrivateKey::SIZE, PrivateKey::from);
+        let priv_keys: Vec<PrivateKey> =
+            from_hex_vec!(v.priv_keys, PrivateKey::SIZE, PrivateKey::from);
         let pub_keys: Vec<PublicKey> = from_hex_vec!(v.pub_keys, PublicKey::SIZE, PublicKey::from);
         let pub_keys_hash: [u8; 64] = from_hex!(v.pub_keys_hash, 64);
-        let delinearized_priv_keys: Vec<Scalar> = from_hex_vec!(v.delinearized_priv_keys, PrivateKey::SIZE, Scalar::from_bytes_mod_order);
-        let delinearized_pub_keys: Vec<EdwardsPoint> = from_hex_vec!(v.delinearized_pub_keys, PublicKey::SIZE).map(|arr: [u8; 32]| {
-                CompressedEdwardsY(arr).decompress().unwrap()
-            }).collect();
-        let secrets: Vec<RandomSecret> = from_hex_vec!(v.secrets, RandomSecret::SIZE, RandomSecret::from);
-        let commitments: Vec<Commitment> = from_hex_vec!(v.commitments, Commitment::SIZE).map(|arr: [u8; 32]| {
-                Commitment::from_bytes(arr).unwrap()
-            }).collect();
+        let delinearized_priv_keys: Vec<Scalar> = from_hex_vec!(
+            v.delinearized_priv_keys,
+            PrivateKey::SIZE,
+            Scalar::from_bytes_mod_order
+        );
+        let delinearized_pub_keys: Vec<EdwardsPoint> =
+            from_hex_vec!(v.delinearized_pub_keys, PublicKey::SIZE)
+                .map(|arr: [u8; 32]| CompressedEdwardsY(arr).decompress().unwrap())
+                .collect();
+        let secrets: Vec<RandomSecret> =
+            from_hex_vec!(v.secrets, RandomSecret::SIZE, RandomSecret::from);
+        let commitments: Vec<Commitment> = from_hex_vec!(v.commitments, Commitment::SIZE)
+            .map(|arr: [u8; 32]| Commitment::from_bytes(arr).unwrap())
+            .collect();
         let agg_pub_key: PublicKey = from_hex!(v.agg_pub_key, PublicKey::SIZE, PublicKey::from);
-        let agg_commitment: Commitment = Commitment::from_bytes(from_hex!(v.agg_commitment, Commitment::SIZE)).unwrap();
-        let partial_signatures: Vec<PartialSignature> = from_hex_vec!(v.partial_signatures, PartialSignature::SIZE, PartialSignature::from);
-        let agg_signature: PartialSignature = from_hex!(v.agg_signature, PartialSignature::SIZE, PartialSignature::from);
+        let agg_commitment: Commitment =
+            Commitment::from_bytes(from_hex!(v.agg_commitment, Commitment::SIZE)).unwrap();
+        let partial_signatures: Vec<PartialSignature> = from_hex_vec!(
+            v.partial_signatures,
+            PartialSignature::SIZE,
+            PartialSignature::from
+        );
+        let agg_signature: PartialSignature = from_hex!(
+            v.agg_signature,
+            PartialSignature::SIZE,
+            PartialSignature::from
+        );
         let signature: Signature = from_hex!(v.signature, Signature::SIZE, Signature::from);
         let message: Vec<u8> = v.message.to_string().into_bytes();
         return TestVector {
@@ -124,7 +131,7 @@ const VECTORS: [StrTestVector; 4] = [
         partial_signatures: &["65d2bb099b979b818fbd26428aa5dd54f8e3f1b71c2d3a3934b4338a9fe53708", "01eafa18d112094ff0888b3429b8bf52732adec4a52c327d26d5126a4b36d904"],
         agg_signature: "66bcb6226caaa4d07f46b276b35d9da76b0ed07cc2596cb65a8946f4ea1b110d",
         signature: "5f6591c8d8a304fbdbb259826f8d88210c3aefce858f2432e91ba7224316861b66bcb6226caaa4d07f46b276b35d9da76b0ed07cc2596cb65a8946f4ea1b110d",
-        message: ""
+        message: "",
     },
     StrTestVector {
         priv_keys: &["af6cccd64c2679d6bdfac26f32ab8c2ad1b875ec3e1ab7933509218bcea69c0a", "459124f418cc9ac5e027886e0bf6591493263b984f3d5d7fdf17867d327b1a0e"],
@@ -139,7 +146,7 @@ const VECTORS: [StrTestVector; 4] = [
         partial_signatures: &["0fa57e95bbf4b5530d13a7e4dc405401c478b0e62a1a26319da966d13edaf105", "2d28a1db8447ee6fcb915a4d5a373b0dcdcedf1fab563a63c15c0ccee49e8505"],
         agg_signature: "3ccd1f71403ca4c3d8a4013237788f0e91479006d67060945e06739f2379770b",
         signature: "bd7b7414e03273d3e23049586b0a97ed8164651937b17c2e52e2261a89fb43473ccd1f71403ca4c3d8a4013237788f0e91479006d67060945e06739f2379770b",
-        message: "Hello World"
+        message: "Hello World",
     },
     StrTestVector {
         priv_keys: &["fce1ccbeefe33e3d25dc198f69a58a2c40f24a75d0ea728cef65ad7e309ac20e", "312a4339dfd85e9650e918b3a714196cd2e54b4c84ac6f7abc1db897c2f4aa0c", "726254985d2fd37ac244365465bb52049e60396051daeaff5be858ef2bff2105", "0c817fcffd7c0e90d1957257b10b617e448454a029cdf25bcb8e2fa312c7860d"],
@@ -154,7 +161,7 @@ const VECTORS: [StrTestVector; 4] = [
         partial_signatures: &["e4b7de85519f7724fd7d00b70edfe3505a71fe720dc9d34618dd77ab3c96e50f", "aa316a69be1fd834fbaa8d76170cb4031adc34ed27ab1640cd44c51aeda55806", "51c3c81056912c1445e9b977935233d55aef075187088107c2ce9f33fc00dc07", "90d28225e5d752b5e02f60d7ac461ee1d4ee1c713ffc3d1c43657cb5c1031008"],
         agg_signature: "95d7a86b1662aa727108b936a9902be1a32b5822fc78a9aaea5559afe7402a06",
         signature: "b57b3ee1fa93230e68def1f56ab9c8e390527618b6f190b592ca40f84a877ad995d7a86b1662aa727108b936a9902be1a32b5822fc78a9aaea5559afe7402a06",
-        message: ""
+        message: "",
     },
     StrTestVector {
         priv_keys: &["65edb8c173fdbaf5e106ca53069cde47c2a7627518228d8269a3da35f5fd0001", "574e47b97d5918ee12f3872c7843b789c34298ff7cc59ea049586afe63f7c20a", "a8177dccd4557044db70f3066960a1df283ba5f0b8ffa997c6411c9119ac160d", "21ea275ae38602ef65aac6774db8ed2e6164923b14a7e11c40df874f453b780a"],
@@ -169,7 +176,7 @@ const VECTORS: [StrTestVector; 4] = [
         partial_signatures: &["9ca3d1ebab436b3309cd37be7a81f3778f1831ae91ee446ae056d1baa8e30b0a", "1fcc5bca7d16245d34a6b363586f20f7280eacf42b9ddeeaa664501fd1a09a0f", "03e7274c1c8a2a2aeb306a1331a26431c8a80ec84bd2717eb6a4e6b66f4c090d", "9800eb815f4df822198970b032871ec364a6951cd47f5e49e0bc0819968e8102"],
         agg_signature: "7caf54ca706b8d2d95f3d69f7926d939e5758187ddddf31c1e1d11aa7f5f3109",
         signature: "640d9c1a5e918fed8e28db6c0d3270ff1c45fed558a00215ad42326c77d1b7f87caf54ca706b8d2d95f3d69f7926d939e5758187ddddf31c1e1d11aa7f5f3109",
-        message: "Hello World"
+        message: "Hello World",
     }
 ];
 
@@ -188,7 +195,10 @@ fn it_can_construct_public_keys() {
 #[test]
 fn it_correctly_calculates_commitments() {
     // Create random 32 bytes.
-    let randomness: [u8; RandomSecret::SIZE] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
+    let randomness: [u8; RandomSecret::SIZE] = [
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31,
+    ];
 
     // Decompress the 32 byte cryptographically secure random data to 64 byte.
     let mut h: ::sha2::Sha512 = ::sha2::Sha512::default();
@@ -197,10 +207,21 @@ fn it_correctly_calculates_commitments() {
     let scalar = Scalar::from_hash::<::sha2::Sha512>(h);
 
     // Compute the point [scalar]B.
-    let commitment: EdwardsPoint = &scalar * &::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
+    let commitment: EdwardsPoint =
+        &scalar * &::curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
 
-    assert_eq!(scalar.as_bytes(), hex::decode("6ee2c0c33a62b1bd39f88528fb2daecbc8d54d69a31cbb32da758ac25a55a40f").unwrap().as_slice());
-    assert_eq!(commitment.compress().as_bytes(), hex::decode("b6d4f93caf5d574e9765db8740c956400c2d6532d179b0d87b4f6b79ba93a387").unwrap().as_slice());
+    assert_eq!(
+        scalar.as_bytes(),
+        hex::decode("6ee2c0c33a62b1bd39f88528fb2daecbc8d54d69a31cbb32da758ac25a55a40f")
+            .unwrap()
+            .as_slice()
+    );
+    assert_eq!(
+        commitment.compress().as_bytes(),
+        hex::decode("b6d4f93caf5d574e9765db8740c956400c2d6532d179b0d87b4f6b79ba93a387")
+            .unwrap()
+            .as_slice()
+    );
 }
 
 #[test]
@@ -208,7 +229,12 @@ fn it_correctly_aggregates_commitments() {
     let test = TestVector::from_str(&VECTORS[0]);
     let agg: Commitment = test.commitments.iter().sum();
 
-    assert_eq!(agg.to_bytes(), hex::decode("5f6591c8d8a304fbdbb259826f8d88210c3aefce858f2432e91ba7224316861b").unwrap().as_slice());
+    assert_eq!(
+        agg.to_bytes(),
+        hex::decode("5f6591c8d8a304fbdbb259826f8d88210c3aefce858f2432e91ba7224316861b")
+            .unwrap()
+            .as_slice()
+    );
 }
 
 #[test]
@@ -227,7 +253,7 @@ fn it_can_aggregate_public_keys() {
         let test = TestVector::from_str(vector);
 
         let delinearized_pk_sum: EdwardsPoint = test.delinearized_pub_keys.iter().sum();
-        let mut public_key_bytes : [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
+        let mut public_key_bytes: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
         public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
         let aggregated_public_key = PublicKey::from(public_key_bytes);
         assert_eq!(aggregated_public_key, test.agg_pub_key);
@@ -261,8 +287,13 @@ fn it_can_create_partial_signatures() {
 
         for i in 0..test.priv_keys.len() {
             let public_keys: Vec<PublicKey> = test.pub_keys.to_vec();
-            let key_pair= KeyPair::from(test.priv_keys[i].clone());
-            let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(&public_keys, &test.secrets[i], &test.commitments, &test.message.as_slice());
+            let key_pair = KeyPair::from(test.priv_keys[i].clone());
+            let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(
+                &public_keys,
+                &test.secrets[i],
+                &test.commitments,
+                &test.message.as_slice(),
+            );
             assert_eq!(agg_public_key, test.agg_pub_key);
             assert_eq!(agg_commitment, test.agg_commitment);
             assert_eq!(partial_signature, test.partial_signatures[i]);
@@ -281,24 +312,41 @@ fn it_sign_and_verify_multisigs() {
 
         for i in 0..test.priv_keys.len() {
             let cp = CommitmentPair::new(&test.secrets[i], &test.commitments[i]);
-            let key_pair= KeyPair::from(test.priv_keys[i].clone());
+            let key_pair = KeyPair::from(test.priv_keys[i].clone());
 
-            let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(&test.pub_keys, cp.random_secret(), &test.commitments, &test.message.as_slice());
+            let (partial_signature, agg_public_key, agg_commitment) = key_pair.partial_sign(
+                &test.pub_keys,
+                cp.random_secret(),
+                &test.commitments,
+                &test.message.as_slice(),
+            );
 
             aggregated_public_key = match aggregated_public_key {
                 None => Some(agg_public_key),
-                Some(pk) => { assert_eq!(pk, agg_public_key); Some(pk) },
+                Some(pk) => {
+                    assert_eq!(pk, agg_public_key);
+                    Some(pk)
+                }
             };
             aggregated_commitment = match aggregated_commitment {
                 None => Some(agg_commitment),
-                Some(com) => { assert_eq!(com, agg_commitment); Some(com) },
+                Some(com) => {
+                    assert_eq!(com, agg_commitment);
+                    Some(com)
+                }
             };
             signatures.push(partial_signature);
         }
 
         let partial_signature: PartialSignature = signatures.iter().sum();
-        let final_signature: Signature = partial_signature.to_signature(&aggregated_commitment.unwrap());
-        assert_eq!(aggregated_public_key.unwrap().verify(&final_signature, &test.message.as_slice()), true);
+        let final_signature: Signature =
+            partial_signature.to_signature(&aggregated_commitment.unwrap());
+        assert_eq!(
+            aggregated_public_key
+                .unwrap()
+                .verify(&final_signature, &test.message.as_slice()),
+            true
+        );
     }
 }
 

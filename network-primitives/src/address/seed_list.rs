@@ -1,5 +1,6 @@
-use keys::PublicKey;
 use url::Url;
+
+use keys::PublicKey;
 
 #[derive(Clone, Debug)]
 pub struct SeedList {
@@ -9,10 +10,7 @@ pub struct SeedList {
 
 impl SeedList {
     pub fn new(url: Url, public_key: Option<PublicKey>) -> Self {
-        Self {
-            url,
-            public_key,
-        }
+        Self { url, public_key }
     }
 
     pub fn url(&self) -> &Url {

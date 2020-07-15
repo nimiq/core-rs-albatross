@@ -1,9 +1,10 @@
 use std::io;
 
 use beserial::{Deserialize, Serialize, SerializingError, WriteBytesExt};
+use block::{Block, BlockBody, Difficulty, Target};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
-use block::{Block, BlockBody, Difficulty, Target};
+
 use crate::super_block_counts::SuperBlockCounts;
 
 #[derive(Default, Clone, PartialEq, Eq, Debug, Deserialize)]
@@ -44,13 +45,15 @@ impl ChainInfo {
             total_work,
             super_block_counts,
             on_main_chain: false,
-            main_chain_successor: None
+            main_chain_successor: None,
         }
     }
 
     pub fn prev(&self, block: Block) -> Self {
         let target = Target::from(&block.header.pow());
-        let super_block_counts = self.super_block_counts.copy_and_subtract(target.get_depth());
+        let super_block_counts = self
+            .super_block_counts
+            .copy_and_subtract(target.get_depth());
         let total_difficulty = &self.total_difficulty - &Difficulty::from(block.header.n_bits);
         let total_work = &self.total_work - &Difficulty::from(target);
         ChainInfo {
@@ -59,7 +62,7 @@ impl ChainInfo {
             total_work,
             super_block_counts,
             on_main_chain: false,
-            main_chain_successor: None
+            main_chain_successor: None,
         }
     }
 }
@@ -105,7 +108,10 @@ impl IntoDatabaseValue for ChainInfo {
 }
 
 impl FromDatabaseValue for ChainInfo {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
     }

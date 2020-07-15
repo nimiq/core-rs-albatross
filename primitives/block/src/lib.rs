@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]
-extern crate log;
-#[macro_use]
 extern crate failure;
+#[macro_use]
+extern crate log;
 extern crate nimiq_account as account;
 extern crate nimiq_block_base as block_base;
 extern crate nimiq_hash as hash;
@@ -13,20 +13,20 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 
-mod block;
-mod body;
-mod header;
-mod interlink;
-mod target;
-pub mod proof;
+use crate::transaction::TransactionError;
 
 pub use self::block::Block;
 pub use self::body::BlockBody;
 pub use self::header::BlockHeader;
 pub use self::interlink::BlockInterlink;
-pub use self::target::{Target, TargetCompact, Difficulty};
+pub use self::target::{Difficulty, Target, TargetCompact};
 
-use crate::transaction::TransactionError;
+mod block;
+mod body;
+mod header;
+mod interlink;
+pub mod proof;
+mod target;
 
 #[derive(Clone, PartialEq, Eq, Debug, Fail)]
 pub enum BlockError {

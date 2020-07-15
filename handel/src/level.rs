@@ -1,13 +1,12 @@
 use std::cmp::min;
 use std::sync::Arc;
 
+use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use parking_lot::RwLock;
 
-use crate::partitioner::{Partitioner, PartitioningError};
 use crate::multisig::Signature;
-
+use crate::partitioner::{Partitioner, PartitioningError};
 
 #[derive(Clone, Debug)]
 pub struct LevelState {
@@ -23,7 +22,7 @@ pub struct Level {
     pub id: usize,
     pub peer_ids: Vec<usize>,
     pub send_expected_full_size: usize,
-    pub state: RwLock<LevelState>
+    pub state: RwLock<LevelState>,
 }
 
 impl Level {
@@ -38,7 +37,7 @@ impl Level {
                 send_peers_pos: 0,
                 send_signature_size: 0,
                 send_peers_count: 0,
-            })
+            }),
         }
     }
 
@@ -52,7 +51,7 @@ impl Level {
         let mut send_expected_full_size: usize = 1;
         let mut rng = thread_rng();
 
-        for i in 0 .. partitioner.levels() {
+        for i in 0..partitioner.levels() {
             match partitioner.range(i) {
                 Ok(ids) => {
                     let mut ids = ids.collect::<Vec<usize>>();
@@ -69,11 +68,11 @@ impl Level {
 
                     levels.push(level);
                     send_expected_full_size += size;
-                },
+                }
                 Err(PartitioningError::EmptyLevel { .. }) => {
                     let level = Level::new(i, vec![], send_expected_full_size);
                     levels.push(level);
-                },
+                }
                 Err(e) => panic!("{}", e),
             }
         }
@@ -94,8 +93,7 @@ impl Level {
     pub fn select_next_peers(&self, count: usize) -> Vec<usize> {
         if self.id == 0 {
             vec![]
-        }
-        else {
+        } else {
             let size = min(count, self.peer_ids.len());
             let mut selected: Vec<usize> = Vec::new();
 

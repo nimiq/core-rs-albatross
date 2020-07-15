@@ -1,15 +1,14 @@
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::iter::FromIterator;
+use std::sync::Arc;
 
-use rpc_server::{RpcServer, JsonRpcConfig};
 use rpc_server::handlers::*;
+use rpc_server::{JsonRpcConfig, RpcServer};
 
 use crate::client::Client;
 use crate::config::config::RpcServerConfig;
-use crate::error::Error;
 use crate::config::consts::default_bind;
-
+use crate::error::Error;
 
 pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result<RpcServer, Error> {
     let ip = config.bind_to.unwrap_or_else(default_bind);
@@ -18,13 +17,13 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
     // Configure RPC server
     let (username, password) = if let Some(credentials) = config.credentials {
         (Some(credentials.username), Some(credentials.password))
-    }
-    else {
+    } else {
         warn!("No password set for RPC server!");
         (None, None)
     };
 
-    let methods = config.allowed_methods
+    let methods = config
+        .allowed_methods
         .map(|methods| HashSet::from_iter(methods))
         .unwrap_or_default();
 
@@ -43,7 +42,8 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
     let handler = Arc::clone(&rpc_server.handler);
 
     // Install RPC modules
-    #[cfg(feature="validator")] {
+    #[cfg(feature = "validator")]
+    {
         if let Some(validator) = client.validator() {
             let block_production_handler = BlockProductionAlbatrossHandler::new(validator);
             handler.add_module(block_production_handler);
@@ -63,7 +63,8 @@ pub fn initialize_rpc_server(client: &Client, config: RpcServerConfig) -> Result
     let wallet_manager = Arc::clone(&wallet_handler.unlocked_wallets);
     handler.add_module(wallet_handler);
 
-    let mempool_handler = MempoolAlbatrossHandler::new(client.mempool(), client.validator(), Some(wallet_manager));
+    let mempool_handler =
+        MempoolAlbatrossHandler::new(client.mempool(), client.validator(), Some(wallet_manager));
     handler.add_module(mempool_handler);
 
     Ok(rpc_server)

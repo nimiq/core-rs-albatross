@@ -1,17 +1,26 @@
 #![allow(non_snake_case)]
 
-use std::ops::{Add, Sub, Mul};
-use std::cmp::{Ordering, PartialOrd, Ord};
+use std::cmp::{Ord, Ordering, PartialOrd};
 use std::fmt::Debug;
+use std::ops::{Add, Mul, Sub};
 
 use num_traits::sign::Unsigned;
 use num_traits::{FromPrimitive, ToPrimitive};
 
 use crate::rng::Rng;
 
-
 pub struct AliasMethod<P>
-    where P: Copy + Debug + Unsigned + Add<P> + Sub<P> + Mul<P> + FromPrimitive + ToPrimitive + PartialOrd<P> + Ord
+where
+    P: Copy
+        + Debug
+        + Unsigned
+        + Add<P>
+        + Sub<P>
+        + Mul<P>
+        + FromPrimitive
+        + ToPrimitive
+        + PartialOrd<P>
+        + Ord,
 {
     /// The total probability - since we work with integers, this is not 1.0, but corresponds to
     /// a the probability 1.0
@@ -27,9 +36,18 @@ pub struct AliasMethod<P>
     U: Vec<P>,
 }
 
-
 impl<P> AliasMethod<P>
-    where P: Copy + Debug + Unsigned + Add<P> + Sub<P> + Mul<P> + FromPrimitive + ToPrimitive + PartialOrd<P> + Ord
+where
+    P: Copy
+        + Debug
+        + Unsigned
+        + Add<P>
+        + Sub<P>
+        + Mul<P>
+        + FromPrimitive
+        + ToPrimitive
+        + PartialOrd<P>
+        + Ord,
 {
     pub fn new<V: AsRef<[P]>>(p: V) -> Self {
         // The algorithm was roughly taken from
@@ -46,7 +64,8 @@ impl<P> AliasMethod<P>
 
         // Construct scaled probabilities and total probability
         let mut T = P::zero();
-        let mut U: Vec<P> = p.iter()
+        let mut U: Vec<P> = p
+            .iter()
             .map(|p| {
                 T = T + *p;
                 p.mul(P::from_usize(n).expect("Can't convert n to P for normalization"))
@@ -126,8 +145,7 @@ impl<P> AliasMethod<P>
         let U_x = self.U[x];
         if y < U_x {
             x
-        }
-        else {
+        } else {
             let K_x = self.K[x];
             //assert_ne!(K_x, 0);
             K_x

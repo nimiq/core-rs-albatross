@@ -1,21 +1,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use json::{Array, JsonValue};
+use parking_lot::RwLock;
 
-use crate::JsonRpcConfig;
 use crate::error::AuthenticationError;
-use crate::jsonrpc;
 use crate::handlers::Module;
+use crate::jsonrpc;
+use crate::JsonRpcConfig;
 
 pub struct Method {
-    f: Box<dyn Fn(&[JsonValue]) -> Result<JsonValue, JsonValue> + Send + Sync>
+    f: Box<dyn Fn(&[JsonValue]) -> Result<JsonValue, JsonValue> + Send + Sync>,
 }
 
 impl Method {
     pub fn new<F>(f: F) -> Self
-        where F: Fn(&[JsonValue]) -> Result<JsonValue, JsonValue> + Send + Sync + 'static
+    where
+        F: Fn(&[JsonValue]) -> Result<JsonValue, JsonValue> + Send + Sync + 'static,
     {
         Self { f: Box::new(f) }
     }
@@ -57,7 +58,7 @@ impl jsonrpc::Handler for Handler {
         if !self.config.methods.is_empty() && !self.config.methods.contains(name) {
             info!("RPC call to black-listed method: {}", name);
             //return Some(|_, _| Err(object!("message" => "Method is not allowed.")))
-            return None
+            return None;
         }
 
         self.methods.read().get(name).map(|h| h.call(&params))
@@ -72,10 +73,8 @@ impl jsonrpc::Handler for Handler {
 
         if ok {
             Ok(())
-        }
-        else {
+        } else {
             Err(AuthenticationError::IncorrectCredentials)
         }
     }
 }
-

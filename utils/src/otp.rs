@@ -2,14 +2,14 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
 use clear_on_drop::clear::Clear;
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 
-use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
 use beserial::ReadBytesExt;
 use beserial::SerializingError;
 use beserial::WriteBytesExt;
-use nimiq_hash::argon2kdf::{Argon2Error, compute_argon2_kdf};
+use beserial::{Deserialize, DeserializeWithLength, Serialize, SerializeWithLength};
+use nimiq_hash::argon2kdf::{compute_argon2_kdf, Argon2Error};
 
 pub trait Verify {
     fn verify(&self) -> bool;
@@ -17,15 +17,13 @@ pub trait Verify {
 
 // Own ClearOnDrop
 struct ClearOnDrop<T: Clear> {
-    place: Option<T>
+    place: Option<T>,
 }
 
 impl<T: Clear> ClearOnDrop<T> {
     #[inline]
     fn new(place: T) -> Self {
-        ClearOnDrop {
-            place: Some(place),
-        }
+        ClearOnDrop { place: Some(place) }
     }
 
     #[inline]
@@ -79,7 +77,12 @@ pub struct Unlocked<T: Clear + Deserialize + Serialize> {
 
 impl<T: Clear + Deserialize + Serialize> Unlocked<T> {
     /// Calling code should make sure to clear the password from memory after use.
-    pub fn new(secret: T, password: &[u8], iterations: u32, salt_length: usize) -> Result<Self, Argon2Error> {
+    pub fn new(
+        secret: T,
+        password: &[u8],
+        iterations: u32,
+        salt_length: usize,
+    ) -> Result<Self, Argon2Error> {
         let locked = Locked::create(&secret, password, iterations, salt_length)?;
         Ok(Unlocked {
             data: ClearOnDrop::new(secret),
@@ -89,7 +92,12 @@ impl<T: Clear + Deserialize + Serialize> Unlocked<T> {
 
     /// Calling code should make sure to clear the password from memory after use.
     pub fn with_defaults(secret: T, password: &[u8]) -> Result<Self, Argon2Error> {
-        Self::new(secret, password, OtpLock::<T>::DEFAULT_ITERATIONS, OtpLock::<T>::DEFAULT_SALT_LENGTH)
+        Self::new(
+            secret,
+            password,
+            OtpLock::<T>::DEFAULT_ITERATIONS,
+            OtpLock::<T>::DEFAULT_SALT_LENGTH,
+        )
     }
 
     #[inline]
@@ -133,7 +141,12 @@ pub struct Locked<T: Clear + Deserialize + Serialize> {
 
 impl<T: Clear + Deserialize + Serialize> Locked<T> {
     /// Calling code should make sure to clear the password from memory after use.
-    pub fn new(mut secret: T, password: &[u8], iterations: u32, salt_length: usize) -> Result<Self, Argon2Error> {
+    pub fn new(
+        mut secret: T,
+        password: &[u8],
+        iterations: u32,
+        salt_length: usize,
+    ) -> Result<Self, Argon2Error> {
         let result = Locked::create(&secret, password, iterations, salt_length)?;
 
         // Remove secret from memory.
@@ -144,7 +157,12 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
 
     /// Calling code should make sure to clear the password from memory after use.
     pub fn with_defaults(secret: T, password: &[u8]) -> Result<Self, Argon2Error> {
-        Self::new(secret, password, OtpLock::<T>::DEFAULT_ITERATIONS, OtpLock::<T>::DEFAULT_SALT_LENGTH)
+        Self::new(
+            secret,
+            password,
+            OtpLock::<T>::DEFAULT_ITERATIONS,
+            OtpLock::<T>::DEFAULT_SALT_LENGTH,
+        )
     }
 
     /// Calling code should make sure to clear the password from memory after use.
@@ -175,7 +193,12 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         }
     }
 
-    fn otp(secret: &[u8], password: &[u8], iterations: u32, salt: &[u8]) -> Result<Vec<u8>, Argon2Error> {
+    fn otp(
+        secret: &[u8],
+        password: &[u8],
+        iterations: u32,
+        salt: &[u8],
+    ) -> Result<Vec<u8>, Argon2Error> {
         let mut key = compute_argon2_kdf(password, salt, iterations, secret.len())?;
         assert_eq!(key.len(), secret.len());
 
@@ -186,7 +209,12 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         Ok(key)
     }
 
-    fn lock(secret: &T, password: &[u8], iterations: u32, salt: Vec<u8>) -> Result<Self, Argon2Error> {
+    fn lock(
+        secret: &T,
+        password: &[u8],
+        iterations: u32,
+        salt: Vec<u8>,
+    ) -> Result<Self, Argon2Error> {
         let mut data = secret.serialize_to_vec();
         let lock = Self::otp(&data, password, iterations, &salt)?;
 
@@ -203,7 +231,12 @@ impl<T: Clear + Deserialize + Serialize> Locked<T> {
         })
     }
 
-    fn create(secret: &T, password: &[u8], iterations: u32, salt_length: usize) -> Result<Self, Argon2Error> {
+    fn create(
+        secret: &T,
+        password: &[u8],
+        iterations: u32,
+        salt_length: usize,
+    ) -> Result<Self, Argon2Error> {
         let mut salt = vec![0; salt_length];
         OsRng.fill_bytes(salt.as_mut_slice());
         Self::lock(&secret, password, iterations, salt)
@@ -225,7 +258,7 @@ impl<T: Clear + Deserialize + Serialize + Verify> Locked<T> {
                 } else {
                     Err(unlocked.lock)
                 }
-            },
+            }
             err => err,
         }
     }
@@ -277,23 +310,53 @@ impl<T: Clear + Deserialize + Serialize> OtpLock<T> {
     pub const DEFAULT_SALT_LENGTH: usize = 32;
 
     /// Calling code should make sure to clear the password from memory after use.
-    pub fn new_unlocked(secret: T, password: &[u8], iterations: u32, salt_length: usize) -> Result<Self, Argon2Error> {
-        Ok(OtpLock::Unlocked(Unlocked::new(secret, password, iterations, salt_length)?))
+    pub fn new_unlocked(
+        secret: T,
+        password: &[u8],
+        iterations: u32,
+        salt_length: usize,
+    ) -> Result<Self, Argon2Error> {
+        Ok(OtpLock::Unlocked(Unlocked::new(
+            secret,
+            password,
+            iterations,
+            salt_length,
+        )?))
     }
 
     /// Calling code should make sure to clear the password from memory after use.
     pub fn unlocked_with_defaults(secret: T, password: &[u8]) -> Result<Self, Argon2Error> {
-        Self::new_unlocked(secret, password, Self::DEFAULT_ITERATIONS, Self::DEFAULT_SALT_LENGTH)
+        Self::new_unlocked(
+            secret,
+            password,
+            Self::DEFAULT_ITERATIONS,
+            Self::DEFAULT_SALT_LENGTH,
+        )
     }
 
     /// Calling code should make sure to clear the password from memory after use.
-    pub fn new_locked(secret: T, password: &[u8], iterations: u32, salt_length: usize) -> Result<Self, Argon2Error> {
-        Ok(OtpLock::Locked(Locked::new(secret, password, iterations, salt_length)?))
+    pub fn new_locked(
+        secret: T,
+        password: &[u8],
+        iterations: u32,
+        salt_length: usize,
+    ) -> Result<Self, Argon2Error> {
+        Ok(OtpLock::Locked(Locked::new(
+            secret,
+            password,
+            iterations,
+            salt_length,
+        )?))
     }
 
     /// Calling code should make sure to clear the password from memory after use.
     pub fn locked_with_defaults(secret: T, password: &[u8]) -> Result<Self, Argon2Error> {
-        Self::new_locked(secret, password, Self::DEFAULT_ITERATIONS, Self::DEFAULT_SALT_LENGTH)
+        Self::new_locked(
+            secret,
+            password,
+            Self::DEFAULT_ITERATIONS,
+            Self::DEFAULT_SALT_LENGTH,
+        )
     }
 
     #[inline]

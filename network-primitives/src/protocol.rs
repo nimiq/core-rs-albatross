@@ -1,4 +1,4 @@
-use beserial::{Serialize, Deserialize};
+use beserial::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -6,7 +6,7 @@ pub enum Protocol {
     Dumb = 0,
     Wss = 1,
     Rtc = 2,
-    Ws = 4
+    Ws = 4,
 }
 
 impl From<ProtocolFlags> for Vec<Protocol> {
@@ -63,7 +63,7 @@ impl Protocol {
     pub fn default_port(self) -> Option<u16> {
         match self {
             Protocol::Ws | Protocol::Wss => Some(8443),
-            _ => None
+            _ => None,
         }
     }
 }

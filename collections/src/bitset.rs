@@ -1,15 +1,18 @@
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
-use itertools::{EitherOrBoth, Itertools};
-use beserial::{Serialize, Deserialize, uvar, SerializingError, ReadBytesExt, WriteBytesExt, FromPrimitive, ToPrimitive};
 use std::fmt;
 use std::iter::{repeat, FromIterator};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
 
+use itertools::{EitherOrBoth, Itertools};
+
+use beserial::{
+    uvar, Deserialize, FromPrimitive, ReadBytesExt, Serialize, SerializingError, ToPrimitive,
+    WriteBytesExt,
+};
 
 #[inline]
 fn index_and_mask(value: usize) -> (usize, u64) {
     (value >> 6, 1u64 << (value & 63))
 }
-
 
 #[derive(Clone, Eq)]
 pub struct BitSet {
@@ -103,7 +106,7 @@ impl BitSet {
                 EitherOrBoth::Both(a, &b) => {
                     op(a, b);
                     count += a.count_ones() as usize;
-                },
+                }
                 EitherOrBoth::Left(_) => break,
                 EitherOrBoth::Right(&b) => {
                     let mut x = 0u64;
@@ -116,14 +119,14 @@ impl BitSet {
     }
 
     /// Infinite iterator of excluded items
-    pub fn iter_excluded<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
+    pub fn iter_excluded<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
         self.iter_bits()
             .enumerate()
             .filter_map(|(i, one)| if one { None } else { Some(i) })
     }
 
     /// Iterator of included items
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item=usize> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
         self.iter_bits()
             .take(self.store.len() * 64)
             .enumerate()
@@ -131,8 +134,9 @@ impl BitSet {
     }
 
     /// Infinite iterator of bits
-    pub fn iter_bits<'a>(&'a self) -> impl Iterator<Item=bool> + 'a {
-        self.store.iter()
+    pub fn iter_bits<'a>(&'a self) -> impl Iterator<Item = bool> + 'a {
+        self.store
+            .iter()
             .flat_map(|store| Bits64Iter::new(*store))
             .chain(repeat(false))
     }
@@ -145,8 +149,8 @@ impl BitSet {
                 EitherOrBoth::Left(_) => {
                     // Since the left side can't change the result anymore, it must be a superset
                     return true;
-                },
-                EitherOrBoth::Right(&b) => b == 0
+                }
+                EitherOrBoth::Right(&b) => b == 0,
             };
             if !c {
                 return false;
@@ -161,7 +165,9 @@ impl BitSet {
     }
 
     pub fn intersection_size(&self, other: &Self) -> usize {
-        self.store.iter().zip(other.store.iter())
+        self.store
+            .iter()
+            .zip(other.store.iter())
             .map(|(a, b)| (a & b).count_ones() as usize)
             .sum()
     }
@@ -239,15 +245,16 @@ impl BitXorAssign for BitSet {
     }
 }
 
-
-
 impl PartialEq for BitSet {
     fn eq(&self, other: &Self) -> bool {
-        self.store.iter().zip_longest(other.store.iter()).all(|x| match x {
-            EitherOrBoth::Both(&a, &b) => a == b,
-            EitherOrBoth::Left(&a) => a == 0,
-            EitherOrBoth::Right(&b) => b == 0,
-        })
+        self.store
+            .iter()
+            .zip_longest(other.store.iter())
+            .all(|x| match x {
+                EitherOrBoth::Both(&a, &b) => a == b,
+                EitherOrBoth::Left(&a) => a == 0,
+                EitherOrBoth::Right(&b) => b == 0,
+            })
     }
 }
 
@@ -265,7 +272,9 @@ impl Serialize for BitSet {
 
     fn serialized_size(&self) -> usize {
         let mut size = 0;
-        size += uvar::from_usize(self.store.len()).unwrap().serialized_size();
+        size += uvar::from_usize(self.store.len())
+            .unwrap()
+            .serialized_size();
         size += self.store.len() * 0u64.serialized_size();
         size
     }
@@ -284,17 +293,14 @@ impl Deserialize for BitSet {
             store.push(x);
         }
 
-        Ok(BitSet {
-            store,
-            count,
-        })
+        Ok(BitSet { store, count })
     }
 }
 
 impl fmt::Display for BitSet {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "[")?;
-        let mut it = self.iter::<>().peekable();
+        let mut it = self.iter().peekable();
         while let Some(value) = it.next() {
             write!(f, "{}", value)?;
             if it.peek().is_some() {
@@ -340,7 +346,7 @@ impl Iterator for Bits64Iter {
 }
 
 impl FromIterator<usize> for BitSet {
-    fn from_iter<T: IntoIterator<Item=usize>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
         let mut bitset = BitSet::new();
         for elem in iter {
             bitset.insert(elem)

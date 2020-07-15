@@ -1,15 +1,16 @@
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+
 /// This module generates `Serialize` and `Deserialize` implementations for the `std::net`
 /// IP address structs and enums
-
-use crate::{ReadBytesExt, WriteBytesExt, Serialize, Deserialize, SerializingError};
-
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6, SocketAddr, IpAddr};
-
+use crate::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 
 macro_rules! impl_serialize_ipaddr {
     ($name: ident, $bytes: expr) => {
         impl Serialize for $name {
-            fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+            fn serialize<W: WriteBytesExt>(
+                &self,
+                writer: &mut W,
+            ) -> Result<usize, SerializingError> {
                 Ok(writer.write(&self.octets())?)
             }
 
@@ -25,13 +26,16 @@ macro_rules! impl_serialize_ipaddr {
                 Ok(Self::from(octets))
             }
         }
-    }
+    };
 }
 
 macro_rules! impl_serialize_sockaddr {
     ($name: ident, $constructor: expr) => {
         impl Serialize for $name {
-            fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+            fn serialize<W: WriteBytesExt>(
+                &self,
+                writer: &mut W,
+            ) -> Result<usize, SerializingError> {
                 let mut size = 0;
                 size += Serialize::serialize(self.ip(), writer)?;
                 size += Serialize::serialize(&self.port(), writer)?;
@@ -52,7 +56,7 @@ macro_rules! impl_serialize_sockaddr {
                 Ok($constructor(ip, port))
             }
         }
-    }
+    };
 }
 
 impl_serialize_ipaddr!(Ipv4Addr, 4);
@@ -65,7 +69,7 @@ impl Serialize for IpAddr {
             IpAddr::V4(addr) => {
                 writer.write_u8(4)?;
                 size += Serialize::serialize(addr, writer)?;
-            },
+            }
             IpAddr::V6(addr) => {
                 writer.write_u8(6)?;
                 size += Serialize::serialize(addr, writer)?;
@@ -89,12 +93,12 @@ impl Deserialize for IpAddr {
             4 => {
                 let ip: Ipv4Addr = Deserialize::deserialize(reader)?;
                 Ok(IpAddr::from(ip))
-            },
+            }
             6 => {
                 let ip: Ipv6Addr = Deserialize::deserialize(reader)?;
                 Ok(IpAddr::from(ip))
-            },
-            _ => Err(SerializingError::InvalidEncoding)
+            }
+            _ => Err(SerializingError::InvalidEncoding),
         }
     }
 }
@@ -123,7 +127,6 @@ impl Deserialize for SocketAddr {
         Ok(SocketAddr::new(ip, port))
     }
 }
-
 
 impl_serialize_sockaddr!(SocketAddrV4, |ip, port| Self::new(ip, port));
 impl_serialize_sockaddr!(SocketAddrV6, |ip, port| Self::new(ip, port, 0, 0));

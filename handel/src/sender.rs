@@ -1,5 +1,5 @@
-use std::fmt::Debug;
 use std::error::Error;
+use std::fmt::Debug;
 
 use crate::update::LevelUpdate;
 

@@ -1,6 +1,7 @@
-use nimiq_collections::bitset::BitSet;
-use beserial::{Deserialize, Serialize};
 use hex;
+
+use beserial::{Deserialize, Serialize};
+use nimiq_collections::bitset::BitSet;
 
 fn sample_bitset() -> BitSet {
     let mut set = BitSet::new();
@@ -18,7 +19,10 @@ fn sample_bitset() -> BitSet {
 fn it_can_correctly_serialize() {
     let set = sample_bitset();
     let bin = set.serialize_to_vec();
-    assert_eq!(hex::decode("02000000000007FFFE0000000000000040").unwrap(), bin);
+    assert_eq!(
+        hex::decode("02000000000007FFFE0000000000000040").unwrap(),
+        bin
+    );
 }
 
 #[test]

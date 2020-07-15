@@ -42,7 +42,8 @@ pub enum SlotChange {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ValidatorStatus {
     None,
-    Synced, // Already reached consensus with peers but we're not still a validator
+    Synced,
+    // Already reached consensus with peers but we're not still a validator
     Potential,
     Active,
 }
@@ -199,10 +200,14 @@ impl Validator {
 
         // Setup event handlers for fork events
         let weak = Arc::downgrade(this);
-        let fork = this.blockchain.fork_notifier.write().register(move |e: &ForkEvent| {
-            let this = upgrade_weak!(weak);
-            this.on_fork_event(&e);
-        });
+        let fork = this
+            .blockchain
+            .fork_notifier
+            .write()
+            .register(move |e: &ForkEvent| {
+                let this = upgrade_weak!(weak);
+                this.on_fork_event(&e);
+            });
 
         // remember listeners for when we drop this validator
         let listeners = ValidatorListeners {

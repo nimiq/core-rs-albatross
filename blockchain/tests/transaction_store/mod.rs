@@ -20,7 +20,7 @@ fn create_transactions() -> (Transaction, Transaction, Transaction) {
         Coin::try_from(10).unwrap(),
         Coin::try_from(0).unwrap(),
         1,
-        NetworkId::Main
+        NetworkId::Main,
     );
     let tx2 = Transaction::new_basic(
         [4u8; Address::SIZE].into(),
@@ -28,7 +28,7 @@ fn create_transactions() -> (Transaction, Transaction, Transaction) {
         Coin::try_from(12).unwrap(),
         Coin::try_from(0).unwrap(),
         1,
-        NetworkId::Main
+        NetworkId::Main,
     );
     let tx3 = Transaction::new_basic(
         [1u8; Address::SIZE].into(),
@@ -36,7 +36,7 @@ fn create_transactions() -> (Transaction, Transaction, Transaction) {
         Coin::try_from(14).unwrap(),
         Coin::try_from(0).unwrap(),
         1,
-        NetworkId::Main
+        NetworkId::Main,
     );
     (tx1, tx2, tx3)
 }
@@ -63,7 +63,7 @@ fn create_block(transactions: Vec<Transaction>, height: u32) -> Block {
             nonce: 0,
         },
         interlink,
-        body: Some(body)
+        body: Some(body),
     }
 }
 
@@ -75,7 +75,9 @@ fn it_can_store_and_remove_transactions() {
     let (tx1, tx2, tx3) = create_transactions();
 
     // Block 1 (empty)
-    let block1 = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let block1 = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let infos1 = TransactionInfo::from_block(&block1);
     assert_eq!(infos1.len(), 0);
 

@@ -1,7 +1,6 @@
-use std::str::FromStr;
-use std::fmt;
 use std::env;
-
+use std::fmt;
+use std::str::FromStr;
 
 /// A user agent string.
 ///
@@ -46,6 +45,12 @@ impl From<UserAgent> for String {
 impl Default for UserAgent {
     fn default() -> Self {
         let nimiq_version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
-        format!("core-rs-albatross/{} (native; {} {})", nimiq_version, env::consts::OS, env::consts::ARCH).into()
+        format!(
+            "core-rs-albatross/{} (native; {} {})",
+            nimiq_version,
+            env::consts::OS,
+            env::consts::ARCH
+        )
+        .into()
     }
 }

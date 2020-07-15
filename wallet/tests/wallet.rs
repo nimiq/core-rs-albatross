@@ -1,15 +1,15 @@
-use lazy_static::lazy_static;
-
 extern crate beserial;
-extern crate nimiq_wallet as wallet;
 extern crate nimiq_keys as keys;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_wallet as wallet;
 
-use beserial::{Serialize, Deserialize};
-use wallet::WalletAccount;
-use keys::{KeyPair, Address, PrivateKey};
+use lazy_static::lazy_static;
+
+use beserial::{Deserialize, Serialize};
+use keys::{Address, KeyPair, PrivateKey};
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
+use wallet::WalletAccount;
 
 lazy_static! {
     /// This is an example for using doc comment attributes
@@ -25,12 +25,12 @@ lazy_static! {
     };
 }
 
-
 #[test]
 fn test_create_transaction() {
     let wallet = WALLET.clone();
     let transaction = wallet.create_transaction(
-        Address::from_user_friendly_address("NQ16 C3HR 85U8 P7MK F52R E9RG SA3Y Q69C X563").unwrap(),
+        Address::from_user_friendly_address("NQ16 C3HR 85U8 P7MK F52R E9RG SA3Y Q69C X563")
+            .unwrap(),
         Coin::from_u64_unchecked(42),
         Coin::ZERO,
         0,
@@ -46,7 +46,7 @@ fn test_serialize_deserialize() {
     match WalletAccount::deserialize_from_vec(&serialized) {
         Ok(deserialized) => {
             assert_eq!(wallet, deserialized);
-        },
+        }
         Err(e) => {
             assert!(false, format!("Error: {}", e));
         }

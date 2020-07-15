@@ -42,7 +42,7 @@ pub struct GenesisValidator {
     pub balance: Coin,
 
     #[serde(deserialize_with = "deserialize_bls_public_key")]
-    pub validator_key: BlsPublicKey
+    pub validator_key: BlsPublicKey,
 }
 
 #[derive(Clone, Debug, Deserialize)]

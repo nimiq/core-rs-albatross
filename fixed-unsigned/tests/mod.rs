@@ -3,20 +3,28 @@ use std::string::ToString;
 
 use fixed_unsigned::types::FixedUnsigned4;
 
-
 #[test]
 fn test_parse_zero() {
-    assert_eq!(FixedUnsigned4::from_str("0").unwrap(), FixedUnsigned4::from(0u32));
+    assert_eq!(
+        FixedUnsigned4::from_str("0").unwrap(),
+        FixedUnsigned4::from(0u32)
+    );
 }
 
 #[test]
 fn test_to_string() {
-    assert_eq!(String::from("1234.0000"), FixedUnsigned4::from(1234u32).to_string());
+    assert_eq!(
+        String::from("1234.0000"),
+        FixedUnsigned4::from(1234u32).to_string()
+    );
 }
 
 #[test]
 fn test_parse() {
-    assert_eq!(FixedUnsigned4::from(1234u32), FixedUnsigned4::from_str("1234.0000").unwrap());
+    assert_eq!(
+        FixedUnsigned4::from(1234u32),
+        FixedUnsigned4::from_str("1234.0000").unwrap()
+    );
 }
 
 #[test]
@@ -93,7 +101,7 @@ fn test_parse_emtpy_string() {
     let res = FixedUnsigned4::from_str("");
     match res {
         Ok(v) => assert!(false, "Expected error, not value: {}", v),
-        Err(_) => ()
+        Err(_) => (),
     }
 }
 
@@ -102,7 +110,7 @@ fn test_parse_dot() {
     let res = FixedUnsigned4::from_str(".");
     match res {
         Ok(v) => assert!(false, "Expected error, not value: {}", v),
-        Err(_) => ()
+        Err(_) => (),
     }
 }
 
@@ -111,7 +119,7 @@ fn test_parse_zero_dot() {
     let res = FixedUnsigned4::from_str("0.");
     match res {
         Ok(v) => assert_eq!(v, FixedUnsigned4::from(0u32)),
-        Err(_) => assert!(false, "Didn't expect an error")
+        Err(_) => assert!(false, "Didn't expect an error"),
     }
 }
 
@@ -120,7 +128,7 @@ fn test_parse_dot_zero() {
     let res = FixedUnsigned4::from_str(".0");
     match res {
         Ok(v) => assert_eq!(v, FixedUnsigned4::from(0u32)),
-        Err(_) => assert!(false, "Didn't expect an error")
+        Err(_) => assert!(false, "Didn't expect an error"),
     }
 }
 
@@ -129,7 +137,7 @@ fn test_parse_one_dot() {
     let res = FixedUnsigned4::from_str("1.");
     match res {
         Ok(v) => assert_eq!(v, FixedUnsigned4::from(1u32)),
-        Err(_) => assert!(false, "Didn't expect an error")
+        Err(_) => assert!(false, "Didn't expect an error"),
     }
 }
 
@@ -138,7 +146,7 @@ fn test_parse_dot_one() {
     let res = FixedUnsigned4::from_str(".1");
     match res {
         Ok(v) => assert_eq!(v, FixedUnsigned4::from_str("0.1").unwrap()),
-        Err(_) => assert!(false, "Didn't expect an error")
+        Err(_) => assert!(false, "Didn't expect an error"),
     }
 }
 
@@ -158,13 +166,15 @@ fn test_from_f64() {
 
 #[test]
 fn test_mul_borrow() {
-    let res = &FixedUnsigned4::from_str("12.34").unwrap() * &FixedUnsigned4::from_str("56.78").unwrap();
+    let res =
+        &FixedUnsigned4::from_str("12.34").unwrap() * &FixedUnsigned4::from_str("56.78").unwrap();
     assert_eq!(res, FixedUnsigned4::from_str("700.6652").unwrap());
 }
 
 #[test]
 fn test_div_borrow() {
-    let res = &FixedUnsigned4::from_str("12.34").unwrap() / &FixedUnsigned4::from_str("56.78").unwrap();
+    let res =
+        &FixedUnsigned4::from_str("12.34").unwrap() / &FixedUnsigned4::from_str("56.78").unwrap();
     assert_eq!(res, FixedUnsigned4::from_str("0.2173").unwrap());
 }
 

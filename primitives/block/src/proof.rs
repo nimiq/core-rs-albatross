@@ -1,4 +1,5 @@
 use beserial::{Deserialize, Serialize};
+
 use crate::{Block, BlockHeader};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

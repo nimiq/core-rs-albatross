@@ -1,6 +1,6 @@
 use std::cell::UnsafeCell;
-use std::ops::Deref;
 use std::mem;
+use std::ops::Deref;
 
 pub struct MutableOnce<T> {
     inner: UnsafeCell<T>,
@@ -41,6 +41,7 @@ impl<T> AsRef<T> for MutableOnce<T> {
 }
 
 unsafe impl<T: Send> Send for MutableOnce<T> {}
+
 unsafe impl<T: Send> Sync for MutableOnce<T> {}
 
 #[cfg(test)]

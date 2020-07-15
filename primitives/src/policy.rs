@@ -1,12 +1,14 @@
 use std::convert::TryInto;
 
-#[cfg(feature = "coin")]
-use crate::coin::Coin;
-use fixed_unsigned::types::FixedUnsigned10;
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use num_traits::pow;
 use parking_lot::RwLock;
+
+use fixed_unsigned::types::FixedUnsigned10;
+
+#[cfg(feature = "coin")]
+use crate::coin::Coin;
 
 lazy_static! {
     /// The highest (easiest) block PoW target.
@@ -197,8 +199,9 @@ pub fn macro_block_of(epoch: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::convert::TryFrom;
+
+    use super::*;
 
     #[test]
     fn it_correctly_computes_block_reward() {

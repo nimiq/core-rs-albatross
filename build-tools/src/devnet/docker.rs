@@ -9,7 +9,7 @@ pub struct Docker {
 impl Docker {
     pub fn new<P: AsRef<Path>>(directory: P) -> Self {
         Self {
-            directory: directory.as_ref().to_path_buf()
+            directory: directory.as_ref().to_path_buf(),
         }
     }
 
@@ -18,7 +18,7 @@ impl Docker {
         docker_cmd::build(self.directory.to_str().unwrap())
     }
 
-    pub fn up<'a>(&'a self) -> Result<impl Iterator<Item=Result<String, Error>> + 'a, Error> {
+    pub fn up<'a>(&'a self) -> Result<impl Iterator<Item = Result<String, Error>> + 'a, Error> {
         info!("Starting docker containers: {}", self.directory.display());
         docker_cmd::up(self.directory.to_str().unwrap())
     }
@@ -35,17 +35,20 @@ impl Docker {
     }*/
 }
 
-
 mod docker_cmd {
     use failure::Error;
 
     #[shellfn::shell]
-    pub fn build<P: ToString>(env_dir: P) -> Result<(), Error> { r#"
+    pub fn build<P: ToString>(env_dir: P) -> Result<(), Error> {
+        r#"
         docker-compose -f $ENV_DIR/docker-compose.yml build
-    "# }
+    "#
+    }
 
     #[shellfn::shell]
-    pub fn up<P: ToString>(env_dir: P) -> Result<impl Iterator<Item=Result<String, Error>>, Error> {
+    pub fn up<P: ToString>(
+        env_dir: P,
+    ) -> Result<impl Iterator<Item = Result<String, Error>>, Error> {
         "docker-compose -f $ENV_DIR/docker-compose.yml up | tee $ENV_DIR/build/validators.log"
     }
 

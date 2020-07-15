@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, io};
 
-use account::{Receipt, Receipts};
 use account::inherent::{Inherent, InherentType};
+use account::{Receipt, Receipts};
 use beserial::{Deserialize, Serialize};
 use hash::{Hash, HashOutput, SerializeContent};
 use keys::Address;
@@ -24,7 +24,9 @@ pub struct BlockBody {
 }
 
 impl SerializeContent for BlockBody {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
 // Different hash implementation than std
@@ -68,7 +70,8 @@ impl BlockBody {
             }
 
             // Check for fee overflow.
-            total_fees = total_fees.checked_add(tx.fee)
+            total_fees = total_fees
+                .checked_add(tx.fee)
                 .ok_or(BlockError::FeeOverflow)?;
         }
 
@@ -94,8 +97,8 @@ impl BlockBody {
                     if !acc.account.is_to_be_pruned() {
                         return Err(BlockError::InvalidReceipt);
                     }
-                },
-                _ => return Err(BlockError::InvalidReceipt)
+                }
+                _ => return Err(BlockError::InvalidReceipt),
             }
         }
 
@@ -118,7 +121,9 @@ impl BlockBody {
 
     /// Can panic on unverified blocks if the total fees overflow.
     pub fn total_fees(&self) -> Coin {
-        self.transactions.iter().fold(Coin::ZERO, |sum, tx| sum + tx.fee)
+        self.transactions
+            .iter()
+            .fold(Coin::ZERO, |sum, tx| sum + tx.fee)
     }
 
     /// Can panic on unverified blocks if the total fees overflow.
@@ -128,7 +133,7 @@ impl BlockBody {
             ty: InherentType::Reward,
             target: self.miner.clone(),
             value: policy::block_reward_at(block_height) + self.total_fees(),
-            data: vec![]
+            data: vec![],
         }
     }
 

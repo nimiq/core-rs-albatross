@@ -1,22 +1,22 @@
 #[macro_use]
 extern crate log;
+extern crate nimiq_block as block;
+extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_blockchain as blockchain;
 extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_network as network;
-extern crate nimiq_block as block;
-extern crate nimiq_block_albatross as block_albatross;
 
+use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::fs::File;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-use futures::{future::Future, IntoFuture};
 use futures::stream::Stream;
+use futures::{future::Future, IntoFuture};
 use hyper::server::conn::Http;
 use native_tls::{Identity, TlsAcceptor as NativeTlsAcceptor};
 use tokio::net::TcpListener;
@@ -25,9 +25,9 @@ use tokio_tls::TlsAcceptor as TokioTlsAcceptor;
 use consensus::{Consensus, ConsensusProtocol};
 
 use crate::error::Error;
+pub use crate::metrics::chain::{AbstractChainMetrics, AlbatrossChainMetrics, NimiqChainMetrics};
 use crate::metrics::mempool::MempoolMetrics;
 use crate::metrics::network::NetworkMetrics;
-pub use crate::metrics::chain::{AbstractChainMetrics, NimiqChainMetrics, AlbatrossChainMetrics};
 
 macro_rules! attributes {
     // Empty attributes.
@@ -62,21 +62,29 @@ macro_rules! attributes {
     })
 }
 
-pub mod server;
-pub mod metrics;
 pub mod error;
+pub mod metrics;
+pub mod server;
 
-
-pub type MetricsServerFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync>;
+pub type MetricsServerFuture = Box<dyn Future<Item = (), Error = ()> + Send + Sync>;
 
 pub struct MetricsServer {
-    future: MetricsServerFuture
+    future: MetricsServerFuture,
 }
 
 impl MetricsServer {
-    pub fn new<P, CM>(ip: IpAddr, port: u16, username: Option<String>, password: Option<String>, pkcs12_key_file: &str, pkcs12_passphrase: &str, consensus: Arc<Consensus<P>>) -> Result<MetricsServer, Error>
-        where P: ConsensusProtocol + 'static,
-              CM: AbstractChainMetrics<P> + server::Metrics + 'static
+    pub fn new<P, CM>(
+        ip: IpAddr,
+        port: u16,
+        username: Option<String>,
+        password: Option<String>,
+        pkcs12_key_file: &str,
+        pkcs12_passphrase: &str,
+        consensus: Arc<Consensus<P>>,
+    ) -> Result<MetricsServer, Error>
+    where
+        P: ConsensusProtocol + 'static,
+        CM: AbstractChainMetrics<P> + server::Metrics + 'static,
     {
         let mut file = File::open(pkcs12_key_file)?;
         let mut pkcs12 = vec![];
@@ -105,7 +113,7 @@ impl MetricsServer {
                         attributes! { "peer" => consensus.network.network_config.peer_address() },
                         username.clone(),
                         password.clone())
-                }
+                },
             )
             .then(|res| {
                 match res {
@@ -113,7 +121,7 @@ impl MetricsServer {
                     Err(e) => {
                         error!("Metrics server failed: {}", e);
                         Ok(None)
-                    },
+                    }
                 }
             })
             .for_each(|conn_opt| {
@@ -128,9 +136,7 @@ impl MetricsServer {
             })
         );
 
-        Ok(MetricsServer {
-            future,
-        })
+        Ok(MetricsServer { future })
     }
 }
 
