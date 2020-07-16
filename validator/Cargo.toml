@@ -14,12 +14,11 @@ maintenance = { status = "experimental" }
 
 [dependencies]
 failure = "0.1"
-futures = "0.1"
 hex = { version = "0.4", optional = true }
 log = "0.4"
 parking_lot = "0.9"
 rand = "0.7"
-tokio = "0.1"
+tokio = { version = "0.2", features = ["rt-core"] }
 
 beserial = { path = "../beserial", version = "0.1" }
 nimiq-account = { path = "../primitives/account", version = "0.1" }

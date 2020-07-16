@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 
 use parking_lot::RwLock;
 use tokio;
-use futures::future;
 
 use account::Account;
 use block_albatross::{
@@ -334,12 +333,11 @@ impl Validator {
                 let transaction = proof_builder.generate().unwrap();
 
                 let weak = self.self_weak.clone();
-                tokio::spawn(future::lazy(move || {
+                tokio::spawn(async move {
                     if let Some(this) = Weak::upgrade(&weak) {
                         this.consensus.mempool.push_transaction(transaction.clone());
                     }
-                    Ok(())
-                }));
+                });
             }
         }
     }
@@ -572,7 +570,7 @@ impl Validator {
 
             let weak = self.self_weak.clone();
             trace!("Spawning thread to produce next block");
-            tokio::spawn(futures::lazy(move || {
+            tokio::spawn(async move {
                 if let Some(this) = Weak::upgrade(&weak) {
                     match block_type {
                         BlockType::Macro => this.produce_macro_block(
@@ -587,8 +585,7 @@ impl Validator {
                         ),
                     }
                 }
-                Ok(())
-            }));
+            });
         }
     }
 
