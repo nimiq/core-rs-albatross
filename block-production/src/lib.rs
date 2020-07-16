@@ -22,7 +22,10 @@ pub struct BlockProducer {
 
 impl BlockProducer {
     pub fn new(blockchain: Arc<Blockchain>, mempool: Arc<Mempool<Blockchain>>) -> Self {
-        BlockProducer { blockchain, mempool }
+        BlockProducer {
+            blockchain,
+            mempool,
+        }
     }
 
     pub fn next_block(&self, timestamp: u32, miner: Address, extra_data: Vec<u8>) -> Block {
@@ -37,7 +40,7 @@ impl BlockProducer {
         Block {
             header,
             interlink,
-            body: Some(body)
+            body: Some(body),
         }
     }
 
@@ -48,17 +51,27 @@ impl BlockProducer {
             - BlockBody::get_metadata_size(extra_data.len());
         let mut transactions = self.mempool.get_transactions_for_block(max_size);
         // In v1, inherents never produce receipts, thus we can omit the reward inherent.
-        let mut receipts = self.blockchain.state().accounts()
+        let mut receipts = self
+            .blockchain
+            .state()
+            .accounts()
             .collect_receipts(&transactions, &[], self.blockchain.height() + 1)
             .expect("Failed to collect receipts during block production");
 
-        let mut size = transactions.iter().fold(0, |size, tx| size + tx.serialized_size())
-            + receipts.receipts.iter().fold(0, |size, pruned_account| size + pruned_account.serialized_size());
+        let mut size = transactions
+            .iter()
+            .fold(0, |size, tx| size + tx.serialized_size())
+            + receipts.receipts.iter().fold(0, |size, pruned_account| {
+                size + pruned_account.serialized_size()
+            });
         if size > max_size {
             while size > max_size {
                 size -= transactions.pop().serialized_size();
             }
-            receipts = self.blockchain.state().accounts()
+            receipts = self
+                .blockchain
+                .state()
+                .accounts()
                 .collect_receipts(&transactions, &[], self.blockchain.height() + 1)
                 .expect("Failed to collect pruned accounts during block production");
         }
@@ -74,17 +87,32 @@ impl BlockProducer {
         }
     }
 
-    fn next_header(&self, target: Target, timestamp: u32, interlink: &BlockInterlink, body: &BlockBody) -> BlockHeader {
+    fn next_header(
+        &self,
+        target: Target,
+        timestamp: u32,
+        interlink: &BlockInterlink,
+        body: &BlockBody,
+    ) -> BlockHeader {
         let height = self.blockchain.height() + 1;
         let n_bits = target.into();
         let timestamp = u32::max(timestamp, self.blockchain.head().header.timestamp + 1);
 
         let prev_hash = self.blockchain.head_hash();
-        let genesis_hash = NetworkInfo::from_network_id(self.blockchain.network_id).genesis_hash().clone();
+        let genesis_hash = NetworkInfo::from_network_id(self.blockchain.network_id)
+            .genesis_hash()
+            .clone();
         let interlink_hash = interlink.hash(genesis_hash);
         let body_hash = body.hash();
-        let accounts_hash = self.blockchain.state().accounts()
-            .hash_with(&body.transactions, &[body.get_reward_inherent(height)], height)
+        let accounts_hash = self
+            .blockchain
+            .state()
+            .accounts()
+            .hash_with(
+                &body.transactions,
+                &[body.get_reward_inherent(height)],
+                height,
+            )
             .expect("Failed to compute accounts hash during block production");
 
         BlockHeader {

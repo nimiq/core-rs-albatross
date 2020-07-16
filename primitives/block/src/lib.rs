@@ -17,14 +17,14 @@ mod block;
 mod body;
 mod header;
 mod interlink;
-mod target;
 pub mod proof;
+mod target;
 
 pub use self::block::Block;
 pub use self::body::BlockBody;
 pub use self::header::BlockHeader;
 pub use self::interlink::BlockInterlink;
-pub use self::target::{Target, TargetCompact, Difficulty};
+pub use self::target::{Difficulty, Target, TargetCompact};
 
 use crate::transaction::TransactionError;
 

@@ -8,9 +8,9 @@ use primitives::networks::NetworkId;
 use transaction::Transaction;
 use vrf::VrfSeed;
 
-use crate::BlockError;
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
+use crate::BlockError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -65,7 +65,7 @@ impl Block {
             // If the previous block was a macro block, this resets the view number
             Block::Macro(_) => 0,
             // Otherwise we are now at the view number of the previous block
-            Block::Micro(ref block) => block.header.view_number
+            Block::Micro(ref block) => block.header.view_number,
         }
     }
 
@@ -115,14 +115,14 @@ impl Block {
     pub fn transactions(&self) -> Option<&Vec<Transaction>> {
         match self {
             Block::Macro(_) => None,
-            Block::Micro(ref block) => block.extrinsics.as_ref().map(|ex| &ex.transactions)
+            Block::Micro(ref block) => block.extrinsics.as_ref().map(|ex| &ex.transactions),
         }
     }
 
     pub fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
         match self {
             Block::Macro(_) => None,
-            Block::Micro(ref mut block) => block.extrinsics.as_mut().map(|ex| &mut ex.transactions)
+            Block::Micro(ref mut block) => block.extrinsics.as_mut().map(|ex| &mut ex.transactions),
         }
     }
 
@@ -205,10 +205,15 @@ impl Deserialize for Block {
 
 impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "[#{}, view {}, type {:?}]", self.block_number(), self.view_number(), self.ty())
+        write!(
+            f,
+            "[#{}, view {}, type {:?}]",
+            self.block_number(),
+            self.view_number(),
+            self.ty()
+        )
     }
 }
-
 
 #[derive(Clone, Debug, Eq, PartialEq, SerializeContent)]
 pub enum BlockHeader {
@@ -255,7 +260,7 @@ impl BlockHeader {
     pub fn parent_hash(&self) -> &Blake2bHash {
         match self {
             BlockHeader::Macro(ref header) => &header.parent_hash,
-            BlockHeader::Micro(ref header) => &header.parent_hash
+            BlockHeader::Micro(ref header) => &header.parent_hash,
         }
     }
 
@@ -268,7 +273,7 @@ impl BlockHeader {
             // If the previous block was a macro block, this resets the view number
             BlockHeader::Macro(_) => 0,
             // Otherwise we are now at the view number of the previous block
-            BlockHeader::Micro(header) => header.view_number
+            BlockHeader::Micro(header) => header.view_number,
         }
     }
 }

@@ -1,10 +1,10 @@
-use nimiq_collections::{UniqueLinkedList, Queue};
-use std::time::Duration;
-use std::time::Instant;
+use nimiq_collections::{Queue, UniqueLinkedList};
+use std::borrow::Borrow;
 use std::cmp;
 use std::hash::Hash;
 use std::rc::Rc;
-use std::borrow::Borrow;
+use std::time::Duration;
+use std::time::Instant;
 
 /// A `ThrottledQueue` is a `Queue` that only allows unique elements and
 /// limits the number of elements that can be retrieved over a period of time.
@@ -13,7 +13,9 @@ use std::borrow::Borrow;
 /// At a given interval however, this number will be increased again by an `allowance`.
 /// Moreover, the `ThrottledQueue` allows to limit its size.
 pub struct ThrottledQueue<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     queue: UniqueLinkedList<T>,
     max_size: Option<usize>,
     max_allowance: usize,
@@ -24,7 +26,9 @@ pub struct ThrottledQueue<T>
 }
 
 impl<T> ThrottledQueue<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     /// Creates an empty `ThrottledQueue`.
     ///
     /// * `max_allowance` - The total maximum of potentially available elements at any point in time.
@@ -34,7 +38,12 @@ impl<T> ThrottledQueue<T>
     ///
     /// It will be enforced that `allowance` < `max_allowance`.
     #[inline]
-    pub fn new(max_allowance: usize, allowance_interval: Duration, allowance_per_interval: usize, max_size: Option<usize>) -> Self {
+    pub fn new(
+        max_allowance: usize,
+        allowance_interval: Duration,
+        allowance_per_interval: usize,
+        max_size: Option<usize>,
+    ) -> Self {
         ThrottledQueue {
             queue: UniqueLinkedList::new(),
             max_size,
@@ -51,9 +60,15 @@ impl<T> ThrottledQueue<T>
         // Check for more allowance if interval is defined.
         if self.allowance_interval > Duration::default() {
             let now = Instant::now();
-            let num_intervals = now.duration_since(self.last_allowance).div_duration_f64(self.allowance_interval).trunc() as usize;
+            let num_intervals = now
+                .duration_since(self.last_allowance)
+                .div_duration_f64(self.allowance_interval)
+                .trunc() as usize;
             if num_intervals > 0 {
-                self.available_now = cmp::min(self.max_allowance, self.available_now + num_intervals * self.allowance_per_interval);
+                self.available_now = cmp::min(
+                    self.max_allowance,
+                    self.available_now + num_intervals * self.allowance_per_interval,
+                );
             }
             self.last_allowance = now;
         }
@@ -90,7 +105,9 @@ impl<T> ThrottledQueue<T>
     /// Removes and returns the element equal to the
     /// given value if present, otherwise returns `None`.
     pub fn remove<Q: ?Sized>(&mut self, x: &Q) -> Option<T>
-        where Rc<T>: Borrow<Q>, Q: Hash + Eq
+    where
+        Rc<T>: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.queue.remove(x)
     }
@@ -109,7 +126,9 @@ impl<T> ThrottledQueue<T>
 }
 
 impl<T> Queue<T> for ThrottledQueue<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }

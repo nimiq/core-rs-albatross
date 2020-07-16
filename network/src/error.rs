@@ -1,11 +1,10 @@
 use failure::Fail;
 use utils::key_store::Error as KeyStoreError;
 
-use network_primitives::networks::NetworkId;
 use network_primitives::address::peer_uri::PeerUriError;
+use network_primitives::networks::NetworkId;
 
 use crate::websocket::error::ServerStartError;
-
 
 #[derive(Fail, Debug)]
 pub enum Error {
@@ -18,7 +17,7 @@ pub enum Error {
     #[fail(display = "Could not load network info for id {:?}", _0)]
     InvalidNetworkInfo(NetworkId),
     #[fail(display = "Could not add seed node {}", _0)]
-    InvalidSeed(#[cause] SeedError)
+    InvalidSeed(#[cause] SeedError),
 }
 
 impl From<KeyStoreError> for Error {
@@ -44,7 +43,7 @@ pub enum SeedError {
     #[fail(display = "Invalid peer URI: {}", _0)]
     Peer(#[cause] PeerUriError),
     #[fail(display = "Invalid seed list URL: {}", _0)]
-    Url(#[cause] url::ParseError)
+    Url(#[cause] url::ParseError),
 }
 
 impl From<PeerUriError> for SeedError {

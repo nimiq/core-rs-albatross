@@ -7,7 +7,10 @@ use std::usize;
 
 use hex;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use hash::{Hash, SerializeContent};
 use keys::Address;
 
@@ -16,7 +19,7 @@ use keys::Address;
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct AddressNibbles {
     bytes: Vec<u8>,
-    length: u8
+    length: u8,
 }
 
 impl AddressNibbles {
@@ -71,7 +74,11 @@ impl AddressNibbles {
         let mut first_difference_nibble = min_len;
         for j in 0..byte_len {
             if self.bytes[j] != other.bytes[j] {
-                first_difference_nibble = if self.get(j * 2) != other.get(j * 2) { j * 2 } else { j * 2 + 1 };
+                first_difference_nibble = if self.get(j * 2) != other.get(j * 2) {
+                    j * 2
+                } else {
+                    j * 2 + 1
+                };
                 break;
             }
         }
@@ -89,19 +96,19 @@ impl AddressNibbles {
         let byte_end = end / 2;
         // Easy case, starts at the beginning of a byte.
         let mut new_bytes = if start % 2 == 0 {
-                self.bytes[byte_start..byte_end].to_vec()
-            } else {
-                let mut new_bytes: Vec<u8> = Vec::new();
-                let mut current_byte = (self.bytes[byte_start] & 0xf) << 4; // Right nibble.
-                for i in (byte_start + 1)..byte_end {
-                    let tmp_byte = self.bytes[i];
-                    let left_nibble = (tmp_byte >> 4) & 0xf;
-                    new_bytes.push(current_byte | left_nibble);
-                    current_byte = (tmp_byte & 0xf) << 4;
-                }
-                new_bytes.push(current_byte);
-                new_bytes
-            };
+            self.bytes[byte_start..byte_end].to_vec()
+        } else {
+            let mut new_bytes: Vec<u8> = Vec::new();
+            let mut current_byte = (self.bytes[byte_start] & 0xf) << 4; // Right nibble.
+            for i in (byte_start + 1)..byte_end {
+                let tmp_byte = self.bytes[i];
+                let left_nibble = (tmp_byte >> 4) & 0xf;
+                new_bytes.push(current_byte | left_nibble);
+                current_byte = (tmp_byte & 0xf) << 4;
+            }
+            new_bytes.push(current_byte);
+            new_bytes
+        };
         if end % 2 == 1 {
             let last_nibble = self.bytes[byte_end] & 0xf0;
             if start % 2 == 0 {
@@ -141,7 +148,7 @@ impl<'a> From<&'a [u8]> for AddressNibbles {
     fn from(v: &'a [u8]) -> Self {
         AddressNibbles {
             bytes: v.to_vec(),
-            length: (v.len() * 2) as u8
+            length: (v.len() * 2) as u8,
         }
     }
 }
@@ -167,12 +174,17 @@ impl str::FromStr for AddressNibbles {
         } else {
             let mut v: Vec<u8> = hex::decode(&s[..s.len() - 1])?;
             let last_nibble = s.chars().last().unwrap();
-            let last_nibble = last_nibble.to_digit(16)
-                .ok_or_else(|| hex::FromHexError::InvalidHexCharacter { c: last_nibble, index: s.len() - 1 })?;
+            let last_nibble =
+                last_nibble
+                    .to_digit(16)
+                    .ok_or_else(|| hex::FromHexError::InvalidHexCharacter {
+                        c: last_nibble,
+                        index: s.len() - 1,
+                    })?;
             v.push((last_nibble as u8) << 4);
             Ok(AddressNibbles {
                 bytes: v,
-                length: s.len() as u8
+                length: s.len() as u8,
             })
         }
     }
@@ -213,7 +225,7 @@ impl<'a, 'b> ops::Add<&'b AddressNibbles> for &'a AddressNibbles {
 
         AddressNibbles {
             bytes,
-            length: self.length + other.length
+            length: self.length + other.length,
         }
     }
 }
@@ -246,7 +258,8 @@ impl Serialize for AddressNibbles {
     }
 
     fn serialized_size(&self) -> usize {
-        /*length*/ 1 + self.len()
+        /*length*/
+        1 + self.len()
     }
 }
 
@@ -268,7 +281,11 @@ mod tests {
 
     #[test]
     fn it_can_convert_and_access_nibbles() {
-        let address = Address::from(hex::decode("cfb98637bcae43c13323eaa1731ced2b716962fd").unwrap().as_slice());
+        let address = Address::from(
+            hex::decode("cfb98637bcae43c13323eaa1731ced2b716962fd")
+                .unwrap()
+                .as_slice(),
+        );
         let an = AddressNibbles::from(&address);
         assert_eq!(an.bytes, address.as_bytes());
         assert_eq!(an.get(0), Some(12));
@@ -282,15 +299,30 @@ mod tests {
         assert_eq!(an.slice(0, 2).to_string(), "cf");
         assert_eq!(an.slice(0, 3).to_string(), "cfb");
         assert_eq!(an.slice(1, 3).to_string(), "fb");
-        assert_eq!(an.slice(0, 41).to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
-        assert_eq!(an.slice(1, 40).to_string(), "fb98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(
+            an.slice(0, 41).to_string(),
+            "cfb98637bcae43c13323eaa1731ced2b716962fd"
+        );
+        assert_eq!(
+            an.slice(1, 40).to_string(),
+            "fb98637bcae43c13323eaa1731ced2b716962fd"
+        );
         assert_eq!(an.slice(2, 1).to_string(), "");
         assert_eq!(an.slice(42, 43).to_string(), "");
 
         // Test suffixes
-        assert_eq!(an.suffix(0).to_string(), "cfb98637bcae43c13323eaa1731ced2b716962fd");
-        assert_eq!(an.suffix(1).to_string(), "fb98637bcae43c13323eaa1731ced2b716962fd");
-        assert_eq!(an.suffix(2).to_string(), "b98637bcae43c13323eaa1731ced2b716962fd");
+        assert_eq!(
+            an.suffix(0).to_string(),
+            "cfb98637bcae43c13323eaa1731ced2b716962fd"
+        );
+        assert_eq!(
+            an.suffix(1).to_string(),
+            "fb98637bcae43c13323eaa1731ced2b716962fd"
+        );
+        assert_eq!(
+            an.suffix(2).to_string(),
+            "b98637bcae43c13323eaa1731ced2b716962fd"
+        );
         assert_eq!(an.suffix(40).to_string(), "");
 
         let an2: AddressNibbles = "cfb".parse().unwrap();

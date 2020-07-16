@@ -9,8 +9,8 @@ use network_messages::Message;
 use utils::unique_id::UniqueId;
 
 use crate::connection::close_type::CloseType;
-use crate::websocket::Message as WebSocketMessage;
 use crate::connection::network_connection::ClosedFlag;
+use crate::websocket::Message as WebSocketMessage;
 
 #[derive(Clone)]
 pub struct PeerSink {
@@ -20,7 +20,11 @@ pub struct PeerSink {
 }
 
 impl PeerSink {
-    pub fn new(channel: UnboundedSender<WebSocketMessage>, unique_id: UniqueId, closed_flag: ClosedFlag) -> Self {
+    pub fn new(
+        channel: UnboundedSender<WebSocketMessage>,
+        unique_id: UniqueId,
+        closed_flag: ClosedFlag,
+    ) -> Self {
         PeerSink {
             sink: channel,
             unique_id,

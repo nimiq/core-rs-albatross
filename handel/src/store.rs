@@ -1,11 +1,10 @@
-use std::sync::Arc;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use collections::bitset::BitSet;
 
-use crate::multisig::{Signature, IndividualSignature, MultiSignature};
+use crate::multisig::{IndividualSignature, MultiSignature, Signature};
 use crate::partitioner::Partitioner;
-
 
 pub trait SignatureStore {
     /// Put `signature` into the store for level `level`.
@@ -31,7 +30,6 @@ pub trait SignatureStore {
     /// Returns the best combined multi-signature for all levels upto `level`.
     fn combined(&self, level: usize) -> Option<MultiSignature>;
 }
-
 
 #[derive(Clone, Debug)]
 pub struct ReplaceStore<P: Partitioner> {
@@ -59,7 +57,7 @@ impl<P: Partitioner> ReplaceStore<P> {
         let n = partitioner.size();
         let mut individual_verified = Vec::with_capacity(partitioner.levels());
         let mut individual_signatures = Vec::with_capacity(partitioner.levels());
-        for level in 0 .. partitioner.levels() {
+        for level in 0..partitioner.levels() {
             individual_verified.push(BitSet::with_capacity(partitioner.level_size(level)));
             individual_signatures.push(BTreeMap::new())
         }
@@ -80,11 +78,16 @@ impl<P: Partitioner> ReplaceStore<P> {
             let mut multisig = multisig.clone();
 
             // we can ignore the error, if it's not possible to merge we continue
-            multisig.add_multisig(best_multisig)
+            multisig
+                .add_multisig(best_multisig)
                 .unwrap_or_else(|e| trace!("check_merge: combining multisigs failed: {}", e));
 
-            let individual_verified = self.individual_verified.get(level)
-                .unwrap_or_else(|| panic!("Individual verified signatures BitSet is missing for level {}", level));
+            let individual_verified = self.individual_verified.get(level).unwrap_or_else(|| {
+                panic!(
+                    "Individual verified signatures BitSet is missing for level {}",
+                    level
+                )
+            });
 
             // the bits set here are verified individual signatures that can be added to `multisig`
             let complements = &(&multisig.signers & individual_verified) ^ individual_verified;
@@ -93,25 +96,33 @@ impl<P: Partitioner> ReplaceStore<P> {
             if complements.len() + multisig.len() <= best_multisig.len() {
                 // doesn't get better
                 None
-            }
-            else {
+            } else {
                 // put in the individual signatures
                 for id in complements.iter() {
                     // get individual signature
-                    let individual = self.individual_signatures.get(level)
-                        .unwrap_or_else(|| panic!("Individual signatures missing for level {}", level))
+                    let individual = self
+                        .individual_signatures
+                        .get(level)
+                        .unwrap_or_else(|| {
+                            panic!("Individual signatures missing for level {}", level)
+                        })
                         .get(&id)
-                        .unwrap_or_else(|| panic!("Individual signature {} missing for level {}", id, level));
+                        .unwrap_or_else(|| {
+                            panic!("Individual signature {} missing for level {}", id, level)
+                        });
                     // merge individual signature into multisig
                     assert_eq!(id, individual.signer);
-                    multisig.add_individual(individual)
-                        .unwrap_or_else(|e| panic!("Individual signature from id={} can't be added to multisig: {}", id, e));
+                    multisig.add_individual(individual).unwrap_or_else(|e| {
+                        panic!(
+                            "Individual signature from id={} can't be added to multisig: {}",
+                            id, e
+                        )
+                    });
                 }
 
                 Some(multisig)
             }
-        }
-        else {
+        } else {
             Some(multisig.clone())
         }
     }
@@ -119,18 +130,24 @@ impl<P: Partitioner> ReplaceStore<P> {
 
 impl<P: Partitioner> SignatureStore for ReplaceStore<P> {
     fn put(&mut self, signature: Signature, level: usize) {
-        trace!("Putting signature into store (level {}): {:?}", level, signature);
+        trace!(
+            "Putting signature into store (level {}): {:?}",
+            level,
+            signature
+        );
         let multisig = match signature {
             Signature::Individual(individual) => {
                 let multisig = individual.as_multisig();
-                self.individual_verified.get_mut(level)
+                self.individual_verified
+                    .get_mut(level)
                     .unwrap_or_else(|| panic!("Missing level {}", level))
                     .insert(individual.signer);
-                self.individual_signatures.get_mut(level)
+                self.individual_signatures
+                    .get_mut(level)
                     .unwrap_or_else(|| panic!("Missing level {}", level))
                     .insert(individual.signer, individual);
                 multisig
-            },
+            }
             Signature::Multi(multisig) => multisig,
         };
 
@@ -153,12 +170,14 @@ impl<P: Partitioner> SignatureStore for ReplaceStore<P> {
     }
 
     fn individual_verified(&self, level: usize) -> &BitSet {
-        self.individual_verified.get(level)
+        self.individual_verified
+            .get(level)
             .unwrap_or_else(|| panic!("Invalid level: {}", level))
     }
 
     fn individual_signature(&self, level: usize, peer_id: usize) -> Option<&IndividualSignature> {
-        self.individual_signatures.get(level)
+        self.individual_signatures
+            .get(level)
             .unwrap_or_else(|| panic!("Invalid level: {}", level))
             .get(&peer_id)
     }
@@ -172,7 +191,7 @@ impl<P: Partitioner> SignatureStore for ReplaceStore<P> {
         trace!("Creating combined signature for level {}", level);
 
         let mut signatures = Vec::new();
-        for (_, signature) in self.multisig_best.range(0 ..= level) {
+        for (_, signature) in self.multisig_best.range(0..=level) {
             trace!("collect: {:?}", signature);
             signatures.push(signature)
         }

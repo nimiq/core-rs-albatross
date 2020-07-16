@@ -35,13 +35,19 @@ impl<A: AccountsTreeLeave> AccountsTreeChunk<A> {
     }
 
     #[inline]
-    pub fn len(&self) -> usize { self.nodes.len() + 1 }
+    pub fn len(&self) -> usize {
+        self.nodes.len() + 1
+    }
 
     #[inline]
-    pub fn is_empty(&self) -> bool { false }
+    pub fn is_empty(&self) -> bool {
+        false
+    }
 
     #[inline]
-    pub fn head(&self) -> &AccountsTreeNode<A> { self.nodes.get(0).unwrap_or_else(|| self.tail()) }
+    pub fn head(&self) -> &AccountsTreeNode<A> {
+        self.nodes.get(0).unwrap_or_else(|| self.tail())
+    }
 
     #[inline]
     pub fn terminal_nodes(&self) -> Vec<&AccountsTreeNode<A>> {
@@ -54,9 +60,13 @@ impl<A: AccountsTreeLeave> AccountsTreeChunk<A> {
     }
 
     #[inline]
-    pub fn tail(&self) -> &AccountsTreeNode<A> { self.proof.nodes().get(0).unwrap() }
+    pub fn tail(&self) -> &AccountsTreeNode<A> {
+        self.proof.nodes().get(0).unwrap()
+    }
 
-    pub fn root(&self) -> Blake2bHash { self.proof.root_hash() }
+    pub fn root(&self) -> Blake2bHash {
+        self.proof.root_hash()
+    }
 
     pub fn last_terminal_string(&self) -> Option<String> {
         Some(self.tail().prefix().to_string())

@@ -1,12 +1,12 @@
-use std::time::SystemTime;
-use std::time::Duration;
-use utils::time::systemtime_to_timestamp;
 use atomic::Atomic;
 use atomic::Ordering;
+use std::time::Duration;
+use std::time::SystemTime;
+use utils::time::systemtime_to_timestamp;
 
 #[derive(Debug, Default)]
 pub struct NetworkTime {
-    offset: Atomic<i64>
+    offset: Atomic<i64>,
 }
 
 impl NetworkTime {
@@ -16,7 +16,7 @@ impl NetworkTime {
 
     pub fn with_offset(offset: i64) -> Self {
         NetworkTime {
-            offset: Atomic::new(offset)
+            offset: Atomic::new(offset),
         }
     }
 

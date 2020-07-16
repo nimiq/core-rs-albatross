@@ -1,19 +1,18 @@
 use std::io::Error as IoError;
 
-use toml::de::Error as TomlError;
 use failure::Fail;
 use log::SetLoggerError;
+use toml::de::Error as TomlError;
 
+use consensus::Error as ConsensusError;
 use database::lmdb::LmdbError;
 use database::volatile::VolatileDatabaseError;
 use network::error::Error as NetworkError;
-use utils::key_store::Error as KeyStoreError;
-use consensus::Error as ConsensusError;
-#[cfg(feature="validator")]
-use validator::error::Error as ValidatorError;
-#[cfg(feature="rpc-server")]
+#[cfg(feature = "rpc-server")]
 use rpc_server::error::Error as RpcServerError;
-
+use utils::key_store::Error as KeyStoreError;
+#[cfg(feature = "validator")]
+use validator::error::Error as ValidatorError;
 
 #[derive(Debug, Fail)]
 pub enum Error {
@@ -38,16 +37,16 @@ pub enum Error {
     #[fail(display = "Config file parsing error: {}", _0)]
     Toml(#[cause] TomlError),
 
-    #[cfg(feature="validator")]
+    #[cfg(feature = "validator")]
     #[fail(display = "Validator error: {}", _0)]
     Validator(#[cause] ValidatorError),
 
-    #[cfg(feature="rpc-server")]
+    #[cfg(feature = "rpc-server")]
     #[fail(display = "RPC server error: {}", _0)]
     RpcServer(#[cause] RpcServerError),
 
     #[fail(display = "Logger error: {}", _0)]
-    Logging(#[cause] SetLoggerError)
+    Logging(#[cause] SetLoggerError),
 }
 
 impl Error {
@@ -107,14 +106,14 @@ impl From<TomlError> for Error {
     }
 }
 
-#[cfg(feature="validator")]
+#[cfg(feature = "validator")]
 impl From<ValidatorError> for Error {
     fn from(e: ValidatorError) -> Self {
         Self::Validator(e)
     }
 }
 
-#[cfg(feature="rpc-server")]
+#[cfg(feature = "rpc-server")]
 impl From<RpcServerError> for Error {
     fn from(e: RpcServerError) -> Self {
         Self::RpcServer(e)

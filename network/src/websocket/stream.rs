@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use futures::prelude::*;
 use tokio::net::TcpStream;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tokio_tungstenite::stream::PeerAddr;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::error::Error as WebSocketError;
 use tungstenite::protocol::CloseFrame;
 use tungstenite::protocol::Message as WebSocketMessage;
@@ -20,8 +20,8 @@ use network_primitives::address::net_address::NetAddress;
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;
 use crate::websocket::error::Error;
-use crate::websocket::Message;
 use crate::websocket::public_state::PublicStreamInfo;
+use crate::websocket::Message;
 
 type WebSocketLayer = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -80,10 +80,13 @@ impl NimiqMessageStream {
             msg_buf: None,
             state: WebSocketState::Active,
 
-            public_state: PublicStreamInfo::new(match peer_addr.ip() {
-                net::IpAddr::V4(ip4) => NetAddress::IPv4(ip4),
-                net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
-            }, outbound),
+            public_state: PublicStreamInfo::new(
+                match peer_addr.ip() {
+                    net::IpAddr::V4(ip4) => NetAddress::IPv4(ip4),
+                    net::IpAddr::V6(ip6) => NetAddress::IPv6(ip6),
+                },
+                outbound,
+            ),
         })
     }
 
@@ -119,7 +122,7 @@ impl Sink for NimiqMessageStream {
             Message::Message(msg) => {
                 let serialized_msg = msg.serialize_to_vec();
                 (serialized_msg, self.next_tag())
-            },
+            }
             // If sending of a message was interrupted due to a full queue
             // we resume sending with the previous tag (if given).
             Message::Resume(serialized_msg, sending_tag) => {
@@ -128,7 +131,7 @@ impl Sink for NimiqMessageStream {
                     None => self.next_tag(),
                 };
                 (serialized_msg, tag)
-            },
+            }
             // Close frames need to be handled differently.
             Message::Close(frame) => {
                 self.state = WebSocketState::ClosedByUs;
@@ -136,15 +139,17 @@ impl Sink for NimiqMessageStream {
                 return match self.inner.start_send(WebSocketMessage::Close(frame)) {
                     Ok(state) => match state {
                         AsyncSink::Ready => Ok(AsyncSink::Ready),
-                        AsyncSink::NotReady(WebSocketMessage::Close(frame)) => Ok(AsyncSink::NotReady(Message::Close(frame))),
+                        AsyncSink::NotReady(WebSocketMessage::Close(frame)) => {
+                            Ok(AsyncSink::NotReady(Message::Close(frame)))
+                        }
                         AsyncSink::NotReady(_) => {
                             error!("Expected to get NotReady of a Close message, but got something else.");
                             Err(Error::InvalidClosingState)
-                        },
+                        }
                     },
                     Err(err) => Err(Error::WebSocketError(err)),
-                }
-            },
+                };
+            }
         };
 
         // Send chunks to underlying layer.
@@ -171,11 +176,18 @@ impl Sink for NimiqMessageStream {
                 Ok(state) => match state {
                     AsyncSink::Ready => {
                         #[cfg(feature = "metrics")]
-                        self.public_state.network_metrics.note_bytes_sent(buffer_len);
-                    },
+                        self.public_state
+                            .network_metrics
+                            .note_bytes_sent(buffer_len);
+                    }
                     // We started to send some chunks, but now the queue is full:
                     // If this happens, we will try sending the rest of the message at a later point with the same tag.
-                    AsyncSink::NotReady(_) => return Ok(AsyncSink::NotReady(Message::Resume(serialized_msg[start..].to_vec(), Some(tag)))),
+                    AsyncSink::NotReady(_) => {
+                        return Ok(AsyncSink::NotReady(Message::Resume(
+                            serialized_msg[start..].to_vec(),
+                            Some(tag),
+                        )))
+                    }
                 },
                 Err(error) => return Err(Error::WebSocketError(error)),
             };
@@ -221,10 +233,12 @@ impl NimiqMessageStream {
 
             // Detect if this is a new message.
             if self.msg_buf.is_none() {
-
                 if let Ok(msg_size) = NimiqMessage::peek_length(chunk) {
                     if msg_size > MAX_MESSAGE_SIZE {
-                        error!("Max message size exceeded ({} > {})", msg_size, MAX_MESSAGE_SIZE);
+                        error!(
+                            "Max message size exceeded ({} > {})",
+                            msg_size, MAX_MESSAGE_SIZE
+                        );
                         return Err(Error::MessageSizeExceeded);
                     }
                     self.msg_buf = Some(Vec::with_capacity(msg_size));
@@ -293,11 +307,13 @@ impl Stream for NimiqMessageStream {
                         self.state = WebSocketState::ClosedByPeer(frame.clone());
                     }
 
-                    return Ok(Async::Ready(Some(Message::Close(frame))))
-                },
+                    return Ok(Async::Ready(Some(Message::Close(frame))));
+                }
                 Ok(Async::Ready(Some(m))) => {
                     #[cfg(feature = "metrics")]
-                    self.public_state.network_metrics.note_bytes_received(m.len());
+                    self.public_state
+                        .network_metrics
+                        .note_bytes_received(m.len());
 
                     // Check max chunk size.
                     if m.len() > MAX_CHUNK_SIZE {
@@ -309,17 +325,15 @@ impl Stream for NimiqMessageStream {
                     if let Some(msg) = self.try_read_message()? {
                         return Ok(Async::Ready(Some(msg)));
                     }
-                },
+                }
                 Ok(Async::Ready(None)) => {
                     // Try to read a message from our buffer, but return early if it fails.
                     return match self.try_read_message()? {
                         Some(msg) => Ok(Async::Ready(Some(msg))),
                         None => Ok(Async::Ready(None)),
                     };
-                },
-                Ok(Async::NotReady) => {
-                    break
-                },
+                }
+                Ok(Async::NotReady) => break,
                 Err(e) => {
                     if let WebSocketError::ConnectionClosed = e {
                         // If we haven't closed the connection, note as closed by peer.
@@ -327,7 +341,7 @@ impl Stream for NimiqMessageStream {
                             self.state = WebSocketState::ClosedByPeer(None);
                         }
                     }
-                    return Err(e.into())
+                    return Err(e.into());
                 }
             }
         }

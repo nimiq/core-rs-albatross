@@ -1,5 +1,5 @@
 use beserial::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter, Error};
+use std::fmt::{Display, Error, Formatter};
 use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
@@ -15,7 +15,6 @@ pub enum NetworkId {
     DevAlbatross = 6,
     UnitAlbatross = 7,
 }
-
 
 impl NetworkId {
     pub fn is_albatross(self) -> bool {
@@ -42,7 +41,7 @@ impl FromStr for NetworkId {
             "main" => Ok(NetworkId::Main),
             "testalbatross" => Ok(NetworkId::TestAlbatross),
             "devalbatross" => Ok(NetworkId::DevAlbatross),
-            _ => Err(NetworkIdParseError(String::from(s)))
+            _ => Err(NetworkIdParseError(String::from(s))),
         }
     }
 }

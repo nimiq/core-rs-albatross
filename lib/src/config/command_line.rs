@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use failure::Fail;
-use structopt::StructOpt;
 use log::{LevelFilter, ParseLevelError};
+use structopt::StructOpt;
 
 use network_primitives::networks::NetworkId;
 
@@ -13,9 +13,8 @@ use crate::config::config_file::ConsensusType;
     static ref VALID_CONSENSUS_TYPES: [&'static str; 2] = ["full", "macro-sync"];
 }*/
 
-
 #[derive(Debug, StructOpt)]
-#[structopt(rename_all="kebab")]
+#[structopt(rename_all = "kebab")]
 pub struct CommandLine {
     /// Hostname of this Nimiq client.
     ///
@@ -41,7 +40,7 @@ pub struct CommandLine {
     ///
     /// * `nimiq-client --config ~/.nimiq/client-albatross.toml`
     ///
-    #[structopt(long, short="c")]
+    #[structopt(long, short = "c")]
     pub config: Option<PathBuf>,
 
     /// Configure global log level.
@@ -97,11 +96,10 @@ impl CommandLine {
     }
 
     /// Load command line from command line arguments (std::env::args)
-    pub fn from_iter<I: IntoIterator<Item=String>>(args: I) -> Self {
+    pub fn from_iter<I: IntoIterator<Item = String>>(args: I) -> Self {
         <Self as StructOpt>::from_iter(args)
     }
 }
-
 
 #[derive(Debug, Fail)]
 pub enum LogTagParseError {
@@ -114,7 +112,8 @@ pub enum LogTagParseError {
 fn parse_log_tags(s: &str) -> Result<(String, LevelFilter), LogTagParseError> {
     let p: Vec<&str> = s.splitn(1, ":").collect();
     let tag = p.get(0).unwrap().to_string();
-    let level = p.get(1)
+    let level = p
+        .get(1)
         .ok_or_else(|| LogTagParseError::MissingColon(s.to_string()))?
         .parse()
         .map_err(|e| LogTagParseError::InvalidLogLevel(e))?;

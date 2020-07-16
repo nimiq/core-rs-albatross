@@ -1,4 +1,3 @@
-
 pub trait Rng {
     /// Returns a random 64 bit integer
     fn next_u64(&mut self) -> u64;

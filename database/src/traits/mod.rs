@@ -28,7 +28,9 @@ pub trait IntoDatabaseValue {
 }
 
 pub trait FromDatabaseValue {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized;
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized;
 }
 
 pub trait AsDatabaseBytes {
@@ -57,22 +59,37 @@ impl IntoDatabaseValue for str {
 }
 
 impl FromDatabaseValue for String {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(String::from_utf8(bytes.to_vec()).unwrap())
     }
 }
 
 impl FromDatabaseValue for u32 {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        let lmdb_result: Result<&lmdb_zero::Unaligned<u32>, String> = lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
-        Ok(lmdb_result.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.get())
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        let lmdb_result: Result<&lmdb_zero::Unaligned<u32>, String> =
+            lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
+        Ok(lmdb_result
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            .get())
     }
 }
 
 impl FromDatabaseValue for u64 {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
-        let lmdb_result: Result<&lmdb_zero::Unaligned<u64>, String> = lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
-        Ok(lmdb_result.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.get())
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
+        let lmdb_result: Result<&lmdb_zero::Unaligned<u64>, String> =
+            lmdb_zero::traits::FromLmdbBytes::from_lmdb_bytes(bytes);
+        Ok(lmdb_result
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            .get())
     }
 }
 
@@ -93,11 +110,11 @@ impl FromDatabaseValue for u64 {
 
 macro_rules! as_lmdb_bytes {
     ($t: ty) => {
-impl AsDatabaseBytes for $t {
-    fn as_database_bytes(&self) -> Cow<[u8]> {
-        return Cow::Borrowed(self.as_lmdb_bytes());
-    }
-}
+        impl AsDatabaseBytes for $t {
+            fn as_database_bytes(&self) -> Cow<[u8]> {
+                return Cow::Borrowed(self.as_lmdb_bytes());
+            }
+        }
     };
 }
 

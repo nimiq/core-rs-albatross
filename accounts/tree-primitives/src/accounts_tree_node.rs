@@ -14,7 +14,9 @@ pub struct AccountsTreeNodeChild {
     pub hash: Blake2bHash,
 }
 
-pub const NO_CHILDREN: [Option<AccountsTreeNodeChild>; 16] = [None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None];
+pub const NO_CHILDREN: [Option<AccountsTreeNodeChild>; 16] = [
+    None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+];
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, Serialize, Deserialize)]
 #[repr(u8)]
@@ -32,7 +34,7 @@ pub enum AccountsTreeNode<A: AccountsTreeLeave> {
     TerminalNode {
         prefix: AddressNibbles,
         account: A,
-    }
+    },
 }
 
 impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
@@ -40,8 +42,14 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
         AccountsTreeNode::TerminalNode { prefix, account }
     }
 
-    pub fn new_branch(prefix: AddressNibbles, children: [Option<AccountsTreeNodeChild>; 16]) -> Self {
-        AccountsTreeNode::BranchNode { prefix, children: Box::new(children) }
+    pub fn new_branch(
+        prefix: AddressNibbles,
+        children: [Option<AccountsTreeNodeChild>; 16],
+    ) -> Self {
+        AccountsTreeNode::BranchNode {
+            prefix,
+            children: Box::new(children),
+        }
     }
 
     #[inline]
@@ -68,7 +76,7 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
                     return Some(&child.hash);
                 }
                 None
-            },
+            }
         }
     }
 
@@ -80,7 +88,7 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
                     return Some(self.prefix() + &child.suffix);
                 }
                 None
-            },
+            }
         }
     }
 
@@ -102,7 +110,12 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
 
     #[inline]
     pub fn get_child_index(&self, prefix: &AddressNibbles) -> Option<usize> {
-        assert!(self.prefix().is_prefix_of(prefix), "prefix {} is not a child of the current node {}", prefix, self.prefix());
+        assert!(
+            self.prefix().is_prefix_of(prefix),
+            "prefix {} is not a child of the current node {}",
+            prefix,
+            self.prefix()
+        );
         prefix.get(self.prefix().len())
     }
 
@@ -110,11 +123,15 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
         let child_index = self.get_child_index(&prefix)?;
         let suffix = prefix.suffix(self.prefix().len() as u8);
         match self {
-            AccountsTreeNode::TerminalNode { .. } => { return None; },
-            AccountsTreeNode::BranchNode { ref mut children, .. } => {
+            AccountsTreeNode::TerminalNode { .. } => {
+                return None;
+            }
+            AccountsTreeNode::BranchNode {
+                ref mut children, ..
+            } => {
                 let child = AccountsTreeNodeChild { suffix, hash };
                 children[child_index] = Some(child);
-            },
+            }
         };
         Some(self)
     }
@@ -122,20 +139,28 @@ impl<A: AccountsTreeLeave> AccountsTreeNode<A> {
     pub fn without_child(mut self, suffix: AddressNibbles) -> Option<Self> {
         let child_index = self.get_child_index(&suffix)?;
         match self {
-            AccountsTreeNode::TerminalNode { .. } => { return None; },
-            AccountsTreeNode::BranchNode { ref mut children, .. } => {
+            AccountsTreeNode::TerminalNode { .. } => {
+                return None;
+            }
+            AccountsTreeNode::BranchNode {
+                ref mut children, ..
+            } => {
                 children[child_index] = None;
-            },
+            }
         };
         Some(self)
     }
 
     pub fn with_account(mut self, new_account: A) -> Option<Self> {
         match &mut self {
-            AccountsTreeNode::TerminalNode { ref mut account, .. } => {
+            AccountsTreeNode::TerminalNode {
+                ref mut account, ..
+            } => {
                 *account = new_account;
-            },
-            AccountsTreeNode::BranchNode { .. } => { return None; },
+            }
+            AccountsTreeNode::BranchNode { .. } => {
+                return None;
+            }
         };
         Some(self)
     }
@@ -158,16 +183,18 @@ impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
         match *self {
             AccountsTreeNode::TerminalNode { ref account, .. } => {
                 size += Serialize::serialize(&account, writer)?;
-            },
+            }
             AccountsTreeNode::BranchNode { ref children, .. } => {
-                let child_count: u8 = children.iter().fold(0, |acc, child| { acc + if child.is_none() { 0 } else { 1 } });
+                let child_count: u8 = children
+                    .iter()
+                    .fold(0, |acc, child| acc + if child.is_none() { 0 } else { 1 });
                 Serialize::serialize(&child_count, writer)?;
                 for child in children.iter() {
                     if let Some(ref child) = child {
                         size += Serialize::serialize(&child, writer)?;
                     }
                 }
-            },
+            }
         }
 
         Ok(size)
@@ -180,7 +207,7 @@ impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
         match *self {
             AccountsTreeNode::TerminalNode { ref account, .. } => {
                 size += Serialize::serialized_size(&account);
-            },
+            }
             AccountsTreeNode::BranchNode { ref children, .. } => {
                 size += /*count*/ 1;
                 for child in children.iter() {
@@ -188,7 +215,7 @@ impl<A: AccountsTreeLeave> Serialize for AccountsTreeNode<A> {
                         size += Serialize::serialized_size(&child);
                     }
                 }
-            },
+            }
         }
 
         size
@@ -204,7 +231,7 @@ impl<A: AccountsTreeLeave> Deserialize for AccountsTreeNode<A> {
             AccountsTreeNodeType::TerminalNode => {
                 let account: A = Deserialize::deserialize(reader)?;
                 Ok(AccountsTreeNode::new_terminal(prefix, account))
-            },
+            }
             AccountsTreeNodeType::BranchNode => {
                 let child_count: u8 = Deserialize::deserialize(reader)?;
                 let mut children = NO_CHILDREN;
@@ -217,13 +244,15 @@ impl<A: AccountsTreeLeave> Deserialize for AccountsTreeNode<A> {
                     }
                 }
                 Ok(AccountsTreeNode::new_branch(prefix, children))
-            },
+            }
         }
     }
 }
 
 impl<A: AccountsTreeLeave> SerializeContent for AccountsTreeNode<A> {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
 // Different hash implementation than std
@@ -231,7 +260,12 @@ impl<A: AccountsTreeLeave> SerializeContent for AccountsTreeNode<A> {
 impl<A: AccountsTreeLeave> Hash for AccountsTreeNode<A> {}
 
 #[allow(clippy::type_complexity)]
-type AccountsTreeNodeIter<'a> = Option<iter::FilterMap<slice::Iter<'a, Option<AccountsTreeNodeChild>>, fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>>>;
+type AccountsTreeNodeIter<'a> = Option<
+    iter::FilterMap<
+        slice::Iter<'a, Option<AccountsTreeNodeChild>>,
+        fn(&Option<AccountsTreeNodeChild>) -> Option<&AccountsTreeNodeChild>,
+    >,
+>;
 
 pub struct Iter<'a> {
     it: AccountsTreeNodeIter<'a>,
@@ -255,12 +289,17 @@ impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a AccountsTreeNode<A> {
     fn into_iter(self) -> Iter<'a> {
         match self {
             AccountsTreeNode::TerminalNode { .. } => Iter { it: None },
-            AccountsTreeNode::BranchNode { ref children, .. } => Iter { it: Some(children.iter().filter_map(Option::as_ref)) },
+            AccountsTreeNode::BranchNode { ref children, .. } => Iter {
+                it: Some(children.iter().filter_map(Option::as_ref)),
+            },
         }
     }
 }
 
-type AccountsTreeNodeChildFilterMap<'a> = iter::FilterMap<slice::IterMut<'a, Option<AccountsTreeNodeChild>>, fn(&mut Option<AccountsTreeNodeChild>) -> Option<&mut AccountsTreeNodeChild>>;
+type AccountsTreeNodeChildFilterMap<'a> = iter::FilterMap<
+    slice::IterMut<'a, Option<AccountsTreeNodeChild>>,
+    fn(&mut Option<AccountsTreeNodeChild>) -> Option<&mut AccountsTreeNodeChild>,
+>;
 
 pub struct IterMut<'a> {
     it: Option<AccountsTreeNodeChildFilterMap<'a>>,
@@ -284,7 +323,11 @@ impl<'a, A: AccountsTreeLeave> iter::IntoIterator for &'a mut AccountsTreeNode<A
     fn into_iter(self) -> IterMut<'a> {
         match self {
             AccountsTreeNode::TerminalNode { .. } => IterMut { it: None },
-            AccountsTreeNode::BranchNode { ref mut children, .. } => IterMut { it: Some(children.iter_mut().filter_map(Option::as_mut)) },
+            AccountsTreeNode::BranchNode {
+                ref mut children, ..
+            } => IterMut {
+                it: Some(children.iter_mut().filter_map(Option::as_mut)),
+            },
         }
     }
 }
@@ -304,22 +347,45 @@ mod tests {
 
     #[test]
     fn it_can_calculate_hash() {
-        let mut node = AccountsTreeNode::<Account>::deserialize_from_vec(&hex::decode(EMPTY_ROOT).unwrap()).unwrap();
-        assert_eq!(node.hash::<Blake2bHash>(), "ab29e6dc16755d0071eba349ebda225d15e4f910cb474549c47e95cb85ecc4d6".into());
+        let mut node =
+            AccountsTreeNode::<Account>::deserialize_from_vec(&hex::decode(EMPTY_ROOT).unwrap())
+                .unwrap();
+        assert_eq!(
+            node.hash::<Blake2bHash>(),
+            "ab29e6dc16755d0071eba349ebda225d15e4f910cb474549c47e95cb85ecc4d6".into()
+        );
 
         node = AccountsTreeNode::deserialize_from_vec(&hex::decode(ROOT).unwrap()).unwrap();
-        assert_eq!(node.hash::<Blake2bHash>(), "4ff16759f1f4cc7274ff46864c9adef278c1a72a9ded784b882e9cbf313f4e7c".into());
+        assert_eq!(
+            node.hash::<Blake2bHash>(),
+            "4ff16759f1f4cc7274ff46864c9adef278c1a72a9ded784b882e9cbf313f4e7c".into()
+        );
 
         node = AccountsTreeNode::deserialize_from_vec(&hex::decode(BRANCH_1).unwrap()).unwrap();
-        assert_eq!(node.hash::<Blake2bHash>(), "e208dcfb22e9130280c633ae753f4a1eb0a6caf71f1a8fce837a7d430b846f1f".into());
+        assert_eq!(
+            node.hash::<Blake2bHash>(),
+            "e208dcfb22e9130280c633ae753f4a1eb0a6caf71f1a8fce837a7d430b846f1f".into()
+        );
 
-        node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_BASIC).unwrap()).unwrap();
-        assert_eq!(node.hash::<Blake2bHash>(), "3b1fcdc81825649f84a8dbf529b2677b4e5e866da96ee874c0b82f68b1afa7a3".into());
+        node =
+            AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_BASIC).unwrap()).unwrap();
+        assert_eq!(
+            node.hash::<Blake2bHash>(),
+            "3b1fcdc81825649f84a8dbf529b2677b4e5e866da96ee874c0b82f68b1afa7a3".into()
+        );
 
-        node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_VESTING).unwrap()).unwrap();
-        assert_eq!(node.hash::<Blake2bHash>(), "aa73e73d559902bdd523b7a79962f3681d7431365999c49718fe5ac591c9daa7".into());
+        node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_VESTING).unwrap())
+            .unwrap();
+        assert_eq!(
+            node.hash::<Blake2bHash>(),
+            "aa73e73d559902bdd523b7a79962f3681d7431365999c49718fe5ac591c9daa7".into()
+        );
 
-        node = AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_HTLC).unwrap()).unwrap();
-        assert_eq!(node.hash::<Blake2bHash>(), "7b27f721750a0413df093e278000018f1293dd46eb246a21c053fa91e27ccaa5".into());
+        node =
+            AccountsTreeNode::deserialize_from_vec(&hex::decode(TERMINAL_HTLC).unwrap()).unwrap();
+        assert_eq!(
+            node.hash::<Blake2bHash>(),
+            "7b27f721750a0413df093e278000018f1293dd46eb246a21c053fa91e27ccaa5".into()
+        );
     }
 }

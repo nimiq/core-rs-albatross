@@ -31,12 +31,16 @@ fn it_can_load_a_stored_chain() {
     let hash = block.header.hash();
 
     {
-        let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+        let blockchain = Arc::new(
+            Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+        );
         let status = blockchain.push(block);
         assert_eq!(status, Ok(PushResult::Extended));
     }
 
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
     assert_eq!(blockchain.height(), 2);
     assert_eq!(blockchain.head_hash(), hash);
 }
@@ -44,7 +48,9 @@ fn it_can_load_a_stored_chain() {
 #[test]
 fn it_can_extend_the_main_chain() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     let mut status = blockchain.push(block);
@@ -66,7 +72,9 @@ fn it_can_extend_the_main_chain() {
 #[test]
 fn it_detects_known_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
 
     let block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     let mut status = blockchain.push(block.clone());
@@ -79,7 +87,9 @@ fn it_detects_known_blocks() {
 #[test]
 fn it_rejects_orphan_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
 
     let block = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
     let status = blockchain.push(block);
@@ -89,7 +99,9 @@ fn it_rejects_orphan_blocks() {
 #[test]
 fn it_rejects_intrisically_invalid_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     block.header.nonce = 1;
@@ -100,7 +112,9 @@ fn it_rejects_intrisically_invalid_blocks() {
 #[test]
 fn it_rejects_invalid_successors() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     block.header.timestamp = 5000;
@@ -113,14 +127,19 @@ fn it_rejects_invalid_successors() {
 #[test]
 fn it_rejects_blocks_with_invalid_difficulty() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
 
     let mut block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     block.header.n_bits = 0x1f051234.into();
     block.header.nonce = 51485;
 
     let status = blockchain.push(block);
-    assert_eq!(status, Err(PushError::from_block_error(BlockError::DifficultyMismatch)));
+    assert_eq!(
+        status,
+        Err(PushError::from_block_error(BlockError::DifficultyMismatch))
+    );
 }
 
 #[test]
@@ -128,7 +147,8 @@ fn it_rejects_blocks_with_duplicate_transactions() {
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+    let blockchain =
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let miner = Address::from(&keypair.public);
     let block2 = crate::next_block(&blockchain)
@@ -146,9 +166,13 @@ fn it_rejects_blocks_with_duplicate_transactions() {
         Coin::try_from(10).unwrap(),
         Coin::try_from(0).unwrap(),
         1,
-        NetworkId::Main
+        NetworkId::Main,
     );
-    tx.proof = SignatureProof::from(keypair.public.clone(), keypair.sign(&tx.serialize_content())).serialize_to_vec();
+    tx.proof = SignatureProof::from(
+        keypair.public.clone(),
+        keypair.sign(&tx.serialize_content()),
+    )
+    .serialize_to_vec();
 
     let block3 = crate::next_block(&blockchain)
         .with_miner(miner)
@@ -171,7 +195,8 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+    let blockchain =
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let miner = Address::from(&keypair.public);
     let block2 = crate::next_block(&blockchain)
@@ -189,16 +214,26 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
         Coin::try_from(1000000000).unwrap(),
         Coin::try_from(0).unwrap(),
         1,
-        NetworkId::Main
+        NetworkId::Main,
     );
-    tx.proof = SignatureProof::from(keypair.public.clone(), keypair.sign(&tx.serialize_content())).serialize_to_vec();
+    tx.proof = SignatureProof::from(
+        keypair.public.clone(),
+        keypair.sign(&tx.serialize_content()),
+    )
+    .serialize_to_vec();
 
     let mut block3 = crate::next_block(&blockchain)
         .with_transactions(vec![tx.clone()])
         .with_nonce(31302)
         .build();
     status = blockchain.push(block3);
-    assert_eq!(status, Err(PushError::AccountsError(AccountError::InsufficientFunds { needed: Coin::try_from(1000000000).unwrap(), balance: Coin::try_from(440597429).unwrap() })));
+    assert_eq!(
+        status,
+        Err(PushError::AccountsError(AccountError::InsufficientFunds {
+            needed: Coin::try_from(1000000000).unwrap(),
+            balance: Coin::try_from(440597429).unwrap()
+        }))
+    );
 
     // Tx with wrong sender type
     tx = Transaction::new_basic(
@@ -207,27 +242,36 @@ fn it_rejects_blocks_if_body_cannot_be_applied() {
         Coin::try_from(1000).unwrap(),
         Coin::try_from(0).unwrap(),
         1,
-        NetworkId::Main
+        NetworkId::Main,
     );
     tx.sender_type = AccountType::Vesting;
-    tx.proof = SignatureProof::from(keypair.public.clone(), keypair.sign(&tx.serialize_content())).serialize_to_vec();
+    tx.proof = SignatureProof::from(
+        keypair.public.clone(),
+        keypair.sign(&tx.serialize_content()),
+    )
+    .serialize_to_vec();
 
     block3 = crate::next_block(&blockchain)
         .with_transactions(vec![tx.clone()])
         .with_nonce(127678)
         .build();
     status = blockchain.push(block3);
-    assert_eq!(status, Err(PushError::AccountsError(AccountError::TypeMismatch { expected: AccountType::Basic, got: AccountType::Vesting })));
+    assert_eq!(
+        status,
+        Err(PushError::AccountsError(AccountError::TypeMismatch {
+            expected: AccountType::Basic,
+            got: AccountType::Vesting
+        }))
+    );
 }
 
 #[test]
 fn it_detects_fork_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+    let blockchain =
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
-    let mut block = crate::next_block(&blockchain)
-        .with_nonce(83054)
-        .build();
+    let mut block = crate::next_block(&blockchain).with_nonce(83054).build();
     assert_eq!(blockchain.push(block), Ok(PushResult::Extended));
 
     block = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
@@ -237,40 +281,55 @@ fn it_detects_fork_blocks() {
 #[test]
 fn it_rebranches_to_the_harder_chain() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+    let blockchain =
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
-    let block1_2 = crate::next_block(&blockchain)
-        .with_nonce(83054)
-        .build();
+    let block1_2 = crate::next_block(&blockchain).with_nonce(83054).build();
     assert_eq!(blockchain.push(block1_2.clone()), Ok(PushResult::Extended));
 
-    let block1_3 = crate::next_block(&blockchain)
-        .with_nonce(23192)
-        .build();
+    let block1_3 = crate::next_block(&blockchain).with_nonce(23192).build();
     assert_eq!(blockchain.push(block1_3.clone()), Ok(PushResult::Extended));
 
-    let block1_4 = crate::next_block(&blockchain)
-        .with_nonce(39719)
-        .build();
+    let block1_4 = crate::next_block(&blockchain).with_nonce(39719).build();
 
     let block2_2 = Block::deserialize_from_vec(&hex::decode(BLOCK_2).unwrap()).unwrap();
     assert_eq!(blockchain.push(block2_2.clone()), Ok(PushResult::Forked));
 
     let block2_3 = Block::deserialize_from_vec(&hex::decode(BLOCK_3).unwrap()).unwrap();
-    assert_eq!(blockchain.push(block2_3.clone()), Ok(PushResult::Rebranched));
+    assert_eq!(
+        blockchain.push(block2_3.clone()),
+        Ok(PushResult::Rebranched)
+    );
 
-    assert_eq!(blockchain.push(block1_4.clone()), Ok(PushResult::Rebranched));
+    assert_eq!(
+        blockchain.push(block1_4.clone()),
+        Ok(PushResult::Rebranched)
+    );
 
     let block2_4 = Block::deserialize_from_vec(&hex::decode(BLOCK_4).unwrap()).unwrap();
 
     let listener_called = Arc::new(Atomic::new(false));
-    let reverted_blocks = Arc::new(vec![(block1_2.header.hash(), block1_2), (block1_3.header.hash(), block1_3), (block1_4.header.hash(), block1_4)]);
-    let adopted_blocks = Arc::new(vec![(block2_2.header.hash(), block2_2), (block2_3.header.hash(), block2_3), (block2_4.header.hash(), block2_4.clone())]);
+    let reverted_blocks = Arc::new(vec![
+        (block1_2.header.hash(), block1_2),
+        (block1_3.header.hash(), block1_3),
+        (block1_4.header.hash(), block1_4),
+    ]);
+    let adopted_blocks = Arc::new(vec![
+        (block2_2.header.hash(), block2_2),
+        (block2_3.header.hash(), block2_3),
+        (block2_4.header.hash(), block2_4.clone()),
+    ]);
     let listener_called1 = listener_called.clone();
-    blockchain.notifier.write().register(move |e: &BlockchainEvent| {
-        assert_eq!(*e, BlockchainEvent::Rebranched((*reverted_blocks).clone(), (*adopted_blocks).clone()));
-        listener_called1.store(true, Ordering::Relaxed);
-    });
+    blockchain
+        .notifier
+        .write()
+        .register(move |e: &BlockchainEvent| {
+            assert_eq!(
+                *e,
+                BlockchainEvent::Rebranched((*reverted_blocks).clone(), (*adopted_blocks).clone())
+            );
+            listener_called1.store(true, Ordering::Relaxed);
+        });
 
     assert_eq!(blockchain.push(block2_4), Ok(PushResult::Rebranched));
     assert!(listener_called.load(Ordering::Relaxed));
@@ -279,28 +338,35 @@ fn it_rebranches_to_the_harder_chain() {
 #[test]
 fn it_deletes_invalid_forks() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+    let blockchain =
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     // Create valid chain
-    let block1_2 = crate::next_block(&blockchain)
-        .with_nonce(83054)
-        .build();
+    let block1_2 = crate::next_block(&blockchain).with_nonce(83054).build();
     assert_eq!(blockchain.push(block1_2), Ok(PushResult::Extended));
-    let block1_3 = crate::next_block(&blockchain)
-        .with_nonce(23192)
-        .build();
+    let block1_3 = crate::next_block(&blockchain).with_nonce(23192).build();
     assert_eq!(blockchain.push(block1_3), Ok(PushResult::Extended));
-    let block1_4 = crate::next_block(&blockchain)
-        .with_nonce(39719)
-        .build();
+    let block1_4 = crate::next_block(&blockchain).with_nonce(39719).build();
     assert_eq!(blockchain.push(block1_4), Ok(PushResult::Extended));
 
     // Create fork with invalid pruned accounts
     let fork_env = VolatileEnvironment::new(10).unwrap();
-    let fork = Blockchain::new(fork_env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+    let fork = Blockchain::new(
+        fork_env.clone(),
+        NetworkId::Main,
+        Arc::new(NetworkTime::new()),
+    )
+    .unwrap();
     let pruned_account = Receipt::PrunedAccount(PrunedAccount {
         address: [1u8; Address::SIZE].into(),
-        account: Account::Vesting(VestingContract::new(Coin::from_u64_unchecked(0), [2u8; Address::SIZE].into(), 0, 500, Coin::from_u64_unchecked(2), Coin::from_u64_unchecked(200)))
+        account: Account::Vesting(VestingContract::new(
+            Coin::from_u64_unchecked(0),
+            [2u8; Address::SIZE].into(),
+            0,
+            500,
+            Coin::from_u64_unchecked(2),
+            Coin::from_u64_unchecked(200),
+        )),
     });
     let block2_2 = crate::next_block(&fork)
         .with_height(2)

@@ -1,20 +1,22 @@
 use std::collections::{HashSet, VecDeque};
 
-use hash::{Blake2bHash, Hash};
 use block::Block;
+use hash::{Blake2bHash, Hash};
 use primitives::policy;
 
 #[derive(Debug, Clone)]
 struct BlockDescriptor {
     hash: Blake2bHash,
     prev_hash: Blake2bHash,
-    transaction_hashes: Vec<Blake2bHash>
+    transaction_hashes: Vec<Blake2bHash>,
 }
 
 impl<'a> From<&'a Block> for BlockDescriptor {
     fn from(block: &'a Block) -> Self {
         let transactions = block.transactions();
-        let hashes = transactions.map(|txs| txs.iter().map(Hash::hash).collect()).unwrap_or_else(|| vec![]);
+        let hashes = transactions
+            .map(|txs| txs.iter().map(Hash::hash).collect())
+            .unwrap_or_else(|| vec![]);
 
         BlockDescriptor {
             hash: block.hash(),
@@ -27,14 +29,16 @@ impl<'a> From<&'a Block> for BlockDescriptor {
 #[derive(Debug, Clone)]
 pub struct TransactionCache {
     transaction_hashes: HashSet<Blake2bHash>,
-    block_order: VecDeque<BlockDescriptor>
+    block_order: VecDeque<BlockDescriptor>,
 }
 
 impl Default for TransactionCache {
     fn default() -> Self {
         TransactionCache {
             transaction_hashes: HashSet::new(),
-            block_order: VecDeque::with_capacity(policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS as usize)
+            block_order: VecDeque::with_capacity(
+                policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS as usize,
+            ),
         }
     }
 }
@@ -64,7 +68,10 @@ impl TransactionCache {
     }
 
     pub fn push_block(&mut self, block: &Block) {
-        assert!(self.block_order.is_empty() || *block.parent_hash() == self.block_order.back().as_ref().unwrap().hash);
+        assert!(
+            self.block_order.is_empty()
+                || *block.parent_hash() == self.block_order.back().as_ref().unwrap().hash
+        );
 
         let descriptor = BlockDescriptor::from(block);
         for hash in &descriptor.transaction_hashes {
@@ -89,7 +96,10 @@ impl TransactionCache {
     }
 
     pub fn prepend_block(&mut self, block: &Block) {
-        assert!(self.block_order.is_empty() || block.hash() == self.block_order.front().as_ref().unwrap().prev_hash);
+        assert!(
+            self.block_order.is_empty()
+                || block.hash() == self.block_order.front().as_ref().unwrap().prev_hash
+        );
         assert!(self.missing_blocks() > 0);
 
         let descriptor = BlockDescriptor::from(block);

@@ -46,17 +46,17 @@ macro_rules! implement_simple_add_sum_traits {
         }
 
         impl<T> Sum<T> for $name
-            where
-                T: Borrow<$name>
+        where
+            T: Borrow<$name>,
         {
             fn sum<I>(iter: I) -> Self
-                where
-                    I: Iterator<Item = T>
+            where
+                I: Iterator<Item = T>,
             {
                 $name(iter.fold($identity, |acc, item| acc + item.borrow().0))
             }
         }
-    }
+    };
 }
 
 pub mod multisig;

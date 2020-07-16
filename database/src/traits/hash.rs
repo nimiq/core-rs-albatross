@@ -12,7 +12,10 @@ impl AsDatabaseBytes for Blake2bHash {
 }
 
 impl FromDatabaseValue for Blake2bHash {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(bytes.into())
     }
 }

@@ -15,7 +15,7 @@ extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
-#[cfg(feature="validator")]
+#[cfg(feature = "validator")]
 extern crate nimiq_validator as validator;
 
 use std::collections::HashSet;
@@ -24,21 +24,20 @@ use std::sync::Arc;
 
 use futures::future::Future;
 use hyper::Server;
-use json::{JsonValue, object};
+use json::{object, JsonValue};
 
 use crate::error::Error;
 pub use crate::handler::Handler;
 use futures::IntoFuture;
 
-pub mod jsonrpc;
 pub mod error;
 pub mod handler;
 pub mod handlers;
+pub mod jsonrpc;
 
 fn rpc_not_implemented<T>() -> Result<T, JsonValue> {
-    Err(object!{"message" => "Not implemented"})
+    Err(object! {"message" => "Not implemented"})
 }
-
 
 #[derive(Debug, Clone)]
 pub struct JsonRpcConfig {
@@ -49,8 +48,7 @@ pub struct JsonRpcConfig {
     pub corsdomain: Vec<String>,
 }
 
-
-pub type RpcServerFuture = Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>;
+pub type RpcServerFuture = Box<dyn Future<Item = (), Error = ()> + Send + Sync + 'static>;
 
 pub struct RpcServer {
     future: RpcServerFuture,
@@ -62,16 +60,13 @@ impl RpcServer {
         let handler = Arc::new(Handler::new(config));
 
         let handler2 = Arc::clone(&handler);
-        let future = Box::new(Server::try_bind(&SocketAddr::new(ip, port))?
-            .serve(move || {
-                jsonrpc::Service::new(Arc::clone(&handler2))
-            })
-            .map_err(|e| error!("RPC server failed: {}", e)));
+        let future = Box::new(
+            Server::try_bind(&SocketAddr::new(ip, port))?
+                .serve(move || jsonrpc::Service::new(Arc::clone(&handler2)))
+                .map_err(|e| error!("RPC server failed: {}", e)),
+        );
 
-        Ok(RpcServer {
-            future,
-            handler,
-        })
+        Ok(RpcServer { future, handler })
     }
 }
 

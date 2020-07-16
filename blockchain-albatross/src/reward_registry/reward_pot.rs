@@ -4,7 +4,6 @@ use primitives::coin::Coin;
 use primitives::policy;
 use transaction::Transaction as BlockchainTransaction;
 
-
 pub struct RewardPot {
     env: Environment,
     reward_pot: Database,
@@ -18,10 +17,7 @@ impl RewardPot {
     pub fn new(env: Environment) -> Self {
         let reward_pot = env.open_database(RewardPot::REWARD_POT_DB_NAME.to_string());
 
-        Self {
-            env,
-            reward_pot,
-        }
+        Self { env, reward_pot }
     }
 
     pub(super) fn commit_macro_block(&self, block: &MacroBlock, txn: &mut WriteTransaction) {
@@ -29,13 +25,25 @@ impl RewardPot {
         let mut current_reward = RewardPot::reward_for_macro_block(block);
 
         // Add to current reward pot of epoch.
-        current_reward += Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY).unwrap_or(0));
+        current_reward += Coin::from_u64_unchecked(
+            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
+                .unwrap_or(0),
+        );
 
         txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
-        txn.put(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY, &u64::from(current_reward));
+        txn.put(
+            &self.reward_pot,
+            Self::PREVIOUS_EPOCH_KEY,
+            &u64::from(current_reward),
+        );
     }
 
-    pub(super) fn commit_epoch(&self, block_number: u32, transactions: &[BlockchainTransaction], txn: &mut WriteTransaction) {
+    pub(super) fn commit_epoch(
+        &self,
+        block_number: u32,
+        transactions: &[BlockchainTransaction],
+        txn: &mut WriteTransaction,
+    ) {
         assert!(policy::is_macro_block_at(block_number));
         let epoch = policy::epoch_at(block_number);
 
@@ -52,7 +60,11 @@ impl RewardPot {
         }
 
         txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &0u64);
-        txn.put(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY, &u64::from(reward));
+        txn.put(
+            &self.reward_pot,
+            Self::PREVIOUS_EPOCH_KEY,
+            &u64::from(reward),
+        );
     }
 
     pub(super) fn commit_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
@@ -60,18 +72,32 @@ impl RewardPot {
         let mut reward = RewardPot::reward_for_micro_block(block);
 
         // Add to current reward pot of epoch.
-        reward += Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY).unwrap_or(0));
-        txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &u64::from(reward));
+        reward += Coin::from_u64_unchecked(
+            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
+                .unwrap_or(0),
+        );
+        txn.put(
+            &self.reward_pot,
+            Self::CURRENT_EPOCH_KEY,
+            &u64::from(reward),
+        );
     }
 
     pub(super) fn revert_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
         // The total reward of a block is composed of the block reward and transaction fees.
-        let mut reward = Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY).unwrap_or(0));
+        let mut reward = Coin::from_u64_unchecked(
+            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
+                .unwrap_or(0),
+        );
 
         // Add to current reward pot of epoch.
         reward -= RewardPot::reward_for_micro_block(block);
 
-        txn.put(&self.reward_pot, Self::CURRENT_EPOCH_KEY, &u64::from(reward));
+        txn.put(
+            &self.reward_pot,
+            Self::CURRENT_EPOCH_KEY,
+            &u64::from(reward),
+        );
     }
 
     fn reward_for_micro_block(block: &MicroBlock) -> Coin {
@@ -93,11 +119,17 @@ impl RewardPot {
 
     pub fn current_reward_pot(&self) -> Coin {
         let txn = ReadTransaction::new(&self.env);
-        Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY).unwrap_or(0))
+        Coin::from_u64_unchecked(
+            txn.get(&self.reward_pot, Self::CURRENT_EPOCH_KEY)
+                .unwrap_or(0),
+        )
     }
 
     pub fn previous_reward_pot(&self) -> Coin {
         let txn = ReadTransaction::new(&self.env);
-        Coin::from_u64_unchecked(txn.get(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY).unwrap_or(0))
+        Coin::from_u64_unchecked(
+            txn.get(&self.reward_pot, Self::PREVIOUS_EPOCH_KEY)
+                .unwrap_or(0),
+        )
     }
 }

@@ -21,7 +21,9 @@ pub enum Error {
     MessageSizeExceeded,
     #[fail(display = "Received the final chunk with a size exceeding the expected size")]
     FinalChunkSizeExceeded,
-    #[fail(display = "Tried closing a connection and got invalid response from the WebSocket layer")]
+    #[fail(
+        display = "Tried closing a connection and got invalid response from the WebSocket layer"
+    )]
     InvalidClosingState,
     #[fail(display = "Stream could not be wrapped: TLS acceptor is None")]
     TlsAcceptorMissing,
@@ -55,9 +57,7 @@ impl From<SerializingError> for Error {
 
 // This implementation is needed for forwarding into our Sink.
 impl From<Error> for () {
-    fn from(_: Error) -> Self {
-
-    }
+    fn from(_: Error) -> Self {}
 }
 
 #[derive(Fail, Debug)]
@@ -76,13 +76,11 @@ pub enum ConnectError {
     InvalidUri(#[cause] ParseError),
 }
 
-
 impl From<TimerError> for ConnectError {
     fn from(e: TimerError) -> Self {
         ConnectError::Timer(e)
     }
 }
-
 
 impl From<Error> for ConnectError {
     fn from(e: Error) -> Self {

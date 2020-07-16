@@ -16,7 +16,10 @@ impl<T: Default + Deserialize + Serialize> IntoDatabaseValue for Locked<T> {
 }
 
 impl<T: Default + Deserialize + Serialize> FromDatabaseValue for Locked<T> {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
     }

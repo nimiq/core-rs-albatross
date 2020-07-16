@@ -87,13 +87,17 @@ use crate::unique_linked_list::{IntoIter, Iter, UniqueLinkedList};
 /// ```
 #[derive(Clone)]
 pub struct LimitHashSet<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     list: UniqueLinkedList<T>,
     limit: usize,
 }
 
 impl<T> LimitHashSet<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     /// Creates an empty `LimitHashSet` with a limit of `limit` elements.
     /// `limit` must be greater than zero or this function will panic.
     ///
@@ -233,10 +237,13 @@ impl<T> LimitHashSet<T>
     /// assert_eq!(diff1, diff2);
     /// assert_eq!(diff1, [1, 4].iter().collect());
     /// ```
-    pub fn symmetric_difference<'a>(&'a self,
-                                    other: &'a LimitHashSet<T>)
-                                    -> SymmetricDifference<'a, T> {
-        SymmetricDifference { iter: self.difference(other).chain(other.difference(self)) }
+    pub fn symmetric_difference<'a>(
+        &'a self,
+        other: &'a LimitHashSet<T>,
+    ) -> SymmetricDifference<'a, T> {
+        SymmetricDifference {
+            iter: self.difference(other).chain(other.difference(self)),
+        }
     }
 
     /// Visits the values representing the intersection,
@@ -283,7 +290,9 @@ impl<T> LimitHashSet<T>
     /// assert_eq!(union, [1, 2, 3, 4].iter().collect());
     /// ```
     pub fn union<'a>(&'a self, other: &'a LimitHashSet<T>) -> Union<'a, T> {
-        Union { iter: self.iter().chain(other.difference(self)) }
+        Union {
+            iter: self.iter().chain(other.difference(self)),
+        }
     }
 
     /// Returns `true` if the set contains a value.
@@ -302,8 +311,9 @@ impl<T> LimitHashSet<T>
     /// assert_eq!(set.contains(&4), false);
     /// ```
     pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
-        where Rc<T>: Borrow<Q>,
-              Q: Hash + Eq
+    where
+        Rc<T>: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.list.contains(value)
     }
@@ -327,8 +337,9 @@ impl<T> LimitHashSet<T>
     /// [`Eq`]: ../../std/cmp/trait.Eq.html
     /// [`Hash`]: ../../std/hash/trait.Hash.html
     pub fn get<Q: ?Sized>(&self, value: &Q) -> Option<&T>
-        where Rc<T>: Borrow<Q>,
-              Q: Hash + Eq
+    where
+        Rc<T>: Borrow<Q>,
+        Q: Hash + Eq,
     {
         let (k, _) = self.list.map.get_key_value(value)?;
         Some(k.as_ref())
@@ -492,8 +503,9 @@ impl<T> LimitHashSet<T>
     /// assert_eq!(set.remove(&2), false);
     /// ```
     pub fn remove<Q: ?Sized>(&mut self, value: &Q) -> bool
-        where Rc<T>: Borrow<Q>,
-              Q: Hash + Eq
+    where
+        Rc<T>: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.list.remove(value).is_some()
     }
@@ -514,15 +526,17 @@ impl<T> LimitHashSet<T>
     /// assert_eq!(set.take(&2), None);
     /// ```
     pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
-        where Rc<T>: Borrow<Q>,
-              Q: Hash + Eq
+    where
+        Rc<T>: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.list.remove(value)
     }
 }
 
 impl<T> PartialEq for LimitHashSet<T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     fn eq(&self, other: &LimitHashSet<T>) -> bool {
         if self.len() != other.len() {
@@ -533,13 +547,11 @@ impl<T> PartialEq for LimitHashSet<T>
     }
 }
 
-impl<T> Eq for LimitHashSet<T>
-    where T: Eq + Hash
-{
-}
+impl<T> Eq for LimitHashSet<T> where T: Eq + Hash {}
 
 impl<T> fmt::Debug for LimitHashSet<T>
-    where T: Eq + Hash + fmt::Debug
+where
+    T: Eq + Hash + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_set().entries(self.iter()).finish()
@@ -547,7 +559,8 @@ impl<T> fmt::Debug for LimitHashSet<T>
 }
 
 impl<T> FromIterator<T> for LimitHashSet<T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> LimitHashSet<T> {
         let iter = iter.into_iter();
@@ -563,7 +576,8 @@ impl<T> FromIterator<T> for LimitHashSet<T>
 }
 
 impl<T> Extend<T> for LimitHashSet<T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for elt in iter {
@@ -573,7 +587,8 @@ impl<T> Extend<T> for LimitHashSet<T>
 }
 
 impl<'a, T> Extend<&'a T> for LimitHashSet<T>
-    where T: 'a + Eq + Hash + Copy
+where
+    T: 'a + Eq + Hash + Copy,
 {
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
@@ -581,7 +596,8 @@ impl<'a, T> Extend<&'a T> for LimitHashSet<T>
 }
 
 impl<'a, 'b, T> BitOr<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
-    where T: Eq + Hash + Clone
+where
+    T: Eq + Hash + Clone,
 {
     type Output = LimitHashSet<T>;
 
@@ -611,7 +627,8 @@ impl<'a, 'b, T> BitOr<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
 }
 
 impl<'a, 'b, T> BitAnd<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
-    where T: Eq + Hash + Clone
+where
+    T: Eq + Hash + Clone,
 {
     type Output = LimitHashSet<T>;
 
@@ -641,7 +658,8 @@ impl<'a, 'b, T> BitAnd<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
 }
 
 impl<'a, 'b, T> BitXor<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
-    where T: Eq + Hash + Clone
+where
+    T: Eq + Hash + Clone,
 {
     type Output = LimitHashSet<T>;
 
@@ -671,7 +689,8 @@ impl<'a, 'b, T> BitXor<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
 }
 
 impl<'a, 'b, T> Sub<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
-    where T: Eq + Hash + Clone
+where
+    T: Eq + Hash + Clone,
 {
     type Output = LimitHashSet<T>;
 
@@ -708,7 +727,9 @@ impl<'a, 'b, T> Sub<&'b LimitHashSet<T>> for &'a LimitHashSet<T>
 /// [`LimitHashSet`]: struct.LimitHashSet.html
 /// [`intersection`]: struct.LimitHashSet.html#method.intersection
 pub struct Intersection<'a, T: 'a>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     // iterator of the first set
     iter: Iter<'a, T>,
     // the second set
@@ -723,7 +744,9 @@ pub struct Intersection<'a, T: 'a>
 /// [`LimitHashSet`]: struct.LimitHashSet.html
 /// [`difference`]: struct.LimitHashSet.html#method.difference
 pub struct Difference<'a, T: 'a>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     // iterator of the first set
     iter: Iter<'a, T>,
     // the second set
@@ -738,7 +761,9 @@ pub struct Difference<'a, T: 'a>
 /// [`LimitHashSet`]: struct.LimitHashSet.html
 /// [`symmetric_difference`]: struct.LimitHashSet.html#method.symmetric_difference
 pub struct SymmetricDifference<'a, T: 'a>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     iter: Chain<Difference<'a, T>, Difference<'a, T>>,
 }
 
@@ -750,12 +775,15 @@ pub struct SymmetricDifference<'a, T: 'a>
 /// [`LimitHashSet`]: struct.LimitHashSet.html
 /// [`union`]: struct.LimitHashSet.html#method.union
 pub struct Union<'a, T: 'a>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     iter: Chain<Iter<'a, T>, Difference<'a, T>>,
 }
 
 impl<'a, T> IntoIterator for &'a LimitHashSet<T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
@@ -766,7 +794,8 @@ impl<'a, T> IntoIterator for &'a LimitHashSet<T>
 }
 
 impl<T> IntoIterator for LimitHashSet<T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     type Item = T;
     type IntoIter = IntoIter<T>;
@@ -797,14 +826,20 @@ impl<T> IntoIterator for LimitHashSet<T>
 }
 
 impl<'a, T> Clone for Intersection<'a, T>
-    where T: Eq + Hash + Clone {
+where
+    T: Eq + Hash + Clone,
+{
     fn clone(&self) -> Intersection<'a, T> {
-        Intersection { iter: self.iter.clone(), ..*self }
+        Intersection {
+            iter: self.iter.clone(),
+            ..*self
+        }
     }
 }
 
 impl<'a, T> Iterator for Intersection<'a, T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     type Item = &'a T;
 
@@ -824,27 +859,31 @@ impl<'a, T> Iterator for Intersection<'a, T>
 }
 
 impl<'a, T> fmt::Debug for Intersection<'a, T>
-    where T: fmt::Debug + Eq + Hash + Clone
+where
+    T: fmt::Debug + Eq + Hash + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
     }
 }
 
-impl<'a, T> FusedIterator for Intersection<'a, T>
-    where T: Eq + Hash
-{
-}
+impl<'a, T> FusedIterator for Intersection<'a, T> where T: Eq + Hash {}
 
 impl<'a, T> Clone for Difference<'a, T>
-    where T: Eq + Hash + Clone {
+where
+    T: Eq + Hash + Clone,
+{
     fn clone(&self) -> Difference<'a, T> {
-        Difference { iter: self.iter.clone(), ..*self }
+        Difference {
+            iter: self.iter.clone(),
+            ..*self
+        }
     }
 }
 
 impl<'a, T> Iterator for Difference<'a, T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     type Item = &'a T;
 
@@ -863,13 +902,11 @@ impl<'a, T> Iterator for Difference<'a, T>
     }
 }
 
-impl<'a, T> FusedIterator for Difference<'a, T>
-    where T: Eq + Hash
-{
-}
+impl<'a, T> FusedIterator for Difference<'a, T> where T: Eq + Hash {}
 
 impl<'a, T> fmt::Debug for Difference<'a, T>
-    where T: fmt::Debug + Eq + Hash + Clone
+where
+    T: fmt::Debug + Eq + Hash + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
@@ -877,14 +914,19 @@ impl<'a, T> fmt::Debug for Difference<'a, T>
 }
 
 impl<'a, T> Clone for SymmetricDifference<'a, T>
-    where T: Eq + Hash + Clone {
+where
+    T: Eq + Hash + Clone,
+{
     fn clone(&self) -> SymmetricDifference<'a, T> {
-        SymmetricDifference { iter: self.iter.clone() }
+        SymmetricDifference {
+            iter: self.iter.clone(),
+        }
     }
 }
 
 impl<'a, T> Iterator for SymmetricDifference<'a, T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     type Item = &'a T;
 
@@ -896,13 +938,11 @@ impl<'a, T> Iterator for SymmetricDifference<'a, T>
     }
 }
 
-impl<'a, T> FusedIterator for SymmetricDifference<'a, T>
-    where T: Eq + Hash
-{
-}
+impl<'a, T> FusedIterator for SymmetricDifference<'a, T> where T: Eq + Hash {}
 
 impl<'a, T> fmt::Debug for SymmetricDifference<'a, T>
-    where T: fmt::Debug + Eq + Hash + Clone
+where
+    T: fmt::Debug + Eq + Hash + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
@@ -910,19 +950,21 @@ impl<'a, T> fmt::Debug for SymmetricDifference<'a, T>
 }
 
 impl<'a, T> Clone for Union<'a, T>
-    where T: Eq + Hash + Clone {
+where
+    T: Eq + Hash + Clone,
+{
     fn clone(&self) -> Union<'a, T> {
-        Union { iter: self.iter.clone() }
+        Union {
+            iter: self.iter.clone(),
+        }
     }
 }
 
-impl<'a, T> FusedIterator for Union<'a, T>
-    where T: Eq + Hash
-{
-}
+impl<'a, T> FusedIterator for Union<'a, T> where T: Eq + Hash {}
 
 impl<'a, T> fmt::Debug for Union<'a, T>
-    where T: fmt::Debug + Eq + Hash + Clone
+where
+    T: fmt::Debug + Eq + Hash + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list().entries(self.clone()).finish()
@@ -930,7 +972,8 @@ impl<'a, T> fmt::Debug for Union<'a, T>
 }
 
 impl<'a, T> Iterator for Union<'a, T>
-    where T: Eq + Hash
+where
+    T: Eq + Hash,
 {
     type Item = &'a T;
 
@@ -947,20 +990,18 @@ fn assert_covariance() {
     fn set<'new>(v: LimitHashSet<&'static str>) -> LimitHashSet<&'new str> {
         v
     }
-    fn difference<'a, 'new>(v: Difference<'a, &'static str>)
-                            -> Difference<'a, &'new str> {
+    fn difference<'a, 'new>(v: Difference<'a, &'static str>) -> Difference<'a, &'new str> {
         v
     }
-    fn symmetric_difference<'a, 'new>(v: SymmetricDifference<'a, &'static str>)
-                                      -> SymmetricDifference<'a, &'new str> {
+    fn symmetric_difference<'a, 'new>(
+        v: SymmetricDifference<'a, &'static str>,
+    ) -> SymmetricDifference<'a, &'new str> {
         v
     }
-    fn intersection<'a, 'new>(v: Intersection<'a, &'static str>)
-                              -> Intersection<'a, &'new str> {
+    fn intersection<'a, 'new>(v: Intersection<'a, &'static str>) -> Intersection<'a, &'new str> {
         v
     }
-    fn union<'a, 'new>(v: Union<'a, &'static str>)
-                       -> Union<'a, &'new str> {
+    fn union<'a, 'new>(v: Union<'a, &'static str>) -> Union<'a, &'new str> {
         v
     }
 }

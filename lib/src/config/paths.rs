@@ -1,7 +1,6 @@
 use directories::UserDirs;
 use std::path::PathBuf;
 
-
 pub fn home() -> PathBuf {
     UserDirs::new()
         .expect("Failed to determine users home directory")

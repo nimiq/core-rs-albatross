@@ -7,8 +7,8 @@ use atomic::Ordering;
 use macros::upgrade_weak;
 use parking_lot::RwLock;
 use parking_lot::RwLockReadGuard;
-use rand::Rng;
 use rand::rngs::OsRng;
+use rand::Rng;
 
 use blockchain_base::AbstractBlockchain;
 use network_primitives::networks::NetworkId;
@@ -25,8 +25,8 @@ use crate::connection::connection_pool::ConnectionPool;
 use crate::connection::connection_pool::ConnectionPoolEvent;
 use crate::error::Error;
 use crate::network_config::NetworkConfig;
-use crate::Peer;
 use crate::peer_scorer::PeerScorer;
+use crate::Peer;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Hash)]
 enum NetworkTimer {
@@ -72,7 +72,12 @@ impl<B: AbstractBlockchain> Network<B> {
 
     pub const SIGNALING_ENABLED: bool = true;
 
-    pub fn new(blockchain: Arc<B>, network_config: NetworkConfig, network_time: Arc<NetworkTime>, network_id: NetworkId) -> Result<Arc<Self>, Error> {
+    pub fn new(
+        blockchain: Arc<B>,
+        network_config: NetworkConfig,
+        network_time: Arc<NetworkTime>,
+        network_id: NetworkId,
+    ) -> Result<Arc<Self>, Error> {
         if !network_config.is_initialized() {
             return Err(Error::UninitializedPeerKey);
         }
@@ -88,7 +93,11 @@ impl<B: AbstractBlockchain> Network<B> {
             backoff: Atomic::new(Self::CONNECT_BACKOFF_INITIAL),
             addresses: addresses.clone(),
             connections: connections.clone(),
-            scorer: Arc::new(RwLock::new(PeerScorer::new(net_config, addresses, connections.clone()))),
+            scorer: Arc::new(RwLock::new(PeerScorer::new(
+                net_config,
+                addresses,
+                connections.clone(),
+            ))),
             timers: Timers::new(),
             notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
@@ -96,17 +105,20 @@ impl<B: AbstractBlockchain> Network<B> {
         unsafe { this.self_weak.replace(Arc::downgrade(&this)) };
 
         let weak = Arc::downgrade(&this);
-        this.connections.notifier.write().register(move |event: ConnectionPoolEvent| {
-            let this = upgrade_weak!(weak);
-            match event {
-                ConnectionPoolEvent::PeerJoined(peer) => this.on_peer_joined(peer),
-                ConnectionPoolEvent::PeerLeft(peer) => this.on_peer_left(peer),
-                ConnectionPoolEvent::PeersChanged => this.on_peers_changed(this.clone()),
-                ConnectionPoolEvent::RecyclingRequest => this.on_recycling_request(),
-                ConnectionPoolEvent::ConnectError(_, _) => this.on_connect_error(this.clone()),
-                _ => {}
-            }
-        });
+        this.connections
+            .notifier
+            .write()
+            .register(move |event: ConnectionPoolEvent| {
+                let this = upgrade_weak!(weak);
+                match event {
+                    ConnectionPoolEvent::PeerJoined(peer) => this.on_peer_joined(peer),
+                    ConnectionPoolEvent::PeerLeft(peer) => this.on_peer_left(peer),
+                    ConnectionPoolEvent::PeersChanged => this.on_peers_changed(this.clone()),
+                    ConnectionPoolEvent::RecyclingRequest => this.on_recycling_request(),
+                    ConnectionPoolEvent::ConnectError(_, _) => this.on_connect_error(this.clone()),
+                    _ => {}
+                }
+            });
 
         if this.network_config.instant_inbound {
             this.connections.set_allow_inbound_connections(true);
@@ -127,9 +139,13 @@ impl<B: AbstractBlockchain> Network<B> {
         let connections = Arc::clone(&self.connections);
         let scorer = Arc::clone(&self.scorer);
 
-        self.timers.set_interval(NetworkTimer::Housekeeping, move || {
-            Self::housekeeping(Arc::clone(&connections), Arc::clone(&scorer));
-        }, Self::HOUSEKEEPING_INTERVAL);
+        self.timers.set_interval(
+            NetworkTimer::Housekeeping,
+            move || {
+                Self::housekeeping(Arc::clone(&connections), Arc::clone(&scorer));
+            },
+            Self::HOUSEKEEPING_INTERVAL,
+        );
 
         // Start connecting to peers.
         self.check_peer_count();
@@ -147,38 +163,58 @@ impl<B: AbstractBlockchain> Network<B> {
 
     fn on_peer_joined(&self, peer: Peer) {
         self.update_time_offset();
-        self.notifier.read().notify(NetworkEvent::PeerJoined(Arc::new(peer)));
+        self.notifier
+            .read()
+            .notify(NetworkEvent::PeerJoined(Arc::new(peer)));
     }
 
     fn on_peer_left(&self, peer: Peer) {
         self.update_time_offset();
-        self.notifier.read().notify(NetworkEvent::PeerLeft(Arc::new(peer)));
+        self.notifier
+            .read()
+            .notify(NetworkEvent::PeerLeft(Arc::new(peer)));
     }
 
     fn on_peers_changed(&self, this: Arc<Network<B>>) {
         self.notifier.read().notify(NetworkEvent::PeersChanged);
-        self.timers.reset_delay(NetworkTimer::PeersChanged, move || {
-            this.check_peer_count();
-        }, Self::CONNECT_THROTTLE);
+        self.timers.reset_delay(
+            NetworkTimer::PeersChanged,
+            move || {
+                this.check_peer_count();
+            },
+            Self::CONNECT_THROTTLE,
+        );
     }
 
     fn on_recycling_request(&self) {
-        self.scorer.write().recycle_connections(1, CloseType::PeerConnectionRecycledInboundExchange, "Peer connection recycled inbound exchange");
+        self.scorer.write().recycle_connections(
+            1,
+            CloseType::PeerConnectionRecycledInboundExchange,
+            "Peer connection recycled inbound exchange",
+        );
 
         // set ability to exchange for new inbound connections
-        self.connections.set_allow_inbound_exchange(match self.scorer.write().lowest_connection_score() {
-            Some(lowest_connection_score) => lowest_connection_score < Self::SCORE_INBOUND_EXCHANGE,
-            None => false
-        });
+        self.connections.set_allow_inbound_exchange(
+            match self.scorer.write().lowest_connection_score() {
+                Some(lowest_connection_score) => {
+                    lowest_connection_score < Self::SCORE_INBOUND_EXCHANGE
+                }
+                None => false,
+            },
+        );
     }
 
     fn on_connect_error(&self, this: Arc<Network<B>>) {
         // Only set new delay if it doesn't already exist.
         if !self.timers.delay_exists(&NetworkTimer::ConnectError) {
-            self.timers.set_delay(NetworkTimer::ConnectError, move || {
-                this.timers.clear_delay(&NetworkTimer::ConnectError);
-                this.check_peer_count();
-            }, Self::CONNECT_THROTTLE);
+            self.timers.set_delay(
+                NetworkTimer::ConnectError,
+                move || {
+                    this.timers.clear_delay(&NetworkTimer::ConnectError);
+                    this.check_peer_count();
+                },
+                Self::CONNECT_THROTTLE,
+            );
         }
     }
 
@@ -186,15 +222,16 @@ impl<B: AbstractBlockchain> Network<B> {
         if self.auto_connect.load(Ordering::Relaxed)
             && self.addresses.seeded()
             && !self.scorer.read().is_good_peer_set()
-            && self.connections.connecting_count() < Self::CONNECTING_COUNT_MAX {
-
+            && self.connections.connecting_count() < Self::CONNECTING_COUNT_MAX
+        {
             // Pick a peer address that we are not connected to yet.
             let peer_addr_opt = self.scorer.read().pick_address();
 
             trace!("Connect to {:?}", peer_addr_opt);
 
             // We can't connect if we don't know any more addresses or only want connections to good peers.
-            let only_good_peers = self.scorer.read().needs_good_peers() && !self.scorer.read().needs_more_peers();
+            let only_good_peers =
+                self.scorer.read().needs_good_peers() && !self.scorer.read().needs_more_peers();
             let mut no_matching_peer_available = peer_addr_opt.is_none();
             if !no_matching_peer_available && only_good_peers {
                 if let Some(peer_addr) = &peer_addr_opt {
@@ -209,10 +246,14 @@ impl<B: AbstractBlockchain> Network<B> {
                     Duration::min(Self::CONNECT_BACKOFF_MAX, old_backoff * 2);
 
                     let weak = self.self_weak.clone();
-                    self.timers.reset_delay(NetworkTimer::PeerCountCheck, move || {
-                        let this = upgrade_weak!(weak);
-                        this.check_peer_count();
-                    }, old_backoff);
+                    self.timers.reset_delay(
+                        NetworkTimer::PeerCountCheck,
+                        move || {
+                            let this = upgrade_weak!(weak);
+                            this.check_peer_count();
+                        },
+                        old_backoff,
+                    );
                 }
 
                 if self.connections.count() == 0 {
@@ -233,12 +274,14 @@ impl<B: AbstractBlockchain> Network<B> {
                 trace!("Connect outbound: {}", peer_address);
                 if !self.connections.connect_outbound(Arc::clone(&peer_address)) {
                     trace!("Connect outbound failed");
-                    self.addresses.close(None, peer_address, CloseType::ConnectionFailed);
+                    self.addresses
+                        .close(None, peer_address, CloseType::ConnectionFailed);
                 }
                 trace!("should be connected now");
             }
         }
-        self.backoff.store(Self::CONNECT_BACKOFF_INITIAL, Ordering::Relaxed);
+        self.backoff
+            .store(Self::CONNECT_BACKOFF_INITIAL, Ordering::Relaxed);
     }
 
     fn update_time_offset(&self) {
@@ -253,7 +296,7 @@ impl<B: AbstractBlockchain> Network<B> {
             }
         }
 
-        offsets.sort_by(|a, b| { i64::cmp(a, b) } );
+        offsets.sort_by(|a, b| i64::cmp(a, b));
 
         let offsets_len = offsets.len();
         let time_offset = if offsets_len % 2 == 0 {
@@ -272,15 +315,24 @@ impl<B: AbstractBlockchain> Network<B> {
         let peer_count = connections.peer_count();
         if peer_count > Self::PEER_COUNT_RECYCLING_ACTIVE {
             // recycle 1% at PEER_COUNT_RECYCLING_ACTIVE, 20% at PEER_COUNT_MAX
-            let percentage_to_recycle = (peer_count as f64 - Self::PEER_COUNT_RECYCLING_ACTIVE as f64) * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN) / (Self::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64 + Self::RECYCLING_PERCENTAGE_MIN as f64;
-            let connections_to_recycle = f64::ceil(peer_count as f64 * percentage_to_recycle) as u32;
-            scorer.write().recycle_connections(connections_to_recycle, CloseType::PeerConnectionRecycled, "Peer connection recycled");
+            let percentage_to_recycle = (peer_count as f64
+                - Self::PEER_COUNT_RECYCLING_ACTIVE as f64)
+                * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN)
+                / (Self::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64
+                + Self::RECYCLING_PERCENTAGE_MIN as f64;
+            let connections_to_recycle =
+                f64::ceil(peer_count as f64 * percentage_to_recycle) as u32;
+            scorer.write().recycle_connections(
+                connections_to_recycle,
+                CloseType::PeerConnectionRecycled,
+                "Peer connection recycled",
+            );
         }
 
         // Set ability to exchange for new inbound connections.
         connections.set_allow_inbound_exchange(match scorer.write().lowest_connection_score() {
             Some(lowest_connection_score) => lowest_connection_score < Self::SCORE_INBOUND_EXCHANGE,
-            None => false
+            None => false,
         });
 
         // Request fresh addresses.
@@ -288,29 +340,34 @@ impl<B: AbstractBlockchain> Network<B> {
     }
 
     fn refresh_addresses(connections: Arc<ConnectionPool<B>>, scorer: Arc<RwLock<PeerScorer<B>>>) {
-        let connection_scores = RwLockReadGuard::map(scorer.read(), |scorer| scorer.connection_scores());
+        let connection_scores =
+            RwLockReadGuard::map(scorer.read(), |scorer| scorer.connection_scores());
         let mut randrng = OsRng;
         if !connection_scores.is_empty() {
             let state = connections.state();
             let cutoff = cmp::min(
                 (state.peer_count_ws + state.peer_count_wss) * 2,
-                Self::ADDRESS_REQUEST_CUTOFF
+                Self::ADDRESS_REQUEST_CUTOFF,
             );
-            let len = cmp::min(
-                connection_scores.len(),
-                cutoff
-            );
+            let len = cmp::min(connection_scores.len(), cutoff);
 
             for _ in 0..cmp::min(Self::ADDRESS_REQUEST_PEERS, connection_scores.len()) {
                 let index = randrng.gen_range(0, len);
                 let (id, _): &(ConnectionId, f64) = connection_scores.get(index).unwrap(); // Cannot fail, since len is at most the real length.
-                let peer_connection = state.get_connection(*id)
+                let peer_connection = state
+                    .get_connection(*id)
                     .expect("ConnectionInfo for scored connection is missing");
 
-                trace!("Requesting addresses from {} (score idx {})", peer_connection.peer_address()
-                    .expect("ConnectionInfo for scored connection is missing its PeerAddress"), index);
+                trace!(
+                    "Requesting addresses from {} (score idx {})",
+                    peer_connection
+                        .peer_address()
+                        .expect("ConnectionInfo for scored connection is missing its PeerAddress"),
+                    index
+                );
 
-                let agent = peer_connection.network_agent()
+                let agent = peer_connection
+                    .network_agent()
                     .expect("ConnectionInfo for scored connection is missing its NetworkAgent");
                 agent.write().request_addresses(None);
             }
@@ -332,15 +389,20 @@ impl<B: AbstractBlockchain> Network<B> {
                 }
 
                 if let Some(peer_connection) = peer_connection {
-                    trace!("Requesting addresses from {} (score idx {})", peer_connection.peer_address()
-                        .expect("ConnectionInfo for scored connection is missing its PeerAddress"), index);
+                    trace!(
+                        "Requesting addresses from {} (score idx {})",
+                        peer_connection.peer_address().expect(
+                            "ConnectionInfo for scored connection is missing its PeerAddress"
+                        ),
+                        index
+                    );
 
-                    let agent = peer_connection.network_agent()
+                    let agent = peer_connection
+                        .network_agent()
                         .expect("ConnectionInfo for scored connection is missing its NetworkAgent");
                     agent.write().request_addresses(None);
                 }
-            }
-            else {
+            } else {
                 error!("No peers to connect to!")
             }
         }
@@ -351,7 +413,8 @@ impl<B: AbstractBlockchain> Network<B> {
     }
 
     pub fn set_allow_inbound_connections(&self, allow_inbound_connections: bool) {
-        self.connections.set_allow_inbound_connections(allow_inbound_connections);
+        self.connections
+            .set_allow_inbound_connections(allow_inbound_connections);
     }
 
     pub fn scorer(&self) -> RwLockReadGuard<PeerScorer<B>> {

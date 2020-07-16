@@ -13,13 +13,21 @@ pub struct BlockInterlink {
 
 impl BlockInterlink {
     #[inline]
-    pub fn len(&self) -> usize { self.hashes.len() }
+    pub fn len(&self) -> usize {
+        self.hashes.len()
+    }
 
     #[inline]
-    pub fn is_empty(&self) -> bool { self.hashes.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.hashes.is_empty()
+    }
 
     fn compress(hashes: &[Blake2bHash], prev_hash: &Blake2bHash) -> (Vec<u8>, Vec<Blake2bHash>) {
-        let repeat_bits_size = if hashes.is_empty() { 0 } else { (hashes.len() - 1) / 8 + 1 };
+        let repeat_bits_size = if hashes.is_empty() {
+            0
+        } else {
+            (hashes.len() - 1) / 8 + 1
+        };
         let mut repeat_bits = vec![0u8; repeat_bits_size];
 
         let mut hash = prev_hash;
@@ -39,10 +47,17 @@ impl BlockInterlink {
 
     pub fn new(hashes: Vec<Blake2bHash>, prev_hash: &Blake2bHash) -> Self {
         let (repeat_bits, compressed) = Self::compress(&hashes, prev_hash);
-        BlockInterlink { hashes, repeat_bits, compressed }
+        BlockInterlink {
+            hashes,
+            repeat_bits,
+            compressed,
+        }
     }
 
-    pub fn deserialize<R: ReadBytesExt>(reader: &mut R, prev_hash: &Blake2bHash) -> io::Result<Self> {
+    pub fn deserialize<R: ReadBytesExt>(
+        reader: &mut R,
+        prev_hash: &Blake2bHash,
+    ) -> io::Result<Self> {
         let count: u8 = Deserialize::deserialize(reader)?;
         let repeat_bits_size = if count > 0 { (count - 1) / 8 + 1 } else { 0 };
         let mut repeat_bits = vec![0u8; repeat_bits_size as usize];
@@ -56,10 +71,18 @@ impl BlockInterlink {
             if !repeated {
                 compressed.push(Deserialize::deserialize(reader)?);
             }
-            hashes.push(if !compressed.is_empty() { compressed[compressed.len() - 1].clone() } else { prev_hash.clone() });
+            hashes.push(if !compressed.is_empty() {
+                compressed[compressed.len() - 1].clone()
+            } else {
+                prev_hash.clone()
+            });
         }
 
-        Ok(BlockInterlink { hashes, repeat_bits, compressed })
+        Ok(BlockInterlink {
+            hashes,
+            repeat_bits,
+            compressed,
+        })
     }
 }
 

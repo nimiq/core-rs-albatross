@@ -1,7 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::{PushResult, PushError, BlockError};
-
+use crate::{BlockError, PushError, PushResult};
 
 #[derive(Default)]
 pub struct BlockchainMetrics {

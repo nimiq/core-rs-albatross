@@ -1,5 +1,5 @@
-use beserial::{Deserialize, Serialize};
 use crate::{Block, BlockHeader};
+use beserial::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChainProof {

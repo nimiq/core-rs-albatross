@@ -3,8 +3,8 @@ use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use futures::sync::mpsc::*;
 use parking_lot::RwLock;
@@ -22,8 +22,8 @@ use crate::websocket::Message as WebSocketMessage;
 
 use super::sink::PeerSink;
 use super::stream::PeerStreamEvent;
-use std::time::Instant;
 use atomic::Atomic;
+use std::time::Instant;
 
 #[derive(Clone)]
 pub struct PeerChannel {
@@ -58,35 +58,47 @@ impl PeerChannel {
         let info = network_connection.address_info();
         let close_event_sent = Arc::new(AtomicBool::new(false));
         let close_event_sent_inner = close_event_sent.clone();
-        network_connection.notifier.write().register(move |e: PeerStreamEvent| {
-            match e {
-                PeerStreamEvent::Message(msg) => {
-                    #[cfg(feature = "metrics")]
-                    let start = Instant::now();
-                    last_message_received1.store(Instant::now(), Ordering::Relaxed);
-                    let msg_type = msg.ty();
-                    msg_notifier1.notify(msg);
-                    #[cfg(feature = "metrics")] {
-                        let time: usize = usize::try_from(start.elapsed().as_micros()).expect("Fatal error while converting processing time to usize");
-                        trace!("Microseconds elapsed while processing this message: {:?}", time);
-                        message_metrics1.note_message(msg_type, time);
+        network_connection
+            .notifier
+            .write()
+            .register(move |e: PeerStreamEvent| {
+                match e {
+                    PeerStreamEvent::Message(msg) => {
+                        #[cfg(feature = "metrics")]
+                        let start = Instant::now();
+                        last_message_received1.store(Instant::now(), Ordering::Relaxed);
+                        let msg_type = msg.ty();
+                        msg_notifier1.notify(msg);
+                        #[cfg(feature = "metrics")]
+                        {
+                            let time: usize = usize::try_from(start.elapsed().as_micros())
+                                .expect("Fatal error while converting processing time to usize");
+                            trace!(
+                                "Microseconds elapsed while processing this message: {:?}",
+                                time
+                            );
+                            message_metrics1.note_message(msg_type, time);
+                        }
                     }
-                },
-                PeerStreamEvent::Close(ty) => {
-                    // Only send close event once, i.e., if close_event_sent was false.
-                    if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
-                        close_notifier1.read().notify(ty)
+                    PeerStreamEvent::Close(ty) => {
+                        // Only send close event once, i.e., if close_event_sent was false.
+                        if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
+                            close_notifier1.read().notify(ty)
+                        }
                     }
-                },
-                PeerStreamEvent::Error(error) => {
-                    // Only send close event once, i.e., if close_event_sent was false.
-                    if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
-                        debug!("Stream with peer closed with error: {} ({})", error.as_ref(), info);
-                        close_notifier1.read().notify(CloseType::NetworkError);
+                    PeerStreamEvent::Error(error) => {
+                        // Only send close event once, i.e., if close_event_sent was false.
+                        if !close_event_sent_inner.swap(true, Ordering::AcqRel) {
+                            debug!(
+                                "Stream with peer closed with error: {} ({})",
+                                error.as_ref(),
+                                info
+                            );
+                            close_notifier1.read().notify(CloseType::NetworkError);
+                        }
                     }
                 }
-            }
-        });
+            });
 
         PeerChannel {
             msg_notifier,
@@ -108,7 +120,8 @@ impl PeerChannel {
 
     pub fn send_or_close(&self, msg: Message) {
         if self.peer_sink.send(msg).is_err() {
-            self.peer_sink.close(CloseType::SendFailed, Some("SendFailed".to_string()));
+            self.peer_sink
+                .close(CloseType::SendFailed, Some("SendFailed".to_string()));
         }
     }
 

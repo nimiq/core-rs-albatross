@@ -4,7 +4,6 @@ use blockchain_base::BlockchainError;
 use consensus::Error as ConsensusError;
 use utils::key_store::Error as KeyStoreError;
 
-
 #[derive(Fail, Debug)]
 pub enum Error {
     #[fail(display = "{}", _0)]

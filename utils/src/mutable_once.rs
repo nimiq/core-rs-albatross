@@ -1,6 +1,6 @@
 use std::cell::UnsafeCell;
-use std::ops::Deref;
 use std::mem;
+use std::ops::Deref;
 
 pub struct MutableOnce<T> {
     inner: UnsafeCell<T>,

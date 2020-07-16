@@ -9,38 +9,32 @@ use weak_table::PtrWeakHashSet;
 use beserial::Serialize;
 use block_base::{Block, BlockError, BlockHeader};
 use blockchain_base::{AbstractBlockchain, Direction, PushError, PushResult};
-use collections::{LimitHashSet, UniqueLinkedList};
 use collections::queue::Queue;
+use collections::{LimitHashSet, UniqueLinkedList};
 use hash::{Blake2bHash, Hash};
 use macros::upgrade_weak;
 use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_messages::{
-    EpochTransactionsMessage,
-    GetBlocksDirection,
-    GetBlocksMessage,
-    InvVector,
-    InvVectorType,
-    Message,
-    MessageAdapter,
-    TxMessage,
+    EpochTransactionsMessage, GetBlocksDirection, GetBlocksMessage, InvVector, InvVectorType,
+    Message, MessageAdapter, TxMessage,
 };
 use network_primitives::networks::NetworkInfo;
 use network_primitives::subscription::Subscription;
 use transaction::Transaction;
+use utils::rate_limit::RateLimit;
+use utils::throttled_queue::ThrottledQueue;
 use utils::{
     self,
     mutable_once::MutableOnce,
-    observer::{Notifier, weak_listener, weak_passthru_listener},
+    observer::{weak_listener, weak_passthru_listener, Notifier},
     timers::Timers,
 };
-use utils::rate_limit::RateLimit;
-use utils::throttled_queue::ThrottledQueue;
 
 use crate::consensus_agent::sync::{SyncEvent, SyncProtocol};
-use crate::ConsensusProtocol;
 use crate::inventory::InventoryManager;
+use crate::ConsensusProtocol;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum InventoryEvent<BE: BlockError> {
@@ -140,7 +134,12 @@ pub struct InventoryAgent<P: ConsensusProtocol + 'static> {
     inv_mgr: Arc<RwLock<InventoryManager<P>>>,
     sync_protocol: Arc<P::SyncProtocol>,
     state: RwLock<InventoryAgentState>,
-    pub notifier: RwLock<Notifier<'static, InventoryEvent<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>>>,
+    pub notifier: RwLock<
+        Notifier<
+            'static,
+            InventoryEvent<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>,
+        >,
+    >,
     pub(crate) self_weak: MutableOnce<Weak<InventoryAgent<P>>>,
     timers: Timers<InventoryAgentTimer>,
     mutex: Mutex<()>,
@@ -177,7 +176,13 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
     const SUBSCRIPTION_CHANGE_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
-    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, peer: Arc<Peer>, sync_agent: Arc<P::SyncProtocol>) -> Arc<Self> {
+    pub fn new(
+        blockchain: Arc<P::Blockchain>,
+        mempool: Arc<Mempool<P::Blockchain>>,
+        inv_mgr: Arc<RwLock<InventoryManager<P>>>,
+        peer: Arc<Peer>,
+        sync_agent: Arc<P::SyncProtocol>,
+    ) -> Arc<Self> {
         let this = Arc::new(InventoryAgent {
             blockchain,
             mempool,
@@ -237,74 +242,126 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let msg_notifier = &channel.msg_notifier;
         msg_notifier.inv.write().register(weak_passthru_listener(
             Arc::downgrade(this),
-            |this, vectors: Vec<InvVector>| this.on_inv(vectors)));
-        P::MessageAdapter::register_block_listener(msg_notifier, weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, block| this.on_block(block)));
-        P::MessageAdapter::register_header_listener(msg_notifier, weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, header| this.on_header(header)));
+            |this, vectors: Vec<InvVector>| this.on_inv(vectors),
+        ));
+        P::MessageAdapter::register_block_listener(
+            msg_notifier,
+            weak_passthru_listener(Arc::downgrade(this), |this, block| this.on_block(block)),
+        );
+        P::MessageAdapter::register_header_listener(
+            msg_notifier,
+            weak_passthru_listener(Arc::downgrade(this), |this, header| this.on_header(header)),
+        );
         msg_notifier.tx.write().register(weak_passthru_listener(
             Arc::downgrade(this),
-            |this, msg: TxMessage| this.on_tx(msg)));
-        msg_notifier.not_found.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, vectors: Vec<InvVector>| this.on_not_found(vectors)));
+            |this, msg: TxMessage| this.on_tx(msg),
+        ));
+        msg_notifier
+            .not_found
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, vectors: Vec<InvVector>| this.on_not_found(vectors),
+            ));
 
-        msg_notifier.get_blocks.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg: GetBlocksMessage| this.on_get_blocks(msg)));
-        msg_notifier.get_data.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, vectors: Vec<InvVector>| this.on_get_data(vectors)));
-        msg_notifier.get_header.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, vectors: Vec<InvVector>| this.on_get_header(vectors)));
-        msg_notifier.mempool.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, _ | this.on_mempool()));
-        msg_notifier.get_macro_blocks.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg: GetBlocksMessage| this.on_get_macro_blocks(msg)));
-        msg_notifier.epoch_transactions.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg: EpochTransactionsMessage| this.on_epoch_transactions(msg)));
+        msg_notifier
+            .get_blocks
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, msg: GetBlocksMessage| this.on_get_blocks(msg),
+            ));
+        msg_notifier
+            .get_data
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, vectors: Vec<InvVector>| this.on_get_data(vectors),
+            ));
+        msg_notifier
+            .get_header
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, vectors: Vec<InvVector>| this.on_get_header(vectors),
+            ));
+        msg_notifier
+            .mempool
+            .write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, _| {
+                this.on_mempool()
+            }));
+        msg_notifier
+            .get_macro_blocks
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, msg: GetBlocksMessage| this.on_get_macro_blocks(msg),
+            ));
+        msg_notifier
+            .epoch_transactions
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, msg: EpochTransactionsMessage| this.on_epoch_transactions(msg),
+            ));
 
-        msg_notifier.subscribe.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, subscription: Subscription| this.on_subscribe(subscription)));
+        msg_notifier
+            .subscribe
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, subscription: Subscription| this.on_subscribe(subscription),
+            ));
 
-        this.sync_protocol.register_listener(weak_passthru_listener(Arc::downgrade(this),
-        |this, event| {
-            match event {
-                SyncEvent::BlockProcessed(hash, result) => this.notifier.read().notify(InventoryEvent::BlockProcessed(hash, result)),
-            }
-        }));
+        this.sync_protocol.register_listener(weak_passthru_listener(
+            Arc::downgrade(this),
+            |this, event| match event {
+                SyncEvent::BlockProcessed(hash, result) => this
+                    .notifier
+                    .read()
+                    .notify(InventoryEvent::BlockProcessed(hash, result)),
+            },
+        ));
 
         let mut close_notifier = channel.close_notifier.write();
-        close_notifier.register(weak_listener(
-            Arc::downgrade(this),
-            |this, _| this.on_close()));
+        close_notifier.register(weak_listener(Arc::downgrade(this), |this, _| {
+            this.on_close()
+        }));
 
         let weak = Arc::downgrade(this);
-        this.timers.set_interval(InventoryAgentTimer::TxInvVectors, move || {
-            let this = upgrade_weak!(weak);
-            this.send_waiting_tx_inv_vectors();
-        }, Self::TRANSACTION_RELAY_INTERVAL);
+        this.timers.set_interval(
+            InventoryAgentTimer::TxInvVectors,
+            move || {
+                let this = upgrade_weak!(weak);
+                this.send_waiting_tx_inv_vectors();
+            },
+            Self::TRANSACTION_RELAY_INTERVAL,
+        );
         let weak = Arc::downgrade(this);
-        this.timers.set_interval(InventoryAgentTimer::FreeTxInvVectors, move || {
-            let this = upgrade_weak!(weak);
-            this.send_waiting_free_tx_inv_vectors();
-        }, Self::FREE_TRANSACTION_RELAY_INTERVAL);
+        this.timers.set_interval(
+            InventoryAgentTimer::FreeTxInvVectors,
+            move || {
+                let this = upgrade_weak!(weak);
+                this.send_waiting_free_tx_inv_vectors();
+            },
+            Self::FREE_TRANSACTION_RELAY_INTERVAL,
+        );
     }
 
     pub fn get_blocks(&self, locators: Vec<Blake2bHash>, max_results: u16, timeout: Duration) {
         let weak = self.self_weak.clone();
-        self.timers.set_delay(InventoryAgentTimer::GetBlocks, move || {
-            let this = upgrade_weak!(weak);
-            this.timers.clear_delay(&InventoryAgentTimer::GetBlocks);
-            this.notifier.read().notify(InventoryEvent::GetBlocksTimeout);
-        }, timeout);
+        self.timers.set_delay(
+            InventoryAgentTimer::GetBlocks,
+            move || {
+                let this = upgrade_weak!(weak);
+                this.timers.clear_delay(&InventoryAgentTimer::GetBlocks);
+                this.notifier
+                    .read()
+                    .notify(InventoryEvent::GetBlocksTimeout);
+            },
+            timeout,
+        );
 
         self.sync_protocol.request_blocks(locators, max_results);
     }
@@ -317,7 +374,9 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let mut state = self.state.write();
         state.local_subscription = subscription.clone();
         state.last_subscription_change = Instant::now();
-        self.peer.channel.send_or_close(Message::Subscribe(Box::new(subscription)));
+        self.peer
+            .channel
+            .send_or_close(Message::Subscribe(Box::new(subscription)));
     }
 
     fn should_request_data(&self, vector: &InvVector) -> bool {
@@ -343,7 +402,9 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             state.known_objects.insert(vector.clone());
             state.waiting_tx_inv_vectors.remove(vector);
             // Serialized size does not matter here due to the implementation of Hash and Eq.
-            state.waiting_free_tx_inv_vectors.remove(&FreeTransactionVector::from_vector(vector, 0));
+            state
+                .waiting_free_tx_inv_vectors
+                .remove(&FreeTransactionVector::from_vector(vector, 0));
         }
 
         // Check which of the advertised objects we know.
@@ -351,9 +412,12 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let num_vectors = vectors.len();
         let mut unknown_blocks = Vec::new();
         let mut unknown_txs = Vec::new();
-        let vectors: Vec<InvVector> = vectors.into_iter().filter(|vector| {
-            !state.objects_in_flight.contains(&vector) && self.should_request_data(&vector)
-        }).collect();
+        let vectors: Vec<InvVector> = vectors
+            .into_iter()
+            .filter(|vector| {
+                !state.objects_in_flight.contains(&vector) && self.should_request_data(&vector)
+            })
+            .collect();
 
         // Give up state write lock.
         drop(state);
@@ -367,22 +431,35 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             match vector.ty {
                 InvVectorType::Block => {
                     if !self.blockchain.contains(&vector.hash, true) {
-                        self.notifier.read().notify(InventoryEvent::NewBlockAnnounced(vector.hash.clone(), head_candidate));
+                        self.notifier
+                            .read()
+                            .notify(InventoryEvent::NewBlockAnnounced(
+                                vector.hash.clone(),
+                                head_candidate,
+                            ));
                         unknown_blocks.push(vector);
                     } else {
-                        self.notifier.read().notify(InventoryEvent::KnownBlockAnnounced(vector.hash.clone()));
+                        self.notifier
+                            .read()
+                            .notify(InventoryEvent::KnownBlockAnnounced(vector.hash.clone()));
                     }
                     has_block = true;
                 }
                 InvVectorType::Transaction => {
-                    if !self.mempool.contains(&vector.hash) && !self.blockchain.contains_tx_in_validity_window(&vector.hash) {
-                        self.notifier.read().notify(InventoryEvent::NewTransactionAnnounced);
+                    if !self.mempool.contains(&vector.hash)
+                        && !self.blockchain.contains_tx_in_validity_window(&vector.hash)
+                    {
+                        self.notifier
+                            .read()
+                            .notify(InventoryEvent::NewTransactionAnnounced);
                         unknown_txs.push(vector);
                     } else {
-                        self.notifier.read().notify(InventoryEvent::KnownTransactionAnnounced);
+                        self.notifier
+                            .read()
+                            .notify(InventoryEvent::KnownTransactionAnnounced);
                     }
                 }
-                InvVectorType::Error => () // XXX Why do we have this??
+                InvVectorType::Error => (), // XXX Why do we have this??
             }
         }
 
@@ -391,8 +468,13 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             self.timers.clear_delay(&InventoryAgentTimer::GetBlocks);
         }
 
-        trace!("[INV] {} vectors, {} new blocks, {} new txs from {}",
-               num_vectors, unknown_blocks.len(), unknown_txs.len(), self.peer.peer_address());
+        trace!(
+            "[INV] {} vectors, {} new blocks, {} new txs from {}",
+            num_vectors,
+            unknown_blocks.len(),
+            unknown_txs.len(),
+            self.peer.peer_address()
+        );
 
         // Re-take state write lock.
         let mut state = self.state.write();
@@ -419,7 +501,9 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             drop(state);
 
             self.sync_protocol.on_no_new_objects_announced();
-            self.notifier.read().notify(InventoryEvent::NoNewObjectsAnnounced);
+            self.notifier
+                .read()
+                .notify(InventoryEvent::NoNewObjectsAnnounced);
         }
     }
 
@@ -428,19 +512,31 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
         // XXX We currently only support and expect full blocks.
         if block.is_light() {
-            error!("Expected full but received light block from {} - dropping peer", self.peer.peer_address());
+            error!(
+                "Expected full but received light block from {} - dropping peer",
+                self.peer.peer_address()
+            );
             self.peer.channel.close(CloseType::InvalidBlock);
             return;
         }
 
         let hash = block.hash();
-        trace!("[BLOCK] #{} ({} txs) from {}", block.height(), block.transactions().map(|txs| txs.len()).unwrap_or(0), self.peer.peer_address());
+        trace!(
+            "[BLOCK] #{} ({} txs) from {}",
+            block.height(),
+            block.transactions().map(|txs| txs.len()).unwrap_or(0),
+            self.peer.peer_address()
+        );
 
         // Check if we have requested this block.
         let vector = InvVector::from_block_hash(hash);
         let state = self.state.read();
-        if !state.objects_in_flight.contains(&vector) && !state.objects_that_flew.contains(&vector) {
-            warn!("Unsolicited block from {} - discarding", self.peer.peer_address());
+        if !state.objects_in_flight.contains(&vector) && !state.objects_that_flew.contains(&vector)
+        {
+            warn!(
+                "Unsolicited block from {} - discarding",
+                self.peer.peer_address()
+            );
             return;
         }
 
@@ -465,36 +561,58 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
     fn on_header(&self, header: <<P::Blockchain as AbstractBlockchain>::Block as Block>::Header) {
         trace!("[HEADER] #{} {}", header.height(), header.hash());
-        warn!("Unsolicited header message received from {}, discarding", self.peer.peer_address());
+        warn!(
+            "Unsolicited header message received from {}, discarding",
+            self.peer.peer_address()
+        );
     }
 
     fn on_tx(&self, msg: TxMessage) {
         let hash = msg.transaction.hash::<Blake2bHash>();
-        trace!("[TX] from {} value {} fee {}", msg.transaction.sender, msg.transaction.value, msg.transaction.fee);
+        trace!(
+            "[TX] from {} value {} fee {}",
+            msg.transaction.sender,
+            msg.transaction.value,
+            msg.transaction.fee
+        );
 
         // Check if we have requested this transaction.
         let vector = InvVector::new(InvVectorType::Transaction, hash.clone());
         let state = self.state.read();
-        if !state.objects_in_flight.contains(&vector) && !state.objects_that_flew.contains(&vector) {
-            warn!("Unsolicited transaction from {} - discarding", self.peer.peer_address());
+        if !state.objects_in_flight.contains(&vector) && !state.objects_that_flew.contains(&vector)
+        {
+            warn!(
+                "Unsolicited transaction from {} - discarding",
+                self.peer.peer_address()
+            );
             return;
         }
 
         // Check whether we subscribed for this transaction.
-        if state.local_subscription.matches_transaction(&msg.transaction) {
+        if state
+            .local_subscription
+            .matches_transaction(&msg.transaction)
+        {
             // Give up read lock before pushing transaction.
             drop(state);
 
             let result = self.mempool.push_transaction(msg.transaction);
-            self.notifier.read().notify(InventoryEvent::TransactionProcessed(vector.hash.clone(), result));
-        } else if state.last_subscription_change.elapsed() > Self::SUBSCRIPTION_CHANGE_GRACE_PERIOD {
+            self.notifier
+                .read()
+                .notify(InventoryEvent::TransactionProcessed(
+                    vector.hash.clone(),
+                    result,
+                ));
+        } else if state.last_subscription_change.elapsed() > Self::SUBSCRIPTION_CHANGE_GRACE_PERIOD
+        {
             // Give up read lock.
             drop(state);
 
             warn!("We're not subscribed to this transaction from {} - discarding and closing the channel", self.peer.peer_address());
-            self.peer.channel.close(CloseType::ReceivedTransactionNotMatchingOurSubscription);
-        }
-        else {
+            self.peer
+                .channel
+                .close(CloseType::ReceivedTransactionNotMatchingOurSubscription);
+        } else {
             // Give up read lock.
             drop(state);
         }
@@ -509,16 +627,19 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         let state = self.state.read();
         // Query mempool for transactions
         let mut transactions = match &state.remote_subscription {
-            Subscription::Addresses(addresses) => self.mempool.get_transactions_by_addresses(addresses.clone(), Self::MEMPOOL_ENTRIES_MAX),
+            Subscription::Addresses(addresses) => self
+                .mempool
+                .get_transactions_by_addresses(addresses.clone(), Self::MEMPOOL_ENTRIES_MAX),
             Subscription::MinFee(min_fee_per_byte) => {
                 // NOTE: every integer up to (2^53 - 1) should have an exact representation as f64 (IEEE 754 64-bit double)
                 // This is guaranteed by the coin type.
                 let min_fee_per_byte: f64 = u64::from(*min_fee_per_byte) as f64;
-                self.mempool.get_transactions(Self::MEMPOOL_ENTRIES_MAX, min_fee_per_byte)
-            },
-            Subscription::Any => {
-                self.mempool.get_transactions(Self::MEMPOOL_ENTRIES_MAX, 0f64)
-            },
+                self.mempool
+                    .get_transactions(Self::MEMPOOL_ENTRIES_MAX, min_fee_per_byte)
+            }
+            Subscription::Any => self
+                .mempool
+                .get_transactions(Self::MEMPOOL_ENTRIES_MAX, 0f64),
             Subscription::None => return,
         };
 
@@ -526,9 +647,10 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         // Split into multiple Inv messages if the mempool is large.
         while !transactions.is_empty() {
             let max_vectors = std::cmp::min(transactions.len(), InvVector::VECTORS_MAX_COUNT);
-            let vectors: Vec<InvVector> = transactions.drain(..max_vectors).
-                map(|tx| InvVector::from_tx_hash(tx.hash())).
-                collect();
+            let vectors: Vec<InvVector> = transactions
+                .drain(..max_vectors)
+                .map(|tx| InvVector::from_tx_hash(tx.hash()))
+                .collect();
 
             self.peer.channel.send_or_close(Message::Inv(vectors));
 
@@ -543,7 +665,8 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
         // Only consider vectors that we requested.
         let state = self.state.read();
-        let expected_vectors = vectors.iter()
+        let expected_vectors = vectors
+            .iter()
             .filter(|vector| state.objects_in_flight.contains(*vector))
             .collect::<Vec<&InvVector>>();
         drop(state);
@@ -574,12 +697,17 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         match vector.ty {
             InvVectorType::Block => state.blocks_to_request.enqueue(vector),
             InvVectorType::Transaction => state.txs_to_request.enqueue(vector),
-            InvVectorType::Error => () // XXX Get rid of this!
+            InvVectorType::Error => (), // XXX Get rid of this!
         }
         self.request_vectors_throttled(&mut *state);
     }
 
-    fn queue_vectors(&self, state: &mut InventoryAgentState, block_vectors: Vec<InvVector>, tx_vectors: Vec<InvVector>) {
+    fn queue_vectors(
+        &self,
+        state: &mut InventoryAgentState,
+        block_vectors: Vec<InvVector>,
+        tx_vectors: Vec<InvVector>,
+    ) {
         for vector in block_vectors {
             state.blocks_to_request.enqueue(vector);
         }
@@ -592,17 +720,24 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
     }
 
     fn request_vectors_throttled(&self, state: &mut InventoryAgentState) {
-        self.timers.clear_delay(&InventoryAgentTimer::GetDataThrottle);
+        self.timers
+            .clear_delay(&InventoryAgentTimer::GetDataThrottle);
 
-        if state.blocks_to_request.len() + state.txs_to_request.num_available() > Self::REQUEST_THRESHOLD {
+        if state.blocks_to_request.len() + state.txs_to_request.num_available()
+            > Self::REQUEST_THRESHOLD
+        {
             self.request_vectors(state);
         } else {
             let weak = self.self_weak.clone();
-            self.timers.set_delay(InventoryAgentTimer::GetDataThrottle, move || {
-                let this = upgrade_weak!(weak);
-                let mut state = this.state.write();
-                this.request_vectors(&mut *state);
-            }, Self::REQUEST_THROTTLE)
+            self.timers.set_delay(
+                InventoryAgentTimer::GetDataThrottle,
+                move || {
+                    let this = upgrade_weak!(weak);
+                    let mut state = this.state.write();
+                    this.request_vectors(&mut *state);
+                },
+                Self::REQUEST_THROTTLE,
+            )
         }
     }
 
@@ -633,10 +768,14 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
         // Set timeout to detect end of request / missing objects.
         let weak = self.self_weak.clone();
-        self.timers.set_delay(InventoryAgentTimer::GetData, move || {
-            let this = upgrade_weak!(weak);
-            this.no_more_data();
-        }, Self::REQUEST_TIMEOUT);
+        self.timers.set_delay(
+            InventoryAgentTimer::GetData,
+            move || {
+                let this = upgrade_weak!(weak);
+                this.no_more_data();
+            },
+            Self::REQUEST_TIMEOUT,
+        );
 
         // Request data from peer.
         self.peer.channel.send_or_close(Message::GetData(vectors));
@@ -660,10 +799,14 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         // Reset request timeout if we expect more objects.
         if !state.objects_in_flight.is_empty() {
             let weak = self.self_weak.clone();
-            self.timers.reset_delay(InventoryAgentTimer::GetData, move || {
-                let this = upgrade_weak!(weak);
-                this.no_more_data();
-            }, Self::REQUEST_TIMEOUT);
+            self.timers.reset_delay(
+                InventoryAgentTimer::GetData,
+                move || {
+                    let this = upgrade_weak!(weak);
+                    this.no_more_data();
+                },
+                Self::REQUEST_TIMEOUT,
+            );
         } else {
             drop(state);
             self.no_more_data();
@@ -699,7 +842,9 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             drop(state);
 
             self.sync_protocol.on_all_objects_received();
-            self.notifier.read().notify(InventoryEvent::AllObjectsReceived);
+            self.notifier
+                .read()
+                .notify(InventoryEvent::AllObjectsReceived);
         }
     }
 
@@ -712,7 +857,12 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             }
         }
 
-        trace!("[GETBLOCKS] {} block locators max_inv_size {} received from {}", msg.locators.len(), msg.max_inv_size, self.peer.peer_address());
+        trace!(
+            "[GETBLOCKS] {} block locators max_inv_size {} received from {}",
+            msg.locators.len(),
+            msg.max_inv_size,
+            self.peer.peer_address()
+        );
 
         // A peer has requested blocks. Check all requested block locator hashes
         // in the given order and pick the first hash that is found on our main
@@ -741,9 +891,10 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             },
         );
 
-        let vectors = blocks.iter().map(|block| {
-            InvVector::from_block_hash(block.hash())
-        }).collect();
+        let vectors = blocks
+            .iter()
+            .map(|block| InvVector::from_block_hash(block.hash()))
+            .collect();
 
         // Send the vectors back to the requesting peer.
         self.peer.channel.send_or_close(Message::Inv(vectors));
@@ -758,7 +909,12 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             }
         }
 
-        trace!("[GETBLOCKS] {} block locators max_inv_size {} received from {}", msg.locators.len(), msg.max_inv_size, self.peer.peer_address());
+        trace!(
+            "[GETBLOCKS] {} block locators max_inv_size {} received from {}",
+            msg.locators.len(),
+            msg.max_inv_size,
+            self.peer.peer_address()
+        );
 
         // A peer has requested blocks. Check all requested block locator hashes
         // in the given order and pick the first hash that is found on our main
@@ -787,9 +943,10 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
             },
         );
 
-        let vectors = blocks.iter().map(|block| {
-            InvVector::from_block_hash(block.hash())
-        }).collect();
+        let vectors = blocks
+            .iter()
+            .map(|block| InvVector::from_block_hash(block.hash()))
+            .collect();
 
         // Send the vectors back to the requesting peer.
         self.peer.channel.send_or_close(Message::Inv(vectors));
@@ -816,11 +973,16 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
                     let block_opt = self.blockchain.get_block(&vector.hash, true);
                     match block_opt {
                         Some(block) => {
-                            if self.peer.channel.send(P::MessageAdapter::new_block_message(block)).is_err() {
+                            if self
+                                .peer
+                                .channel
+                                .send(P::MessageAdapter::new_block_message(block))
+                                .is_err()
+                            {
                                 self.peer.channel.close(CloseType::SendFailed);
                                 return;
                             }
-                        },
+                        }
                         None => {
                             unknown_objects.push(vector);
                         }
@@ -838,13 +1000,15 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
                         unknown_objects.push(vector);
                     }
                 }
-                InvVectorType::Error => () // XXX Why do we have this??
+                InvVectorType::Error => (), // XXX Why do we have this??
             }
         }
 
         // Report any unknown objects to the sender.
         if !unknown_objects.is_empty() {
-            self.peer.channel.send_or_close(Message::NotFound(unknown_objects));
+            self.peer
+                .channel
+                .send_or_close(Message::NotFound(unknown_objects));
         }
     }
 
@@ -869,29 +1033,37 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
                     let block_opt = self.blockchain.get_block(&vector.hash, false);
                     match block_opt {
                         Some(block) => {
-                            if self.peer.channel.send(P::MessageAdapter::new_header_message(block.header())).is_err() {
+                            if self
+                                .peer
+                                .channel
+                                .send(P::MessageAdapter::new_header_message(block.header()))
+                                .is_err()
+                            {
                                 self.peer.channel.close(CloseType::SendFailed);
                                 return;
                             }
-                        },
+                        }
                         None => {
                             unknown_objects.push(vector);
                         }
                     }
                 }
                 InvVectorType::Transaction => {} // XXX JavaScript client errors here
-                InvVectorType::Error => {} // XXX Why do we have this??
+                InvVectorType::Error => {}       // XXX Why do we have this??
             }
         }
 
         // Report any unknown objects to the sender.
         if !unknown_objects.is_empty() {
-            self.peer.channel.send_or_close(Message::NotFound(unknown_objects));
+            self.peer
+                .channel
+                .send_or_close(Message::NotFound(unknown_objects));
         }
     }
 
     fn on_epoch_transactions(&self, epoch_transactions_message: EpochTransactionsMessage) {
-        self.sync_protocol.on_epoch_transactions(epoch_transactions_message);
+        self.sync_protocol
+            .on_epoch_transactions(epoch_transactions_message);
     }
 
     pub fn relay_block(&self, block: &<P::Blockchain as AbstractBlockchain>::Block) -> bool {
@@ -909,7 +1081,9 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
         let mut state = self.state.write();
         // Relay block to peer.
-        let mut vectors = state.waiting_tx_inv_vectors.dequeue_multi(InvVector::VECTORS_MAX_COUNT - 1);
+        let mut vectors = state
+            .waiting_tx_inv_vectors
+            .dequeue_multi(InvVector::VECTORS_MAX_COUNT - 1);
         vectors.insert(0, vector.clone());
         self.peer.channel.send_or_close(Message::Inv(vectors));
 
@@ -921,7 +1095,12 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
     pub fn relay_transaction(&self, transaction: &Transaction) -> bool {
         // Only relay transaction if it matches the peer's subscription.
-        if !self.state.read().remote_subscription.matches_transaction(transaction) {
+        if !self
+            .state
+            .read()
+            .remote_subscription
+            .matches_transaction(transaction)
+        {
             return false;
         }
 
@@ -934,9 +1113,12 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
         let mut state = self.state.write();
         if (transaction.fee_per_byte() as u64) < Self::TRANSACTION_RELAY_FEE_MIN {
-            state.waiting_free_tx_inv_vectors.enqueue(
-                FreeTransactionVector::from_vector(&vector, transaction.serialized_size())
-            );
+            state
+                .waiting_free_tx_inv_vectors
+                .enqueue(FreeTransactionVector::from_vector(
+                    &vector,
+                    transaction.serialized_size(),
+                ));
         } else {
             state.waiting_tx_inv_vectors.enqueue(vector.clone());
         }
@@ -954,7 +1136,9 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
         // Remove transaction from relay queues.
         state.waiting_tx_inv_vectors.remove(&vector);
         // Serialized size does not matter here due to the implementation of Eq and Hash.
-        state.waiting_free_tx_inv_vectors.remove(&FreeTransactionVector::from_vector(&vector, 0));
+        state
+            .waiting_free_tx_inv_vectors
+            .remove(&FreeTransactionVector::from_vector(&vector, 0));
     }
 
     fn send_waiting_tx_inv_vectors(&self) {
@@ -980,7 +1164,9 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
 
         let mut size: usize = 0;
         let mut vectors = Vec::new();
-        while vectors.len() < InvVector::VECTORS_MAX_COUNT && size < Self::FREE_TRANSACTION_SIZE_PER_INTERVAL {
+        while vectors.len() < InvVector::VECTORS_MAX_COUNT
+            && size < Self::FREE_TRANSACTION_SIZE_PER_INTERVAL
+        {
             if let Some(vector) = state.waiting_free_tx_inv_vectors.dequeue() {
                 size += vector.serialized_size;
                 vectors.push(InvVector::from(vector));
@@ -1001,6 +1187,7 @@ impl<P: ConsensusProtocol + 'static> InventoryAgent<P> {
     }
 
     pub fn is_busy(&self) -> bool {
-        !self.state.read().objects_in_flight.is_empty() || self.timers.delay_exists(&InventoryAgentTimer::GetBlocks)
+        !self.state.read().objects_in_flight.is_empty()
+            || self.timers.delay_exists(&InventoryAgentTimer::GetBlocks)
     }
 }

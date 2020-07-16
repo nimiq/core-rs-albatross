@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 
+use nimiq_block::Block;
 use nimiq_blockchain::transaction_cache::TransactionCache;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
@@ -8,7 +9,6 @@ use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
-use nimiq_block::Block;
 
 #[test]
 fn it_can_push_blocks() {
@@ -16,13 +16,18 @@ fn it_can_push_blocks() {
     assert!(cache.is_empty());
     assert_eq!(cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW);
 
-    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let mut hash = block.header.hash::<Blake2bHash>();
     let tail_hash = hash.clone();
 
     cache.push_block(&block);
     assert!(!cache.is_empty());
-    assert_eq!(cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW - 1);
+    assert_eq!(
+        cache.missing_blocks(),
+        policy::TRANSACTION_VALIDITY_WINDOW - 1
+    );
     assert_eq!(cache.head_hash(), hash);
     assert_eq!(cache.tail_hash(), hash);
 
@@ -39,7 +44,7 @@ fn it_can_push_blocks() {
             Coin::try_from((i + 1) * 50).unwrap(),
             Coin::ZERO,
             b.header.height,
-            NetworkId::Main
+            NetworkId::Main,
         );
         let tx2 = Transaction::new_basic(
             [9u8; Address::SIZE].into(),
@@ -47,7 +52,7 @@ fn it_can_push_blocks() {
             Coin::try_from((i + 1) * 300).unwrap(),
             Coin::try_from(i).unwrap(),
             b.header.height,
-            NetworkId::Main
+            NetworkId::Main,
         );
 
         {
@@ -63,7 +68,10 @@ fn it_can_push_blocks() {
         hash = b.header.hash();
         block = b;
 
-        assert_eq!(cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW - 2 - i as u32);
+        assert_eq!(
+            cache.missing_blocks(),
+            policy::TRANSACTION_VALIDITY_WINDOW - 2 - i as u32
+        );
         assert_eq!(cache.head_hash(), hash);
         assert_eq!(cache.tail_hash(), tail_hash);
 
@@ -76,7 +84,9 @@ fn it_can_push_blocks() {
 #[test]
 fn it_can_revert_blocks() {
     let mut cache = TransactionCache::new();
-    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let mut hash = block.header.hash::<Blake2bHash>();
     cache.push_block(&block);
 
@@ -94,7 +104,7 @@ fn it_can_revert_blocks() {
             Coin::try_from((i + 1) * 50).unwrap(),
             Coin::ZERO,
             b.header.height,
-            NetworkId::Main
+            NetworkId::Main,
         );
         let tx2 = Transaction::new_basic(
             [9u8; Address::SIZE].into(),
@@ -102,7 +112,7 @@ fn it_can_revert_blocks() {
             Coin::try_from((i + 1) * 300).unwrap(),
             Coin::try_from(i).unwrap(),
             b.header.height,
-            NetworkId::Main
+            NetworkId::Main,
         );
 
         {
@@ -119,7 +129,10 @@ fn it_can_revert_blocks() {
         block = b;
         blocks.push(block.clone());
 
-        assert_eq!(cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW - 2 - i as u32);
+        assert_eq!(
+            cache.missing_blocks(),
+            policy::TRANSACTION_VALIDITY_WINDOW - 2 - i as u32
+        );
         assert_eq!(cache.head_hash(), hash);
         assert_eq!(cache.tail_hash(), blocks[0].header.hash());
 
@@ -133,7 +146,10 @@ fn it_can_revert_blocks() {
 
         cache.revert_block(&blocks[10 - i]);
 
-        assert_eq!(cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW - 10 + i as u32);
+        assert_eq!(
+            cache.missing_blocks(),
+            policy::TRANSACTION_VALIDITY_WINDOW - 10 + i as u32
+        );
         assert_eq!(cache.head_hash(), blocks[10 - i - 1].header.hash());
         assert_eq!(cache.tail_hash(), blocks[0].header.hash());
 
@@ -148,7 +164,9 @@ fn it_can_revert_blocks() {
 #[test]
 fn it_removes_blocks_outside_the_validity_window() {
     let mut cache = TransactionCache::new();
-    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let mut hash = block.header.hash::<Blake2bHash>();
     cache.push_block(&block);
 
@@ -166,7 +184,7 @@ fn it_removes_blocks_outside_the_validity_window() {
             Coin::try_from((i + 1) * 50).unwrap(),
             Coin::ZERO,
             b.header.height,
-            NetworkId::Main
+            NetworkId::Main,
         );
         let tx2 = Transaction::new_basic(
             [9u8; Address::SIZE].into(),
@@ -174,7 +192,7 @@ fn it_removes_blocks_outside_the_validity_window() {
             Coin::try_from((i + 1) * 300).unwrap(),
             Coin::try_from(i).unwrap(),
             b.header.height,
-            NetworkId::Main
+            NetworkId::Main,
         );
 
         {
@@ -191,8 +209,12 @@ fn it_removes_blocks_outside_the_validity_window() {
         block = b;
         blocks.push(block.clone());
 
-        let tail_index = i.saturating_sub((policy::TRANSACTION_VALIDITY_WINDOW - 2) as u64) as usize;
-        assert_eq!(cache.missing_blocks(), (policy::TRANSACTION_VALIDITY_WINDOW - 2).saturating_sub(i as u32));
+        let tail_index =
+            i.saturating_sub((policy::TRANSACTION_VALIDITY_WINDOW - 2) as u64) as usize;
+        assert_eq!(
+            cache.missing_blocks(),
+            (policy::TRANSACTION_VALIDITY_WINDOW - 2).saturating_sub(i as u32)
+        );
         assert_eq!(cache.head_hash(), hash);
         assert_eq!(cache.tail_hash(), blocks[tail_index].header.hash());
 
@@ -210,7 +232,9 @@ fn it_removes_blocks_outside_the_validity_window() {
 #[test]
 fn it_can_prepend_blocks() {
     let mut cache = TransactionCache::new();
-    let mut block = NetworkInfo::from_network_id(NetworkId::Main).genesis_block::<Block>().clone();
+    let mut block = NetworkInfo::from_network_id(NetworkId::Main)
+        .genesis_block::<Block>()
+        .clone();
     let mut hash = block.header.hash::<Blake2bHash>();
 
     let mut blocks = vec![block.clone()];
@@ -225,7 +249,7 @@ fn it_can_prepend_blocks() {
             Coin::try_from((i + 1) * 50).unwrap(),
             Coin::ZERO,
             b.header.height,
-            NetworkId::Main
+            NetworkId::Main,
         );
         let tx2 = Transaction::new_basic(
             [9u8; Address::SIZE].into(),
@@ -233,7 +257,7 @@ fn it_can_prepend_blocks() {
             Coin::try_from((i + 1) * 300).unwrap(),
             Coin::try_from(i).unwrap(),
             b.header.height,
-            NetworkId::Main
+            NetworkId::Main,
         );
 
         {
@@ -252,7 +276,10 @@ fn it_can_prepend_blocks() {
         cache.prepend_block(&b);
 
         i += 1;
-        assert_eq!(cache.missing_blocks(), policy::TRANSACTION_VALIDITY_WINDOW - i);
+        assert_eq!(
+            cache.missing_blocks(),
+            policy::TRANSACTION_VALIDITY_WINDOW - i
+        );
         assert_eq!(cache.head_hash(), blocks[blocks.len() - 1].header.hash());
         assert_eq!(cache.tail_hash(), b.header.hash());
         assert!(cache.contains_any(&b) || b.body.as_ref().unwrap().transactions.is_empty());
@@ -266,7 +293,10 @@ fn it_can_prepend_blocks() {
         cache.revert_block(b);
 
         assert_eq!(cache.missing_blocks(), j as u32 + 1);
-        assert_eq!(cache.head_hash(), blocks[blocks.len() - j - 2].header.hash());
+        assert_eq!(
+            cache.head_hash(),
+            blocks[blocks.len() - j - 2].header.hash()
+        );
         assert_eq!(cache.tail_hash(), blocks[0].header.hash());
         assert!(!cache.contains_any(b));
     }

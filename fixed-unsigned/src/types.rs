@@ -1,6 +1,4 @@
-use crate::{FixedUnsigned, FixedScale};
-
-
+use crate::{FixedScale, FixedUnsigned};
 
 /*macro_rules! create_typed_array {
     ($scale: expr) => {
@@ -12,7 +10,6 @@ use crate::{FixedUnsigned, FixedScale};
     };
 }*/
 
-
 /// A fixed point Uint with 4 decimal places
 #[derive(Clone, Debug)]
 pub struct FixedScale4 {}
@@ -20,7 +17,6 @@ impl FixedScale for FixedScale4 {
     const SCALE: u64 = 4;
 }
 pub type FixedUnsigned4 = FixedUnsigned<FixedScale4>;
-
 
 /// A fixed point Uint with 8 decimal places
 #[derive(Clone, Debug)]
@@ -30,7 +26,6 @@ impl FixedScale for FixedScale8 {
 }
 pub type FixedUnsigned8 = FixedUnsigned<FixedScale8>;
 
-
 /// A fixed point Uint with 16 decimal places
 #[derive(Clone, Debug)]
 pub struct FixedScale16 {}
@@ -38,7 +33,6 @@ impl FixedScale for FixedScale16 {
     const SCALE: u64 = 16;
 }
 pub type FixedUnsigned16 = FixedUnsigned<FixedScale16>;
-
 
 /// A fixed point Uint with 10 decimal places
 ///
@@ -49,7 +43,6 @@ impl FixedScale for FixedScale10 {
     const SCALE: u64 = 10;
 }
 pub type FixedUnsigned10 = FixedUnsigned<FixedScale10>;
-
 
 /// A fixed point Uint with 10 decimal places
 ///

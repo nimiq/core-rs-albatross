@@ -24,6 +24,7 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::convert::AsRef;
 use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -31,9 +32,10 @@ use std::iter::FromIterator;
 use std::iter::FusedIterator;
 use std::ptr::NonNull;
 use std::rc::Rc;
-use std::convert::AsRef;
 
-use crate::linked_list::{IntoIter as LinkedListIntoIter, Iter as LinkedListIter, LinkedList, Node};
+use crate::linked_list::{
+    IntoIter as LinkedListIntoIter, Iter as LinkedListIter, LinkedList, Node,
+};
 
 /// A doubly-linked list with owned nodes and a unique constraint enforced by a HashMap.
 ///
@@ -87,7 +89,9 @@ pub struct IntoIter<T> {
 }
 
 impl<T> Default for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     /// Creates an empty `UniqueLinkedList<T>`.
     #[inline]
     fn default() -> Self {
@@ -96,7 +100,9 @@ impl<T> Default for UniqueLinkedList<T>
 }
 
 impl<T> UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     /// Creates an empty `UniqueLinkedList`.
     ///
     /// # Examples
@@ -170,7 +176,9 @@ impl<T> UniqueLinkedList<T>
     /// ```
     #[inline]
     pub fn iter(&self) -> Iter<T> {
-        Iter { iter: self.list.iter() }
+        Iter {
+            iter: self.list.iter(),
+        }
     }
 
     /// Returns `true` if the `UniqueLinkedList` is empty.
@@ -262,7 +270,9 @@ impl<T> UniqueLinkedList<T>
     /// assert_eq!(list.contains(&10), false);
     /// ```
     pub fn contains<Q: ?Sized>(&self, x: &Q) -> bool
-        where Rc<T>: Borrow<Q>, Q: Hash + Eq
+    where
+        Rc<T>: Borrow<Q>,
+        Q: Hash + Eq,
     {
         self.map.contains_key(x)
     }
@@ -283,7 +293,9 @@ impl<T> UniqueLinkedList<T>
     /// assert_eq!(list.remove(&10), None);
     /// ```
     pub fn remove<Q: ?Sized>(&mut self, x: &Q) -> Option<T>
-        where Rc<T>: Borrow<Q>, Q: Hash + Eq
+    where
+        Rc<T>: Borrow<Q>,
+        Q: Hash + Eq,
     {
         // Remove and drop node.
         let elt = unsafe {
@@ -292,7 +304,8 @@ impl<T> UniqueLinkedList<T>
             Box::from_raw(node.as_ptr()); // This drops the node's Box.
             elt
         };
-        let elt = Rc::try_unwrap(elt).ok()
+        let elt = Rc::try_unwrap(elt)
+            .ok()
             .expect("Internal contract requires a single strong reference");
         Some(elt)
     }
@@ -384,9 +397,11 @@ impl<T> UniqueLinkedList<T>
     /// ```
     pub fn pop_front(&mut self) -> Option<T> {
         let elt = self.list.pop_front()?;
-        self.map.remove(&elt)
+        self.map
+            .remove(&elt)
             .expect("Internal contract requires value to be present");
-        let elt = Rc::try_unwrap(elt).ok()
+        let elt = Rc::try_unwrap(elt)
+            .ok()
             .expect("Internal contract requires a single strong reference");
         Some(elt)
     }
@@ -430,16 +445,20 @@ impl<T> UniqueLinkedList<T>
     /// ```
     pub fn pop_back(&mut self) -> Option<T> {
         let elt = self.list.pop_back()?;
-        self.map.remove(&elt)
+        self.map
+            .remove(&elt)
             .expect("Internal contract requires value to be present");
-        let elt = Rc::try_unwrap(elt).ok()
+        let elt = Rc::try_unwrap(elt)
+            .ok()
             .expect("Internal contract requires a single strong reference");
         Some(elt)
     }
 }
 
 impl<'a, T> Iterator for Iter<'a, T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     type Item = &'a T;
 
     #[inline]
@@ -454,27 +473,30 @@ impl<'a, T> Iterator for Iter<'a, T>
 }
 
 impl<'a, T> DoubleEndedIterator for Iter<'a, T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     #[inline]
     fn next_back(&mut self) -> Option<&'a T> {
         self.iter.next_back().map(AsRef::as_ref)
     }
 }
 
-impl<'a, T> ExactSizeIterator for Iter<'a, T>
-    where T: Hash + Eq {}
+impl<'a, T> ExactSizeIterator for Iter<'a, T> where T: Hash + Eq {}
 
-impl<'a, T> FusedIterator for Iter<'a, T>
-    where T: Hash + Eq {}
+impl<'a, T> FusedIterator for Iter<'a, T> where T: Hash + Eq {}
 
 impl<T> Iterator for IntoIter<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     type Item = T;
 
     #[inline]
     fn next(&mut self) -> Option<T> {
         self.iter.next().map(|elt| {
-            Rc::try_unwrap(elt).ok()
+            Rc::try_unwrap(elt)
+                .ok()
                 .expect("Internal contract requires a single strong reference")
         })
     }
@@ -486,24 +508,27 @@ impl<T> Iterator for IntoIter<T>
 }
 
 impl<T> DoubleEndedIterator for IntoIter<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     #[inline]
     fn next_back(&mut self) -> Option<T> {
         self.iter.next_back().map(|elt| {
-            Rc::try_unwrap(elt).ok()
+            Rc::try_unwrap(elt)
+                .ok()
                 .expect("Internal contract requires a single strong reference")
         })
     }
 }
 
-impl<T> ExactSizeIterator for IntoIter<T>
-    where T: Hash + Eq {}
+impl<T> ExactSizeIterator for IntoIter<T> where T: Hash + Eq {}
 
-impl<T> FusedIterator for IntoIter<T>
-    where T: Hash + Eq {}
+impl<T> FusedIterator for IntoIter<T> where T: Hash + Eq {}
 
 impl<T> FromIterator<T> for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut list = Self::new();
         list.extend(iter);
@@ -512,7 +537,9 @@ impl<T> FromIterator<T> for UniqueLinkedList<T>
 }
 
 impl<T> IntoIterator for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     type Item = T;
     type IntoIter = IntoIter<T>;
 
@@ -520,12 +547,16 @@ impl<T> IntoIterator for UniqueLinkedList<T>
     #[inline]
     fn into_iter(mut self) -> IntoIter<T> {
         self.map.clear();
-        IntoIter { iter: self.list.into_iter() }
+        IntoIter {
+            iter: self.list.into_iter(),
+        }
     }
 }
 
 impl<'a, T> IntoIterator for &'a UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
@@ -535,7 +566,9 @@ impl<'a, T> IntoIterator for &'a UniqueLinkedList<T>
 }
 
 impl<T> Extend<T> for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for elt in iter {
             self.push_back(elt);
@@ -544,31 +577,38 @@ impl<T> Extend<T> for UniqueLinkedList<T>
 }
 
 impl<'a, T: 'a + Copy> Extend<&'a T> for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
     }
 }
 
 impl<T: PartialEq> PartialEq for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other)
     }
 }
 
-impl<T: Eq> Eq for UniqueLinkedList<T>
-    where T: Hash + Eq {}
+impl<T: Eq> Eq for UniqueLinkedList<T> where T: Hash + Eq {}
 
 impl<T: PartialOrd> PartialOrd for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.iter().partial_cmp(other)
     }
 }
 
 impl<T: Ord> Ord for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         self.iter().cmp(other)
@@ -576,21 +616,27 @@ impl<T: Ord> Ord for UniqueLinkedList<T>
 }
 
 impl<T: Clone> Clone for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn clone(&self) -> Self {
         self.iter().cloned().collect()
     }
 }
 
 impl<T: fmt::Debug> fmt::Debug for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list().entries(self).finish()
     }
 }
 
 impl<T: Hash> Hash for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.len().hash(state);
         for elt in self {
@@ -745,9 +791,9 @@ mod tests {
             let a: &[_] = &[&1, &2, &3];
             assert_eq!(a, &*n.iter().collect::<Vec<_>>());
         })
-            .join()
-            .ok()
-            .unwrap();
+        .join()
+        .ok()
+        .unwrap();
     }
 
     #[test]

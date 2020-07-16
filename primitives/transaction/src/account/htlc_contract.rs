@@ -9,9 +9,9 @@ use keys::Address;
 use macros::{add_hex_io_fns_typed_arr, create_typed_array};
 use primitives::account::AccountType;
 
-use crate::{Transaction, TransactionError, TransactionFlags};
 use crate::account::AccountTransactionVerification;
 use crate::SignatureProof;
+use crate::{Transaction, TransactionError, TransactionFlags};
 
 pub struct HashedTimeLockedContractVerifier {}
 
@@ -23,7 +23,10 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
-        if !transaction.flags.contains(TransactionFlags::CONTRACT_CREATION) {
+        if !transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION)
+        {
             warn!("Only contract creation is allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
@@ -72,10 +75,10 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                     match hash_algorithm {
                         HashAlgorithm::Blake2b => {
                             pre_image = Blake2bHasher::default().digest(&pre_image[..]).into();
-                        },
+                        }
                         HashAlgorithm::Sha256 => {
                             pre_image = Sha256Hasher::default().digest(&pre_image[..]).into();
-                        },
+                        }
                         _ => return Err(TransactionError::InvalidProof),
                     }
                 }
@@ -89,32 +92,35 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                     warn!("Invalid signature");
                     return Err(TransactionError::InvalidProof);
                 }
-            },
+            }
             ProofType::EarlyResolve => {
-                let signature_proof_recipient: SignatureProof = Deserialize::deserialize(proof_buf)?;
+                let signature_proof_recipient: SignatureProof =
+                    Deserialize::deserialize(proof_buf)?;
                 let signature_proof_sender: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
                 if !proof_buf.is_empty() {
                     warn!("Over-long proof");
-                    return Err(TransactionError::InvalidProof)
+                    return Err(TransactionError::InvalidProof);
                 }
 
-                if !signature_proof_recipient.verify(tx_buf) || !signature_proof_sender.verify(tx_buf) {
+                if !signature_proof_recipient.verify(tx_buf)
+                    || !signature_proof_sender.verify(tx_buf)
+                {
                     warn!("Invalid signature");
-                    return Err(TransactionError::InvalidProof)
+                    return Err(TransactionError::InvalidProof);
                 }
-            },
+            }
             ProofType::TimeoutResolve => {
                 let signature_proof: SignatureProof = Deserialize::deserialize(proof_buf)?;
 
                 if !proof_buf.is_empty() {
                     warn!("Over-long proof");
-                    return Err(TransactionError::InvalidProof)
+                    return Err(TransactionError::InvalidProof);
                 }
 
                 if !signature_proof.verify(tx_buf) {
                     warn!("Invalid signature");
-                    return Err(TransactionError::InvalidProof)
+                    return Err(TransactionError::InvalidProof);
                 }
             }
         }
@@ -142,7 +148,7 @@ impl Default for HashAlgorithm {
 pub enum ProofType {
     RegularTransfer = 1,
     EarlyResolve = 2,
-    TimeoutResolve = 3
+    TimeoutResolve = 3,
 }
 
 create_typed_array!(AnyHash, u8, 32);
@@ -168,8 +174,8 @@ impl CreationTransactionData {
             HashAlgorithm::Argon2d => {
                 warn!("Invalid creation data: hash_algorithm may not be Argon2d");
                 return Err(TransactionError::InvalidData);
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         if self.hash_count == 0 {

@@ -10,17 +10,15 @@ use hash::{Blake2bHash, Hash, SerializeContent};
 use primitives::slot::{Slots, ValidatorSlots};
 use vrf::VrfSeed;
 
-use crate::BlockError;
 use crate::pbft::PbftProof;
 use crate::signed;
-
-
+use crate::BlockError;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MacroBlock {
     pub header: MacroHeader,
     pub justification: Option<PbftProof>,
-    pub extrinsics: Option<MacroExtrinsics>
+    pub extrinsics: Option<MacroExtrinsics>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -70,9 +68,7 @@ impl TryInto<Slots> for MacroBlock {
 // CHECKME: Check for performance
 impl MacroExtrinsics {
     pub fn from_slashed_set(slashed_set: BitSet) -> Self {
-        MacroExtrinsics {
-            slashed_set,
-        }
+        MacroExtrinsics { slashed_set }
     }
 }
 
@@ -94,24 +90,30 @@ impl MacroBlock {
 }
 
 impl SerializeContent for MacroHeader {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for MacroHeader { }
+impl Hash for MacroHeader {}
 
 impl SerializeContent for MacroExtrinsics {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
 // TODO Do we need merkle here?
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for MacroExtrinsics { }
+impl Hash for MacroExtrinsics {}
 
 impl fmt::Display for MacroBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "[#{}, view {}, type Macro]",
-               self.header.block_number,
-               self.header.view_number)
+        write!(
+            f,
+            "[#{}, view {}, type Macro]",
+            self.header.block_number, self.header.view_number
+        )
     }
 }

@@ -1,11 +1,11 @@
 use std::time::SystemTime;
 
 use keys::{KeyPair, PrivateKey, PublicKey, SecureGenerate};
-use network_primitives::address::PeerUri;
 use network_primitives::address::net_address::NetAddress;
 use network_primitives::address::peer_address::{PeerAddress, PeerAddressType};
-use network_primitives::address::PeerId;
 use network_primitives::address::seed_list::SeedList;
+use network_primitives::address::PeerId;
+use network_primitives::address::PeerUri;
 use network_primitives::protocol::{Protocol, ProtocolFlags};
 use network_primitives::services::Services;
 use utils::key_store::{Error as KeyStoreError, KeyStore};
@@ -17,7 +17,7 @@ use crate::error::Error;
 #[derive(Clone, Debug)]
 pub enum Seed {
     Peer(Box<PeerUri>),
-    List(Box<SeedList>)
+    List(Box<SeedList>),
 }
 
 impl Seed {
@@ -29,7 +29,6 @@ impl Seed {
         Seed::List(Box::new(seed_list))
     }
 }
-
 
 #[derive(Clone, Debug)]
 pub struct NetworkConfig {
@@ -44,7 +43,12 @@ pub struct NetworkConfig {
 }
 
 impl NetworkConfig {
-    pub fn new_ws_network_config(host: String, port: u16, instant_inbound: bool, reverse_proxy_config: Option<ReverseProxyConfig>) -> Self {
+    pub fn new_ws_network_config(
+        host: String,
+        port: u16,
+        instant_inbound: bool,
+        reverse_proxy_config: Option<ReverseProxyConfig>,
+    ) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -61,7 +65,14 @@ impl NetworkConfig {
         }
     }
 
-    pub fn new_wss_network_config(host: String, port: u16, instant_inbound: bool, identity_file: String, identity_password: String, reverse_proxy_config: Option<ReverseProxyConfig>) -> Self {
+    pub fn new_wss_network_config(
+        host: String,
+        port: u16,
+        instant_inbound: bool,
+        identity_file: String,
+        identity_password: String,
+        reverse_proxy_config: Option<ReverseProxyConfig>,
+    ) -> Self {
         Self {
             protocol_mask: ProtocolFlags::WS | ProtocolFlags::WSS,
             key_pair: None,
@@ -103,7 +114,7 @@ impl NetworkConfig {
                 let private_key = PrivateKey::generate_default_csprng();
                 peer_key_store.save_key(&private_key)?;
                 Ok(private_key)
-            },
+            }
             res => res,
         }?;
 
@@ -128,15 +139,25 @@ impl NetworkConfig {
     }
 
     pub fn key_pair(&self) -> &KeyPair {
-        &self.key_pair.as_ref().expect("NetworkConfig is uninitialized")
+        &self
+            .key_pair
+            .as_ref()
+            .expect("NetworkConfig is uninitialized")
     }
 
     pub fn public_key(&self) -> &PublicKey {
-        &self.key_pair.as_ref().expect("NetworkConfig is uninitialized").public
+        &self
+            .key_pair
+            .as_ref()
+            .expect("NetworkConfig is uninitialized")
+            .public
     }
 
     pub fn peer_id(&self) -> &PeerId {
-        &self.peer_id.as_ref().expect("NetworkConfig is uninitialized")
+        &self
+            .peer_id
+            .as_ref()
+            .expect("NetworkConfig is uninitialized")
     }
 
     pub fn services(&self) -> &Services {
@@ -192,7 +213,7 @@ impl NetworkConfig {
                     } else {
                         PeerAddressType::Ws(host.clone(), port)
                     }
-                },
+                }
                 ProtocolConfig::Wss {
                     ref host,
                     port,
@@ -204,21 +225,34 @@ impl NetworkConfig {
                     } else {
                         PeerAddressType::Wss(host.clone(), port)
                     }
-                },
+                }
             },
             services: self.services.provided,
             timestamp: systemtime_to_timestamp(SystemTime::now()),
             net_address: NetAddress::Unspecified,
-            public_key: self.key_pair.as_ref().expect("NetworkConfig is uninitialized").public,
+            public_key: self
+                .key_pair
+                .as_ref()
+                .expect("NetworkConfig is uninitialized")
+                .public,
             distance: 0,
             signature: None,
-            peer_id: self.peer_id.as_ref().expect("NetworkConfig is uninitialized").clone(),
+            peer_id: self
+                .peer_id
+                .as_ref()
+                .expect("NetworkConfig is uninitialized")
+                .clone(),
         };
         if addr.protocol() == Protocol::Wss || addr.protocol() == Protocol::Ws {
             // TODO Disabled for debugging
             //assert!(addr.is_globally_reachable(false), "PeerAddress not globally reachable.");
         }
-        addr.signature = Some(self.key_pair.as_ref().expect("NetworkConfig is uninitialized").sign(&addr.get_signature_data()[..]));
+        addr.signature = Some(
+            self.key_pair
+                .as_ref()
+                .expect("NetworkConfig is uninitialized")
+                .sign(&addr.get_signature_data()[..]),
+        );
         addr
     }
 
@@ -258,12 +292,19 @@ impl From<&ProtocolConfig> for Protocol {
         match config {
             ProtocolConfig::Dumb => Protocol::Dumb,
             ProtocolConfig::Rtc => Protocol::Rtc,
-            ProtocolConfig::Ws { reverse_proxy_config, .. } => {
-                match reverse_proxy_config {
-                    Some(ReverseProxyConfig { with_tls_termination: true, .. }) => Protocol::Wss,
-                    Some(ReverseProxyConfig { with_tls_termination: false, .. }) => Protocol::Ws,
-                    _ => Protocol::Ws,
-                }
+            ProtocolConfig::Ws {
+                reverse_proxy_config,
+                ..
+            } => match reverse_proxy_config {
+                Some(ReverseProxyConfig {
+                    with_tls_termination: true,
+                    ..
+                }) => Protocol::Wss,
+                Some(ReverseProxyConfig {
+                    with_tls_termination: false,
+                    ..
+                }) => Protocol::Ws,
+                _ => Protocol::Ws,
             },
             ProtocolConfig::Wss { .. } => Protocol::Wss,
         }

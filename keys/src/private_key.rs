@@ -15,19 +15,25 @@ use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
 use crate::PublicKey;
 
 #[derive(Default)]
-pub struct PrivateKey(pub(in super) ed25519_dalek::SecretKey);
+pub struct PrivateKey(pub(super) ed25519_dalek::SecretKey);
 
 impl PrivateKey {
     pub const SIZE: usize = 32;
 
     #[inline]
-    pub fn as_bytes(&self) -> &[u8; PrivateKey::SIZE] { self.0.as_bytes() }
+    pub fn as_bytes(&self) -> &[u8; PrivateKey::SIZE] {
+        self.0.as_bytes()
+    }
 
     #[inline]
-    pub (crate) fn as_dalek(&self) -> &ed25519_dalek::SecretKey { &self.0 }
+    pub(crate) fn as_dalek(&self) -> &ed25519_dalek::SecretKey {
+        &self.0
+    }
 
     #[inline]
-    pub fn to_hex(&self) -> String { hex::encode(self.as_bytes()) }
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
+    }
 }
 
 impl SecureGenerate for PrivateKey {
@@ -75,10 +81,12 @@ impl Serialize for PrivateKey {
 }
 
 impl SerializeContent for PrivateKey {
-    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> { Ok(self.serialize(writer)?) }
+    fn serialize_content<W: io::Write>(&self, writer: &mut W) -> io::Result<usize> {
+        Ok(self.serialize(writer)?)
+    }
 }
 
-impl Hash for PrivateKey { }
+impl Hash for PrivateKey {}
 
 impl Debug for PrivateKey {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {

@@ -4,13 +4,13 @@ use chrono::Local;
 use colored::Colorize;
 use failure::Fail;
 use fern::colors::{Color, ColoredLevelConfig};
-use fern::{Dispatch, log_file};
+use fern::{log_file, Dispatch};
 use lazy_static::lazy_static;
 use log::{Level, LevelFilter};
 
-use crate::error::Error;
 use crate::config::command_line::CommandLine;
 use crate::config::config_file::LogSettings;
+use crate::error::Error;
 
 static MAX_MODULE_WIDTH: AtomicUsize = AtomicUsize::new(20);
 
@@ -81,7 +81,7 @@ fn pretty_logging(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispa
     dispatch.format(move |out, message, record| {
         let target_text = record.target().split("::").last().unwrap();
         let max_width = max_module_width(target_text);
-        let target = format!("{: <width$}", target_text, width=max_width);
+        let target = format!("{: <width$}", target_text, width = max_width);
         out.finish(format_args!(
             " {level: <5} {target} | {message}",
             target = target.bold(),
@@ -91,11 +91,14 @@ fn pretty_logging(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispa
     })
 }
 
-fn pretty_logging_with_timestamps(dispatch: Dispatch, colors_level: ColoredLevelConfig) -> Dispatch {
+fn pretty_logging_with_timestamps(
+    dispatch: Dispatch,
+    colors_level: ColoredLevelConfig,
+) -> Dispatch {
     dispatch.format(move |out, message, record| {
         let target_text = record.target().split("::").last().unwrap();
         let max_width = max_module_width(target_text);
-        let target = format!("{: <width$}", target_text, width=max_width);
+        let target = format!("{: <width$}", target_text, width = max_width);
         out.finish(format_args!(
             " {timestamp} {level: <5} {target} | {message}",
             timestamp = Local::now().format("%Y-%m-%d %H:%M:%S"),
@@ -157,12 +160,12 @@ pub fn log_error_cause_chain(mut fail: &dyn Fail) {
     }
 }
 
-
-
-pub fn initialize_logging(command_line_opt: Option<&CommandLine>, settings_opt: Option<&LogSettings>) -> Result<(), Error> {
+pub fn initialize_logging(
+    command_line_opt: Option<&CommandLine>,
+    settings_opt: Option<&LogSettings>,
+) -> Result<(), Error> {
     // Get config from config file
-    let mut settings = settings_opt.cloned()
-        .unwrap_or_default();
+    let mut settings = settings_opt.cloned().unwrap_or_default();
 
     // Override config from command line
     if let Some(command_line) = command_line_opt {
@@ -188,8 +191,7 @@ pub fn initialize_logging(command_line_opt: Option<&CommandLine>, settings_opt: 
     // Log into file or to stderr
     if let Some(ref filename) = settings.file {
         dispatch = dispatch.chain(log_file(filename)?);
-    }
-    else {
+    } else {
         dispatch = dispatch.chain(std::io::stderr());
     }
 

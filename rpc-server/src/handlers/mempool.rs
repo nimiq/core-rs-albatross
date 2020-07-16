@@ -2,8 +2,8 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use json::{Array, JsonValue, Null, object};
 use json::object::Object;
+use json::{object, Array, JsonValue, Null};
 use parking_lot::RwLock;
 
 use beserial::{Deserialize, Serialize};
@@ -18,8 +18,8 @@ use primitives::networks::NetworkId;
 use transaction::{Transaction, TransactionFlags};
 
 use crate::handler::Method;
-use crate::handlers::Module;
 use crate::handlers::wallet::UnlockedWalletManager;
+use crate::handlers::Module;
 
 pub struct MempoolHandler<P: ConsensusProtocol + 'static> {
     pub mempool: Arc<Mempool<P::Blockchain>>,
@@ -27,7 +27,10 @@ pub struct MempoolHandler<P: ConsensusProtocol + 'static> {
 }
 
 impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
-    pub fn new(mempool: Arc<Mempool<P::Blockchain>>, unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>) -> Self {
+    pub fn new(
+        mempool: Arc<Mempool<P::Blockchain>>,
+        unlocked_wallets: Option<Arc<RwLock<UnlockedWalletManager>>>,
+    ) -> Self {
         MempoolHandler {
             mempool,
             unlocked_wallets,
@@ -40,17 +43,21 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     ///     If set to `true`, the full transactions will be included,
     ///     otherwise it will only include the hashes.
     pub(crate) fn mempool_content(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let include_transactions = params.get(0).and_then(JsonValue::as_bool)
-            .unwrap_or(false);
+        let include_transactions = params.get(0).and_then(JsonValue::as_bool).unwrap_or(false);
 
-        Ok(JsonValue::Array(self.mempool.get_transactions(usize::max_value(), 0f64)
-            .iter()
-            .map(|tx| if include_transactions {
-                transaction_to_obj(tx, None, None)
-            } else {
-                tx.hash::<Blake2bHash>().to_hex().into()
-            })
-            .collect::<Array>()))
+        Ok(JsonValue::Array(
+            self.mempool
+                .get_transactions(usize::max_value(), 0f64)
+                .iter()
+                .map(|tx| {
+                    if include_transactions {
+                        transaction_to_obj(tx, None, None)
+                    } else {
+                        tx.hash::<Blake2bHash>().to_hex().into()
+                    }
+                })
+                .collect::<Array>(),
+        ))
     }
 
     /// Returns mempool statistics on the number of transactions ordered by fee/byte.
@@ -64,12 +71,16 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     pub(crate) fn mempool(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         // Transactions sorted by fee/byte, ascending
         let transactions = self.mempool.get_transactions(usize::max_value(), 0f64);
-        let bucket_values: [u64; 14] = [0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+        let bucket_values: [u64; 14] = [
+            0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000,
+        ];
         let mut bucket_counts: [u32; 14] = [0; 14];
         let mut i = 0;
 
         for transaction in &transactions {
-            while (transaction.fee_per_byte() as u64) < bucket_values[i] { i += 1; }
+            while (transaction.fee_per_byte() as u64) < bucket_values[i] {
+                i += 1;
+            }
             bucket_counts[i] += 1;
         }
 
@@ -90,14 +101,20 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// Sends a raw transaction.
     /// Parameters:
     /// - transaction (string)
-    pub(crate) fn send_raw_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let raw = hex::decode(params.get(0)
-            .unwrap_or(&Null)
-            .as_str()
-            .ok_or_else(|| object! {"message" => "Raw transaction must be a string"} )?)
-            .map_err(|_| object! {"message" => "Raw transaction must be a hex string"} )?;
+    pub(crate) fn send_raw_transaction(
+        &self,
+        params: &[JsonValue],
+    ) -> Result<JsonValue, JsonValue> {
+        let raw = hex::decode(
+            params
+                .get(0)
+                .unwrap_or(&Null)
+                .as_str()
+                .ok_or_else(|| object! {"message" => "Raw transaction must be a string"})?,
+        )
+        .map_err(|_| object! {"message" => "Raw transaction must be a hex string"})?;
         let transaction: Transaction = Deserialize::deserialize_from_vec(&raw)
-            .map_err(|_| object! {"message" => "Transaction can't be deserialized"} )?;
+            .map_err(|_| object! {"message" => "Transaction can't be deserialized"})?;
         self.push_transaction(transaction)
     }
 
@@ -121,8 +138,15 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// }
     /// ```
     /// Fields that can be null are optional.
-    pub(crate) fn create_raw_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let mut transaction = obj_to_transaction(params.get(0).unwrap_or(&Null), self.mempool.current_height(), self.mempool.network_id())?;
+    pub(crate) fn create_raw_transaction(
+        &self,
+        params: &[JsonValue],
+    ) -> Result<JsonValue, JsonValue> {
+        let mut transaction = obj_to_transaction(
+            params.get(0).unwrap_or(&Null),
+            self.mempool.current_height(),
+            self.mempool.network_id(),
+        )?;
 
         if let Some(ref unlocked_wallets) = self.unlocked_wallets {
             if transaction.sender_type == AccountType::Basic {
@@ -157,7 +181,11 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// ```
     /// Fields that can be null are optional.
     pub(crate) fn send_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let mut transaction = obj_to_transaction(params.get(0).unwrap_or(&Null), self.mempool.current_height(), self.mempool.network_id())?;
+        let mut transaction = obj_to_transaction(
+            params.get(0).unwrap_or(&Null),
+            self.mempool.current_height(),
+            self.mempool.network_id(),
+        )?;
 
         if let Some(ref unlocked_wallets) = self.unlocked_wallets {
             if transaction.sender_type == AccountType::Basic {
@@ -203,10 +231,14 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
     /// }
     /// ```
     pub(crate) fn get_transaction(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let hash = params.get(0).and_then(JsonValue::as_str)
+        let hash = params
+            .get(0)
+            .and_then(JsonValue::as_str)
             .ok_or_else(|| object! {"message" => "Invalid transaction hash"})
-            .and_then(|s| Blake2bHash::from_str(s)
-                .map_err(|_| object! {"message" => "Invalid transaction hash"}))?;
+            .and_then(|s| {
+                Blake2bHash::from_str(s)
+                    .map_err(|_| object! {"message" => "Invalid transaction hash"})
+            })?;
         let transaction = self.mempool.get_transaction(&hash);
         if let Some(tx) = transaction {
             Ok(transaction_to_obj(&tx, None, None))
@@ -217,16 +249,23 @@ impl<P: ConsensusProtocol + 'static> MempoolHandler<P> {
 
     // Helper functions
 
-    pub(crate) fn push_transaction(&self, transaction: Transaction) -> Result<JsonValue, JsonValue> {
+    pub(crate) fn push_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<JsonValue, JsonValue> {
         let txid = transaction.hash::<Blake2bHash>();
         match self.mempool.push_transaction(transaction) {
             ReturnCode::Accepted | ReturnCode::Known => Ok(txid.to_hex().into()),
-            code => Err(object! {"message" => format!("Rejected: {:?}", code)})
+            code => Err(object! {"message" => format!("Rejected: {:?}", code)}),
         }
     }
 }
 
-pub(crate) fn transaction_to_obj(transaction: &Transaction, context: Option<&TransactionContext>, head_height: Option<u32>) -> JsonValue {
+pub(crate) fn transaction_to_obj(
+    transaction: &Transaction,
+    context: Option<&TransactionContext>,
+    head_height: Option<u32>,
+) -> JsonValue {
     object! {
         "hash" => transaction.hash::<Blake2bHash>().to_hex(),
         "blockHash" => context.map(|c| c.block_hash.into()).unwrap_or(Null),
@@ -257,59 +296,102 @@ pub(crate) fn transaction_to_obj(transaction: &Transaction, context: Option<&Tra
 //     data: string|null,
 //     validityStartHeight: number|null,
 // }
-pub(crate) fn obj_to_transaction(obj: &JsonValue, current_height: u32, network_id: NetworkId) -> Result<Transaction, JsonValue> {
-    let from = Address::from_any_str(obj["from"].as_str()
-        .ok_or_else(|| object! {"message" => "Sender address must be a string"})?)
-        .map_err(|_|  object! {"message" => "Sender address invalid"})?;
+pub(crate) fn obj_to_transaction(
+    obj: &JsonValue,
+    current_height: u32,
+    network_id: NetworkId,
+) -> Result<Transaction, JsonValue> {
+    let from = Address::from_any_str(
+        obj["from"]
+            .as_str()
+            .ok_or_else(|| object! {"message" => "Sender address must be a string"})?,
+    )
+    .map_err(|_| object! {"message" => "Sender address invalid"})?;
 
     let from_type = match &obj["fromType"] {
         &JsonValue::Null => Some(AccountType::Basic),
         n @ JsonValue::Number(_) => n.as_u8().and_then(AccountType::from_int),
-        _ => None
-    }.ok_or_else(|| object! {"message" => "Invalid sender account type"})?;
+        _ => None,
+    }
+    .ok_or_else(|| object! {"message" => "Invalid sender account type"})?;
 
     let to = match obj["to"] {
-        JsonValue::String(ref recipient) => Some(Address::from_any_str(recipient)
-            .map_err(|_|  object! {"message" => "Recipient address invalid"})?),
+        JsonValue::String(ref recipient) => Some(
+            Address::from_any_str(recipient)
+                .map_err(|_| object! {"message" => "Recipient address invalid"})?,
+        ),
         _ => None,
     };
 
     let to_type = match &obj["toType"] {
         &JsonValue::Null => Some(AccountType::Basic),
         n @ JsonValue::Number(_) => n.as_u8().and_then(AccountType::from_int),
-        _ => None
-    }.ok_or_else(|| object! {"message" => "Invalid recipient account type"})?;
+        _ => None,
+    }
+    .ok_or_else(|| object! {"message" => "Invalid recipient account type"})?;
 
-    let value = Coin::try_from(obj["value"].as_u64()
-        .ok_or_else(|| object! {"message" => "Invalid transaction value"})?)
-        .map_err(|_| object! {"message" => "Invalid transaction value"})?;
+    let value = Coin::try_from(
+        obj["value"]
+            .as_u64()
+            .ok_or_else(|| object! {"message" => "Invalid transaction value"})?,
+    )
+    .map_err(|_| object! {"message" => "Invalid transaction value"})?;
 
-    let fee = Coin::try_from(obj["fee"].as_u64()
-        .ok_or_else(|| object! {"message" => "Invalid transaction fee"})?)
-        .map_err(|_| object! {"message" => "Invalid transaction fee"})?;
+    let fee = Coin::try_from(
+        obj["fee"]
+            .as_u64()
+            .ok_or_else(|| object! {"message" => "Invalid transaction fee"})?,
+    )
+    .map_err(|_| object! {"message" => "Invalid transaction fee"})?;
 
-    let flags = obj["flags"].as_u8()
-        .map_or_else(|| Some(TransactionFlags::empty()), TransactionFlags::from_bits)
+    let flags = obj["flags"]
+        .as_u8()
+        .map_or_else(
+            || Some(TransactionFlags::empty()),
+            TransactionFlags::from_bits,
+        )
         .ok_or_else(|| object! {"message" => "Invalid transaction flags"})?;
 
-    let data = obj["data"].as_str()
+    let data = obj["data"]
+        .as_str()
         .map(hex::decode)
-        .transpose().map_err(|_| object! {"message" => "Invalid transaction data"})?
+        .transpose()
+        .map_err(|_| object! {"message" => "Invalid transaction data"})?
         .unwrap_or_else(|| vec![]);
 
     let validity_start_height = match &obj["validityStartHeight"] {
         &JsonValue::Null => Some(current_height),
         n @ JsonValue::Number(_) => n.as_u32(),
-        _ => None
-    }.ok_or_else(|| object! {"message" => "Invalid validityStartHeight"})?;
+        _ => None,
+    }
+    .ok_or_else(|| object! {"message" => "Invalid validityStartHeight"})?;
 
     if to_type != AccountType::Basic
         && flags.contains(TransactionFlags::CONTRACT_CREATION)
-        && to.is_none() {
-        Ok(Transaction::new_contract_creation(data, from, from_type, to_type, value, fee, validity_start_height, network_id))
-    } else if to.is_some()
-        && !flags.contains(TransactionFlags::CONTRACT_CREATION) {
-        Ok(Transaction::new_extended(from, from_type, to.unwrap(), to_type, value, fee, data, validity_start_height, network_id))
+        && to.is_none()
+    {
+        Ok(Transaction::new_contract_creation(
+            data,
+            from,
+            from_type,
+            to_type,
+            value,
+            fee,
+            validity_start_height,
+            network_id,
+        ))
+    } else if to.is_some() && !flags.contains(TransactionFlags::CONTRACT_CREATION) {
+        Ok(Transaction::new_extended(
+            from,
+            from_type,
+            to.unwrap(),
+            to_type,
+            value,
+            fee,
+            data,
+            validity_start_height,
+            network_id,
+        ))
     } else {
         Err(object! {"message" => "Invalid combination of flags, toType and to."})
     }

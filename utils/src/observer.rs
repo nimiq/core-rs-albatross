@@ -1,11 +1,13 @@
-use std::sync::{Weak, Arc};
+use std::sync::{Arc, Weak};
 
 pub trait Listener<E>: Send + Sync {
     fn on_event(&self, event: &E);
 }
 
 impl<E, F: Fn(&E)> Listener<E> for F
-    where F: Send + Sync {
+where
+    F: Send + Sync,
+{
     fn on_event(&self, event: &E) {
         self(event);
     }
@@ -16,7 +18,7 @@ pub type ListenerHandle = usize;
 #[derive(Default)]
 pub struct Notifier<'l, E> {
     listeners: Vec<(ListenerHandle, Box<dyn Listener<E> + 'l>)>,
-    next_handle: ListenerHandle
+    next_handle: ListenerHandle,
 }
 
 impl<'l, E> Notifier<'l, E> {
@@ -50,9 +52,11 @@ impl<'l, E> Notifier<'l, E> {
     }
 }
 
-
 pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
-    where C: Fn(Arc<T>, &E) + Send + Sync, T: Send + Sync {
+where
+    C: Fn(Arc<T>, &E) + Send + Sync,
+    T: Send + Sync,
+{
     move |event: &E| {
         if let Some(arc) = weak_ref.upgrade() {
             closure(arc, event);
@@ -61,7 +65,10 @@ pub fn weak_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl Listener<E>
 }
 
 pub fn weak_passthru_listener<T, E, C>(weak_ref: Weak<T>, closure: C) -> impl PassThroughListener<E>
-    where C: Fn(Arc<T>, E) + Send + Sync, T: Send + Sync {
+where
+    C: Fn(Arc<T>, E) + Send + Sync,
+    T: Send + Sync,
+{
     move |event: E| {
         if let Some(arc) = weak_ref.upgrade() {
             closure(arc, event);
@@ -74,7 +81,9 @@ pub trait PassThroughListener<E>: Send + Sync {
 }
 
 impl<E, F: Fn(E)> PassThroughListener<E> for F
-    where F: Send + Sync {
+where
+    F: Send + Sync,
+{
     fn on_event(&self, event: E) {
         self(event);
     }
@@ -86,9 +95,7 @@ pub struct PassThroughNotifier<'l, E> {
 
 impl<E> Default for PassThroughNotifier<'_, E> {
     fn default() -> Self {
-        Self {
-            listener: None
-        }
+        Self { listener: None }
     }
 }
 

@@ -45,7 +45,9 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     /// (even after successful completion) if the key is going to be used multiple times
     /// or to prevent memory leaks.
     pub fn set_delay<F: Send + 'static>(&self, key: K, func: F, delay: Duration)
-        where F: FnOnce() {
+    where
+        F: FnOnce(),
+    {
         let mut delays = self.delays.lock();
         self.set_delay_guarded(key, func, delay, &mut delays);
     }
@@ -58,7 +60,9 @@ impl<K: Eq + Hash + Debug> Timers<K> {
 
     /// Aborts the delayed closure if present and schedules a new one.
     pub fn reset_delay<F: Send + 'static>(&self, key: K, func: F, delay: Duration)
-        where F: FnOnce() {
+    where
+        F: FnOnce(),
+    {
         let mut delays = self.delays.lock();
         self.clear_timer_guarded(&key, &mut delays);
         self.set_delay_guarded(key, func, delay, &mut delays);
@@ -75,7 +79,9 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     /// (even after successful completion) if the key is going to be used multiple times
     /// or to prevent memory leaks.
     pub fn set_interval<F: Send + Sync + 'static>(&self, key: K, func: F, duration: Duration)
-        where F: Fn() {
+    where
+        F: Fn(),
+    {
         let mut intervals = self.intervals.lock();
         self.set_interval_guarded(key, func, duration, &mut intervals);
     }
@@ -88,7 +94,9 @@ impl<K: Eq + Hash + Debug> Timers<K> {
 
     /// Aborts the interval and schedules a new recurring closure.
     pub fn reset_interval<F: Send + Sync + 'static>(&self, key: K, func: F, duration: Duration)
-        where F: Fn() {
+    where
+        F: Fn(),
+    {
         let mut intervals = self.intervals.lock();
         self.clear_timer_guarded(&key, &mut intervals);
         self.set_interval_guarded(key, func, duration, &mut intervals);
@@ -100,8 +108,15 @@ impl<K: Eq + Hash + Debug> Timers<K> {
     }
 
     // Internal functions
-    fn set_delay_guarded<F: Send + 'static>(&self, key: K, func: F, delay: Duration, delays: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>)
-        where F: FnOnce() {
+    fn set_delay_guarded<F: Send + 'static>(
+        &self,
+        key: K,
+        func: F,
+        delay: Duration,
+        delays: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>,
+    ) where
+        F: FnOnce(),
+    {
         if delays.contains_key(&key) {
             error!("Duplicate delay for key {:?}", &key);
             return;
@@ -111,17 +126,24 @@ impl<K: Eq + Hash + Debug> Timers<K> {
             .and_then(move |_| {
                 func();
                 Ok(())
-            }).map_err(|_| ());
+            })
+            .map_err(|_| ());
         let (tx, rx) = oneshot::channel();
-        let task = task.select(rx.map_err(|_| ()))
-            .map(|_| ()).map_err(|_| ());
+        let task = task.select(rx.map_err(|_| ())).map(|_| ()).map_err(|_| ());
 
         delays.insert(key, tx);
         tokio::spawn(task);
     }
 
-    pub fn set_interval_guarded<F: Send + Sync + 'static>(&self, key: K, func: F, duration: Duration, intervals: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>)
-        where F: Fn() {
+    pub fn set_interval_guarded<F: Send + Sync + 'static>(
+        &self,
+        key: K,
+        func: F,
+        duration: Duration,
+        intervals: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>,
+    ) where
+        F: Fn(),
+    {
         if intervals.contains_key(&key) {
             error!("Duplicate delay for key {:?}", &key);
             return;
@@ -131,16 +153,20 @@ impl<K: Eq + Hash + Debug> Timers<K> {
             .for_each(move |_| {
                 func();
                 Ok(())
-            }).map_err(|_| ());
+            })
+            .map_err(|_| ());
         let (tx, rx) = oneshot::channel();
-        let task = task.select(rx.map_err(|_| ()))
-            .map(|_| ()).map_err(|_| ());
+        let task = task.select(rx.map_err(|_| ())).map(|_| ()).map_err(|_| ());
 
         intervals.insert(key, tx);
         tokio::spawn(task);
     }
 
-    fn clear_timer_guarded(&self, key: &K, guard: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>) {
+    fn clear_timer_guarded(
+        &self,
+        key: &K,
+        guard: &mut MutexGuard<HashMap<K, oneshot::Sender<()>>>,
+    ) {
         let handle = guard.remove(key);
         if let Some(handle) = handle {
             handle.send(()).unwrap_or(());
@@ -156,6 +182,11 @@ impl<K: Eq + Hash + Debug> Drop for Timers<K> {
 
 impl<K: Eq + Hash + Debug> fmt::Debug for Timers<K> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Timers {{ num_delays: {}, num_intervals: {} }}", self.delays.lock().len(), self.intervals.lock().len())
+        write!(
+            f,
+            "Timers {{ num_delays: {}, num_intervals: {} }}",
+            self.delays.lock().len(),
+            self.intervals.lock().len()
+        )
     }
 }

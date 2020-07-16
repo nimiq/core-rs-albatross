@@ -1,4 +1,4 @@
-use nimiq_collections::{UniqueLinkedList, Queue};
+use nimiq_collections::{Queue, UniqueLinkedList};
 
 #[test]
 fn it_can_correctly_dequeue_elements() {

@@ -1,6 +1,6 @@
+use hex::FromHex;
 use nimiq_hash::hmac::*;
 use nimiq_hash::Sha512Hash;
-use hex::FromHex;
 
 struct TestVector {
     key: &'static str,
@@ -71,7 +71,12 @@ fn it_correctly_computes_hmac_sha512() {
             hash.truncate(32);
             assert_eq!(hash, vector.hash, "Invalid hmac sha512 in test case {}", i);
         } else {
-            assert_eq!(hash, vector.get_hash(), "Invalid hmac sha512 in test case {}", i);
+            assert_eq!(
+                hash,
+                vector.get_hash(),
+                "Invalid hmac sha512 in test case {}",
+                i
+            );
         }
     }
 }

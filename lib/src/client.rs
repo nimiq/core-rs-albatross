@@ -1,27 +1,22 @@
 use std::convert::TryFrom;
 use std::sync::{Arc, Weak};
 
-#[cfg(feature="validator")]
-use validator::validator::Validator;
-use consensus::{
-    Consensus as AbstractConsensus,
-    AlbatrossConsensusProtocol,
-};
-use database::Environment;
-use network::{NetworkConfig, Network as GenericNetwork};
-use mempool::Mempool as GenericMempool;
-use network_primitives::services::ServiceFlags;
 use blockchain::Blockchain;
+use consensus::{AlbatrossConsensusProtocol, Consensus as AbstractConsensus};
+use database::Environment;
+use mempool::Mempool as GenericMempool;
+use network::{Network as GenericNetwork, NetworkConfig};
+use network_primitives::services::ServiceFlags;
+#[cfg(feature = "validator")]
+use validator::validator::Validator;
 
-use crate::error::Error;
 use crate::config::config::{ClientConfig, ProtocolConfig};
-
+use crate::error::Error;
 
 /// Alias for the Consensus specialized over Albatross
 pub type Consensus = AbstractConsensus<AlbatrossConsensusProtocol>;
 pub type Mempool = GenericMempool<Blockchain>;
 pub type Network = GenericNetwork<Blockchain>;
-
 
 /// Holds references to the relevant structs. This is then Arc'd in `Client` and a nice API is
 /// exposed.
@@ -42,10 +37,9 @@ pub(crate) struct ClientInner {
     consensus: Arc<Consensus>,
 
     /// The block production logic. This is optional and can also be fully disabled at compile-time
-    #[cfg(feature="validator")]
-    validator: Option<Arc<Validator>>
+    #[cfg(feature = "validator")]
+    validator: Option<Arc<Validator>>,
 }
-
 
 impl TryFrom<ClientConfig> for ClientInner {
     type Error = Error;
@@ -56,20 +50,34 @@ impl TryFrom<ClientConfig> for ClientInner {
         // client API.
 
         let mut network_config = match config.protocol {
-            ProtocolConfig::Dumb => {
-                NetworkConfig::new_dumb_network_config()
-            },
-            ProtocolConfig::Rtc => {
-                panic!("WebRTC is not yet implemented")
-            },
+            ProtocolConfig::Dumb => NetworkConfig::new_dumb_network_config(),
+            ProtocolConfig::Rtc => panic!("WebRTC is not yet implemented"),
             ProtocolConfig::Ws { host, port } => {
                 NetworkConfig::new_ws_network_config(host, port, false, config.reverse_proxy)
-            },
-            ProtocolConfig::Wss { host, port, pkcs12_key_file, pkcs12_passphrase } => {
-                let pkcs12_key_file = pkcs12_key_file.to_str()
-                    .unwrap_or_else(|| panic!("Failed to convert path to PKCS#12 key file to string: {}", pkcs12_key_file.display()))
+            }
+            ProtocolConfig::Wss {
+                host,
+                port,
+                pkcs12_key_file,
+                pkcs12_passphrase,
+            } => {
+                let pkcs12_key_file = pkcs12_key_file
+                    .to_str()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Failed to convert path to PKCS#12 key file to string: {}",
+                            pkcs12_key_file.display()
+                        )
+                    })
                     .to_string();
-                NetworkConfig::new_wss_network_config(host, port, false, pkcs12_key_file, pkcs12_passphrase, config.reverse_proxy)
+                NetworkConfig::new_wss_network_config(
+                    host,
+                    port,
+                    false,
+                    pkcs12_key_file,
+                    pkcs12_passphrase,
+                    config.reverse_proxy,
+                )
             }
         };
 
@@ -83,19 +91,23 @@ impl TryFrom<ClientConfig> for ClientInner {
         config.storage.init_key_store(&mut network_config)?;
 
         // Load validator wallet key
-        #[cfg(feature="validator")]
-        let validator_wallet_key = config.validator.as_ref()
+        #[cfg(feature = "validator")]
+        let validator_wallet_key = config
+            .validator
+            .as_ref()
             .map(|config| config.clone().validator_wallet_key())
             .expect("Failed to load validator configuration")
             .expect("Failed to load validator wallet key");
 
         // Load validator key (before we give away ownership of the storage config)
-        #[cfg(feature="validator")]
-        let validator_key = config.storage.validator_key()
+        #[cfg(feature = "validator")]
+        let validator_key = config
+            .storage
+            .validator_key()
             .expect("Failed to load validator key");
 
         // Add validator service flag, if necessary
-        #[cfg(feature="validator")]
+        #[cfg(feature = "validator")]
         {
             if config.validator.is_some() {
                 let mut services = network_config.services().clone();
@@ -106,11 +118,17 @@ impl TryFrom<ClientConfig> for ClientInner {
         }
 
         // Open database
-        let environment = config.storage.database(config.network, config.consensus, config.database)?;
+        let environment =
+            config
+                .storage
+                .database(config.network, config.consensus, config.database)?;
 
         // Create Nimiq consensus
         if !config.network.is_albatross() {
-            return Err(Error::config_error(&format!("{} is not compatible with Albatross", config.network)));
+            return Err(Error::config_error(&format!(
+                "{} is not compatible with Albatross",
+                config.network
+            )));
         }
         let consensus = Consensus::new(
             environment.clone(),
@@ -119,21 +137,22 @@ impl TryFrom<ClientConfig> for ClientInner {
             config.mempool,
         )?;
 
-        #[cfg(feature="validator")]
-        let validator = config.validator.map(|_config| {
-            Validator::new(Arc::clone(&consensus), validator_key, validator_wallet_key)
-        }).transpose()?;
+        #[cfg(feature = "validator")]
+        let validator = config
+            .validator
+            .map(|_config| {
+                Validator::new(Arc::clone(&consensus), validator_key, validator_wallet_key)
+            })
+            .transpose()?;
 
         Ok(ClientInner {
             environment,
             consensus,
-            #[cfg(feature="validator")]
+            #[cfg(feature = "validator")]
             validator,
         })
     }
 }
-
-
 
 /// Entry point for the Nimiq client API.
 ///
@@ -154,9 +173,8 @@ impl TryFrom<ClientConfig> for ClientInner {
 /// * Register listeners for certain events.
 ///
 pub struct Client {
-    inner: Arc<ClientInner>
+    inner: Arc<ClientInner>,
 }
-
 
 impl Client {
     /// Initializes the Nimiq network stack.
@@ -192,7 +210,7 @@ impl Client {
     }
 
     /// Returns a reference to the *Validator* or `None`.
-    #[cfg(feature="validator")]
+    #[cfg(feature = "validator")]
     pub fn validator(&self) -> Option<Arc<Validator>> {
         self.inner.validator.as_ref().map(|v| Arc::clone(v))
     }
@@ -218,12 +236,16 @@ impl TryFrom<ClientConfig> for Client {
 
     fn try_from(config: ClientConfig) -> Result<Self, Self::Error> {
         let inner = ClientInner::try_from(config)?;
-        Ok(Client { inner: Arc::new(inner) })
+        Ok(Client {
+            inner: Arc::new(inner),
+        })
     }
 }
 
 impl Clone for Client {
     fn clone(&self) -> Self {
-        Client { inner: Arc::clone(&self.inner)}
+        Client {
+            inner: Arc::clone(&self.inner),
+        }
     }
 }

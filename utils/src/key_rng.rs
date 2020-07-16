@@ -1,5 +1,5 @@
-pub use rand::{CryptoRng, Rng};
 use rand::rngs::OsRng;
+pub use rand::{CryptoRng, Rng};
 
 pub type SecureRng = OsRng;
 

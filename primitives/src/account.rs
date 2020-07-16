@@ -19,7 +19,7 @@ impl AccountType {
             1 => Some(AccountType::Vesting),
             2 => Some(AccountType::HTLC),
             3 => Some(AccountType::Staking),
-            _ => None
+            _ => None,
         }
     }
 }

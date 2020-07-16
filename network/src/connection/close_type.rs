@@ -48,7 +48,6 @@ pub enum CloseType {
     ManualPeerDisconnect = 90,
 
     // Ban Close Types
-
     ReceivedInvalidBlock = 100,
     BlockchainSyncFailed = 101,
     ReceivedInvalidHeader = 102,
@@ -80,7 +79,6 @@ pub enum CloseType {
     InvalidSignatureInValidatorInfo = 133,
 
     // Fail Close Types
-
     ClosedByRemote = 200,
     PingTimeout = 201,
     ConnectionFailed = 202,
@@ -115,7 +113,10 @@ impl Into<CloseCode> for CloseType {
 impl From<CloseCode> for CloseType {
     fn from(code: CloseCode) -> Self {
         match code {
-            CloseCode::Library(code) => Deserialize::deserialize_from_vec(&(code - 4000).to_be_bytes().to_vec()).unwrap_or(CloseType::Unknown),
+            CloseCode::Library(code) => {
+                Deserialize::deserialize_from_vec(&(code - 4000).to_be_bytes().to_vec())
+                    .unwrap_or(CloseType::Unknown)
+            }
             _ => CloseType::Unknown,
         }
     }

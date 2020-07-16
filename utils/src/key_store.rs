@@ -11,16 +11,12 @@ pub struct KeyStore {
 
 impl KeyStore {
     pub fn new(path: String) -> Self {
-        KeyStore {
-            path
-        }
+        KeyStore { path }
     }
 
     pub fn load_key<T: Serialize + Deserialize>(&self) -> Result<T, Error> {
         match fs::read(&self.path) {
-            Ok(data) => {
-                Deserialize::deserialize_from_vec(&data).map_err(|_| Error::InvalidKey)
-            },
+            Ok(data) => Deserialize::deserialize_from_vec(&data).map_err(|_| Error::InvalidKey),
             Err(e) => Err(Error::IoError(e)),
         }
     }

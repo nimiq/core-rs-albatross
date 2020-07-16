@@ -1,34 +1,41 @@
 extern crate num_traits;
 
-use std::ops::*;
 use num_traits::identities::Zero;
+use std::ops::*;
 
 pub struct SegmentTree<T, U>
-    where T: Ord + Eq + Clone,
-          U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq {
+where
+    T: Ord + Eq + Clone,
+    U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq,
+{
     root: Option<Box<Node<T, U>>>,
     size: usize,
 }
 
 #[derive(Debug, PartialOrd, PartialEq)]
 pub struct Range<U>
-    where U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq {
+where
+    U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq,
+{
     pub weight: U,
     pub offset: U,
 }
 
 struct Node<T, U>
-    where T: Ord + Eq + Clone,
-          U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq {
-    key:      T,
-    weight:   U,
+where
+    T: Ord + Eq + Clone,
+    U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq,
+{
+    key: T,
+    weight: U,
     children: Option<[Box<Node<T, U>>; 2]>,
 }
 
-impl <T, U> SegmentTree<T, U>
-    where T: Ord + Eq + Clone,
-          U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq {
-
+impl<T, U> SegmentTree<T, U>
+where
+    T: Ord + Eq + Clone,
+    U: Copy + Add + AddAssign + Zero + PartialOrd + PartialEq,
+{
     /// Builds a new segment tree.
     ///
     /// weight keys must be in ascending order and must not contain duplicates
@@ -44,8 +51,8 @@ impl <T, U> SegmentTree<T, U>
         match entries.len() {
             0 => None,
             1 => Some(Box::new(Node {
-                key:      entries[0].0.clone(),
-                weight:   entries[0].1,
+                key: entries[0].0.clone(),
+                weight: entries[0].1,
                 children: None,
             })),
             _ => {
@@ -55,13 +62,12 @@ impl <T, U> SegmentTree<T, U>
                 let left = Self::build_tree(left_slice).unwrap();
                 let right = Self::build_tree(right_slice).unwrap();
                 Some(Box::new(Node {
-                    key:      right_slice[0].0.clone(),
-                    weight:   left.weight + right.weight,
+                    key: right_slice[0].0.clone(),
+                    weight: left.weight + right.weight,
                     children: Some([left, right]),
                 }))
             }
         }
-
     }
 
     // Get searches for the node with the specified key.
@@ -85,7 +91,7 @@ impl <T, U> SegmentTree<T, U>
         }
         // Leaf node reached, check if value is correct
         if key == node.key {
-            Some(Range{
+            Some(Range {
                 weight: node.weight,
                 offset,
             })
@@ -138,7 +144,7 @@ impl <T, U> SegmentTree<T, U>
 
     pub fn range(&self) -> U {
         if let Some(ref root) = self.root {
-           root.weight
+            root.weight
         } else {
             U::zero()
         }

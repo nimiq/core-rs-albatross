@@ -1,6 +1,6 @@
 use failure::Fail;
-use std::io::Error as IoError;
 use native_tls::Error as NativeTlsError;
+use std::io::Error as IoError;
 
 #[derive(Fail, Debug)]
 pub enum Error {

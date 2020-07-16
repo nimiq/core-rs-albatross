@@ -194,7 +194,9 @@ pub trait Queue<T> {
 }
 
 impl<T> Queue<T> for UniqueLinkedList<T>
-    where T: Hash + Eq {
+where
+    T: Hash + Eq,
+{
     #[inline]
     fn is_empty(&self) -> bool {
         UniqueLinkedList::is_empty(self)

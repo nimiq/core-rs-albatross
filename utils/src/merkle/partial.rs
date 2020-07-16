@@ -2,7 +2,7 @@ use std::io::Write;
 use std::ops::Range;
 
 use beserial::{Deserialize, Serialize};
-use nimiq_hash::{Blake2bHash, Hasher, HashOutput, SerializeContent};
+use nimiq_hash::{Blake2bHash, HashOutput, Hasher, SerializeContent};
 
 use crate::math::CeilingDiv;
 
@@ -14,7 +14,10 @@ use crate::math::CeilingDiv;
 pub struct PartialMerkleProofBuilder {}
 
 impl PartialMerkleProofBuilder {
-    pub fn new<H: HashOutput>(hashes: &[H], chunk_size: usize) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
+    pub fn new<H: HashOutput>(
+        hashes: &[H],
+        chunk_size: usize,
+    ) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
         if chunk_size == 0 {
             return Err(PartialMerkleProofError::InvalidChunkSize);
         }
@@ -24,12 +27,23 @@ impl PartialMerkleProofBuilder {
         Ok(proofs)
     }
 
-    pub fn from_values<H: HashOutput, T: SerializeContent>(values: &[T], chunk_size: usize) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
-        let hashes: Vec<H> = values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+    pub fn from_values<H: HashOutput, T: SerializeContent>(
+        values: &[T],
+        chunk_size: usize,
+    ) -> Result<Vec<PartialMerkleProof<H>>, PartialMerkleProofError> {
+        let hashes: Vec<H> = values
+            .iter()
+            .map(|v| H::Builder::default().chain(v).finish())
+            .collect();
         PartialMerkleProofBuilder::new::<H>(&hashes, chunk_size)
     }
 
-    fn compute<H: HashOutput>(hashes: &[H], chunk_size: usize, current_range: Range<usize>, proofs: &mut Vec<PartialMerkleProof<H>>) -> H {
+    fn compute<H: HashOutput>(
+        hashes: &[H],
+        chunk_size: usize,
+        current_range: Range<usize>,
+        proofs: &mut Vec<PartialMerkleProof<H>>,
+    ) -> H {
         let mut hasher = H::Builder::default();
 
         match current_range.end - current_range.start {
@@ -43,8 +57,18 @@ impl PartialMerkleProofBuilder {
             }
             len => {
                 let mid = current_range.start + len.ceiling_div(2);
-                let left_hash = PartialMerkleProofBuilder::compute::<H>(&hashes, chunk_size, current_range.start..mid, proofs);
-                let right_hash = PartialMerkleProofBuilder::compute::<H>(&hashes, chunk_size, mid..current_range.end, proofs);
+                let left_hash = PartialMerkleProofBuilder::compute::<H>(
+                    &hashes,
+                    chunk_size,
+                    current_range.start..mid,
+                    proofs,
+                );
+                let right_hash = PartialMerkleProofBuilder::compute::<H>(
+                    &hashes,
+                    chunk_size,
+                    mid..current_range.end,
+                    proofs,
+                );
                 hasher.hash(&left_hash);
                 hasher.hash(&right_hash);
 
@@ -100,7 +124,10 @@ impl<H: HashOutput> PartialMerkleProofResult<H> {
     }
 }
 
-impl<H> PartialMerkleProof<H> where H: HashOutput {
+impl<H> PartialMerkleProof<H>
+where
+    H: HashOutput,
+{
     pub fn empty(total_len: usize) -> Self {
         PartialMerkleProof {
             total_len: total_len as u32,
@@ -108,21 +135,42 @@ impl<H> PartialMerkleProof<H> where H: HashOutput {
         }
     }
 
-    pub fn compute_root_from_values<T: SerializeContent>(&self, chunk_values: &[T], previous_result: Option<&PartialMerkleProofResult<H>>) -> Result<PartialMerkleProofResult<H>, PartialMerkleProofError> {
-        let hashes: Vec<H> = chunk_values.iter().map(|v| H::Builder::default().chain(v).finish()).collect();
+    pub fn compute_root_from_values<T: SerializeContent>(
+        &self,
+        chunk_values: &[T],
+        previous_result: Option<&PartialMerkleProofResult<H>>,
+    ) -> Result<PartialMerkleProofResult<H>, PartialMerkleProofError> {
+        let hashes: Vec<H> = chunk_values
+            .iter()
+            .map(|v| H::Builder::default().chain(v).finish())
+            .collect();
         self.compute_root(&hashes, previous_result)
     }
 
-    pub fn compute_root(&self, chunk_hashes: &[H], previous_result: Option<&PartialMerkleProofResult<H>>) -> Result<PartialMerkleProofResult<H>, PartialMerkleProofError> {
+    pub fn compute_root(
+        &self,
+        chunk_hashes: &[H],
+        previous_result: Option<&PartialMerkleProofResult<H>>,
+    ) -> Result<PartialMerkleProofResult<H>, PartialMerkleProofError> {
         let index_offset = previous_result.map(|r| r.next_index).unwrap_or(0);
         let last_index = chunk_hashes.len() + index_offset;
         let empty_vec = Vec::new();
-        let helper_nodes = previous_result.map(|r| &r.helper_nodes).unwrap_or(&empty_vec);
+        let helper_nodes = previous_result
+            .map(|r| &r.helper_nodes)
+            .unwrap_or(&empty_vec);
         let mut helper_index = helper_nodes.len();
         let mut proof_index = 0;
 
         let mut helper_output = Vec::new();
-        let (_, root) = self.compute(chunk_hashes, 0..self.total_len(), index_offset, helper_nodes, &mut helper_index, &mut proof_index, &mut helper_output)?;
+        let (_, root) = self.compute(
+            chunk_hashes,
+            0..self.total_len(),
+            index_offset,
+            helper_nodes,
+            &mut helper_index,
+            &mut proof_index,
+            &mut helper_output,
+        )?;
 
         // Check that we consumed everything.
         if helper_index > 0 {
@@ -139,17 +187,31 @@ impl<H> PartialMerkleProof<H> where H: HashOutput {
         })
     }
 
-    fn compute(&self, hashes: &[H],current_range: Range<usize>, index_offset: usize, helper_nodes: &[H], helper_index: &mut usize, proof_index: &mut usize, helper_output: &mut Vec<H>) -> Result<(bool, H), PartialMerkleProofError> {
+    fn compute(
+        &self,
+        hashes: &[H],
+        current_range: Range<usize>,
+        index_offset: usize,
+        helper_nodes: &[H],
+        helper_index: &mut usize,
+        proof_index: &mut usize,
+        helper_output: &mut Vec<H>,
+    ) -> Result<(bool, H), PartialMerkleProofError> {
         let mut hasher = H::Builder::default();
 
         // Catch cases that require proof/helper nodes.
         if current_range.end <= index_offset {
             *helper_index -= 1;
-            let hash = helper_nodes.get(*helper_index).ok_or(PartialMerkleProofError::InvalidPreviousProof)?;
+            let hash = helper_nodes
+                .get(*helper_index)
+                .ok_or(PartialMerkleProofError::InvalidPreviousProof)?;
             return Ok((false, hash.clone()));
         }
         if current_range.start >= index_offset + hashes.len() {
-            let hash = self.nodes.get(*proof_index).ok_or(PartialMerkleProofError::InvalidProof)?;
+            let hash = self
+                .nodes
+                .get(*proof_index)
+                .ok_or(PartialMerkleProofError::InvalidProof)?;
             *proof_index += 1;
             return Ok((true, hash.clone()));
         }
@@ -165,8 +227,24 @@ impl<H> PartialMerkleProof<H> where H: HashOutput {
             }
             len => {
                 let mid = current_range.start + len.ceiling_div(2);
-                let (proof_node_left, left_hash) = self.compute(&hashes, current_range.start..mid, index_offset, helper_nodes, helper_index, proof_index, helper_output)?;
-                let (proof_node_right, right_hash) = self.compute(&hashes, mid..current_range.end, index_offset, helper_nodes, helper_index, proof_index, helper_output)?;
+                let (proof_node_left, left_hash) = self.compute(
+                    &hashes,
+                    current_range.start..mid,
+                    index_offset,
+                    helper_nodes,
+                    helper_index,
+                    proof_index,
+                    helper_output,
+                )?;
+                let (proof_node_right, right_hash) = self.compute(
+                    &hashes,
+                    mid..current_range.end,
+                    index_offset,
+                    helper_nodes,
+                    helper_index,
+                    proof_index,
+                    helper_output,
+                )?;
                 hasher.hash(&left_hash);
                 hasher.hash(&right_hash);
 

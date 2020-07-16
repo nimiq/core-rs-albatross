@@ -1,14 +1,14 @@
 use std::collections::{HashSet, VecDeque};
 
-use hash::{Blake2bHash, Hash};
 use block::Block;
+use hash::{Blake2bHash, Hash};
 use primitives::policy;
 
 #[derive(Debug, Clone)]
 struct BlockDescriptor {
     hash: Blake2bHash,
     prev_hash: Blake2bHash,
-    transaction_hashes: Vec<Blake2bHash>
+    transaction_hashes: Vec<Blake2bHash>,
 }
 
 impl<'a> From<&'a Block> for BlockDescriptor {
@@ -19,7 +19,7 @@ impl<'a> From<&'a Block> for BlockDescriptor {
         BlockDescriptor {
             hash: block.header.hash(),
             prev_hash: block.header.prev_hash.clone(),
-            transaction_hashes: hashes
+            transaction_hashes: hashes,
         }
     }
 }
@@ -27,14 +27,14 @@ impl<'a> From<&'a Block> for BlockDescriptor {
 #[derive(Debug, Clone)]
 pub struct TransactionCache {
     transaction_hashes: HashSet<Blake2bHash>,
-    block_order: VecDeque<BlockDescriptor>
+    block_order: VecDeque<BlockDescriptor>,
 }
 
 impl Default for TransactionCache {
     fn default() -> Self {
         TransactionCache {
             transaction_hashes: HashSet::new(),
-            block_order: VecDeque::with_capacity(policy::TRANSACTION_VALIDITY_WINDOW as usize)
+            block_order: VecDeque::with_capacity(policy::TRANSACTION_VALIDITY_WINDOW as usize),
         }
     }
 }
@@ -58,7 +58,10 @@ impl TransactionCache {
     }
 
     pub fn push_block(&mut self, block: &Block) {
-        assert!(self.block_order.is_empty() || block.header.prev_hash == self.block_order.back().as_ref().unwrap().hash);
+        assert!(
+            self.block_order.is_empty()
+                || block.header.prev_hash == self.block_order.back().as_ref().unwrap().hash
+        );
 
         let descriptor = BlockDescriptor::from(block);
         for hash in &descriptor.transaction_hashes {
@@ -83,7 +86,11 @@ impl TransactionCache {
     }
 
     pub fn prepend_block(&mut self, block: &Block) {
-        assert!(self.block_order.is_empty() || block.header.hash::<Blake2bHash>() == self.block_order.front().as_ref().unwrap().prev_hash);
+        assert!(
+            self.block_order.is_empty()
+                || block.header.hash::<Blake2bHash>()
+                    == self.block_order.front().as_ref().unwrap().prev_hash
+        );
         assert!(self.missing_blocks() > 0);
 
         let descriptor = BlockDescriptor::from(block);

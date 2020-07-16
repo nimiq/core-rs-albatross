@@ -3,19 +3,17 @@ extern crate log;
 
 extern crate nimiq_lib as nimiq;
 
-
 use std::convert::TryFrom;
 use std::time::Duration;
 
-use futures::{future, Future, Stream, IntoFuture};
+use futures::{future, Future, IntoFuture, Stream};
 use tokio;
 use tokio::timer::Interval;
 
-use nimiq::prelude::*;
-use nimiq::extras::logging::{initialize_logging, log_error_cause_chain};
 use nimiq::extras::deadlock::initialize_deadlock_detection;
+use nimiq::extras::logging::{initialize_logging, log_error_cause_chain};
 use nimiq::extras::panic::initialize_panic_reporting;
-
+use nimiq::prelude::*;
 
 fn main_inner() -> Result<(), Error> {
     // Initialize deadlock detection
@@ -75,11 +73,25 @@ fn main_inner() -> Result<(), Error> {
             if let Some(metrics_config) = metrics_config {
                 use nimiq::config::config::ProtocolConfig;
                 use nimiq::extras::metrics_server::initialize_metrics_server;
-                if let ProtocolConfig::Wss{pkcs12_key_file, pkcs12_passphrase, .. } = protocol_config {
-                    let pkcs12_key_file = pkcs12_key_file.to_str()
-                        .unwrap_or_else(|| panic!("Failed to convert path to PKCS#12 key file to string: {}", pkcs12_key_file.display()));
-                    let metrics_server = initialize_metrics_server(&client, metrics_config, pkcs12_key_file, &pkcs12_passphrase)
-                        .expect("Failed to initialize metrics server");
+                if let ProtocolConfig::Wss {
+                    pkcs12_key_file,
+                    pkcs12_passphrase,
+                    ..
+                } = protocol_config
+                {
+                    let pkcs12_key_file = pkcs12_key_file.to_str().unwrap_or_else(|| {
+                        panic!(
+                            "Failed to convert path to PKCS#12 key file to string: {}",
+                            pkcs12_key_file.display()
+                        )
+                    });
+                    let metrics_server = initialize_metrics_server(
+                        &client,
+                        metrics_config,
+                        pkcs12_key_file,
+                        &pkcs12_passphrase,
+                    )
+                    .expect("Failed to initialize metrics server");
                     tokio::spawn(metrics_server.into_future());
                 } else {
                     error!("Cannot provide metrics when running without a certificate");
@@ -105,31 +117,36 @@ fn main_inner() -> Result<(), Error> {
             // TODO: RPC server and metrics server need to be instantiated here
             Ok(client)
         })
-            .and_then(move |client| {
-                // NOTE: This is the "monitor" future, which keeps the Client object alive.
+        .and_then(move |client| {
+            // NOTE: This is the "monitor" future, which keeps the Client object alive.
 
-                let mut statistics_interval = config_file.log.statistics;
-                let mut show_statistics = true;
-                if statistics_interval == 0 {
-                    statistics_interval = 10;
-                    show_statistics = false;
-                }
+            let mut statistics_interval = config_file.log.statistics;
+            let mut show_statistics = true;
+            if statistics_interval == 0 {
+                statistics_interval = 10;
+                show_statistics = false;
+            }
 
-                // Run this periodically and optionally show some info
-                Interval::new_interval(Duration::from_secs(statistics_interval))
-                    .map_err(|e| panic!("Timer failed: {}", e))
-                    .for_each(move |_| {
+            // Run this periodically and optionally show some info
+            Interval::new_interval(Duration::from_secs(statistics_interval))
+                .map_err(|e| panic!("Timer failed: {}", e))
+                .for_each(move |_| {
+                    if show_statistics {
+                        let peer_count = client.network().connections.peer_count();
+                        let head = client.blockchain().head().clone();
+                        info!(
+                            "Head: #{} - {}, Peers: {}",
+                            head.block_number(),
+                            head.hash(),
+                            peer_count
+                        );
+                    }
 
-                        if show_statistics {
-                            let peer_count = client.network().connections.peer_count();
-                            let head = client.blockchain().head().clone();
-                            info!("Head: #{} - {}, Peers: {}", head.block_number(), head.hash(), peer_count);
-                        }
-
-                        future::ok::<(), Error>(())
-                    })
-            })
-            .map_err(|e: Error| warn!("{}", e)));
+                    future::ok::<(), Error>(())
+                })
+        })
+        .map_err(|e: Error| warn!("{}", e)),
+    );
 
     Ok(())
 }

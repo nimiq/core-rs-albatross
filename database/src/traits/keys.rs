@@ -12,7 +12,10 @@ impl AsDatabaseBytes for Address {
 }
 
 impl FromDatabaseValue for Address {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         Ok(bytes.into())
     }
 }

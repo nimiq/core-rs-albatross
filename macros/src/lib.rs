@@ -3,11 +3,15 @@ macro_rules! create_typed_array {
     ($name: ident, $t: ty, $len: expr) => {
         #[repr(C)]
         #[derive(Default, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
-        pub struct $name ([$t; $len]);
+        pub struct $name([$t; $len]);
 
         impl<'a> From<&'a [$t]> for $name {
             fn from(slice: &'a [$t]) -> Self {
-                assert_eq!(slice.len(), $len, "Tried to create instance with slice of wrong length");
+                assert_eq!(
+                    slice.len(),
+                    $len,
+                    "Tried to create instance with slice of wrong length"
+                );
                 let mut a = [0 as $t; $len];
                 a.clone_from_slice(&slice[0..$len]);
                 $name(a)
@@ -15,7 +19,9 @@ macro_rules! create_typed_array {
         }
 
         impl ::beserial::Deserialize for $name {
-            fn deserialize<R: ::beserial::ReadBytesExt>(reader: &mut R) -> Result<Self, ::beserial::SerializingError> {
+            fn deserialize<R: ::beserial::ReadBytesExt>(
+                reader: &mut R,
+            ) -> Result<Self, ::beserial::SerializingError> {
                 let mut a = [0 as $t; $len];
                 reader.read_exact(&mut a[..])?;
                 Ok($name(a))
@@ -23,7 +29,10 @@ macro_rules! create_typed_array {
         }
 
         impl ::beserial::Serialize for $name {
-            fn serialize<W: ::beserial::WriteBytesExt>(&self, writer: &mut W) -> Result<usize, ::beserial::SerializingError> {
+            fn serialize<W: ::beserial::WriteBytesExt>(
+                &self,
+                writer: &mut W,
+            ) -> Result<usize, ::beserial::SerializingError> {
                 writer.write_all(&self.0)?;
                 Ok($len)
             }
@@ -54,8 +63,12 @@ macro_rules! create_typed_array {
         impl $name {
             pub const SIZE: usize = $len;
             #[inline]
-            pub fn len() -> usize { $len }
-            pub fn as_bytes(&self) -> &[$t] { &self.0 }
+            pub fn len() -> usize {
+                $len
+            }
+            pub fn as_bytes(&self) -> &[$t] {
+                &self.0
+            }
         }
     };
 }
@@ -70,7 +83,9 @@ macro_rules! add_hex_io_fns_typed_arr {
         }
 
         impl $name {
-            pub fn to_hex(&self) -> String { ::hex::encode(&self.0) }
+            pub fn to_hex(&self) -> String {
+                ::hex::encode(&self.0)
+            }
         }
 
         impl ::std::str::FromStr for $name {
@@ -102,5 +117,5 @@ macro_rules! upgrade_weak {
         } else {
             return;
         }
-    }
+    };
 }

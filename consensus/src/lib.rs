@@ -18,15 +18,15 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 
+mod accounts_chunk_cache;
 pub mod consensus;
 pub mod consensus_agent;
-pub mod inventory;
 pub mod error;
-mod accounts_chunk_cache;
+pub mod inventory;
 mod protocol;
 
 pub use self::consensus::{Consensus, ConsensusEvent};
 pub use self::error::Error;
-pub use self::protocol::nimiq::NimiqConsensusProtocol;
 pub use self::protocol::albatross::AlbatrossConsensusProtocol;
+pub use self::protocol::nimiq::NimiqConsensusProtocol;
 pub use self::protocol::ConsensusProtocol;

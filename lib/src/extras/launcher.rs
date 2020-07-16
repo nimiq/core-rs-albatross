@@ -1,4 +1,3 @@
-
 /// # ToDo
 ///
 /// A rocket-like launcher. We can use this to easily:
@@ -19,11 +18,9 @@ use url::Url;
 #[cfg(feature = "panic")]
 extern crate log_panics;
 
-
 pub fn go() -> Launcher {
     Launcher::default()
 }
-
 
 // TODO: Move into panic
 #[derive(Debug, Default)]

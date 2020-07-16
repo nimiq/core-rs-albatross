@@ -1,5 +1,5 @@
-use nimiq_mnemonic::*;
 use hex;
+use nimiq_mnemonic::*;
 
 struct TestVector {
     entropy: &'static str,
@@ -20,7 +20,9 @@ impl TestVector {
         self.entropy.len() / 2
     }
 
-    fn get_seed(&self) -> Vec<u8> { hex::decode(self.seed.unwrap()).unwrap() }
+    fn get_seed(&self) -> Vec<u8> {
+        hex::decode(self.seed.unwrap()).unwrap()
+    }
 }
 
 #[test]
@@ -149,14 +151,33 @@ fn it_correctly_computes_mnemonics() {
         }
     ];
 
-    for (i, vector) in TEST_CASES.iter().filter(|case| case.entropy_len() == 32).enumerate() { // We only support 32 byte entropy.
+    for (i, vector) in TEST_CASES
+        .iter()
+        .filter(|case| case.entropy_len() == 32)
+        .enumerate()
+    {
+        // We only support 32 byte entropy.
         let entropy = vector.get_entropy();
         let mnemonic = vector.get_mnemonic();
 
-        assert_eq!(entropy.to_mnemonic(WORDLIST_EN), mnemonic, "Invalid entropy.to_mnemonic in test case {}", i);
+        assert_eq!(
+            entropy.to_mnemonic(WORDLIST_EN),
+            mnemonic,
+            "Invalid entropy.to_mnemonic in test case {}",
+            i
+        );
         let computed_entropy = mnemonic.to_entropy(WORDLIST_EN);
-        assert!(computed_entropy.is_some(), "mnemonic.to_entropy yields None in test case {}", i);
-        assert_eq!(mnemonic.to_entropy(WORDLIST_EN).unwrap(), entropy, "Invalid mnemonic.to_entropy in test case {}", i);
+        assert!(
+            computed_entropy.is_some(),
+            "mnemonic.to_entropy yields None in test case {}",
+            i
+        );
+        assert_eq!(
+            mnemonic.to_entropy(WORDLIST_EN).unwrap(),
+            entropy,
+            "Invalid mnemonic.to_entropy in test case {}",
+            i
+        );
         if vector.seed.is_some() {
             assert_eq!(mnemonic.to_seed(Some("TREZOR")).unwrap(), vector.get_seed());
         }
@@ -173,7 +194,10 @@ fn it_correctly_computes_mnemonic_type() {
     assert_eq!(bip39.get_type(WORDLIST_EN), MnemonicType::BIP39);
     assert_eq!(legacy.get_type(WORDLIST_EN), MnemonicType::LEGACY);
     assert_eq!(both.get_type(WORDLIST_EN), MnemonicType::UNKNOWN);
-    assert_eq!(invalid_checksum.get_type(WORDLIST_EN), MnemonicType::INVALID);
+    assert_eq!(
+        invalid_checksum.get_type(WORDLIST_EN),
+        MnemonicType::INVALID
+    );
     assert_eq!(invalid_words.get_type(WORDLIST_EN), MnemonicType::INVALID);
 }
 

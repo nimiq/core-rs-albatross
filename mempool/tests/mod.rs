@@ -10,8 +10,8 @@ use nimiq_blockchain::Blockchain;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::Hash;
-use nimiq_keys::{KeyPair, SecureGenerate};
 use nimiq_keys::Address;
+use nimiq_keys::{KeyPair, SecureGenerate};
 use nimiq_mempool::{Mempool, MempoolConfig, ReturnCode};
 use nimiq_network_primitives::time::NetworkTime;
 use nimiq_primitives::coin::Coin;
@@ -23,7 +23,9 @@ const BASIC_TRANSACTION: &str = "000222666efadc937148a6d61589ce6d4aeecca97fda4c3
 #[test]
 fn push_same_tx_twice() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair_a = KeyPair::generate_default_csprng();
@@ -31,14 +33,38 @@ fn push_same_tx_twice() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
+    let body = BlockBody {
+        miner: address_a.clone(),
+        extra_data: Vec::new(),
+        transactions: Vec::new(),
+        receipts: Receipts::default(),
+    };
     let mut txn = WriteTransaction::new(&env);
-    blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
+    blockchain
+        .state()
+        .accounts()
+        .commit(
+            &mut txn,
+            &body.transactions,
+            &vec![body.get_reward_inherent(1)],
+            1,
+        )
+        .unwrap();
     txn.commit();
 
     // Generate and sign transaction from address_a
-    let mut tx = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::try_from(10).unwrap(), Coin::try_from(0).unwrap(), 1, NetworkId::Main );
-    let signature_proof = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx.serialize_content()));
+    let mut tx = Transaction::new_basic(
+        address_a.clone(),
+        address_b.clone(),
+        Coin::try_from(10).unwrap(),
+        Coin::try_from(0).unwrap(),
+        1,
+        NetworkId::Main,
+    );
+    let signature_proof = SignatureProof::from(
+        keypair_a.public.clone(),
+        keypair_a.sign(&tx.serialize_content()),
+    );
     tx.proof = signature_proof.serialize_to_vec();
 
     assert_eq!(mempool.push_transaction(tx), ReturnCode::Accepted);
@@ -47,7 +73,9 @@ fn push_same_tx_twice() {
 #[test]
 fn push_tx_with_wrong_signature() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
     let mempool = Mempool::new(blockchain, MempoolConfig::default());
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
@@ -59,7 +87,9 @@ fn push_tx_with_wrong_signature() {
 #[test]
 fn push_tx_with_insufficient_balance() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
     let mempool = Mempool::new(blockchain, MempoolConfig::default());
 
     let v: Vec<u8> = hex::decode(BASIC_TRANSACTION).unwrap();
@@ -71,7 +101,9 @@ fn push_tx_with_insufficient_balance() {
 #[test]
 fn push_and_get_valid_tx() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair_a = KeyPair::generate_default_csprng();
@@ -79,14 +111,38 @@ fn push_and_get_valid_tx() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
+    let body = BlockBody {
+        miner: address_a.clone(),
+        extra_data: Vec::new(),
+        transactions: Vec::new(),
+        receipts: Receipts::default(),
+    };
     let mut txn = WriteTransaction::new(&env);
-    blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
+    blockchain
+        .state()
+        .accounts()
+        .commit(
+            &mut txn,
+            &body.transactions,
+            &vec![body.get_reward_inherent(1)],
+            1,
+        )
+        .unwrap();
     txn.commit();
 
     // Generate and sign transaction from address_a
-    let mut tx = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::try_from(10).unwrap(), Coin::try_from(0).unwrap(), 1, NetworkId::Main );
-    let signature_proof = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx.serialize_content()));
+    let mut tx = Transaction::new_basic(
+        address_a.clone(),
+        address_b.clone(),
+        Coin::try_from(10).unwrap(),
+        Coin::try_from(0).unwrap(),
+        1,
+        NetworkId::Main,
+    );
+    let signature_proof = SignatureProof::from(
+        keypair_a.public.clone(),
+        keypair_a.sign(&tx.serialize_content()),
+    );
     tx.proof = signature_proof.serialize_to_vec();
     let tx_copy = tx.clone();
     let hash = tx.hash();
@@ -101,7 +157,9 @@ fn push_and_get_valid_tx() {
 #[test]
 fn push_and_get_two_tx_same_user() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair_a = KeyPair::generate_default_csprng();
@@ -109,22 +167,56 @@ fn push_and_get_two_tx_same_user() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
+    let body = BlockBody {
+        miner: address_a.clone(),
+        extra_data: Vec::new(),
+        transactions: Vec::new(),
+        receipts: Receipts::default(),
+    };
     let mut txn = WriteTransaction::new(&env);
-    blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
+    blockchain
+        .state()
+        .accounts()
+        .commit(
+            &mut txn,
+            &body.transactions,
+            &vec![body.get_reward_inherent(1)],
+            1,
+        )
+        .unwrap();
     txn.commit();
 
     // Generate, sign and push 1st transaction from address_a
-    let mut tx1 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::try_from(10).unwrap(), Coin::try_from(0).unwrap(), 1, NetworkId::Main );
-    let signature_proof1 = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx1.serialize_content()));
+    let mut tx1 = Transaction::new_basic(
+        address_a.clone(),
+        address_b.clone(),
+        Coin::try_from(10).unwrap(),
+        Coin::try_from(0).unwrap(),
+        1,
+        NetworkId::Main,
+    );
+    let signature_proof1 = SignatureProof::from(
+        keypair_a.public.clone(),
+        keypair_a.sign(&tx1.serialize_content()),
+    );
     tx1.proof = signature_proof1.serialize_to_vec();
     let tx1_copy = tx1.clone();
     let hash1 = tx1.hash();
     assert_eq!(mempool.push_transaction(tx1), ReturnCode::Accepted);
 
     // Generate, sign and push 2nd transaction from address_a
-    let mut tx2 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::try_from(9).unwrap(), Coin::try_from(0).unwrap(), 1, NetworkId::Main );
-    let signature_proof2 = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx2.serialize_content()));
+    let mut tx2 = Transaction::new_basic(
+        address_a.clone(),
+        address_b.clone(),
+        Coin::try_from(9).unwrap(),
+        Coin::try_from(0).unwrap(),
+        1,
+        NetworkId::Main,
+    );
+    let signature_proof2 = SignatureProof::from(
+        keypair_a.public.clone(),
+        keypair_a.sign(&tx2.serialize_content()),
+    );
     tx2.proof = signature_proof2.serialize_to_vec();
     let tx2_copy = tx2.clone();
     let hash2 = tx2.hash();
@@ -137,7 +229,9 @@ fn push_and_get_two_tx_same_user() {
 #[test]
 fn reject_free_tx_beyond_limit() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap());
+    let blockchain = Arc::new(
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+    );
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
     let keypair_a = KeyPair::generate_default_csprng();
@@ -145,14 +239,38 @@ fn reject_free_tx_beyond_limit() {
     let address_b = Address::from([2u8; Address::SIZE]);
 
     // Give address_a balance
-    let body = BlockBody { miner: address_a.clone(), extra_data: Vec::new(), transactions: Vec::new(), receipts: Receipts::default() };
+    let body = BlockBody {
+        miner: address_a.clone(),
+        extra_data: Vec::new(),
+        transactions: Vec::new(),
+        receipts: Receipts::default(),
+    };
     let mut txn = WriteTransaction::new(&env);
-    blockchain.state().accounts().commit(&mut txn, &body.transactions, &vec![body.get_reward_inherent(1)], 1).unwrap();
+    blockchain
+        .state()
+        .accounts()
+        .commit(
+            &mut txn,
+            &body.transactions,
+            &vec![body.get_reward_inherent(1)],
+            1,
+        )
+        .unwrap();
     txn.commit();
 
     for i in 0..10 + 1 {
-        let mut tx1 = Transaction::new_basic( address_a.clone(), address_b.clone(), Coin::try_from(1 + i).unwrap(), Coin::try_from(0).unwrap(), 1, NetworkId::Main );
-        let signature_proof1 = SignatureProof::from(keypair_a.public.clone(), keypair_a.sign(&tx1.serialize_content()));
+        let mut tx1 = Transaction::new_basic(
+            address_a.clone(),
+            address_b.clone(),
+            Coin::try_from(1 + i).unwrap(),
+            Coin::try_from(0).unwrap(),
+            1,
+            NetworkId::Main,
+        );
+        let signature_proof1 = SignatureProof::from(
+            keypair_a.public.clone(),
+            keypair_a.sign(&tx1.serialize_content()),
+        );
         tx1.proof = signature_proof1.serialize_to_vec();
         if i < 10 {
             assert_eq!(mempool.push_transaction(tx1), ReturnCode::Accepted);

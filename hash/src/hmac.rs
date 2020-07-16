@@ -1,8 +1,8 @@
-use super::{Sha512Hasher, Sha512Hash, Hasher, SHA512_LENGTH};
+use super::{Hasher, Sha512Hash, Sha512Hasher, SHA512_LENGTH};
 
 enum Key<'a> {
     Borrowed(&'a [u8]),
-    Owned([u8; SHA512_LENGTH])
+    Owned([u8; SHA512_LENGTH]),
 }
 
 impl<'a> Key<'a> {
@@ -10,7 +10,8 @@ impl<'a> Key<'a> {
         match self {
             Key::Borrowed(key) => key.get(index),
             Key::Owned(key) => key.get(index),
-        }.cloned()
+        }
+        .cloned()
     }
 }
 
@@ -29,6 +30,12 @@ pub fn compute_hmac_sha512(key: &[u8], data: &[u8]) -> Sha512Hash {
         outer_key.push(0x5c ^ byte);
     }
 
-    let inner_hash = Sha512Hasher::default().chain(&inner_key).chain(&data).finish();
-    Sha512Hasher::default().chain(&outer_key).chain(&inner_hash).finish()
+    let inner_hash = Sha512Hasher::default()
+        .chain(&inner_key)
+        .chain(&data)
+        .finish();
+    Sha512Hasher::default()
+        .chain(&outer_key)
+        .chain(&inner_hash)
+        .finish()
 }

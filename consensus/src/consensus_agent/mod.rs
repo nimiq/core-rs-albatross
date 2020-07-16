@@ -15,25 +15,21 @@ use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_messages::{
-    GetBlockProofMessage,
-    GetBlocksMessage,
-    GetEpochTransactionsMessage,
-    MessageType,
-    RejectMessage,
-    RejectMessageCode,
+    GetBlockProofMessage, GetBlocksMessage, GetEpochTransactionsMessage, MessageType,
+    RejectMessage, RejectMessageCode,
 };
 use network_primitives::subscription::Subscription;
 use primitives::coin::Coin;
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
-use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
+use utils::observer::{weak_listener, weak_passthru_listener, Notifier};
 use utils::rate_limit::RateLimit;
 use utils::timers::Timers;
 
 use crate::accounts_chunk_cache::AccountsChunkCache;
-use crate::consensus_agent::sync::{SyncProtocol, BlockQueue};
-use crate::ConsensusProtocol;
+use crate::consensus_agent::sync::{BlockQueue, SyncProtocol};
 use crate::inventory::{InventoryAgent, InventoryEvent, InventoryManager};
+use crate::ConsensusProtocol;
 
 pub mod requests;
 pub mod sync;
@@ -91,7 +87,6 @@ enum ConsensusAgentTimer {
     ResyncThrottle,
 }
 
-
 pub struct ConsensusAgent<P: ConsensusProtocol + 'static> {
     pub(crate) blockchain: Arc<P::Blockchain>,
     accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>,
@@ -128,11 +123,28 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     /// Maximum time to wait before triggering the initial mempool request.
     const MEMPOOL_DELAY_MAX: u64 = 20 * 1000; // in ms
 
-    pub fn new(blockchain: Arc<P::Blockchain>, mempool: Arc<Mempool<P::Blockchain>>, inv_mgr: Arc<RwLock<InventoryManager<P>>>, accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>, block_queue: Arc<RwLock<BlockQueue<P::Blockchain>>>, peer: Arc<Peer>) -> Arc<Self> {
+    pub fn new(
+        blockchain: Arc<P::Blockchain>,
+        mempool: Arc<Mempool<P::Blockchain>>,
+        inv_mgr: Arc<RwLock<InventoryManager<P>>>,
+        accounts_chunk_cache: Arc<AccountsChunkCache<P::Blockchain>>,
+        block_queue: Arc<RwLock<BlockQueue<P::Blockchain>>>,
+        peer: Arc<Peer>,
+    ) -> Arc<Self> {
         let sync_target = peer.head_hash.clone();
         let peer_arc = peer;
-        let sync_protocol = <P::SyncProtocol as SyncProtocol<P::Blockchain>>::new(blockchain.clone(), block_queue, peer_arc.clone());
-        let inv_agent = InventoryAgent::new(blockchain.clone(), mempool.clone(), inv_mgr, peer_arc.clone(), sync_protocol.clone());
+        let sync_protocol = <P::SyncProtocol as SyncProtocol<P::Blockchain>>::new(
+            blockchain.clone(),
+            block_queue,
+            peer_arc.clone(),
+        );
+        let inv_agent = InventoryAgent::new(
+            blockchain.clone(),
+            mempool.clone(),
+            inv_mgr,
+            peer_arc.clone(),
+            sync_protocol.clone(),
+        );
         let this = Arc::new(ConsensusAgent {
             blockchain,
             accounts_chunk_cache,
@@ -152,17 +164,23 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
 
                 chain_proof_limit: RateLimit::new_per_minute(Self::CHAIN_PROOF_RATE_LIMIT),
                 block_proof_limit: RateLimit::new_per_minute(Self::BLOCK_PROOF_RATE_LIMIT),
-                transaction_receipts_limit: RateLimit::new_per_minute(Self::TRANSACTION_RECEIPTS_RATE_LIMIT),
-                transactions_proof_limit: RateLimit::new_per_minute(Self::TRANSACTIONS_PROOF_RATE_LIMIT),
+                transaction_receipts_limit: RateLimit::new_per_minute(
+                    Self::TRANSACTION_RECEIPTS_RATE_LIMIT,
+                ),
+                transactions_proof_limit: RateLimit::new_per_minute(
+                    Self::TRANSACTIONS_PROOF_RATE_LIMIT,
+                ),
                 accounts_proof_limit: RateLimit::new_per_minute(Self::ACCOUNTS_PROOF_RATE_LIMIT),
-                epoch_transactions_limit: RateLimit::new_per_minute(Self::EPOCH_TRANSACTIONS_RATE_LIMIT),
+                epoch_transactions_limit: RateLimit::new_per_minute(
+                    Self::EPOCH_TRANSACTIONS_RATE_LIMIT,
+                ),
             }),
 
             notifier: RwLock::new(Notifier::new()),
             self_weak: MutableOnce::new(Weak::new()),
 
             sync_lock: Mutex::new(()),
-            timers: Timers::new()
+            timers: Timers::new(),
         });
         ConsensusAgent::init_listeners(&this);
         this
@@ -171,32 +189,57 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
     fn init_listeners(this: &Arc<Self>) {
         unsafe { this.self_weak.replace(Arc::downgrade(this)) };
 
-        this.inv_agent.notifier.write().register(weak_listener(
-            Arc::downgrade(this),
-            |this, e| this.on_inventory_event(e)));
+        this.inv_agent
+            .notifier
+            .write()
+            .register(weak_listener(Arc::downgrade(this), |this, e| {
+                this.on_inventory_event(e)
+            }));
 
         let msg_notifier = &this.peer.channel.msg_notifier;
-        msg_notifier.get_chain_proof.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, _| this.on_get_chain_proof()));
-        msg_notifier.get_block_proof.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg| this.on_get_block_proof(msg)));
-        msg_notifier.get_transaction_receipts.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg| this.on_get_transaction_receipts(msg)));
-        msg_notifier.get_transactions_proof.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg| this.on_get_transactions_proof(msg)));
-        msg_notifier.get_accounts_proof.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg| this.on_get_accounts_proof(msg)));
-        msg_notifier.get_accounts_tree_chunk.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg| this.on_get_accounts_tree_chunk(msg)));
-        msg_notifier.get_epoch_transactions.write().register(weak_passthru_listener(
-            Arc::downgrade(this),
-            |this, msg: GetEpochTransactionsMessage| this.on_get_epoch_transactions(msg)));
+        msg_notifier
+            .get_chain_proof
+            .write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, _| {
+                this.on_get_chain_proof()
+            }));
+        msg_notifier
+            .get_block_proof
+            .write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, msg| {
+                this.on_get_block_proof(msg)
+            }));
+        msg_notifier
+            .get_transaction_receipts
+            .write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, msg| {
+                this.on_get_transaction_receipts(msg)
+            }));
+        msg_notifier
+            .get_transactions_proof
+            .write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, msg| {
+                this.on_get_transactions_proof(msg)
+            }));
+        msg_notifier
+            .get_accounts_proof
+            .write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, msg| {
+                this.on_get_accounts_proof(msg)
+            }));
+        msg_notifier
+            .get_accounts_tree_chunk
+            .write()
+            .register(weak_passthru_listener(Arc::downgrade(this), |this, msg| {
+                this.on_get_accounts_tree_chunk(msg)
+            }));
+        msg_notifier
+            .get_epoch_transactions
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(this),
+                |this, msg: GetEpochTransactionsMessage| this.on_get_epoch_transactions(msg),
+            ));
     }
 
     pub fn relay_block(&self, block: &<P::Blockchain as AbstractBlockchain>::Block) -> bool {
@@ -239,7 +282,10 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         }
 
         // If we know our sync target block, the sync is finished.
-        if self.blockchain.contains(&self.state.read().sync_target, true) {
+        if self
+            .blockchain
+            .contains(&self.state.read().sync_target, true)
+        {
             self.sync_finished(sync_guard);
             return;
         }
@@ -268,13 +314,17 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
 
         // Request the peer's mempool.
         let weak = self.self_weak.clone();
-        self.timers.set_delay(ConsensusAgentTimer::Mempool, move || {
-            let agent = upgrade_weak!(weak);
-            agent.timers.clear_delay(&ConsensusAgentTimer::Mempool);
-            agent.inv_agent.mempool();
-        }, Duration::from_millis(rand::thread_rng()
-            .gen_range(Self::MEMPOOL_DELAY_MIN, Self::MEMPOOL_DELAY_MAX)));
-
+        self.timers.set_delay(
+            ConsensusAgentTimer::Mempool,
+            move || {
+                let agent = upgrade_weak!(weak);
+                agent.timers.clear_delay(&ConsensusAgentTimer::Mempool);
+                agent.inv_agent.mempool();
+            },
+            Duration::from_millis(
+                rand::thread_rng().gen_range(Self::MEMPOOL_DELAY_MIN, Self::MEMPOOL_DELAY_MAX),
+            ),
+        );
 
         self.inv_agent.bypass_mgr(false);
 
@@ -298,12 +348,15 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         {
             let state = self.state.read();
             // Check if the peer is sending us a fork.
-            let on_fork = state.fork_head.is_some() && state.num_blocks_extending == 0 && state.num_blocks_forking > 0;
+            let on_fork = state.fork_head.is_some()
+                && state.num_blocks_extending == 0
+                && state.num_blocks_forking > 0;
 
             locators = if on_fork {
                 vec![state.fork_head.as_ref().unwrap().clone()]
             } else {
-                self.sync_protocol.get_block_locators(GetBlocksMessage::LOCATORS_MAX_COUNT)
+                self.sync_protocol
+                    .get_block_locators(GetBlocksMessage::LOCATORS_MAX_COUNT)
             };
         }
 
@@ -318,7 +371,8 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         self.inv_agent.get_blocks(
             locators,
             Self::GET_BLOCKS_MAX_RESULTS,
-            Self::GET_BLOCKS_TIMEOUT);
+            Self::GET_BLOCKS_TIMEOUT,
+        );
     }
 
     fn on_get_chain_proof(&self) {
@@ -333,14 +387,21 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         let _ = self.state.read().block_proof_limit;
     }
 
-    fn on_inventory_event(&self, event: &InventoryEvent<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>) {
+    fn on_inventory_event(
+        &self,
+        event: &InventoryEvent<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>,
+    ) {
         match event {
-            InventoryEvent::NewBlockAnnounced(hash, head_candidate) => self.on_new_block_announced(hash, *head_candidate),
+            InventoryEvent::NewBlockAnnounced(hash, head_candidate) => {
+                self.on_new_block_announced(hash, *head_candidate)
+            }
             InventoryEvent::KnownBlockAnnounced(hash) => self.on_known_block_announced(hash),
             InventoryEvent::NoNewObjectsAnnounced => self.on_no_new_objects_announced(),
             InventoryEvent::AllObjectsReceived => self.on_all_objects_received(),
             InventoryEvent::BlockProcessed(hash, result) => self.on_block_processed(hash, result),
-            InventoryEvent::TransactionProcessed(hash, result) => self.on_tx_processed(hash, result),
+            InventoryEvent::TransactionProcessed(hash, result) => {
+                self.on_tx_processed(hash, result)
+            }
             InventoryEvent::GetBlocksTimeout => self.on_get_blocks_timeout(),
             _ => {}
         }
@@ -373,24 +434,31 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         }
     }
 
-    fn on_block_processed(&self, hash: &Blake2bHash, result: &Result<PushResult, PushError<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>>) {
+    fn on_block_processed(
+        &self,
+        hash: &Blake2bHash,
+        result: &Result<
+            PushResult,
+            PushError<<<P::Blockchain as AbstractBlockchain>::Block as Block>::Error>,
+        >,
+    ) {
         match result {
             Ok(PushResult::Extended) | Ok(PushResult::Rebranched) => {
                 let mut state = self.state.write();
                 if state.syncing {
                     state.num_blocks_extending += 1;
                 }
-            },
+            }
             Ok(PushResult::Forked) => {
                 let mut state = self.state.write();
                 if state.syncing {
                     state.num_blocks_forking += 1;
                     state.fork_head = Some(hash.clone());
                 }
-            },
+            }
             Ok(PushResult::Known) => {
                 trace!("Known block {} from {}", hash, self.peer.peer_address());
-            },
+            }
             Ok(PushResult::Ignored) => {
                 // Stop syncing with this peer if the block has been ignored,
                 // because it is an inferior chain.
@@ -398,13 +466,13 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
                     let sync_guard = self.sync_lock.lock();
                     self.sync_finished(sync_guard);
                 }
-            },
+            }
             Err(PushError::Orphan) => {
                 self.on_orphan_block(hash);
-            },
+            }
             Err(_) => {
                 self.peer.channel.close(CloseType::InvalidBlock);
-            },
+            }
         }
     }
 
@@ -412,29 +480,29 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
         match result {
             ReturnCode::Accepted => {
                 debug!("Accepted tx {} from {}", hash, self.peer.peer_address());
-            },
+            }
             ReturnCode::Known => {
                 debug!("Known tx {} from {}", hash, self.peer.peer_address());
-            },
+            }
             ReturnCode::FeeTooLow => {
                 self.peer.channel.send_or_close(RejectMessage::new(
                     MessageType::Tx,
                     RejectMessageCode::InsufficientFee,
                     String::from("Sender has too many free transactions)"),
-                    Some(hash.serialize_to_vec())
+                    Some(hash.serialize_to_vec()),
                 ));
-            },
+            }
             ReturnCode::Invalid => {
                 self.peer.channel.send_or_close(RejectMessage::new(
                     MessageType::Tx,
                     RejectMessageCode::Invalid,
                     String::from("Invalid transaction"),
-                    Some(hash.serialize_to_vec())
+                    Some(hash.serialize_to_vec()),
                 ));
-            },
+            }
             ReturnCode::Filtered => {
                 debug!("Filtered tx {} from {}", hash, self.peer.peer_address());
-            },
+            }
         }
     }
 
@@ -444,30 +512,49 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
 
         // Ignore orphan blocks if we're not synced yet. This shouldn't happen.
         if !self.state.read().synced {
-            debug!("Received orphan block {} from {} before/while syncing", hash, self.peer.peer_address());
+            debug!(
+                "Received orphan block {} from {} before/while syncing",
+                hash,
+                self.peer.peer_address()
+            );
             return;
         }
 
         // The peer has announced an orphaned block after the initial sync. We're probably out of sync.
-        debug!("Received orphan block {} from {}", hash, self.peer.peer_address());
+        debug!(
+            "Received orphan block {} from {}",
+            hash,
+            self.peer.peer_address()
+        );
 
         // Disable transaction announcements from the peer once.
-        if !self.timers.delay_exists(&ConsensusAgentTimer::ResyncThrottle) {
-            self.inv_agent.subscribe(Subscription::MinFee(Coin::from_u64_unchecked(Coin::MAX_SAFE_VALUE)));
+        if !self
+            .timers
+            .delay_exists(&ConsensusAgentTimer::ResyncThrottle)
+        {
+            self.inv_agent
+                .subscribe(Subscription::MinFee(Coin::from_u64_unchecked(
+                    Coin::MAX_SAFE_VALUE,
+                )));
         }
 
         // Wait a short time for:
         // - our (un-)subscribe message to be sent
         // - potentially more orphaned blocks to arrive
         let weak = self.self_weak.clone();
-        self.timers.reset_delay(ConsensusAgentTimer::ResyncThrottle, move || {
-            let this = upgrade_weak!(weak);
-            this.out_of_sync();
-        }, Self::RESYNC_THROTTLE);
+        self.timers.reset_delay(
+            ConsensusAgentTimer::ResyncThrottle,
+            move || {
+                let this = upgrade_weak!(weak);
+                this.out_of_sync();
+            },
+            Self::RESYNC_THROTTLE,
+        );
     }
 
     fn out_of_sync(&self) {
-        self.timers.clear_delay(&ConsensusAgentTimer::ResyncThrottle);
+        self.timers
+            .clear_delay(&ConsensusAgentTimer::ResyncThrottle);
 
         self.state.write().synced = false;
 

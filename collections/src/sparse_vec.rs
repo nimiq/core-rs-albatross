@@ -4,13 +4,15 @@ use std::convert::TryFrom;
 /// This is a special vector implementation that has a O(1) remove function.
 /// It never shrinks in size, but reuses available spaces as much as possible.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
-pub struct SparseVec<T, K=usize> {
+pub struct SparseVec<T, K = usize> {
     inner: Vec<Option<T>>,
     free_indices: LinkedList<K>,
 }
 
 impl<T, K> SparseVec<T, K>
-    where K: Into<usize> + TryFrom<usize> + Copy {
+where
+    K: Into<usize> + TryFrom<usize> + Copy,
+{
     pub fn new() -> Self {
         SparseVec {
             inner: Vec::new(),

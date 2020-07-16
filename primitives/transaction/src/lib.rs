@@ -16,10 +16,13 @@ use std::sync::Arc;
 use bitflags::bitflags;
 use failure::Fail;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use nimiq_hash::{Blake2bHash, Hash, SerializeContent};
-use nimiq_keys::{PublicKey, Signature};
 use nimiq_keys::Address;
+use nimiq_keys::{PublicKey, Signature};
 use nimiq_utils::merkle::{Blake2bMerklePath, Blake2bMerkleProof};
 use primitives::account::AccountType;
 use primitives::coin::Coin;
@@ -111,14 +114,21 @@ pub struct Transaction {
     pub network_id: NetworkId,
     pub flags: TransactionFlags,
     pub proof: Vec<u8>,
-    valid: bool
+    valid: bool,
 }
 
 impl Transaction {
     /// The size in bytes of the smallest possible transaction (basic single-sig).
     pub const MIN_SIZE: usize = 138;
 
-    pub fn new_basic(sender: Address, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
+    pub fn new_basic(
+        sender: Address,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Self {
         Self {
             data: Vec::new(),
             sender,
@@ -131,11 +141,21 @@ impl Transaction {
             network_id,
             flags: TransactionFlags::empty(),
             proof: Vec::new(),
-            valid: false
+            valid: false,
         }
     }
 
-    pub fn new_extended(sender: Address, sender_type: AccountType, recipient: Address, recipient_type: AccountType, value: Coin, fee: Coin, data: Vec<u8>, validity_start_height: u32, network_id: NetworkId) -> Self {
+    pub fn new_extended(
+        sender: Address,
+        sender_type: AccountType,
+        recipient: Address,
+        recipient_type: AccountType,
+        value: Coin,
+        fee: Coin,
+        data: Vec<u8>,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Self {
         Self {
             data,
             sender,
@@ -148,11 +168,21 @@ impl Transaction {
             network_id,
             flags: TransactionFlags::empty(),
             proof: Vec::new(),
-            valid: false
+            valid: false,
         }
     }
 
-    pub fn new_signalling(sender: Address, sender_type: AccountType, recipient: Address, recipient_type: AccountType, value: Coin, fee: Coin, data: Vec<u8>, validity_start_height: u32, network_id: NetworkId) -> Self {
+    pub fn new_signalling(
+        sender: Address,
+        sender_type: AccountType,
+        recipient: Address,
+        recipient_type: AccountType,
+        value: Coin,
+        fee: Coin,
+        data: Vec<u8>,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Self {
         Self {
             data,
             sender,
@@ -165,11 +195,20 @@ impl Transaction {
             network_id,
             flags: TransactionFlags::SIGNALLING,
             proof: Vec::new(),
-            valid: false
+            valid: false,
         }
     }
 
-    pub fn new_contract_creation(data: Vec<u8>, sender: Address, sender_type: AccountType, recipient_type: AccountType, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Self {
+    pub fn new_contract_creation(
+        data: Vec<u8>,
+        sender: Address,
+        sender_type: AccountType,
+        recipient_type: AccountType,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Self {
         let mut tx = Self {
             data,
             sender,
@@ -182,7 +221,7 @@ impl Transaction {
             network_id,
             flags: TransactionFlags::CONTRACT_CREATION,
             proof: Vec::new(),
-            valid: false
+            valid: false,
         };
         tx.recipient = tx.contract_creation_address();
         tx
@@ -192,11 +231,12 @@ impl Transaction {
         if self.sender_type == AccountType::Basic
             && self.recipient_type == AccountType::Basic
             && self.data.is_empty()
-            && self.flags.is_empty() {
-
+            && self.flags.is_empty()
+        {
             if let Ok(signature_proof) = SignatureProof::deserialize_from_vec(&self.proof) {
                 if self.sender == Address::from(&signature_proof.public_key)
-                    && signature_proof.merkle_path.is_empty() {
+                    && signature_proof.merkle_path.is_empty()
+                {
                     return TransactionFormat::Basic;
                 }
             }
@@ -206,7 +246,11 @@ impl Transaction {
 
     pub fn cmp_mempool_order(&self, other: &Transaction) -> Ordering {
         Ordering::Equal
-            .then_with(|| self.fee_per_byte().partial_cmp(&other.fee_per_byte()).unwrap_or(Ordering::Equal))
+            .then_with(|| {
+                self.fee_per_byte()
+                    .partial_cmp(&other.fee_per_byte())
+                    .unwrap_or(Ordering::Equal)
+            })
             .then_with(|| self.fee.cmp(&other.fee))
             .then_with(|| self.value.cmp(&other.value))
             .then_with(|| self.recipient.cmp(&other.recipient))
@@ -267,9 +311,11 @@ impl Transaction {
 
         // Check that value + fee doesn't overflow.
         match self.value.checked_add(self.fee) {
-            Some(coin) => if coin > Coin::from_u64_unchecked(policy::TOTAL_SUPPLY) {
-                return Err(TransactionError::Overflow);
-            },
+            Some(coin) => {
+                if coin > Coin::from_u64_unchecked(policy::TOTAL_SUPPLY) {
+                    return Err(TransactionError::Overflow);
+                }
+            }
             None => return Err(TransactionError::Overflow),
         }
 
@@ -291,8 +337,7 @@ impl Transaction {
     pub fn is_valid_at(&self, block_height: u32) -> bool {
         let window = if self.network_id.is_albatross() {
             policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS
-        }
-        else {
+        } else {
             policy::TRANSACTION_VALIDITY_WINDOW
         };
         block_height >= self.validity_start_height
@@ -325,7 +370,9 @@ impl Transaction {
     }
 
     pub fn total_value(&self) -> Result<Coin, TransactionError> {
-        self.value.checked_add(self.fee).ok_or(TransactionError::Overflow)
+        self.value
+            .checked_add(self.fee)
+            .ok_or(TransactionError::Overflow)
     }
 }
 
@@ -414,26 +461,28 @@ impl Deserialize for Transaction {
                     validity_start_height: Deserialize::deserialize(reader)?,
                     network_id: Deserialize::deserialize(reader)?,
                     flags: TransactionFlags::empty(),
-                    proof: SignatureProof::from(sender_public_key, Deserialize::deserialize(reader)?).serialize_to_vec(),
-                    valid: false
+                    proof: SignatureProof::from(
+                        sender_public_key,
+                        Deserialize::deserialize(reader)?,
+                    )
+                    .serialize_to_vec(),
+                    valid: false,
                 })
             }
-            TransactionFormat::Extended => {
-                Ok(Transaction {
-                    data: DeserializeWithLength::deserialize::<u16, R>(reader)?,
-                    sender: Deserialize::deserialize(reader)?,
-                    sender_type: Deserialize::deserialize(reader)?,
-                    recipient: Deserialize::deserialize(reader)?,
-                    recipient_type: Deserialize::deserialize(reader)?,
-                    value: Deserialize::deserialize(reader)?,
-                    fee: Deserialize::deserialize(reader)?,
-                    validity_start_height: Deserialize::deserialize(reader)?,
-                    network_id: Deserialize::deserialize(reader)?,
-                    flags: Deserialize::deserialize(reader)?,
-                    proof: DeserializeWithLength::deserialize::<u16, R>(reader)?,
-                    valid: false
-                })
-            }
+            TransactionFormat::Extended => Ok(Transaction {
+                data: DeserializeWithLength::deserialize::<u16, R>(reader)?,
+                sender: Deserialize::deserialize(reader)?,
+                sender_type: Deserialize::deserialize(reader)?,
+                recipient: Deserialize::deserialize(reader)?,
+                recipient_type: Deserialize::deserialize(reader)?,
+                value: Deserialize::deserialize(reader)?,
+                fee: Deserialize::deserialize(reader)?,
+                validity_start_height: Deserialize::deserialize(reader)?,
+                network_id: Deserialize::deserialize(reader)?,
+                flags: Deserialize::deserialize(reader)?,
+                proof: DeserializeWithLength::deserialize::<u16, R>(reader)?,
+                valid: false,
+            }),
         }
     }
 }

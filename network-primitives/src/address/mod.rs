@@ -10,8 +10,8 @@ pub use self::seed_list::SeedList;
 
 use hex::FromHex;
 
-use nimiq_keys::{PublicKey};
 use nimiq_hash::{Blake2bHash, Blake2bHasher, Hasher};
+use nimiq_keys::PublicKey;
 use std::net::{IpAddr, Ipv4Addr};
 
 create_typed_array!(PeerId, u8, 16);
@@ -37,7 +37,7 @@ fn is_ip_globally_reachable_legacy(ip: &IpAddr) -> bool {
         IpAddr::V6(ipv6) => {
             let octets = ipv6.octets();
             // check for local ip ::1
-            if octets[0..octets.len() - 1] == [0;15] && octets[15] == 1 {
+            if octets[0..octets.len() - 1] == [0; 15] && octets[15] == 1 {
                 return false;
             }
             // Private subnet is fc00::/7.
@@ -81,13 +81,22 @@ fn is_ip_globally_reachable_legacy_falsifys() {
         // Local IPs
         "127.0.0.1",
         // Private IPs
-        "192.168.2.1", "172.16.0.0", "172.31.0.0", "172.31.255.255", "100.64.0.0", "169.254.0.0",
-        "fd12:3456:789a:1::1", "fe80:3456:789a:1::1", "fd00:3456:789a:1::1",
+        "192.168.2.1",
+        "172.16.0.0",
+        "172.31.0.0",
+        "172.31.255.255",
+        "100.64.0.0",
+        "169.254.0.0",
+        "fd12:3456:789a:1::1",
+        "fe80:3456:789a:1::1",
+        "fd00:3456:789a:1::1",
         // Private IPv4-mapped IPv6
         "::ffff:127.0.0.1",
     ];
     for bad_ip in bad_ips {
-        assert!(!is_ip_globally_reachable_legacy(&IpAddr::from_str(bad_ip).unwrap()));
+        assert!(!is_ip_globally_reachable_legacy(
+            &IpAddr::from_str(bad_ip).unwrap()
+        ));
     }
 }
 
@@ -97,12 +106,19 @@ fn is_ip_globally_reachable_legacy_verifies() {
 
     let good_ips = vec![
         // Non-Private IPs
-        "100.168.2.1", "172.32.0.0", "172.15.255.255",
-        "fbff:3456:789a:1::1", "fe00:3456:789a:1::1", "ff02:3456:789a:1::1", "::3456:789a:1:1",
+        "100.168.2.1",
+        "172.32.0.0",
+        "172.15.255.255",
+        "fbff:3456:789a:1::1",
+        "fe00:3456:789a:1::1",
+        "ff02:3456:789a:1::1",
+        "::3456:789a:1:1",
         // IPv4-mapped IPv6
         "::ffff:100.168.2.1",
     ];
     for good_ip in good_ips {
-        assert!(is_ip_globally_reachable_legacy(&IpAddr::from_str(good_ip).unwrap()));
+        assert!(is_ip_globally_reachable_legacy(
+            &IpAddr::from_str(good_ip).unwrap()
+        ));
     }
 }

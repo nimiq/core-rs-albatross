@@ -6,7 +6,6 @@ use hex::FromHexError;
 #[fail(display = "{}", _0)]
 pub struct KeysError(pub(crate) SignatureError);
 
-
 #[derive(Debug, Fail)]
 pub enum ParseError {
     #[fail(display = "{}", _0)]

@@ -18,14 +18,14 @@ use parking_lot::MutexGuard;
 
 use account::{Account, AccountError};
 use block_base::{Block, BlockError};
-use database::{ReadTransaction, Transaction};
 use database::Environment;
+use database::{ReadTransaction, Transaction};
 use hash::Blake2bHash;
 use keys::Address;
 use nimiq_network_primitives::time::NetworkTime;
 use primitives::networks::NetworkId;
-use transaction::{TransactionReceipt, TransactionsProof};
 use transaction::Transaction as BlockchainTransaction;
+use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle};
@@ -40,16 +40,17 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
     //type VerifyResult;
 
     // XXX This signature is most likely too restrictive to accommodate all blockchain types.
-    fn new(env: Environment, network_id: NetworkId, network_time: Arc<NetworkTime>) -> Result<Self, BlockchainError>;
-
+    fn new(
+        env: Environment,
+        network_id: NetworkId,
+        network_time: Arc<NetworkTime>,
+    ) -> Result<Self, BlockchainError>;
 
     #[cfg(feature = "metrics")]
     fn metrics(&self) -> &chain_metrics::BlockchainMetrics;
 
-
     /// Returns the network ID
     fn network_id(&self) -> NetworkId;
-
 
     /// Returns the current head block
     fn head_block(&self) -> MappedRwLockReadGuard<Self::Block>;
@@ -59,7 +60,6 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
 
     /// Returns the height of the current head
     fn head_height(&self) -> u32;
-
 
     /// Get block by hash
     fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Self::Block>;
@@ -72,31 +72,52 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
 
     /// Get `count` blocks starting from `start_block_hash` into `direction` and optionally include
     /// block bodies.
-    fn get_blocks(&self, start_block_hash: &Blake2bHash, count: u32, include_body: bool, direction: Direction) -> Vec<Self::Block>;
-
+    fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+    ) -> Vec<Self::Block>;
 
     /// Verify a block
     //fn verify(&self, block: &Self::Block) -> Self::VerifyResult;
 
     /// Push a block to the block chain
-    fn push(&self, block: Self::Block) -> Result<PushResult, PushError<<Self::Block as Block>::Error>>;
-
+    fn push(
+        &self,
+        block: Self::Block,
+    ) -> Result<PushResult, PushError<<Self::Block as Block>::Error>>;
 
     /// Check if a block with the given hash is included in the blockchain
     /// `include_forks` will also check for micro-block forks in the current epoch
     fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool;
 
+    fn get_accounts_proof(
+        &self,
+        block_hash: &Blake2bHash,
+        addresses: &[Address],
+    ) -> Option<AccountsProof<Account>>;
 
-    fn get_accounts_proof(&self, block_hash: &Blake2bHash, addresses: &[Address]) -> Option<AccountsProof<Account>>;
+    fn get_transactions_proof(
+        &self,
+        block_hash: &Blake2bHash,
+        addresses: &HashSet<Address>,
+    ) -> Option<TransactionsProof>;
 
-    fn get_transactions_proof(&self, block_hash: &Blake2bHash, addresses: &HashSet<Address>) -> Option<TransactionsProof>;
-
-    fn get_transaction_receipts_by_address(&self, address: &Address, sender_limit: usize, recipient_limit: usize) -> Vec<TransactionReceipt>;
-
+    fn get_transaction_receipts_by_address(
+        &self,
+        address: &Address,
+        sender_limit: usize,
+        recipient_limit: usize,
+    ) -> Vec<TransactionReceipt>;
 
     /* Required by Mempool */
 
-    fn register_listener<T: Listener<BlockchainEvent<Self::Block>> + 'static>(&self, listener: T) -> ListenerHandle;
+    fn register_listener<T: Listener<BlockchainEvent<Self::Block>> + 'static>(
+        &self,
+        listener: T,
+    ) -> ListenerHandle;
 
     fn lock(&self) -> MutexGuard<()>;
 
@@ -104,15 +125,23 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
 
     fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool;
 
-
     /* Required by AccountsChunkCache */
     // TODO Why do we need this? Remove if possible.
     fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash>;
 
-    fn get_accounts_chunk(&self, prefix: &str, size: usize, txn_option: Option<&Transaction>) -> Option<AccountsTreeChunk<Account>>;
+    fn get_accounts_chunk(
+        &self,
+        prefix: &str,
+        size: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Option<AccountsTreeChunk<Account>>;
 
     // TODO: Currently, we can implement request responses in the ConsensusAgent only for *both* protocols, which is why AbstractBlockchain needs to support this.
-    fn get_epoch_transactions(&self, epoch: u32, txn_option: Option<&Transaction>) -> Option<Vec<BlockchainTransaction>>;
+    fn get_epoch_transactions(
+        &self,
+        epoch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>>;
 
     fn validator_registry_address(&self) -> Option<&Address>;
 }

@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use nimiq_hash::{Hash, Blake2bHash};
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_mempool::filter::{MempoolFilter, Rules};
 use nimiq_primitives::coin::Coin;

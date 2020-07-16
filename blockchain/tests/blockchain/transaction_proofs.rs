@@ -17,7 +17,8 @@ fn it_can_compute_trivial_transactions_proof() {
     let keypair: KeyPair = PrivateKey::from([1u8; PrivateKey::SIZE]).into();
 
     let env = VolatileEnvironment::new(10).unwrap();
-    let blockchain = Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+    let blockchain =
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
 
     let miner = Address::from(&keypair.public);
     let block2 = crate::next_block(&blockchain)
@@ -35,9 +36,13 @@ fn it_can_compute_trivial_transactions_proof() {
         Coin::try_from(10).unwrap(),
         Coin::try_from(0).unwrap(),
         1,
-        NetworkId::Main
+        NetworkId::Main,
     );
-    tx.proof = SignatureProof::from(keypair.public.clone(), keypair.sign(&tx.serialize_content())).serialize_to_vec();
+    tx.proof = SignatureProof::from(
+        keypair.public.clone(),
+        keypair.sign(&tx.serialize_content()),
+    )
+    .serialize_to_vec();
 
     let block3 = crate::next_block(&blockchain)
         .with_miner(miner.clone())
@@ -52,12 +57,13 @@ fn it_can_compute_trivial_transactions_proof() {
     // Generate transactions proof.
     let mut addresses = HashSet::new();
     addresses.insert(miner.clone());
-    let transactions_proof = blockchain.get_transactions_proof(
-        &block_hash,
-        &addresses,
-    ).unwrap();
+    let transactions_proof = blockchain
+        .get_transactions_proof(&block_hash, &addresses)
+        .unwrap();
 
-    let root_hash = transactions_proof.proof
-        .compute_root_from_values(&transactions_proof.transactions[..]).unwrap();
+    let root_hash = transactions_proof
+        .proof
+        .compute_root_from_values(&transactions_proof.transactions[..])
+        .unwrap();
     assert_eq!(root_hash, body_hash);
 }

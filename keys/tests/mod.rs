@@ -21,7 +21,12 @@ fn falsify_wrong_signature() {
 
 #[test]
 fn verify_rfc8032_test_vectors() {
-    struct TestVector<'a, 'b, 'c, 'd> { private: &'a str, public: &'b str, sig: &'c str, msg: &'d str }
+    struct TestVector<'a, 'b, 'c, 'd> {
+        private: &'a str,
+        public: &'b str,
+        sig: &'c str,
+        msg: &'d str,
+    }
     const TEST_CASES: [TestVector; 5] = [
         TestVector {
             private: "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
@@ -56,15 +61,15 @@ fn verify_rfc8032_test_vectors() {
     ];
 
     for test_case in &TEST_CASES {
-        let mut private_key_bytes : [u8; PrivateKey::SIZE] = [0; PrivateKey::SIZE];
+        let mut private_key_bytes: [u8; PrivateKey::SIZE] = [0; PrivateKey::SIZE];
         private_key_bytes.clone_from_slice(&::hex::decode(test_case.private).unwrap()[0..]);
         let private_key = PrivateKey::from(&private_key_bytes);
 
-        let mut public_key_bytes : [u8; PublicKey::SIZE] = [0; PublicKey::SIZE];
+        let mut public_key_bytes: [u8; PublicKey::SIZE] = [0; PublicKey::SIZE];
         public_key_bytes.clone_from_slice(&::hex::decode(test_case.public).unwrap()[0..]);
         let public_key = PublicKey::from(&public_key_bytes);
 
-        let mut sig_key_bytes : [u8; Signature::SIZE] = [0; Signature::SIZE];
+        let mut sig_key_bytes: [u8; Signature::SIZE] = [0; Signature::SIZE];
         sig_key_bytes.clone_from_slice(&::hex::decode(test_case.sig).unwrap()[0..]);
         let signature = Signature::from(&sig_key_bytes);
 
@@ -74,7 +79,10 @@ fn verify_rfc8032_test_vectors() {
 
         assert!(derived_public_key == public_key);
 
-        let key_pair = KeyPair { private: private_key, public: public_key };
+        let key_pair = KeyPair {
+            private: private_key,
+            public: public_key,
+        };
 
         let computed_signature = key_pair.sign(data);
 
@@ -86,18 +94,35 @@ fn verify_rfc8032_test_vectors() {
 #[test]
 fn it_computes_friendly_addresses() {
     let mut addr = Address::from([0u8; Address::SIZE]);
-    assert_eq!(addr.to_user_friendly_address(), "NQ07 0000 0000 0000 0000 0000 0000 0000 0000");
+    assert_eq!(
+        addr.to_user_friendly_address(),
+        "NQ07 0000 0000 0000 0000 0000 0000 0000 0000"
+    );
 
-    let mut addr_bytes : [u8; Address::SIZE] = [0; Address::SIZE];
-    addr_bytes.clone_from_slice(&::hex::decode("e9910f2452419823dc2e5534633210074ae9527f").unwrap()[0..]);
+    let mut addr_bytes: [u8; Address::SIZE] = [0; Address::SIZE];
+    addr_bytes
+        .clone_from_slice(&::hex::decode("e9910f2452419823dc2e5534633210074ae9527f").unwrap()[0..]);
     addr = Address::from(addr_bytes);
-    assert_eq!(addr.to_user_friendly_address(), "NQ97 V68G X92J 86C2 7P1E ALS6 6CGG 0V5E JLKY");
+    assert_eq!(
+        addr.to_user_friendly_address(),
+        "NQ97 V68G X92J 86C2 7P1E ALS6 6CGG 0V5E JLKY"
+    );
 
-    addr_bytes.clone_from_slice(&::hex::decode("2987c28c1ff373ba1e18a9a2efe6dc101ee25ed9").unwrap()[0..]);
+    addr_bytes
+        .clone_from_slice(&::hex::decode("2987c28c1ff373ba1e18a9a2efe6dc101ee25ed9").unwrap()[0..]);
     addr = Address::from(addr_bytes);
-    assert_eq!(addr.to_user_friendly_address(), "NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR");
+    assert_eq!(
+        addr.to_user_friendly_address(),
+        "NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR"
+    );
 
-    let addr2 = Address::from_user_friendly_address(&"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string()).unwrap();
+    let addr2 = Address::from_user_friendly_address(
+        &"NQ05 563U 530Y XDRT L7GQ M6HE YRNU 20FE 4PNR".to_string(),
+    )
+    .unwrap();
     assert_eq!(addr.as_bytes(), addr2.as_bytes());
-    assert_eq!(addr.to_user_friendly_address(), addr2.to_user_friendly_address());
+    assert_eq!(
+        addr.to_user_friendly_address(),
+        addr2.to_user_friendly_address()
+    );
 }

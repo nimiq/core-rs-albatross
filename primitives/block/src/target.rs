@@ -3,7 +3,10 @@ use std::ops::{Add, AddAssign, Div, Sub, SubAssign};
 
 use num_bigint::BigUint;
 
-use beserial::{Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength, SerializingError, WriteBytesExt};
+use beserial::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 use fixed_unsigned::types::FixedUnsigned10;
 use hash::Argon2dHash;
 use macros::create_typed_array;
@@ -15,7 +18,13 @@ pub struct TargetCompact(u32);
 
 impl fmt::Debug for TargetCompact {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TargetCompact{{{:04x}: shift={}, value={:06x}}}", self.0, self.0 >> 24, self.0 & 0x00FF_FFFF)
+        write!(
+            f,
+            "TargetCompact{{{:04x}: shift={}, value={:06x}}}",
+            self.0,
+            self.0 >> 24,
+            self.0 & 0x00FF_FFFF
+        )
     }
 }
 
@@ -28,12 +37,16 @@ pub struct Difficulty(FixedUnsigned10);
 
 /// Convert `TargetCompact` to `u32`
 impl From<TargetCompact> for u32 {
-    fn from(t: TargetCompact) -> Self { t.0 }
+    fn from(t: TargetCompact) -> Self {
+        t.0
+    }
 }
 
 /// Convert `u32` to `TargetCompact`
 impl From<u32> for TargetCompact {
-    fn from(u: u32) -> Self { TargetCompact(u) }
+    fn from(u: u32) -> Self {
+        TargetCompact(u)
+    }
 }
 
 /// Convert `TargetCompact` to `Target`
@@ -76,10 +89,12 @@ impl<'a> From<&'a Target> for TargetCompact {
 
         let shift_bytes = 32 - first_byte;
         let start_byte = first_byte.min(29);
-        TargetCompact(((shift_bytes as u32) << 24)
-            | (u32::from(target.0[start_byte]) << 16)
-            | (u32::from(target.0[start_byte + 1]) << 8)
-            | u32::from(target.0[start_byte + 2]))
+        TargetCompact(
+            ((shift_bytes as u32) << 24)
+                | (u32::from(target.0[start_byte]) << 16)
+                | (u32::from(target.0[start_byte + 1]) << 8)
+                | u32::from(target.0[start_byte + 2]),
+        )
     }
 }
 
@@ -96,7 +111,10 @@ impl From<BigUint> for Target {
         // Convert `BigUint` to big-endian byte represetation, this must have length <= 32
         let bytes = num.to_bytes_be();
         let byte_len = bytes.len();
-        assert!(byte_len <= 32, "Cannot convert BigDecimal to Target - out of bounds");
+        assert!(
+            byte_len <= 32,
+            "Cannot convert BigDecimal to Target - out of bounds"
+        );
 
         // Fill up front of array (most-siginificant bytes) with zeros
         let mut target_data = [0u8; 32];
@@ -182,7 +200,9 @@ impl From<FixedUnsigned10> for Difficulty {
 }
 
 impl From<Difficulty> for FixedUnsigned10 {
-    fn from(difficulty: Difficulty) -> Self { difficulty.0 }
+    fn from(difficulty: Difficulty) -> Self {
+        difficulty.0
+    }
 }
 
 /// XXX Only for debugging - or is it?

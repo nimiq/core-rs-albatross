@@ -19,13 +19,19 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn new(channel: Arc<PeerChannel>, version: u32, head_hash: Blake2bHash, time_offset: i64, user_agent: Option<String>) -> Self {
+    pub fn new(
+        channel: Arc<PeerChannel>,
+        version: u32,
+        head_hash: Blake2bHash,
+        time_offset: i64,
+        user_agent: Option<String>,
+    ) -> Self {
         Peer {
             channel,
             version,
             head_hash,
             time_offset,
-            user_agent
+            user_agent,
         }
     }
 

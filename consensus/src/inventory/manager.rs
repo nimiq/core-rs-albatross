@@ -9,48 +9,45 @@ use weak_table::PtrWeakHashSet;
 use beserial::Serialize;
 use block_base::{Block, BlockError, BlockHeader};
 use blockchain_base::{AbstractBlockchain, Direction, PushError, PushResult};
-use collections::{LimitHashSet, UniqueLinkedList};
 use collections::queue::Queue;
+use collections::{LimitHashSet, UniqueLinkedList};
 use hash::{Blake2bHash, Hash};
 use macros::upgrade_weak;
 use mempool::{Mempool, ReturnCode};
 use network::connection::close_type::CloseType;
 use network::Peer;
 use network_messages::{
-    EpochTransactionsMessage,
-    GetBlocksDirection,
-    GetBlocksMessage,
-    InvVector,
-    InvVectorType,
-    Message,
-    MessageAdapter,
-    TxMessage,
+    EpochTransactionsMessage, GetBlocksDirection, GetBlocksMessage, InvVector, InvVectorType,
+    Message, MessageAdapter, TxMessage,
 };
 use network_primitives::networks::NetworkInfo;
 use network_primitives::subscription::Subscription;
 use transaction::Transaction;
+use utils::rate_limit::RateLimit;
+use utils::throttled_queue::ThrottledQueue;
 use utils::{
     self,
     mutable_once::MutableOnce,
-    observer::{Notifier, weak_listener, weak_passthru_listener},
+    observer::{weak_listener, weak_passthru_listener, Notifier},
     timers::Timers,
 };
-use utils::rate_limit::RateLimit;
-use utils::throttled_queue::ThrottledQueue;
 
 use crate::consensus_agent::sync::{SyncEvent, SyncProtocol};
-use crate::ConsensusProtocol;
 use crate::inventory::InventoryAgent;
-
+use crate::ConsensusProtocol;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum InventoryManagerTimer {
-    Request(InvVector)
+    Request(InvVector),
 }
 
-
-
-type VectorsToRequest<P> = HashMap<InvVector, (Weak<InventoryAgent<P>>, PtrWeakHashSet<Weak<InventoryAgent<P>>>)>;
+type VectorsToRequest<P> = HashMap<
+    InvVector,
+    (
+        Weak<InventoryAgent<P>>,
+        PtrWeakHashSet<Weak<InventoryAgent<P>>>,
+    ),
+>;
 
 pub struct InventoryManager<P: ConsensusProtocol + 'static> {
     vectors_to_request: VectorsToRequest<P>,
@@ -85,7 +82,8 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
                 }
             }
 
-            self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
+            self.timers
+                .clear_delay(&InventoryManagerTimer::Request(vector.clone()));
             record.0 = agent.self_weak.clone();
             self.request_vector(agent, vector);
         } else {
@@ -101,19 +99,29 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
         let weak = self.self_weak.clone();
         let agent1 = agent.self_weak.clone();
         let vector1 = vector.clone();
-        self.timers.set_delay(InventoryManagerTimer::Request(vector.clone()), move || {
-            let this = upgrade_weak!(weak);
-            this.write().note_vector_not_received(&agent1, &vector1);
-        }, Self::REQUEST_TIMEOUT);
+        self.timers.set_delay(
+            InventoryManagerTimer::Request(vector.clone()),
+            move || {
+                let this = upgrade_weak!(weak);
+                this.write().note_vector_not_received(&agent1, &vector1);
+            },
+            Self::REQUEST_TIMEOUT,
+        );
     }
 
     pub(crate) fn note_vector_received(&mut self, vector: &InvVector) {
-        self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
+        self.timers
+            .clear_delay(&InventoryManagerTimer::Request(vector.clone()));
         self.vectors_to_request.remove(vector);
     }
 
-    pub(crate) fn note_vector_not_received(&mut self, agent_weak: &Weak<InventoryAgent<P>>, vector: &InvVector) {
-        self.timers.clear_delay(&InventoryManagerTimer::Request(vector.clone()));
+    pub(crate) fn note_vector_not_received(
+        &mut self,
+        agent_weak: &Weak<InventoryAgent<P>>,
+        vector: &InvVector,
+    ) {
+        self.timers
+            .clear_delay(&InventoryManagerTimer::Request(vector.clone()));
 
         let record_opt = self.vectors_to_request.get_mut(vector);
         let caller_opt = agent_weak.upgrade();
@@ -143,9 +151,14 @@ impl<P: ConsensusProtocol + 'static> InventoryManager<P> {
         record.1.remove(&next_agent);
         record.0 = Arc::downgrade(&next_agent);
 
-        debug!("Active agent {:?} didn't find {:?} {}, trying {:p} ({} agents left)",
-               current_opt.map_or_else(|| "null".to_string(), |c| format!("{:p}", c)),
-               vector.ty, vector.hash, next_agent, record.1.len());
+        debug!(
+            "Active agent {:?} didn't find {:?} {}, trying {:p} ({} agents left)",
+            current_opt.map_or_else(|| "null".to_string(), |c| format!("{:p}", c)),
+            vector.ty,
+            vector.hash,
+            next_agent,
+            record.1.len()
+        );
 
         self.request_vector(&next_agent, vector);
     }

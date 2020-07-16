@@ -30,8 +30,22 @@ impl WalletAccount {
         WalletAccount::from(KeyPair::generate_default_csprng())
     }
 
-    pub fn create_transaction(&self, recipient: Address, value: Coin, fee: Coin, validity_start_height: u32, network_id: NetworkId) -> Transaction {
-        let mut transaction = Transaction::new_basic(self.address.clone(), recipient, value, fee, validity_start_height, network_id);
+    pub fn create_transaction(
+        &self,
+        recipient: Address,
+        value: Coin,
+        fee: Coin,
+        validity_start_height: u32,
+        network_id: NetworkId,
+    ) -> Transaction {
+        let mut transaction = Transaction::new_basic(
+            self.address.clone(),
+            recipient,
+            value,
+            fee,
+            validity_start_height,
+            network_id,
+        );
         self.sign_transaction(&mut transaction);
         transaction
     }
@@ -42,7 +56,9 @@ impl WalletAccount {
     }
 
     pub fn create_signature_proof(&self, transaction: &Transaction) -> SignatureProof {
-        let signature = self.key_pair.sign(transaction.serialize_content().as_slice());
+        let signature = self
+            .key_pair
+            .sign(transaction.serialize_content().as_slice());
         SignatureProof::from(self.key_pair.public, signature)
     }
 
@@ -85,10 +101,7 @@ impl Deserialize for WalletAccount {
 impl From<KeyPair> for WalletAccount {
     fn from(key_pair: KeyPair) -> Self {
         let address = Address::from(&key_pair);
-        Self {
-            key_pair,
-            address,
-        }
+        Self { key_pair, address }
     }
 }
 
@@ -103,7 +116,10 @@ impl IntoDatabaseValue for WalletAccount {
 }
 
 impl FromDatabaseValue for WalletAccount {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
     }

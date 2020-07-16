@@ -1,7 +1,9 @@
 use bitvec::prelude::{AsBits, BitSlice, BitVec, Msb0};
 
-use crate::{SerializeWithLength, DeserializeWithLength, Serialize, Deserialize, WriteBytesExt, ReadBytesExt, SerializingError};
-
+use crate::{
+    Deserialize, DeserializeWithLength, ReadBytesExt, Serialize, SerializeWithLength,
+    SerializingError, WriteBytesExt,
+};
 
 #[inline]
 // NOTE: We can't use `nimiq_utils::math::CeilingDiv`, because it'll create a cyclic dependency.
@@ -9,9 +11,11 @@ fn bits_to_bytes(lhs: usize) -> usize {
     (lhs + 8 - 1) / 8
 }
 
-
 impl SerializeWithLength for BitSlice<Msb0, u8> {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
         let mut size = 0;
 
         // Serialize the number of bits
@@ -59,7 +63,10 @@ impl SerializeWithLength for BitSlice<Msb0, u8> {
 }
 
 impl SerializeWithLength for BitVec<Msb0, u8> {
-    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
         self.as_bitslice().serialize::<S, W>(writer)
     }
 
@@ -69,10 +76,14 @@ impl SerializeWithLength for BitVec<Msb0, u8> {
 }
 
 impl DeserializeWithLength for BitVec<Msb0, u8> {
-    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(reader: &mut R, limit: Option<usize>) -> Result<Self, SerializingError> {
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
         // Deserialize the number if bits in the BitVec
         let n_bits = D::deserialize(reader)?
-            .to_usize().ok_or(SerializingError::Overflow)?;
+            .to_usize()
+            .ok_or(SerializingError::Overflow)?;
         let n_bytes = bits_to_bytes(n_bits);
 
         // If number of bits is too large, abort.
@@ -99,7 +110,8 @@ mod tests {
     fn reserialize(bits: &BitSlice<Msb0, u8>, raw: &[u8]) {
         let serialized = bits.serialize_to_vec::<u8>();
         assert_eq!(&serialized[..], raw);
-        let deserialized_bits = BitVec::<Msb0, u8>::deserialize_from_vec::<u8>(&serialized).unwrap();
+        let deserialized_bits =
+            BitVec::<Msb0, u8>::deserialize_from_vec::<u8>(&serialized).unwrap();
         assert_eq!(deserialized_bits, bits);
     }
 

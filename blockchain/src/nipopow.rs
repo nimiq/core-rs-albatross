@@ -1,13 +1,13 @@
 use std::time::Instant;
 
-use database::{Transaction, ReadTransaction};
+use block::proof::ChainProof;
+use block::{Block, BlockHeader, Target};
+use database::{ReadTransaction, Transaction};
 use hash::Blake2bHash;
 use network_primitives::networks::NetworkInfo;
-use block::{Block, BlockHeader, Target};
-use block::proof::ChainProof;
 use utils::iterators::Merge;
 
-use crate::{Blockchain, chain_info::ChainInfo};
+use crate::{chain_info::ChainInfo, Blockchain};
 
 impl Blockchain {
     const NIPOPOW_M: u32 = 240;
@@ -18,8 +18,18 @@ impl Blockchain {
         let mut state = self.state.write();
         if state.chain_proof.is_none() {
             let start = Instant::now();
-            let chain_proof = self.prove(&state.main_chain.head, Self::NIPOPOW_M, Self::NIPOPOW_K, Self::NIPOPOW_DELTA);
-            trace!("Chain proof took {}ms to compute (prefix={}, suffix={})", (Instant::now() - start).as_millis(), chain_proof.prefix.len(), chain_proof.suffix.len());
+            let chain_proof = self.prove(
+                &state.main_chain.head,
+                Self::NIPOPOW_M,
+                Self::NIPOPOW_K,
+                Self::NIPOPOW_DELTA,
+            );
+            trace!(
+                "Chain proof took {}ms to compute (prefix={}, suffix={})",
+                (Instant::now() - start).as_millis(),
+                chain_proof.prefix.len(),
+                chain_proof.suffix.len()
+            );
             state.chain_proof = Some(chain_proof);
         }
         // XXX Get rid of the clone here? ChainProof is typically >1mb.
@@ -31,32 +41,60 @@ impl Blockchain {
         let mut start_height = 1u32;
 
         let txn = ReadTransaction::new(&self.env);
-        let head_info = self.chain_store
-            .get_chain_info_at(u32::max(head.header.height.saturating_sub(k), 1), false, Some(&txn))
+        let head_info = self
+            .chain_store
+            .get_chain_info_at(
+                u32::max(head.header.height.saturating_sub(k), 1),
+                false,
+                Some(&txn),
+            )
             .expect("Failed to compute chain proof - prefix head block not found");
         let max_depth = head_info.super_block_counts.get_candidate_depth(m);
 
         for depth in (0..=max_depth).rev() {
             let super_chain = self.get_super_chain(depth, &head_info, start_height, Some(&txn));
             if super_chain.is_good(depth, m, delta) {
-                assert!(super_chain.0.len() >= m as usize, "Good superchain too short");
-                trace!("Found good superchain at depth {} with length {} (#{} - #{})", depth, super_chain.0.len(), start_height, head_info.head.header.height);
-                start_height = super_chain.0[super_chain.0.len() - m as usize].head.header.height;
+                assert!(
+                    super_chain.0.len() >= m as usize,
+                    "Good superchain too short"
+                );
+                trace!(
+                    "Found good superchain at depth {} with length {} (#{} - #{})",
+                    depth,
+                    super_chain.0.len(),
+                    start_height,
+                    head_info.head.header.height
+                );
+                start_height = super_chain.0[super_chain.0.len() - m as usize]
+                    .head
+                    .header
+                    .height;
             }
 
             let merged = Merge::new(
                 prefix.into_iter(),
                 super_chain.0.into_iter().map(|chain_info| chain_info.head),
-                |l, r| u32::cmp(&l.header.height, &r.header.height));
+                |l, r| u32::cmp(&l.header.height, &r.header.height),
+            );
             prefix = merged.collect();
         }
 
-        let suffix = self.get_header_chain(head.header.height - head_info.head.header.height, &head, Some(&txn));
+        let suffix = self.get_header_chain(
+            head.header.height - head_info.head.header.height,
+            &head,
+            Some(&txn),
+        );
 
         ChainProof { prefix, suffix }
     }
 
-    fn get_super_chain(&self, depth: u8, head_info: &ChainInfo, tail_height: u32, txn_option: Option<&Transaction>) -> SuperChain {
+    fn get_super_chain(
+        &self,
+        depth: u8,
+        head_info: &ChainInfo,
+        tail_height: u32,
+        txn_option: Option<&Transaction>,
+    ) -> SuperChain {
         assert!(tail_height >= 1, "Tail height must be >= 1");
         let mut chain = vec![];
 
@@ -68,7 +106,10 @@ impl Blockchain {
 
         let mut block;
         let mut head = &head_info.head;
-        let mut j = i16::max(i16::from(depth) - i16::from(Target::from(head.header.n_bits).get_depth()), -1);
+        let mut j = i16::max(
+            i16::from(depth) - i16::from(Target::from(head.header.n_bits).get_depth()),
+            -1,
+        );
         while j < head.interlink.hashes.len() as i16 && head.header.height > tail_height {
             let reference = if j < 0 {
                 &head.header.prev_hash
@@ -76,18 +117,24 @@ impl Blockchain {
                 &head.interlink.hashes[j as usize]
             };
 
-            let chain_info = self.chain_store
+            let chain_info = self
+                .chain_store
                 .get_chain_info(reference, false, txn_option)
                 .expect("Failed to construct superchain - missing block");
             block = chain_info.head.clone();
             chain.push(chain_info);
 
             head = &block;
-            j = i16::max(i16::from(depth) - i16::from(Target::from(head.header.n_bits).get_depth()), -1);
+            j = i16::max(
+                i16::from(depth) - i16::from(Target::from(head.header.n_bits).get_depth()),
+                -1,
+            );
         }
 
         if (chain.is_empty() || chain[chain.len() - 1].head.header.height > 1) && tail_height == 1 {
-            let genesis_block = NetworkInfo::from_network_id(self.network_id).genesis_block::<Block>().clone();
+            let genesis_block = NetworkInfo::from_network_id(self.network_id)
+                .genesis_block::<Block>()
+                .clone();
             chain.push(ChainInfo::initial(genesis_block.into_light()));
         }
 
@@ -95,7 +142,12 @@ impl Blockchain {
         SuperChain(chain)
     }
 
-    fn get_header_chain(&self, length: u32, head: &Block, txn_option: Option<&Transaction>) -> Vec<BlockHeader> {
+    fn get_header_chain(
+        &self,
+        length: u32,
+        head: &Block,
+        txn_option: Option<&Transaction>,
+    ) -> Vec<BlockHeader> {
         let mut headers = vec![];
 
         if length > 0 {
@@ -105,7 +157,8 @@ impl Blockchain {
         let mut prev_hash = head.header.prev_hash.clone();
         let mut height = head.header.height;
         while headers.len() < length as usize && height > 1 {
-            let block = self.chain_store
+            let block = self
+                .chain_store
                 .get_block(&prev_hash, false, txn_option)
                 .expect("Failed to construct header chain - missing block");
 
@@ -119,24 +172,33 @@ impl Blockchain {
         headers
     }
 
-    pub fn get_block_proof(&self, hash_to_prove: &Blake2bHash, known_hash: &Blake2bHash) -> Option<Vec<Block>> {
+    pub fn get_block_proof(
+        &self,
+        hash_to_prove: &Blake2bHash,
+        known_hash: &Blake2bHash,
+    ) -> Option<Vec<Block>> {
         let txn = ReadTransaction::new(&self.env);
 
-        let block_to_prove = self.chain_store
+        let block_to_prove = self
+            .chain_store
             .get_block(hash_to_prove, false, Some(&txn))?;
 
         if hash_to_prove == known_hash || block_to_prove.header.height == 1 {
             return Some(vec![]);
         }
 
-        let mut block = self.chain_store
-            .get_block(known_hash, false, Some(&txn))?;
+        let mut block = self.chain_store.get_block(known_hash, false, Some(&txn))?;
 
         let mut blocks = vec![];
-        let mut depth = i16::from(Target::from(block.header.n_bits).get_depth()) + block.interlink.len() as i16 - 1;
+        let mut depth = i16::from(Target::from(block.header.n_bits).get_depth())
+            + block.interlink.len() as i16
+            - 1;
         let prove_depth = i16::from(Target::from(&block_to_prove.header.pow()).get_depth());
 
-        let index = i16::min(depth - i16::from(Target::from(block.header.n_bits).get_depth()), block.interlink.len() as i16 - 1);
+        let index = i16::min(
+            depth - i16::from(Target::from(block.header.n_bits).get_depth()),
+            block.interlink.len() as i16 - 1,
+        );
         let mut reference = if index < 0 {
             &block.header.prev_hash
         } else {
@@ -144,7 +206,8 @@ impl Blockchain {
         };
 
         while hash_to_prove != reference && block.header.height > 1 {
-            let next_block = self.chain_store
+            let next_block = self
+                .chain_store
                 .get_block(reference, false, Some(&txn))
                 .expect("Failed to construct block proof - missing block");
 
@@ -162,11 +225,17 @@ impl Blockchain {
                 block = next_block;
             } else {
                 // We found a reference to a different block than blockToProve at its height.
-                warn!("Failed to prove block {} - different block {} at its height {}", hash_to_prove, reference, block_to_prove.header.height);
+                warn!(
+                    "Failed to prove block {} - different block {} at its height {}",
+                    hash_to_prove, reference, block_to_prove.header.height
+                );
                 return None;
             }
 
-            let index = i16::min(depth - i16::from(Target::from(block.header.n_bits).get_depth()), block.interlink.len() as i16 - 1);
+            let index = i16::min(
+                depth - i16::from(Target::from(block.header.n_bits).get_depth()),
+                block.interlink.len() as i16 - 1,
+            );
             reference = if index < 0 {
                 &block.header.prev_hash
             } else {
@@ -194,7 +263,8 @@ impl SuperChain {
         }
 
         for i in m as usize..=length {
-            let underlying_length = self.0[length - 1].head.header.height - self.0[length - i].head.header.height + 1;
+            let underlying_length =
+                self.0[length - 1].head.header.height - self.0[length - i].head.header.height + 1;
             if !SuperChain::is_locally_good(i as u32, underlying_length, depth, delta) {
                 return false;
             }
@@ -213,13 +283,27 @@ impl SuperChain {
             let head_info = &self.0[i + k1 as usize];
 
             for mu in (1..=depth).rev() {
-                let upper_chain_length = head_info.super_block_counts.get(mu) - tail_info.super_block_counts.get(mu);
+                let upper_chain_length =
+                    head_info.super_block_counts.get(mu) - tail_info.super_block_counts.get(mu);
 
                 // Moderate badness check:
                 for j in (0..mu).rev() {
-                    let lower_chain_length = head_info.super_block_counts.get(j) - tail_info.super_block_counts.get(j);
-                    if !SuperChain::is_locally_good(upper_chain_length, lower_chain_length, mu - j, delta) {
-                        trace!("Chain badness detected at depth {}[{}:{}], failing at {}/{}", depth, i, i + k1 as usize, mu, j);
+                    let lower_chain_length =
+                        head_info.super_block_counts.get(j) - tail_info.super_block_counts.get(j);
+                    if !SuperChain::is_locally_good(
+                        upper_chain_length,
+                        lower_chain_length,
+                        mu - j,
+                        delta,
+                    ) {
+                        trace!(
+                            "Chain badness detected at depth {}[{}:{}], failing at {}/{}",
+                            depth,
+                            i,
+                            i + k1 as usize,
+                            mu,
+                            j
+                        );
                         return false;
                     }
                 }
@@ -230,6 +314,7 @@ impl SuperChain {
     }
 
     fn is_locally_good(super_length: u32, underlying_length: u32, depth: u8, delta: f64) -> bool {
-        f64::from(super_length) > (1f64 - delta) * 2f64.powi(-i32::from(depth)) * f64::from(underlying_length)
+        f64::from(super_length)
+            > (1f64 - delta) * 2f64.powi(-i32::from(depth)) * f64::from(underlying_length)
     }
 }

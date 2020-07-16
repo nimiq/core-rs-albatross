@@ -1,14 +1,13 @@
-use block_powchain::{Block, BlockHeader, BlockInterlink, BlockBody};
 use account::{Account, AccountsList, Receipts};
-use std::path::Path;
-use std::fs::OpenOptions;
-use beserial::{Serialize, Deserialize, SerializingError};
+use beserial::{Deserialize, Serialize, SerializingError};
+use block_powchain::{Block, BlockBody, BlockHeader, BlockInterlink};
 use failure::Fail;
-use keys::Address;
-use std::io::{Error as IoError, Write};
 use hash::Blake2bHash;
 use hex::FromHexError;
-
+use keys::Address;
+use std::fs::OpenOptions;
+use std::io::{Error as IoError, Write};
+use std::path::Path;
 
 pub struct PowChainGenesis {
     genesis_block: Block,
@@ -23,7 +22,7 @@ pub enum PowChainError {
     #[fail(display = "I/O error")]
     IoError(#[cause] IoError),
     #[fail(display = "Invalid hex encoding")]
-    HexEncodingError(#[cause] FromHexError)
+    HexEncodingError(#[cause] FromHexError),
 }
 
 impl From<SerializingError> for PowChainError {
@@ -48,12 +47,18 @@ impl PowChainGenesis {
     pub fn write_to_files<P: AsRef<Path>>(&self, directory: P) -> Result<(), PowChainError> {
         let block_path = directory.as_ref().join("block.dat");
         info!("Writing block to {}", block_path.display());
-        let mut file = OpenOptions::new().create(true).write(true).open(&block_path)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&block_path)?;
         self.generate_block()?.serialize(&mut file)?;
 
         let accounts_path = directory.as_ref().join("accounts.dat");
         info!("Writing accounts to {}", accounts_path.display());
-        let mut file = OpenOptions::new().create(true).write(true).open(&accounts_path)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&accounts_path)?;
         //AccountsList(self.generate_accounts()?).serialize(&mut file)?;
         file.write_all(&hex::decode(self.genesis_accounts)?)?;
 
@@ -68,8 +73,9 @@ impl PowChainGenesis {
         Ok(self.genesis_hash.clone())
     }
 
-    pub fn generate_accounts(&self)  -> Result<Vec<(Address, Account)>, PowChainError> {
-        let accounts: AccountsList = Deserialize::deserialize_from_vec(&hex::decode(self.genesis_accounts)?)?;
+    pub fn generate_accounts(&self) -> Result<Vec<(Address, Account)>, PowChainError> {
+        let accounts: AccountsList =
+            Deserialize::deserialize_from_vec(&hex::decode(self.genesis_accounts)?)?;
         Ok(accounts.0)
     }
 
@@ -1212,23 +1218,26 @@ impl PowChainGenesis {
                     version: 1,
                     prev_hash: [0u8; 32].into(),
                     interlink_hash: [0u8; 32].into(),
-                    body_hash: "f6ba2bbf7e1478a209057000471d73fbdc28df0b717747d929cfde829c4120f6".into(),
-                    accounts_hash: "2e02da3d162e20fa982029dbde9cc20f6b431ab05df1764f34af4c62a4f2b33f".into(),
+                    body_hash: "f6ba2bbf7e1478a209057000471d73fbdc28df0b717747d929cfde829c4120f6"
+                        .into(),
+                    accounts_hash:
+                        "2e02da3d162e20fa982029dbde9cc20f6b431ab05df1764f34af4c62a4f2b33f".into(),
                     n_bits: 0x1f01_0000.into(),
                     height: 1,
                     timestamp: 1_522_735_199,
-                    nonce: 79_001
+                    nonce: 79_001,
                 },
                 interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                 body: Some(BlockBody {
                     miner: [0u8; Address::SIZE].into(),
                     extra_data: b"TestNet".to_vec(),
                     transactions: vec![],
-                    receipts: Receipts::default()
-                })
+                    receipts: Receipts::default(),
+                }),
             },
             genesis_hash: "1fc28119e35b1418713218192012c7eda9e1d6d142ce8138a313366bd6068300".into(),
-            genesis_accounts: {"\
+            genesis_accounts: {
+                "\
                 00646da588646cae6840ee6c5344b4f92311ced1c2490000000236610228efaf96fd0771d7c9aa4e\
                 e9e7b205c938a08e0f7b4b00000001df68823f7294ac3ba70a75d2993ef78f63165a89c40993d0ed\
                 0100000363f08a2af7b5d050775729289baf93eb7519fa5e5174ca95080000000100001680000003\
@@ -1373,7 +1382,8 @@ impl PowChainGenesis {
                 0f7c77899b8b4ec5a3b2d0fd583024a08c963da6d8a0725b7b00000001000016800000010f7c7789\
                 9b0000010f7c77899b1702dc1b2cb05e372a24f84ece01c4835c6f1c800100001e9dbaf7b6df9ac9\
                 4a1a46736363a20b8e52074ca76981cc43390000000100000b400000051a49d3f3d000001e9dbaf7\
-                b6df"}
+                b6df"
+            },
         }
     }
 
@@ -1384,23 +1394,26 @@ impl PowChainGenesis {
                     version: 1,
                     prev_hash: [0u8; 32].into(),
                     interlink_hash: [0u8; 32].into(),
-                    body_hash: "26f32bf5cf65da6f0758d7450064c46acb4a1fe68366f967f44a295de9615488".into(),
-                    accounts_hash: "d6dfd99bdd6d374a75efcf9e3dcc724796cfc6f0ba8c52ec92a8a274514edf06".into(),
+                    body_hash: "26f32bf5cf65da6f0758d7450064c46acb4a1fe68366f967f44a295de9615488"
+                        .into(),
+                    accounts_hash:
+                        "d6dfd99bdd6d374a75efcf9e3dcc724796cfc6f0ba8c52ec92a8a274514edf06".into(),
                     n_bits: 0x1f01_0000.into(),
                     height: 1,
                     timestamp: 1_522_338_300,
-                    nonce: 12_432
+                    nonce: 12_432,
                 },
                 interlink: BlockInterlink::new(vec![], &[0u8; 32].into()),
                 body: Some(BlockBody {
                     miner: [0u8; Address::SIZE].into(),
                     extra_data: b"DevNet".to_vec(),
                     transactions: vec![],
-                    receipts: Receipts::default()
-                })
+                    receipts: Receipts::default(),
+                }),
             },
             genesis_hash: "5fbc78d778f12485b121cb43c4c0e50d51a06a3def993e19d5862e8fdd4874c4".into(),
-            genesis_accounts: {"\
+            genesis_accounts: {
+                "\
                 0064c7c9a18a298b4c5bdce6f35370d94602216af66d000000038ef61816ca1ff9133bfed4b770f4\
                 e89ddb3c1a63e2e345702301000001da717a91a84d54f2db90e3f563995e0d52032a02b429849206\
                 0000000100001680000001da717a91a8000001da717a91a8311405eb9d66b00a26d798d22872910d\
@@ -1548,7 +1561,8 @@ impl PowChainGenesis {
                 4ccd2cca89fc558a0000000100001680000003ee75f7f021000003ee75f7f021f4725ca23a28c4fe\
                 357eb0ec26e990798b91af6101000001b2fc634c4d0cb36a1d3be937aa313fa3c8c2611a07ac7bcb\
                 db0000000100000b40000000487f65e20d000001b2fc634c4daff24dcccbd3b3381072a31c0c1133\
-                b5f28e35f800000011a48952856d"}
+                b5f28e35f800000011a48952856d"
+            },
         }
     }
 }

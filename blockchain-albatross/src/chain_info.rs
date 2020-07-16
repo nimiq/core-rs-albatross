@@ -5,7 +5,6 @@ use block::{Block, BlockType, MacroExtrinsics, MicroExtrinsics};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
 
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ChainInfo {
     pub head: Block,
@@ -42,7 +41,7 @@ impl Serialize for ChainInfo {
                 size += Serialize::serialize(&macro_block.header, writer)?;
                 size += Serialize::serialize(&macro_block.justification, writer)?;
                 size += Serialize::serialize(&None::<MacroExtrinsics>, writer)?;
-            },
+            }
             Block::Micro(ref micro_block) => {
                 size += Serialize::serialize(&micro_block.header, writer)?;
                 size += Serialize::serialize(&micro_block.justification, writer)?;
@@ -62,7 +61,7 @@ impl Serialize for ChainInfo {
                 size += Serialize::serialized_size(&macro_block.header);
                 size += Serialize::serialized_size(&macro_block.justification);
                 size += Serialize::serialized_size(&None::<MacroExtrinsics>);
-            },
+            }
             Block::Micro(ref micro_block) => {
                 size += Serialize::serialized_size(&micro_block.header);
                 size += Serialize::serialized_size(&micro_block.justification);
@@ -104,7 +103,10 @@ impl IntoDatabaseValue for ChainInfo {
 }
 
 impl FromDatabaseValue for ChainInfo {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
     }

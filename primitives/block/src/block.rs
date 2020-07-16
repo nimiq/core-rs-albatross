@@ -1,6 +1,6 @@
 use account::inherent::Inherent;
-use block_base;
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError};
+use block_base;
 use hash::{Argon2dHash, Blake2bHash, Hash};
 use primitives::networks::NetworkId;
 use transaction::Transaction;
@@ -31,7 +31,12 @@ impl Block {
     pub const MAX_SIZE: usize = 100_000; // 100 kb
     const TIMESTAMP_DRIFT_MAX: u64 = 600 * 1000;
 
-    pub fn verify(&self, timestamp_now: u64, network_id: NetworkId, genesis_hash: Blake2bHash) -> Result<(), BlockError> {
+    pub fn verify(
+        &self,
+        timestamp_now: u64,
+        network_id: NetworkId,
+        genesis_hash: Blake2bHash,
+    ) -> Result<(), BlockError> {
         // XXX Check that the block version is supported.
         if self.header.version != Block::VERSION {
             return Err(BlockError::UnsupportedVersion);
@@ -67,7 +72,9 @@ impl Block {
 
     fn verify_interlink(&self, genesis_hash: Blake2bHash) -> Result<(), BlockError> {
         // Skip check for genesis block due to the cyclic dependency (since the interlink hash contains the genesis block hash).
-        if self.header.height == 1 && self.header.interlink_hash == Blake2bHash::from([0u8; Blake2bHash::SIZE]) {
+        if self.header.height == 1
+            && self.header.interlink_hash == Blake2bHash::from([0u8; Blake2bHash::SIZE])
+        {
             return Ok(());
         }
 
@@ -140,7 +147,10 @@ impl Block {
     // XXX Does this really belong here?
     pub fn get_reward_inherent(&self) -> Inherent {
         assert!(self.body.is_some(), "Body needed for reward inherent");
-        self.body.as_ref().unwrap().get_reward_inherent(self.header.height)
+        self.body
+            .as_ref()
+            .unwrap()
+            .get_reward_inherent(self.header.height)
     }
 
     pub fn into_light(mut self) -> Block {

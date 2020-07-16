@@ -27,7 +27,10 @@ impl<A: AccountsTreeLeave> IntoDatabaseValue for AccountsTreeNode<A> {
 }
 
 impl<A: AccountsTreeLeave> FromDatabaseValue for AccountsTreeNode<A> {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
     }
@@ -44,7 +47,10 @@ impl IntoDatabaseValue for Receipts {
 }
 
 impl FromDatabaseValue for Receipts {
-    fn copy_from_database(bytes: &[u8]) -> io::Result<Self> where Self: Sized {
+    fn copy_from_database(bytes: &[u8]) -> io::Result<Self>
+    where
+        Self: Sized,
+    {
         let mut cursor = io::Cursor::new(bytes);
         Ok(Deserialize::deserialize(&mut cursor)?)
     }

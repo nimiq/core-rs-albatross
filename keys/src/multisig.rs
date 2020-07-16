@@ -96,10 +96,15 @@ impl CommitmentPair {
     pub fn new(random_secret: &RandomSecret, commitment: &Commitment) -> Self {
         let cloned_secret = *random_secret;
         let cloned_commitment = *commitment;
-        CommitmentPair { random_secret: cloned_secret, commitment: cloned_commitment }
+        CommitmentPair {
+            random_secret: cloned_secret,
+            commitment: cloned_commitment,
+        }
     }
 
-    fn generate_internal<R: Rng + CryptoRng>(rng: &mut R) -> Result<CommitmentPair, InvalidScalarError> {
+    fn generate_internal<R: Rng + CryptoRng>(
+        rng: &mut R,
+    ) -> Result<CommitmentPair, InvalidScalarError> {
         // Create random 32 bytes.
         let mut randomness: [u8; RandomSecret::SIZE] = [0u8; RandomSecret::SIZE];
         rng.fill(&mut randomness);
@@ -118,13 +123,20 @@ impl CommitmentPair {
 
         let rs = RandomSecret(scalar);
         let ct = Commitment(commitment);
-        Ok(CommitmentPair { random_secret: rs, commitment: ct })
+        Ok(CommitmentPair {
+            random_secret: rs,
+            commitment: ct,
+        })
     }
 
     #[inline]
-    pub fn random_secret(&self) -> &RandomSecret { &self.random_secret }
+    pub fn random_secret(&self) -> &RandomSecret {
+        &self.random_secret
+    }
     #[inline]
-    pub fn commitment(&self) -> &Commitment { &self.commitment }
+    pub fn commitment(&self) -> &Commitment {
+        &self.commitment
+    }
 }
 
 impl SecureGenerate for CommitmentPair {
@@ -148,7 +160,9 @@ impl PartialSignature {
     }
 
     #[inline]
-    pub fn as_bytes(&self) -> &[u8; PartialSignature::SIZE] { self.0.as_bytes() }
+    pub fn as_bytes(&self) -> &[u8; PartialSignature::SIZE] {
+        self.0.as_bytes()
+    }
 }
 
 impl From<[u8; PartialSignature::SIZE]> for PartialSignature {
@@ -164,7 +178,13 @@ impl<'a> From<&'a [u8; PartialSignature::SIZE]> for PartialSignature {
 }
 
 impl KeyPair {
-    pub fn partial_sign(&self, public_keys: &[PublicKey], secret: &RandomSecret, commitments: &[Commitment], data: &[u8]) -> (PartialSignature, PublicKey, Commitment) {
+    pub fn partial_sign(
+        &self,
+        public_keys: &[PublicKey],
+        secret: &RandomSecret,
+        commitments: &[Commitment],
+        data: &[u8],
+    ) -> (PartialSignature, PublicKey, Commitment) {
         if public_keys.len() != commitments.len() {
             panic!("Number of public keys and commitments must be the same.");
         }
@@ -181,7 +201,10 @@ impl KeyPair {
         // Hash public keys.
         let public_keys_hash = hash_public_keys(public_keys);
         // And delinearize them.
-        let delinearized_pk_sum: EdwardsPoint = public_keys.iter().map(|public_key| { public_key.delinearize(&public_keys_hash) }).sum();
+        let delinearized_pk_sum: EdwardsPoint = public_keys
+            .iter()
+            .map(|public_key| public_key.delinearize(&public_keys_hash))
+            .sum();
         let delinearized_private_key: Scalar = self.delinearize_private_key(&public_keys_hash);
 
         // Aggregate commitments.
@@ -197,7 +220,11 @@ impl KeyPair {
         let partial_signature: Scalar = s * delinearized_private_key + secret.0;
         let mut public_key_bytes: [u8; PublicKey::SIZE] = [0u8; PublicKey::SIZE];
         public_key_bytes.copy_from_slice(delinearized_pk_sum.compress().as_bytes());
-        (PartialSignature(partial_signature), PublicKey::from(public_key_bytes), aggregated_commitment)
+        (
+            PartialSignature(partial_signature),
+            PublicKey::from(public_key_bytes),
+            aggregated_commitment,
+        )
     }
 
     fn delinearize_private_key(&self, public_keys_hash: &[u8; 64]) -> Scalar {

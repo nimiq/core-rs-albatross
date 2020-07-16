@@ -7,7 +7,9 @@ use vrf::VrfSeed;
 
 use super::signed;
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent, Hash)]
+#[derive(
+    Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent, Hash,
+)]
 pub struct ViewChange {
     /// The number of the block for which the view change is constructed (i.e. the block number
     /// the validator is at + 1, since it's for the next block)
@@ -42,7 +44,11 @@ pub struct ViewChanges {
 }
 
 impl ViewChanges {
-    pub fn new(block_number: u32, first_view_number: u32, last_view_number: u32) -> Option<ViewChanges> {
+    pub fn new(
+        block_number: u32,
+        first_view_number: u32,
+        last_view_number: u32,
+    ) -> Option<ViewChanges> {
         if first_view_number < last_view_number {
             Some(ViewChanges {
                 block_number,
@@ -57,6 +63,10 @@ impl ViewChanges {
 
 impl fmt::Display for ViewChange {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "#{}.{} ({})", self.block_number, self.new_view_number, self.prev_seed)
+        write!(
+            f,
+            "#{}.{} ({})",
+            self.block_number, self.new_view_number, self.prev_seed
+        )
     }
 }

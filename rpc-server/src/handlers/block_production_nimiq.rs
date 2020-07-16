@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use json::{JsonValue, Null, object};
+use json::{object, JsonValue, Null};
 
 use beserial::{Deserialize, Serialize};
 use block::{Block, BlockHeader};
@@ -15,8 +15,8 @@ use utils::merkle::MerklePath;
 use utils::time::systemtime_to_timestamp;
 
 use crate::handler::Method;
-use crate::handlers::Module;
 use crate::handlers::mempool::transaction_to_obj;
+use crate::handlers::Module;
 
 pub struct BlockProductionNimiqHandler {
     pub blockchain: Arc<Blockchain>,
@@ -46,7 +46,7 @@ impl BlockProductionNimiqHandler {
         let block = self.produce_block(params)?;
         let block_bytes = block.serialize_to_vec();
 
-        Ok(object!{
+        Ok(object! {
             "data" => hex::encode(&block_bytes[..BlockHeader::SIZE]),
             "suffix" => hex::encode(&block_bytes[BlockHeader::SIZE..]),
             "target" => u32::from(block.header.n_bits),
@@ -82,7 +82,7 @@ impl BlockProductionNimiqHandler {
     pub(crate) fn get_block_template(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
         let block = self.produce_block(params)?;
         let header = block.header;
-        let json_header = object!{
+        let json_header = object! {
             "version" => header.version,
             "prevHash" => header.prev_hash.to_hex(),
             "interlinkHash" => header.interlink_hash.to_hex(),
@@ -91,8 +91,11 @@ impl BlockProductionNimiqHandler {
             "height" => header.height,
         };
         let body = block.body.unwrap();
-        let merkle_path = MerklePath::new::<Blake2bHasher, Blake2bHash>(&body.get_merkle_leaves::<Blake2bHash>(), &body.miner.hash::<Blake2bHash>());
-        let json_body = object!{
+        let merkle_path = MerklePath::new::<Blake2bHasher, Blake2bHash>(
+            &body.get_merkle_leaves::<Blake2bHash>(),
+            &body.miner.hash::<Blake2bHash>(),
+        );
+        let json_body = object! {
             "hash" => header.body_hash.to_hex(),
             "minerAddr" => body.miner.to_hex(),
             "extraData" => hex::encode(body.extra_data),
@@ -101,7 +104,7 @@ impl BlockProductionNimiqHandler {
             "prunedAccounts" => JsonValue::Array(body.receipts.receipts.iter().map(|acc| JsonValue::String(hex::encode(acc.serialize_to_vec()))).collect()),
         };
 
-        Ok(object!{
+        Ok(object! {
             "header" => json_header,
             "interlink" => hex::encode(block.interlink.serialize_to_vec()),
             "target" => u32::from(header.n_bits),
@@ -113,30 +116,42 @@ impl BlockProductionNimiqHandler {
     /// Parameters:
     /// - block (string)
     pub(crate) fn submit_block(&self, params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let block = params.get(0).and_then(JsonValue::as_str)
-            .ok_or_else(|| object!{"message" => "Block must be a string"})
-            .and_then(|s| hex::decode(s)
-                .map_err(|_| object!{"message" => "Block must be hex-encoded"}))
-            .and_then(|b| Block::deserialize_from_vec(&b)
-                .map_err(|_| object!{"message" => "Invalid block data"}))?;
+        let block = params
+            .get(0)
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| object! {"message" => "Block must be a string"})
+            .and_then(|s| {
+                hex::decode(s).map_err(|_| object! {"message" => "Block must be hex-encoded"})
+            })
+            .and_then(|b| {
+                Block::deserialize_from_vec(&b)
+                    .map_err(|_| object! {"message" => "Invalid block data"})
+            })?;
 
         match self.blockchain.push(block) {
-            Ok(PushResult::Forked) => Ok(object!{"message" => "Forked"}),
-            Ok(_) => Ok(object!{"message" => "Ok"}),
-            _ => Err(object!{"message" => "Block rejected"})
+            Ok(PushResult::Forked) => Ok(object! {"message" => "Forked"}),
+            Ok(_) => Ok(object! {"message" => "Ok"}),
+            _ => Err(object! {"message" => "Block rejected"}),
         }
     }
 
     fn produce_block(&self, params: &[JsonValue]) -> Result<Block, JsonValue> {
-        let miner = params.get(0).and_then(JsonValue::as_str)
-            .ok_or_else(|| object!{"message" => "Miner address must be a string"})
-            .and_then(|s| Address::from_any_str(s)
-                .map_err(|_| object!{"message" => "Invalid miner address"}))?;
+        let miner = params
+            .get(0)
+            .and_then(JsonValue::as_str)
+            .ok_or_else(|| object! {"message" => "Miner address must be a string"})
+            .and_then(|s| {
+                Address::from_any_str(s).map_err(|_| object! {"message" => "Invalid miner address"})
+            })?;
 
-        let extra_data = params.get(1).unwrap_or(&Null).as_str()
-            .ok_or_else(|| object!{"message" => "Extra data must be a string"})
-            .and_then(|s| hex::decode(s)
-                .map_err(|_| object!{"message" => "Extra data must be hex-encoded"}))?;
+        let extra_data = params
+            .get(1)
+            .unwrap_or(&Null)
+            .as_str()
+            .ok_or_else(|| object! {"message" => "Extra data must be a string"})
+            .and_then(|s| {
+                hex::decode(s).map_err(|_| object! {"message" => "Extra data must be hex-encoded"})
+            })?;
 
         let timestamp = (systemtime_to_timestamp(SystemTime::now()) / 1000) as u32;
 

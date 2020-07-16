@@ -2,9 +2,9 @@ use std::default::Default;
 use std::io::Write;
 use std::marker::PhantomData;
 
-use rand_core::{Error, impls, RngCore, SeedableRng};
+use rand_core::{impls, Error, RngCore, SeedableRng};
 
-use nimiq_hash::{Hasher, HashOutput};
+use nimiq_hash::{HashOutput, Hasher};
 
 pub struct HashRng<S: Sized + Default + AsMut<[u8]>, H: HashOutput> {
     seed: S,
@@ -15,8 +15,12 @@ pub struct HashRng<S: Sized + Default + AsMut<[u8]>, H: HashOutput> {
 impl<S: Sized + Default + AsMut<[u8]>, H: HashOutput> HashRng<S, H> {
     fn next_hash(&mut self) -> H {
         let mut hash_state = H::Builder::default();
-        hash_state.write_all(self.seed.as_mut()).expect("Failed to hash seed");
-        hash_state.write_all(&self.counter.to_be_bytes()).expect("Failed to hash index");
+        hash_state
+            .write_all(self.seed.as_mut())
+            .expect("Failed to hash seed");
+        hash_state
+            .write_all(&self.counter.to_be_bytes())
+            .expect("Failed to hash index");
         self.counter += 1;
         hash_state.finish()
     }

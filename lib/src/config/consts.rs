@@ -1,6 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr};
 
-
 /// The default port for `ws` and `wss`.
 pub const WS_DEFAULT_PORT: u16 = 8443;
 

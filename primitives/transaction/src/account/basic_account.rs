@@ -1,9 +1,9 @@
 use beserial::Deserialize;
 use primitives::account::AccountType;
 
-use crate::{Transaction, TransactionError, TransactionFlags};
 use crate::account::AccountTransactionVerification;
 use crate::SignatureProof;
+use crate::{Transaction, TransactionError, TransactionFlags};
 
 pub struct BasicAccountVerifier {}
 
@@ -15,8 +15,11 @@ impl AccountTransactionVerification for BasicAccountVerifier {
             return Err(TransactionError::SenderEqualsRecipient);
         }
 
-        if transaction.flags.contains(TransactionFlags::CONTRACT_CREATION)
-            || transaction.flags.contains(TransactionFlags::SIGNALLING) {
+        if transaction
+            .flags
+            .contains(TransactionFlags::CONTRACT_CREATION)
+            || transaction.flags.contains(TransactionFlags::SIGNALLING)
+        {
             warn!("Contract creation and signalling not allowed");
             return Err(TransactionError::InvalidForRecipient);
         }
@@ -28,8 +31,11 @@ impl AccountTransactionVerification for BasicAccountVerifier {
         assert_eq!(transaction.sender_type, AccountType::Basic);
 
         // Verify signer & signature.
-        let signature_proof: SignatureProof = Deserialize::deserialize(&mut &transaction.proof[..])?;
-        if !signature_proof.is_signed_by(&transaction.sender) || !signature_proof.verify(transaction.serialize_content().as_slice()) {
+        let signature_proof: SignatureProof =
+            Deserialize::deserialize(&mut &transaction.proof[..])?;
+        if !signature_proof.is_signed_by(&transaction.sender)
+            || !signature_proof.verify(transaction.serialize_content().as_slice())
+        {
             warn!("Invalid signature");
             return Err(TransactionError::InvalidProof);
         }

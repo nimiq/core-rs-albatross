@@ -1,3 +1,4 @@
+pub mod command_line;
 /// This modules manages the Nimiq configuration. It provides a builder and can load from
 /// config file or command line.
 ///
@@ -5,11 +6,8 @@
 ///
 /// * Load config from environment variables. envopt doesn't look very usable, but we can easily
 ///   write our own derive macro, that will also use FromStr to parse the variables.
-
 pub mod config;
-pub mod paths;
-pub mod user_agent;
 pub mod config_file;
 pub mod consts;
-pub mod command_line;
-
+pub mod paths;
+pub mod user_agent;

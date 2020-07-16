@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::sync::{Arc, Weak};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
 use std::thread;
 use std::time::Instant;
 
 use futures::future::Future;
-use futures::Poll;
 use futures::prelude::*;
 use futures::task;
 use futures::task::Task;
+use futures::Poll;
 use parking_lot::RwLock;
 
 use beserial::Serialize;
@@ -30,11 +30,10 @@ pub struct AccountsChunkCache<B: AbstractBlockchain + 'static> {
     chunks_by_prefix_by_block: RwLock<HashMap<Blake2bHash, HashMap<String, SerializedChunk>>>,
     tasks_by_block: RwLock<HashMap<Blake2bHash, Vec<Task>>>,
     block_history_order: RwLock<VecDeque<Blake2bHash>>,
-    weak_self: MutableOnce<Weak<Self>>
+    weak_self: MutableOnce<Weak<Self>>,
 }
 
 impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
-
     const MAX_BLOCKS_BACKLOG: usize = 10;
     const CHUNK_SIZE_MAX: usize = 5000;
 
@@ -43,7 +42,9 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
             blockchain,
             env,
             computing_enabled: AtomicBool::new(false),
-            chunks_by_prefix_by_block: RwLock::new(HashMap::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
+            chunks_by_prefix_by_block: RwLock::new(HashMap::with_capacity(
+                Self::MAX_BLOCKS_BACKLOG + 1,
+            )),
             tasks_by_block: RwLock::new(HashMap::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
             block_history_order: RwLock::new(VecDeque::with_capacity(Self::MAX_BLOCKS_BACKLOG + 1)),
             weak_self: MutableOnce::new(Weak::new()),
@@ -52,7 +53,11 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
         unsafe { cache_arc.weak_self.replace(Arc::downgrade(&cache_arc)) };
 
         let cache_arc2 = Arc::clone(&cache_arc);
-        cache_arc.blockchain.register_listener(move |event: &BlockchainEvent<B::Block>| cache_arc2.on_blockchain_event(event));
+        cache_arc
+            .blockchain
+            .register_listener(move |event: &BlockchainEvent<B::Block>| {
+                cache_arc2.on_blockchain_event(event)
+            });
 
         cache_arc
     }
@@ -64,7 +69,11 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
         if !self.computing_enabled.swap(true, Ordering::AcqRel) {
             self.compute_chunks_for_block();
         }
-        GetChunkFuture::new(hash.clone(), prefix.to_string(), self.weak_self.upgrade().unwrap())
+        GetChunkFuture::new(
+            hash.clone(),
+            prefix.to_string(),
+            self.weak_self.upgrade().unwrap(),
+        )
     }
 
     /// Trigger computation of chunks asynchronously after blockchain events.
@@ -76,7 +85,7 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
         match event {
             BlockchainEvent::Extended(_) | BlockchainEvent::Rebranched(_, _) => {
                 self.compute_chunks_for_block();
-            },
+            }
             BlockchainEvent::Finalized(_) => (),
         }
     }
@@ -107,10 +116,17 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
 
             // Compute and store chunks.
             let chunk_start = Instant::now();
-            this.chunks_by_prefix_by_block.write().insert(hash.clone(), HashMap::new());
+            this.chunks_by_prefix_by_block
+                .write()
+                .insert(hash.clone(), HashMap::new());
             let mut prefix = "".to_string();
-            while let Some(chunk) = this.blockchain.get_accounts_chunk(&prefix[..], Self::CHUNK_SIZE_MAX, Some(&txn)) {
-                if let Some(chunks_by_prefix) = this.chunks_by_prefix_by_block.write().get_mut(&hash) {
+            while let Some(chunk) =
+                this.blockchain
+                    .get_accounts_chunk(&prefix[..], Self::CHUNK_SIZE_MAX, Some(&txn))
+            {
+                if let Some(chunks_by_prefix) =
+                    this.chunks_by_prefix_by_block.write().get_mut(&hash)
+                {
                     let last_terminal_string_opt = chunk.last_terminal_string();
                     let chunk_len = chunk.len();
                     chunks_by_prefix.insert(prefix.clone(), chunk.serialize_to_vec());
@@ -129,8 +145,17 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
             // The chunks are cached, so newly created requests will not need to enter them into the list of tasks.
             this.tasks_by_block.write().remove(&hash.clone());
 
-            let num_chunks = this.chunks_by_prefix_by_block.read().get(&hash).map_or(0, HashMap::len);
-            trace!("Computing {} chunks for block {} tree took {:?}", num_chunks, hash, chunk_start.elapsed());
+            let num_chunks = this
+                .chunks_by_prefix_by_block
+                .read()
+                .get(&hash)
+                .map_or(0, HashMap::len);
+            trace!(
+                "Computing {} chunks for block {} tree took {:?}",
+                num_chunks,
+                hash,
+                chunk_start.elapsed()
+            );
 
             // Put those blocks that are cached into a history, so that we can remove them later on.
             this.block_history_order.write().push_back(hash.clone());
@@ -168,12 +193,17 @@ pub struct GetChunkFuture<B: AbstractBlockchain + 'static> {
     hash: Blake2bHash,
     prefix: String,
     chunk_cache: Arc<AccountsChunkCache<B>>,
-    running: bool
+    running: bool,
 }
 
 impl<B: AbstractBlockchain> GetChunkFuture<B> {
     pub fn new(hash: Blake2bHash, prefix: String, chunk_cache: Arc<AccountsChunkCache<B>>) -> Self {
-        GetChunkFuture { hash, prefix, chunk_cache, running: false }
+        GetChunkFuture {
+            hash,
+            prefix,
+            chunk_cache,
+            running: false,
+        }
     }
 }
 
@@ -183,7 +213,12 @@ impl<B: AbstractBlockchain> Future for GetChunkFuture<B> {
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         // If chunk is available, deliver it to the client.
-        if let Some(chunks_by_prefix) = self.chunk_cache.chunks_by_prefix_by_block.read().get(&self.hash) {
+        if let Some(chunks_by_prefix) = self
+            .chunk_cache
+            .chunks_by_prefix_by_block
+            .read()
+            .get(&self.hash)
+        {
             if let Some(chunk) = chunks_by_prefix.get(&self.prefix) {
                 return Ok(Async::Ready(Some(chunk.clone())));
             }
