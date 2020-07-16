@@ -48,6 +48,7 @@ use crate::chain_store::ChainStore;
 use crate::reward_registry::{EpochStateError, SlashRegistry, SlashedSetSelector};
 use crate::transaction_cache::TransactionCache;
 use crate::ForkEvent;
+use std::time::SystemTime;
 
 pub struct Blockchain {
     pub(crate) env: Environment,
@@ -303,6 +304,26 @@ impl Blockchain {
                 header.block_number()
             );
             return Err(PushError::InvalidSuccessor);
+        }
+
+        // Check that the current block timestamp is equal or greater than the timestamp of the
+        // previous block.
+        if prev_info.head.timestamp() >= header.timestamp() {
+            warn!("Rejecting block - block timestamp precedes parent timestamp");
+            return Err(PushError::InvalidSuccessor);
+        }
+
+        // Check that the current block timestamp less the node's system time is less than or equal
+        // to the allowed maximum drift. Basically, we check that the block isn't from the future.
+        // Both times are given in Unix time standard.
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("System time is before Unix epoch")
+            .as_secs();
+
+        if header.timestamp().saturating_sub(now) > policy::TIMESTAMP_MAX_DRIFT {
+            warn!("Rejecting block - block timestamp exceeds allowed maximum drift");
+            return Err(PushError::InvalidBlock(BlockError::FromTheFuture));
         }
 
         // Check if a view change occurred - if so, validate the proof
@@ -589,15 +610,15 @@ impl Blockchain {
 
             // Check if there are two blocks in the same slot and with the same height. Since we already
             // verified the validator for the current slot, this is enough to check for fork proofs.
-            // Count the microblocks after the last macroblock
+            // Count the micro blocks after the last macro block
             let mut micro_blocks: Vec<Block> =
                 self.chain_store
                     .get_blocks_at(block.block_number(), false, Some(&read_txn));
 
-            // Get the microheader from the block
+            // Get the header from the micro block
             let micro_header1 = &micro_block.header;
 
-            // Get the justification for the block. We asume that the
+            // Get the justification for the block. We assume that the
             // validator's signature is valid.
             let justification1 = &micro_block.justification.signature;
 
@@ -606,7 +627,7 @@ impl Blockchain {
 
             for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
                 // for micro_block in micro_blocks.iter() {
-                // If there's another microblock set to this view number, we
+                // If there's another micro block set to this view number, we
                 // notify the fork event.
                 if view_number == micro_block.header.view_number {
                     let micro_header2 = micro_block.header;
