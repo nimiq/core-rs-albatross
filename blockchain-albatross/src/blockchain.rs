@@ -1955,7 +1955,7 @@ impl Blockchain {
         // Remember the number of eligible slots that a validator had (that was able to accept the inherent)
         let mut num_eligible_slots_for_accepted_inherent = Vec::new();
 
-        // Remember the total amount of reward must be burned. The reward for a slot is burned
+        // Remember that the total amount of reward must be burned. The reward for a slot is burned
         // either because the slot was slashed or because the corresponding validator was unable to
         // accept the inherent.
         let mut burned_reward = Coin::ZERO;

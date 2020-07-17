@@ -180,7 +180,7 @@ impl RewardPot {
         txn.put(&self.reward_pot, Self::CURRENT_REWARD_KEY, &current_reward);
     }
 
-    /// Rollbacks the RewardPot database for a micro block. It takes the whole micro block as input
+    /// Rolls back the RewardPot database for a micro block. It takes the whole micro block as input
     /// since we need all the transactions in it.
     /// This function is used for normal block syncing.
     pub(super) fn revert_micro_block(&self, block: &MicroBlock, txn: &mut WriteTransaction) {
