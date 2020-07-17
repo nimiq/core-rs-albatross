@@ -24,6 +24,7 @@ beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
 nimiq-account = { path = "../account", version = "0.1" }
 nimiq-bls = { path = "../../bls", version = "0.1", features = ["beserial"]}
 nimiq-collections = { path = "../../collections", version = "0.1", features = ["bitset"] }
+nimiq-handel = { path = "../../handel", version = "0.1" }
 nimiq-hash = { path = "../../hash", version = "0.1" }
 nimiq-hash_derive = { path = "../../hash/hash_derive", version = "0.1" }
 nimiq-keys = { path = "../../keys", version = "0.1" }

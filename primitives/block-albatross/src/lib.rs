@@ -7,6 +7,7 @@ extern crate log;
 extern crate nimiq_account as account;
 extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;
+extern crate nimiq_handel as handel;
 extern crate nimiq_hash as hash;
 extern crate nimiq_hash_derive as hash_derive;
 extern crate nimiq_keys as keys;
@@ -15,6 +16,7 @@ extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
+mod multisig;
 pub use block::{
     Block, BlockBody, BlockComponentFlags, BlockComponents, BlockHeader, BlockJustification,
     BlockType,
@@ -22,6 +24,7 @@ pub use block::{
 pub use fork_proof::ForkProof;
 pub use macro_block::{MacroBlock, MacroBody, MacroHeader};
 pub use micro_block::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
+pub use multisig::{IndividualSignature, MultiSignature};
 pub use pbft::{
     PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProofBuilder, PbftProposal,
     SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
