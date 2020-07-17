@@ -3,7 +3,7 @@ use std::fmt;
 use std::io;
 use std::str::FromStr;
 
-use ed25519_dalek;
+use ed25519_dalek::{self, Verifier};
 use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
@@ -34,9 +34,7 @@ impl PublicKey {
 
     #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, KeysError> {
-        Ok(PublicKey(
-            ed25519_dalek::PublicKey::from_bytes(bytes).map_err(KeysError)?,
-        ))
+        Ok(PublicKey(ed25519_dalek::PublicKey::from_bytes(bytes)?))
     }
 
     pub fn to_hex(&self) -> String {

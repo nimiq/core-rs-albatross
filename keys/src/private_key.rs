@@ -14,7 +14,6 @@ use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
 
 use crate::PublicKey;
 
-#[derive(Default)]
 pub struct PrivateKey(pub(super) ed25519_dalek::SecretKey);
 
 impl PrivateKey {
@@ -109,5 +108,12 @@ impl FromStr for PrivateKey {
         let vec = Vec::from_hex(s)?;
         Ok(Deserialize::deserialize_from_vec(&vec)
             .map_err(|_| hex::FromHexError::InvalidStringLength)?)
+    }
+}
+
+impl Default for PrivateKey {
+    fn default() -> Self {
+        let default_array: [u8; Self::SIZE] = Default::default();
+        Self::from(default_array)
     }
 }
