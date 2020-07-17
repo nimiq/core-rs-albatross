@@ -7,7 +7,8 @@ use futures::{executor, future, StreamExt};
 use parking_lot::RwLock;
 
 use block_albatross::{
-    ForkProof, PbftCommitMessage, PbftPrepareMessage, SignedPbftProposal, ViewChange,
+    ForkProof, MultiSignature, PbftCommitMessage, PbftPrepareMessage, SignedPbftProposal,
+    ViewChange,
 };
 use blockchain_albatross::Blockchain;
 use bls::CompressedPublicKey;
@@ -28,11 +29,11 @@ use crate::validator_info::{SignedValidatorInfo, SignedValidatorInfos, Validator
 pub enum ValidatorAgentEvent {
     ValidatorInfos(Vec<SignedValidatorInfo>),
     ForkProof(Box<ForkProof>),
-    ViewChange(Box<LevelUpdateMessage<ViewChange>>),
+    ViewChange(Box<LevelUpdateMessage<MultiSignature, ViewChange>>),
     ViewChangeProof(Box<ViewChangeProofMessage>),
     PbftProposal(Box<SignedPbftProposal>),
-    PbftPrepare(Box<LevelUpdateMessage<PbftPrepareMessage>>),
-    PbftCommit(Box<LevelUpdateMessage<PbftCommitMessage>>),
+    PbftPrepare(Box<LevelUpdateMessage<MultiSignature, PbftPrepareMessage>>),
+    PbftCommit(Box<LevelUpdateMessage<MultiSignature, PbftCommitMessage>>),
 }
 
 pub struct ValidatorAgentState {
@@ -272,7 +273,10 @@ impl ValidatorAgent {
     }
 
     /// When a view change message is received, verify the signature and pass it to ValidatorNetwork
-    fn on_view_change_message(&self, update_message: LevelUpdateMessage<ViewChange>) {
+    fn on_view_change_message(
+        &self,
+        update_message: LevelUpdateMessage<MultiSignature, ViewChange>,
+    ) {
         trace!(
             "[VIEW-CHANGE] Received: number={} update={:?} peer={}",
             update_message.tag,
@@ -334,7 +338,10 @@ impl ValidatorAgent {
 
     /// When a pbft prepare message is received, verify the signature and pass it to ValidatorNetwork
     /// TODO: The validator network could just register this it-self
-    fn on_pbft_prepare_message(&self, level_update: LevelUpdateMessage<PbftPrepareMessage>) {
+    fn on_pbft_prepare_message(
+        &self,
+        level_update: LevelUpdateMessage<MultiSignature, PbftPrepareMessage>,
+    ) {
         trace!(
             "[PBFT-PREPARE] Received: block_hash={} update={:?} peer={}",
             level_update.tag.block_hash,
@@ -350,7 +357,10 @@ impl ValidatorAgent {
     /// When a pbft commit message is received, verify the signature and pass it to ValidatorNetwork
     /// FIXME This will verify a commit message with the current validator set, not with the one for
     /// which this commit is for.
-    fn on_pbft_commit_message(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
+    fn on_pbft_commit_message(
+        &self,
+        level_update: LevelUpdateMessage<MultiSignature, PbftCommitMessage>,
+    ) {
         trace!(
             "[PBFT-COMMIT] Received: block_hash={} update={:?} peer={}",
             level_update.tag.block_hash,

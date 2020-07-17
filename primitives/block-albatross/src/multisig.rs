@@ -63,7 +63,6 @@ impl MultiSignature {
     }
 }
 
-
 impl AggregatableContribution for MultiSignature {
     fn contributors(&self) -> BitSet {
         self.signers.clone()

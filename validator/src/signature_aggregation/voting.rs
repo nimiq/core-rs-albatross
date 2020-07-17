@@ -5,33 +5,33 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use block_albatross::signed;
+use block_albatross::{signed, IndividualSignature, MultiSignature};
 use bls::PublicKey;
 use collections::bitset::BitSet;
 use handel::aggregation::Aggregation;
 use handel::config::Config;
 use handel::evaluator::WeightedVote;
 use handel::identity::{IdentityRegistry, WeightRegistry};
-use handel::multisig::{IndividualSignature, Signature};
 use handel::partitioner::BinomialPartitioner;
 use handel::protocol::Protocol;
 use handel::sender::Sender;
+use handel::store::ContributionStore;
 use handel::store::ReplaceStore;
-use handel::store::SignatureStore;
 use handel::update::{LevelUpdate, LevelUpdateMessage};
-use handel::verifier::MultithreadedVerifier;
-use messages::Message;
-use primitives::policy::TWO_THIRD_SLOTS;
 
 use crate::pool::ValidatorPool;
+use crate::signature_aggregation::verifier::MultithreadedVerifier;
 
 /// The evaluator used for voting
-pub type VotingEvaluator =
-    WeightedVote<ReplaceStore<BinomialPartitioner>, ValidatorRegistry, BinomialPartitioner>;
+pub type VotingEvaluator = WeightedVote<
+    ReplaceStore<BinomialPartitioner, MultiSignature>,
+    ValidatorRegistry,
+    BinomialPartitioner,
+>;
 
 pub trait Tag: signed::Message {
     // TODO: This should not be implemented by the tag, right?
-    fn create_level_update_message(&self, update: LevelUpdate) -> Message;
+    fn create_level_update_message(&self, update: LevelUpdate<MultiSignature>) -> Message;
 }
 
 /// Implementation for sender using a mapping from validator ID to `Peer`.
@@ -50,10 +50,10 @@ impl<T: Tag> VotingSender<T> {
     }
 }
 
-impl<T: Tag> Sender for VotingSender<T> {
+impl<T: Tag> Sender<MultiSignature> for VotingSender<T> {
     type Error = IoError;
 
-    fn send_to(&self, peer_id: usize, update: LevelUpdate) {
+    fn send_to(&self, peer_id: usize, update: LevelUpdate<MultiSignature>) {
         if let Some(agent) = self.validators.read().get_active_validator_agent(peer_id) {
             let update_message = self.tag.create_level_update_message(update);
             agent.peer.channel.send_or_close(update_message);
@@ -111,7 +111,7 @@ pub struct VotingProtocol<T: Tag> {
     verifier: Arc<MultithreadedVerifier<ValidatorRegistry>>,
 
     partitioner: Arc<BinomialPartitioner>,
-    store: Arc<RwLock<ReplaceStore<BinomialPartitioner>>>,
+    store: Arc<RwLock<ReplaceStore<BinomialPartitioner, MultiSignature>>>,
 
     /// The evaluator being used. This either just counts votes
     evaluator: Arc<VotingEvaluator>,
@@ -165,7 +165,7 @@ impl<T: Tag> VotingProtocol<T> {
             .combined(store.best_level())
             .map(|multisig| {
                 self.registry
-                    .signature_weight(&Signature::Multi(multisig.clone()))
+                    .signature_weight(&multisig.clone())
                     .unwrap_or_else(|| panic!("Unknown signers in signature: {:?}", multisig))
             })
             .unwrap_or(0)
@@ -183,11 +183,12 @@ impl<T: Tag> fmt::Debug for VotingProtocol<T> {
 }
 
 impl<T: Tag> Protocol for VotingProtocol<T> {
+    type Contribution = MultiSignature;
     type Registry = ValidatorRegistry;
     type Verifier = MultithreadedVerifier<ValidatorRegistry>;
-    type Store = ReplaceStore<BinomialPartitioner>;
     type Evaluator = VotingEvaluator;
     type Partitioner = BinomialPartitioner;
+    type Store = ReplaceStore<Self::Partitioner, MultiSignature>;
     type Sender = VotingSender<T>;
 
     fn registry(&self) -> Arc<Self::Registry> {
@@ -261,10 +262,10 @@ impl<T: Tag> VoteAggregation<T> {
         }
 
         self.inner
-            .push_contribution(IndividualSignature::new(signature, node_id));
+            .push_contribution(IndividualSignature::new(signature, node_id).as_multisig());
     }
 
-    pub fn push_update(&self, level_update: LevelUpdateMessage<T>) {
+    pub fn push_update(&self, level_update: LevelUpdateMessage<MultiSignature, T>) {
         if level_update.tag != *self.tag() {
             panic!(
                 "Submitting level update for {:?}, but aggregation is for {:?}",

@@ -7,9 +7,9 @@ use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 
 use block_albatross::signed::AggregateProof;
 use block_albatross::{
-    BlockHeader, ForkProof, PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProposal,
-    SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange,
-    ViewChange, ViewChangeProof,
+    BlockHeader, ForkProof, MultiSignature, PbftCommitMessage, PbftPrepareMessage, PbftProof,
+    PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
+    SignedViewChange, ViewChange, ViewChangeProof,
 };
 use blockchain_albatross::Blockchain;
 use bls::CompressedPublicKey;
@@ -462,7 +462,10 @@ impl ValidatorNetwork {
     }
 
     /// Pushes the update to the signature aggregation for this view-change
-    fn on_view_change_level_update(&self, update_message: LevelUpdateMessage<ViewChange>) {
+    fn on_view_change_level_update(
+        &self,
+        update_message: LevelUpdateMessage<MultiSignature, ViewChange>,
+    ) {
         let state = self.state.upgradable_read();
 
         // check if we already completed this view change
@@ -648,7 +651,7 @@ impl ValidatorNetwork {
             .write()
             .register(weak_passthru_listener(
                 Weak::clone(&self.self_weak),
-                move |this, event| {
+                move |this, event: AggregationEvent<MultiSignature>| {
                     match event {
                         AggregationEvent::Complete { best } => {
                             let event =
@@ -682,7 +685,7 @@ impl ValidatorNetwork {
             .write()
             .register(weak_passthru_listener(
                 Weak::clone(&self.self_weak),
-                move |this, event| {
+                move |this, event: AggregationEvent<MultiSignature>| {
                     match event {
                         AggregationEvent::Complete { best } => {
                             let event =
@@ -759,7 +762,7 @@ impl ValidatorNetwork {
 
     pub fn on_pbft_prepare_level_update(
         &self,
-        level_update: LevelUpdateMessage<PbftPrepareMessage>,
+        level_update: LevelUpdateMessage<MultiSignature, PbftPrepareMessage>,
     ) {
         let state = self.state.read();
 
@@ -798,7 +801,10 @@ impl ValidatorNetwork {
         }
     }
 
-    pub fn on_pbft_commit_level_update(&self, level_update: LevelUpdateMessage<PbftCommitMessage>) {
+    pub fn on_pbft_commit_level_update(
+        &self,
+        level_update: LevelUpdateMessage<MultiSignature, PbftCommitMessage>,
+    ) {
         // TODO: This is almost identical to the prepare one, maybe we can make the method generic over it?
         let state = self.state.read();
 
@@ -872,7 +878,7 @@ impl ValidatorNetwork {
             .write()
             .register(weak_passthru_listener(
                 Weak::clone(&self.self_weak),
-                move |this, event| match event {
+                move |this, event: AggregationEvent<MultiSignature>| match event {
                     AggregationEvent::Complete { best } => {
                         let view_change = view_change.clone();
                         tokio::spawn(async move {
