@@ -10,18 +10,18 @@ use utils::observer::PassThroughNotifier;
 use utils::timers::Timers;
 
 use crate::config::Config;
+use crate::contribution::AggregatableContribution;
 use crate::evaluator::Evaluator;
 use crate::level::Level;
-use crate::multisig::{IndividualSignature, MultiSignature, Signature};
 use crate::protocol::Protocol;
 use crate::sender::Sender;
-use crate::store::SignatureStore;
+use crate::store::ContributionStore;
 use crate::todo::TodoList;
 use crate::update::LevelUpdate;
 
 #[derive(Clone, Debug)]
-pub enum AggregationEvent {
-    Complete { best: MultiSignature },
+pub enum AggregationEvent<C: AggregatableContribution> {
+    Complete { best: C },
     //LevelComplete { level: usize },
     //Aborted,
 }
@@ -32,11 +32,11 @@ enum AggregationTimer {
     Update,
 }
 
-struct AggregationState {
-    result: Option<MultiSignature>,
+struct AggregationState<C: AggregatableContribution> {
+    result: Option<C>,
 
     /// Our contribution
-    contribution: Option<IndividualSignature>,
+    contribution: Option<C>,
 
     next_level_timeout: usize,
 }
@@ -49,7 +49,7 @@ pub struct Aggregation<P: Protocol> {
     levels: Vec<Level>,
 
     /// Signatures that still need to be processed
-    todos: Arc<TodoList<P::Evaluator>>,
+    todos: Arc<TodoList<P::Contribution, P::Evaluator>>,
 
     /// The underlying protocol
     pub protocol: P,
@@ -58,13 +58,13 @@ pub struct Aggregation<P: Protocol> {
     timers: Timers<AggregationTimer>,
 
     /// Internal state
-    state: RwLock<AggregationState>,
+    state: RwLock<AggregationState<P::Contribution>>,
 
     /// Weak reference to the Aggregation itself
     self_weak: MutableOnce<Weak<Self>>,
 
     /// Notifications for completion
-    pub notifier: RwLock<PassThroughNotifier<'static, AggregationEvent>>,
+    pub notifier: RwLock<PassThroughNotifier<'static, AggregationEvent<P::Contribution>>>,
 }
 
 impl<P: Protocol + fmt::Debug> Aggregation<P> {
@@ -79,7 +79,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
             todos,
             protocol,
             timers: Timers::new(),
-            state: RwLock::new(AggregationState {
+            state: RwLock::new(AggregationState::<P::Contribution> {
                 result: None,
                 next_level_timeout: 0,
                 contribution: None,
@@ -93,13 +93,20 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         this
     }
 
-    pub fn push_contribution(&self, contribution: IndividualSignature) {
-        assert_eq!(contribution.signer, self.protocol.node_id());
+    /// adds this nodes own signature to the aggregation
+    pub fn push_contribution(&self, contribution: P::Contribution) {
+        // only allow contributions with a single contributor, which also must be this node itself.
+        assert!(
+            contribution.num_contributors() == 1
+                && contribution
+                    .contributors()
+                    .contains(self.protocol.node_id())
+        );
 
         let mut state = self.state.write();
         if state.contribution.is_none() {
             state.contribution = Some(contribution.clone());
-            let signature = Signature::Individual(contribution);
+            // let signature = Signature::Individual(contribution.clone());
 
             // drop state before sending updates
             // Drop state before store is locked. Otherwise we have a circular dependency with
@@ -107,11 +114,11 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
             drop(state);
 
             // put our own contribution into store at level 0
-            self.protocol.store().write().put(signature.clone(), 0);
+            self.protocol.store().write().put(contribution.clone(), 0);
 
             // check for completed levels
-            self.check_completed_level(&signature, 0);
-            self.check_final_signature();
+            self.check_completed_level(&contribution, 0);
+            self.check_final_contribution();
 
         // send level 0
         // This will be done by check_completed level
@@ -192,7 +199,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
     }
 
     /// Send updated `multisig` for `level` to `count` peers
-    fn send_update(&self, multisig: MultiSignature, level: &Level, count: usize) {
+    fn send_update(&self, multisig: P::Contribution, level: &Level, count: usize) {
         let peer_ids = level.select_next_peers(count);
 
         if !peer_ids.is_empty() {
@@ -202,7 +209,12 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
             } else {
                 self.state.read().contribution.clone()
             };
-            let update = LevelUpdate::new(multisig, individual, level.id, self.protocol.node_id());
+            let update = LevelUpdate::<P::Contribution>::new(
+                multisig,
+                individual,
+                level.id,
+                self.protocol.node_id(),
+            );
 
             for peer_id in peer_ids {
                 assert_ne!(
@@ -216,7 +228,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
     }
 
     /// Check if a level was completed
-    fn check_completed_level(&self, signature: &Signature, level: usize) {
+    fn check_completed_level(&self, contribution: &P::Contribution, level: usize) {
         let level = self
             .levels
             .get(level)
@@ -225,7 +237,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         trace!(
             "Checking for completed level {}: signers={:?}",
             level.id,
-            signature.signers().collect::<Vec<usize>>()
+            contribution.contributors().iter().collect::<Vec<usize>>()
         );
 
         let store = self.protocol.store();
@@ -247,10 +259,10 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
             trace!(
                 "check_completed_level: level={}, best.len={}, num_peers={}",
                 level.id,
-                best.len(),
+                best.num_contributors(),
                 level.num_peers()
             );
-            if best.len() == level.num_peers() {
+            if best.num_contributors() == level.num_peers() {
                 trace!("Level {} complete", level.id);
                 level_state.receive_completed = true;
 
@@ -267,7 +279,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
                     .levels
                     .get(i)
                     .unwrap_or_else(|| panic!("No level {}", i));
-                if level.update_signature_to_send(&multisig.clone().into()) {
+                if level.update_signature_to_send(&multisig.clone()) {
                     // XXX Do this without cloning
                     self.send_update(multisig, &level, self.config.peer_count);
                 }
@@ -280,7 +292,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
     /// TODO: In some cases we still want to make the final signature "more final", i.e. the
     /// pbft prepare signature still can become better and thus influence the finality of the
     /// commit signature.
-    fn check_final_signature(&self) -> bool {
+    fn check_final_contribution(&self) -> bool {
         // first check if we're already done
         let state = self.state.upgradable_read();
         if state.result.is_some() {
@@ -319,11 +331,11 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         false
     }
 
-    pub fn result(&self) -> Option<MultiSignature> {
+    pub fn result(&self) -> Option<P::Contribution> {
         self.state.read().result.clone()
     }
 
-    pub fn push_update(&self, update: LevelUpdate) {
+    pub fn push_update(&self, update: LevelUpdate<P::Contribution>) {
         if self.state.read().result.is_some() {
             // NOP, if we already have a valid multi-signature
             return;
@@ -332,7 +344,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         let LevelUpdate {
             origin,
             level,
-            multisig,
+            aggregate,
             individual,
         } = update;
 
@@ -347,12 +359,12 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
         // NOTE: We use `map` instead of `and_then`, because `and_then` needs to return a future,
         //       and `upgrade_weak!` might return `()`.
         let individual_fut = if let Some(individual) = individual {
-            let sig = Signature::Individual(individual);
+            // let sig = Signature::Individual(individual);
             let weak = self.self_weak.clone();
-            future::Either::A(self.protocol.verify(&sig).map(move |result| {
+            future::Either::A(self.protocol.verify(&individual).map(move |result| {
                 if result.is_ok() {
                     let this = upgrade_weak!(weak);
-                    this.todos.put(sig, level as usize);
+                    this.todos.put(individual, level as usize);
                 } else {
                     warn!("Invalid signature: {:?}", result);
                 }
@@ -363,12 +375,12 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
 
         // Future that verifies the multi-signature and puts it into the TODO list
         let multisig_fut = {
-            let sig = Signature::Multi(multisig);
+            // let sig = Signature::Multi(multisig);
             let weak = Weak::clone(&self.self_weak);
-            self.protocol.verify(&sig).map(move |result| {
+            self.protocol.verify(&aggregate).map(move |result| {
                 if result.is_ok() {
                     let this = upgrade_weak!(weak);
-                    this.todos.put(sig, level as usize);
+                    this.todos.put(aggregate, level as usize);
                 } else {
                     warn!("Invalid signature: {:?}", result);
                 }
@@ -405,7 +417,7 @@ impl<P: Protocol + fmt::Debug> Aggregation<P> {
                         drop(store);
 
                         this.check_completed_level(&signature, level);
-                        this.check_final_signature();
+                        this.check_final_contribution();
                     }
                 })
                 .map_err(|e| {

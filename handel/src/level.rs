@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
-use crate::multisig::Signature;
+use crate::contribution::AggregatableContribution;
 use crate::partitioner::{Partitioner, PartitioningError};
 
 #[derive(Clone, Debug)]
@@ -111,14 +111,14 @@ impl Level {
         }
     }
 
-    pub fn update_signature_to_send(&self, signature: &Signature) -> bool {
+    pub fn update_signature_to_send<C: AggregatableContribution>(&self, signature: &C) -> bool {
         let mut state = self.state.write();
 
-        if state.send_signature_size >= signature.len() {
+        if state.send_signature_size >= signature.num_contributors() {
             return false;
         }
 
-        state.send_signature_size = signature.len();
+        state.send_signature_size = signature.num_contributors();
         state.send_peers_count = 0;
 
         if state.send_signature_size == self.send_expected_full_size {

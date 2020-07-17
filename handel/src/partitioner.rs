@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 
 use utils::math::log2;
 
-use crate::multisig::MultiSignature;
+use crate::contribution::AggregatableContribution;
 
 /// Errors that can happen during partitioning
 #[derive(Clone, Debug, Fail, PartialEq)]
@@ -26,9 +26,9 @@ pub trait Partitioner {
     /// Range of identities that need to be contacted at `level`
     fn range(&self, level: usize) -> Result<RangeInclusive<usize>, PartitioningError>;
 
-    /// Combine `signatures` to `MultiSignature` for next level
-    /// TODO: Return `Result<MultiSignature, PartitioningError>` instead of option
-    fn combine(&self, signatures: Vec<&MultiSignature>, level: usize) -> Option<MultiSignature>;
+    /// Combine `AggregatableContributions` to a new `AggregatableContribution` for next level
+    /// TODO: Return `Result<C, PartitioningError>` instead of option
+    fn combine<C: AggregatableContribution>(&self, signatures: Vec<&C>, level: usize) -> Option<C>;
 }
 
 /// The next level is always double the size of the current level
@@ -96,14 +96,18 @@ impl Partitioner for BinomialPartitioner {
     }
 
     /// TODO: Why do we have `_level` as argument?
-    fn combine(&self, signatures: Vec<&MultiSignature>, _level: usize) -> Option<MultiSignature> {
+    fn combine<C: AggregatableContribution>(
+        &self,
+        contributions: Vec<&C>,
+        _level: usize,
+    ) -> Option<C> {
         //debug!("Combining signatures for level {}: {:?}", level, signatures);
-        let mut combined = (*signatures.first()?).clone();
+        let mut combined = (*contributions.first()?).clone();
 
-        for signature in signatures.iter().skip(1) {
+        for contribution in contributions.iter().skip(1) {
             combined
-                .add_multisig(signature)
-                .unwrap_or_else(|e| panic!("Failed to combine signatures: {}", e));
+                .combine(contribution)
+                .unwrap_or_else(|e| panic!("Failed to combine contributions: {}", e));
         }
 
         //debug!("Combined signature: {:?}", combined);

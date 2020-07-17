@@ -29,7 +29,6 @@ pub mod contribution;
 pub mod evaluator;
 pub mod identity;
 pub mod level;
-pub mod multisig;
 pub mod partitioner;
 pub mod protocol;
 pub mod sender;
