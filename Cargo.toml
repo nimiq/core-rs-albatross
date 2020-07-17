@@ -50,8 +50,8 @@ members = [
   "ws-rpc-server",
 ]
 
-[profile.test.package.nimiq-bls]
+[profile.dev.package.nimiq-bls]
 opt-level = 3
 
-[profile.test.package.nimiq-nano-sync]
+[profile.dev.package.nimiq-nano-sync]
 opt-level = 3
