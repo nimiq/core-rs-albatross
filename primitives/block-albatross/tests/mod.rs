@@ -1,10 +1,13 @@
 use std::convert::TryInto;
 use std::str::FromStr;
 
-use beserial::Deserialize;
-use nimiq_block_albatross::{MacroBlock, MacroBody, MacroHeader};
-use nimiq_bls::{CompressedPublicKey, Signature};
+use beserial::{Deserialize, Serialize};
+use nimiq_block_albatross::{
+    IndividualSignature, MacroBlock, MacroExtrinsics, MacroHeader, MultiSignature,
+};
+use nimiq_bls::{CompressedPublicKey, KeyPair, Signature};
 use nimiq_collections::bitset::BitSet;
+use nimiq_handel::update::LevelUpdate;
 use nimiq_hash::{Blake2bHasher, Hasher};
 use nimiq_keys::Address;
 use nimiq_primitives::slot::{Slots, ValidatorSlotBand, ValidatorSlots};
@@ -99,4 +102,35 @@ fn it_can_convert_macro_block_into_slots() {
     let slots_from_macro: Slots = macro_block.try_into().unwrap();
 
     assert_eq!(slots, slots_from_macro);
+}
+
+fn create_multisig() -> MultiSignature {
+    let raw_key = hex::decode(
+        "1b9e470e0deb06fe55774bb2cf499b411f55265c10d8d78742078381803451e058c88\
+        391431799462edde4c7872649964137d8e03cd618dd4a25690c56ffd7f42fb7ae8049d29f38d569598b38d4\
+        39f69107cc0b6f4ecd00a250c74409510100",
+    )
+    .unwrap();
+    let key_pair = KeyPair::deserialize_from_vec(&raw_key).unwrap();
+    let signature = key_pair.sign(&"foobar");
+    IndividualSignature::new(signature, 1).as_multisig()
+}
+
+#[test]
+fn test_serialize_deserialize_level_update() {
+    let update = LevelUpdate::new(create_multisig(), None, 2, 3);
+    let data = update.serialize_to_vec();
+    let update_2: LevelUpdate<MultiSignature> = Deserialize::deserialize_from_vec(&data).unwrap();
+
+    assert_eq!(data.len(), update.serialized_size());
+    assert_eq!(update.serialized_size(), 108);
+    // assert!(update_2.individual.is_none()); // not publicly accessible
+    assert_eq!(update_2.level(), 2);
+    assert_eq!(update_2.origin(), 3);
+}
+
+#[test]
+fn test_serialize_deserialize_with_message() {
+    let update = LevelUpdate::new(create_multisig(), None, 2, 3).with_tag(42u64);
+    assert_eq!(update.serialized_size(), 108 + 8);
 }
