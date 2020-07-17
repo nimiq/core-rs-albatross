@@ -236,6 +236,13 @@ impl BlockHeader {
         }
     }
 
+    pub fn timestamp(&self) -> u64 {
+        match self {
+            BlockHeader::Macro(ref header) => header.timestamp,
+            BlockHeader::Micro(ref header) => header.timestamp,
+        }
+    }
+
     pub fn view_number(&self) -> u32 {
         match self {
             BlockHeader::Macro(ref header) => header.view_number,

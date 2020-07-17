@@ -273,6 +273,8 @@ impl Blockchain {
         Some(validators)
     }
 
+    /// Performs some checks on the header of a block (macro or micro). If it returns Ok we can be
+    /// sure that the header is valid, but we can't assume the same for the body of the block.
     pub fn verify_block_header(
         &self,
         header: &BlockHeader,
@@ -280,7 +282,8 @@ impl Blockchain {
         intended_slot_owner: &MappedRwLockReadGuard<PublicKey>,
         txn_opt: Option<&Transaction>,
     ) -> Result<(), PushError> {
-        // Check if the block's immediate predecessor is part of the chain.
+        // Check if the block's immediate predecessor (aka the parent, aka the previous block) is
+        // part of the chain.
         let prev_info_opt = self
             .chain_store
             .get_chain_info(&header.parent_hash(), false, txn_opt);
@@ -289,7 +292,7 @@ impl Blockchain {
             return Err(PushError::Orphan);
         }
 
-        // Check that the block is a valid successor of its predecessor.
+        // Check that the block type is valid successor given the type of its predecessor.
         let prev_info = prev_info_opt.unwrap();
 
         if self.get_next_block_type(Some(prev_info.head.block_number())) != header.ty() {
@@ -297,7 +300,7 @@ impl Blockchain {
             return Err(PushError::InvalidSuccessor);
         }
 
-        // Check the block number
+        // Check that the block number was incremented by one.
         if prev_info.head.block_number() + 1 != header.block_number() {
             warn!(
                 "Rejecting block - wrong block number ({:?})",
@@ -307,7 +310,8 @@ impl Blockchain {
         }
 
         // Check that the current block timestamp is equal or greater than the timestamp of the
-        // previous block.
+        // previous block. This is necessary to guarantee that time is monotonically increasing.
+        // Having time go back could create issues with the blockchain state.
         if prev_info.head.timestamp() >= header.timestamp() {
             warn!("Rejecting block - block timestamp precedes parent timestamp");
             return Err(PushError::InvalidSuccessor);
@@ -315,6 +319,8 @@ impl Blockchain {
 
         // Check that the current block timestamp less the node's system time is less than or equal
         // to the allowed maximum drift. Basically, we check that the block isn't from the future.
+        // This is necessary so that validators cannot create blocks far in the future, which would
+        // give them bigger rewards.
         // Both times are given in Unix time standard.
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -326,9 +332,10 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::FromTheFuture));
         }
 
-        // Check if a view change occurred - if so, validate the proof
+        // Check if a view change occurred. And if so, validate the proof.
         let view_number = if policy::is_macro_block_at(header.block_number() - 1) {
-            0 // Reset view number in new epoch
+            // Reset view number in new epoch.
+            0
         } else {
             prev_info.head.view_number()
         };
@@ -369,7 +376,7 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
-        // Check if the block was produced (and signed) by the intended producer
+        // Check if the block was produced (and signed) by the intended producer.
         if let Err(e) = header
             .seed()
             .verify(prev_info.head.seed(), intended_slot_owner)
@@ -378,18 +385,22 @@ impl Blockchain {
             return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
         }
 
+        // Additional checks only for Macro blocks.
         if let BlockHeader::Macro(ref header) = header {
-            // Check if the parent macro hash matches the current macro head hash
+            // Check if the parent macro hash matches the current macro head hash.
             if header.parent_macro_hash != self.state().macro_head_hash {
                 warn!("Rejecting block - wrong parent macro hash");
                 return Err(PushError::InvalidSuccessor);
             }
 
+            // Check if the transaction root given in the header is a valid commitment to the actual
+            // transactions of the epoch.
             let transactions_root = self
                 .get_transactions_root(policy::epoch_at(header.block_number), txn_opt)
                 .ok_or(PushError::BlockchainError(
                     BlockchainError::FailedLoadingMainChain,
                 ))?;
+
             if header.transactions_root != transactions_root {
                 warn!("Rejecting block - wrong transactions root");
                 return Err(PushError::InvalidBlock(BlockError::InvalidTransactionsRoot));
@@ -1806,6 +1817,11 @@ impl Blockchain {
         RwLockReadGuard::map(guard, |s| s.last_validators().unwrap())
     }
 
+    /// This function distributes the rewards of the previous epoch. Note that the rewards for an
+    /// epoch are NOT distributed at the end of that epoch, instead they are distributed at the end
+    /// of the next epoch. We do this to allow more time for validators to submit fork proofs.
+    /// Otherwise, validators that created forks in the last micro block(s) of an epoch could maybe
+    /// not be punished. Hence the need for this function.
     pub fn finalize_previous_epoch(
         &self,
         state: &BlockchainState,
@@ -1814,41 +1830,41 @@ impl Blockchain {
         // It might be that we don't have any micro blocks, thus we need to look at the next macro block.
         let epoch = policy::epoch_at(macro_header.block_number) - 1;
 
-        // Special case for first epoch: Epoch 0 is finalized by definition.
+        // Special case for first epoch. Epoch 0 is finalized by definition.
         if epoch == 0 {
             return vec![];
         }
 
-        // Get validator slots
-        // NOTE: Field `previous_slots` is expected to be always set.
+        // Get validator slots. Note that the field `previous_slots` is expected to be always set.
         let validator_slots = &state
             .previous_slots
             .as_ref()
             .expect("Slots for last epoch are missing")
             .validator_slots;
 
-        // Slashed slots (including fork proofs)
+        // Get the slashed slots (including fork proofs).
         let slashed_set = state
             .reward_registry
             .slashed_set(epoch, SlashedSetSelector::All, None);
 
-        // Total reward for the previous epoch
+        // Get the total reward for the previous epoch.
         let reward_pot: Coin = state.reward_registry.previous_reward();
 
-        // Distribute reward between all slots and calculate the remainder
+        // Distribute reward between all slots and calculate the remainder.
         let slot_reward = reward_pot / policy::SLOTS as u64;
         let remainder = reward_pot % policy::SLOTS as u64;
 
-        // The first slot number of the current validator
+        // The first slot number of the current validator.
         let mut first_slot_number = 0;
 
-        // Peekable iterator to collect slashed slots for validator
+        // Peekable iterator to collect slashed slots for validator.
         let mut slashed_set_iter = slashed_set.iter().peekable();
 
-        // All accepted inherents.
+        // A vector that will contain all accepted reward inherents.
         let mut inherents = Vec::new();
 
-        // Remember the number of eligible slots that a validator had (that was able to accept the inherent)
+        // A vector that, for each validator that was able to accept the reward inherent, stores the
+        // number of eligible slots of that validator.
         let mut num_eligible_slots_for_accepted_inherent = Vec::new();
 
         // Remember that the total amount of reward must be burned. The reward for a slot is burned
@@ -1856,7 +1872,7 @@ impl Blockchain {
         // accept the inherent.
         let mut burned_reward = Coin::ZERO;
 
-        // Compute inherents
+        // Compute the reward inherents for all validators.
         for validator_slot in validator_slots.iter() {
             // The interval of slot numbers for the current slot band is
             // [first_slot_number, last_slot_number). So it actually doesn't include
@@ -1879,8 +1895,8 @@ impl Blockchain {
                 }
             }
 
-            // Compute reward from slot reward and number of eligible slots. Also update the burned
-            // reward from the number of slashed slots.
+            // Compute the reward for this validator from the slot reward and the number of eligible
+            // slots. Also update the burned reward from the number of slashed slots.
             let reward = slot_reward
                 .checked_mul(num_eligible_slots as u64)
                 .expect("Overflow in reward");
@@ -1889,7 +1905,7 @@ impl Blockchain {
                 .checked_mul(num_slashed_slots as u64)
                 .expect("Overflow in reward");
 
-            // Create inherent for the reward
+            // Create reward inherent for this validator.
             let inherent = Inherent {
                 ty: InherentType::Reward,
                 target: validator_slot.reward_address().clone(),
@@ -1915,25 +1931,27 @@ impl Blockchain {
                 inherents.push(inherent);
             }
 
-            // Update first_slot_number for next iteration
+            // Update first_slot_number for next iteration.
             first_slot_number = last_slot_number;
         }
 
-        // Check that number of accepted inherents is equal to length of the map that gives us the
+        // Check that the number of accepted inherents is equal to length of the map that gives us the
         // corresponding number of slots for that staker (which should be equal to the number of
-        // validator that will receive rewards).
+        // validators that will receive rewards).
         assert_eq!(
             inherents.len(),
             num_eligible_slots_for_accepted_inherent.len()
         );
 
-        // Get RNG from last block's seed and build lookup table based on number of eligible slots
+        // Get RNG from last block's seed and build lookup table based on number of eligible slots.
         let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution, 0);
+
         let lookup = AliasMethod::new(num_eligible_slots_for_accepted_inherent);
 
         // Randomly give remainder to one accepting slot. We don't bother to distribute it over all
         // accepting slots because the remainder is always at most SLOTS - 1 Lunas.
         let index = lookup.sample(&mut rng);
+
         inherents[index].value += remainder;
 
         // Create the inherent for the burned reward.
