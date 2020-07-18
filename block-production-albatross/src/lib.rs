@@ -20,15 +20,10 @@ use block::{
     Block, MacroBlock, MacroExtrinsics, MacroHeader, MicroBlock, MicroExtrinsics, MicroHeader,
     PbftProposal, ViewChangeProof, ViewChanges,
 };
-use block::{
-    Block, MacroBlock, MacroExtrinsics, MacroHeader, MicroBlock, MicroExtrinsics, MicroHeader,
-    PbftProposal, ViewChangeProof, ViewChanges,
-};
 use blockchain::blockchain::Blockchain;
 use blockchain::reward_registry::SlashedSetSelector;
-use blockchain::reward_registry::SlashedSetSelector;
 use blockchain_base::AbstractBlockchain;
-use bls::bls12_381::KeyPair;
+use bls::KeyPair;
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use mempool::Mempool;

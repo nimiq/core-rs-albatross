@@ -325,7 +325,7 @@ impl Blockchain {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("System time is before Unix epoch")
-            .as_secs();
+            .as_millis() as u64;
 
         if header.timestamp().saturating_sub(now) > policy::TIMESTAMP_MAX_DRIFT {
             warn!("Rejecting block - block timestamp exceeds allowed maximum drift");

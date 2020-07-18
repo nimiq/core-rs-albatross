@@ -112,10 +112,10 @@ pub fn block_reward_at(block_height: u32) -> Coin {
 
 /* Albatross */
 
-/// The maximum drift, in seconds, that is allowed between any block's timestamp and the node's
+/// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
 /// system time. We only care about drifting to the future.
 // TODO: Maybe change to network time instead of local time.
-pub const TIMESTAMP_MAX_DRIFT: u64 = 600;
+pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
 
 /// Number of micro blocks to wait for unstaking after next macro block.
 pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.

@@ -132,7 +132,7 @@ impl TemporaryBlockProducer {
 
         // create proof
         let mut view_change_proof = ViewChangeProofBuilder::new();
-        view_change_proof.add_signature(&keypair.public, policy::SLOTS, &view_change);
+        view_change_proof.add_signature(&keypair.public_key, policy::SLOTS, &view_change);
         view_change_proof.build()
     }
 }
