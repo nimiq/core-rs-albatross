@@ -42,7 +42,7 @@ impl SecureGenerate for PrivateKey {
 }
 
 impl<'a> From<&'a [u8; PrivateKey::SIZE]> for PrivateKey {
-    fn from(bytes: &'a [u8; PublicKey::SIZE]) -> Self {
+    fn from(bytes: &'a [u8; PrivateKey::SIZE]) -> Self {
         PrivateKey(ed25519_dalek::SecretKey::from_bytes(bytes).unwrap())
     }
 }
