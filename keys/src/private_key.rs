@@ -4,15 +4,11 @@ use std::fmt::Formatter;
 use std::io;
 use std::str::FromStr;
 
-use ed25519_dalek;
-use hex;
 use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use hash::{Hash, SerializeContent};
 use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
-
-use crate::PublicKey;
 
 pub struct PrivateKey(pub(super) ed25519_dalek::SecretKey);
 

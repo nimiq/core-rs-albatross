@@ -1,5 +1,3 @@
-use ed25519_dalek;
-
 use beserial::{Deserialize, Serialize};
 use utils::key_rng::{CryptoRng, Rng, SecureGenerate};
 

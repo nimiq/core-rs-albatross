@@ -3,7 +3,7 @@ use std::fmt;
 use std::io;
 use std::str::FromStr;
 
-use ed25519_dalek::{self, Verifier};
+use ed25519_dalek::Verifier;
 use hex::FromHex;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};

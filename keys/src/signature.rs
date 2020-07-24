@@ -1,5 +1,4 @@
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use ed25519_dalek;
 use hex::FromHex;
 
 use crate::errors::{KeysError, ParseError};
