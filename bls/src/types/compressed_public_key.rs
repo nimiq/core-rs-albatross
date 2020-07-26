@@ -16,11 +16,11 @@ use crate::{PublicKey, PublicKeyParseError};
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone)]
 pub struct CompressedPublicKey {
-    pub public_key: [u8; 288],
+    pub public_key: [u8; 285],
 }
 
 impl CompressedPublicKey {
-    pub const SIZE: usize = 288;
+    pub const SIZE: usize = 285;
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<PublicKey, SerializationError> {

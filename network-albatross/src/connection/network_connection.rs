@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use futures::prelude::*;
 use futures::stream::Forward;
@@ -66,7 +66,10 @@ pub struct NetworkConnection {
 }
 
 impl NetworkConnection {
-    pub fn new_connection_setup(stream: SharedNimiqMessageStream, address_info: AddressInfo) -> (Self, ProcessConnectionFuture) {
+    pub fn new_connection_setup(
+        stream: SharedNimiqMessageStream,
+        address_info: AddressInfo,
+    ) -> (Self, ProcessConnectionFuture) {
         let id = UniqueId::new();
         let closed_flag = ClosedFlag::new();
         let (tx, rx) = unbounded(); // TODO: use bounded channel?
@@ -115,12 +118,16 @@ impl NetworkConnection {
         self.closed_flag.clone()
     }
 
-    pub fn peer_address(&self) -> Option<Arc<PeerAddress>> { self.address_info.peer_address() }
+    pub fn peer_address(&self) -> Option<Arc<PeerAddress>> {
+        self.address_info.peer_address()
+    }
     pub fn set_peer_address(&self, peer_address: Arc<PeerAddress>) {
         self.address_info.set_peer_address(peer_address);
     }
 
-    pub fn peer_sink(&self) -> PeerSink { self.peer_sink.clone() }
+    pub fn peer_sink(&self) -> PeerSink {
+        self.peer_sink.clone()
+    }
     pub fn address_info(&self) -> AddressInfo {
         self.address_info.clone()
     }
@@ -132,19 +139,26 @@ impl NetworkConnection {
 }
 
 pub struct ProcessConnectionFuture {
-    inner: Box<dyn Future<Item=(), Error=()> + Send + Sync + 'static>,
+    inner: Box<dyn Future<Item = (), Error = ()> + Send + Sync + 'static>,
 }
 
 impl ProcessConnectionFuture {
-    pub fn new(peer_stream: PeerStream, forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>, _id: UniqueId) -> Self {
+    pub fn new(
+        peer_stream: PeerStream,
+        forward_future: Forward<UnboundedReceiver<Message>, SharedNimiqMessageStream>,
+        _id: UniqueId,
+    ) -> Self {
         // `select` required Item/Error to be the same, that's why we need to map them both to ().
         // TODO We're discarding any errors here, especially those coming from the forward future.
         // Results by the peer_stream have been processes already.
-        let connection = forward_future.map(|_| ()).map_err(|_| ()).select(peer_stream.process_stream().map_err(|_| ()));
+        let connection = forward_future
+            .map(|_| ())
+            .map_err(|_| ())
+            .select(peer_stream.process_stream().map_err(|_| ()));
         let connection = connection.map(|_| ()).map_err(|_| ());
 
         Self {
-            inner: Box::new(connection)
+            inner: Box::new(connection),
         }
     }
 }
@@ -170,18 +184,21 @@ struct AddressInfoInternal {
 impl Clone for AddressInfo {
     fn clone(&self) -> Self {
         AddressInfo {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 }
 
 impl AddressInfo {
-    pub fn new(net_address: Option<Arc<NetAddress>>, peer_address: Option<Arc<PeerAddress>>) -> Self {
+    pub fn new(
+        net_address: Option<Arc<NetAddress>>,
+        peer_address: Option<Arc<PeerAddress>>,
+    ) -> Self {
         AddressInfo {
             inner: Arc::new(AddressInfoInternal {
                 peer_address: RwLock::new(peer_address),
                 net_address: RwLock::new(net_address),
-            })
+            }),
         }
     }
 
@@ -203,17 +220,25 @@ impl fmt::Display for AddressInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "AddressInfo {{")?;
         match self.inner.peer_address.try_read() {
-            Some(lock) => write!(f, "peer_address: {}, ", match lock.as_ref() {
-                Some(address) => address.to_string(),
-                None => "None".to_string(),
-            })?,
+            Some(lock) => write!(
+                f,
+                "peer_address: {}, ",
+                match lock.as_ref() {
+                    Some(address) => address.to_string(),
+                    None => "None".to_string(),
+                }
+            )?,
             None => write!(f, "peer_address: [locked], ")?,
         }
         match self.inner.net_address.try_read() {
-            Some(lock) => write!(f, "net_address: {}, ", match lock.as_ref() {
-                Some(address) => address.to_string(),
-                None => "None".to_string(),
-            })?,
+            Some(lock) => write!(
+                f,
+                "net_address: {}, ",
+                match lock.as_ref() {
+                    Some(address) => address.to_string(),
+                    None => "None".to_string(),
+                }
+            )?,
             None => write!(f, "net_address: [locked], ")?,
         }
         write!(f, "}}")

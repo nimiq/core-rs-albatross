@@ -6,7 +6,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use atomic::Ordering;
 use parking_lot::RwLock;
-use rand::{Rng, rngs::OsRng};
+use rand::{rngs::OsRng, Rng};
 
 use beserial::Serialize;
 use blockchain_base::AbstractBlockchain;
@@ -17,7 +17,7 @@ use network_primitives::address::PeerId;
 use network_primitives::networks::NetworkInfo;
 use network_primitives::protocol::Protocol;
 use network_primitives::version;
-use utils::observer::{Notifier, weak_listener, weak_passthru_listener};
+use utils::observer::{weak_listener, weak_passthru_listener, Notifier};
 use utils::rate_limit::RateLimit;
 use utils::time::systemtime_to_timestamp;
 use utils::timers::Timers;
@@ -26,8 +26,8 @@ use utils::unique_ptr::UniquePtr;
 use crate::address::peer_address_book::PeerAddressBook;
 use crate::connection::close_type::CloseType;
 use crate::network_config::NetworkConfig;
-use crate::Peer;
 use crate::peer_channel::PeerChannel;
+use crate::Peer;
 
 pub struct NetworkAgent<B: AbstractBlockchain + 'static> {
     blockchain: Arc<B>,
@@ -54,7 +54,7 @@ pub struct NetworkAgent<B: AbstractBlockchain + 'static> {
 
     self_weak: Weak<RwLock<NetworkAgent<B>>>,
     pub notifier: Notifier<'static, NetworkAgentEvent>,
-    
+
     timers: Timers<NetworkAgentTimer>,
 }
 
@@ -87,7 +87,12 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
     const MAX_ADDR_PER_REQUEST: u16 = 500;
     const NUM_ADDR_PER_REQUEST: u16 = 200;
 
-    pub fn new(blockchain: Arc<B>, addresses: Arc<PeerAddressBook>, network_config: Arc<NetworkConfig>, channel: Arc<PeerChannel>) -> Arc<RwLock<Self>> {
+    pub fn new(
+        blockchain: Arc<B>,
+        addresses: Arc<PeerAddressBook>,
+        network_config: Arc<NetworkConfig>,
+        channel: Arc<PeerChannel>,
+    ) -> Arc<RwLock<Self>> {
         let agent = Arc::new(RwLock::new(Self {
             blockchain,
             addresses,
@@ -113,7 +118,7 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
             self_weak: Weak::new(),
             notifier: Notifier::new(),
-            
+
             timers: Timers::new(),
         }));
         Self::init_listeners(&agent);
@@ -125,34 +130,49 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         let channel = &agent.read().channel;
         let msg_notifier = &channel.msg_notifier;
-        msg_notifier.version.write().register(weak_passthru_listener(
-            Arc::downgrade(agent),
-            |agent, msg: VersionMessage| agent.write().on_version(msg)));
+        msg_notifier
+            .version
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(agent),
+                |agent, msg: VersionMessage| agent.write().on_version(msg),
+            ));
 
-        msg_notifier.ver_ack.write().register(weak_passthru_listener(
-            Arc::downgrade(agent),
-            |agent, msg: VerAckMessage| agent.write().on_ver_ack(msg)));
+        msg_notifier
+            .ver_ack
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(agent),
+                |agent, msg: VerAckMessage| agent.write().on_ver_ack(msg),
+            ));
 
         msg_notifier.addr.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
-            |agent, msg: AddrMessage| agent.write().on_addr(msg)));
+            |agent, msg: AddrMessage| agent.write().on_addr(msg),
+        ));
 
-        msg_notifier.get_addr.write().register(weak_passthru_listener(
-            Arc::downgrade(agent),
-            |agent, msg: GetAddrMessage| agent.write().on_get_addr(msg)));
+        msg_notifier
+            .get_addr
+            .write()
+            .register(weak_passthru_listener(
+                Arc::downgrade(agent),
+                |agent, msg: GetAddrMessage| agent.write().on_get_addr(msg),
+            ));
 
         msg_notifier.ping.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
-            |agent, nonce: u32| agent.write().on_ping(nonce)));
+            |agent, nonce: u32| agent.write().on_ping(nonce),
+        ));
 
         msg_notifier.pong.write().register(weak_passthru_listener(
             Arc::downgrade(agent),
-            |agent, nonce: u32| agent.write().on_pong(nonce)));
+            |agent, nonce: u32| agent.write().on_pong(nonce),
+        ));
 
         let mut close_notifier = channel.close_notifier.write();
-        close_notifier.register(weak_listener(
-            Arc::downgrade(agent),
-            |agent, _| agent.write().on_close()));
+        close_notifier.register(weak_listener(Arc::downgrade(agent), |agent, _| {
+            agent.write().on_close()
+        }));
     }
 
     pub fn handshake(&mut self) {
@@ -170,7 +190,8 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
             self.blockchain.head_hash(),
             network_info.genesis_hash().clone(),
             self.challenge_nonce.clone(),
-            self.network_config.user_agent().clone());
+            self.network_config.user_agent().clone(),
+        );
         if self.channel.send(msg).is_err() {
             self.version_attempts += 1;
             if self.version_attempts >= Self::VERSION_ATTEMPTS_MAX || self.channel.closed() {
@@ -179,10 +200,14 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
             }
 
             let weak = self.self_weak.clone();
-            self.timers.reset_delay(NetworkAgentTimer::Handshake, move || {
-                let arc = upgrade_weak!(weak);
-                arc.write().handshake();
-            }, Self::VERSION_RETRY_DELAY);
+            self.timers.reset_delay(
+                NetworkAgentTimer::Handshake,
+                move || {
+                    let arc = upgrade_weak!(weak);
+                    arc.write().handshake();
+                },
+                Self::VERSION_RETRY_DELAY,
+            );
             return;
         }
 
@@ -193,23 +218,31 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         if !self.version_received {
             // TODO Should we ban instead?
             let weak = self.self_weak.clone();
-            self.timers.set_delay(NetworkAgentTimer::Version, move || {
-                let arc = upgrade_weak!(weak);
-                let agent = arc.read();
-                agent.timers.clear_delay(&NetworkAgentTimer::Version);
-                agent.channel.close(CloseType::VersionTimeout);
-            }, Self::HANDSHAKE_TIMEOUT);
+            self.timers.set_delay(
+                NetworkAgentTimer::Version,
+                move || {
+                    let arc = upgrade_weak!(weak);
+                    let agent = arc.read();
+                    agent.timers.clear_delay(&NetworkAgentTimer::Version);
+                    agent.channel.close(CloseType::VersionTimeout);
+                },
+                Self::HANDSHAKE_TIMEOUT,
+            );
         } else if self.peer_address_verified {
             self.send_ver_ack();
         }
 
         let weak = self.self_weak.clone();
-        self.timers.set_delay(NetworkAgentTimer::VerAck, move || {
-            let arc = upgrade_weak!(weak);
-            let agent = arc.read();
-            agent.timers.clear_delay(&NetworkAgentTimer::VerAck);
-            agent.channel.close(CloseType::VerackTimeout);
-        }, Self::HANDSHAKE_TIMEOUT);
+        self.timers.set_delay(
+            NetworkAgentTimer::VerAck,
+            move || {
+                let arc = upgrade_weak!(weak);
+                let agent = arc.read();
+                agent.timers.clear_delay(&NetworkAgentTimer::VerAck);
+                agent.channel.close(CloseType::VerackTimeout);
+            },
+            Self::HANDSHAKE_TIMEOUT,
+        );
     }
 
     fn send_ver_ack(&mut self) {
@@ -219,14 +252,20 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         let msg = VerAckMessage::new(
             &self.channel.address_info.peer_address().unwrap().peer_id,
             self.peer_challenge_nonce.as_ref().unwrap(),
-            self.network_config.key_pair());
+            self.network_config.key_pair(),
+        );
         self.channel.send_or_close(msg);
 
         self.verack_sent = true;
     }
 
     fn on_version(&mut self, msg: VersionMessage) {
-        trace!("[VERSION] {} {} {}", &msg.peer_address, &msg.head_hash, &msg.user_agent.as_ref().unwrap_or(&"None".to_string()));
+        trace!(
+            "[VERSION] {} {} {}",
+            &msg.peer_address,
+            &msg.head_hash,
+            &msg.user_agent.as_ref().unwrap_or(&"None".to_string())
+        );
 
         let now = SystemTime::now();
 
@@ -237,7 +276,10 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         // Ignore duplicate version messages.
         if self.version_received {
-            debug!("Ignoring duplicate version message from {}", self.channel.address_info.peer_address().unwrap());
+            debug!(
+                "Ignoring duplicate version message from {}",
+                self.channel.address_info.peer_address().unwrap()
+            );
             return;
         }
 
@@ -249,9 +291,13 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
             self.channel.send_or_close(RejectMessage::new(
                 MessageType::Version,
                 RejectMessageCode::Obsolete,
-                format!("incompatible version (ours={}, theirs={})", version::CODE, msg.version),
-                None)
-            );
+                format!(
+                    "incompatible version (ours={}, theirs={})",
+                    version::CODE,
+                    msg.version
+                ),
+                None,
+            ));
             self.channel.close(CloseType::IncompatibleVersion);
             return;
         }
@@ -265,7 +311,8 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         // Check that the given peerAddress is correctly signed.
         if !msg.peer_address.verify_signature() {
-            self.channel.close(CloseType::InvalidPeerAddressInVersionMessage);
+            self.channel
+                .close(CloseType::InvalidPeerAddressInVersionMessage);
             return;
         }
 
@@ -277,7 +324,8 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         let mut peer_address = msg.peer_address.clone();
         if let Some(channel_peer_address) = self.channel.address_info.peer_address() {
             if &peer_address != channel_peer_address.as_ref() {
-                self.channel.close(CloseType::UnexpectedPeerAddressInVersionMessage);
+                self.channel
+                    .close(CloseType::UnexpectedPeerAddressInVersionMessage);
                 return;
             }
             self.peer_address_verified = true;
@@ -296,7 +344,9 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         let peer_address = Arc::new(peer_address);
         // Set/update the channel's peer address.
-        self.channel.address_info.set_peer_address(peer_address.clone());
+        self.channel
+            .address_info
+            .set_peer_address(peer_address.clone());
 
         // Create peer object. Since the initial version message received from the
         // peer contains their local timestamp, we can use it to calculate their
@@ -306,7 +356,7 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
             msg.version,
             msg.head_hash.clone(),
             peer_address.timestamp as i64 - systemtime_to_timestamp(now) as i64,
-            msg.user_agent
+            msg.user_agent,
         ));
 
         self.peer_challenge_nonce = Some(msg.challenge_nonce.clone());
@@ -314,7 +364,10 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         // Tell listeners that we received this peer's version information.
         // Listeners registered to this event might close the connection to this peer.
-        self.notifier.notify(NetworkAgentEvent::Version(UniquePtr::new(self.peer.as_ref().unwrap())));
+        self.notifier
+            .notify(NetworkAgentEvent::Version(UniquePtr::new(
+                self.peer.as_ref().unwrap(),
+            )));
 
         // Abort handshake if the connection was closed.
         if self.channel.closed() {
@@ -336,8 +389,13 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
     }
 
     fn on_ver_ack(&mut self, msg: VerAckMessage) {
-        trace!("[VERACK] from {}", self.channel.address_info.peer_address()
-            .map_or("<unknown>".to_string(), |p| p.to_string()));
+        trace!(
+            "[VERACK] from {}",
+            self.channel
+                .address_info
+                .peer_address()
+                .map_or("<unknown>".to_string(), |p| p.to_string())
+        );
 
         // Make sure this is a valid message in our current state.
         if !self.can_accept_message(MessageType::VerAck) {
@@ -346,8 +404,13 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         // Ignore duplicate VerAck messages.
         if self.verack_received {
-            debug!("Ignoring duplicate VerAck message from {}", self.channel.address_info.peer_address()
-                .map_or("<unknown>".to_string(), |p| p.to_string()));
+            debug!(
+                "Ignoring duplicate VerAck message from {}",
+                self.channel
+                    .address_info
+                    .peer_address()
+                    .map_or("<unknown>".to_string(), |p| p.to_string())
+            );
             return;
         }
 
@@ -355,8 +418,11 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         self.timers.clear_delay(&NetworkAgentTimer::VerAck);
 
         // Verify public key.
-        if &PeerId::from(&msg.public_key) != self.channel.address_info.peer_address().unwrap().peer_id() {
-            self.channel.close(CloseType::InvalidPublicKeyInVerackMessage);
+        if &PeerId::from(&msg.public_key)
+            != self.channel.address_info.peer_address().unwrap().peer_id()
+        {
+            self.channel
+                .close(CloseType::InvalidPublicKeyInVerackMessage);
             return;
         }
 
@@ -364,7 +430,8 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         let mut data = self.network_config.peer_id().serialize_to_vec();
         self.challenge_nonce.serialize(&mut data).unwrap();
         if !msg.public_key.verify(&msg.signature, &data[..]) {
-            self.channel.close(CloseType::InvalidSignatureInVerackMessage);
+            self.channel
+                .close(CloseType::InvalidSignatureInVerackMessage);
             return;
         }
 
@@ -384,22 +451,35 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         // Setup regular connectivity check.
         // TODO randomize interval?
         let weak = self.self_weak.clone();
-        self.timers.set_interval(NetworkAgentTimer::Connectivity, move || {
-            let arc = upgrade_weak!(weak);
-            let mut agent = arc.write();
-            agent.check_connectivity();
-        }, Self::CONNECTIVITY_CHECK_INTERVAL);
+        self.timers.set_interval(
+            NetworkAgentTimer::Connectivity,
+            move || {
+                let arc = upgrade_weak!(weak);
+                let mut agent = arc.write();
+                agent.check_connectivity();
+            },
+            Self::CONNECTIVITY_CHECK_INTERVAL,
+        );
 
         // Regularly announce our address.
         let weak = self.self_weak.clone();
-        self.timers.set_interval(NetworkAgentTimer::AnnounceAddr, move || {
-            let arc = upgrade_weak!(weak);
-            let agent = arc.read();
-            agent.channel.send_or_close(AddrMessage::new(vec![agent.network_config.peer_address()]));
-        }, Self::ANNOUNCE_ADDR_INTERVAL);
+        self.timers.set_interval(
+            NetworkAgentTimer::AnnounceAddr,
+            move || {
+                let arc = upgrade_weak!(weak);
+                let agent = arc.read();
+                agent
+                    .channel
+                    .send_or_close(AddrMessage::new(vec![agent.network_config.peer_address()]));
+            },
+            Self::ANNOUNCE_ADDR_INTERVAL,
+        );
 
         // Tell listeners that the handshake with this peer succeeded.
-        self.notifier.notify(NetworkAgentEvent::Handshake(UniquePtr::new(self.peer.as_ref().unwrap())));
+        self.notifier
+            .notify(NetworkAgentEvent::Handshake(UniquePtr::new(
+                self.peer.as_ref().unwrap(),
+            )));
 
         // Request new network addresses from the peer.
         self.request_addresses(None);
@@ -411,15 +491,14 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         let max_results = max_results.unwrap_or(Self::NUM_ADDR_PER_REQUEST);
 
-        self.address_request = Some(AddressRequest {
-           max_results
-        });
+        self.address_request = Some(AddressRequest { max_results });
 
         // Request addresses from peer.
         self.channel.send_or_close(GetAddrMessage::new(
             self.network_config.protocol_mask(),
             self.network_config.services().accepted,
-            Some(max_results)));
+            Some(max_results),
+        ));
 
         // We don't use a timeout here. The peer will not respond with an addr message if
         // it doesn't have any new addresses.
@@ -438,9 +517,12 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
             return;
         }
 
-        let address_request = self.address_request.take().unwrap_or_else(|| AddressRequest {
-            max_results: Self::MAX_ADDR_PER_REQUEST,
-        });
+        let address_request = self
+            .address_request
+            .take()
+            .unwrap_or_else(|| AddressRequest {
+                max_results: Self::MAX_ADDR_PER_REQUEST,
+            });
 
         // Reject messages that contain more than 1000 addresses, ban peer (bitcoin).
         if msg.addresses.len() > Self::MAX_ADDR_PER_MESSAGE as usize {
@@ -449,12 +531,21 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
             return;
         }
 
-        trace!("[ADDR] {} addresses from {}", msg.addresses.len(), peer_address);
+        trace!(
+            "[ADDR] {} addresses from {}",
+            msg.addresses.len(),
+            peer_address
+        );
 
         // XXX Discard any addresses beyond the ones we requested
         // and check the addresses the peer sent to us.
         // TODO reject addr messages not matching our request.
-        let mut addresses: Vec<PeerAddress> = msg.addresses.iter().take(address_request.max_results as usize).cloned().collect();
+        let mut addresses: Vec<PeerAddress> = msg
+            .addresses
+            .iter()
+            .take(address_request.max_results as usize)
+            .cloned()
+            .collect();
 
         for address in addresses.iter() {
             if !address.verify_signature() {
@@ -462,7 +553,9 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
                 return;
             }
 
-            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss) && !address.is_globally_reachable(true) {
+            if (address.protocol() == Protocol::Ws || address.protocol() == Protocol::Wss)
+                && !address.is_globally_reachable(true)
+            {
                 self.channel.close(CloseType::AddrNotGloballyReachable);
                 return;
             }
@@ -473,7 +566,9 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         // Update peer with new address.
         if is_own_address {
-            self.channel.address_info.set_peer_address(Arc::new(msg.addresses[0].clone()));
+            self.channel
+                .address_info
+                .set_peer_address(Arc::new(msg.addresses[0].clone()));
         }
 
         // Put the new addresses in the address pool.
@@ -495,14 +590,17 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
         }
 
         // Find addresses that match the given protocolMask & serviceMask.
-        let num_results = cmp::min(msg.max_results.unwrap_or(Self::MAX_ADDR_PER_REQUEST), Self::MAX_ADDR_PER_REQUEST);
-        let addresses = self.addresses.query(
-            msg.protocol_mask,
-            msg.service_mask,
-            num_results
+        let num_results = cmp::min(
+            msg.max_results.unwrap_or(Self::MAX_ADDR_PER_REQUEST),
+            Self::MAX_ADDR_PER_REQUEST,
         );
+        let addresses = self
+            .addresses
+            .query(msg.protocol_mask, msg.service_mask, num_results);
         let addresses = addresses
-            .iter().map(|peer_address| peer_address.as_ref().clone()).collect();
+            .iter()
+            .map(|peer_address| peer_address.as_ref().clone())
+            .collect();
         self.channel.send_or_close(AddrMessage::new(addresses));
     }
 
@@ -523,15 +621,25 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
 
         // Expect the peer to answer with a pong message if we haven't heard anything from it
         // within the last CONNECTIVITY_CHECK_INTERVAL. Drop the peer otherwise.
-        if self.channel.last_message_received.load(Ordering::Relaxed).elapsed() > Self::CONNECTIVITY_CHECK_INTERVAL  {
+        if self
+            .channel
+            .last_message_received
+            .load(Ordering::Relaxed)
+            .elapsed()
+            > Self::CONNECTIVITY_CHECK_INTERVAL
+        {
             let weak = self.self_weak.clone();
-            self.timers.set_delay(NetworkAgentTimer::Ping(nonce), move || {
-                let arc = upgrade_weak!(weak);
-                let mut agent = arc.write();
-                agent.timers.clear_delay(&NetworkAgentTimer::Ping(nonce));
-                agent.ping_times.remove(&nonce);
-                agent.channel.close(CloseType::PingTimeout);
-            }, Self::PING_TIMEOUT);
+            self.timers.set_delay(
+                NetworkAgentTimer::Ping(nonce),
+                move || {
+                    let arc = upgrade_weak!(weak);
+                    let mut agent = arc.write();
+                    agent.timers.clear_delay(&NetworkAgentTimer::Ping(nonce));
+                    agent.ping_times.remove(&nonce);
+                    agent.channel.close(CloseType::PingTimeout);
+                },
+                Self::PING_TIMEOUT,
+            );
         }
     }
 
@@ -564,11 +672,21 @@ impl<B: AbstractBlockchain + 'static> NetworkAgent<B> {
     fn can_accept_message(&self, ty: MessageType) -> bool {
         // The first message must be the version message.
         if !self.version_received && ty != MessageType::Version {
-            warn!("Discarding {:?} message from {:?} / {:?} - no version message received previously", ty, self.channel.address_info.peer_address(), self.channel.address_info.net_address());
+            warn!(
+                "Discarding {:?} message from {:?} / {:?} - no version message received previously",
+                ty,
+                self.channel.address_info.peer_address(),
+                self.channel.address_info.net_address()
+            );
             return false;
         }
         if self.version_received && !self.verack_received && ty != MessageType::VerAck {
-            warn!("Discarding {:?} message from {:?} / {:?} - no verack message received previously", ty, self.channel.address_info.peer_address(), self.channel.address_info.net_address());
+            warn!(
+                "Discarding {:?} message from {:?} / {:?} - no verack message received previously",
+                ty,
+                self.channel.address_info.peer_address(),
+                self.channel.address_info.net_address()
+            );
             return false;
         }
 

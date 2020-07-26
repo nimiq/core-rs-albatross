@@ -13,11 +13,11 @@ use crate::Signature;
 /// and one bit indicating if it is the "point-at-infinity".
 #[derive(Clone, Copy)]
 pub struct CompressedSignature {
-    pub signature: [u8; 96],
+    pub signature: [u8; 95],
 }
 
 impl CompressedSignature {
-    pub const SIZE: usize = 96;
+    pub const SIZE: usize = 95;
 
     /// Transforms the compressed form back into the projective form.
     pub fn uncompress(&self) -> Result<Signature, SerializationError> {
