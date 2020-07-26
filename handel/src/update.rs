@@ -89,7 +89,7 @@ mod test {
         let update_2: LevelUpdate = Deserialize::deserialize_from_vec(&data).unwrap();
 
         assert_eq!(data.len(), update.serialized_size());
-        assert_eq!(update.serialized_size(), 109);
+        assert_eq!(update.serialized_size(), 108);
         assert!(update_2.individual.is_none());
         assert_eq!(update_2.level, 2);
         assert_eq!(update_2.origin, 3);
@@ -98,6 +98,6 @@ mod test {
     #[test]
     fn test_serialize_deserialize_with_message() {
         let update = LevelUpdate::new(create_multisig(), None, 2, 3).with_tag(42u64);
-        assert_eq!(update.serialized_size(), 109 + 8);
+        assert_eq!(update.serialized_size(), 108 + 8);
     }
 }
