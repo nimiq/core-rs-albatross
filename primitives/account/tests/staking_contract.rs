@@ -1570,7 +1570,7 @@ fn it_can_build_a_validator_set() {
             .unwrap()
             .public_key()
             .compressed(),
-        &validator3
+        &validator1
     );
     assert_eq!(
         slots
@@ -1578,7 +1578,7 @@ fn it_can_build_a_validator_set() {
             .unwrap()
             .public_key()
             .compressed(),
-        &validator2
+        &validator3
     );
     assert_eq!(
         slots
@@ -1586,7 +1586,7 @@ fn it_can_build_a_validator_set() {
             .unwrap()
             .public_key()
             .compressed(),
-        &validator1
+        &validator2
     );
 
     // TODO More tests
