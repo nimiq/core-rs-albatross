@@ -4,8 +4,7 @@ use algebra::mnt6_753::G1Affine;
 use algebra::SerializationError;
 use algebra_core::curves::AffineCurve;
 
-use nimiq_nano_sync::compression::BeDeserialize;
-
+use crate::compression::BeDeserialize;
 use crate::Signature;
 
 /// The serialized compressed form of a signature.

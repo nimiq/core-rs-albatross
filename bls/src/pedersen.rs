@@ -1,11 +1,12 @@
-use algebra::mnt6_753::{Fq, G1Affine, G1Projective};
-use algebra_core::{Group, One, PrimeField};
+use algebra::mnt6_753::{Fq, FqParameters, G1Affine, G1Projective};
+use algebra_core::{FpParameters, Group, One, PrimeField};
 use blake2_rfc::blake2s::Blake2s;
 use crypto_primitives::prf::Blake2sWithParameterBlock;
 
-use crate::constants::POINT_CAPACITY;
 use crate::rand_gen::generate_random_seed;
 use crate::utils::big_int_from_bytes_be;
+
+const POINT_CAPACITY: usize = FqParameters::MODULUS_BITS as usize - 1;
 
 /// This is the function for creating generators in the G1 group for the MNT6-753 curve. These
 /// generators are meant to be used for the Pedersen hash function.

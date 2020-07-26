@@ -6,8 +6,8 @@ use log::error;
 use num_traits::Zero;
 
 use nimiq_hash::Hash;
-use nimiq_nano_sync::compression::BeSerialize;
 
+use crate::compression::BeSerialize;
 use crate::{CompressedPublicKey, SecretKey, SigHash, Signature};
 
 #[derive(Clone, Copy)]

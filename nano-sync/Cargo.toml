@@ -22,6 +22,8 @@ groth16 = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", feature
 r1cs-core = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq" }
 r1cs-std = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq", features = ["mnt4_753", "mnt6_753"] }
 
+nimiq-bls = { path = "../bls", version = "0.1" }
+
 [features]
 default = []
 cost-analysis = ["colored"]

@@ -6,8 +6,8 @@ use algebra_core::curves::AffineCurve;
 
 #[cfg(feature = "beserial")]
 use beserial::Deserialize;
-use nimiq_nano_sync::compression::BeDeserialize;
 
+use crate::compression::BeDeserialize;
 use crate::{PublicKey, PublicKeyParseError};
 
 /// The serialized compressed form of a public key.

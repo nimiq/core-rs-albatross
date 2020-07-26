@@ -18,11 +18,11 @@ num-traits = { version = "0.2", default-features = false }
 parking_lot = { version = "0.9", optional = true }
 rand = "0.7"
 
-algebra = { git = "https://github.com/nimiq/zexe", branch = "nimiq", features=["mnt6_753"]}
+algebra = { git = "https://github.com/nimiq/zexe", branch = "nimiq", features=["mnt6_753", "mnt4_753"]}
 algebra-core = { git = "https://github.com/nimiq/zexe", branch = "nimiq"}
+crypto-primitives = { git = "https://github.com/nimiq/zexe.git", branch = "nimiq" }
 
 beserial = { path = "../beserial", version = "0.1", optional = true }
-nimiq-nano-sync = { path = "../nano-sync", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["key-rng"] }
 
