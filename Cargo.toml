@@ -35,6 +35,7 @@ members = [
   "network",
   "network-albatross",
   "network-interface",
+  "network-mock",
   "network-primitives",
   "primitives",
   "primitives/account",
