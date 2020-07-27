@@ -16,7 +16,7 @@ fn it_can_convert_macro_block_into_slots() {
     let signature_bytes = hex::decode(
         "8001733b6e6edf3e1c6feb8841d32abe26d05163fddf6d2\
     2179b17c7b1ead82e8fcad81e9685da8102ae3ae8c3b80d098545cadfba0d5310b1aa48f97ee649ec58943ae68d68a9\
-    f8e9fff2830da42e18e6f9a58781f3f8757795605bcf577588",
+    f8e9fff2830da42e18e6f9a58781f3f8757795605bcf5775",
     )
     .unwrap();
     let signature = Signature::deserialize_from_vec(&signature_bytes).unwrap();
@@ -66,7 +66,8 @@ fn it_can_convert_macro_block_into_slots() {
     let validator_slots: ValidatorSlots = slot_allocation
         .into_iter()
         .map(|(num_slots, data)| {
-            let pubkey = CompressedPublicKey::from_str(&data[..576]).unwrap();
+            // The 6 unused bytes in the middle come from reducing the public key size to 270 bytes.
+            let pubkey = CompressedPublicKey::from_str(&data[..570]).unwrap();
             let address = Address::from_any_str(&data[576..]).unwrap();
             ValidatorSlotBand::new(pubkey, address, num_slots)
         })
