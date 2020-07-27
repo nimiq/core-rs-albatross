@@ -17,6 +17,7 @@ use network_interface::message::{peek_type, Message};
 use network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
 use network_interface::peer::{CloseReason, Peer as PeerInterface, SendError as SendErrorI};
 use network_messages::{Message as LegacyMessage, MessageNotifier, MessageType};
+use network_primitives::address::peer_address::PeerAddress;
 use utils::observer::Notifier;
 
 use crate::connection::close_type::CloseType;
@@ -197,6 +198,14 @@ impl Hash for PeerChannel {
 
 #[async_trait]
 impl PeerInterface for PeerChannel {
+    type Id = Arc<PeerAddress>;
+
+    fn id(&self) -> Self::Id {
+        self.address_info
+            .peer_address()
+            .expect("PeerAddress not set")
+    }
+
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendErrorI> {
         self.peer_sink
             .send(msg)

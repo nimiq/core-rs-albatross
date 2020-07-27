@@ -11,6 +11,7 @@ pub enum CloseReason {
     Other,
 }
 
+#[derive(Debug)]
 pub enum SendError {
     Serialization(SerializingError),
     AlreadyClosed,
@@ -18,6 +19,9 @@ pub enum SendError {
 
 #[async_trait]
 pub trait Peer: Send + Sync {
+    type Id;
+
+    fn id(&self) -> Self::Id;
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError>;
     async fn send_or_close<T: Message, F: FnOnce(&SendError) -> CloseReason + Send>(
         &self,

@@ -11,7 +11,7 @@ use rand::rngs::OsRng;
 use rand::Rng;
 
 use blockchain_base::AbstractBlockchain;
-use network_interface::prelude::{Network as NetworkInterface, NetworkEvent as NetworkEventI};
+use network_interface::prelude::{Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface};
 use network_primitives::address::peer_address::PeerAddress;
 use network_primitives::networks::NetworkId;
 use network_primitives::time::NetworkTime;
@@ -428,7 +428,6 @@ impl<B: AbstractBlockchain> Network<B> {
 
 impl<B: AbstractBlockchain> NetworkInterface for Network<B> {
     type PeerType = PeerChannel;
-    type PeerId = PeerAddress;
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
         self.connections
@@ -439,7 +438,7 @@ impl<B: AbstractBlockchain> NetworkInterface for Network<B> {
             .collect::<Vec<_>>()
     }
 
-    fn get_peer(&self, peer_id: &Self::PeerId) -> Option<Arc<Self::PeerType>> {
+    fn get_peer(&self, peer_id: &<Self::PeerType as PeerInterface>::Id) -> Option<Arc<Self::PeerType>> {
         self.connections
             .state()
             .get_connection_by_peer_address(peer_id)

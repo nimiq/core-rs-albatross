@@ -72,6 +72,15 @@ impl Hash for Peer {
 
 #[async_trait]
 impl PeerInterface for Peer {
+    type Id = Arc<PeerAddress>;
+
+    fn id(&self) -> Self::Id {
+        self.channel
+            .address_info
+            .peer_address()
+            .expect("PeerAddress not set")
+    }
+
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError> {
         self.channel
             .peer_sink

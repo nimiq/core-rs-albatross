@@ -25,10 +25,9 @@ impl<P> Clone for NetworkEvent<P> {
 #[async_trait]
 pub trait Network {
     type PeerType: Peer + 'static;
-    type PeerId;
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;
-    fn get_peer(&self, peer_id: &Self::PeerId) -> Option<Arc<Self::PeerType>>;
+    fn get_peer(&self, peer_id: &<Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>>;
 
     fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>>;
 
