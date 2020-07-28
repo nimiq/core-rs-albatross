@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::channel::mpsc::unbounded;
+use futures::channel::mpsc::{unbounded, UnboundedSender};
+use futures::channel::oneshot::{channel as oneshot, Sender as OneshotSender};
 use futures::{executor, future, FutureExt, Sink, SinkExt, Stream, StreamExt};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use tokio::sync::broadcast::{
     channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
 };
@@ -21,9 +21,9 @@ pub type Channels =
 
 pub struct MockPeer {
     id: u32,
-    tx: Arc<RwLock<Option<Pin<Box<dyn Sink<Vec<u8>, Error = SendError> + Send + Sync>>>>>,
+    tx: Arc<Mutex<Option<Pin<Box<dyn Sink<Vec<u8>, Error = SendError> + Send + Sync>>>>>,
     channels: Channels,
-    closed: Arc<AtomicBool>,
+    close_tx: Mutex<Option<OneshotSender<CloseReason>>>,
 }
 
 impl MockPeer {
@@ -31,43 +31,45 @@ impl MockPeer {
         id: u32,
         tx: Pin<Box<dyn Sink<Vec<u8>, Error = SendError> + Send + Sync>>,
         rx: Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>,
+        mut network_close_tx: UnboundedSender<u32>,
     ) -> Self {
-        let tx = Arc::new(RwLock::new(Some(tx)));
+        let tx = Arc::new(Mutex::new(Some(tx)));
         let tx1 = Arc::clone(&tx);
 
         let channels: Channels = Arc::new(RwLock::new(HashMap::new()));
         let channels1 = Arc::clone(&channels);
         let channels2 = Arc::clone(&channels);
 
-        let closed = Arc::new(AtomicBool::new(false));
-        let closed1 = Arc::clone(&closed);
-
-        tokio::spawn(
-            rx
-                .take_while(move |_| future::ready(!closed1.load(Ordering::Relaxed)))
-                .for_each(move |msg: Vec<u8>| {
-                    if let Ok(msg_type) = peek_type(&msg) {
-                        let mut channels = channels1.write();
-                        if let Some(channel) = channels.get_mut(&msg_type) {
-                            if let Err(_) = executor::block_on(channel.send(msg)) {
-                                channels.remove(&msg_type);
-                            }
-                        }
+        // Setup message dispatcher to distribute incoming messages to message-type specific channels.
+        let dispatcher = rx.for_each(move |msg: Vec<u8>| {
+            if let Ok(msg_type) = peek_type(&msg) {
+                let mut channels = channels1.write();
+                if let Some(channel) = channels.get_mut(&msg_type) {
+                    if let Err(_) = executor::block_on(channel.send(msg)) {
+                        channels.remove(&msg_type);
                     }
-                    future::ready(())
-                })
-                .then(move |_| {
-                    tx1.write().take();
-                    channels2.write().clear();
-                    future::ready(())
-                }),
-        );
+                }
+            }
+            future::ready(())
+        });
+        // Oneshot channel to terminate the dispatcher.
+        let (close_tx, close_rx) = oneshot::<CloseReason>();
+
+        let select = future::select(dispatcher, close_rx).then(move |_| async move {
+            // Drop all senders. tx1 might have already been dropped if we closed this connection.
+            tx1.lock().take();
+            channels2.write().clear();
+
+            // Notify network that peer disconnected.
+            network_close_tx.send(id).await
+        });
+        tokio::spawn(select);
 
         MockPeer {
             id,
             tx,
             channels,
-            closed,
+            close_tx: Mutex::new(Some(close_tx)),
         }
     }
 }
@@ -81,7 +83,7 @@ impl Peer for MockPeer {
     }
 
     async fn send<T: Message>(&self, msg: &T) -> Result<(), SendError> {
-        match self.tx.write().as_mut() {
+        match self.tx.lock().as_mut() {
             Some(tx) => {
                 let mut serialized = Vec::with_capacity(msg.serialized_message_size());
                 msg.serialize_message(&mut serialized)
@@ -101,23 +103,42 @@ impl Peer for MockPeer {
     }
 
     async fn close(&self, ty: CloseReason) {
-        self.closed.store(true, Ordering::Relaxed);
+        if let Some(close_tx) = self.close_tx.lock().take() {
+            close_tx.send(ty).expect("Close failed");
+
+            // Eagerly drop sender to stop sending message immediately.
+            self.tx.lock().take();
+        }
     }
 }
 
 pub struct MockNetwork {
     peer_id: u32,
-    peers: RwLock<HashMap<u32, Arc<MockPeer>>>,
-    events: BroadcastSender<NetworkEvent<MockPeer>>,
+    peers: Arc<RwLock<HashMap<u32, Arc<MockPeer>>>>,
+    event_tx: BroadcastSender<NetworkEvent<MockPeer>>,
+    close_tx: UnboundedSender<u32>,
 }
 
 impl MockNetwork {
     pub fn new(peer_id: u32) -> Self {
-        let (tx, _rx) = broadcast(16);
+        let peers = Arc::new(RwLock::new(HashMap::new()));
+        let (event_tx, _rx) = broadcast(16);
+        let (close_tx, close_rx) = unbounded();
+
+        let peers1 = Arc::clone(&peers);
+        let event_tx1 = event_tx.clone();
+        tokio::spawn(close_rx.for_each(move |peer_id| {
+            if let Some(peer) = peers1.write().remove(&peer_id) {
+                event_tx1.send(NetworkEvent::PeerLeft(peer)).ok();
+            }
+            future::ready(())
+        }));
+
         MockNetwork {
             peer_id,
-            peers: RwLock::new(HashMap::new()),
-            events: tx,
+            peers,
+            event_tx,
+            close_tx,
         }
     }
 
@@ -129,11 +150,13 @@ impl MockNetwork {
             other.peer_id,
             Box::pin(tx1.sink_map_err(|_| SendError::AlreadyClosed)),
             rx2.boxed(),
+            self.close_tx.clone(),
         );
         let peer2 = MockPeer::new(
             self.peer_id,
             Box::pin(tx2.sink_map_err(|_| SendError::AlreadyClosed)),
             rx1.boxed(),
+            other.close_tx.clone(),
         );
 
         self.add_peer(Arc::new(peer1));
@@ -145,8 +168,9 @@ impl MockNetwork {
             .write()
             .insert(peer.id(), Arc::clone(&peer))
             .map_or((), |_| panic!("Duplicate peer '{}'", peer.id()));
-        self.events
-            .send(NetworkEvent::PeerJoined(Arc::clone(&peer)));
+        self.event_tx
+            .send(NetworkEvent::PeerJoined(Arc::clone(&peer)))
+            .ok();
     }
 }
 
@@ -166,7 +190,7 @@ impl Network for MockNetwork {
     }
 
     fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>> {
-        self.events.subscribe()
+        self.event_tx.subscribe()
     }
 }
 
@@ -174,15 +198,16 @@ impl Network for MockNetwork {
 mod tests {
     use std::sync::Arc;
 
-    use beserial::{Deserialize, Serialize};
     use futures::StreamExt;
+
+    use beserial::{Deserialize, Serialize};
     use nimiq_network_interface::message::Message;
     use nimiq_network_interface::network::{Network, NetworkEvent};
-    use nimiq_network_interface::peer::Peer;
+    use nimiq_network_interface::peer::{CloseReason, Peer};
 
     use crate::network::MockNetwork;
 
-    #[derive(Deserialize, Serialize)]
+    #[derive(Debug, Deserialize, Serialize)]
     struct TestMessage {
         id: u32,
     }
@@ -242,7 +267,42 @@ mod tests {
             .next()
             .await
             .expect("Message expected");
-
         assert_eq!(msg.id, 4711);
+    }
+
+    #[tokio::test]
+    async fn connections_are_properly_closed() {
+        let net1 = MockNetwork::new(1);
+        let net2 = MockNetwork::new(2);
+        net1.connect(&net2);
+
+        assert_eq!(net1.get_peers().len(), 1);
+        assert_eq!(net2.get_peers().len(), 1);
+
+        let peer2 = net1.get_peer(&2).unwrap();
+        let peer2_1 = Arc::clone(&peer2);
+        tokio::spawn(async move {
+            peer2_1.close(CloseReason::Other).await;
+            // This message should not arrive.
+            peer2_1
+                .send(&TestMessage { id: 6969 })
+                .await
+                .expect_err("Message didn't fail");
+        });
+
+        let mut events1 = net1.subscribe_events();
+        let mut events2 = net2.subscribe_events();
+        let peer1 = net2.get_peer(&1).unwrap();
+        let mut msg1 = peer1.receive::<TestMessage>();
+        match join!(events1.next(), events2.next(), msg1.next()) {
+            (Some(Ok(NetworkEvent::PeerLeft(p1))), Some(Ok(NetworkEvent::PeerLeft(p2))), None) => {
+                assert_eq!(p1.id(), 2);
+                assert_eq!(p2.id(), 1);
+            }
+            _ => panic!("Unexpected event"),
+        }
+
+        assert_eq!(net1.get_peers().len(), 0);
+        assert_eq!(net2.get_peers().len(), 0);
     }
 }

@@ -7,6 +7,7 @@ use crate::message::Message;
 
 pub mod dispatch;
 
+#[derive(Debug)]
 pub enum CloseReason {
     Other,
 }
