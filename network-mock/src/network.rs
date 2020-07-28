@@ -305,11 +305,10 @@ mod tests {
         assert_eq!(net2.get_peers().len(), 1);
 
         let peer2 = net1.get_peer(&2).unwrap();
-        let peer2_1 = Arc::clone(&peer2);
         tokio::spawn(async move {
-            peer2_1.close(CloseReason::Other).await;
+            peer2.close(CloseReason::Other).await;
             // This message should not arrive.
-            peer2_1
+            peer2
                 .send(&TestMessage { id: 6969 })
                 .await
                 .expect_err("Message didn't fail");
@@ -318,8 +317,8 @@ mod tests {
         let mut events1 = net1.subscribe_events();
         let mut events2 = net2.subscribe_events();
         let peer1 = net2.get_peer(&1).unwrap();
-        let mut msg1 = peer1.receive::<TestMessage>();
-        match join!(events1.next(), events2.next(), msg1.next()) {
+        let mut no_msg = peer1.receive::<TestMessage>();
+        match join!(events1.next(), events2.next(), no_msg.next()) {
             (Some(Ok(NetworkEvent::PeerLeft(p1))), Some(Ok(NetworkEvent::PeerLeft(p2))), None) => {
                 assert_eq!(p1.id(), 2);
                 assert_eq!(p2.id(), 1);
