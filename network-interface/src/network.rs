@@ -24,7 +24,7 @@ impl<P> Clone for NetworkEvent<P> {
 }
 
 #[async_trait]
-pub trait Network {
+pub trait Network: Send + Sync + 'static {
     type PeerType: Peer + 'static;
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>>;

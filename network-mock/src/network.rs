@@ -201,11 +201,13 @@ mod tests {
     use futures::StreamExt;
 
     use beserial::{Deserialize, Serialize};
-    use nimiq_network_interface::message::Message;
+    use nimiq_network_interface::message::{Message, RequestMessage, ResponseMessage};
     use nimiq_network_interface::network::{Network, NetworkEvent};
     use nimiq_network_interface::peer::{CloseReason, Peer};
 
     use crate::network::MockNetwork;
+    use nimiq_network_interface::request_response::RequestResponse;
+    use std::time::Duration;
 
     #[derive(Debug, Deserialize, Serialize)]
     struct TestMessage {
@@ -213,6 +215,18 @@ mod tests {
     }
     impl Message for TestMessage {
         const TYPE_ID: u64 = 42;
+    }
+
+    impl RequestMessage for TestMessage {
+        fn set_request_identifier(&mut self, request_identifier: u32) {
+            self.id = request_identifier;
+        }
+    }
+
+    impl ResponseMessage for TestMessage {
+        fn get_request_identifier(&self) -> u32 {
+            self.id
+        }
     }
 
     #[tokio::test]
@@ -304,5 +318,31 @@ mod tests {
 
         assert_eq!(net1.get_peers().len(), 0);
         assert_eq!(net2.get_peers().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn request_response() {
+        let net1 = MockNetwork::new(1);
+        let net2 = MockNetwork::new(2);
+        net1.connect(&net2);
+
+        assert_eq!(net1.get_peers().len(), 1);
+        assert_eq!(net2.get_peers().len(), 1);
+
+        let mut stream = net2.receive_from_all::<TestMessage>();
+        // Relay messages back.
+        tokio::spawn(async move {
+            while let Some((msg, peer)) = stream.next().await {
+                peer.send(&msg).await.unwrap();
+            }
+        });
+
+        let peer2 = net1.get_peer(&2).unwrap();
+        let requests =
+            RequestResponse::<_, TestMessage, TestMessage>::new(peer2, Duration::new(1, 0));
+
+        let msg = TestMessage { id: 0 };
+        let response = requests.request(msg).await.expect("TestMessage expected");
+        assert_eq!(response.id, 0);
     }
 }

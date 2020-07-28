@@ -26,6 +26,7 @@ pub struct RequestResponse<P: Peer, Req: RequestMessage, Res: ResponseMessage> {
     _req_type: PhantomData<Req>,
 }
 
+#[derive(Debug)]
 pub enum RequestError {
     Timeout,
     SendError(SendError),
