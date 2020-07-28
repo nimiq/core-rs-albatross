@@ -50,7 +50,7 @@ pub trait Network {
 
 /// A wrapper around `SelectAll` that automatically subscribes to new peers.
 pub struct ReceiveFromAll<T: Message, P> {
-    inner: SelectAll<Pin<Box<dyn Stream<Item = T> + Send>>>,
+    inner: SelectAll<Pin<Box<dyn Stream<Item = (T, Arc<P>)> + Send>>>,
     event_stream:
         Pin<Box<dyn FusedStream<Item = Result<NetworkEvent<P>, BroadcastRecvError>> + Send>>,
 }
@@ -58,14 +58,19 @@ pub struct ReceiveFromAll<T: Message, P> {
 impl<T: Message, P: Peer + 'static> ReceiveFromAll<T, P> {
     pub fn new<N: Network<PeerType = P> + ?Sized>(network: &N) -> Self {
         ReceiveFromAll {
-            inner: stream::select_all(network.get_peers().iter().map(|peer| peer.receive::<T>())),
+            inner: stream::select_all(network.get_peers().iter().map(|peer| {
+                let peer_inner = Arc::clone(&peer);
+                peer.receive::<T>()
+                    .map(move |item| (item, Arc::clone(&peer_inner)))
+                    .boxed()
+            })),
             event_stream: Box::pin(network.subscribe_events().into_stream().fuse()),
         }
     }
 }
 
-impl<T: Message, P: Peer> Stream for ReceiveFromAll<T, P> {
-    type Item = T;
+impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
+    type Item = (T, Arc<P>);
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         loop {
@@ -73,7 +78,12 @@ impl<T: Message, P: Peer> Stream for ReceiveFromAll<T, P> {
                 Poll::Pending => break,
                 Poll::Ready(Some(Ok(NetworkEvent::PeerJoined(peer)))) => {
                     // We have a new peer to receive from.
-                    self.inner.push(peer.receive::<T>())
+                    let peer_inner = Arc::clone(&peer);
+                    self.inner.push(
+                        peer.receive::<T>()
+                            .map(move |item| (item, Arc::clone(&peer_inner)))
+                            .boxed(),
+                    )
                 }
                 #[allow(unreachable_patterns)]
                 Poll::Ready(Some(Ok(_))) => {} // Ignore others.
@@ -91,7 +101,7 @@ impl<T: Message, P: Peer> Stream for ReceiveFromAll<T, P> {
     }
 }
 
-impl<T: Message, P: Peer> FusedStream for ReceiveFromAll<T, P> {
+impl<T: Message, P: Peer + 'static> FusedStream for ReceiveFromAll<T, P> {
     fn is_terminated(&self) -> bool {
         self.inner.is_terminated() || self.event_stream.is_terminated()
     }
