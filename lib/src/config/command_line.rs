@@ -4,7 +4,7 @@ use failure::Fail;
 use log::{LevelFilter, ParseLevelError};
 use structopt::StructOpt;
 
-use network_primitives::networks::NetworkId;
+use genesis::NetworkId;
 
 use crate::config::config_file::ConsensusType;
 

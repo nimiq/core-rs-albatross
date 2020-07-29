@@ -4,8 +4,11 @@ use rand::rngs::OsRng;
 use rand::Rng;
 
 use blockchain_base::AbstractBlockchain;
-use network_primitives::services::ServiceFlags;
-use network_primitives::{address::peer_address::PeerAddress, protocol::Protocol};
+use peer_address::{
+    address::PeerAddress,
+    protocol::Protocol,
+    services::ServiceFlags
+};
 
 use crate::address::peer_address_book::PeerAddressBookState;
 use crate::{

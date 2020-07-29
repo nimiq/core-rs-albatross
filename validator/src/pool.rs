@@ -8,10 +8,10 @@ use bls::lazy::LazyPublicKey;
 use bls::CompressedPublicKey;
 use hash::{Blake2bHash, Hash};
 use network::Network;
-use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
 use primitives::slot::{SlotBand, SlotCollection, ValidatorSlots};
 
 use crate::validator_agent::ValidatorAgent;
+use crate::validator_info::{SignedValidatorInfo, ValidatorInfo};
 
 pub enum PushResult {
     OldInfo,

@@ -10,13 +10,12 @@ use rand::{rngs::OsRng, Rng};
 
 use beserial::Serialize;
 use blockchain_base::AbstractBlockchain;
+use genesis::NetworkInfo;
 use macros::upgrade_weak;
 use network_messages::*;
-use network_primitives::address::peer_address::PeerAddress;
-use network_primitives::address::PeerId;
-use network_primitives::networks::NetworkInfo;
-use network_primitives::protocol::Protocol;
-use network_primitives::version;
+use peer_address::address::{PeerAddress, PeerId};
+use peer_address::protocol::Protocol;
+use peer_address::version;
 use utils::observer::{weak_listener, weak_passthru_listener, Notifier};
 use utils::rate_limit::RateLimit;
 use utils::time::systemtime_to_timestamp;

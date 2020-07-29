@@ -17,7 +17,7 @@ use network_interface::message::{peek_type, Message};
 use network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
 use network_interface::peer::{CloseReason, Peer as PeerInterface, SendError as SendErrorI};
 use network_messages::{Message as LegacyMessage, MessageNotifier, MessageType};
-use network_primitives::address::peer_address::PeerAddress;
+use peer_address::address::PeerAddress;
 use utils::observer::Notifier;
 
 use crate::connection::close_type::CloseType;

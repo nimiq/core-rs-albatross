@@ -6,17 +6,18 @@ use nimiq_account::AccountType;
 use nimiq_block_production::BlockProducer;
 use nimiq_blockchain::{Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_genesis::NetworkId;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_mempool::{Mempool, MempoolConfig, ReturnCode};
-use nimiq_network_primitives::{networks::NetworkId, time::NetworkTime};
 use nimiq_primitives::coin::Coin;
 use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_utils::time::OffsetTime;
 
 #[test]
 fn it_can_produce_empty_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(
-        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(OffsetTime::new())).unwrap(),
     );
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 
@@ -37,7 +38,7 @@ fn it_can_produce_empty_blocks() {
 fn it_can_produce_nonempty_blocks() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain = Arc::new(
-        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap(),
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(OffsetTime::new())).unwrap(),
     );
     let mempool = Mempool::new(blockchain.clone(), MempoolConfig::default());
 

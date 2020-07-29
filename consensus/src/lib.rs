@@ -8,13 +8,14 @@ extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_collections as collections;
 extern crate nimiq_database as database;
+extern crate nimiq_genesis as genesis;
 extern crate nimiq_hash as hash;
 extern crate nimiq_macros as macros;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_messages as network_messages;
 extern crate nimiq_network as network;
-extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
+extern crate nimiq_subscription as subscription;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;
 

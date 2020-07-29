@@ -18,8 +18,8 @@ use tokio_tungstenite::MaybeTlsStream;
 use tungstenite::stream::Mode;
 use url::Url;
 
-use network_primitives::address::PeerAddress;
-use network_primitives::protocol::ProtocolFlags;
+use peer_address::address::PeerAddress;
+use peer_address::protocol::ProtocolFlags;
 use utils::observer::PassThroughNotifier;
 
 use crate::connection::close_type::CloseType;

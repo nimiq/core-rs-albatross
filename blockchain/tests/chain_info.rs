@@ -4,7 +4,7 @@ use std::str::FromStr;
 use beserial::{Deserialize, Serialize};
 use nimiq_block::{Block, Difficulty};
 use nimiq_blockchain::{chain_info::ChainInfo, super_block_counts::SuperBlockCounts};
-use nimiq_network_primitives::networks::NetworkInfo;
+use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::networks::NetworkId;
 
 #[test]

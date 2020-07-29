@@ -15,7 +15,7 @@ use tungstenite::protocol::Message as WebSocketMessage;
 
 use beserial::{Deserialize, Serialize};
 use network_messages::Message as NimiqMessage;
-use network_primitives::address::net_address::NetAddress;
+use peer_address::address::NetAddress;
 
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;

@@ -12,13 +12,13 @@ use log::LevelFilter;
 use serde_derive::Deserialize;
 use url::Url;
 
+use genesis::NetworkId;
 use keys::PublicKey;
 use mempool::filter::{MempoolFilter, Rules as MempoolRules};
 use mempool::MempoolConfig;
 use network::network_config::{ReverseProxyConfig, Seed as NetworkSeed};
-use network_primitives::address::peer_uri::PeerUriError;
-use network_primitives::networks::NetworkId;
-use network_primitives::{address, protocol};
+use peer_address::address::peer_uri::PeerUriError;
+use peer_address::{address, protocol};
 use primitives::coin::Coin;
 
 use crate::config::command_line::CommandLine;

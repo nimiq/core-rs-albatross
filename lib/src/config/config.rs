@@ -17,7 +17,7 @@ use keys::PublicKey;
 use mempool::filter::Rules as MempoolRules;
 use mempool::MempoolConfig;
 use network::network_config::{NetworkConfig, ReverseProxyConfig, Seed};
-use network_primitives::address::{NetAddress, PeerUri, SeedList};
+use peer_address::address::{NetAddress, PeerUri, SeedList};
 use primitives::networks::NetworkId;
 #[cfg(feature = "validator")]
 use utils::key_rng::SecureGenerate;

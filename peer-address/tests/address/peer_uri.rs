@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use network_primitives::address::PeerUri;
-use network_primitives::protocol::Protocol;
+use nimiq_peer_address::address::PeerUri;
+use nimiq_peer_address::protocol::Protocol;
 
 #[test]
 fn test_parse_uri_dumb() {

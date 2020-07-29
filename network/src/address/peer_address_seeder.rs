@@ -11,9 +11,9 @@ use url::Url;
 
 use crate::network_config::{NetworkConfig, Seed};
 use keys::Signature;
-use network_primitives::address::peer_address::PeerAddress;
-use network_primitives::address::peer_uri::{PeerUri, PeerUriError};
-use network_primitives::networks::{NetworkId, NetworkInfo};
+use peer_address::address::PeerAddress;
+use peer_address::address::peer_uri::{PeerUri, PeerUriError};
+use genesis::{NetworkId, NetworkInfo};
 
 use utils::observer::Notifier;
 

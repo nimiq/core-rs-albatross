@@ -6,7 +6,7 @@ use consensus::{AlbatrossConsensusProtocol, Consensus as AbstractConsensus};
 use database::Environment;
 use mempool::Mempool as GenericMempool;
 use network::{Network as GenericNetwork, NetworkConfig};
-use network_primitives::services::ServiceFlags;
+use peer_address::services::ServiceFlags;
 #[cfg(feature = "validator")]
 use validator::validator::Validator;
 

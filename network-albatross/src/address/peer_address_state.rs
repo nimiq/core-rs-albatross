@@ -6,8 +6,8 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::connection::close_type::CloseType;
 use crate::peer_channel::PeerChannel;
-use network_primitives::address::{net_address::NetAddress, peer_address::PeerAddress};
-use network_primitives::protocol::Protocol;
+use peer_address::address::{NetAddress, PeerAddress};
+use peer_address::protocol::Protocol;
 
 pub struct PeerAddressInfo {
     pub peer_address: Arc<PeerAddress>,

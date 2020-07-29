@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use reqwest::StatusCode;
 use tungstenite::handshake::server::{Callback, ErrorResponse, Request};
 
-use network_primitives::address::NetAddress;
+use peer_address::address::NetAddress;
 
 use crate::network_config::ReverseProxyConfig;
 

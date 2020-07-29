@@ -37,4 +37,4 @@ hex = "0.4"
 nimiq-block = { path = "../primitives/block", version = "0.1" }
 nimiq-blockchain = { path = "../blockchain", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1" }
+nimiq-genesis = { path = "../genesis", version = "0.1" }

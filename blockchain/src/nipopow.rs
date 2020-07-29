@@ -4,7 +4,7 @@ use block::proof::ChainProof;
 use block::{Block, BlockHeader, Target};
 use database::{ReadTransaction, Transaction};
 use hash::Blake2bHash;
-use network_primitives::networks::NetworkInfo;
+use genesis::NetworkInfo;
 use utils::iterators::Merge;
 
 use crate::{chain_info::ChainInfo, Blockchain};

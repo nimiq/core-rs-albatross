@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use futures_03::Stream;
 use hash::Blake2bHash;
 use network_interface::prelude::{CloseReason, Message, Peer as PeerInterface, SendError};
-use network_primitives::address::net_address::NetAddress;
-use network_primitives::address::peer_address::PeerAddress;
+use peer_address::address::NetAddress;
+use peer_address::address::PeerAddress;
 
 use crate::connection::close_type::CloseType;
 use crate::peer_channel::PeerChannel;

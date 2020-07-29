@@ -26,8 +26,8 @@ use collections::bitset::BitSet;
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use network_primitives::networks::NetworkInfo;
-use network_primitives::time::NetworkTime;
+use genesis::NetworkInfo;
+use utils::time::OffsetTime;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
@@ -108,7 +108,7 @@ pub enum ForkEvent {
 pub struct Blockchain {
     pub(crate) env: Environment,
     pub network_id: NetworkId,
-    // TODO network_time: Arc<NetworkTime>,
+    // TODO time: Arc<OffsetTime>,
     pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
     pub fork_notifier: RwLock<Notifier<'static, ForkEvent>>,
     pub chain_store: Arc<ChainStore>,
@@ -270,7 +270,7 @@ impl Blockchain {
         Ok(Blockchain {
             env,
             network_id,
-            //network_time,
+            //time,
             notifier: RwLock::new(Notifier::new()),
             fork_notifier: RwLock::new(Notifier::new()),
             chain_store,
@@ -334,7 +334,7 @@ impl Blockchain {
         Ok(Blockchain {
             env,
             network_id,
-            //network_time,
+            //time,
             notifier: RwLock::new(Notifier::new()),
             fork_notifier: RwLock::new(Notifier::new()),
             chain_store,
@@ -2156,7 +2156,7 @@ impl AbstractBlockchain for Blockchain {
     fn new(
         env: Environment,
         network_id: NetworkId,
-        _network_time: Arc<NetworkTime>,
+        _time: Arc<OffsetTime>,
     ) -> Result<Self, BlockchainError> {
         Blockchain::new(env, network_id)
     }

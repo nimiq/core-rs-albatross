@@ -3,14 +3,14 @@ use std::sync::Arc;
 use nimiq_blockchain::{Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_network_primitives::time::NetworkTime;
+use nimiq_utils::time::OffsetTime;
 use nimiq_primitives::networks::NetworkId;
 
 #[test]
 fn it_can_compute_trivial_chain_proofs() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain =
-        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(OffsetTime::new())).unwrap();
 
     let proof = blockchain.get_chain_proof();
     assert_eq!(proof.prefix.len(), 1);
@@ -50,7 +50,7 @@ fn it_can_compute_trivial_chain_proofs() {
 fn it_can_compute_trivial_block_proofs() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain =
-        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(OffsetTime::new())).unwrap();
 
     let block = crate::next_block(&blockchain).with_nonce(83054).build();
     let hash_to_prove1 = block.header.hash::<Blake2bHash>();
@@ -96,7 +96,7 @@ fn it_can_compute_trivial_block_proofs() {
 fn it_can_compute_empty_block_proofs() {
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain =
-        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(OffsetTime::new())).unwrap();
 
     let head_hash1 = blockchain.head_hash();
     let proof = blockchain.get_block_proof(&head_hash1, &head_hash1);

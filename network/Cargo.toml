@@ -36,11 +36,12 @@ beserial = { path = "../beserial", version = "0.1" }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
 nimiq-collections = { path = "../collections", version = "0.1" }
+nimiq-genesis = { path = "../genesis", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-messages = { path = "../messages", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["all"] }
+nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["timers", "key-store", "observer", "mutable-once", "time", "unique-ptr", "iterators", "locking", "rate-limit", "unique-id"] }
 
 [dependencies.tungstenite]

@@ -3,6 +3,7 @@ use std::fmt;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+use futures::{future, StreamExt};
 use parking_lot::RwLock;
 
 use block_albatross::{
@@ -15,13 +16,14 @@ use hash::{Blake2bHash, Hash};
 use messages::{Message, ViewChangeProofMessage};
 use network::connection::close_type::CloseType;
 use network::Peer;
-use network_primitives::address::PeerId;
-use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
+use network_interface::peer::Peer as PeerInterface;
+use peer_address::address::PeerId;
 use primitives::policy;
-use utils::observer::{weak_passthru_listener, PassThroughNotifier};
+use utils::observer::{PassThroughNotifier, weak_passthru_listener};
 use utils::rate_limit::RateLimit;
 
 use crate::pool::{PushResult, ValidatorPool};
+use crate::validator_info::{SignedValidatorInfo, SignedValidatorInfos, ValidatorInfo};
 
 pub enum ValidatorAgentEvent {
     ValidatorInfos(Vec<SignedValidatorInfo>),
@@ -71,17 +73,29 @@ impl ValidatorAgent {
     }
 
     fn init_listeners(this: &Arc<Self>) {
-        this.peer
-            .channel
-            .msg_notifier
-            .validator_info
-            .write()
-            .register(weak_passthru_listener(
-                Arc::downgrade(this),
-                |this, signed_infos: Vec<SignedValidatorInfo>| {
-                    this.on_validator_infos(signed_infos);
-                },
-            ));
+        let weak = Arc::downgrade(this);
+        let weak1 = Arc::downgrade(this);
+        tokio::spawn(this.peer.receive::<SignedValidatorInfos>()
+            .take_while(move |_| future::ready(weak.strong_count() > 0))
+            .for_each(move |infos| {
+                if let Some(this) = weak1.upgrade() {
+                    this.on_validator_infos(infos);
+                }
+                future::ready(())
+            })
+        );
+
+        // this.peer
+        //     .channel
+        //     .msg_notifier
+        //     .validator_info
+        //     .write()
+        //     .register(weak_passthru_listener(
+        //         Arc::downgrade(this),
+        //         |this, signed_infos: Vec<SignedValidatorInfo>| {
+        //             this.on_validator_infos(signed_infos);
+        //         },
+        //     ));
         this.peer
             .channel
             .msg_notifier

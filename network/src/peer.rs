@@ -4,8 +4,8 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use hash::Blake2bHash;
-use network_primitives::address::net_address::NetAddress;
-use network_primitives::address::peer_address::PeerAddress;
+use peer_address::address::NetAddress;
+use peer_address::address::PeerAddress;
 
 use crate::peer_channel::PeerChannel;
 

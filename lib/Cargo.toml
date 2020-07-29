@@ -49,7 +49,7 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-metrics-server = { path = "../metrics-server", version = "0.1", optional = true }
 nimiq-network = { path = "../network", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["all"] }
+nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["networks"] }
 nimiq-rpc-server = { path = "../rpc-server", version = "0.1", optional = true }
 nimiq-utils = { path = "../utils", version = "0.1" }

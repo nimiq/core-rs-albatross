@@ -7,7 +7,7 @@ use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::WriteTransaction;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_primitives::networks::NetworkInfo;
+use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::Transaction;

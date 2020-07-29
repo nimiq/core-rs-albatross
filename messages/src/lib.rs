@@ -13,7 +13,8 @@ extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_macros as macros;
 extern crate nimiq_network_interface as network_interface;
-extern crate nimiq_network_primitives as network_primitives;
+extern crate nimiq_peer_address as peer_address;
+extern crate nimiq_subscription as subscription;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_tree_primitives as tree_primitives;
 extern crate nimiq_utils as utils;
@@ -43,12 +44,11 @@ use hash::Blake2bHash;
 use keys::{Address, KeyPair, PublicKey, Signature};
 use macros::create_typed_array;
 use network_interface::message::Message as MessageInterface;
-use network_primitives::address::{PeerAddress, PeerId};
-use network_primitives::protocol::ProtocolFlags;
-use network_primitives::services::ServiceFlags;
-use network_primitives::subscription::Subscription;
-use network_primitives::validator_info::SignedValidatorInfo;
-use network_primitives::version;
+use peer_address::address::{PeerAddress, PeerId};
+use peer_address::protocol::ProtocolFlags;
+use peer_address::services::ServiceFlags;
+use peer_address::version;
+use subscription::Subscription;
 use transaction::{Transaction, TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
@@ -104,7 +104,7 @@ pub enum MessageType {
     ViewChange = 105,
     ViewChangeProof = 106,
     ForkProof = 107,
-    ValidatorInfo = 111,
+    //ValidatorInfo = 111,
     PbftProposal = 120,
     PbftPrepare = 121,
     PbftCommit = 122,
@@ -159,7 +159,6 @@ impl Display for MessageType {
             Self::ViewChange => write!(f, "view-change"),
             Self::ViewChangeProof => write!(f, "view-change-proof"),
             Self::ForkProof => write!(f, "fork-proof"),
-            Self::ValidatorInfo => write!(f, "validator-info"),
             Self::PbftProposal => write!(f, "pbft-proposal"),
             Self::PbftPrepare => write!(f, "pbft-prepare"),
             Self::PbftCommit => write!(f, "pbft-commit"),
@@ -213,7 +212,6 @@ pub enum Message {
     // Albatross
     BlockAlbatross(Box<BlockAlbatross>),
     HeaderAlbatross(Box<BlockHeaderAlbatross>),
-    ValidatorInfo(Vec<SignedValidatorInfo>),
     ForkProof(Box<ForkProof>),
     ViewChange(Box<LevelUpdateMessage<ViewChange>>),
     ViewChangeProof(Box<ViewChangeProofMessage>),
@@ -265,7 +263,6 @@ impl Message {
             Message::HeaderAlbatross(_) => MessageType::HeaderAlbatross,
             Message::ViewChange(_) => MessageType::ViewChange,
             Message::ViewChangeProof(_) => MessageType::ViewChangeProof,
-            Message::ValidatorInfo(_) => MessageType::ValidatorInfo,
             Message::ForkProof(_) => MessageType::ForkProof,
             Message::PbftProposal(_) => MessageType::PbftProposal,
             Message::PbftPrepare(_) => MessageType::PbftPrepare,
@@ -432,12 +429,6 @@ impl Deserialize for Message {
             MessageType::HeaderAlbatross => {
                 Message::HeaderAlbatross(Deserialize::deserialize(&mut crc32_reader)?)
             }
-            MessageType::ValidatorInfo => {
-                Message::ValidatorInfo(DeserializeWithLength::deserialize::<
-                    u8,
-                    ReaderComputeCrc32<R>,
-                >(&mut crc32_reader)?)
-            }
             MessageType::ForkProof => {
                 Message::ForkProof(Deserialize::deserialize(&mut crc32_reader)?)
             }
@@ -541,9 +532,6 @@ impl Serialize for Message {
             Message::HeaderAlbatross(header) => header.serialize(&mut v)?,
             Message::ViewChange(view_change_message) => view_change_message.serialize(&mut v)?,
             Message::ViewChangeProof(view_change_proof) => view_change_proof.serialize(&mut v)?,
-            Message::ValidatorInfo(validator_infos) => {
-                validator_infos.serialize::<u8, Vec<u8>>(&mut v)?
-            }
             Message::ForkProof(fork_proof) => fork_proof.serialize(&mut v)?,
             Message::PbftProposal(pbft_proposal) => pbft_proposal.serialize(&mut v)?,
             Message::PbftPrepare(pbft_prepare) => pbft_prepare.serialize(&mut v)?,
@@ -617,7 +605,6 @@ impl Serialize for Message {
             // Albatross
             Message::BlockAlbatross(block) => block.serialized_size(),
             Message::HeaderAlbatross(header) => header.serialized_size(),
-            Message::ValidatorInfo(validator_info) => validator_info.serialized_size::<u8>(),
             Message::ForkProof(fork_proof) => fork_proof.serialized_size(),
             Message::ViewChange(view_change_message) => view_change_message.serialized_size(),
             Message::ViewChangeProof(view_change_proof) => view_change_proof.serialized_size(),
@@ -694,7 +681,6 @@ pub struct MessageNotifier {
     // Albatross
     pub block_albatross: RwLock<PassThroughNotifier<'static, BlockAlbatross>>,
     pub header_albatross: RwLock<PassThroughNotifier<'static, BlockHeaderAlbatross>>,
-    pub validator_info: RwLock<PassThroughNotifier<'static, Vec<SignedValidatorInfo>>>,
     pub fork_proof: RwLock<PassThroughNotifier<'static, ForkProof>>,
     pub view_change: RwLock<PassThroughNotifier<'static, LevelUpdateMessage<ViewChange>>>,
     pub view_change_proof: RwLock<PassThroughNotifier<'static, ViewChangeProofMessage>>,
@@ -750,9 +736,6 @@ impl MessageNotifier {
             // Albatross
             Message::BlockAlbatross(block) => self.block_albatross.read().notify(*block),
             Message::HeaderAlbatross(header) => self.header_albatross.read().notify(*header),
-            Message::ValidatorInfo(validator_info) => {
-                self.validator_info.read().notify(validator_info)
-            }
             Message::ViewChange(view_change) => self.view_change.read().notify(*view_change),
             Message::ViewChangeProof(view_change_proof) => {
                 self.view_change_proof.read().notify(*view_change_proof)

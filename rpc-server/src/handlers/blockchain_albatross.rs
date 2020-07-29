@@ -10,9 +10,9 @@ use block_albatross::{signed, Block, ForkProof};
 use blockchain_albatross::Blockchain;
 use blockchain_base::AbstractBlockchain;
 use bls::CompressedPublicKey as BlsPublicKey;
+use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use network_primitives::networks::NetworkInfo;
 use primitives::policy;
 use primitives::slot::{Slot, SlotBand, Slots};
 

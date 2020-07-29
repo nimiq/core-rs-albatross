@@ -11,10 +11,10 @@ use rand::rngs::OsRng;
 use rand::Rng;
 
 use blockchain_base::AbstractBlockchain;
+use genesis::NetworkId;
 use network_interface::prelude::{Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface};
-use network_primitives::address::peer_address::PeerAddress;
-use network_primitives::networks::NetworkId;
-use network_primitives::time::NetworkTime;
+use utils::time::OffsetTime;
+use peer_address::address::PeerAddress;
 use tokio_02::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
@@ -48,7 +48,7 @@ pub enum NetworkEvent {
 
 pub struct Network<B: AbstractBlockchain + 'static> {
     pub network_config: Arc<NetworkConfig>,
-    pub network_time: Arc<NetworkTime>,
+    pub time: Arc<OffsetTime>,
     auto_connect: Atomic<bool>,
     backed_off: Atomic<bool>,
     backoff: Atomic<Duration>,
@@ -61,7 +61,6 @@ pub struct Network<B: AbstractBlockchain + 'static> {
 }
 
 impl<B: AbstractBlockchain> Network<B> {
-    const PEER_COUNT_MAX: usize = 4000;
     const PEER_COUNT_RECYCLING_ACTIVE: usize = 1000;
     const RECYCLING_PERCENTAGE_MIN: f64 = 0.01;
     const RECYCLING_PERCENTAGE_MAX: f64 = 0.20;
@@ -79,7 +78,7 @@ impl<B: AbstractBlockchain> Network<B> {
     pub fn new(
         blockchain: Arc<B>,
         network_config: NetworkConfig,
-        network_time: Arc<NetworkTime>,
+        time: Arc<OffsetTime>,
         network_id: NetworkId,
     ) -> Result<Arc<Self>, Error> {
         if !network_config.is_initialized() {
@@ -91,7 +90,7 @@ impl<B: AbstractBlockchain> Network<B> {
         let connections = ConnectionPool::new(addresses.clone(), net_config.clone(), blockchain)?;
         let this = Arc::new(Network {
             network_config: net_config.clone(),
-            network_time,
+            time,
             auto_connect: Atomic::new(false),
             backed_off: Atomic::new(false),
             backoff: Atomic::new(Self::CONNECT_BACKOFF_INITIAL),
@@ -309,7 +308,7 @@ impl<B: AbstractBlockchain> Network<B> {
             offsets[(offsets_len - 1) / 2]
         };
 
-        self.network_time.set_offset(time_offset);
+        self.time.set_offset(time_offset);
     }
 
     fn housekeeping(connections: Arc<ConnectionPool<B>>, scorer: Arc<RwLock<PeerScorer<B>>>) {
@@ -322,7 +321,7 @@ impl<B: AbstractBlockchain> Network<B> {
             let percentage_to_recycle = (peer_count as f64
                 - Self::PEER_COUNT_RECYCLING_ACTIVE as f64)
                 * (Self::RECYCLING_PERCENTAGE_MAX - Self::RECYCLING_PERCENTAGE_MIN)
-                / (Self::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64
+                / (ConnectionPool::<B>::PEER_COUNT_MAX - Self::PEER_COUNT_RECYCLING_ACTIVE) as f64
                 + Self::RECYCLING_PERCENTAGE_MIN as f64;
             let connections_to_recycle =
                 f64::ceil(peer_count as f64 * percentage_to_recycle) as u32;

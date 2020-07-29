@@ -16,8 +16,8 @@ use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUn
 use fixed_unsigned::RoundHalfUp;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use network_primitives::networks::NetworkInfo;
-use network_primitives::time::NetworkTime;
+use genesis::NetworkInfo;
+use utils::time::OffsetTime;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use transaction::Transaction as BlockchainTransaction;
@@ -41,7 +41,7 @@ pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
 pub struct Blockchain {
     pub(crate) env: Environment,
     pub network_id: NetworkId,
-    network_time: Arc<NetworkTime>,
+    time: Arc<OffsetTime>,
     pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
     pub(crate) chain_store: ChainStore,
     pub(crate) state: RwLock<BlockchainState>,
@@ -80,20 +80,20 @@ impl Blockchain {
     pub fn new(
         env: Environment,
         network_id: NetworkId,
-        network_time: Arc<NetworkTime>,
+        time: Arc<OffsetTime>,
     ) -> Result<Self, BlockchainError> {
         let chain_store = ChainStore::new(env.clone());
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => {
-                Blockchain::load(env, network_time, network_id, chain_store, head_hash)?
+                Blockchain::load(env, time, network_id, chain_store, head_hash)?
             }
-            None => Blockchain::init(env, network_time, network_id, chain_store)?,
+            None => Blockchain::init(env, time, network_id, chain_store)?,
         })
     }
 
     fn load(
         env: Environment,
-        network_time: Arc<NetworkTime>,
+        time: Arc<OffsetTime>,
         network_id: NetworkId,
         chain_store: ChainStore,
         head_hash: Blake2bHash,
@@ -140,7 +140,7 @@ impl Blockchain {
         Ok(Blockchain {
             env,
             network_id,
-            network_time,
+            time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
             state: RwLock::new(BlockchainState {
@@ -162,7 +162,7 @@ impl Blockchain {
 
     fn init(
         env: Environment,
-        network_time: Arc<NetworkTime>,
+        time: Arc<OffsetTime>,
         network_id: NetworkId,
         chain_store: ChainStore,
     ) -> Result<Self, BlockchainError> {
@@ -210,7 +210,7 @@ impl Blockchain {
         Ok(Blockchain {
             env,
             network_id,
-            network_time,
+            time,
             notifier: RwLock::new(Notifier::new()),
             chain_store,
             state: RwLock::new(BlockchainState {
@@ -238,7 +238,7 @@ impl Blockchain {
         let genesis_hash = NetworkInfo::from_network_id(self.network_id)
             .genesis_hash()
             .clone();
-        if let Err(e) = block.verify(self.network_time.now(), self.network_id, genesis_hash) {
+        if let Err(e) = block.verify(self.time.now(), self.network_id, genesis_hash) {
             warn!("Rejecting block - verification failed ({:?})", e);
             #[cfg(feature = "metrics")]
             self.metrics.note_invalid_block();
@@ -885,9 +885,9 @@ impl AbstractBlockchain for Blockchain {
     fn new(
         env: Environment,
         network_id: NetworkId,
-        network_time: Arc<NetworkTime>,
+        time: Arc<OffsetTime>,
     ) -> Result<Self, BlockchainError> {
-        Blockchain::new(env, network_id, network_time)
+        Blockchain::new(env, network_id, time)
     }
 
     #[cfg(feature = "metrics")]

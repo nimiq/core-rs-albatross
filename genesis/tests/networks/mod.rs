@@ -1,7 +1,7 @@
 use hex;
 use nimiq_block::Block;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_network_primitives::networks::*;
+use nimiq_genesis::*;
 
 #[test]
 fn it_has_expected_main_hash() {

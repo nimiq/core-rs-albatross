@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use futures::prelude::*;
 
-use network_primitives::address::net_address::NetAddress;
+use peer_address::address::NetAddress;
 use utils::locking::MultiLock;
 
 #[cfg(feature = "metrics")]

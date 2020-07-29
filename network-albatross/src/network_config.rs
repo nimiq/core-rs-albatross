@@ -1,13 +1,9 @@
 use std::time::SystemTime;
 
 use keys::{KeyPair, PrivateKey, PublicKey, SecureGenerate};
-use network_primitives::address::net_address::NetAddress;
-use network_primitives::address::peer_address::{PeerAddress, PeerAddressType};
-use network_primitives::address::seed_list::SeedList;
-use network_primitives::address::PeerId;
-use network_primitives::address::PeerUri;
-use network_primitives::protocol::{Protocol, ProtocolFlags};
-use network_primitives::services::Services;
+use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId, PeerUri, SeedList};
+use peer_address::protocol::{Protocol, ProtocolFlags};
+use peer_address::services::Services;
 use utils::key_store::{Error as KeyStoreError, KeyStore};
 use utils::time::systemtime_to_timestamp;
 

@@ -8,8 +8,8 @@ use beserial::{Deserialize, Serialize};
 use blockchain_albatross::Blockchain;
 use bls::{CompressedPublicKey, CompressedSignature};
 use consensus::AlbatrossConsensusProtocol;
+use genesis::NetworkInfo;
 use keys::Address;
-use network_primitives::networks::NetworkInfo;
 use nimiq_mempool::Mempool;
 use nimiq_transaction_builder::{
     recipient::staking_contract::StakingRecipientBuilder, Recipient, TransactionBuilder,

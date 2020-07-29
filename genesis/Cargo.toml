@@ -1,9 +1,9 @@
 [package]
-name = "nimiq-network-primitives"
+name = "nimiq-genesis"
 version = "0.1.0"
 authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
 edition = "2018"
-description = "Network primitives and constants for Nimiq"
+description = "Nimiq Genesis configuration"
 homepage = "https://nimiq.com"
 repository = "https://github.com/nimiq/core-rs-albatross"
 license = "Apache-2.0"
@@ -35,6 +35,7 @@ nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-hash_derive = { path = "../hash/hash_derive", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
+nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["coin", "networks"] }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }

@@ -68,7 +68,7 @@ impl<B: AbstractBlockchain + 'static> server::Metrics for NetworkMetrics<B> {
             attributes! {"type" => "webrtc"},
         )?;
 
-        serializer.metric("network_time_now", self.network.network_time.now())?;
+        serializer.metric("network_time_now", self.network.time.now())?;
         serializer.metric_with_attributes(
             "network_bytes",
             network_metrics.bytes_sent(),

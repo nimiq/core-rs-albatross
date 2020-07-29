@@ -21,8 +21,7 @@ use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use macros::upgrade_weak;
-use network_primitives::networks::NetworkInfo;
-use network_primitives::validator_info::{SignedValidatorInfo, ValidatorInfo};
+use genesis::NetworkInfo;
 use primitives::coin::Coin;
 use primitives::policy;
 use transaction_builder::{Recipient, TransactionBuilder};
@@ -32,6 +31,7 @@ use utils::timers::Timers;
 
 use crate::error::Error;
 use crate::slash::ForkProofPool;
+use crate::validator_info::{SignedValidatorInfo, ValidatorInfo};
 use crate::validator_network::{ValidatorNetwork, ValidatorNetworkEvent};
 
 #[derive(Clone, Debug)]
@@ -739,7 +739,7 @@ impl Validator {
         }
 
         // FIXME: Don't use network time
-        let timestamp = self.consensus.network.network_time.now();
+        let timestamp = self.consensus.network.time.now();
         let (pbft_proposal, proposed_extrinsics) =
             self.block_producer
                 .next_macro_block_proposal(timestamp, view_number, view_change);
@@ -780,7 +780,7 @@ impl Validator {
 
         let state = self.state.read();
         let fork_proofs = state.fork_proof_pool.get_fork_proofs_for_block(max_size);
-        let timestamp = self.consensus.network.network_time.now();
+        let timestamp = self.consensus.network.time.now();
 
         let block = self.block_producer.next_micro_block(
             fork_proofs,

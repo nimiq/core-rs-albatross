@@ -26,10 +26,10 @@ nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-collections = { path = "../collections", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1" }
+nimiq-genesis = { path = "../genesis", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks"] }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-vrf = { path = "../vrf", version = "0.1" }
 

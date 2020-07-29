@@ -1,12 +1,12 @@
 use std::net::SocketAddr;
 
 use beserial::{Deserialize, Serialize};
-use block_albatross::signed::{Message, SignedMessage, PREFIX_VALIDATOR_INFO};
+use block_albatross::signed::{Message, PREFIX_VALIDATOR_INFO, SignedMessage};
 use bls::CompressedPublicKey;
 use hash::SerializeContent;
 use hash_derive::SerializeContent;
-
-use crate::address::peer_address::PeerAddress;
+use network_interface::message::Message as NetworkMessage;
+use peer_address::address::PeerAddress;
 
 /// Information regarding an (maybe active) validator
 #[derive(Clone, Debug, Serialize, Deserialize, SerializeContent, Eq)]
@@ -37,3 +37,9 @@ impl Message for ValidatorInfo {
 
 /// The signed version of a ValidatorInfo
 pub type SignedValidatorInfo = SignedMessage<ValidatorInfo>;
+
+/// A list of signed ValidatorInfos which is sent across the network
+pub type SignedValidatorInfos = Vec<SignedValidatorInfo>;
+impl NetworkMessage for SignedValidatorInfos {
+    const TYPE_ID: u64 = 111;
+}

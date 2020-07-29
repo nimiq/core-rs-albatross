@@ -5,7 +5,7 @@
     ## Usage
 
     1. Run `devnet_create.py NUM_VALIDATORS`. This will create keys and configurations for multiple validator nodes.
-    2. Copy genesis config from `/tmp/nimiq-devnet-RANDOM/dev-albatross.toml` to `core-rs/network-primitives/src/genesis/dev-albatross.toml`.
+    2. Copy genesis config from `/tmp/nimiq-devnet-RANDOM/dev-albatross.toml` to `core-rs/genesis/src/genesis/dev-albatross.toml`.
     3. Build core-rs: `cargo build`
     4. Run seed node. Run a node (not as validator) at `127.0.0.1:8443`
     5. Run `devnet_run.py PATH` (with `PATH=/tmp/nimiq-devnet-RANDOM`). This will start the validators.

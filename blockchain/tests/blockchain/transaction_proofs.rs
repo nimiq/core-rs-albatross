@@ -7,7 +7,7 @@ use nimiq_blockchain::{Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_network_primitives::time::NetworkTime;
+use nimiq_utils::time::OffsetTime;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::{SignatureProof, Transaction};
@@ -18,7 +18,7 @@ fn it_can_compute_trivial_transactions_proof() {
 
     let env = VolatileEnvironment::new(10).unwrap();
     let blockchain =
-        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(NetworkTime::new())).unwrap();
+        Blockchain::new(env.clone(), NetworkId::Main, Arc::new(OffsetTime::new())).unwrap();
 
     let miner = Address::from(&keypair.public);
     let block2 = crate::next_block(&blockchain)

@@ -6,7 +6,7 @@ use std::{fmt, fmt::Display};
 
 use blockchain_base::AbstractBlockchain;
 use network_messages::MessageType;
-use network_primitives::protocol::Protocol;
+use peer_address::protocol::Protocol;
 
 use crate::connection::connection_info::ConnectionState;
 use crate::connection::connection_pool::ConnectionPool;

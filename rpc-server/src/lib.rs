@@ -11,7 +11,7 @@ extern crate nimiq_bls as bls;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
-extern crate nimiq_network_primitives as network_primitives;
+extern crate nimiq_genesis as genesis;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction as transaction;
 extern crate nimiq_utils as utils;

@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 
 use collections::UniqueLinkedList;
 use network_messages::{Message, SignalMessage, SignalMessageFlags};
-use network_primitives::address::PeerId;
+use peer_address::address::PeerId;
 
 use crate::address::peer_address_book::PeerAddressBook;
 use crate::network_config::NetworkConfig;

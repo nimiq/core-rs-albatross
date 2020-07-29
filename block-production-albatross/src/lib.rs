@@ -4,10 +4,10 @@ extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_bls as bls;
 extern crate nimiq_collections as collections;
 extern crate nimiq_database as database;
+extern crate nimiq_genesis as genesis;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;
-extern crate nimiq_network_primitives as network_primitives;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_vrf as vrf;
 

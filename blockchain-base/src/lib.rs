@@ -22,7 +22,7 @@ use database::Environment;
 use database::{ReadTransaction, Transaction};
 use hash::Blake2bHash;
 use keys::Address;
-use nimiq_network_primitives::time::NetworkTime;
+use utils::time::OffsetTime;
 use primitives::networks::NetworkId;
 use transaction::Transaction as BlockchainTransaction;
 use transaction::{TransactionReceipt, TransactionsProof};
@@ -43,7 +43,7 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
     fn new(
         env: Environment,
         network_id: NetworkId,
-        network_time: Arc<NetworkTime>,
+        time: Arc<OffsetTime>,
     ) -> Result<Self, BlockchainError>;
 
     #[cfg(feature = "metrics")]

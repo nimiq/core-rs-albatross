@@ -18,8 +18,8 @@ use network_messages::{
     GetBlockProofMessage, GetBlocksMessage, GetEpochTransactionsMessage, MessageType,
     RejectMessage, RejectMessageCode,
 };
-use network_primitives::subscription::Subscription;
 use primitives::coin::Coin;
+use subscription::Subscription;
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::{weak_listener, weak_passthru_listener, Notifier};

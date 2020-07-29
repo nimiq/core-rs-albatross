@@ -10,9 +10,9 @@ use blockchain_base::AbstractBlockchain;
 use collections::SparseVec;
 use macros::upgrade_weak;
 use network_messages::SignalMessage;
-use network_primitives::address::net_address::{NetAddress, NetAddressType};
-use network_primitives::address::peer_address::PeerAddress;
-use network_primitives::protocol::Protocol;
+use peer_address::address::{NetAddress, NetAddressType};
+use peer_address::address::PeerAddress;
+use peer_address::protocol::Protocol;
 use utils::mutable_once::MutableOnce;
 use utils::observer::PassThroughNotifier;
 use utils::timers::Timers;
@@ -449,6 +449,14 @@ pub struct ConnectionPool<B: AbstractBlockchain + 'static> {
 }
 
 impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
+    pub const PEER_COUNT_MAX: usize = 4000;
+    const PEER_COUNT_PER_IP_MAX: usize = 20;
+    const PEER_COUNT_DUMB_MAX: usize = 1000;
+    const OUTBOUND_PEER_COUNT_PER_SUBNET_MAX: usize = 2;
+    const INBOUND_PEER_COUNT_PER_SUBNET_MAX: usize = 100;
+    const IPV4_SUBNET_MASK: u8 = 24;
+    const IPV6_SUBNET_MASK: u8 = 96;
+
     const DEFAULT_BAN_TIME: Duration = Duration::from_secs(60 * 10); // seconds
     const UNBAN_IPS_INTERVAL: Duration = Duration::from_secs(60); // seconds
 
@@ -631,7 +639,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
 
             // Close connection if we have too many connections to the peer's IP address.
             if state.get_num_connections_by_net_address(&net_address)
-                > network_primitives::PEER_COUNT_PER_IP_MAX
+                > Self::PEER_COUNT_PER_IP_MAX
             {
                 Self::close(info.network_connection(), CloseType::ConnectionLimitPerIp);
                 return false;
@@ -639,7 +647,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
 
             // Close connection if we have too many connections to the peer's subnet.
             if state.get_num_connections_by_subnet(&net_address)
-                > network_primitives::INBOUND_PEER_COUNT_PER_SUBNET_MAX
+                > Self::INBOUND_PEER_COUNT_PER_SUBNET_MAX
             {
                 Self::close(info.network_connection(), CloseType::ConnectionLimitPerIp);
                 return false;
@@ -649,7 +657,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
         // Reject peer if we have reached max peer count.
         // There are two exceptions to this: outbound connections
         // and inbound connections with inbound exchange set.
-        if state.peer_count() >= network_primitives::PEER_COUNT_MAX
+        if state.peer_count() >= Self::PEER_COUNT_MAX
             && !conn.outbound()
             && !(conn.inbound() && state.allow_inbound_exchange)
         {
@@ -849,7 +857,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
 
             // Close connection if we have too many dumb connections.
             if peer_address.protocol() == Protocol::Dumb
-                && state.peer_count_dumb >= network_primitives::PEER_COUNT_DUMB_MAX
+                && state.peer_count_dumb >= Self::PEER_COUNT_DUMB_MAX
             {
                 Self::close(info.network_connection(), CloseType::ConnectionLimitDumb);
                 return;
@@ -879,7 +887,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
 
                 if network_connection.inbound() {
                     // Re-check allowInboundExchange as it might have changed.
-                    if state.peer_count() >= network_primitives::PEER_COUNT_MAX
+                    if state.peer_count() >= Self::PEER_COUNT_MAX
                         && !state.allow_inbound_exchange
                     {
                         Self::close(info.network_connection(), CloseType::MaxPeerCountReached);
@@ -988,7 +996,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
         // Handshake accepted.
 
         // Check if we need to recycle a connection.
-        if self.peer_count() >= network_primitives::PEER_COUNT_MAX {
+        if self.peer_count() >= Self::PEER_COUNT_MAX {
             // This will most likely lead to reentering the guard.
             self.notifier
                 .read()
@@ -1261,9 +1269,9 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
     /// Convert a net address into a subnet according to the configured bitmask.
     fn get_subnet_address(net_address: &NetAddress) -> NetAddress {
         let bit_mask = if net_address.get_type() == NetAddressType::IPv4 {
-            network_primitives::IPV4_SUBNET_MASK
+            Self::IPV4_SUBNET_MASK
         } else {
-            network_primitives::IPV6_SUBNET_MASK
+            Self::IPV6_SUBNET_MASK
         };
         net_address.subnet(bit_mask)
     }
@@ -1294,22 +1302,22 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
         // Forbid connection if we have too many connections to the peer's IP address.
         if peer_address.net_address.is_reliable() {
             if state.get_num_connections_by_net_address(&peer_address.net_address)
-                >= network_primitives::PEER_COUNT_PER_IP_MAX
+                >= Self::PEER_COUNT_PER_IP_MAX
             {
                 warn!(
                     "Connection limit per IP ({}) reached ({})",
-                    network_primitives::PEER_COUNT_PER_IP_MAX,
+                    Self::PEER_COUNT_PER_IP_MAX,
                     peer_address.net_address
                 );
                 return false;
             }
 
             if state.get_num_outbound_connections_by_subnet(&peer_address.net_address)
-                >= network_primitives::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX
+                >= Self::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX
             {
                 warn!(
                     "Connection limit per IP ({}) reached ({})",
-                    network_primitives::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX,
+                    Self::OUTBOUND_PEER_COUNT_PER_SUBNET_MAX,
                     peer_address.net_address
                 );
                 return false;

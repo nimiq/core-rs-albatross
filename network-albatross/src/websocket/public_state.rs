@@ -1,7 +1,7 @@
 #[cfg(feature = "metrics")]
 use std::sync::Arc;
 
-use network_primitives::address::net_address::NetAddress;
+use peer_address::address::NetAddress;
 
 #[cfg(feature = "metrics")]
 use crate::network_metrics::NetworkMetrics;

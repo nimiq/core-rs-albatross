@@ -1,19 +1,18 @@
-use crate::address::net_address::NetAddress;
-use crate::address::peer_address::PeerAddress;
-use crate::address::peer_address::PeerAddressType;
-use crate::address::seed_list::SeedList;
-use crate::address::PeerId;
-use crate::services::ServiceFlags;
+use std::collections::HashMap;
+
+use hex::FromHex;
+use lazy_static::lazy_static;
+
 use account::Account;
 use account::AccountsList;
 use beserial::Deserialize;
 use hash::Blake2bHash;
-use hex::FromHex;
 use keys::Address;
 use keys::PublicKey;
-use lazy_static::lazy_static;
+use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
+use peer_address::address::seed_list::SeedList;
+use peer_address::services::ServiceFlags;
 pub use primitives::networks::NetworkId;
-use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 struct GenesisData {

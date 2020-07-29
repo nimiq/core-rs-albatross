@@ -20,8 +20,8 @@ use network_messages::{
     EpochTransactionsMessage, GetBlocksDirection, GetBlocksMessage, InvVector, InvVectorType,
     Message, MessageAdapter, TxMessage,
 };
-use network_primitives::networks::NetworkInfo;
-use network_primitives::subscription::Subscription;
+use genesis::NetworkInfo;
+use subscription::Subscription;
 use transaction::Transaction;
 use utils::rate_limit::RateLimit;
 use utils::throttled_queue::ThrottledQueue;

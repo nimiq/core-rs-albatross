@@ -36,11 +36,12 @@ nimiq-handel = { path = "../handel", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "subscription", "version"] }
 nimiq-network-interface = { path = "../network-interface", version = "0.1" }
+nimiq-peer-address = { path = "../peer-address", version = "0.1" }
+nimiq-subscription = { path = "../primitives/subscription", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc"] }
 
 [dev-dependencies]
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time", "iterators"] }

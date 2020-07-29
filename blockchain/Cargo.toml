@@ -30,13 +30,13 @@ nimiq-accounts = { path = "../accounts", version = "0.1" }
 nimiq-block = { path = "../primitives/block", version = "0.1" }
 nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1", features = ["full-nimiq"] }
+nimiq-genesis = { path = "../genesis", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks", "time"] }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "unique-ptr", "iterators"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "unique-ptr", "iterators", "time"] }
 
 [dev-dependencies]
 atomic = "0.4"

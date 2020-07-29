@@ -3,7 +3,7 @@ use nimiq_block::*;
 use nimiq_blockchain::Blockchain;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_network_primitives::networks::NetworkInfo;
+use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::policy;
 use nimiq_transaction::Transaction;
 

@@ -37,8 +37,8 @@ env:
   - TEST_CRATES="-p nimiq-database"
   - TEST_CRATES="-p nimiq-hash -p nimiq-hash_derive -p nimiq-keys -p nimiq-key-derivation -p nimiq-mnemonic -p nimiq-vrf -p nimiq-bls -p nimiq-nano-sync"
   - TEST_CRATES="-p nimiq-accounts -p nimiq-tree-primitives -p nimiq-blockchain -p nimiq-blockchain-albatross -p nimiq-blockchain-base -p nimiq-block-production -p nimiq-block-production-albatross -p nimiq-consensus -p nimiq-mempool"
-  - TEST_CRATES="-p nimiq-handel -p nimiq-messages -p nimiq-metrics-server -p nimiq-network -p nimiq-network-primitives -p nimiq-rpc-server -p nimiq-validator -p nimiq-ws-rpc-server"
-  - TEST_CRATES="-p nimiq-wallet -p nimiq-lib -p nimiq-client"
+  - TEST_CRATES="-p nimiq-handel -p nimiq-messages -p nimiq-metrics-server -p nimiq-network -p nimiq-genesis -p nimiq-rpc-server -p nimiq-validator -p nimiq-ws-rpc-server"
+  - TEST_CRATES="-p nimiq-wallet -p nimiq-peer-address -p nimiq-subscription -p nimiq-lib -p nimiq-client"
   - RUN_CLIPPY=1
 
 before_script:

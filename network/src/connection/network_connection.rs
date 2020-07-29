@@ -7,8 +7,8 @@ use futures::sync::mpsc::*;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use network_primitives::address::net_address::NetAddress;
-use network_primitives::address::peer_address::PeerAddress;
+use peer_address::address::NetAddress;
+use peer_address::address::PeerAddress;
 use utils::observer::PassThroughNotifier;
 use utils::unique_id::UniqueId;
 

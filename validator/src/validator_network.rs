@@ -19,8 +19,7 @@ use handel::update::LevelUpdateMessage;
 use hash::{Blake2bHash, Hash};
 use messages::{Message, ViewChangeProofMessage};
 use network::{Network, NetworkEvent, Peer};
-use network_primitives::address::PeerId;
-use network_primitives::validator_info::SignedValidatorInfo;
+use peer_address::address::PeerId;
 use primitives::policy::{is_macro_block_at, SLOTS, TWO_THIRD_SLOTS};
 use utils::mutable_once::MutableOnce;
 use utils::observer::{weak_listener, weak_passthru_listener, Notifier};
@@ -29,6 +28,7 @@ use crate::pool::ValidatorPool;
 use crate::signature_aggregation::pbft::PbftAggregation;
 use crate::signature_aggregation::view_change::ViewChangeAggregation;
 use crate::validator_agent::{ValidatorAgent, ValidatorAgentEvent};
+use crate::validator_info::SignedValidatorInfo;
 use primitives::slot::SlotCollection;
 
 #[derive(Clone, Debug, Fail)]

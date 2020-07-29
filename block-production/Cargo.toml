@@ -20,10 +20,11 @@ maintenance = { status = "experimental" }
 beserial = { path = "../beserial", version = "0.1" }
 nimiq-block = { path = "../primitives/block", version = "0.1" }
 nimiq-blockchain = { path = "../blockchain", version = "0.1" }
+nimiq-genesis = { path = "../genesis", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-network-primitives = { path = "../network-primitives", version = "0.1", features = ["networks"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["time"] }
 
 [dev-dependencies]
 nimiq-account = { path = "../primitives/account", version = "0.1" }

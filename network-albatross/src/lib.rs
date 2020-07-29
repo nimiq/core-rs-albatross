@@ -5,12 +5,13 @@ extern crate log;
 extern crate beserial_derive;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_collections as collections;
+extern crate nimiq_genesis as genesis;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_macros as macros;
 extern crate nimiq_messages as network_messages;
 extern crate nimiq_network_interface as network_interface;
-extern crate nimiq_network_primitives as network_primitives;
+extern crate nimiq_peer_address as peer_address;
 extern crate nimiq_utils as utils;
 
 pub mod address;

@@ -1,19 +1,19 @@
 extern crate nimiq_block as block;
 extern crate nimiq_blockchain as blockchain;
+extern crate nimiq_genesis as genesis;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;
-extern crate nimiq_network_primitives as network_primitives;
 
 use std::sync::Arc;
 
 use beserial::Serialize;
 use block::{Block, BlockBody, BlockHeader, BlockInterlink, Target};
 use blockchain::Blockchain;
+use genesis::NetworkInfo;
 use hash::Hash;
 use keys::Address;
 use mempool::Mempool;
-use network_primitives::networks::NetworkInfo;
 
 pub struct BlockProducer {
     blockchain: Arc<Blockchain>,

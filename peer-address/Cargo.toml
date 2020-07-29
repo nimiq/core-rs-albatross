@@ -1,0 +1,44 @@
+[package]
+name = "nimiq-peer-address"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+edition = "2018"
+description = "Nimiq peer address"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+license = "Apache-2.0"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+atomic = "0.4"
+bitflags = "1.0"
+failure = "0.1"
+hex = "0.4"
+lazy_static = "1.2"
+url = "1.7"
+
+beserial = { path = "../beserial", version = "0.1", features = ["net"] }
+beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
+nimiq-bls = { path = "../bls", version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-hash_derive = { path = "../hash/hash_derive", version = "0.1" }
+nimiq-keys = { path = "../keys", version = "0.1" }
+nimiq-macros = { path = "../macros", version = "0.1" }
+nimiq-primitives = { path = "../primitives", version = "0.1", features = ["coin", "networks"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }
+
+[build-dependencies]
+human-panic = { version = "1.0" }
+log = "0.4"
+simple_logger = "1.0"
+
+nimiq-build-tools = { path = "../build-tools", version = "0.1" }
+nimiq-hash = { path = "../hash", version = "0.1" }
+nimiq-keys = { path = "../keys" }

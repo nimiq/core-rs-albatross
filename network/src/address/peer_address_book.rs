@@ -2,38 +2,33 @@ use std::borrow::Borrow;
 use std::cmp;
 use std::collections::hash_map::{Keys, Values};
 use std::collections::hash_set::Iter;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::Iterator;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-use macros::upgrade_weak;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use rand::{rngs::OsRng, Rng};
+use rand::{Rng, rngs::OsRng};
 
-use network_primitives::address::net_address::NetAddress;
-use network_primitives::address::peer_address::PeerAddress;
-use network_primitives::address::PeerId;
-use network_primitives::networks::{NetworkId, NetworkInfo};
-use network_primitives::protocol::{Protocol, ProtocolFlags};
-use network_primitives::services::ServiceFlags;
+use genesis::{NetworkId, NetworkInfo};
+use macros::upgrade_weak;
+use peer_address::address::{NetAddress, PeerAddress, PeerId};
+use peer_address::protocol::{Protocol, ProtocolFlags};
+use peer_address::services::ServiceFlags;
 use utils::iterators::Alternate;
 use utils::observer::Notifier;
 use utils::time::systemtime_to_timestamp;
 use utils::timers::Timers;
 
 use crate::connection::close_type::CloseType;
+use crate::error::Error;
 use crate::network_config::{NetworkConfig, Seed};
 use crate::peer_channel::PeerChannel;
 
 use super::peer_address_seeder::{PeerAddressSeeder, PeerAddressSeederEvent};
-use super::peer_address_state::PeerAddressInfo;
-use super::peer_address_state::PeerAddressState;
-use crate::error::Error;
+use super::peer_address_state::{PeerAddressInfo, PeerAddressState};
 
 pub struct PeerAddressBookState {
     info_by_address: HashMap<Arc<PeerAddress>, PeerAddressInfo>,

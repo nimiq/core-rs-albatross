@@ -11,11 +11,11 @@ use rand::thread_rng;
 
 use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use database::Environment;
+use genesis::NetworkId;
 use macros::upgrade_weak;
 use mempool::{Mempool, MempoolConfig, MempoolEvent};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
-use network_primitives::networks::NetworkId;
-use network_primitives::time::NetworkTime;
+use utils::time::OffsetTime;
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
@@ -77,17 +77,17 @@ impl<P: ConsensusProtocol> Consensus<P> {
         network_config: NetworkConfig,
         mempool_config: MempoolConfig,
     ) -> Result<Arc<Self>, Error> {
-        let network_time = Arc::new(NetworkTime::new());
+        let time = Arc::new(OffsetTime::new());
         let blockchain = Arc::new(<P::Blockchain as AbstractBlockchain>::new(
             env.clone(),
             network_id,
-            Arc::clone(&network_time),
+            Arc::clone(&time),
         )?);
         let mempool = Mempool::new(Arc::clone(&blockchain), mempool_config);
         let network = Network::new(
             Arc::clone(&blockchain),
             network_config,
-            network_time,
+            time,
             network_id,
         )?;
         let accounts_chunk_cache = AccountsChunkCache::new(env.clone(), Arc::clone(&blockchain));

@@ -6,7 +6,7 @@ use json::{object, Array, JsonValue, Null};
 
 use blockchain_base::AbstractBlockchain;
 use consensus::{Consensus, ConsensusProtocol};
-use network_primitives::address::{PeerId, PeerUri};
+use peer_address::address::{PeerId, PeerUri};
 use nimiq_network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
 use nimiq_network::connection::close_type::CloseType;
 use nimiq_network::connection::connection_info::ConnectionInfo;
