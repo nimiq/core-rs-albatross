@@ -3,11 +3,11 @@ use collections::bitset::BitSet;
 
 use crate::contribution::AggregatableContribution;
 
-pub trait IdentityRegistry {
+pub trait IdentityRegistry: Send + Sync {
     fn public_key(&self, id: usize) -> Option<PublicKey>;
 }
 
-pub trait WeightRegistry {
+pub trait WeightRegistry: Send + Sync {
     fn weight(&self, id: usize) -> Option<usize>;
 
     fn signers_weight(&self, signers: &BitSet) -> Option<usize> {

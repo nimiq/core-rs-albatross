@@ -14,6 +14,7 @@ pub trait AggregatableContribution:
     + std::marker::Sync
     + beserial::Serialize
     + beserial::Deserialize
+    + Unpin
 {
     /// A BitSet signaling which contributors have contributed in this Contribution
     fn contributors(&self) -> BitSet;

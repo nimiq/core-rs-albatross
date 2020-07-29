@@ -7,9 +7,10 @@ use crate::identity::WeightRegistry;
 use crate::partitioner::Partitioner;
 use crate::store::ContributionStore;
 
-pub trait Evaluator<C: AggregatableContribution> {
+pub trait Evaluator<C: AggregatableContribution>: Send + Sync {
     fn evaluate(&self, signature: &C, level: usize) -> usize;
     fn is_final(&self, signature: &C) -> bool;
+    fn level_contains_id(&self, level: usize, id: usize) -> bool;
 }
 
 /// Every signature counts as a single vote
@@ -43,6 +44,10 @@ impl<C: AggregatableContribution, S: ContributionStore<Contribution = C>, P: Par
 
     fn is_final(&self, contribution: &C) -> bool {
         contribution.num_contributors() >= self.threshold
+    }
+
+    fn level_contains_id(&self, level: usize, id: usize) -> bool {
+        self.partitioner.range(level).unwrap().contains(&id)
     }
 }
 
@@ -79,6 +84,11 @@ impl<
         P: Partitioner,
     > Evaluator<C> for WeightedVote<S, I, P>
 {
+    /// takes an unverified contribution and scroes it in terms of usefulness with
+    ///
+    /// `0` being not useful at all, can be discarded.
+    ///
+    /// `>0` being more useful the bigger the number.
     fn evaluate(&self, contribution: &C, level: usize) -> usize {
         // TODO: Consider weight
         //let weight = self.weights.signature_weight(&signature)
@@ -87,22 +97,21 @@ impl<
         let store = self.store.read();
 
         // check if we already know this individual signature
-        if contribution.num_contributors() == 1 {
-            // if let Signature::Individual(individual) = signature {
-            if store
+        if contribution.num_contributors() == 1
+            && store
                 .individual_signature(level, contribution.contributor())
                 .is_some()
-            {
-                // If we already know it for this level, score it as 0
-                trace!(
-                    "Individual contribution from peer {} for level {} already known",
-                    level,
-                    contribution.contributor(),
-                );
-                return 0;
-            }
+        {
+            // If we already know it for this level, score it as 0
+            trace!(
+                "Individual contribution from peer {} for level {} already known",
+                level,
+                contribution.contributor(),
+            );
+            return 0;
         }
 
+        // number of identities at `level`, sort of maximum receivable contributions
         let to_receive = self.partitioner.level_size(level);
         let best_contribution = store.best(level);
 
@@ -137,7 +146,7 @@ impl<
             individuals.insert(contribution.contributor());
             individuals
         } else {
-            contribution.contributors().clone()
+            contribution.contributors()
         };
 
         // compute bitset of signers combined with all (verified) individual signatures that we have
@@ -147,6 +156,7 @@ impl<
 
         let (new_total, added_sigs, combined_sigs) = if let Some(best_signature) = best_contribution
         {
+            // TODO weights!
             if signers.intersection_size(&best_signature.contributors()) > 0 {
                 // can't merge
                 let new_total = with_individuals.len();
@@ -181,16 +191,12 @@ impl<
         // compute score
         // TODO: Remove magic numbers! What do they mean? I don't think this is discussed in the paper.
         if added_sigs == 0 {
-            // return 1 for an individual signature, otherwise 0
+            // return signature_weight for an individual signature, otherwise 0
             if contribution.num_contributors() == 1 {
-                1
+                self.weights.signature_weight(contribution).unwrap_or(0)
             } else {
                 0
             }
-        // match contribution {
-        //     Signature::Individual(_) => 1,
-        //     Signature::Multi(_) => 0,
-        // }
         } else if new_total == to_receive {
             1_000_000 - level * 10 - combined_sigs
         } else {
@@ -210,5 +216,9 @@ impl<
             votes >= self.threshold
         );
         votes >= self.threshold
+    }
+
+    fn level_contains_id(&self, level: usize, id: usize) -> bool {
+        self.partitioner.range(level).unwrap().contains(&id)
     }
 }

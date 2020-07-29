@@ -1,6 +1,5 @@
-use futures::Future;
-
 use crate::contribution::AggregatableContribution;
+use async_trait::async_trait;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VerificationResult {
@@ -16,20 +15,11 @@ impl VerificationResult {
 }
 
 /// Trait for a signature verification backend
-pub trait Verifier {
+#[async_trait]
+pub trait Verifier: Send + Sync {
     type Contribution: AggregatableContribution;
-    type Output: Future<Item = VerificationResult, Error = ()> + Send + Sync + 'static;
 
-    fn verify(&self, signature: &Self::Contribution) -> Self::Output;
+    /// Verifies the correectness of `contribution`
+    /// * `contribution` - The contribution to verify
+    async fn verify(&self, contribution: &Self::Contribution) -> VerificationResult;
 }
-
-// /// A dummy verifier that accepts all signatures
-// pub struct DummyVerifier();
-
-// impl Verifier for DummyVerifier {
-//     type Output = FutureResult<VerificationResult, ()>;
-
-//     fn verify(&self, _signature: &Signature) -> Self::Output {
-//         future::ok(VerificationResult::Ok)
-//     }
-// }

@@ -8,6 +8,9 @@ pub struct Config {
     /// Frequency at which updates are sent to peers
     pub update_interval: Duration,
 
+    /// Grace period handel will aggregate additional signatures once the threshold is reached
+    pub grace_period: Duration,
+
     /// Timeout for levels
     pub timeout: Duration,
 
@@ -21,6 +24,7 @@ impl Default for Config {
             update_count: 1,
             update_interval: Duration::from_millis(100),
             timeout: Duration::from_millis(500),
+            grace_period: Duration::from_millis(50),
             peer_count: 10,
         }
     }

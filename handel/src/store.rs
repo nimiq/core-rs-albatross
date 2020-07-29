@@ -6,10 +6,11 @@ use collections::bitset::BitSet;
 use crate::contribution::AggregatableContribution;
 use crate::partitioner::Partitioner;
 
-pub trait ContributionStore {
+pub trait ContributionStore: Send + Sync {
     type Contribution: AggregatableContribution;
+
     /// Put `signature` into the store for level `level`.
-    fn put(&mut self, signature: Self::Contribution, level: usize);
+    fn put(&mut self, contribution: Self::Contribution, level: usize);
 
     /// Return the number of the current best level.
     fn best_level(&self) -> usize;
@@ -18,6 +19,8 @@ pub trait ContributionStore {
     fn individual_received(&self, peer_id: usize) -> bool;
 
     /// Return a `BitSet` of the verified individual signatures we have for a given `level`.
+    ///
+    /// Panics if `level` is invalid.
     fn individual_verified(&self, level: usize) -> &BitSet;
 
     /// Returns a `BTreeMap` of the individual signatures for the given `level`.
@@ -26,6 +29,8 @@ pub trait ContributionStore {
     fn individual_signature(&self, level: usize, peer_id: usize) -> Option<&Self::Contribution>;
 
     /// Returns the best multi-signature for the given `level`.
+    ///
+    /// Panics if `level` is invalid.
     fn best(&self, level: usize) -> Option<&Self::Contribution>;
 
     /// Returns the best combined multi-signature for all levels upto `level`.
@@ -34,8 +39,10 @@ pub trait ContributionStore {
 
 #[derive(Clone, Debug)]
 pub struct ReplaceStore<P: Partitioner, C: AggregatableContribution> {
+    /// The Partitioner used to create the Aggregation Tree.
     partitioner: Arc<P>,
 
+    /// The currently best level
     best_level: usize,
 
     /// BitSet that contains the IDs of all individual contributions we already received
@@ -47,13 +54,14 @@ pub struct ReplaceStore<P: Partitioner, C: AggregatableContribution> {
 
     /// All individual contributions
     /// level -> peer_id -> Contribution
-    individual_signatures: Vec<BTreeMap<usize, C>>,
+    individual_contributions: Vec<BTreeMap<usize, C>>,
 
     /// The best Contribution at each level
     best_contribution: BTreeMap<usize, C>,
 }
 
 impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
+    /// Create a new Replace Store using the Partitioner `partitioner`.
     pub fn new(partitioner: Arc<P>) -> Self {
         let n = partitioner.size();
         let mut individual_verified = Vec::with_capacity(partitioner.levels());
@@ -68,13 +76,17 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
             best_level: 0,
             individual_received: BitSet::with_capacity(n),
             individual_verified,
-            individual_signatures,
+            individual_contributions: individual_signatures,
             best_contribution: BTreeMap::new(),
         }
     }
 
     fn check_merge(&self, contribution: &C, level: usize) -> Option<C> {
         if let Some(best_contribution) = self.best_contribution.get(&level) {
+            trace!(
+                "trying to combine contribution {:?} for level {}, current bests: {:?}",
+                contribution, level, self.best_contribution,
+            );
             // try to combine
             let mut contribution = contribution.clone();
 
@@ -106,7 +118,7 @@ impl<P: Partitioner, C: AggregatableContribution> ReplaceStore<P, C> {
                 for id in complements.iter() {
                     // get individual signature
                     let individual = self
-                        .individual_signatures
+                        .individual_contributions
                         .get(level)
                         .unwrap_or_else(|| {
                             panic!("Individual contribution missing for level {}", level)
@@ -149,21 +161,17 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
             level,
             contribution,
         );
-        // let multisig = match signature {
-        //     Signature::Individual(individual) => {
-        //         let multisig = individual.as_multisig();
-        //         self.individual_verified
-        //             .get_mut(level)
-        //             .unwrap_or_else(|| panic!("Missing level {}", level))
-        //             .insert(individual.signer);
-        //         self.individual_signatures
-        //             .get_mut(level)
-        //             .unwrap_or_else(|| panic!("Missing level {}", level))
-        //             .insert(individual.signer, individual);
-        //         multisig
-        //     }
-        //     Signature::Multi(multisig) => multisig,
-        // };
+
+        if contribution.num_contributors() == 1 {
+            self.individual_verified
+                .get_mut(level)
+                .unwrap_or_else(|| panic!("Missing Level {}", level))
+                .insert(contribution.contributor());
+            self.individual_contributions
+                .get_mut(level)
+                .unwrap_or_else(|| panic!("Missing Level {}", level))
+                .insert(contribution.contributor(), contribution.clone());
+        }
 
         if let Some(best_contribution) = self.check_merge(&contribution, level) {
             trace!(
@@ -194,7 +202,7 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
     }
 
     fn individual_signature(&self, level: usize, peer_id: usize) -> Option<&Self::Contribution> {
-        self.individual_signatures
+        self.individual_contributions
             .get(level)
             .unwrap_or_else(|| panic!("Invalid level: {}", level))
             .get(&peer_id)
@@ -206,14 +214,12 @@ impl<P: Partitioner, C: AggregatableContribution> ContributionStore for ReplaceS
 
     fn combined(&self, mut level: usize) -> Option<Self::Contribution> {
         // TODO: Cache this?
-        trace!("Creating combined signature for level {}", level);
 
         let mut signatures = Vec::new();
         for (_, signature) in self.best_contribution.range(0..=level) {
             trace!("collect: {:?}", signature);
             signatures.push(signature)
         }
-        trace!("Collected {} signatures", signatures.len());
 
         // ???
         if level < self.partitioner.levels() - 1 {

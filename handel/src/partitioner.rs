@@ -1,4 +1,5 @@
 use std::ops::RangeInclusive;
+// use nimiq_collections::bitset::BitSet;
 
 use utils::math::log2;
 
@@ -13,7 +14,7 @@ pub enum PartitioningError {
     EmptyLevel { level: usize },
 }
 
-pub trait Partitioner {
+pub trait Partitioner: Send + Sync {
     /// Number of levels
     fn levels(&self) -> usize;
 
@@ -61,6 +62,7 @@ impl BinomialPartitioner {
 }
 
 impl Partitioner for BinomialPartitioner {
+    /// returns the number of levels including level 0 (which is always this nodes own contribution)
     fn levels(&self) -> usize {
         self.num_levels
     }
@@ -101,7 +103,6 @@ impl Partitioner for BinomialPartitioner {
         contributions: Vec<&C>,
         _level: usize,
     ) -> Option<C> {
-        //debug!("Combining signatures for level {}: {:?}", level, signatures);
         let mut combined = (*contributions.first()?).clone();
 
         for contribution in contributions.iter().skip(1) {
@@ -122,6 +123,7 @@ mod tests {
     #[test]
     fn test_partitioner() {
         /*
+        partitioner: node_id = 3
             ---ID---   -Level-
             0    000   . . 2 .
             1    001   . . 2 .
@@ -132,19 +134,65 @@ mod tests {
             6    110   . . . 3
             7    111   . . . 3
 
-        node_id = 3
         level = 3
         m = (1 << level - 1) - 1 = 100 - 1 = 011
         f = (1 << level)                   = 100
+
+
+        other_partitioner: node_id = 0
+            ---ID---   -Level-
+            0    000   . 1 . .
+            1    001   0 . . .
+            2    010   . . 2 .
+            3    011   . . 2 .
+            4    100   . . . 3
+            5    101   . . . 3
+            6    110   . . . 3
+            7    111   . . . 3
         */
 
         let partitioner = BinomialPartitioner::new(3, 8);
+        let second_partitioner = BinomialPartitioner::new(1, 8);
+        let third_partitioner = BinomialPartitioner::new(7, 8);
 
         assert_eq!(partitioner.levels(), 4);
+
         assert_eq!(partitioner.range(0), Ok(3..=3), "Level 0");
+        assert_eq!(second_partitioner.range(0), Ok(1..=1), "Level 0");
+
         assert_eq!(partitioner.range(1), Ok(2..=2), "Level 1");
+        assert_eq!(second_partitioner.range(1), Ok(0..=0), "Level 1");
+
         assert_eq!(partitioner.range(2), Ok(0..=1), "Level 2");
+        assert_eq!(second_partitioner.range(2), Ok(2..=3), "Level 2");
+
         assert_eq!(partitioner.range(3), Ok(4..=7), "Level 3");
+        assert_eq!(second_partitioner.range(3), Ok(4..=7), "Level 3");
+
+        // must be symetrical
+        for level in 2..partitioner.levels() {
+            if partitioner
+                .range(level)
+                .unwrap()
+                .contains(&second_partitioner.node_id)
+            {
+                assert!(second_partitioner
+                    .range(level)
+                    .unwrap()
+                    .contains(&partitioner.node_id));
+            }
+            if partitioner
+                .range(level)
+                .unwrap()
+                .contains(&third_partitioner.node_id)
+            {
+                assert!(third_partitioner
+                    .range(level)
+                    .unwrap()
+                    .contains(&partitioner.node_id));
+            }
+        }
+
         assert_eq!(
             partitioner.range(4),
             Err(PartitioningError::InvalidLevel { level: 4 })
