@@ -7,7 +7,7 @@ extern crate nimiq_blockchain_albatross as blockchain_albatross;
 extern crate nimiq_blockchain_base as blockchain_base;
 extern crate nimiq_consensus as consensus;
 extern crate nimiq_mempool as mempool;
-extern crate nimiq_network as network;
+extern crate nimiq_network_albatross as network;
 
 use std::fs::File;
 use std::io;

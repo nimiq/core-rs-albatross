@@ -13,7 +13,7 @@ extern crate nimiq_hash as hash;
 extern crate nimiq_macros as macros;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_messages as network_messages;
-extern crate nimiq_network as network;
+extern crate nimiq_network_albatross as network;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_subscription as subscription;
 extern crate nimiq_transaction as transaction;

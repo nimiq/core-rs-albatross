@@ -39,7 +39,18 @@ impl Message for ValidatorInfo {
 pub type SignedValidatorInfo = SignedMessage<ValidatorInfo>;
 
 /// A list of signed ValidatorInfos which is sent across the network
-pub type SignedValidatorInfos = Vec<SignedValidatorInfo>;
+#[derive(Deserialize, Serialize)]
+pub struct SignedValidatorInfos(
+    #[beserial(len_type(u16))]
+    pub Vec<SignedValidatorInfo>
+);
+
 impl NetworkMessage for SignedValidatorInfos {
     const TYPE_ID: u64 = 111;
+}
+
+impl Into<Vec<SignedValidatorInfo>> for SignedValidatorInfos {
+    fn into(self) -> Vec<SignedValidatorInfo> {
+        self.0
+    }
 }

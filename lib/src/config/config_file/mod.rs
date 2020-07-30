@@ -12,7 +12,6 @@ use log::LevelFilter;
 use serde_derive::Deserialize;
 use url::Url;
 
-use genesis::NetworkId;
 use keys::PublicKey;
 use mempool::filter::{MempoolFilter, Rules as MempoolRules};
 use mempool::MempoolConfig;
@@ -20,6 +19,7 @@ use network::network_config::{ReverseProxyConfig, Seed as NetworkSeed};
 use peer_address::address::peer_uri::PeerUriError;
 use peer_address::{address, protocol};
 use primitives::coin::Coin;
+use primitives::networks::NetworkId;
 
 use crate::config::command_line::CommandLine;
 use crate::config::config_file::serialization::*;

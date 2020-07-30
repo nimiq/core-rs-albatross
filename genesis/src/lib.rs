@@ -1,5 +1,3 @@
-#![feature(ip)] // For Ip::is_global
-
 #[macro_use]
 extern crate beserial_derive;
 #[macro_use]

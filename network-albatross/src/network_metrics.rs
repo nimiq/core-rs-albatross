@@ -60,7 +60,7 @@ pub struct MessageMetrics {
 
 impl MessageMetrics {
     // New message types need to be added here to occur in the metrics!
-    const MESSAGE_TYPES: [MessageType; 43] = [
+    const MESSAGE_TYPES: [MessageType; 42] = [
         MessageType::Version,
         MessageType::Inv,
         MessageType::GetData,
@@ -100,7 +100,6 @@ impl MessageMetrics {
         MessageType::ViewChange,
         MessageType::ViewChangeProof,
         MessageType::ForkProof,
-        MessageType::ValidatorInfo,
         MessageType::PbftProposal,
         MessageType::PbftPrepare,
         MessageType::PbftCommit,

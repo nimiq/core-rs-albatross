@@ -43,7 +43,8 @@ nimiq-genesis = { path = "../genesis", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
-nimiq-network = { path = "../network", version = "0.1", features = ["metrics"] }
+nimiq-network-albatross = { path = "../network-albatross", version = "0.1", features = ["metrics"] }
+nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-transaction-builder = { path = "../transaction-builder", version = "0.1" }

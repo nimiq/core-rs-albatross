@@ -7,12 +7,12 @@ use json::{object, Array, JsonValue, Null};
 use blockchain_base::AbstractBlockchain;
 use consensus::{Consensus, ConsensusProtocol};
 use peer_address::address::{PeerId, PeerUri};
-use nimiq_network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
-use nimiq_network::connection::close_type::CloseType;
-use nimiq_network::connection::connection_info::ConnectionInfo;
-use nimiq_network::connection::connection_pool::ConnectionId;
-use nimiq_network::peer_scorer::Score;
-use nimiq_network::Network;
+use network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
+use network::connection::close_type::CloseType;
+use network::connection::connection_info::ConnectionInfo;
+use network::connection::connection_pool::ConnectionId;
+use network::peer_scorer::Score;
+use network::Network;
 
 use crate::handler::Method;
 use crate::handlers::Module;

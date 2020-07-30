@@ -3,7 +3,7 @@ use std::fmt;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use futures::{future, StreamExt};
+use futures::{executor, future, StreamExt};
 use parking_lot::RwLock;
 
 use block_albatross::{
@@ -79,7 +79,7 @@ impl ValidatorAgent {
             .take_while(move |_| future::ready(weak.strong_count() > 0))
             .for_each(move |infos| {
                 if let Some(this) = weak1.upgrade() {
-                    this.on_validator_infos(infos);
+                    this.on_validator_infos(infos.into());
                 }
                 future::ready(())
             })
@@ -409,9 +409,11 @@ impl ValidatorAgent {
             num_infos,
             self.peer.peer_address()
         );
-        self.peer
-            .channel
-            .send_or_close(Message::ValidatorInfo(unknown_infos));
+
+        executor::block_on(
+            self.peer
+                .send(&SignedValidatorInfos(unknown_infos))
+        ).ok();
     }
 }
 

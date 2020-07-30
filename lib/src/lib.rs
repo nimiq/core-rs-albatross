@@ -8,7 +8,7 @@ extern crate nimiq_consensus as consensus;
 extern crate nimiq_database as database;
 extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;
-extern crate nimiq_network as network;
+extern crate nimiq_network_albatross as network;
 extern crate nimiq_peer_address as peer_address;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_utils as utils;

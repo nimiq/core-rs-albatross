@@ -37,7 +37,7 @@ nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-macros = { path = "../macros", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-messages = { path = "../messages", version = "0.1" }
-nimiq-network = { path = "../network", version = "0.1" }
+nimiq-network-albatross = { path = "../network-albatross", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1", features = ["policy"] }
 nimiq-subscription = { path = "../primitives/subscription", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
