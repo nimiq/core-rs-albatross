@@ -31,8 +31,13 @@ use crate::websocket::Message as WebSocketMessage;
 use super::sink::PeerSink;
 use super::stream::PeerStreamEvent;
 use beserial::{uvar, Deserialize, Serialize};
-use futures_03::{executor, AsyncWriteExt, Sink, SinkExt, Stream};
+use futures_03::{
+    executor,
+    task::{noop_waker_ref, Context},
+    AsyncWriteExt, Sink, SinkExt, Stream,
+};
 use std::pin::Pin;
+use std::task::Poll;
 
 pub type Channels =
     Arc<RwLock<HashMap<u64, Pin<Box<dyn Sink<Vec<u8>, Error = DispatchError> + Send + Sync>>>>>;
@@ -153,6 +158,16 @@ impl PeerChannel {
         let (tx, rx) = unbounded_dispatch();
 
         let mut channels = self.msg_channels.write();
+        // Check if receiver has been dropped if one already exists.
+        if let Some(channel) = channels.get_mut(&T::TYPE_ID) {
+            let mut cx = Context::from_waker(noop_waker_ref());
+            // We expect the sink to return an error because the receiver is dropped.
+            // If not, we would overwrite an active receive.
+            match channel.as_mut().poll_ready(&mut cx) {
+                Poll::Ready(Err(_)) => {}
+                _ => panic!("Receiver for message type {} already exists", T::TYPE_ID),
+            }
+        }
         channels.insert(T::TYPE_ID, tx);
 
         rx

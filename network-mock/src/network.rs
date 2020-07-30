@@ -11,6 +11,7 @@ use tokio::sync::broadcast::{
     channel as broadcast, Receiver as BroadcastReceiver, Sender as BroadcastSender,
 };
 
+use futures::task::{noop_waker_ref, Context, Poll};
 use nimiq_network_interface::message::{peek_type, Message};
 use nimiq_network_interface::network::{Network, NetworkEvent};
 use nimiq_network_interface::peer::dispatch::{unbounded_dispatch, DispatchError};
@@ -96,9 +97,19 @@ impl Peer for MockPeer {
 
     fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>> {
         let (tx, rx) = unbounded_dispatch();
-        if let Some(_) = self.channels.write().insert(T::TYPE_ID, tx) {
-            warn!("Receiver for message type {} already exists", T::TYPE_ID);
+        let mut channels = self.channels.write();
+        // Check if receiver has been dropped if one already exists.
+        if let Some(channel) = channels.get_mut(&T::TYPE_ID) {
+            let mut cx = Context::from_waker(noop_waker_ref());
+            // We expect the sink to return an error because the receiver is dropped.
+            // If not, we would overwrite an active receive.
+            match channel.as_mut().poll_ready(&mut cx) {
+                Poll::Ready(Err(_)) => {}
+                _ => panic!("Receiver for message type {} already exists", T::TYPE_ID),
+            }
         }
+        channels.insert(T::TYPE_ID, tx);
+
         rx
     }
 

@@ -38,6 +38,7 @@ pub trait Peer: Send + Sync {
             Ok(())
         }
     }
+    /// Should panic if there is already a non-closed sink registered for a message type.
     fn receive<T: Message>(&self) -> Pin<Box<dyn Stream<Item = T> + Send>>;
     async fn close(&self, ty: CloseReason);
 }

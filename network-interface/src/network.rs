@@ -41,6 +41,7 @@ pub trait Network: Send + Sync + 'static {
         .await;
     }
 
+    /// Should panic if there is already a non-closed sink registered for a message type.
     fn receive_from_all<T: Message>(&self) -> ReceiveFromAll<T, Self::PeerType> {
         ReceiveFromAll::new(self)
     }
