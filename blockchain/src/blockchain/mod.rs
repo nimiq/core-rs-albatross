@@ -14,10 +14,9 @@ use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
 use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use fixed_unsigned::types::{FixedScale10, FixedScale26, FixedUnsigned10, FixedUnsigned26};
 use fixed_unsigned::RoundHalfUp;
+use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
-use genesis::NetworkInfo;
-use utils::time::OffsetTime;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use transaction::Transaction as BlockchainTransaction;
@@ -25,6 +24,7 @@ use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle, Notifier};
+use utils::time::OffsetTime;
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
@@ -84,9 +84,7 @@ impl Blockchain {
     ) -> Result<Self, BlockchainError> {
         let chain_store = ChainStore::new(env.clone());
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => {
-                Blockchain::load(env, time, network_id, chain_store, head_hash)?
-            }
+            Some(head_hash) => Blockchain::load(env, time, network_id, chain_store, head_hash)?,
             None => Blockchain::init(env, time, network_id, chain_store)?,
         })
     }
@@ -1004,12 +1002,20 @@ impl AbstractBlockchain for Blockchain {
             .get_chunk(prefix, size, txn_option)
     }
 
+    fn get_batch_transactions(
+        &self,
+        batch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>> {
+        self.get_epoch_transactions(batch, txn_option)
+    }
+
     fn get_epoch_transactions(
         &self,
         epoch: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<Vec<BlockchainTransaction>> {
-        // We just return transactions of block n.
+        // We just return transactions of block on block_height = epoch.
         self.chain_store
             .get_chain_info_at(epoch, true, txn_option)
             .and_then(|chain_info| chain_info.head.body.map(|body| body.transactions))

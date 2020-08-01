@@ -168,6 +168,14 @@ impl Block {
     pub fn unwrap_transactions(self) -> Vec<Transaction> {
         self.unwrap_micro().extrinsics.unwrap().transactions
     }
+
+    pub fn is_micro(&self) -> bool {
+        if let Block::Micro(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Serialize for Block {

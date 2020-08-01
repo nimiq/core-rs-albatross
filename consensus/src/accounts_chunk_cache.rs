@@ -85,6 +85,7 @@ impl<B: AbstractBlockchain + 'static> AccountsChunkCache<B> {
                 self.compute_chunks_for_block();
             }
             BlockchainEvent::Finalized(_) => (),
+            BlockchainEvent::EpochFinalized(_) => (),
         }
     }
 

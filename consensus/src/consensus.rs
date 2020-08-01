@@ -15,10 +15,10 @@ use genesis::NetworkId;
 use macros::upgrade_weak;
 use mempool::{Mempool, MempoolConfig, MempoolEvent};
 use network::{Network, NetworkConfig, NetworkEvent, Peer};
-use utils::time::OffsetTime;
 use transaction::Transaction;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
+use utils::time::OffsetTime;
 use utils::timers::Timers;
 
 use crate::accounts_chunk_cache::AccountsChunkCache;
@@ -84,12 +84,7 @@ impl<P: ConsensusProtocol> Consensus<P> {
             Arc::clone(&time),
         )?);
         let mempool = Mempool::new(Arc::clone(&blockchain), mempool_config);
-        let network = Network::new(
-            Arc::clone(&blockchain),
-            network_config,
-            time,
-            network_id,
-        )?;
+        let network = Network::new(Arc::clone(&blockchain), network_config, time, network_id)?;
         let accounts_chunk_cache = AccountsChunkCache::new(env.clone(), Arc::clone(&blockchain));
         let block_queue = BlockQueue::new(Arc::clone(&blockchain));
 
@@ -263,7 +258,9 @@ impl<P: ConsensusProtocol> Consensus<P> {
         let blocks: Vec<&<P::Blockchain as AbstractBlockchain>::Block>;
         let block;
         match event {
-            BlockchainEvent::Extended(_) | BlockchainEvent::Finalized(_) => {
+            BlockchainEvent::Extended(_)
+            | BlockchainEvent::Finalized(_)
+            | BlockchainEvent::EpochFinalized(_) => {
                 // This implicitly takes the lock on the blockchain state.
                 block = self.blockchain.head_block();
                 blocks = vec![&block];

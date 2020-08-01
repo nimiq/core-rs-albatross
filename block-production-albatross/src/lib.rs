@@ -22,13 +22,13 @@ use block::{
 };
 use blockchain::blockchain::Blockchain;
 use blockchain::reward_registry::SlashedSetSelector;
-use blockchain_base::AbstractBlockchain;
 use bls::KeyPair;
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
 use mempool::Mempool;
+use nimiq_account::Inherent;
 use primitives::policy;
-use primitives::slot::ValidatorSlots;
+
 use vrf::VrfSeed;
 
 pub struct BlockProducer {
@@ -117,18 +117,32 @@ impl BlockProducer {
 
     pub fn next_macro_extrinsics(
         &self,
-        txn: &mut WriteTransaction,
-        seed: &VrfSeed,
+        _txn: &mut WriteTransaction,
+        _seed: &VrfSeed,
     ) -> MacroExtrinsics {
-        // Determine slashed set without txn, so that it is not garbage collected yet.
-        let prev_epoch = policy::epoch_at(self.blockchain.height() + 1) - 1;
-        // Select whole slashed set here.
+        // Determine slashed sets without txn, so that it is not garbage collected yet.
+        let epoch = policy::epoch_at(self.blockchain.height() + 1);
+
+        // Select whole slashed sets here.
         let slashed_set = self.blockchain.state().reward_registry().slashed_set(
-            prev_epoch,
+            epoch - 1,
             SlashedSetSelector::All,
             None,
         );
-        MacroExtrinsics::from_slashed_set(slashed_set)
+
+        let current_slashed_set = if policy::is_election_block_at(self.blockchain.height() + 1) {
+            // election blocks do not have a current slashed set as it holds no information
+            None
+        } else {
+            // all other macro blocks need to maintain the slashed set of the current epoch
+            Some(self.blockchain.state().reward_registry().slashed_set(
+                epoch,
+                SlashedSetSelector::All,
+                None,
+            ))
+        };
+
+        MacroExtrinsics::from_slashed_set(slashed_set, current_slashed_set)
     }
 
     fn next_micro_extrinsics(
@@ -191,13 +205,17 @@ impl BlockProducer {
 
         let parent_hash = self.blockchain.head_hash();
         let parent_macro_hash = self.blockchain.macro_head_hash();
+        let parent_election_hash = self.blockchain.election_head_hash();
 
         let mut header = MacroHeader {
             version: Block::VERSION,
-            validators: ValidatorSlots::default(),
+            // Default is no new validators.
+            // If this block turns out to be an electioon block the validators will be set later in this fn.
+            validators: None,
             block_number,
             view_number,
             parent_macro_hash,
+            parent_election_hash,
             seed: seed.clone(),
             parent_hash,
             state_root: Blake2bHash::default(),
@@ -220,9 +238,21 @@ impl BlockProducer {
             )
             .expect("Failed to commit dummy block to reward registry");
 
-        let mut inherents = self
-            .blockchain
-            .finalize_previous_epoch(&self.blockchain.state(), &header);
+        let mut inherents: Vec<Inherent> = vec![];
+
+        if policy::is_election_block_at(block_number) {
+            // If this is an election block we need to set the new validators.
+            let validators = self.blockchain.next_validators(seed, Some(txn));
+
+            header.validators = validators.into();
+
+            // for election blocks add reward and finalize epoch inherents.
+            inherents.append(
+                &mut self
+                    .blockchain
+                    .finalize_previous_epoch(&self.blockchain.state(), &header),
+            );
+        }
 
         // Add slashes for view changes.
         let view_changes = ViewChanges::new(
@@ -249,9 +279,6 @@ impl BlockProducer {
             .get_transactions_root(policy::epoch_at(block_number), Some(txn))
             .expect("Failed to compute transactions root, micro blocks missing");
 
-        let validators = self.blockchain.next_validators(seed, Some(txn));
-
-        header.validators = validators.into();
         header.state_root = state_root;
         header.transactions_root = transactions_root;
 

@@ -43,6 +43,11 @@ impl BlockchainAlbatrossHandler {
         Ok(policy::epoch_at(self.blockchain.height()).into())
     }
 
+    /// Returns the current batch number.
+    pub(crate) fn batch_number(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
+        Ok(policy::batch_at(self.blockchain.height()).into())
+    }
+
     /// Returns a block object for a block hash.
     /// Parameters:
     /// - hash (string)
@@ -113,7 +118,7 @@ impl BlockchainAlbatrossHandler {
 
     /// Returns the producer of a block given the block and view number.
     /// The block number has to be less or equal to the current chain height
-    /// and greater than that of the second last known macro block.
+    /// and greater than that of the second last known election block.
     /// Parameters:
     /// - block_number (number)
     /// - view_number (number) (optional)
@@ -398,12 +403,21 @@ impl BlockchainAlbatrossHandler {
                     .justification
                     .as_ref()
                     .map(|pbft_proof| {
-                        let validators = block.header.validators.clone().into();
-                        object! {
-                            "votes" => pbft_proof.votes(&validators)
-                                .map(JsonValue::from).unwrap_or(JsonValue::Null),
-                            "prepare" => Self::proof_to_object(&pbft_proof.prepare),
-                            "commit" => Self::proof_to_object(&pbft_proof.commit),
+                        if let Some(Block::Macro(election_block)) = self.blockchain.get_block(
+                            &block.header.parent_election_hash,
+                            false,
+                            false,
+                        ) {
+                            let validators =
+                                election_block.header.validators.unwrap().clone().into();
+                            object! {
+                                "votes" => pbft_proof.votes(&validators)
+                                    .map(JsonValue::from).unwrap_or(JsonValue::Null),
+                                "prepare" => Self::proof_to_object(&pbft_proof.prepare),
+                                "commit" => Self::proof_to_object(&pbft_proof.commit),
+                            }
+                        } else {
+                            JsonValue::Null
                         }
                     })
                     .unwrap_or(JsonValue::Null);
@@ -422,12 +436,30 @@ impl BlockchainAlbatrossHandler {
                     })
                     .unwrap_or(JsonValue::Null);
 
+                let current_slashed_slots = block
+                    .extrinsics
+                    .as_ref()
+                    .map(|extrinsics| {
+                        extrinsics.current_slashed_set.as_ref().map(|slashed_set| {
+                            JsonValue::Array(
+                                slashed_set
+                                    .iter()
+                                    .map(|slot_number| JsonValue::Number(slot_number.into()))
+                                    .collect(),
+                            )
+                        })
+                    })
+                    .unwrap_or(Some(JsonValue::Null))
+                    .unwrap_or(JsonValue::Null);
+
                 object! {
                     "type" => "macro",
                     "hash" => hash.clone(),
                     "blockNumber" => block.header.block_number,
                     "viewNumber" => block.header.view_number,
+                    "batch" => policy::batch_at(block.header.block_number),
                     "epoch" => policy::epoch_at(block.header.block_number),
+                    "parentElectionHash" => block.header.parent_election_hash.to_hex(),
                     "parentMacroHash" => block.header.parent_macro_hash.to_hex(),
                     "parentHash" => block.header.parent_hash.to_hex(),
                     "seed" => block.header.seed.to_string(),
@@ -436,6 +468,7 @@ impl BlockchainAlbatrossHandler {
                     "timestamp" => block.header.timestamp,
                     "slots" => slots.as_ref().map(Self::slots_to_obj).unwrap_or(Null),
                     "slashedSlots" => slashed_slots,
+                    "currentSlashedSlots" => current_slashed_slots,
                     "justification" => justification,
                 }
             }
@@ -562,6 +595,7 @@ impl Module for BlockchainAlbatrossHandler {
         // Blockchain
         "blockNumber" => generic.block_number,
         "epochNumber" => epoch_number,
+        "batchNumber" => batch_number,
         "getBlockByHash" => get_block_by_hash,
         "getBlockByNumber" => get_block_by_number,
         "get_slot_at" => get_slot_at,

@@ -134,7 +134,8 @@ impl<P: ConsensusProtocol + 'static> ConsensusAgent<P> {
             .get_chunk(&msg.block_hash, &msg.start_prefix);
         let peer = self.peer.clone();
         tokio::spawn(async move {
-            let chunk_opt = get_chunk_future.await
+            let chunk_opt = get_chunk_future
+                .await
                 .map(AccountsTreeChunkData::Serialized);
             peer.channel
                 .send_or_close(Message::AccountsTreeChunk(Box::new(

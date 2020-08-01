@@ -6,13 +6,13 @@ use json::{object, Array, JsonValue, Null};
 
 use blockchain_base::AbstractBlockchain;
 use consensus::{Consensus, ConsensusProtocol};
-use peer_address::address::{PeerId, PeerUri};
 use network::address::peer_address_state::{PeerAddressInfo, PeerAddressState};
 use network::connection::close_type::CloseType;
 use network::connection::connection_info::ConnectionInfo;
 use network::connection::connection_pool::ConnectionId;
 use network::peer_scorer::Score;
 use network::Network;
+use peer_address::address::{PeerId, PeerUri};
 
 use crate::handler::Method;
 use crate::handlers::Module;

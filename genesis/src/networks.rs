@@ -9,8 +9,8 @@ use beserial::Deserialize;
 use hash::Blake2bHash;
 use keys::Address;
 use keys::PublicKey;
-use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
 use peer_address::address::seed_list::SeedList;
+use peer_address::address::{NetAddress, PeerAddress, PeerAddressType, PeerId};
 use peer_address::services::ServiceFlags;
 pub use primitives::networks::NetworkId;
 

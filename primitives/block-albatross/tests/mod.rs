@@ -76,10 +76,11 @@ fn it_can_convert_macro_block_into_slots() {
     let macro_block = MacroBlock {
         header: MacroHeader {
             version: 1,
-            validators: validator_slots.clone(),
+            validators: Some(validator_slots.clone()),
             block_number: 42,
             view_number: 0,
             parent_macro_hash: hash.clone(),
+            parent_election_hash: hash.clone(),
             seed: signature.compress().into(),
             parent_hash: hash.clone(),
             state_root: hash.clone(),
@@ -90,6 +91,7 @@ fn it_can_convert_macro_block_into_slots() {
         justification: None,
         extrinsics: Some(MacroExtrinsics {
             slashed_set: BitSet::new(),
+            current_slashed_set: None,
             extra_data: vec![],
         }),
     };

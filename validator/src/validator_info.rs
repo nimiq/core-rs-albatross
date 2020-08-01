@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use beserial::{Deserialize, Serialize};
-use block_albatross::signed::{Message, PREFIX_VALIDATOR_INFO, SignedMessage};
+use block_albatross::signed::{Message, SignedMessage, PREFIX_VALIDATOR_INFO};
 use bls::CompressedPublicKey;
 use hash::SerializeContent;
 use hash_derive::SerializeContent;
@@ -40,10 +40,7 @@ pub type SignedValidatorInfo = SignedMessage<ValidatorInfo>;
 
 /// A list of signed ValidatorInfos which is sent across the network
 #[derive(Deserialize, Serialize)]
-pub struct SignedValidatorInfos(
-    #[beserial(len_type(u16))]
-    pub Vec<SignedValidatorInfo>
-);
+pub struct SignedValidatorInfos(#[beserial(len_type(u16))] pub Vec<SignedValidatorInfo>);
 
 impl NetworkMessage for SignedValidatorInfos {
     const TYPE_ID: u64 = 111;

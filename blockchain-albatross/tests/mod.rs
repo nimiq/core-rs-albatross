@@ -14,8 +14,8 @@ use nimiq_blockchain_base::Direction;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::Environment;
-use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_genesis::NetworkId;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
 mod macro_block_sync;

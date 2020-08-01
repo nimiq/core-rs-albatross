@@ -11,8 +11,8 @@ use nimiq_blockchain_base::AbstractBlockchain;
 use nimiq_blockchain_base::Direction;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_genesis::NetworkId;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`

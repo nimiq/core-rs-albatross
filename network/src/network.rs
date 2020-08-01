@@ -12,9 +12,9 @@ use rand::Rng;
 
 use blockchain_base::AbstractBlockchain;
 use genesis::NetworkId;
-use utils::time::OffsetTime;
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
+use utils::time::OffsetTime;
 use utils::timers::Timers;
 
 use crate::address::peer_address_book::PeerAddressBook;

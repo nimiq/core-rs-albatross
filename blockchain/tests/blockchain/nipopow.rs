@@ -3,8 +3,8 @@ use std::sync::Arc;
 use nimiq_blockchain::{Blockchain, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::{Blake2bHash, Hash};
-use nimiq_utils::time::OffsetTime;
 use nimiq_primitives::networks::NetworkId;
+use nimiq_utils::time::OffsetTime;
 
 #[test]
 fn it_can_compute_trivial_chain_proofs() {

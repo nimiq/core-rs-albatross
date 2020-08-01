@@ -11,10 +11,10 @@ use nimiq_blockchain::{Blockchain, BlockchainEvent, PushError, PushResult};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_hash::Hash;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
-use nimiq_utils::time::OffsetTime;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_transaction::{SignatureProof, Transaction};
+use nimiq_utils::time::OffsetTime;
 
 mod nipopow;
 mod transaction_proofs;

@@ -142,8 +142,6 @@ pub const MIN_STAKE: u64 = 1;
 /// in proof-of-work.
 pub const MIN_VALIDATOR_STAKE: u64 = 100_000_000;
 
-
-
 /// Returns the epoch number at a given block number (height).
 #[inline]
 pub fn epoch_at(block_number: u32) -> u32 {
@@ -372,7 +370,6 @@ mod tests {
         assert_eq!(is_macro_block_at(1), false);
         assert_eq!(!is_micro_block_at(1), false);
         assert_eq!(is_election_block_at(1), false);
-
 
         assert_eq!(is_macro_block_at(2), false);
         assert_eq!(!is_micro_block_at(2), false);

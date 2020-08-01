@@ -22,13 +22,13 @@ use database::Environment;
 use database::{ReadTransaction, Transaction};
 use hash::Blake2bHash;
 use keys::Address;
-use utils::time::OffsetTime;
 use primitives::networks::NetworkId;
 use transaction::Transaction as BlockchainTransaction;
 use transaction::{TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
 use utils::observer::{Listener, ListenerHandle};
+use utils::time::OffsetTime;
 
 #[cfg(feature = "metrics")]
 pub mod chain_metrics;
@@ -137,6 +137,13 @@ pub trait AbstractBlockchain: Sized + Send + Sync {
     ) -> Option<AccountsTreeChunk<Account>>;
 
     // TODO: Currently, we can implement request responses in the ConsensusAgent only for *both* protocols, which is why AbstractBlockchain needs to support this.
+    fn get_batch_transactions(
+        &self,
+        batch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>>;
+
+    // TODO: Currently, we can implement request responses in the ConsensusAgent only for *both* protocols, which is why AbstractBlockchain needs to support this.
     fn get_epoch_transactions(
         &self,
         epoch: u32,
@@ -151,6 +158,7 @@ pub enum BlockchainEvent<BL: Block> {
     Extended(Blake2bHash),
     Rebranched(Vec<(Blake2bHash, BL)>, Vec<(Blake2bHash, BL)>),
     Finalized(Blake2bHash),
+    EpochFinalized(Blake2bHash),
 }
 
 #[derive(Debug, Fail, Clone, PartialEq, Eq)]

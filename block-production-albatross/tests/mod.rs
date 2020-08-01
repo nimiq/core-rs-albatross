@@ -13,10 +13,10 @@ use nimiq_blockchain_base::{AbstractBlockchain, PushError};
 use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
+use nimiq_genesis::NetworkId;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
 use nimiq_mempool::{Mempool, MempoolConfig};
-use nimiq_genesis::NetworkId;
 use nimiq_primitives::policy;
 use nimiq_primitives::slot::{ValidatorSlotBand, ValidatorSlots};
 use nimiq_vrf::VrfSeed;
@@ -190,6 +190,30 @@ fn it_can_produce_macro_blocks() {
         blockchain.push_block(Block::Macro(block), true),
         Ok(PushResult::Extended)
     );
+}
+
+#[test]
+fn it_can_produce_election_blocks() {
+    let env = VolatileEnvironment::new(10).unwrap();
+    let blockchain = Arc::new(Blockchain::new(env.clone(), NetworkId::UnitAlbatross).unwrap());
+    let mempool = Mempool::new(Arc::clone(&blockchain), MempoolConfig::default());
+
+    let keypair =
+        KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
+    let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair);
+    // push micro and macro blocks until the 3rd epoch is reached
+    while policy::epoch_at(blockchain.block_number()) < 2 {
+        fill_micro_blocks(&producer, &blockchain);
+
+        let (proposal, extrinsics) =
+            producer.next_macro_block_proposal(1565720000000u64, 0u32, None);
+
+        let block = sign_macro_block(proposal, Some(extrinsics));
+        assert_eq!(
+            blockchain.push_block(Block::Macro(block), true),
+            Ok(PushResult::Extended)
+        );
+    }
 }
 
 // TODO Test transactions

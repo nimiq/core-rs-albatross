@@ -307,7 +307,9 @@ impl ValidatorNetwork {
                     }
                     ValidatorAgentEvent::ViewChangeProof(view_change_proof) => {
                         let ViewChangeProofMessage { view_change, proof } = *view_change_proof;
-                        tokio::spawn(async move { this.on_view_change_proof(view_change, proof); });
+                        tokio::spawn(async move {
+                            this.on_view_change_proof(view_change, proof);
+                        });
                     }
                     ValidatorAgentEvent::PbftProposal(proposal) => {
                         this.on_pbft_proposal(*proposal)

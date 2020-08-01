@@ -199,7 +199,7 @@ impl GenesisBuilder {
         debug!("Slots: {:#?}", slots);
 
         // extrinsics
-        let extrinsics = MacroExtrinsics::from_slashed_set(BitSet::new());
+        let extrinsics = MacroExtrinsics::from_slashed_set(BitSet::new(), None);
         let extrinsics_root = extrinsics.hash::<Blake2bHash>();
         debug!("Extrinsics root: {}", &extrinsics_root);
 
@@ -236,10 +236,11 @@ impl GenesisBuilder {
         // the header
         let header = MacroHeader {
             version: 1,
-            validators: slots.validator_slots,
+            validators: Some(slots.validator_slots),
             block_number: 0,
             view_number: 0,
             parent_macro_hash: [0u8; 32].into(),
+            parent_election_hash: [0u8; 32].into(),
             seed,
             parent_hash: [0u8; 32].into(),
             state_root,

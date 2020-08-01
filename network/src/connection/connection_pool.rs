@@ -10,8 +10,8 @@ use blockchain_base::AbstractBlockchain;
 use collections::SparseVec;
 use macros::upgrade_weak;
 use network_messages::SignalMessage;
-use peer_address::address::{NetAddress, NetAddressType};
 use peer_address::address::PeerAddress;
+use peer_address::address::{NetAddress, NetAddressType};
 use peer_address::protocol::Protocol;
 use utils::mutable_once::MutableOnce;
 use utils::observer::PassThroughNotifier;
@@ -638,8 +638,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
             }
 
             // Close connection if we have too many connections to the peer's IP address.
-            if state.get_num_connections_by_net_address(&net_address)
-                > Self::PEER_COUNT_PER_IP_MAX
+            if state.get_num_connections_by_net_address(&net_address) > Self::PEER_COUNT_PER_IP_MAX
             {
                 Self::close(info.network_connection(), CloseType::ConnectionLimitPerIp);
                 return false;
@@ -887,9 +886,7 @@ impl<B: AbstractBlockchain + 'static> ConnectionPool<B> {
 
                 if network_connection.inbound() {
                     // Re-check allowInboundExchange as it might have changed.
-                    if state.peer_count() >= Self::PEER_COUNT_MAX
-                        && !state.allow_inbound_exchange
-                    {
+                    if state.peer_count() >= Self::PEER_COUNT_MAX && !state.allow_inbound_exchange {
                         Self::close(info.network_connection(), CloseType::MaxPeerCountReached);
                         return;
                     }

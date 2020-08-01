@@ -19,7 +19,7 @@ use network::Peer;
 use network_interface::peer::Peer as PeerInterface;
 use peer_address::address::PeerId;
 use primitives::policy;
-use utils::observer::{PassThroughNotifier, weak_passthru_listener};
+use utils::observer::{weak_passthru_listener, PassThroughNotifier};
 use utils::rate_limit::RateLimit;
 
 use crate::pool::{PushResult, ValidatorPool};
@@ -75,14 +75,16 @@ impl ValidatorAgent {
     fn init_listeners(this: &Arc<Self>) {
         let weak = Arc::downgrade(this);
         let weak1 = Arc::downgrade(this);
-        tokio::spawn(this.peer.receive::<SignedValidatorInfos>()
-            .take_while(move |_| future::ready(weak.strong_count() > 0))
-            .for_each(move |infos| {
-                if let Some(this) = weak1.upgrade() {
-                    this.on_validator_infos(infos.into());
-                }
-                future::ready(())
-            })
+        tokio::spawn(
+            this.peer
+                .receive::<SignedValidatorInfos>()
+                .take_while(move |_| future::ready(weak.strong_count() > 0))
+                .for_each(move |infos| {
+                    if let Some(this) = weak1.upgrade() {
+                        this.on_validator_infos(infos.into());
+                    }
+                    future::ready(())
+                }),
         );
 
         // this.peer
@@ -410,10 +412,7 @@ impl ValidatorAgent {
             self.peer.peer_address()
         );
 
-        executor::block_on(
-            self.peer
-                .send(&SignedValidatorInfos(unknown_infos))
-        ).ok();
+        executor::block_on(self.peer.send(&SignedValidatorInfos(unknown_infos))).ok();
     }
 }
 
