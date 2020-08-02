@@ -4,6 +4,7 @@ use algebra::mnt6_753::{Fr, G1Projective};
 use algebra_core::UniformRand;
 use num_traits::Zero;
 
+#[cfg(feature = "beserial")]
 use beserial::Serialize;
 use nimiq_hash::Hash;
 use nimiq_utils::key_rng::SecureGenerate;

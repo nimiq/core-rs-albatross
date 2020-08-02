@@ -1,5 +1,6 @@
 use std::fmt;
 
+#[cfg(feature = "beserial")]
 use beserial::Serialize;
 use nimiq_hash::Hash;
 use nimiq_utils::key_rng::SecureGenerate;
