@@ -135,7 +135,7 @@ impl<T> LinkedList<T> {
         unsafe {
             node.next = self.head;
             node.prev = None;
-            let node = Some(Box::into_raw_non_null(node));
+            let node = Some(NonNull::from(Box::leak(node)));
 
             match self.head {
                 None => self.tail = node,
@@ -170,7 +170,7 @@ impl<T> LinkedList<T> {
         unsafe {
             node.next = None;
             node.prev = self.tail;
-            let node = Some(Box::into_raw_non_null(node));
+            let node = Some(NonNull::from(Box::leak(node)));
 
             match self.tail {
                 None => self.head = node,
@@ -902,11 +902,11 @@ impl<'a, T> IterMut<'a, T> {
                     Some(prev) => prev,
                 };
 
-                let node = Some(Box::into_raw_non_null(Box::new(Node {
+                let node = Some(NonNull::from(Box::leak(Box::new(Node {
                     next: Some(head),
                     prev: Some(prev),
                     element,
-                })));
+                }))));
 
                 prev.as_mut().next = node;
                 head.as_mut().prev = node;
