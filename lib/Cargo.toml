@@ -27,14 +27,13 @@ enum-display-derive = "0.1"
 failure = "0.1"
 fern = { version = "0.5", features = ["colored"], optional = true }
 hex = "0.4"
-human-panic = { version = "1.0", optional = true }
+# human-panic = { version = "1.0", optional = true } currently unused, might be used in the future
 lazy_static = "1.4"
 log = "0.4"
 log-panics = { version = "2.0", features = ["with-backtrace"], optional = true }
 parking_lot = { version = "0.9", features = ["deadlock_detection"], optional = true }
 paw = "1.0"
 rand = "0.7"
-rand04_compat = "0.1"
 serde = "1.0"
 serde_derive = "1.0"
 structopt = { version = "0.3", features = ["paw"] }
@@ -60,7 +59,7 @@ nimiq-ws-rpc-server = { path = "../ws-rpc-server", version = "0.1", optional = t
 default = []
 validator = ["nimiq-validator", "nimiq-bls", "nimiq-rpc-server/validator", "nimiq-ws-rpc-server/validator"]
 deadlock = ["parking_lot"]
-panic = ["log-panics", "human-panic"]
+panic = ["log-panics"]
 logging = ["fern", "colored"]
 launcher = []
 rpc-server = ["nimiq-rpc-server", "parking_lot"]

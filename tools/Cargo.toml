@@ -28,11 +28,9 @@ failure = "0.1"
 hex = "0.4"
 log = "0.4"
 rand = "0.7"
-simple_logger = "1.0"
 
 beserial = { path = "../beserial", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1" }
-nimiq-build-tools = { path = "../build-tools", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }

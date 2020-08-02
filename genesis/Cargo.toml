@@ -41,7 +41,6 @@ nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "crc", "time"] }
 
 [build-dependencies]
-human-panic = { version = "1.0" }
 log = "0.4"
 simple_logger = "1.0"
 
