@@ -29,7 +29,7 @@ nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
 nimiq-tree-primitives = { path = "../accounts/tree-primitives", version = "0.1" }
-nimiq-utils = { path = "../utils", version = "0.1", features = ["observer"] }
+nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "time"] }
 
 [features]
 metrics = []
