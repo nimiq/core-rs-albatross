@@ -31,6 +31,7 @@ pub mod blockchain_albatross;
 pub mod blockchain_nimiq;
 pub mod consensus;
 pub mod mempool;
+#[cfg(feature = "validator")]
 pub mod mempool_albatross;
 pub mod network;
 pub mod wallet;
@@ -43,6 +44,7 @@ pub use self::blockchain_albatross::BlockchainAlbatrossHandler;
 pub use self::blockchain_nimiq::BlockchainNimiqHandler;
 pub use self::consensus::ConsensusHandler;
 pub use self::mempool::MempoolHandler;
+#[cfg(feature = "validator")]
 pub use self::mempool_albatross::MempoolAlbatrossHandler;
 pub use self::network::NetworkHandler;
 pub use self::wallet::{UnlockedWalletManager, WalletHandler};
