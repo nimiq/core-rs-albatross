@@ -20,14 +20,14 @@ addons:
 
 # run builds for all the trains (and more)
 rust:
-  - stable
-  - beta
+  # - stable
+  # - beta
   - nightly
 
 matrix:
-  allow_failures:
-    - rust: stable
-    - rust: beta
+  # allow_failures:
+    # - rust: stable
+    # - rust: beta
   fast_finish: true
 
 # Splitting the jobs is necessary due to timeouts, however we have to make sure that we include all crates
@@ -40,10 +40,14 @@ env:
   - TEST_CRATES="-p nimiq-handel -p nimiq-messages -p nimiq-metrics-server -p nimiq-network -p nimiq-genesis -p nimiq-rpc-server -p nimiq-validator -p nimiq-ws-rpc-server"
   - TEST_CRATES="-p nimiq-wallet -p nimiq-peer-address -p nimiq-subscription -p nimiq-lib -p nimiq-client"
   - RUN_CLIPPY=1
+  - RUN_FMT=1
 
 before_script:
   - export PATH=$HOME/.cargo/bin:$PATH
-  - if [[ -n ${RUN_CLIPPY:+x} ]]; then rustup component add clippy || export NO_CLIPPY=1; fi
+  # add componnent rustfmt when RUN_FMT is set. If that fails, downgrade nightly toolchain to one which has rustfmt support
+  - if [[ -n ${RUN_FMT:+x} ]]; then rustup component add rustfmt || rustup uninstall nightly && rustup toolchain install nightly -c rustfmt; fi
+  # add componnent clippy when RUN_CLIPPY is set. If that fails, downgrade nightly toolchain to one which has clippy support
+  - if [[ -n ${RUN_CLIPPY:+x} ]]; then rustup component add clippy || rustup uninstall nightly && rustup toolchain install nightly -c clippy; fi
   - cargo install cargo-update || echo "cargo-update already installed"
   - cargo install cargo-travis || echo "cargo-travis already installed"
   - cargo install-update -a # update outdated cached binaries
@@ -51,6 +55,7 @@ before_script:
 
 
 script:
+  - if [[ -n ${RUN_FMT:+x} ]] && [[ -z ${NO_FMT+x} ]]; then cargo fmt -- --check; fi
   - if [[ -n ${RUN_CLIPPY:+x} ]] && [[ -z ${NO_CLIPPY+x} ]]; then cargo clippy --all-features; fi
   - if [[ -n ${TEST_CRATES:+x} ]]; then echo $TEST_CRATES; fi
   - if [[ -n ${TEST_CRATES:+x} ]]; then travis_wait 60 cargo test --release --verbose --all-features $TEST_CRATES; fi
