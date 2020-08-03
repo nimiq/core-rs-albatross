@@ -99,6 +99,12 @@ impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
             }
         }
         match ready!(self.inner.poll_next_unpin(cx)) {
+            // `SelectAll` is built upon a `FuturesUnordered`, which returns `None` once the list of
+            // futures is all worked through. However, it allows to add new futures and then
+            // may resume to return values.
+            // Thus, it is fine for us to return `Pending` once all streams in the select all are
+            // gone as we know `SelectAll` can actually recover from the `None` case once we
+            // push new streams into it.
             None => Poll::Pending,
             other => Poll::Ready(other),
         }
