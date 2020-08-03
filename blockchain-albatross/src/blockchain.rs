@@ -714,7 +714,7 @@ impl Blockchain {
 
             // Check if there are two blocks in the same slot and with the same height. Since we already
             // verified the validator for the current slot, this is enough to check for fork proofs.
-            // Count the microblocks after the last macroblock
+            // Count the microblocks after the last macroblock.
             let mut micro_blocks: Vec<Block> =
                 self.chain_store
                     .get_blocks_at(block.block_number(), false, Some(&read_txn));
@@ -730,7 +730,6 @@ impl Blockchain {
             let view_number = block.view_number();
 
             for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
-                // for micro_block in micro_blocks.iter() {
                 // If there's another microblock set to this view number, we
                 // notify the fork event.
                 if view_number == micro_block.header.view_number {

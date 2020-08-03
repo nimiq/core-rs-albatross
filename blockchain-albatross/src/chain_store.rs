@@ -197,6 +197,7 @@ impl ChainStore {
         self.get_chain_info_at(block_height, include_body, txn_option)
             .map(|chain_info| chain_info.head)
     }
+
     pub fn get_blocks_at(
         &self,
         block_height: u32,
@@ -221,12 +222,8 @@ impl ChainStore {
         };
 
         // Iterate until we find all blocks at the same height.
-        loop {
-            if let Some(block) = self.get_block(&block_hash, include_body, Some(&txn)) {
-                blocks.push(block);
-            } else {
-                break;
-            }
+        while let Some(block) = self.get_block(&block_hash, include_body, Some(&txn)) {
+            blocks.push(block);
 
             // Get next block hash
             block_hash = match cursor.next_duplicate::<u32, Blake2bHash>() {

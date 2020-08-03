@@ -291,14 +291,16 @@ fn it_can_rebranch_at_macro_block() {
     assert_eq!(temp_producer2.push(fork1), Ok(PushResult::Ignored));
 }
 
+#[test]
 fn create_fork_proof() {
-    // Build a fork using a producer
-    let producer = TemporaryBlockProducer::new();
+    // Build a fork using two producers.
+    let producer1 = TemporaryBlockProducer::new();
+    let producer2 = TemporaryBlockProducer::new();
 
     let event1_rc1 = Arc::new(RwLock::new(false));
     let event1_rc2 = event1_rc1.clone();
 
-    producer
+    producer1
         .blockchain
         .fork_notifier
         .write()
@@ -309,9 +311,12 @@ fn create_fork_proof() {
     // Easy rebranch
     // [0] - [0] - [0] - [0]
     //          \- [0]
-    let block = producer.next_block(0, vec![]);
-    let _ = producer.next_block(0, vec![0x48]);
-    let _ = producer.next_block(0, vec![]);
+    let block = producer1.next_block(0, vec![]);
+    let _next_block = producer1.next_block(0, vec![0x48]);
+    producer2.push(block).unwrap();
+
+    let fork = producer2.next_block(0, vec![]);
+    producer1.push(fork).unwrap();
 
     // Verify that the fork proof was generated
     assert_eq!(*event1_rc1.read().unwrap(), true);
