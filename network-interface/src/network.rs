@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::stream::{FusedStream, SelectAll};
 use futures::task::{Context, Poll};
-use futures::{future, stream, Stream, StreamExt, TryFutureExt};
+use futures::{future, ready, stream, Stream, StreamExt, TryFutureExt};
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
@@ -98,12 +98,15 @@ impl<T: Message, P: Peer + 'static> Stream for ReceiveFromAll<T, P> {
                 }
             }
         }
-        self.inner.poll_next_unpin(cx)
+        match ready!(self.inner.poll_next_unpin(cx)) {
+            None => Poll::Pending,
+            other => Poll::Ready(other),
+        }
     }
 }
 
 impl<T: Message, P: Peer + 'static> FusedStream for ReceiveFromAll<T, P> {
     fn is_terminated(&self) -> bool {
-        self.inner.is_terminated() || self.event_stream.is_terminated()
+        self.event_stream.is_terminated()
     }
 }

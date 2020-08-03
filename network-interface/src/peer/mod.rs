@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use beserial::SerializingError;
 use futures::Stream;
 use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 
 use crate::message::Message;
