@@ -1,0 +1,23 @@
+[package]
+name = "nimiq-validator-network-interface"
+version = "0.1.0"
+authors = ["The Nimiq Core Development Team <info@nimiq.com>"]
+edition = "2018"
+description = "Nimiq's validator network abstraction in Rust"
+homepage = "https://nimiq.com"
+repository = "https://github.com/nimiq/core-rs-albatross"
+license = "Apache-2.0"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["nimiq", "cryptocurrency", "blockchain"]
+
+[badges]
+travis-ci = { repository = "nimiq/core-rs", branch = "master" }
+is-it-maintained-issue-resolution = { repository = "nimiq/core-rs" }
+is-it-maintained-open-issues = { repository = "nimiq/core-rs" }
+maintenance = { status = "experimental" }
+
+[dependencies]
+async-trait = "0.1"
+beserial = { path = "../beserial", version = "0.1" }
+futures = "0.3"
+nimiq-network-interface = { path = "../network-interface", version = "0.1" }
