@@ -6,3 +6,4 @@ extern crate futures;
 extern crate log;
 
 pub mod network;
+pub mod validator_network;
