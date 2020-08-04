@@ -440,16 +440,14 @@ impl BlockchainAlbatrossHandler {
                     .extrinsics
                     .as_ref()
                     .map(|extrinsics| {
-                        extrinsics.current_slashed_set.as_ref().map(|slashed_set| {
-                            JsonValue::Array(
-                                slashed_set
-                                    .iter()
-                                    .map(|slot_number| JsonValue::Number(slot_number.into()))
-                                    .collect(),
-                            )
-                        })
+                        JsonValue::Array(
+                            extrinsics
+                                .current_slashed_set
+                                .iter()
+                                .map(|slot_number| JsonValue::Number(slot_number.into()))
+                                .collect(),
+                        )
                     })
-                    .unwrap_or(Some(JsonValue::Null))
                     .unwrap_or(JsonValue::Null);
 
                 object! {

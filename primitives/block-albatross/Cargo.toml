@@ -29,7 +29,7 @@ nimiq-hash = { path = "../../hash", version = "0.1" }
 nimiq-hash_derive = { path = "../../hash/hash_derive", version = "0.1" }
 nimiq-keys = { path = "../../keys", version = "0.1" }
 nimiq-macros = { path = "../../macros", version = "0.1" }
-nimiq-primitives = { path = "..", version = "0.1", features = ["policy", "networks"] }
+nimiq-primitives = { path = "..", version = "0.1", features = ["policy", "networks", "coin"] }
 nimiq-transaction = { path = "../transaction", version = "0.1" }
 nimiq-utils = { path = "../../utils", version = "0.1", features = ["merkle"] }
 nimiq-vrf = { path = "../../vrf", version = "0.1" }

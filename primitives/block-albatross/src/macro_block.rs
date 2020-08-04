@@ -48,9 +48,8 @@ pub struct MacroHeader {
 pub struct MacroExtrinsics {
     /// The final list of slashes from the previous epoch.
     pub slashed_set: BitSet,
-    /// the slashed set of the current epoch.
-    /// None for election blocks as the slashed set of the current epoch is always an empty BitSet for those
-    pub current_slashed_set: Option<BitSet>,
+    /// The slashed set of the current epoch.
+    pub current_slashed_set: BitSet,
     #[beserial(len_type(u8))]
     pub extra_data: Vec<u8>,
 }
@@ -75,7 +74,7 @@ impl MacroBlock {
 
 // CHECKME: Check for performance
 impl MacroExtrinsics {
-    pub fn from_slashed_set(slashed_set: BitSet, current_slashed_set: Option<BitSet>) -> Self {
+    pub fn from_slashed_set(slashed_set: BitSet, current_slashed_set: BitSet) -> Self {
         MacroExtrinsics {
             slashed_set,
             current_slashed_set,

@@ -9,7 +9,6 @@ extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
 extern crate nimiq_mempool as mempool;
 extern crate nimiq_primitives as primitives;
-extern crate nimiq_vrf as vrf;
 
 use std::sync::Arc;
 
@@ -20,7 +19,9 @@ use block::{
     PbftProposal, ViewChangeProof, ViewChanges,
 };
 use blockchain::blockchain::Blockchain;
-use blockchain::reward_registry::SlashedSetSelector;
+use blockchain::chain_info::ChainInfo;
+use blockchain::slots::ForkProofInfos;
+use blockchain_base::AbstractBlockchain;
 use bls::KeyPair;
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
@@ -140,34 +141,15 @@ impl BlockProducer {
 
     /// Creates the extrinsics for the next macro block.
     pub fn next_macro_extrinsics(&self, extra_data: Vec<u8>) -> MacroExtrinsics {
-        // Determine slashed sets without txn, so that it is not garbage collected yet.
-        // Get the number of the current epoch.
-        let epoch = policy::epoch_at(self.blockchain.height() + 1);
+        let slashed_set = self
+            .blockchain
+            .slashed_set_at(self.blockchain.height() + 1)
+            .expect("Missing previous block for block production")
+            .next_slashed_set(self.blockchain.height() + 1);
 
-        // Get the slashed set for the previous epoch.
-        let slashed_set = self.blockchain.state().reward_registry().slashed_set(
-            epoch - 1,
-            SlashedSetSelector::All,
-            None,
-        );
-
-        // Get the slashed set for the current epoch.
-        let current_slashed_set = if policy::is_election_block_at(self.blockchain.height() + 1) {
-            // election blocks do not have a current slashed set as it holds no information
-            None
-        } else {
-            // all other macro blocks need to maintain the slashed set of the current epoch
-            Some(self.blockchain.state().reward_registry().slashed_set(
-                epoch,
-                SlashedSetSelector::All,
-                None,
-            ))
-        };
-
-        // Create and return the macro block extrinsics.
         MacroExtrinsics {
-            slashed_set,
-            current_slashed_set,
+            slashed_set: slashed_set.prev_epoch_state.clone(),
+            current_slashed_set: slashed_set.current_epoch(),
             extra_data,
         }
     }
@@ -272,19 +254,6 @@ impl BlockProducer {
         // Get and update the state.
         let state = self.blockchain.state();
 
-        state
-            .reward_registry()
-            .commit_block(
-                txn,
-                &Block::Macro(MacroBlock {
-                    header: header.clone(),
-                    justification: None,
-                    extrinsics: None,
-                }),
-                self.blockchain.view_number(),
-            )
-            .expect("Failed to commit dummy block to reward registry");
-
         // Initialize the inherents vector.
         let mut inherents: Vec<Inherent> = vec![];
 
@@ -296,12 +265,17 @@ impl BlockProducer {
             // Add it to the header.
             header.validators = validators.into();
 
-            // Also create the reward inherents from finalizing the previous epoch.
-            inherents.append(
-                &mut self
-                    .blockchain
-                    .finalize_previous_epoch(&self.blockchain.state(), &header),
-            );
+            let dummy_macro_block = Block::Macro(MacroBlock {
+                header: header.clone(),
+                justification: None,
+                extrinsics: None,
+            });
+            let prev_chain_info = state.main_chain();
+            let fork_proof_infos = ForkProofInfos::empty();
+            let chain_info =
+                ChainInfo::new(dummy_macro_block, prev_chain_info, &fork_proof_infos).unwrap();
+            // For election blocks add reward and finalize epoch inherents.
+            inherents.append(&mut self.blockchain.finalize_previous_epoch(&state, &chain_info));
         }
 
         // Create the slash inherents for the view changes.

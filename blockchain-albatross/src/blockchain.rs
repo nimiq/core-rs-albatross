@@ -15,8 +15,8 @@ use account::{Account, Inherent, InherentType};
 use accounts::Accounts;
 use beserial::Serialize;
 use block::{
-    Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroExtrinsics, MacroHeader,
-    MicroBlock, ViewChange, ViewChangeProof, ViewChanges,
+    Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroExtrinsics, MicroBlock,
+    ViewChange, ViewChangeProof, ViewChanges,
 };
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -41,7 +41,8 @@ use vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
-use crate::reward_registry::{EpochStateError, SlashRegistry, SlashedSetSelector};
+use crate::reward::{block_reward_for_epoch, genesis_parameters};
+use crate::slots::{get_slot_at, ForkProofInfos, SlashedSet};
 use crate::transaction_cache::TransactionCache;
 
 pub type PushResult = blockchain_base::PushResult;
@@ -119,17 +120,19 @@ pub struct Blockchain {
 
     #[cfg(feature = "metrics")]
     metrics: BlockchainMetrics,
+
+    genesis_supply: Coin,
+    genesis_timestamp: u64,
 }
 
 pub struct BlockchainState {
     pub accounts: Accounts,
     pub transaction_cache: TransactionCache,
-    pub reward_registry: SlashRegistry,
 
     pub(crate) main_chain: ChainInfo,
     head_hash: Blake2bHash,
 
-    macro_head: MacroBlock,
+    macro_info: ChainInfo,
     macro_head_hash: Blake2bHash,
 
     election_head: MacroBlock,
@@ -172,24 +175,16 @@ impl BlockchainState {
 
     /// This includes fork proof slashes and view changes.
     pub fn current_slashed_set(&self) -> BitSet {
-        self.reward_registry.slashed_set(
-            policy::epoch_at(self.block_number()),
-            SlashedSetSelector::All,
-            None,
-        )
+        self.main_chain.slashed_set.current_epoch()
     }
 
     /// This includes fork proof slashes and view changes.
     pub fn last_slashed_set(&self) -> BitSet {
-        self.reward_registry.slashed_set(
-            policy::epoch_at(self.block_number()) - 1,
-            SlashedSetSelector::All,
-            None,
-        )
+        self.main_chain.slashed_set.prev_epoch_state.clone()
     }
 
-    pub fn reward_registry(&self) -> &SlashRegistry {
-        &self.reward_registry
+    pub fn main_chain(&self) -> &ChainInfo {
+        &self.main_chain
     }
 }
 
@@ -213,9 +208,16 @@ impl Blockchain {
         // Check that the correct genesis block is stored.
         let network_info = NetworkInfo::from_network_id(network_id);
         let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
-        if !genesis_info.map(|i| i.on_main_chain).unwrap_or(false) {
+        if !genesis_info
+            .as_ref()
+            .map(|i| i.on_main_chain)
+            .unwrap_or(false)
+        {
             return Err(BlockchainError::InvalidGenesisBlock);
         }
+
+        let (genesis_supply, genesis_timestamp) =
+            genesis_parameters(genesis_info.unwrap().head.unwrap_macro_ref());
 
         // Load main chain from store.
         let main_chain = chain_store
@@ -237,7 +239,7 @@ impl Blockchain {
             )
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
         let macro_head = match macro_chain_info.head {
-            Block::Macro(macro_head) => macro_head,
+            Block::Macro(ref macro_head) => macro_head,
             Block::Micro(_) => return Err(BlockchainError::InconsistentState),
         };
         let macro_head_hash = macro_head.hash();
@@ -278,9 +280,6 @@ impl Blockchain {
                 .saturating_sub(main_chain.head.block_number() + 1)
         );
 
-        // Initialize SlashRegistry.
-        let slash_registry = SlashRegistry::new(env.clone(), Arc::clone(&chain_store));
-
         // Current slots and validators
         let current_slots = Self::slots_from_block(&election_head);
 
@@ -309,10 +308,9 @@ impl Blockchain {
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,
-                reward_registry: slash_registry,
                 main_chain,
                 head_hash,
-                macro_head,
+                macro_info: macro_chain_info,
                 macro_head_hash,
                 election_head,
                 election_head_hash,
@@ -323,6 +321,8 @@ impl Blockchain {
 
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default(),
+            genesis_supply,
+            genesis_timestamp,
         })
     }
 
@@ -340,6 +340,7 @@ impl Blockchain {
             _ => None,
         })
         .unwrap();
+        let (genesis_supply, genesis_timestamp) = genesis_parameters(genesis_macro_block);
         let main_chain = ChainInfo::initial(genesis_block.clone());
         let head_hash = network_info.genesis_hash().clone();
 
@@ -359,9 +360,6 @@ impl Blockchain {
         // Initialize empty TransactionCache.
         let transaction_cache = TransactionCache::new();
 
-        // Initialize SlashRegistry.
-        let slash_registry = SlashRegistry::new(env.clone(), Arc::clone(&chain_store));
-
         // current slots and validators
         let current_slots = Self::slots_from_block(&genesis_macro_block);
         let last_slots = Slots::default();
@@ -376,10 +374,9 @@ impl Blockchain {
             state: RwLock::new(BlockchainState {
                 accounts,
                 transaction_cache,
-                reward_registry: slash_registry,
+                macro_info: main_chain.clone(),
                 main_chain,
                 head_hash: head_hash.clone(),
-                macro_head: genesis_macro_block.clone(),
                 macro_head_hash: head_hash.clone(),
                 election_head: genesis_macro_block.clone(),
                 election_head_hash: head_hash,
@@ -390,6 +387,8 @@ impl Blockchain {
 
             #[cfg(feature = "metrics")]
             metrics: BlockchainMetrics::default(),
+            genesis_supply,
+            genesis_timestamp,
         })
     }
 
@@ -590,7 +589,7 @@ impl Blockchain {
             // the branch are the same. Then, we need to follow and compare.
             let mut view_numbers = vec![block.view_number()];
             let mut current: (Blake2bHash, ChainInfo) =
-                (block.hash(), ChainInfo::new(block.clone()));
+                (block.hash(), ChainInfo::dummy(block.clone()));
             let mut prev: (Blake2bHash, ChainInfo) = (prev_info.head.hash(), prev_info.clone());
             while !prev.1.on_main_chain {
                 // Macro blocks are final
@@ -860,7 +859,18 @@ impl Blockchain {
             }
         }
 
-        let chain_info = ChainInfo::new(block);
+        let fork_proof_infos = ForkProofInfos::fetch(&block, &self.chain_store, Some(&read_txn))
+            .map_err(|err| {
+                warn!("Rejecting block - slash commit failed: {:?}", err);
+                PushError::InvalidSuccessor
+            })?;
+        let chain_info = match ChainInfo::new(block, &prev_info, &fork_proof_infos) {
+            Ok(info) => info,
+            Err(err) => {
+                warn!("Rejecting block - slash commit failed: {:?}", err);
+                return Err(PushError::InvalidSuccessor);
+            }
+        };
 
         // Drop read transaction before calling other functions.
         drop(read_txn);
@@ -908,55 +918,12 @@ impl Blockchain {
             return Err(PushError::DuplicateTransaction);
         }
 
-        // Get the slashed set used to finalize the previous epoch before garbage collecting it below.
-        // We need to keep track of the slashed set for the previous epoch as well as the current epoch:
-        // - Because fork proofs might happen after a macro block they are comitted to the previous epochs slashed set.
-        //   Rewards are distributed with one epoch delay to acomodate those fork proofs.
-        // - Because macro blocks do only change the validator set when it is an election blockas well,
-        //   the current slashed set needs to be stored because without all micro blocks
-        //   of the current epoch it would be impossible to determine if a slot is allowed to produce
-        //   a block or not.
-        let mut slashed_set: Option<BitSet> = None;
-        let mut current_slashed_set: Option<BitSet> = None;
-        let mut is_election_block = false;
-
-        if let Block::Macro(ref macro_block) = chain_info.head {
-            // Get whole slashed set here.
-            slashed_set = Some(state.reward_registry.slashed_set(
-                policy::epoch_at(chain_info.head.block_number()) - 1,
-                SlashedSetSelector::All,
-                Some(&txn),
-            ));
-            // Macro blocks which do not have an election also need to keep track of the slashed set of the current
-            // epoch. Macro blocks with an election always have a current_slashed_set of None, as slashes are reset
-            // on election.
-            if !macro_block.is_election_block() {
-                let current_slashes = state.reward_registry.slashed_set(
-                    policy::epoch_at(chain_info.head.block_number()),
-                    SlashedSetSelector::All,
-                    Some(&txn),
-                );
-                current_slashed_set = Some(current_slashes);
-            } else {
-                is_election_block = true;
-            }
-        }
-
-        if let Err(e) = state.reward_registry.commit_block(
-            &mut txn,
-            &chain_info.head,
-            prev_info.head.next_view_number(),
-        ) {
-            warn!("Rejecting block - slash commit failed: {:?}", e);
-            return Err(PushError::InvalidSuccessor);
-        }
-
         // Commit block to AccountsTree.
         if let Err(e) = self.commit_accounts(
             &state,
             prev_info.head.next_view_number(),
             &mut txn,
-            &chain_info.head,
+            &chain_info,
         ) {
             warn!("Rejecting block - commit failed: {:?}", e);
             txn.abort();
@@ -968,7 +935,10 @@ impl Blockchain {
         drop(state);
 
         // Only now can we check macro extrinsics.
+        let mut is_election_block = false;
         if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
+            is_election_block = macro_block.is_election_block();
+
             if is_election_block {
                 let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
                 if let Some(ref block_slots) = macro_block.header.validators {
@@ -981,9 +951,13 @@ impl Blockchain {
                     return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
                 }
             }
-            // extrinsics are the same for macro blocks with and without election
-            let slashed_set = slashed_set.unwrap();
 
+            // The final list of slashes from the previous epoch.
+            let slashed_set = chain_info.slashed_set.prev_epoch_state.clone();
+            // Macro blocks which do not have an election also need to keep track of the slashed set of the current
+            // epoch. Macro blocks with an election always have a current_slashed_set of None, as slashes are reset
+            // on election.
+            let current_slashed_set = chain_info.slashed_set.current_epoch();
             let mut computed_extrinsics =
                 MacroExtrinsics::from_slashed_set(slashed_set, current_slashed_set);
             // The extra data is only available on the block.
@@ -1018,7 +992,7 @@ impl Blockchain {
         state.transaction_cache.push_block(&chain_info.head);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
-            state.macro_head = macro_block.clone();
+            state.macro_info = chain_info.clone();
             state.macro_head_hash = block_hash.clone();
 
             if is_election_block {
@@ -1111,7 +1085,7 @@ impl Blockchain {
         current = (state.head_hash.clone(), state.main_chain.clone());
 
         // Check if ancestor is in current epoch
-        if ancestor.1.head.block_number() < state.macro_head.header.block_number {
+        if ancestor.1.head.block_number() < state.macro_info.head.block_number() {
             info!("Ancestor is in finalized epoch");
             return Err(PushError::InvalidFork);
         }
@@ -1134,11 +1108,6 @@ impl Blockchain {
                         &micro_block,
                         prev_info.head.view_number(),
                     )?;
-
-                    state
-                        .reward_registry
-                        .revert_block(&mut write_txn, &current.1.head)
-                        .unwrap();
 
                     cache_txn.revert_block(&current.1.head);
 
@@ -1184,18 +1153,12 @@ impl Blockchain {
                 Block::Macro(_) => unreachable!(),
                 Block::Micro(ref micro_block) => {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
-                        state
-                            .reward_registry
-                            .commit_block(&mut write_txn, &fork_block.1.head, prev_view_number)
-                            .map_err(|_| PushError::InvalidBlock(BlockError::InvalidSlash))
-                            .and_then(|_| {
-                                self.commit_accounts(
-                                    &state,
-                                    prev_view_number,
-                                    &mut write_txn,
-                                    &fork_block.1.head,
-                                )
-                            })
+                        self.commit_accounts(
+                            &state,
+                            prev_view_number,
+                            &mut write_txn,
+                            &fork_block.1,
+                        )
                     } else {
                         Err(PushError::DuplicateTransaction)
                     };
@@ -1294,8 +1257,9 @@ impl Blockchain {
         state: &BlockchainState,
         first_view_number: u32,
         txn: &mut WriteTransaction,
-        block: &Block,
+        chain_info: &ChainInfo,
     ) -> Result<(), PushError> {
+        let block = &chain_info.head;
         let accounts = &state.accounts;
 
         match block {
@@ -1304,7 +1268,7 @@ impl Blockchain {
                 if macro_block.is_election_block() {
                     // On election the previous epoch needs to be finalized.
                     // We can rely on `state` here, since we cannot revert macro blocks.
-                    inherents.append(&mut self.finalize_previous_epoch(state, &macro_block.header));
+                    inherents.append(&mut self.finalize_previous_epoch(state, chain_info));
                 }
 
                 // Add slashes for view changes.
@@ -1537,7 +1501,24 @@ impl Blockchain {
         // Drop read transaction before creating the write transaction.
         drop(read_txn);
 
-        let chain_info = ChainInfo::new(block);
+        // We don't know the exact distribution between fork proofs and view changes here.
+        // But as this block concludes the epoch, it is not of relevance anymore.
+        let chain_info = ChainInfo {
+            on_main_chain: false,
+            main_chain_successor: None,
+            slashed_set: SlashedSet {
+                view_change_epoch_state: macro_block
+                    .extrinsics
+                    .as_ref()
+                    .unwrap()
+                    .current_slashed_set
+                    .clone(),
+                fork_proof_epoch_state: Default::default(),
+                prev_epoch_state: macro_block.extrinsics.as_ref().unwrap().slashed_set.clone(),
+            },
+            head: block,
+            cum_tx_fees: transactions.iter().map(|tx| tx.fee).sum(),
+        };
 
         self.extend_isolated_macro(
             chain_info.head.hash(),
@@ -1560,10 +1541,6 @@ impl Blockchain {
 
         let state = self.state.read();
 
-        let block_number = chain_info.head.block_number();
-
-        let timestamp = chain_info.head.timestamp();
-
         let macro_block = chain_info.head.unwrap_macro_ref();
         let is_election_block = macro_block.is_election_block();
 
@@ -1578,23 +1555,6 @@ impl Blockchain {
             .current_slashed_set
             .clone();
 
-        // `commit_epoch` switches the current reward of the current epoch into the previous epoch,
-        // which only needs to be done when a new epoch starts.
-        if is_election_block {
-            let result = state.reward_registry.commit_epoch(
-                &mut txn,
-                block_number,
-                timestamp,
-                transactions,
-                &slashed_set,
-            );
-
-            if let Err(e) = result {
-                warn!("Rejecting block - slash commit failed: {:?}", e);
-                return Err(PushError::InvalidSuccessor);
-            }
-        }
-
         // We cannot check the accounts hash yet.
         // Apply transactions and inherents to AccountsTree.
         let slots = state
@@ -1605,7 +1565,7 @@ impl Blockchain {
 
         // election blocks finalize the previous epoch.
         if is_election_block {
-            inherents.append(&mut self.finalize_previous_epoch(&state, &macro_block.header));
+            inherents.append(&mut self.finalize_previous_epoch(&state, &chain_info));
         }
 
         // Commit epoch to AccountsTree.
@@ -1678,7 +1638,7 @@ impl Blockchain {
         //state.transaction_cache.push_block(&chain_info.head);
 
         if let Block::Macro(ref macro_block) = chain_info.head {
-            state.macro_head = macro_block.clone();
+            state.macro_info = chain_info.clone();
             state.macro_head_hash = block_hash.clone();
             if is_election_block {
                 state.election_head = macro_block.clone();
@@ -1899,7 +1859,7 @@ impl Blockchain {
 
     pub fn macro_head(&self) -> MappedRwLockReadGuard<MacroBlock> {
         let guard = self.state.read();
-        RwLockReadGuard::map(guard, |s| &s.macro_head)
+        RwLockReadGuard::map(guard, |s| s.macro_info.head.unwrap_macro_ref())
     }
 
     pub fn macro_head_hash(&self) -> Blake2bHash {
@@ -2016,9 +1976,11 @@ impl Blockchain {
             &slots_owned
         };
 
-        state
-            .reward_registry
-            .get_slot_at(block_number, view_number, slots, Some(&txn))
+        let prev_info = self
+            .chain_store
+            .get_chain_info_at(block_number - 1, false, Some(&txn))?;
+
+        Some(get_slot_at(block_number, view_number, &prev_info, slots))
     }
 
     pub fn state(&self) -> RwLockReadGuard<BlockchainState> {
@@ -2115,17 +2077,13 @@ impl Blockchain {
             .collect::<Vec<Inherent>>()
     }
 
-    /// Get slash set of epoch at specific block number
+    /// Get slashed set at specific block number
     /// Returns slash set before applying block with that block_number (TODO Tests)
-    pub fn slashed_set_at(
-        &self,
-        epoch_number: u32,
-        block_number: u32,
-        set_selector: SlashedSetSelector,
-    ) -> Result<BitSet, EpochStateError> {
-        let s = self.state.read();
-        s.reward_registry
-            .slashed_set_at(epoch_number, block_number, set_selector, None)
+    pub fn slashed_set_at(&self, block_number: u32) -> Option<SlashedSet> {
+        let prev_info = self
+            .chain_store
+            .get_chain_info_at(block_number - 1, false, None)?;
+        Some(prev_info.slashed_set)
     }
 
     pub fn current_validators(&self) -> MappedRwLockReadGuard<ValidatorSlots> {
@@ -2141,13 +2099,10 @@ impl Blockchain {
     pub fn finalize_previous_epoch(
         &self,
         state: &BlockchainState,
-        macro_header: &MacroHeader,
+        chain_info: &ChainInfo,
     ) -> Vec<Inherent> {
-        // make sure the given block is actually an election block, as only on election blocks the previous epoch can be finalized.
-        assert!(
-            macro_header.validators.is_some(),
-            "Trying to finalize_previous_epoch, but given macro header does not have an election!"
-        );
+        let prev_macro_info = &state.macro_info;
+        let macro_header = &chain_info.head.unwrap_macro_ref().header;
 
         // It might be that we don't have any micro blocks, thus we need to look at the next macro block.
         let epoch = policy::epoch_at(macro_header.block_number) - 1;
@@ -2166,12 +2121,17 @@ impl Blockchain {
             .validator_slots;
 
         // Slashed slots (including fork proofs)
-        let slashed_set = state
-            .reward_registry
-            .slashed_set(epoch, SlashedSetSelector::All, None);
+        let slashed_set = chain_info.slashed_set.prev_epoch_state.clone();
 
         // Total reward for the previous epoch
-        let reward_pot: Coin = state.reward_registry.previous_reward();
+        let block_reward = block_reward_for_epoch(
+            chain_info.head.unwrap_macro_ref(),
+            prev_macro_info.head.unwrap_macro_ref(),
+            self.genesis_supply,
+            self.genesis_timestamp,
+        );
+        let tx_fees = chain_info.cum_tx_fees;
+        let reward_pot: Coin = block_reward + tx_fees;
 
         // Distribute reward between all slots and calculate the remainder
         let slot_reward = reward_pot / policy::SLOTS as u64;

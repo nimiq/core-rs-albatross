@@ -32,7 +32,6 @@ nimiq-hash = { path = "../hash", version = "0.1" }
 nimiq-keys = { path = "../keys", version = "0.1" }
 nimiq-mempool = { path = "../mempool", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
-nimiq-vrf = { path = "../vrf", version = "0.1" }
 
 [dev-dependencies]
 hex = "0.4"
@@ -41,3 +40,4 @@ nimiq-account = { path = "../primitives/account", version = "0.1" }
 nimiq-collections = { path = "../collections", version = "0.1" }
 nimiq-database = { path = "../database", version = "0.1" }
 nimiq-transaction = { path = "../primitives/transaction", version = "0.1" }
+nimiq-vrf = { path = "../vrf", version = "0.1" }

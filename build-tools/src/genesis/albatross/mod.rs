@@ -199,7 +199,7 @@ impl GenesisBuilder {
         debug!("Slots: {:#?}", slots);
 
         // extrinsics
-        let extrinsics = MacroExtrinsics::from_slashed_set(BitSet::new(), None);
+        let extrinsics = MacroExtrinsics::from_slashed_set(BitSet::new(), BitSet::new());
         let extrinsics_root = extrinsics.hash::<Blake2bHash>();
         debug!("Extrinsics root: {}", &extrinsics_root);
 

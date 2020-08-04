@@ -4,7 +4,7 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use block_base;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
-use primitives::networks::NetworkId;
+use primitives::{coin::Coin, networks::NetworkId};
 use transaction::Transaction;
 use vrf::VrfSeed;
 
@@ -123,6 +123,17 @@ impl Block {
         match self {
             Block::Macro(_) => None,
             Block::Micro(ref mut block) => block.extrinsics.as_mut().map(|ex| &mut ex.transactions),
+        }
+    }
+
+    pub fn sum_transaction_fees(&self) -> Coin {
+        match self {
+            Block::Macro(_) => Coin::ZERO,
+            Block::Micro(ref block) => block
+                .extrinsics
+                .as_ref()
+                .map(|ex| ex.transactions.iter().map(|tx| tx.fee).sum())
+                .unwrap_or(Coin::ZERO),
         }
     }
 

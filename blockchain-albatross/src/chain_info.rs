@@ -4,31 +4,86 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use block::{Block, BlockType, MacroExtrinsics, MicroExtrinsics};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
+use primitives::coin::Coin;
+use primitives::policy;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+use crate::slots::{apply_slashes, ForkProofInfos, SlashPushError, SlashedSet};
+
+#[derive(Clone, Debug)]
 pub struct ChainInfo {
     pub head: Block,
     pub on_main_chain: bool,
     pub main_chain_successor: Option<Blake2bHash>,
+    pub slashed_set: SlashedSet,
+    pub cum_tx_fees: Coin,
 }
 
 impl ChainInfo {
+    /// Creates the ChainInfo for the genesis block.
     pub fn initial(block: Block) -> Self {
         ChainInfo {
             head: block,
             on_main_chain: true,
             main_chain_successor: None,
+            slashed_set: Default::default(),
+            cum_tx_fees: Default::default(),
         }
     }
 
-    pub fn new(block: Block) -> Self {
+    /// Creates a new ChainInfo for a block given its predecessor.
+    /// We need the ForkProofInfos to retrieve the slashed sets just before a fork proof.
+    pub fn new(
+        block: Block,
+        prev_info: &ChainInfo,
+        fork_proof_infos: &ForkProofInfos,
+    ) -> Result<Self, SlashPushError> {
+        assert_eq!(prev_info.head.block_number(), block.block_number() - 1);
+        let cum_tx_fees = if policy::is_macro_block_at(prev_info.head.block_number()) {
+            block.sum_transaction_fees()
+        } else {
+            prev_info.cum_tx_fees + block.sum_transaction_fees()
+        };
+
+        Ok(ChainInfo {
+            on_main_chain: false,
+            main_chain_successor: None,
+            slashed_set: apply_slashes(&block, prev_info, fork_proof_infos)?,
+            head: block,
+            cum_tx_fees,
+        })
+    }
+
+    /// Creates a new dummy ChainInfo for a block ignoring slashes and transaction fees.
+    pub fn dummy(block: Block) -> Self {
         ChainInfo {
             head: block,
             on_main_chain: false,
             main_chain_successor: None,
+            slashed_set: Default::default(),
+            cum_tx_fees: Default::default(),
         }
     }
+
+    /// Calculates the base for the next block's slashed set.
+    /// If the current block is an election block, the next slashed set needs to account for
+    /// the new epoch. Otherwise, it is simply the current slashed set.
+    ///
+    /// Note that this method does not yet add new slashes to the set!
+    pub fn next_slashed_set(&self) -> SlashedSet {
+        self.slashed_set
+            .next_slashed_set(self.head.block_number() + 1)
+    }
 }
+
+impl PartialEq for ChainInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.head.eq(&other.head)
+            && self.on_main_chain == other.on_main_chain
+            && self.main_chain_successor.eq(&other.main_chain_successor)
+    }
+}
+
+impl Eq for ChainInfo {}
 
 // Do not serialize the block body.
 // XXX Move this into Block.serialize_xxx()?
@@ -50,6 +105,8 @@ impl Serialize for ChainInfo {
         }
         size += Serialize::serialize(&self.on_main_chain, writer)?;
         size += Serialize::serialize(&self.main_chain_successor, writer)?;
+        size += Serialize::serialize(&self.slashed_set, writer)?;
+        size += Serialize::serialize(&self.cum_tx_fees, writer)?;
         Ok(size)
     }
 
@@ -70,6 +127,8 @@ impl Serialize for ChainInfo {
         }
         size += Serialize::serialized_size(&self.on_main_chain);
         size += Serialize::serialized_size(&self.main_chain_successor);
+        size += Serialize::serialized_size(&self.slashed_set);
+        size += Serialize::serialized_size(&self.cum_tx_fees);
         size
     }
 }
@@ -83,11 +142,15 @@ impl Deserialize for ChainInfo {
         };
         let on_main_chain = Deserialize::deserialize(reader)?;
         let main_chain_successor = Deserialize::deserialize(reader)?;
+        let slashed_set = Deserialize::deserialize(reader)?;
+        let cum_tx_fees = Deserialize::deserialize(reader)?;
 
         Ok(ChainInfo {
             head,
             on_main_chain,
             main_chain_successor,
+            slashed_set,
+            cum_tx_fees,
         })
     }
 }

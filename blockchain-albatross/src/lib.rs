@@ -23,5 +23,6 @@ pub use blockchain::{Blockchain, ForkEvent};
 pub mod blockchain;
 pub mod chain_info;
 pub mod chain_store;
-pub mod reward_registry;
+pub mod reward;
+pub mod slots;
 pub mod transaction_cache;

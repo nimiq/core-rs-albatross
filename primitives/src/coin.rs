@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt;
 use std::io;
+use std::iter::Sum;
 use std::ops::{Add, AddAssign, Div, Rem, Sub, SubAssign};
 use std::str::FromStr;
 
@@ -135,6 +136,12 @@ impl Zero for Coin {
 
     fn is_zero(&self) -> bool {
         self.0 == 0
+    }
+}
+
+impl Sum for Coin {
+    fn sum<I: Iterator<Item = Coin>>(iter: I) -> Self {
+        iter.fold(Coin::ZERO, Add::add)
     }
 }
 
