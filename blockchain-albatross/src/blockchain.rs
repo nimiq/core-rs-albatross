@@ -727,7 +727,7 @@ impl Blockchain {
 
         {
             let intended_slot_owner = slot.public_key().uncompress_unchecked();
-            // This will also check that the type at this block number is correct and wether or not an election takes place
+            // This will also check that the type at this block number is correct and whether or not an election takes place
             if let Err(e) = self.verify_block_header(
                 &block.header(),
                 view_change_proof,
@@ -758,15 +758,15 @@ impl Blockchain {
 
             // Check if there are two blocks in the same slot and with the same height. Since we already
             // verified the validator for the current slot, this is enough to check for fork proofs.
-            // Count the microblocks after the last macroblock.
+            // Count the micro blocks after the last macro block.
             let mut micro_blocks: Vec<Block> =
                 self.chain_store
                     .get_blocks_at(block.block_number(), false, Some(&read_txn));
 
-            // Get the microheader from the block
+            // Get the micro header from the block
             let micro_header1 = &micro_block.header;
 
-            // Get the justification for the block. We asume that the
+            // Get the justification for the block. We assume that the
             // validator's signature is valid.
             let justification1 = &micro_block.justification.signature;
 
@@ -774,7 +774,7 @@ impl Blockchain {
             let view_number = block.view_number();
 
             for micro_block in micro_blocks.drain(..).map(|block| block.unwrap_micro()) {
-                // If there's another microblock set to this view number, we
+                // If there's another micro block set to this view number, we
                 // notify the fork event.
                 if view_number == micro_block.header.view_number {
                     let micro_header2 = micro_block.header;
@@ -784,7 +784,7 @@ impl Blockchain {
                         header1: micro_header1.clone(),
                         header2: micro_header2,
                         justification1: justification1.clone(),
-                        justification2: justification2,
+                        justification2,
                     };
 
                     self.fork_notifier.read().notify(ForkEvent::Detected(proof));

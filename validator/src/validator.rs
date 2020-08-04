@@ -747,7 +747,7 @@ impl Validator {
         let timestamp = self.consensus.network.time.now();
         let (pbft_proposal, proposed_extrinsics) =
             self.block_producer
-                .next_macro_block_proposal(timestamp, view_number, view_change);
+                .next_macro_block_proposal(timestamp, view_number, view_change, vec![]);
         state
             .proposed_extrinsics
             .insert(pbft_proposal.header.hash(), proposed_extrinsics);
@@ -788,11 +788,11 @@ impl Validator {
         let timestamp = self.consensus.network.time.now();
 
         let block = self.block_producer.next_micro_block(
-            fork_proofs,
             timestamp,
             view_number,
-            vec![],
             view_change_proof,
+            fork_proofs,
+            vec![],
         );
         info!(
             "Produced block #{}.{}: {}",
