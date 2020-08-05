@@ -977,8 +977,16 @@ impl Blockchain {
             }
             // extrinsics are the same for macro blocks with and without election
             let slashed_set = slashed_set.unwrap();
-            let computed_extrinsics =
+
+            let mut computed_extrinsics =
                 MacroExtrinsics::from_slashed_set(slashed_set, current_slashed_set);
+            // The extra data is only available on the block.
+            // If the extrinsics exist we need to copy extra_data to the newly created extrinsics for
+            // the hash to be the same (given that the slashed sets also are the same).
+            if macro_block.extrinsics.is_some() {
+                computed_extrinsics.extra_data =
+                    macro_block.extrinsics.as_ref().unwrap().extra_data.clone();
+            }
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
@@ -1634,8 +1642,14 @@ impl Blockchain {
                 }
             }
 
-            let computed_extrinsics =
+            let mut computed_extrinsics =
                 MacroExtrinsics::from_slashed_set(slashed_set, current_slashed_set);
+            // The extra data is only available on the block.
+            // We need to copy it to the newly created extrinsics for the hash to be the
+            // same (given that the slashed sets also are the same).
+            // The extrinsics must exist for isolated macro blocks, so we can unwrap() here.
+            computed_extrinsics.extra_data =
+                macro_block.extrinsics.as_ref().unwrap().extra_data.clone();
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
