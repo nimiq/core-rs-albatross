@@ -745,9 +745,12 @@ impl Validator {
 
         // FIXME: Don't use network time
         let timestamp = self.consensus.network.time.now();
-        let (pbft_proposal, proposed_extrinsics) =
-            self.block_producer
-                .next_macro_block_proposal(timestamp, view_number, view_change, vec![]);
+        let (pbft_proposal, proposed_extrinsics) = self.block_producer.next_macro_block_proposal(
+            timestamp,
+            view_number,
+            view_change,
+            vec![],
+        );
         state
             .proposed_extrinsics
             .insert(pbft_proposal.header.hash(), proposed_extrinsics);
