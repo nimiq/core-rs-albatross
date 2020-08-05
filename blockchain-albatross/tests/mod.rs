@@ -14,8 +14,8 @@ use nimiq_blockchain_base::Direction;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::Environment;
-use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_genesis::NetworkId;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
 mod macro_block_sync;
@@ -64,17 +64,18 @@ impl TemporaryBlockProducer {
                 1565713920000 + height as u64 * 2000,
                 0u32,
                 view_change_proof,
+                extra_data,
             );
             Block::Macro(TemporaryBlockProducer::finalize_macro_block(
                 proposal, extrinsics,
             ))
         } else {
             Block::Micro(self.producer.next_micro_block(
-                vec![],
                 1565713920000 + height as u64 * 2000,
                 view_number,
-                extra_data,
                 view_change_proof,
+                vec![],
+                extra_data,
             ))
         };
         assert_eq!(self.push(block.clone()), Ok(PushResult::Extended));

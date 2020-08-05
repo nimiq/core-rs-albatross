@@ -11,8 +11,8 @@ use nimiq_blockchain_base::AbstractBlockchain;
 use nimiq_blockchain_base::Direction;
 use nimiq_bls::{KeyPair, SecretKey};
 use nimiq_database::volatile::VolatileEnvironment;
-use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_genesis::NetworkId;
+use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_primitives::policy;
 
 /// Secret key of validator. Tests run with `genesis/src/genesis/unit-albatross.toml`
@@ -24,7 +24,7 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     let macro_block_number = policy::macro_block_after(init_height + 1);
     for i in (init_height + 1)..macro_block_number {
         let last_micro_block =
-            producer.next_micro_block(vec![], 1565713920000 + i as u64 * 2000, 0, vec![0x42], None);
+            producer.next_micro_block(1565713920000 + i as u64 * 2000, 0, None, vec![], vec![0x42]);
         assert_eq!(
             blockchain.push(Block::Micro(last_micro_block)),
             Ok(PushResult::Extended)
@@ -76,6 +76,7 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
             1565713920000 + next_block_height as u64 * 2000,
             0u32,
             None,
+            vec![],
         );
 
         let block = sign_macro_block(proposal);

@@ -5,12 +5,12 @@ use std::collections::hash_set::Iter;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::Iterator;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use rand::{Rng, rngs::OsRng};
+use rand::{rngs::OsRng, Rng};
 
 use genesis::{NetworkId, NetworkInfo};
 use macros::upgrade_weak;

@@ -12,12 +12,14 @@ use rand::Rng;
 
 use blockchain_base::AbstractBlockchain;
 use genesis::NetworkId;
-use network_interface::prelude::{Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface};
-use utils::time::OffsetTime;
+use network_interface::prelude::{
+    Network as NetworkInterface, NetworkEvent as NetworkEventI, Peer as PeerInterface,
+};
 use peer_address::address::PeerAddress;
 use tokio_02::sync::broadcast::{Receiver as BroadcastReceiver, RecvError as BroadcastRecvError};
 use utils::mutable_once::MutableOnce;
 use utils::observer::Notifier;
+use utils::time::OffsetTime;
 use utils::timers::Timers;
 
 use crate::address::peer_address_book::PeerAddressBook;
@@ -437,7 +439,10 @@ impl<B: AbstractBlockchain> NetworkInterface for Network<B> {
             .collect::<Vec<_>>()
     }
 
-    fn get_peer(&self, peer_id: &<Self::PeerType as PeerInterface>::Id) -> Option<Arc<Self::PeerType>> {
+    fn get_peer(
+        &self,
+        peer_id: &<Self::PeerType as PeerInterface>::Id,
+    ) -> Option<Arc<Self::PeerType>> {
         self.connections
             .state()
             .get_connection_by_peer_address(peer_id)

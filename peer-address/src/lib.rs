@@ -14,6 +14,6 @@ extern crate nimiq_primitives as primitives;
 extern crate nimiq_utils as utils;
 
 pub mod address;
-pub mod services;
 pub mod protocol;
+pub mod services;
 pub mod version;

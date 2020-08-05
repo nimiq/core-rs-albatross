@@ -116,47 +116,50 @@ impl RewardPot {
     /// but all we need is the timestamp. If the macro block is the genesis block, then it will set
     /// the GENESIS_SUPPLY and GENESIS_TIME constants.
     /// This function is used for normal block syncing.
-    pub(super) fn commit_macro_block(&self, block: &MacroBlock, txn: &mut WriteTransaction) {
-        // This is supposed to be the tuple (current_reward, new_supply).
-        let tuple: (u64, u64);
+    pub(super) fn commit_election_block(&self, block: &MacroBlock, txn: &mut WriteTransaction) {
+        if block.is_election_block() {
+            // This is supposed to be the tuple (current_reward, new_supply).
+            let tuple: (u64, u64);
 
-        // Get the timestamp from the block.
-        let timestamp = block.header.timestamp;
+            // Get the timestamp from the block.
+            let timestamp = block.header.timestamp;
 
-        // Check if this is the genesis block.
-        if block.header.block_number == 0 {
-            // Get the supply from the extra_data field of the genesis block. We assume that the
-            // first 8 bytes of the extra_data field will have the supply as a big-endian byte array.
-            let extrinsics = block.extrinsics.as_ref().unwrap();
+            // Check if this is the genesis block.
+            if block.header.block_number == 0 {
+                // Get the supply from the extra_data field of the genesis block. We assume that the
+                // first 8 bytes of the extra_data field will have the supply as a big-endian byte array.
+                let extrinsics = block.extrinsics.as_ref().unwrap();
 
-            let bytes = extrinsics.extra_data[..8]
-                .try_into()
-                .expect("slice has wrong size");
+                let bytes = extrinsics.extra_data[..8]
+                    .try_into()
+                    .expect("slice has wrong size");
 
-            let supply = u64::from_be_bytes(bytes);
+                let supply = u64::from_be_bytes(bytes);
 
-            // Set the genesis supply to be the current supply.
-            txn.put(&self.reward_pot, Self::GENESIS_SUPPLY_KEY, &supply);
+                // Set the genesis supply to be the current supply.
+                txn.put(&self.reward_pot, Self::GENESIS_SUPPLY_KEY, &supply);
 
-            // Set the genesis time to be the current time.
-            txn.put(&self.reward_pot, Self::GENESIS_TIME_KEY, &timestamp);
+                // Set the genesis time to be the current time.
+                txn.put(&self.reward_pot, Self::GENESIS_TIME_KEY, &timestamp);
 
-            // Initialize the tuple to have current_reward = 0 and new_supply = genesis_supply.
-            tuple = (0, supply);
-        } else {
-            // Calculate the reward for the macro block (which corresponds to the coinbase) and the
-            // new supply.
-            tuple = self.reward_for_macro_block(timestamp, txn);
+                // Initialize the tuple to have current_reward = 0 and new_supply = genesis_supply.
+                tuple = (0, supply);
+            } else {
+                // Calculate the reward for the macro block (which corresponds to the coinbase) and the
+                // new supply.
+                tuple = self.reward_for_macro_block(timestamp, txn);
+            }
+
+            // Set the current reward to zero.
+            txn.put(&self.reward_pot, Self::CURRENT_REWARD_KEY, &0u64);
+
+            // Set the previous reward to the newly calculated reward.
+            txn.put(&self.reward_pot, Self::PREVIOUS_REWARD_KEY, &tuple.0);
+
+            // Set the supply to the newly calculated supply.
+            txn.put(&self.reward_pot, Self::SUPPLY_KEY, &tuple.1);
         }
-
-        // Set the current reward to zero.
-        txn.put(&self.reward_pot, Self::CURRENT_REWARD_KEY, &0u64);
-
-        // Set the previous reward to the newly calculated reward.
-        txn.put(&self.reward_pot, Self::PREVIOUS_REWARD_KEY, &tuple.0);
-
-        // Set the supply to the newly calculated supply.
-        txn.put(&self.reward_pot, Self::SUPPLY_KEY, &tuple.1);
+        // for macro blocks without election they are just a block without any transactions.
     }
 
     /// Updates the RewardPot database for a micro block. It takes the whole micro block as input

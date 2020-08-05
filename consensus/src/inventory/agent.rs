@@ -11,6 +11,7 @@ use block_base::{Block, BlockError, BlockHeader};
 use blockchain_base::{AbstractBlockchain, Direction, PushError, PushResult};
 use collections::queue::Queue;
 use collections::{LimitHashSet, UniqueLinkedList};
+use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
 use macros::upgrade_weak;
 use mempool::{Mempool, ReturnCode};
@@ -20,7 +21,6 @@ use network_messages::{
     EpochTransactionsMessage, GetBlocksDirection, GetBlocksMessage, InvVector, InvVectorType,
     Message, MessageAdapter, TxMessage,
 };
-use genesis::NetworkInfo;
 use subscription::Subscription;
 use transaction::Transaction;
 use utils::rate_limit::RateLimit;

@@ -1,8 +1,8 @@
 use nimiq_block::{Block, Difficulty};
 use nimiq_blockchain::{chain_info::ChainInfo, chain_store::ChainStore};
 use nimiq_database::{volatile::VolatileEnvironment, WriteTransaction};
-use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_genesis::{NetworkId, NetworkInfo};
+use nimiq_hash::{Blake2bHash, Hash};
 
 #[test]
 fn it_can_store_the_chain_head() {

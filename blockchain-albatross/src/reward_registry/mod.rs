@@ -115,9 +115,15 @@ impl SlashRegistry {
     ) -> Result<(), SlashPushError> {
         match block {
             Block::Macro(ref macro_block) => {
-                self.reward_pot.commit_macro_block(macro_block, txn);
                 self.commit_macro_block(txn, macro_block, prev_view_number)?;
-                self.gc(txn, policy::epoch_at(macro_block.header.block_number));
+                if macro_block.is_election_block() {
+                    // interestingly for non election macro blocks there is nothing to do in the reward pot.
+                    // They are just a block without any transaction. That is why there is no commit_macro_block
+                    // in RewardPot.
+                    self.reward_pot.commit_election_block(macro_block, txn);
+                    // only garbage collect when a new epoch starts = the macro block has an election
+                    self.gc(txn, policy::epoch_at(macro_block.header.block_number));
+                }
                 Ok(())
             }
             Block::Micro(ref micro_block) => {
@@ -127,6 +133,10 @@ impl SlashRegistry {
         }
     }
 
+    /// Stores the reward of the closing epoch as well as its slashed set.
+    ///
+    /// This fundction should only be used for election blocks, as otherwise there is nothing to do
+    /// and thus will issue a warning while not doing anything.
     pub fn commit_epoch(
         &self,
         txn: &mut WriteTransaction,
@@ -135,6 +145,12 @@ impl SlashRegistry {
         transactions: &[BlockchainTransaction],
         view_change_slashed_slots: &BitSet,
     ) -> Result<(), SlashPushError> {
+        // epochs can only be committed on election blocks.
+        if !policy::is_election_block_at(block_number) {
+            warn!("Trying to commit an epoch but given block does not have an election!");
+            return Ok(());
+        }
+
         self.reward_pot.commit_epoch(timestamp, transactions, txn);
 
         // Just put the whole epochs slashed set at the macro blocks position.

@@ -10,10 +10,10 @@ use reqwest::r#async::{Chunk, Client, Response};
 use url::Url;
 
 use crate::network_config::{NetworkConfig, Seed};
-use keys::Signature;
-use peer_address::address::PeerAddress;
-use peer_address::address::peer_uri::{PeerUri, PeerUriError};
 use genesis::{NetworkId, NetworkInfo};
+use keys::Signature;
+use peer_address::address::peer_uri::{PeerUri, PeerUriError};
+use peer_address::address::PeerAddress;
 
 use utils::observer::Notifier;
 

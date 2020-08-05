@@ -26,11 +26,12 @@ pub struct MacroHeader {
     pub version: u16,
 
     /// Slots with validator information, i.e. their public key & reward address.
-    pub validators: ValidatorSlots,
+    pub validators: Option<ValidatorSlots>,
 
     pub block_number: u32,
     pub view_number: u32,
     pub parent_macro_hash: Blake2bHash,
+    pub parent_election_hash: Blake2bHash,
 
     pub seed: VrfSeed,
     pub parent_hash: Blake2bHash,
@@ -47,6 +48,9 @@ pub struct MacroHeader {
 pub struct MacroExtrinsics {
     /// The final list of slashes from the previous epoch.
     pub slashed_set: BitSet,
+    /// the slashed set of the current epoch.
+    /// None for election blocks as the slashed set of the current epoch is always an empty BitSet for those
+    pub current_slashed_set: Option<BitSet>,
     #[beserial(len_type(u8))]
     pub extra_data: Vec<u8>,
 }
@@ -62,13 +66,19 @@ impl MacroBlock {
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
     }
+
+    /// Returns wether or not this macro block header contains an election
+    pub fn is_election_block(&self) -> bool {
+        self.header.validators.is_some()
+    }
 }
 
 // CHECKME: Check for performance
 impl MacroExtrinsics {
-    pub fn from_slashed_set(slashed_set: BitSet) -> Self {
+    pub fn from_slashed_set(slashed_set: BitSet, current_slashed_set: Option<BitSet>) -> Self {
         MacroExtrinsics {
             slashed_set,
+            current_slashed_set,
             extra_data: vec![],
         }
     }
@@ -111,14 +121,18 @@ impl fmt::Display for MacroBlock {
 pub enum IntoSlotsError {
     #[fail(display = "Extrinsics missing in macro block")]
     MissingExtrinsics,
+    #[fail(display = "Not an election macro block")]
+    NoElection,
 }
 
 impl TryInto<Slots> for MacroBlock {
     type Error = IntoSlotsError;
 
     fn try_into(self) -> Result<Slots, Self::Error> {
-        let validator_slots = self.header.validators;
-
-        Ok(Slots::new(validator_slots))
+        if let Some(validator_slots) = self.header.validators {
+            Ok(Slots::new(validator_slots))
+        } else {
+            Err(IntoSlotsError::NoElection)
+        }
     }
 }

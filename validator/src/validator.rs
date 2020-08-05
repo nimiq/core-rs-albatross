@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Mul;
 use std::sync::{Arc, Weak};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use parking_lot::RwLock;
 use tokio;
@@ -18,10 +18,10 @@ use blockchain_albatross::{Blockchain, ForkEvent};
 use blockchain_base::{AbstractBlockchain, BlockchainEvent};
 use bls::KeyPair;
 use consensus::{AlbatrossConsensusProtocol, Consensus, ConsensusEvent};
+use genesis::NetworkInfo;
 use hash::{Blake2bHash, Hash};
 use keys::Address;
 use macros::upgrade_weak;
-use genesis::NetworkInfo;
 use primitives::coin::Coin;
 use primitives::policy;
 use transaction_builder::{Recipient, TransactionBuilder};
@@ -258,9 +258,14 @@ impl Validator {
     fn on_blockchain_event(&self, event: &BlockchainEvent<Block>) {
         // Handle each block type (which is directly related to each event type).
         match event {
-            BlockchainEvent::Finalized(hash) => {
+            BlockchainEvent::EpochFinalized(hash) => {
                 // Init new validator epoch
                 self.init_epoch();
+                self.validator_network.on_blockchain_changed(hash);
+            }
+
+            BlockchainEvent::Finalized(hash) => {
+                self.on_blockchain_extended(hash);
                 self.validator_network.on_blockchain_changed(hash);
             }
 
@@ -740,9 +745,12 @@ impl Validator {
 
         // FIXME: Don't use network time
         let timestamp = self.consensus.network.time.now();
-        let (pbft_proposal, proposed_extrinsics) =
-            self.block_producer
-                .next_macro_block_proposal(timestamp, view_number, view_change);
+        let (pbft_proposal, proposed_extrinsics) = self.block_producer.next_macro_block_proposal(
+            timestamp,
+            view_number,
+            view_change,
+            vec![],
+        );
         state
             .proposed_extrinsics
             .insert(pbft_proposal.header.hash(), proposed_extrinsics);
@@ -783,11 +791,11 @@ impl Validator {
         let timestamp = self.consensus.network.time.now();
 
         let block = self.block_producer.next_micro_block(
-            fork_proofs,
             timestamp,
             view_number,
-            vec![],
             view_change_proof,
+            fork_proofs,
+            vec![],
         );
         info!(
             "Produced block #{}.{}: {}",

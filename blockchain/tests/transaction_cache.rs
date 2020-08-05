@@ -2,9 +2,9 @@ use std::convert::TryFrom;
 
 use nimiq_block::Block;
 use nimiq_blockchain::transaction_cache::TransactionCache;
+use nimiq_genesis::NetworkInfo;
 use nimiq_hash::{Blake2bHash, Hash};
 use nimiq_keys::Address;
-use nimiq_genesis::NetworkInfo;
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
 use nimiq_primitives::policy;

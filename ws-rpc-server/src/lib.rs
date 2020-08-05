@@ -211,6 +211,10 @@ impl WsRpcServer {
                 "eventType" => "blockchainFinalized",
                 "blockHash" => block_hash.to_string(),
             },
+            BlockchainEvent::EpochFinalized(block_hash) => object! {
+                "eventType" => "blockchainEpochFinalized",
+                "blockHash" => block_hash.to_string(),
+            },
         })
     }
 

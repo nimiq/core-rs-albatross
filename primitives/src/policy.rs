@@ -124,8 +124,14 @@ pub const SLOTS: u16 = 512;
 /// ceil(x/y) = (x+y-1)/y
 pub const TWO_THIRD_SLOTS: u16 = (2 * SLOTS + 3 - 1) / 3;
 
-/// Length of epoch including macro block
-pub const EPOCH_LENGTH: u32 = 128; // TODO: Set.
+/// Length of a batch including the macro block
+pub const BATCH_LENGTH: u32 = 32; // TODO Set
+
+// how many batches constitute an epoch
+pub const BATCHES_PER_EPOCH: u32 = 4; // TODO Set
+
+/// Length of epoch including election macro block
+pub const EPOCH_LENGTH: u32 = BATCH_LENGTH * BATCHES_PER_EPOCH;
 
 /// Minimum stake for stakers in Lunas (1 NIM = 100,000 Lunas).
 /// A staker is someone who delegates their stake to a validator.
@@ -135,29 +141,6 @@ pub const MIN_STAKE: u64 = 1;
 /// A validator is someone who actually participates in block production. They are akin to miners
 /// in proof-of-work.
 pub const MIN_VALIDATOR_STAKE: u64 = 100_000_000;
-
-/// Returns the number (height) of the next macro block after a given block number (height).
-#[inline]
-pub fn macro_block_after(block_number: u32) -> u32 {
-    (block_number / EPOCH_LENGTH + 1) * EPOCH_LENGTH
-}
-
-/// Returns the number (height) of the preceding macro block before a given block number (height).
-/// If the given block number is a macro block, it returns the macro block before it.
-#[inline]
-pub fn macro_block_before(block_number: u32) -> u32 {
-    if block_number == 0 {
-        panic!("Called macro_block_before with block_number 0");
-    }
-    (block_number - 1) / EPOCH_LENGTH * EPOCH_LENGTH
-}
-
-/// Returns the number (height) of the last macro block at a given block number (height).
-/// If the given block number is a macro block, then it returns that block number.
-#[inline]
-pub fn last_macro_block(block_number: u32) -> u32 {
-    block_number / EPOCH_LENGTH * EPOCH_LENGTH
-}
 
 /// Returns the epoch number at a given block number (height).
 #[inline]
@@ -172,16 +155,81 @@ pub fn epoch_index_at(block_number: u32) -> u32 {
     (block_number + EPOCH_LENGTH - 1) % EPOCH_LENGTH
 }
 
+/// Returns the batch number at a given `block_number` (height)
+#[inline]
+pub fn batch_at(block_number: u32) -> u32 {
+    (block_number + BATCH_LENGTH - 1) / BATCH_LENGTH
+}
+
+/// Returns the batch index at a given block number. The batch index is the number of a block relative
+/// to the the batch it is in. For example, the first block of any batch always has an batch index of 0.
+#[inline]
+pub fn batch_index_at(block_number: u32) -> u32 {
+    (block_number + BATCH_LENGTH - 1) % BATCH_LENGTH
+}
+
+/// Returns the number (height) of the next election macro block after a given block number (height).
+#[inline]
+pub fn election_block_after(block_number: u32) -> u32 {
+    (block_number / EPOCH_LENGTH + 1) * EPOCH_LENGTH
+}
+
+/// Returns the number (height) of the preceding election macro block before a given block number (height).
+/// If the given block number is an  election macro block, it returns the election macro block before it.
+#[inline]
+pub fn election_block_before(block_number: u32) -> u32 {
+    if block_number == 0 {
+        panic!("Called macro_block_before with block_number 0");
+    }
+    (block_number - 1) / EPOCH_LENGTH * EPOCH_LENGTH
+}
+
+/// Returns the number (height) of the last election macro block at a given block number (height).
+/// If the given block number is an election macro block, then it returns that block number.
+#[inline]
+pub fn last_election_block(block_number: u32) -> u32 {
+    block_number / EPOCH_LENGTH * EPOCH_LENGTH
+}
+
+/// Returns a boolean expressing if the block at a given block number (height) is an election macro block.
+#[inline]
+pub fn is_election_block_at(block_number: u32) -> bool {
+    epoch_index_at(block_number) == EPOCH_LENGTH - 1
+}
+
+/// Returns the number (height) of the next macro block after a given block number (height).
+#[inline]
+pub fn macro_block_after(block_number: u32) -> u32 {
+    (block_number / BATCH_LENGTH + 1) * BATCH_LENGTH
+}
+
+/// Returns the number (height) of the preceding macro block before a given block number (height).
+/// If the given block number is a macro block, it returns the macro block before it.
+#[inline]
+pub fn macro_block_before(block_number: u32) -> u32 {
+    if block_number == 0 {
+        panic!("Called macro_block_before with block_number 0");
+    }
+    (block_number - 1) / BATCH_LENGTH * BATCH_LENGTH
+}
+
+/// Returns the number (height) of the last macro block at a given block number (height).
+/// If the given block number is a macro block, then it returns that block number.
+#[inline]
+pub fn last_macro_block(block_number: u32) -> u32 {
+    block_number / BATCH_LENGTH * BATCH_LENGTH
+}
+
 /// Returns a boolean expressing if the block at a given block number (height) is a macro block.
 #[inline]
 pub fn is_macro_block_at(block_number: u32) -> bool {
-    epoch_index_at(block_number) == EPOCH_LENGTH - 1
+    batch_index_at(block_number) == BATCH_LENGTH - 1
 }
 
 /// Returns a boolean expressing if the block at a given block number (height) is a micro block.
 #[inline]
 pub fn is_micro_block_at(block_number: u32) -> bool {
-    epoch_index_at(block_number) != EPOCH_LENGTH - 1
+    batch_index_at(block_number) != BATCH_LENGTH - 1
 }
 
 /// Returns the block number of the first block of the given epoch (which is always a micro block).
@@ -192,9 +240,22 @@ pub fn first_block_of(epoch: u32) -> u32 {
     (epoch - 1) * EPOCH_LENGTH + 1
 }
 
-/// Returns the block number of the macro block of the given epoch (which is always the last block).
-pub fn macro_block_of(epoch: u32) -> u32 {
+///  Returns the block number of the first block of the given batch (which is always a micro block).
+pub fn first_block_of_batch(batch: u32) -> u32 {
+    if batch == 0 {
+        panic!("Called first_block_of_batch for batch 0");
+    }
+    (batch - 1) * BATCH_LENGTH + 1
+}
+
+/// Returns the block number of the election macro block of the given epoch (which is always the last block).
+pub fn election_block_of(epoch: u32) -> u32 {
     epoch * EPOCH_LENGTH
+}
+
+/// Returns the block number of the macro block of the given epoch (which is always the last block).
+pub fn macro_block_of(batch: u32) -> u32 {
+    batch * EPOCH_LENGTH
 }
 
 /// First block in reward registry (first block of previous epoch).
@@ -285,34 +346,103 @@ mod tests {
     }
 
     #[test]
-    fn it_correctly_computes_macro_block_position() {
+    fn it_correctly_computes_batch() {
+        assert_eq!(batch_at(0), 0);
+        assert_eq!(batch_at(1), 1);
+        assert_eq!(batch_at(32), 1);
+        assert_eq!(batch_at(33), 2);
+    }
+
+    #[test]
+    fn it_correctly_computes_batch_index() {
+        assert_eq!(batch_index_at(1), 0);
+        assert_eq!(batch_index_at(2), 1);
+        assert_eq!(batch_index_at(128), 31);
+        assert_eq!(batch_index_at(129), 0);
+    }
+
+    #[test]
+    fn it_correctly_computes_block_positions() {
         assert_eq!(is_macro_block_at(0), true);
         assert_eq!(!is_micro_block_at(0), true);
+        assert_eq!(is_election_block_at(0), true);
+
         assert_eq!(is_macro_block_at(1), false);
         assert_eq!(!is_micro_block_at(1), false);
+        assert_eq!(is_election_block_at(1), false);
+
         assert_eq!(is_macro_block_at(2), false);
         assert_eq!(!is_micro_block_at(2), false);
+        assert_eq!(is_election_block_at(2), false);
+
+        assert_eq!(is_macro_block_at(32), true);
+        assert_eq!(is_micro_block_at(32), false);
+        assert_eq!(is_election_block_at(32), false);
+
         assert_eq!(is_macro_block_at(127), false);
         assert_eq!(!is_micro_block_at(127), false);
+        assert_eq!(is_election_block_at(127), false);
+
         assert_eq!(is_macro_block_at(128), true);
         assert_eq!(!is_micro_block_at(128), true);
+        assert_eq!(is_election_block_at(128), true);
+
         assert_eq!(is_macro_block_at(129), false);
         assert_eq!(!is_micro_block_at(129), false);
+        assert_eq!(is_election_block_at(129), false);
+
+        assert_eq!(is_macro_block_at(160), true);
+        assert_eq!(is_micro_block_at(160), false);
+        assert_eq!(is_election_block_at(160), false);
     }
 
     #[test]
     fn it_correctly_computes_macro_numbers() {
-        assert_eq!(macro_block_after(0), 128);
-        assert_eq!(macro_block_after(1), 128);
+        assert_eq!(macro_block_after(0), 32);
+        assert_eq!(macro_block_after(1), 32);
         assert_eq!(macro_block_after(127), 128);
-        assert_eq!(macro_block_after(128), 256);
-        assert_eq!(macro_block_after(129), 256);
+        assert_eq!(macro_block_after(128), 160);
+        assert_eq!(macro_block_after(129), 160);
 
         assert_eq!(macro_block_before(1), 0);
         assert_eq!(macro_block_before(2), 0);
-        assert_eq!(macro_block_before(127), 0);
-        assert_eq!(macro_block_before(128), 0);
+        assert_eq!(macro_block_before(127), 96);
+        assert_eq!(macro_block_before(128), 96);
         assert_eq!(macro_block_before(129), 128);
         assert_eq!(macro_block_before(130), 128);
+    }
+
+    #[test]
+    fn it_correctly_computes_election_numbers() {
+        assert_eq!(election_block_after(0), 128);
+        assert_eq!(election_block_after(1), 128);
+        assert_eq!(election_block_after(127), 128);
+        assert_eq!(election_block_after(128), 256);
+        assert_eq!(election_block_after(129), 256);
+
+        assert_eq!(election_block_before(1), 0);
+        assert_eq!(election_block_before(2), 0);
+        assert_eq!(election_block_before(127), 0);
+        assert_eq!(election_block_before(128), 0);
+        assert_eq!(election_block_before(129), 128);
+        assert_eq!(election_block_before(130), 128);
+
+        assert_eq!(last_election_block(0), 0);
+        assert_eq!(last_election_block(1), 0);
+        assert_eq!(last_election_block(127), 0);
+        assert_eq!(last_election_block(128), 128);
+        assert_eq!(last_election_block(129), 128);
+    }
+
+    #[test]
+    fn it_correctly_comutes_first_ofs() {
+        assert_eq!(first_block_of(1), 1);
+        assert_eq!(first_block_of(2), 129);
+
+        assert_eq!(first_block_of_batch(1), 1);
+        assert_eq!(first_block_of_batch(2), 33);
+        assert_eq!(first_block_of_batch(3), 65);
+        assert_eq!(first_block_of_batch(4), 97);
+        assert_eq!(first_block_of_batch(5), 129);
     }
 }
