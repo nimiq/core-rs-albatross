@@ -79,7 +79,6 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
                         HashAlgorithm::Sha256 => {
                             pre_image = Sha256Hasher::default().digest(&pre_image[..]).into();
                         }
-                        _ => return Err(TransactionError::InvalidProof),
                     }
                 }
 
@@ -132,9 +131,7 @@ impl AccountTransactionVerification for HashedTimeLockedContractVerifier {
 #[repr(u8)]
 pub enum HashAlgorithm {
     Blake2b = 1,
-    Argon2d = 2,
     Sha256 = 3,
-    Sha512 = 4,
 }
 
 impl Default for HashAlgorithm {
@@ -170,14 +167,6 @@ impl CreationTransactionData {
     }
 
     pub fn verify(&self) -> Result<(), TransactionError> {
-        match self.hash_algorithm {
-            HashAlgorithm::Argon2d => {
-                warn!("Invalid creation data: hash_algorithm may not be Argon2d");
-                return Err(TransactionError::InvalidData);
-            }
-            _ => {}
-        }
-
         if self.hash_count == 0 {
             warn!("Invalid creation data: hash_count may not be zero");
             return Err(TransactionError::InvalidData);
