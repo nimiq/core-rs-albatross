@@ -210,15 +210,11 @@ impl Network for MockNetwork {
     type PeerType = MockPeer;
 
     fn get_peers(&self) -> Vec<Arc<Self::PeerType>> {
-        self.peers
-            .read()
-            .values()
-            .map(|peer| Arc::clone(peer))
-            .collect()
+        self.peers.read().values().cloned().collect()
     }
 
     fn get_peer(&self, peer_id: &<Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>> {
-        self.peers.read().get(peer_id).map(|peer| Arc::clone(peer))
+        self.peers.read().get(peer_id).cloned()
     }
 
     fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>> {
