@@ -4,6 +4,30 @@ use crate::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesEx
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Copy, Clone)]
 pub struct uvar(u64);
 
+impl uvar {
+    pub fn serialized_size_from_first_byte(first_byte: u8) -> usize {
+        if first_byte == 0xFF {
+            9
+        } else if first_byte == 0xFE {
+            8
+        } else if first_byte & 0xFC == 0xFC {
+            7
+        } else if first_byte & 0xF8 == 0xF8 {
+            6
+        } else if first_byte & 0xF0 == 0xF0 {
+            5
+        } else if first_byte & 0xE0 == 0xE0 {
+            4
+        } else if first_byte & 0xC0 == 0xC0 {
+            3
+        } else if first_byte & 0x80 == 0x80 {
+            2
+        } else {
+            1
+        }
+    }
+}
+
 impl From<uvar> for u64 {
     fn from(u: uvar) -> Self {
         u.0

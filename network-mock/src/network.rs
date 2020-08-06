@@ -208,7 +208,7 @@ impl Network for MockNetwork {
     }
 
     fn get_peer(&self, peer_id: &<Self::PeerType as Peer>::Id) -> Option<Arc<Self::PeerType>> {
-        self.peers.read().get(peer_id).map(|peer| Arc::clone(peer))
+        self.peers.read().get(peer_id).cloned()
     }
 
     fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>> {

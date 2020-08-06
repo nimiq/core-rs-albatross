@@ -2,6 +2,7 @@ use std::io;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use beserial::{uvar, Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
+use futures::{AsyncRead, AsyncReadExt};
 use nimiq_utils::crc::Crc32Computer;
 
 use crate::message::crc::ReaderComputeCrc32;
@@ -109,6 +110,35 @@ pub fn peek_length(buffer: &[u8]) -> Result<usize, SerializingError> {
     let n = u32::deserialize(&mut c)?;
 
     Ok(n as usize)
+}
+
+pub async fn read_message<R: AsyncRead + Unpin>(
+    mut reader: R,
+) -> Result<Vec<u8>, SerializingError> {
+    // Read message magic and first type byte.
+    let mut msg = vec![0; 5];
+    reader.read_exact(&mut msg).await?;
+
+    // Read type remainder and message length.
+    let header_len = uvar::serialized_size_from_first_byte(msg[4]) + 8;
+    msg.resize(header_len, 0);
+    reader.read_exact(&mut msg[5..]).await?;
+
+    // Check message size.
+    let msg_len = peek_length(&msg[..])?;
+    if msg_len < 13 {
+        return Err(SerializingError::InvalidValue);
+    } else if msg_len > 10_000_000 {
+        return Err(SerializingError::LimitExceeded);
+    }
+
+    // Read remainder of message.
+    // FIXME Don't allocate the whole message buffer immediately.
+    // TODO Copy message in chunks and grow incrementally.
+    msg.resize(msg_len, 0);
+    reader.read_exact(&mut msg[header_len..]).await?;
+
+    Ok(msg)
 }
 
 pub trait RequestMessage: Message {
