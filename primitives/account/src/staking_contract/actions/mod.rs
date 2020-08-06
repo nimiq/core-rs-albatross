@@ -233,11 +233,8 @@ impl AccountTransactionInteraction for StakingContract {
                         .get(&staker_address)
                         .ok_or(AccountError::InvalidForSender)?;
 
-                    // Check unstake delay.
-                    if block_height
-                        < policy::macro_block_after(inactive_stake.retire_time)
-                            + policy::UNSTAKING_DELAY
-                    {
+                    // Check unstaking delay.
+                    if block_height < policy::election_block_after(inactive_stake.retire_time) {
                         return Err(AccountError::InvalidForSender);
                     }
 
@@ -249,11 +246,8 @@ impl AccountTransactionInteraction for StakingContract {
                         .get(&validator_key)
                         .ok_or(AccountError::InvalidForSender)?;
 
-                    // Check unstake delay.
-                    if block_height
-                        < policy::macro_block_after(inactive_validator.retire_time)
-                            + policy::UNSTAKING_DELAY
-                    {
+                    // Check unstaking delay.
+                    if block_height < policy::election_block_after(inactive_validator.retire_time) {
                         return Err(AccountError::InvalidForSender);
                     }
 

@@ -112,9 +112,6 @@ pub fn block_reward_at(block_height: u32) -> Coin {
 
 /* Albatross */
 
-/// Number of micro blocks to wait for unstaking after next macro block.
-pub const UNSTAKING_DELAY: u32 = 100; // TODO: Set.
-
 /// Number of available validator slots. Note that a single validator may own several validator slots.
 pub const SLOTS: u16 = 512;
 
