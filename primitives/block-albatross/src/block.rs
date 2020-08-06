@@ -251,6 +251,13 @@ impl BlockHeader {
         }
     }
 
+    pub fn timestamp(&self) -> u64 {
+        match self {
+            BlockHeader::Macro(ref header) => header.timestamp,
+            BlockHeader::Micro(ref header) => header.timestamp,
+        }
+    }
+
     pub fn seed(&self) -> &VrfSeed {
         match self {
             BlockHeader::Macro(ref header) => &header.seed,

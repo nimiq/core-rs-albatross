@@ -112,6 +112,10 @@ pub fn block_reward_at(block_height: u32) -> Coin {
 
 /* Albatross */
 
+/// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
+/// system time. We only care about drifting to the future.
+pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;
+
 /// Number of available validator slots. Note that a single validator may own several validator slots.
 pub const SLOTS: u16 = 512;
 

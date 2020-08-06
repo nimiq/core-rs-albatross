@@ -110,7 +110,7 @@ pub enum ForkEvent {
 pub struct Blockchain {
     pub(crate) env: Environment,
     pub network_id: NetworkId,
-    // TODO time: Arc<OffsetTime>,
+    pub time: Arc<OffsetTime>,
     pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
     pub fork_notifier: RwLock<Notifier<'static, ForkEvent>>,
     pub chain_store: Arc<ChainStore>,
@@ -196,9 +196,10 @@ impl BlockchainState {
 impl Blockchain {
     pub fn new(env: Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
         let chain_store = Arc::new(ChainStore::new(env.clone()));
+        let time = Arc::new(OffsetTime::new());
         Ok(match chain_store.get_head(None) {
-            Some(head_hash) => Blockchain::load(env, network_id, chain_store, head_hash)?,
-            None => Blockchain::init(env, network_id, chain_store)?,
+            Some(head_hash) => Blockchain::load(env, network_id, chain_store, time, head_hash)?,
+            None => Blockchain::init(env, network_id, chain_store, time)?,
         })
     }
 
@@ -206,6 +207,7 @@ impl Blockchain {
         env: Environment,
         network_id: NetworkId,
         chain_store: Arc<ChainStore>,
+        time: Arc<OffsetTime>,
         head_hash: Blake2bHash,
     ) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
@@ -300,7 +302,7 @@ impl Blockchain {
         Ok(Blockchain {
             env,
             network_id,
-            //time,
+            time,
             notifier: RwLock::new(Notifier::new()),
             fork_notifier: RwLock::new(Notifier::new()),
             chain_store,
@@ -328,6 +330,7 @@ impl Blockchain {
         env: Environment,
         network_id: NetworkId,
         chain_store: Arc<ChainStore>,
+        time: Arc<OffsetTime>,
     ) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let network_info = NetworkInfo::from_network_id(network_id);
@@ -366,7 +369,7 @@ impl Blockchain {
         Ok(Blockchain {
             env,
             network_id,
-            //time,
+            time,
             notifier: RwLock::new(Notifier::new()),
             fork_notifier: RwLock::new(Notifier::new()),
             chain_store,
@@ -462,6 +465,21 @@ impl Blockchain {
                 header.block_number()
             );
             return Err(PushError::InvalidSuccessor);
+        }
+
+        // Check that the current block timestamp is equal or greater than the timestamp of the
+        // previous block.
+        if prev_info.head.timestamp() >= header.timestamp() {
+            warn!("Rejecting block - block timestamp precedes parent timestamp");
+            return Err(PushError::InvalidSuccessor);
+        }
+
+        // Check that the current block timestamp less the node's current time is less than or equal
+        // to the allowed maximum drift. Basically, we check that the block isn't from the future.
+        // Both times are given in Unix time standard.
+        if header.timestamp().saturating_sub(self.time.now()) > policy::TIMESTAMP_MAX_DRIFT {
+            warn!("Rejecting block - block timestamp exceeds allowed maximum drift");
+            return Err(PushError::InvalidBlock(BlockError::FromTheFuture));
         }
 
         // Check if a view change occurred - if so, validate the proof

@@ -35,7 +35,7 @@ fn it_can_produce_micro_blocks() {
     let producer = BlockProducer::new(Arc::clone(&blockchain), mempool, keypair.clone());
 
     // #1.0: Empty standard micro block
-    let block = producer.next_micro_block(1565713920000, 0, None, vec![], vec![0x41]);
+    let block = producer.next_micro_block(blockchain.time.now(), 0, None, vec![], vec![0x41]);
     assert_eq!(
         blockchain.push(Block::Micro(block.clone())),
         Ok(PushResult::Extended)
@@ -59,7 +59,13 @@ fn it_can_produce_micro_blocks() {
     }
 
     // #2.0: Empty micro block with fork proof
-    let block = producer.next_micro_block(1565713922000, 0, None, vec![fork_proof], vec![0x41]);
+    let block = producer.next_micro_block(
+        blockchain.time.now() + 1000,
+        0,
+        None,
+        vec![fork_proof],
+        vec![0x41],
+    );
     assert_eq!(
         blockchain.push(Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -68,7 +74,13 @@ fn it_can_produce_micro_blocks() {
 
     // #2.1: Empty view-changed micro block (wrong prev_hash)
     let view_change = sign_view_change(VrfSeed::default(), 3, 1);
-    let block = producer.next_micro_block(1565713924000, 1, Some(view_change), vec![], vec![0x41]);
+    let block = producer.next_micro_block(
+        blockchain.time.now() + 2000,
+        1,
+        Some(view_change),
+        vec![],
+        vec![0x41],
+    );
     assert_eq!(
         blockchain.push(Block::Micro(block)),
         Err(PushError::InvalidBlock(BlockError::InvalidJustification))
@@ -76,7 +88,13 @@ fn it_can_produce_micro_blocks() {
 
     // #2.2: Empty view-changed micro block
     let view_change = sign_view_change(blockchain.head().seed().clone(), 3, 1);
-    let block = producer.next_micro_block(1565713924000, 1, Some(view_change), vec![], vec![0x41]);
+    let block = producer.next_micro_block(
+        blockchain.time.now() + 2000,
+        1,
+        Some(view_change),
+        vec![],
+        vec![0x41],
+    );
     assert_eq!(
         blockchain.push(Block::Micro(block)),
         Ok(PushResult::Extended)
@@ -90,8 +108,13 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     let init_height = blockchain.head_height();
     let macro_block_number = policy::macro_block_after(init_height + 1);
     for i in (init_height + 1)..macro_block_number {
-        let last_micro_block =
-            producer.next_micro_block(1565713920000 + i as u64 * 2000, 0, None, vec![], vec![0x42]);
+        let last_micro_block = producer.next_micro_block(
+            blockchain.time.now() + i as u64 * 1000,
+            0,
+            None,
+            vec![],
+            vec![0x42],
+        );
         assert_eq!(
             blockchain.push(Block::Micro(last_micro_block)),
             Ok(PushResult::Extended)
@@ -183,8 +206,12 @@ fn it_can_produce_macro_blocks() {
 
     fill_micro_blocks(&producer, &blockchain);
 
-    let (proposal, extrinsics) =
-        producer.next_macro_block_proposal(1565720000000u64, 0u32, None, vec![]);
+    let (proposal, extrinsics) = producer.next_macro_block_proposal(
+        blockchain.time.now() + blockchain.block_number() as u64 * 1000,
+        0u32,
+        None,
+        vec![],
+    );
 
     let block = sign_macro_block(proposal, Some(extrinsics));
     assert_eq!(
@@ -206,8 +233,12 @@ fn it_can_produce_election_blocks() {
     while policy::epoch_at(blockchain.block_number()) < 2 {
         fill_micro_blocks(&producer, &blockchain);
 
-        let (proposal, extrinsics) =
-            producer.next_macro_block_proposal(1565720000000u64, 0u32, None, vec![0x42]);
+        let (proposal, extrinsics) = producer.next_macro_block_proposal(
+            blockchain.time.now() + blockchain.block_number() as u64 * 1000,
+            0u32,
+            None,
+            vec![0x42],
+        );
 
         let block = sign_macro_block(proposal, Some(extrinsics));
         assert_eq!(

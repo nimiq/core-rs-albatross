@@ -23,8 +23,13 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     let init_height = blockchain.head_height();
     let macro_block_number = policy::macro_block_after(init_height + 1);
     for i in (init_height + 1)..macro_block_number {
-        let last_micro_block =
-            producer.next_micro_block(1565713920000 + i as u64 * 2000, 0, None, vec![], vec![0x42]);
+        let last_micro_block = producer.next_micro_block(
+            blockchain.time.now() + i as u64 * 1000,
+            0,
+            None,
+            vec![],
+            vec![0x42],
+        );
         assert_eq!(
             blockchain.push(Block::Micro(last_micro_block)),
             Ok(PushResult::Extended)
@@ -39,7 +44,7 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
 
         let next_block_height = blockchain.head_height() + 1;
         let (proposal, extrinsics) = producer.next_macro_block_proposal(
-            1565713920000 + next_block_height as u64 * 2000,
+            blockchain.time.now() + next_block_height as u64 * 1000,
             0u32,
             None,
             vec![],

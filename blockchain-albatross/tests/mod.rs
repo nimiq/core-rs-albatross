@@ -61,7 +61,7 @@ impl TemporaryBlockProducer {
 
         let block = if policy::is_macro_block_at(height) {
             let (proposal, extrinsics) = self.producer.next_macro_block_proposal(
-                1565713920000 + height as u64 * 2000,
+                self.blockchain.time.now() + height as u64 * 1000,
                 0u32,
                 view_change_proof,
                 extra_data,
@@ -71,7 +71,7 @@ impl TemporaryBlockProducer {
             ))
         } else {
             Block::Micro(self.producer.next_micro_block(
-                1565713920000 + height as u64 * 2000,
+                self.blockchain.time.now() + height as u64 * 1000,
                 view_number,
                 view_change_proof,
                 vec![],
