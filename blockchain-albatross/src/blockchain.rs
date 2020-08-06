@@ -548,7 +548,7 @@ impl Blockchain {
     }
 
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
-        self.push_block(block, false)
+        self.push_block(block)
     }
 
     /// Calculate chain ordering.
@@ -648,11 +648,7 @@ impl Blockchain {
     }
 
     /// Same as push, but with more options.
-    pub fn push_block(
-        &self,
-        block: Block,
-        create_macro_extrinsics: bool,
-    ) -> Result<PushResult, PushError> {
+    pub fn push_block(&self, block: Block) -> Result<PushResult, PushError> {
         // Only one push operation at a time.
         let _push_lock = self.push_lock.lock();
 
@@ -836,15 +832,13 @@ impl Blockchain {
 
             // The correct construction of the extrinsics is only checked after the block's inherents are applied.
 
-            // The macro extrinsics may only be None if the `create_macro_extrinsics` flag is set.
+            // The macro extrinsics cannot be None.
             if let Some(ref extrinsics) = macro_block.extrinsics {
                 let extrinsics_hash: Blake2bHash = extrinsics.hash();
                 if extrinsics_hash != macro_block.header.extrinsics_root {
                     warn!("Rejecting block - Header extrinsics hash doesn't match real extrinsics hash");
                     return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
                 }
-            } else if !create_macro_extrinsics {
-                return Err(PushError::InvalidBlock(BlockError::MissingExtrinsics));
             }
         }
 
@@ -855,12 +849,7 @@ impl Blockchain {
 
         match chain_order {
             ChainOrdering::Extend => {
-                return self.extend(
-                    chain_info.head.hash(),
-                    chain_info,
-                    prev_info,
-                    create_macro_extrinsics,
-                );
+                return self.extend(chain_info.head.hash(), chain_info, prev_info);
             }
             ChainOrdering::Better => {
                 return self.rebranch(chain_info.head.hash(), chain_info);
@@ -889,7 +878,6 @@ impl Blockchain {
         block_hash: Blake2bHash,
         mut chain_info: ChainInfo,
         mut prev_info: ChainInfo,
-        create_macro_extrinsics: bool,
     ) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(&self.env);
         let state = self.state.read();
@@ -991,11 +979,6 @@ impl Blockchain {
             if computed_extrinsics_hash != macro_block.header.extrinsics_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
                 return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
-            }
-
-            // Set macro extrinsics if the option is given.
-            if create_macro_extrinsics && macro_block.extrinsics.is_none() {
-                macro_block.extrinsics.replace(computed_extrinsics);
             }
         }
 

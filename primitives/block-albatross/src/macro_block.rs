@@ -67,7 +67,7 @@ impl MacroBlock {
         self.header.hash()
     }
 
-    /// Returns wether or not this macro block header contains an election
+    /// Returns whether or not this macro block header contains an election
     pub fn is_election_block(&self) -> bool {
         self.header.validators.is_some()
     }

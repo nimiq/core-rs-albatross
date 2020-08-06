@@ -188,7 +188,7 @@ fn it_can_produce_macro_blocks() {
 
     let block = sign_macro_block(proposal, Some(extrinsics));
     assert_eq!(
-        blockchain.push_block(Block::Macro(block), true),
+        blockchain.push_block(Block::Macro(block)),
         Ok(PushResult::Extended)
     );
 }
@@ -211,7 +211,7 @@ fn it_can_produce_election_blocks() {
 
         let block = sign_macro_block(proposal, Some(extrinsics));
         assert_eq!(
-            blockchain.push_block(Block::Macro(block), true),
+            blockchain.push_block(Block::Macro(block)),
             Ok(PushResult::Extended)
         );
     }

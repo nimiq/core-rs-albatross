@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, PbftProposal,
-    SignedPbftCommitMessage, SignedPbftPrepareMessage,
+    Block, MacroBlock, MacroExtrinsics, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
+    PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage,
 };
 use nimiq_block_production_albatross::BlockProducer;
 use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult};
@@ -33,7 +33,27 @@ fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
     assert_eq!(blockchain.head_height(), macro_block_number - 1);
 }
 
-fn sign_macro_block(proposal: PbftProposal) -> MacroBlock {
+fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
+    for _ in 0..num_macro {
+        fill_micro_blocks(producer, blockchain);
+
+        let next_block_height = blockchain.head_height() + 1;
+        let (proposal, extrinsics) = producer.next_macro_block_proposal(
+            1565713920000 + next_block_height as u64 * 2000,
+            0u32,
+            None,
+            vec![],
+        );
+
+        let block = sign_macro_block(proposal, extrinsics);
+        assert_eq!(
+            blockchain.push_block(Block::Macro(block)),
+            Ok(PushResult::Extended)
+        );
+    }
+}
+
+fn sign_macro_block(proposal: PbftProposal, extrinsics: MacroExtrinsics) -> MacroBlock {
     let keypair =
         KeyPair::from(SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap());
 
@@ -63,27 +83,7 @@ fn sign_macro_block(proposal: PbftProposal) -> MacroBlock {
     MacroBlock {
         header: proposal.header,
         justification: Some(pbft_proof.build()),
-        extrinsics: None,
-    }
-}
-
-fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
-    for _ in 0..num_macro {
-        fill_micro_blocks(producer, blockchain);
-
-        let next_block_height = blockchain.head_height() + 1;
-        let (proposal, _extrinsics) = producer.next_macro_block_proposal(
-            1565713920000 + next_block_height as u64 * 2000,
-            0u32,
-            None,
-            vec![],
-        );
-
-        let block = sign_macro_block(proposal);
-        assert_eq!(
-            blockchain.push_block(Block::Macro(block), true),
-            Ok(PushResult::Extended)
-        );
+        extrinsics: Some(extrinsics),
     }
 }
 
