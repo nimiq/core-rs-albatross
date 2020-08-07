@@ -1,29 +1,56 @@
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::Arc;
 
+use futures::channel::mpsc;
 use futures::task::{Context, Poll};
-use futures::{future, ready, Future, StreamExt};
+use futures::{executor, future, ready, Future, SinkExt, StreamExt};
+use libp2p::core::Multiaddr;
 use libp2p::swarm::SwarmBuilder;
 use libp2p::{PeerId, Swarm};
-use parking_lot::RwLock;
-use tokio::macros::support::Pin;
-use tokio::sync::broadcast::{
-    channel as broadcast_channel, Receiver as BroadcastReceiver, Sender as BroadcastSender,
-};
+use parking_lot::{Mutex, RwLock};
+use tokio::sync::broadcast;
 
 use network_interface::network::{Network as NetworkInterface, NetworkEvent};
 
 use crate::behaviour::NimiqBehaviour;
 use crate::peer::Peer;
 
+enum SwarmAction {
+    Dial(PeerId),
+    DialAddr(Multiaddr),
+}
+
 struct SwarmTask {
     swarm: Swarm<NimiqBehaviour>,
-    events_tx: BroadcastSender<NetworkEvent<Peer>>,
+    event_tx: broadcast::Sender<NetworkEvent<Peer>>,
+    action_rx: mpsc::Receiver<SwarmAction>,
 }
 
 impl SwarmTask {
-    fn new(swarm: Swarm<NimiqBehaviour>, events_tx: BroadcastSender<NetworkEvent<Peer>>) -> Self {
-        Self { swarm, events_tx }
+    fn new(
+        swarm: Swarm<NimiqBehaviour>,
+        event_tx: broadcast::Sender<NetworkEvent<Peer>>,
+        action_rx: mpsc::Receiver<SwarmAction>,
+    ) -> Self {
+        Self {
+            swarm,
+            event_tx,
+            action_rx,
+        }
+    }
+}
+
+impl SwarmTask {
+    fn perform_action(&mut self, action: SwarmAction) {
+        match action {
+            SwarmAction::Dial(peer_id) => Swarm::dial(&mut self.swarm, &peer_id)
+                .map_err(|err| warn!("Failed to dial peer {}: {:?}", peer_id, err)),
+            SwarmAction::DialAddr(addr) => Swarm::dial_addr(&mut self.swarm, addr)
+                .map_err(|err| warn!("Failed to dial addr: {:?}", err)),
+        }
+        // Error handling?
+        .unwrap_or(())
     }
 }
 
@@ -33,20 +60,27 @@ impl Future for SwarmTask {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // The network instance that spawn this task is subscribed to the events channel.
         // If the receiver count drops to zero, the network has gone away and we stop this task.
-        if self.events_tx.receiver_count() < 1 {
+        if self.event_tx.receiver_count() < 1 {
             return Poll::Ready(());
+        }
+
+        // Execute pending swarm actions.
+        while let Poll::Ready(action) = self.action_rx.poll_next_unpin(cx) {
+            match action {
+                Some(action) => self.perform_action(action),
+                None => return Poll::Ready(()), // Network is gone, terminate.
+            }
         }
 
         // Poll the swarm.
         match ready!(self.swarm.poll_next_unpin(cx)) {
             Some(event) => {
                 // Dispatch swarm event on network event broadcast channel.
-                if self.events_tx.send(event).is_ok() {
+                if self.event_tx.send(event).is_ok() {
                     // Keep the task alive.
                     Poll::Pending
                 } else {
                     // Event dispatch can still fail if the network was dropped after the check above.
-                    // Terminate task.
                     Poll::Ready(())
                 }
             }
@@ -61,20 +95,26 @@ impl Future for SwarmTask {
 
 pub struct Network {
     peers: Arc<RwLock<HashMap<PeerId, Arc<Peer>>>>,
-    events_tx: BroadcastSender<NetworkEvent<Peer>>,
+    event_tx: broadcast::Sender<NetworkEvent<Peer>>,
+    action_tx: Mutex<mpsc::Sender<SwarmAction>>,
 }
 
 impl Network {
     pub fn new() -> Self {
-        let (events_tx, events_rx) = broadcast_channel::<NetworkEvent<Peer>>(4096);
+        let (event_tx, events_rx) = broadcast::channel::<NetworkEvent<Peer>>(64);
+        let (action_tx, action_rx) = mpsc::channel(16);
 
         let peers = Arc::new(RwLock::new(HashMap::new()));
         tokio::spawn(Self::new_network_task(events_rx, &peers));
 
         let swarm = Self::new_swarm();
-        tokio::spawn(SwarmTask::new(swarm, events_tx.clone()));
+        tokio::spawn(SwarmTask::new(swarm, event_tx.clone(), action_rx));
 
-        Self { peers, events_tx }
+        Self {
+            peers,
+            event_tx,
+            action_tx: Mutex::new(action_tx),
+        }
     }
 
     fn new_swarm() -> Swarm<NimiqBehaviour> {
@@ -90,7 +130,7 @@ impl Network {
     }
 
     fn new_network_task(
-        events_rx: BroadcastReceiver<NetworkEvent<Peer>>,
+        events_rx: broadcast::Receiver<NetworkEvent<Peer>>,
         peers: &Arc<RwLock<HashMap<PeerId, Arc<Peer>>>>,
     ) -> impl Future<Output = ()> {
         let peers_weak1 = Arc::downgrade(peers);
@@ -115,6 +155,16 @@ impl Network {
                 future::ready(())
             })
     }
+
+    pub fn dial(&self, peer_id: PeerId) {
+        // TODO make async? error handling
+        executor::block_on(self.action_tx.lock().send(SwarmAction::Dial(peer_id))).unwrap_or(())
+    }
+
+    pub fn dial_addr(&self, addr: Multiaddr) {
+        // TODO make async? handling
+        executor::block_on(self.action_tx.lock().send(SwarmAction::DialAddr(addr))).unwrap_or(())
+    }
 }
 
 impl NetworkInterface for Network {
@@ -128,8 +178,8 @@ impl NetworkInterface for Network {
         self.peers.read().get(peer_id.as_ref()).cloned()
     }
 
-    fn subscribe_events(&self) -> BroadcastReceiver<NetworkEvent<Self::PeerType>> {
-        self.events_tx.subscribe()
+    fn subscribe_events(&self) -> broadcast::Receiver<NetworkEvent<Self::PeerType>> {
+        self.event_tx.subscribe()
     }
 }
 
