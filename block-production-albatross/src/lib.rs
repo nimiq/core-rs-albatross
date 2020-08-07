@@ -15,8 +15,8 @@ use std::sync::Arc;
 use block::ForkProof;
 use block::MicroJustification;
 use block::{
-    Block, MacroBlock, MacroExtrinsics, MacroHeader, MicroBlock, MicroExtrinsics, MicroHeader,
-    PbftProposal, ViewChangeProof, ViewChanges,
+    Block, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, PbftProposal,
+    ViewChangeProof, ViewChanges,
 };
 use blockchain::blockchain::Blockchain;
 use blockchain::chain_info::ChainInfo;
@@ -75,10 +75,10 @@ impl BlockProducer {
         // height.
         view_change_proof: Option<ViewChangeProof>,
         // Extra data for this block. It has no a priori use.
-        extra_data: Vec<u8>,
-    ) -> (PbftProposal, MacroExtrinsics) {
+        _extra_data: Vec<u8>,
+    ) -> (PbftProposal, MacroBody) {
         // Creates the extrinsics for the block proposal.
-        let extrinsics = self.next_macro_extrinsics(extra_data);
+        let extrinsics = self.next_macro_extrinsics();
 
         // Creates the header for the block proposal.
         let mut txn = self.blockchain.write_transaction();
@@ -131,27 +131,27 @@ impl BlockProducer {
         // Returns the micro block.
         MicroBlock {
             header,
-            extrinsics: Some(extrinsics),
-            justification: MicroJustification {
+            body: Some(extrinsics),
+            justification: Some(MicroJustification {
                 signature,
                 view_change_proof,
-            },
+            }),
         }
     }
 
     /// Creates the extrinsics for the next macro block.
-    pub fn next_macro_extrinsics(&self, extra_data: Vec<u8>) -> MacroExtrinsics {
+    pub fn next_macro_extrinsics(&self) -> MacroBody {
         let slashed_set = self
             .blockchain
             .slashed_set_at(self.blockchain.height() + 1)
             .expect("Missing previous block for block production")
             .next_slashed_set(self.blockchain.height() + 1);
 
-        MacroExtrinsics {
-            slashed_set: slashed_set.prev_epoch_state.clone(),
-            current_slashed_set: slashed_set.current_epoch(),
-            extra_data,
-        }
+        // TODO: Compute the history root and the validator list?
+        MacroBody::from_slashed_set(
+            slashed_set.prev_epoch_state.clone(),
+            slashed_set.current_epoch(),
+        )
     }
 
     /// Creates the extrinsics for the next micro block.
@@ -160,11 +160,11 @@ impl BlockProducer {
         fork_proofs: Vec<ForkProof>,
         view_changes: &Option<ViewChanges>,
         extra_data: Vec<u8>,
-    ) -> MicroExtrinsics {
+    ) -> MicroBody {
         // Calculate the maximum allowed size for the micro block extrinsics.
         let max_size = MicroBlock::MAX_SIZE
             - MicroHeader::SIZE
-            - MicroExtrinsics::get_metadata_size(fork_proofs.len(), extra_data.len());
+            - MicroBody::get_metadata_size(fork_proofs.len());
 
         // Get the transactions from the mempool.
         let mut transactions = self
@@ -189,9 +189,8 @@ impl BlockProducer {
         transactions.sort_unstable_by(|a, b| a.cmp_block_order(b));
 
         // Create and return the micro block extrinsics.
-        MicroExtrinsics {
+        MicroBody {
             fork_proofs,
-            extra_data,
             transactions,
         }
     }
@@ -202,7 +201,7 @@ impl BlockProducer {
         txn: &mut WriteTransaction,
         timestamp: u64,
         view_number: u32,
-        extrinsics: &MacroExtrinsics,
+        extrinsics: &MacroBody,
     ) -> MacroHeader {
         // Calculate the block number. It is simply the previous block number incremented by one.
         let block_number = self.blockchain.height() + 1;
@@ -236,19 +235,16 @@ impl BlockProducer {
         // state. It is just simpler to pass the entire header.
         let mut header = MacroHeader {
             version: Block::VERSION,
-            // The default is to have no new validators. If this block turns out to be an election
-            // block the validators will be set later in this function.
-            validators: None,
             block_number,
             view_number,
-            parent_macro_hash,
             parent_election_hash,
             seed: seed.clone(),
             parent_hash,
             state_root: Blake2bHash::default(),
-            extrinsics_root,
+            body_root: extrinsics_root,
             timestamp,
-            transactions_root: Blake2bHash::default(),
+            // TODO: needs to have some data!
+            extra_data: vec![],
         };
 
         // Get and update the state.
@@ -262,13 +258,14 @@ impl BlockProducer {
             // Get the new validator list.
             let validators = self.blockchain.next_validators(&seed, Some(txn));
 
-            // Add it to the header.
-            header.validators = validators.into();
+            // TODO: This needs to be moved to the body!!!
+            // // Add it to the header.
+            // header.validators = validators.into();
 
             let dummy_macro_block = Block::Macro(MacroBlock {
                 header: header.clone(),
                 justification: None,
-                extrinsics: None,
+                body: None,
             });
             let prev_chain_info = state.main_chain();
             let fork_proof_infos = ForkProofInfos::empty();
@@ -301,12 +298,13 @@ impl BlockProducer {
         let state_root = state.accounts().hash(Some(txn));
         header.state_root = state_root;
 
-        // Calculate the transactions root and add it to the header.
-        let transactions_root = self
-            .blockchain
-            .get_transactions_root(policy::epoch_at(block_number), Some(txn))
-            .expect("Failed to compute transactions root, micro blocks missing");
-        header.transactions_root = transactions_root;
+        // TODO: This needs to be moved to the body!!!
+        // // Calculate the transactions root and add it to the header.
+        // let transactions_root = self
+        //     .blockchain
+        //     .get_history_root(policy::epoch_at(block_number), Some(txn))
+        //     .expect("Failed to compute transactions root, micro blocks missing");
+        // header.history_root = transactions_root;
 
         // Return the finalized header.
         header
@@ -317,7 +315,7 @@ impl BlockProducer {
         &self,
         timestamp: u64,
         view_number: u32,
-        extrinsics: &MicroExtrinsics,
+        extrinsics: &MicroBody,
         view_changes: &Option<ViewChanges>,
     ) -> MicroHeader {
         // Calculate the block number. It is simply the previous block number incremented by one.
@@ -360,10 +358,12 @@ impl BlockProducer {
             block_number,
             view_number,
             parent_hash,
-            extrinsics_root,
+            body_root: extrinsics_root,
             state_root,
             seed,
             timestamp,
+            // TODO: Add some data!
+            extra_data: vec![],
         }
     }
 }
@@ -405,7 +405,7 @@ pub mod test_utils {
     pub fn sign_macro_block(
         keypair: &KeyPair,
         proposal: PbftProposal,
-        extrinsics: Option<MacroExtrinsics>,
+        extrinsics: Option<MacroBody>,
     ) -> MacroBlock {
         let block_hash = proposal.header.hash::<Blake2bHash>();
 
@@ -433,7 +433,7 @@ pub mod test_utils {
         MacroBlock {
             header: proposal.header,
             justification: Some(pbft_proof.build()),
-            extrinsics,
+            body: extrinsics,
         }
     }
 

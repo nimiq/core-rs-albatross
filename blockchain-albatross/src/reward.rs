@@ -7,17 +7,15 @@ use std::convert::TryInto;
 pub fn genesis_parameters(genesis_block: &MacroBlock) -> (Coin, u64) {
     assert_eq!(genesis_block.header.block_number, 0);
 
-    let extrinsics = genesis_block.extrinsics.as_ref().unwrap();
+    let extra_data = &genesis_block.header.extra_data;
 
     let supply;
     // Try reading supply from genesis block.
-    if extrinsics.extra_data.len() < 8 {
+    if extra_data.len() < 8 {
         warn!("Genesis block does not encode initial supply, assuming zero.");
         supply = Coin::ZERO;
     } else {
-        let bytes = extrinsics.extra_data[..8]
-            .try_into()
-            .expect("slice has wrong size");
+        let bytes = extra_data[..8].try_into().expect("slice has wrong size");
         supply = Coin::from_u64_unchecked(u64::from_be_bytes(bytes));
     }
 

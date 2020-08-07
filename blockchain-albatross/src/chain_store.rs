@@ -393,7 +393,7 @@ impl ChainStore {
         let mut hash = if election_blocks_only {
             start_block.header.parent_election_hash
         } else {
-            start_block.header.parent_macro_hash
+            start_block.header.parent_hash
         };
         while (blocks.len() as u32) < count {
             let block_opt = self.get_block(&hash, include_body, Some(&txn));
@@ -401,7 +401,7 @@ impl ChainStore {
                 hash = if election_blocks_only {
                     block.header.parent_election_hash.clone()
                 } else {
-                    block.header.parent_macro_hash.clone()
+                    block.header.parent_hash.clone()
                 };
                 blocks.push(Block::Macro(block));
             } else {

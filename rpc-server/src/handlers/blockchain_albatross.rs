@@ -408,8 +408,13 @@ impl BlockchainAlbatrossHandler {
                             false,
                             false,
                         ) {
-                            let validators =
-                                election_block.header.validators.unwrap().clone().into();
+                            let validators = election_block
+                                .body
+                                .unwrap()
+                                .validators
+                                .unwrap()
+                                .clone()
+                                .into();
                             object! {
                                 "votes" => pbft_proof.votes(&validators)
                                     .map(JsonValue::from).unwrap_or(JsonValue::Null),
@@ -423,12 +428,12 @@ impl BlockchainAlbatrossHandler {
                     .unwrap_or(JsonValue::Null);
 
                 let slashed_slots = block
-                    .extrinsics
+                    .body
                     .as_ref()
                     .map(|extrinsics| {
                         JsonValue::Array(
                             extrinsics
-                                .slashed_set
+                                .lost_reward_set
                                 .iter()
                                 .map(|slot_number| JsonValue::Number(slot_number.into()))
                                 .collect(),
@@ -437,12 +442,12 @@ impl BlockchainAlbatrossHandler {
                     .unwrap_or(JsonValue::Null);
 
                 let current_slashed_slots = block
-                    .extrinsics
+                    .body
                     .as_ref()
                     .map(|extrinsics| {
                         JsonValue::Array(
                             extrinsics
-                                .current_slashed_set
+                                .lost_reward_set
                                 .iter()
                                 .map(|slot_number| JsonValue::Number(slot_number.into()))
                                 .collect(),
@@ -458,11 +463,10 @@ impl BlockchainAlbatrossHandler {
                     "batch" => policy::batch_at(block.header.block_number),
                     "epoch" => policy::epoch_at(block.header.block_number),
                     "parentElectionHash" => block.header.parent_election_hash.to_hex(),
-                    "parentMacroHash" => block.header.parent_macro_hash.to_hex(),
                     "parentHash" => block.header.parent_hash.to_hex(),
                     "seed" => block.header.seed.to_string(),
                     "stateRoot" => block.header.state_root.to_hex(),
-                    "extrinsicsRoot" => block.header.extrinsics_root.to_hex(),
+                    "extrinsicsRoot" => block.header.body_root.to_hex(),
                     "timestamp" => block.header.timestamp,
                     "slots" => slots.as_ref().map(Self::slots_to_obj).unwrap_or(Null),
                     "slashedSlots" => slashed_slots,
@@ -485,12 +489,12 @@ impl BlockchainAlbatrossHandler {
                     "epoch" => policy::epoch_at(block.header.block_number),
                     "parentHash" => block.header.parent_hash.to_hex(),
                     "stateRoot" => block.header.state_root.to_hex(),
-                    "extrinsicsRoot" => block.header.extrinsics_root.to_hex(),
+                    "extrinsicsRoot" => block.header.body_root.to_hex(),
                     "seed" => block.header.seed.to_string(),
                     "timestamp" => block.header.timestamp,
-                    "extraData" => block.extrinsics.as_ref().map(|body| hex::encode(&body.extra_data).into()).unwrap_or(Null),
-                    "forkProofs" => block.extrinsics.as_ref().map(|body| JsonValue::Array(body.fork_proofs.iter().map(Self::fork_proof_to_obj).collect())).unwrap_or(Null),
-                    "transactions" => JsonValue::Array(block.extrinsics.as_ref().map(|body| if include_transactions {
+                    "extraData" => hex::encode(&block.header.extra_data),
+                    "forkProofs" => block.body.as_ref().map(|body| JsonValue::Array(body.fork_proofs.iter().map(Self::fork_proof_to_obj).collect())).unwrap_or(Null),
+                    "transactions" => JsonValue::Array(block.body.as_ref().map(|body| if include_transactions {
                         body.transactions.iter().enumerate().map(|(i, tx)| transaction_to_obj(tx, Some(&TransactionContext {
                             block_hash: &hash,
                             block_number: block.header.block_number,
@@ -502,8 +506,8 @@ impl BlockchainAlbatrossHandler {
                     }).unwrap_or_else(Vec::new)),
                     "producer" => producer,
                     "justification" => object! {
-                        "signature" => block.justification.signature.to_hex(),
-                        "view_change_proof" => block.justification.view_change_proof.as_ref()
+                        "signature" => block.justification.as_ref().unwrap().signature.to_hex(),
+                        "view_change_proof" => block.justification.as_ref().unwrap().view_change_proof.as_ref()
                             .map(Self::proof_to_object)
                             .unwrap_or(JsonValue::Null),
                     },

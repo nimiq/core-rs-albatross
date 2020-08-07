@@ -25,12 +25,12 @@ pub mod signed;
 mod view_change;
 
 pub use block::{
-    Block, BlockComponentFlags, BlockComponents, BlockExtrinsics, BlockHeader, BlockJustification,
+    Block, BlockBody, BlockComponentFlags, BlockComponents, BlockHeader, BlockJustification,
     BlockType,
 };
 pub use fork_proof::ForkProof;
-pub use macro_block::{MacroBlock, MacroExtrinsics, MacroHeader};
-pub use micro_block::{MicroBlock, MicroExtrinsics, MicroHeader, MicroJustification};
+pub use macro_block::{MacroBlock, MacroBody, MacroHeader};
+pub use micro_block::{MicroBlock, MicroBody, MicroHeader, MicroJustification};
 pub use pbft::{
     PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProofBuilder, PbftProposal,
     SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
@@ -88,14 +88,12 @@ pub enum BlockError {
     #[fail(display = "Invalid view number")]
     InvalidViewNumber,
     #[fail(display = "Invalid transactions root")]
-    InvalidTransactionsRoot,
+    InvalidHistoryRoot,
     #[fail(display = "Incorrect validators")]
     InvalidValidators,
 
-    #[fail(display = "Missing extrinsics")]
-    MissingExtrinsics,
-    #[fail(display = "Extrinsics hash mismatch")]
-    ExtrinsicsHashMismatch,
+    #[fail(display = "Missing body")]
+    MissingBody,
 }
 
 impl block_base::BlockError for BlockError {}

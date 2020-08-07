@@ -8,9 +8,9 @@ use tokio;
 
 use block_albatross::signed::AggregateProof;
 use block_albatross::{
-    BlockHeader, ForkProof, PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProposal,
-    SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange,
-    ViewChange, ViewChangeProof,
+    BlockBody, BlockHeader, ForkProof, PbftCommitMessage, PbftPrepareMessage, PbftProof,
+    PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal,
+    SignedViewChange, ViewChange, ViewChangeProof,
 };
 use blockchain_albatross::Blockchain;
 use bls::CompressedPublicKey;

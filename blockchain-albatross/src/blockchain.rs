@@ -15,8 +15,8 @@ use account::{Account, Inherent, InherentType};
 use accounts::Accounts;
 use beserial::Serialize;
 use block::{
-    Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroExtrinsics, MicroBlock,
-    ViewChange, ViewChangeProof, ViewChanges,
+    Block, BlockBody, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroBody,
+    MicroBlock, ViewChange, ViewChangeProof, ViewChanges,
 };
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -419,7 +419,8 @@ impl Blockchain {
         } else {
             self.get_block_at(policy::election_block_of(epoch), true)?
                 .unwrap_macro()
-                .header
+                .body
+                .expect("Missing body!")
                 .validators?
                 .into()
         };
@@ -528,10 +529,13 @@ impl Blockchain {
         }
 
         if let BlockHeader::Macro(ref header) = header {
-            // In case of an election block make sure it contains validators
-            if policy::is_election_block_at(header.block_number) && header.validators.is_none() {
-                return Err(PushError::InvalidSuccessor);
-            }
+            // TODO: Move this check to someplace else!
+            // // In case of an election block make sure it contains validators
+            // if policy::is_election_block_at(header.block_number)
+            //     && body.unwrap_macro().validators.is_none()
+            // {
+            //     return Err(PushError::InvalidSuccessor);
+            // }
 
             // Check if the parent election hash matches the current election head hash
             if header.parent_election_hash != self.state().election_head_hash {
@@ -539,15 +543,16 @@ impl Blockchain {
                 return Err(PushError::InvalidSuccessor);
             }
 
-            let transactions_root = self
-                .get_transactions_root(policy::batch_at(header.block_number), txn_opt)
-                .ok_or(PushError::BlockchainError(
-                    BlockchainError::FailedLoadingMainChain,
-                ))?;
-            if header.transactions_root != transactions_root {
-                warn!("Rejecting block - wrong transactions root");
-                return Err(PushError::InvalidBlock(BlockError::InvalidTransactionsRoot));
-            }
+            // TODO: Move this check to someplace else!
+            // let history_root = self
+            //     .get_history_root(policy::batch_at(header.block_number), txn_opt)
+            //     .ok_or(PushError::BlockchainError(
+            //         BlockchainError::FailedLoadingMainChain,
+            //     ))?;
+            // if body.unwrap_macro().history_root != history_root {
+            //     warn!("Rejecting block - wrong history root");
+            //     return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+            // }
         }
 
         Ok(())
@@ -718,9 +723,13 @@ impl Blockchain {
 
         let view_change_proof = match block {
             Block::Macro(_) => OptionalCheck::Skip,
-            Block::Micro(ref micro_block) => {
-                micro_block.justification.view_change_proof.as_ref().into()
-            }
+            Block::Micro(ref micro_block) => micro_block
+                .justification
+                .as_ref()
+                .expect("Missing body!")
+                .view_change_proof
+                .as_ref()
+                .into(),
         };
 
         let (slot, _) = self
@@ -742,7 +751,13 @@ impl Blockchain {
         }
 
         if let Block::Micro(ref micro_block) = block {
-            let justification = match micro_block.justification.signature.uncompress() {
+            let justification = match micro_block
+                .justification
+                .as_ref()
+                .expect("Missing justification!")
+                .signature
+                .uncompress()
+            {
                 Ok(justification) => justification,
                 Err(_) => {
                     warn!("Rejecting block - bad justification");
@@ -770,7 +785,11 @@ impl Blockchain {
 
             // Get the justification for the block. We assume that the
             // validator's signature is valid.
-            let justification1 = &micro_block.justification.signature;
+            let justification1 = &micro_block
+                .justification
+                .as_ref()
+                .expect("Missing justification!")
+                .signature;
 
             // Get the view number from the block
             let view_number = block.view_number();
@@ -780,7 +799,11 @@ impl Blockchain {
                 // notify the fork event.
                 if view_number == micro_block.header.view_number {
                     let micro_header2 = micro_block.header;
-                    let justification2 = micro_block.justification.signature;
+                    let justification2 = micro_block
+                        .justification
+                        .as_ref()
+                        .expect("Missing justification!")
+                        .signature;
 
                     let proof = ForkProof {
                         header1: micro_header1.clone(),
@@ -794,7 +817,7 @@ impl Blockchain {
             }
 
             // Validate slash inherents
-            for fork_proof in &micro_block.extrinsics.as_ref().unwrap().fork_proofs {
+            for fork_proof in &micro_block.body.as_ref().unwrap().fork_proofs {
                 // NOTE: if this returns None, that means that at least the previous block doesn't exist, so that fork proof is invalid anyway.
                 let (slot, _) = self
                     .get_slot_at(
@@ -838,12 +861,12 @@ impl Blockchain {
 
             // The correct construction of the extrinsics is only checked after the block's inherents are applied.
 
-            // The macro extrinsics cannot be None.
-            if let Some(ref extrinsics) = macro_block.extrinsics {
-                let extrinsics_hash: Blake2bHash = extrinsics.hash();
-                if extrinsics_hash != macro_block.header.extrinsics_root {
-                    warn!("Rejecting block - Header extrinsics hash doesn't match real extrinsics hash");
-                    return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
+            // The macro body cannot be None.
+            if let Some(ref body) = macro_block.body {
+                let body_hash: Blake2bHash = body.hash();
+                if body_hash != macro_block.header.body_root {
+                    warn!("Rejecting block - Header body hash doesn't match real body hash");
+                    return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
                 }
             }
         }
@@ -923,14 +946,16 @@ impl Blockchain {
 
         drop(state);
 
-        // Only now can we check macro extrinsics.
+        // Only now can we check the macro body.
         let mut is_election_block = false;
         if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
             is_election_block = macro_block.is_election_block();
 
             if is_election_block {
                 let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
-                if let Some(ref block_slots) = macro_block.header.validators {
+                if let Some(ref block_slots) =
+                    macro_block.body.as_ref().expect("Missing body!").validators
+                {
                     if &slots.validator_slots != block_slots {
                         warn!("Rejecting block - Validators don't match real validators");
                         return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
@@ -948,18 +973,11 @@ impl Blockchain {
             // on election.
             let current_slashed_set = chain_info.slashed_set.current_epoch();
             let mut computed_extrinsics =
-                MacroExtrinsics::from_slashed_set(slashed_set, current_slashed_set);
-            // The extra data is only available on the block.
-            // If the extrinsics exist we need to copy extra_data to the newly created extrinsics for
-            // the hash to be the same (given that the slashed sets also are the same).
-            if macro_block.extrinsics.is_some() {
-                computed_extrinsics.extra_data =
-                    macro_block.extrinsics.as_ref().unwrap().extra_data.clone();
-            }
+                MacroBody::from_slashed_set(slashed_set, current_slashed_set);
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
-            if computed_extrinsics_hash != macro_block.header.extrinsics_root {
+            if computed_extrinsics_hash != macro_block.header.body_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
-                return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
+                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
             }
         }
 
@@ -1280,7 +1298,7 @@ impl Blockchain {
                 }
             }
             Block::Micro(ref micro_block) => {
-                let extrinsics = micro_block.extrinsics.as_ref().unwrap();
+                let extrinsics = micro_block.body.as_ref().unwrap();
                 let view_changes = ViewChanges::new(
                     micro_block.header.block_number,
                     first_view_number,
@@ -1331,7 +1349,7 @@ impl Blockchain {
             "Failed to revert - inconsistent state"
         );
 
-        let extrinsics = micro_block.extrinsics.as_ref().unwrap();
+        let extrinsics = micro_block.body.as_ref().unwrap();
         let view_changes = ViewChanges::new(
             micro_block.header.block_number,
             prev_view_number,
@@ -1432,9 +1450,15 @@ impl Blockchain {
         // Check transactions root
         let hashes: Vec<Blake2bHash> = transactions.iter().map(|tx| tx.hash()).collect();
         let transactions_root = merkle::compute_root_from_hashes::<Blake2bHash>(&hashes);
-        if macro_block.header.transactions_root != transactions_root {
-            warn!("Rejecting block - wrong transactions root");
-            return Err(PushError::InvalidBlock(BlockError::InvalidTransactionsRoot));
+        if macro_block
+            .body
+            .as_ref()
+            .expect("Missing body!")
+            .history_root
+            != transactions_root
+        {
+            warn!("Rejecting block - wrong history root");
+            return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
         }
 
         // Check Macro Justification
@@ -1458,16 +1482,16 @@ impl Blockchain {
         // The correct construction of the extrinsics is only checked after the block's inherents are applied.
 
         // The macro extrinsics must not be None for this function.
-        if let Some(ref extrinsics) = macro_block.extrinsics {
+        if let Some(ref extrinsics) = macro_block.body {
             let extrinsics_hash: Blake2bHash = extrinsics.hash();
-            if extrinsics_hash != macro_block.header.extrinsics_root {
+            if extrinsics_hash != macro_block.header.body_root {
                 warn!(
                     "Rejecting block - Header extrinsics hash doesn't match real extrinsics hash"
                 );
-                return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
+                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
             }
         } else {
-            return Err(PushError::InvalidBlock(BlockError::MissingExtrinsics));
+            return Err(PushError::InvalidBlock(BlockError::MissingBody));
         }
 
         // Drop read transaction before creating the write transaction.
@@ -1479,14 +1503,9 @@ impl Blockchain {
             on_main_chain: false,
             main_chain_successor: None,
             slashed_set: SlashedSet {
-                view_change_epoch_state: macro_block
-                    .extrinsics
-                    .as_ref()
-                    .unwrap()
-                    .current_slashed_set
-                    .clone(),
+                view_change_epoch_state: macro_block.body.as_ref().unwrap().lost_reward_set.clone(),
                 fork_proof_epoch_state: Default::default(),
-                prev_epoch_state: macro_block.extrinsics.as_ref().unwrap().slashed_set.clone(),
+                prev_epoch_state: macro_block.body.as_ref().unwrap().lost_reward_set.clone(),
             },
             head: block,
             cum_tx_fees: transactions.iter().map(|tx| tx.fee).sum(),
@@ -1561,13 +1580,8 @@ impl Blockchain {
         // We cannot verify the slashed set, so we need to trust it here.
         // Also, we verified that macro extrinsics have been set in the corresponding push,
         // thus we can unwrap here.
-        let slashed_set = macro_block.extrinsics.as_ref().unwrap().slashed_set.clone();
-        let current_slashed_set = macro_block
-            .extrinsics
-            .as_ref()
-            .unwrap()
-            .current_slashed_set
-            .clone();
+        let slashed_set = macro_block.body.as_ref().unwrap().disabled_set.clone();
+        let current_slashed_set = macro_block.body.as_ref().unwrap().disabled_set.clone();
 
         // We cannot check the accounts hash yet.
         // Apply transactions and inherents to AccountsTree.
@@ -1605,7 +1619,9 @@ impl Blockchain {
         // Only now can we check macro extrinsics.
         if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
             if is_election_block {
-                if let Some(ref validators) = macro_block.header.validators {
+                if let Some(ref validators) =
+                    macro_block.body.as_ref().expect("Missing body!").validators
+                {
                     let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
                     if &slots.validator_slots != validators {
                         warn!("Rejecting block - Validators don't match real validators");
@@ -1618,17 +1634,13 @@ impl Blockchain {
             }
 
             let mut computed_extrinsics =
-                MacroExtrinsics::from_slashed_set(slashed_set, current_slashed_set);
-            // The extra data is only available on the block.
-            // We need to copy it to the newly created extrinsics for the hash to be the
-            // same (given that the slashed sets also are the same).
+                MacroBody::from_slashed_set(slashed_set, current_slashed_set);
+
             // The extrinsics must exist for isolated macro blocks, so we can unwrap() here.
-            computed_extrinsics.extra_data =
-                macro_block.extrinsics.as_ref().unwrap().extra_data.clone();
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
-            if computed_extrinsics_hash != macro_block.header.extrinsics_root {
+            if computed_extrinsics_hash != macro_block.header.body_root {
                 warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
-                return Err(PushError::InvalidBlock(BlockError::ExtrinsicsHashMismatch));
+                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
             }
         }
 
@@ -1774,7 +1786,7 @@ impl Blockchain {
             })?;
 
         let first_hash = first_block.hash();
-        let mut txs = first_block.unwrap_micro().extrinsics.unwrap().transactions;
+        let mut txs = first_block.unwrap_micro().body.unwrap().transactions;
 
         // Excludes current block and macro block.
         let blocks = self.chain_store.get_blocks(
@@ -1840,7 +1852,7 @@ impl Blockchain {
         self.get_transactions(epoch, false, txn_option)
     }
 
-    pub fn get_transactions_root(
+    pub fn get_history_root(
         &self,
         batch: u32,
         txn_option: Option<&Transaction>,
@@ -2302,7 +2314,7 @@ impl Blockchain {
                     hash = if election_blocks_only {
                         block.header.parent_election_hash
                     } else {
-                        block.header.parent_macro_hash
+                        block.header.parent_hash
                     };
                     locators.push(hash.clone());
                 }

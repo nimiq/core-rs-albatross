@@ -2,7 +2,7 @@ use std::convert::TryInto;
 use std::str::FromStr;
 
 use beserial::Deserialize;
-use nimiq_block_albatross::{MacroBlock, MacroExtrinsics, MacroHeader};
+use nimiq_block_albatross::{MacroBlock, MacroBody, MacroHeader};
 use nimiq_bls::{CompressedPublicKey, Signature};
 use nimiq_collections::bitset::BitSet;
 use nimiq_hash::{Blake2bHasher, Hasher};
@@ -76,23 +76,22 @@ fn it_can_convert_macro_block_into_slots() {
     let macro_block = MacroBlock {
         header: MacroHeader {
             version: 1,
-            validators: Some(validator_slots.clone()),
             block_number: 42,
             view_number: 0,
-            parent_macro_hash: hash.clone(),
+            timestamp: 0,
+            parent_hash: hash.clone(),
             parent_election_hash: hash.clone(),
             seed: signature.compress().into(),
-            parent_hash: hash.clone(),
+            extra_data: vec![],
             state_root: hash.clone(),
-            extrinsics_root: hash.clone(),
-            transactions_root: [0u8; 32].into(),
-            timestamp: 0,
+            body_root: hash.clone(),
         },
         justification: None,
-        extrinsics: Some(MacroExtrinsics {
-            slashed_set: BitSet::new(),
-            current_slashed_set: BitSet::new(),
-            extra_data: vec![],
+        body: Some(MacroBody {
+            validators: Some(validator_slots.clone()),
+            lost_reward_set: BitSet::new(),
+            disabled_set: BitSet::new(),
+            history_root: [0u8; 32].into(),
         }),
     };
 

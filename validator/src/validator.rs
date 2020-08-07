@@ -8,10 +8,9 @@ use tokio;
 
 use account::Account;
 use block_albatross::{
-    Block, BlockType, ForkProof, MacroBlock, MacroExtrinsics, MicroBlock, MicroExtrinsics,
-    MicroHeader, PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProposal,
-    SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange,
-    ViewChange, ViewChangeProof,
+    Block, BlockType, ForkProof, MacroBlock, MacroBody, MicroBlock, MicroBody, MicroHeader,
+    PbftCommitMessage, PbftPrepareMessage, PbftProof, PbftProposal, SignedPbftCommitMessage,
+    SignedPbftPrepareMessage, SignedPbftProposal, SignedViewChange, ViewChange, ViewChangeProof,
 };
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::{Blockchain, ForkEvent};
@@ -83,7 +82,7 @@ pub struct ValidatorState {
     fork_proof_pool: ForkProofPool,
     view_number: u32,
     active_view_change: Option<ViewChange>,
-    proposed_extrinsics: HashMap<Blake2bHash, MacroExtrinsics>,
+    proposed_extrinsics: HashMap<Blake2bHash, MacroBody>,
 }
 
 impl Validator {
@@ -661,13 +660,13 @@ impl Validator {
         let mut state = self.state.write();
 
         if let Some(extrinsics) = state.proposed_extrinsics.remove(hash) {
-            assert_eq!(proposal.header.extrinsics_root, extrinsics.hash());
+            assert_eq!(proposal.header.body_root, extrinsics.hash());
 
             // Note: we're not verifying the justification as the validator network already did that
             let block = Block::Macro(MacroBlock {
                 header: proposal.header.clone(),
                 justification: Some(proof.clone()),
-                extrinsics: Some(extrinsics),
+                body: Some(extrinsics),
             });
 
             //trace!("Relaying finished macro block: {:#?}", block);
@@ -783,8 +782,7 @@ impl Validator {
             return;
         }
 
-        let max_size =
-            MicroBlock::MAX_SIZE - MicroHeader::SIZE - MicroExtrinsics::get_metadata_size(0, 0);
+        let max_size = MicroBlock::MAX_SIZE - MicroHeader::SIZE - MicroBody::get_metadata_size(0);
 
         let state = self.state.read();
         let fork_proofs = state.fork_proof_pool.get_fork_proofs_for_block(max_size);

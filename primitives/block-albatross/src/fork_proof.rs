@@ -17,7 +17,7 @@ pub struct ForkProof {
 }
 
 impl ForkProof {
-    pub const SIZE: usize = 2 * MicroHeader::SIZE + 2 * 48;
+    pub const SIZE: usize = 2 * MicroHeader::SIZE + 2 * CompressedSignature::SIZE;
 
     pub fn verify(&self, public_key: &PublicKey) -> Result<(), ForkProofError> {
         // XXX Duplicate check

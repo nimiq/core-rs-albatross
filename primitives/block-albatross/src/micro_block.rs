@@ -12,71 +12,109 @@ use vrf::VrfSeed;
 use crate::fork_proof::ForkProof;
 use crate::{BlockError, ViewChangeProof};
 
+/// The struct representing a Micro block.
+/// A Micro block, unlike a Macro block, doesn't contain any inherents (data that can be calculated
+/// by full nodes but for syncing and for nano nodes some needs to be explicitly included).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroBlock {
+    /// The header, contains some basic information and commitments to the body and the state.
     pub header: MicroHeader,
-    pub justification: MicroJustification,
-    pub extrinsics: Option<MicroExtrinsics>,
+    /// The justification, contains all the information needed to verify that the header was signed
+    /// by the correct producer.
+    pub justification: Option<MicroJustification>,
+    /// The body of the block.
+    pub body: Option<MicroBody>,
 }
 
+/// The struct representing the header of a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroHeader {
+    /// The version number of the block. Changing this always results in a hard fork.
     pub version: u16,
-
-    // Digest
+    /// The number of the block.
     pub block_number: u32,
+    /// The view number of this block. It increases whenever a view change happens and resets on
+    /// every macro block.
     pub view_number: u32,
-
-    pub parent_hash: Blake2bHash,
-    pub extrinsics_root: Blake2bHash,
-    pub state_root: Blake2bHash,
-
-    pub seed: VrfSeed,
+    /// The timestamp of the block. It follows the Unix time and has millisecond precision.
     pub timestamp: u64,
+    /// The hash of the header of the immediately preceding block (either micro or macro).
+    pub parent_hash: Blake2bHash,
+    /// The seed of the block. This is the BLS signature of the seed of the immediately preceding
+    /// block (either micro or macro) using the validator key of the block producer.
+    pub seed: VrfSeed,
+    /// The extra data of the block. It is simply 32 raw bytes. No planned use.
+    #[beserial(len_type(u8, limit = 32))]
+    pub extra_data: Vec<u8>,
+    /// The root of the Merkle tree of the blockchain state. It just acts as a commitment to the
+    /// state.
+    pub state_root: Blake2bHash,
+    /// The root of the Merkle tree of the body. It just acts as a commitment to the
+    /// body.
+    pub body_root: Blake2bHash,
 }
 
+/// The struct representing the justification for a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MicroJustification {
+    /// The signature of the block producer.
     pub signature: CompressedSignature,
+    /// The view change proof. It consists of the aggregated signatures to a single view change
+    /// message. It is an Option since no view change might occur for any given block.
     pub view_change_proof: Option<ViewChangeProof>,
 }
 
+/// The struct representing the extrinsics for a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
-pub struct MicroExtrinsics {
-    #[beserial(len_type(u8))]
-    pub extra_data: Vec<u8>,
+pub struct MicroBody {
+    /// A vector containing the fork proofs. It might be empty.
     #[beserial(len_type(u16))]
     pub fork_proofs: Vec<ForkProof>,
+    /// A vector containing the transactions. It might be empty.
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
 }
 
 impl MicroBlock {
-    pub const MAX_SIZE: usize = 100_000; // 100 KB
+    /// The maximum allowed size, in bytes, for a micro block. Changing this requires a hard fork.
+    pub const MAX_SIZE: usize = 100_000;
 
+    /// Function that performs some very basic checks on the block. Passing these tests does not
+    /// guarantee that the block is valid, but failing them guarantees that it is invalid.
     pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
-        if let Some(ref extrinsics) = self.extrinsics {
+        if let Some(ref extrinsics) = self.body {
             extrinsics.verify(self.header.block_number, network_id)?;
 
-            if self.header.extrinsics_root != extrinsics.hash() {
+            if self.header.body_root != extrinsics.hash() {
                 return Err(BlockError::BodyHashMismatch);
+            }
+
+            if self.justification.is_none() {
+                return Err(BlockError::NoJustification);
             }
         }
 
         Ok(())
     }
 
+    /// Returns the hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
     }
 }
 
 impl MicroHeader {
-    pub const SIZE: usize = /*version*/ 2 + /*block_number*/ 4 + /*view_number*/ 4
-        + /*hashes*/ 3 * 32 + /*seed*/ 48 + /*timestamp*/ 8;
+    /// Returns the size, in bytes, of a Micro block header. Assuming the extra_data field is
+    /// completely filled.
+    pub const SIZE: usize =
+        /*version*/
+        2 + /*block_number*/ 4 + /*view_number*/ 4 + /*timestamp*/ 8
+            + /*parent_hash*/ 32 + /*seed*/ CompressedSignature::SIZE + /*extra_data*/ 32 +
+            /*state_root*/ 32 + /*body_root*/ 32;
 }
 
-impl MicroExtrinsics {
+impl MicroBody {
+    /// Performs some validity tests on the body. It is not an exhaustive verification.
     pub fn verify(&self, block_height: u32, network_id: NetworkId) -> Result<(), BlockError> {
         // Verify fork proofs.
         let mut previous_proof: Option<&ForkProof> = None;
@@ -132,12 +170,11 @@ impl MicroExtrinsics {
         Ok(())
     }
 
-    pub fn get_metadata_size(num_fork_proofs: usize, extra_data_size: usize) -> usize {
+    /// Returns the metadata size, in bytes, of the body for a Micro block. Basically, the
+    /// size of everything in the body that isn't a transaction.
+    pub fn get_metadata_size(num_fork_proofs: usize) -> usize {
         /*fork_proofs size*/
-        2
-            + num_fork_proofs * ForkProof::SIZE
-            + /*extra_data size*/ 1
-            + extra_data_size
+        2 + num_fork_proofs * ForkProof::SIZE
             + /*transactions size*/ 2
     }
 }
@@ -156,4 +193,4 @@ impl fmt::Display for MicroHeader {
 }
 
 #[allow(clippy::derive_hash_xor_eq)] // TODO: Shouldn't be necessary
-impl Hash for MicroExtrinsics {}
+impl Hash for MicroBody {}

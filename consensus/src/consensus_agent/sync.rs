@@ -322,7 +322,12 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
                     return;
                 }
 
-                expected_root = macro_block.header.transactions_root.clone();
+                expected_root = macro_block
+                    .body
+                    .as_ref()
+                    .expect("Missing body!")
+                    .history_root
+                    .clone();
             }
             None => {
                 warn!("We didn't expect any transactions for epoch {} from {} - discarding and closing the channel", epoch_transactions.epoch, self.peer.peer_address());

@@ -3,7 +3,7 @@ use std::sync::RwLock;
 
 use beserial::Deserialize;
 use nimiq_block_albatross::{
-    Block, MacroBlock, MacroExtrinsics, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
+    Block, MacroBlock, MacroBody, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
     PbftProposal, SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange,
     ViewChangeProof, ViewChangeProofBuilder,
 };
@@ -82,7 +82,7 @@ impl TemporaryBlockProducer {
         block
     }
 
-    fn finalize_macro_block(proposal: PbftProposal, extrinsics: MacroExtrinsics) -> MacroBlock {
+    fn finalize_macro_block(proposal: PbftProposal, extrinsics: MacroBody) -> MacroBlock {
         let keypair = KeyPair::from(
             SecretKey::deserialize_from_vec(&hex::decode(SECRET_KEY).unwrap()).unwrap(),
         );
@@ -113,7 +113,7 @@ impl TemporaryBlockProducer {
         MacroBlock {
             header: proposal.header,
             justification: Some(pbft_proof.build()),
-            extrinsics: Some(extrinsics),
+            body: Some(extrinsics),
         }
     }
 

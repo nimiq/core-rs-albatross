@@ -122,7 +122,7 @@ fn slash_fork_proofs(
     let mut fork_proof_prev_epoch_diff = BitSet::new();
 
     // Mark from fork proofs.
-    let fork_proofs = &block.extrinsics.as_ref().unwrap().fork_proofs;
+    let fork_proofs = &block.body.as_ref().unwrap().fork_proofs;
     if fork_proofs.len() != fork_proof_infos.predecessor_infos.len() {
         return Err(SlashPushError::InvalidForkProofInfos);
     }
@@ -227,7 +227,7 @@ impl ForkProofInfos {
     ) -> Result<Self, SlashPushError> {
         let mut infos = vec![];
         if let Block::Micro(micro_block) = block {
-            let fork_proofs = &micro_block.extrinsics.as_ref().unwrap().fork_proofs;
+            let fork_proofs = &micro_block.body.as_ref().unwrap().fork_proofs;
             for fork_proof in fork_proofs {
                 let prev_info = chain_store
                     .get_chain_info(&fork_proof.header1.parent_hash, false, txn)

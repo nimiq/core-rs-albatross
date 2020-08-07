@@ -1,7 +1,7 @@
 use std::io;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
-use block::{Block, BlockType, MacroExtrinsics, MicroExtrinsics};
+use block::{Block, BlockType, MacroBody, MicroBody};
 use database::{FromDatabaseValue, IntoDatabaseValue};
 use hash::Blake2bHash;
 use primitives::coin::Coin;
@@ -96,12 +96,12 @@ impl Serialize for ChainInfo {
             Block::Macro(ref macro_block) => {
                 size += Serialize::serialize(&macro_block.header, writer)?;
                 size += Serialize::serialize(&macro_block.justification, writer)?;
-                size += Serialize::serialize(&None::<MacroExtrinsics>, writer)?;
+                size += Serialize::serialize(&None::<MacroBody>, writer)?;
             }
             Block::Micro(ref micro_block) => {
                 size += Serialize::serialize(&micro_block.header, writer)?;
                 size += Serialize::serialize(&micro_block.justification, writer)?;
-                size += Serialize::serialize(&None::<MicroExtrinsics>, writer)?;
+                size += Serialize::serialize(&None::<MicroBody>, writer)?;
             }
         }
         size += Serialize::serialize(&self.on_main_chain, writer)?;
@@ -118,12 +118,12 @@ impl Serialize for ChainInfo {
             Block::Macro(ref macro_block) => {
                 size += Serialize::serialized_size(&macro_block.header);
                 size += Serialize::serialized_size(&macro_block.justification);
-                size += Serialize::serialized_size(&None::<MacroExtrinsics>);
+                size += Serialize::serialized_size(&None::<MacroBody>);
             }
             Block::Micro(ref micro_block) => {
                 size += Serialize::serialized_size(&micro_block.header);
                 size += Serialize::serialized_size(&micro_block.justification);
-                size += Serialize::serialized_size(&None::<MicroExtrinsics>);
+                size += Serialize::serialized_size(&None::<MicroBody>);
             }
         }
         size += Serialize::serialized_size(&self.on_main_chain);

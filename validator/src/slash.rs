@@ -27,7 +27,7 @@ impl ForkProofPool {
     pub fn apply_block(&mut self, block: &Block) {
         match block {
             Block::Micro(MicroBlock {
-                extrinsics: Some(extrinsics),
+                body: Some(extrinsics),
                 ..
             }) => {
                 for fork_proof in extrinsics.fork_proofs.iter() {
@@ -50,7 +50,7 @@ impl ForkProofPool {
     /// Reverts a block, re-adding fork proofs.
     pub fn revert_block(&mut self, block: &Block) {
         if let Block::Micro(MicroBlock {
-            extrinsics: Some(extrinsics),
+            body: Some(extrinsics),
             ..
         }) = block
         {

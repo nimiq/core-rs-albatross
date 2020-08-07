@@ -12,8 +12,10 @@ use vrf::VrfSeed;
 
 use crate::macro_block::{MacroBlock, MacroHeader};
 use crate::micro_block::{MicroBlock, MicroHeader};
-use crate::{BlockError, MacroExtrinsics, MicroExtrinsics, MicroJustification, PbftProof};
+use crate::{BlockError, MacroBody, MicroBody, MicroJustification, PbftProof};
 
+/// Defines the type of the block, either Micro or Macro (which includes both checkpoint and
+/// election blocks).
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum BlockType {
@@ -21,6 +23,8 @@ pub enum BlockType {
     Micro = 2,
 }
 
+/// The enum representing a block. Blocks can either be Micro blocks or Macro blocks (which includes
+/// both checkpoint and election blocks).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Block {
     Macro(MacroBlock),
@@ -28,8 +32,11 @@ pub enum Block {
 }
 
 impl Block {
+    /// The version number of the block. Changing this always results in a hard fork.
     pub const VERSION: u16 = 1;
 
+    /// Function that performs some very basic checks on the block. Passing these tests does not
+    /// guarantee that the block is valid, but failing them guarantees that it is invalid.
     pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
         match self {
             Block::Macro(ref block) => block.verify(),
@@ -37,6 +44,15 @@ impl Block {
         }
     }
 
+    /// Returns the type of the block.
+    pub fn ty(&self) -> BlockType {
+        match self {
+            Block::Macro(_) => BlockType::Macro,
+            Block::Micro(_) => BlockType::Micro,
+        }
+    }
+
+    /// Returns the version number of the block.
     pub fn version(&self) -> u16 {
         match self {
             Block::Macro(ref block) => block.header.version,
@@ -44,6 +60,7 @@ impl Block {
         }
     }
 
+    /// Returns the block number of the block.
     pub fn block_number(&self) -> u32 {
         match self {
             Block::Macro(ref block) => block.header.block_number,
@@ -51,6 +68,8 @@ impl Block {
         }
     }
 
+    /// Returns the view number of the block. Macro blocks do not have a view number so this
+    /// function outputs an Option.
     pub fn view_number(&self) -> u32 {
         match self {
             Block::Macro(ref block) => block.header.view_number,
@@ -58,26 +77,7 @@ impl Block {
         }
     }
 
-    /// The next view number, if there is no view change. This will return 0, if the next block
-    /// will be the first of the epoch (i.e. the current one is a macro block), or the view number
-    /// of the current block.
-    /// To get the view number for after a single view change, just add 1
-    pub fn next_view_number(&self) -> u32 {
-        match self {
-            // If the previous block was a macro block, this resets the view number
-            Block::Macro(_) => 0,
-            // Otherwise we are now at the view number of the previous block
-            Block::Micro(ref block) => block.header.view_number,
-        }
-    }
-
-    pub fn parent_hash(&self) -> &Blake2bHash {
-        match self {
-            Block::Macro(ref block) => &block.header.parent_hash,
-            Block::Micro(ref block) => &block.header.parent_hash,
-        }
-    }
-
+    /// Returns the timestamp of the block.
     pub fn timestamp(&self) -> u64 {
         match self {
             Block::Macro(ref block) => block.header.timestamp,
@@ -85,6 +85,25 @@ impl Block {
         }
     }
 
+    /// Returns the parent hash of the block. The parent hash is the hash of the header of the
+    /// immediately preceding block.
+    pub fn parent_hash(&self) -> &Blake2bHash {
+        match self {
+            Block::Macro(ref block) => &block.header.parent_hash,
+            Block::Micro(ref block) => &block.header.parent_hash,
+        }
+    }
+
+    /// Returns the parent election hash of the block. The parent election hash is the hash of the
+    /// header of the preceding election macro block.
+    pub fn parent_election_hash(&self) -> Option<&Blake2bHash> {
+        match self {
+            Block::Macro(ref block) => Some(&block.header.parent_election_hash),
+            Block::Micro(ref _block) => None,
+        }
+    }
+
+    /// Returns the seed of the block.
     pub fn seed(&self) -> &VrfSeed {
         match self {
             Block::Macro(ref block) => &block.header.seed,
@@ -92,6 +111,15 @@ impl Block {
         }
     }
 
+    /// Returns the extra data of the block.
+    pub fn extra_data(&self) -> &Vec<u8> {
+        match self {
+            Block::Macro(ref block) => &block.header.extra_data,
+            Block::Micro(ref block) => &block.header.extra_data,
+        }
+    }
+
+    /// Returns the state root of the block.
     pub fn state_root(&self) -> &Blake2bHash {
         match self {
             Block::Macro(ref block) => &block.header.state_root,
@@ -99,6 +127,20 @@ impl Block {
         }
     }
 
+    /// Returns the next view number, assuming that there was no view change. This will return 0, if
+    /// the next block is the first of the batch (i.e. the current one is a macro block), or the
+    /// view number of the current block.
+    /// To get the view number for after a single view change, just add 1.
+    pub fn next_view_number(&self) -> u32 {
+        match self {
+            // If the previous block was a macro block, this resets the view number.
+            Block::Macro(_) => 0,
+            // Otherwise we are now at the view number of the previous block.
+            Block::Micro(ref block) => block.header.view_number,
+        }
+    }
+
+    /// Returns the Blake2b hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         match self {
             Block::Macro(ref block) => block.header.hash(),
@@ -106,6 +148,7 @@ impl Block {
         }
     }
 
+    /// Returns the header of the block.
     pub fn header(&self) -> BlockHeader {
         // TODO Can we eliminate the clone()s here?
         match self {
@@ -114,43 +157,52 @@ impl Block {
         }
     }
 
+    /// Returns the justification of the block.
     pub fn justification(&self) -> Option<BlockJustification> {
         // TODO Can we eliminate the clone()s here?
         Some(match self {
             Block::Macro(ref block) => {
                 BlockJustification::Macro(block.justification.as_ref()?.clone())
             }
-            Block::Micro(ref block) => BlockJustification::Micro(block.justification.clone()),
+            Block::Micro(ref block) => {
+                BlockJustification::Micro(block.justification.as_ref()?.clone())
+            }
         })
     }
 
-    pub fn extrinsics(&self) -> Option<BlockExtrinsics> {
+    pub fn body(&self) -> Option<BlockBody> {
         // TODO Can we eliminate the clone()s here?
         Some(match self {
-            Block::Macro(ref block) => BlockExtrinsics::Macro(block.extrinsics.as_ref()?.clone()),
-            Block::Micro(ref block) => BlockExtrinsics::Micro(block.extrinsics.as_ref()?.clone()),
+            Block::Macro(ref block) => BlockBody::Macro(block.body.as_ref()?.clone()),
+            Block::Micro(ref block) => BlockBody::Micro(block.body.as_ref()?.clone()),
         })
     }
 
+    /// Returns a reference to the transactions of the block. If the block is a Macro block it just
+    /// returns None, since Macro blocks don't contain any transactions.
     pub fn transactions(&self) -> Option<&Vec<Transaction>> {
         match self {
             Block::Macro(_) => None,
-            Block::Micro(ref block) => block.extrinsics.as_ref().map(|ex| &ex.transactions),
+            Block::Micro(ref block) => block.body.as_ref().map(|ex| &ex.transactions),
         }
     }
 
+    /// Returns a mutable reference to the transactions of the block. If the block is a Macro block
+    /// it just returns None, since Macro blocks don't contain any transactions.
     pub fn transactions_mut(&mut self) -> Option<&mut Vec<Transaction>> {
         match self {
             Block::Macro(_) => None,
-            Block::Micro(ref mut block) => block.extrinsics.as_mut().map(|ex| &mut ex.transactions),
+            Block::Micro(ref mut block) => block.body.as_mut().map(|ex| &mut ex.transactions),
         }
     }
 
+    /// Returns the sum of the fees of all of the transactions in the block. If the block is a Macro
+    /// block it just returns zero, since Macro blocks don't contain any transactions.
     pub fn sum_transaction_fees(&self) -> Coin {
         match self {
             Block::Macro(_) => Coin::ZERO,
             Block::Micro(ref block) => block
-                .extrinsics
+                .body
                 .as_ref()
                 .map(|ex| ex.transactions.iter().map(|tx| tx.fee).sum())
                 .unwrap_or(Coin::ZERO),
@@ -189,19 +241,22 @@ impl Block {
         }
     }
 
-    pub fn ty(&self) -> BlockType {
-        match self {
-            Block::Macro(_) => BlockType::Macro,
-            Block::Micro(_) => BlockType::Micro,
+    pub fn unwrap_transactions(self) -> Vec<Transaction> {
+        self.unwrap_micro().body.unwrap().transactions
+    }
+
+    /// Returns true if the block is a micro block, false otherwise.
+    pub fn is_micro(&self) -> bool {
+        if let Block::Micro(_) = self {
+            true
+        } else {
+            false
         }
     }
 
-    pub fn unwrap_transactions(self) -> Vec<Transaction> {
-        self.unwrap_micro().extrinsics.unwrap().transactions
-    }
-
-    pub fn is_micro(&self) -> bool {
-        if let Block::Micro(_) = self {
+    /// Returns true if the block is a macro block, false otherwise.
+    pub fn is_macro(&self) -> bool {
+        if let Block::Macro(_) = self {
             true
         } else {
             false
@@ -254,6 +309,8 @@ impl fmt::Display for Block {
     }
 }
 
+/// The enum representing a block header. Blocks can either be Micro blocks or Macro blocks (which
+/// includes both checkpoint and election blocks).
 #[derive(Clone, Debug, Eq, PartialEq, SerializeContent)]
 pub enum BlockHeader {
     Micro(MicroHeader),
@@ -261,6 +318,7 @@ pub enum BlockHeader {
 }
 
 impl BlockHeader {
+    /// Returns the type of the block.
     pub fn ty(&self) -> BlockType {
         match self {
             BlockHeader::Macro(_) => BlockType::Macro,
@@ -268,6 +326,15 @@ impl BlockHeader {
         }
     }
 
+    /// Returns the version number of the block.
+    pub fn version(&self) -> u16 {
+        match self {
+            BlockHeader::Macro(ref header) => header.version,
+            BlockHeader::Micro(ref header) => header.version,
+        }
+    }
+
+    /// Returns the block number of the block.
     pub fn block_number(&self) -> u32 {
         match self {
             BlockHeader::Macro(ref header) => header.block_number,
@@ -275,6 +342,7 @@ impl BlockHeader {
         }
     }
 
+    /// Returns the view number of the block.
     pub fn view_number(&self) -> u32 {
         match self {
             BlockHeader::Macro(ref header) => header.view_number,
@@ -282,6 +350,7 @@ impl BlockHeader {
         }
     }
 
+    /// Returns the timestamp of the block.
     pub fn timestamp(&self) -> u64 {
         match self {
             BlockHeader::Macro(ref header) => header.timestamp,
@@ -289,20 +358,8 @@ impl BlockHeader {
         }
     }
 
-    pub fn seed(&self) -> &VrfSeed {
-        match self {
-            BlockHeader::Macro(ref header) => &header.seed,
-            BlockHeader::Micro(ref header) => &header.seed,
-        }
-    }
-
-    pub fn hash(&self) -> Blake2bHash {
-        match self {
-            BlockHeader::Macro(ref header) => header.hash(),
-            BlockHeader::Micro(ref header) => header.hash(),
-        }
-    }
-
+    /// Returns the parent hash of the block. The parent hash is the hash of the header of the
+    /// immediately preceding block.
     pub fn parent_hash(&self) -> &Blake2bHash {
         match self {
             BlockHeader::Macro(ref header) => &header.parent_hash,
@@ -310,16 +367,56 @@ impl BlockHeader {
         }
     }
 
-    /// The next view number, if there is no view change. This will return 0, if the next block
-    /// will be the first of the epoch (i.e. the current one is a macro block), or the view number
-    /// of the current block.
-    /// To get the view number for after a single view change, just add 1
+    /// Returns the parent election hash of the block. The parent election hash is the hash of the
+    /// header of the preceding election macro block.
+    pub fn parent_election_hash(&self) -> Option<&Blake2bHash> {
+        match self {
+            BlockHeader::Macro(ref header) => Some(&header.parent_election_hash),
+            BlockHeader::Micro(ref _header) => None,
+        }
+    }
+
+    /// Returns the seed of the block.
+    pub fn seed(&self) -> &VrfSeed {
+        match self {
+            BlockHeader::Macro(ref header) => &header.seed,
+            BlockHeader::Micro(ref header) => &header.seed,
+        }
+    }
+
+    /// Returns the extra data of the block.
+    pub fn extra_data(&self) -> &Vec<u8> {
+        match self {
+            BlockHeader::Macro(ref header) => &header.extra_data,
+            BlockHeader::Micro(ref header) => &header.extra_data,
+        }
+    }
+
+    /// Returns the state root of the block.
+    pub fn state_root(&self) -> &Blake2bHash {
+        match self {
+            BlockHeader::Macro(ref header) => &header.state_root,
+            BlockHeader::Micro(ref header) => &header.state_root,
+        }
+    }
+
+    /// Returns the next view number, assuming that there was no view change. This will return 0, if
+    /// the next block is the first of the batch (i.e. the current one is a macro block), or the
+    /// view number of the current block.
+    /// To get the view number for after a single view change, just add 1.
     pub fn next_view_number(&self) -> u32 {
         match self {
-            // If the previous block was a macro block, this resets the view number
+            // If the previous block was a macro block, this resets the view number.
             BlockHeader::Macro(_) => 0,
-            // Otherwise we are now at the view number of the previous block
+            // Otherwise we are now at the view number of the previous block.
             BlockHeader::Micro(header) => header.view_number,
+        }
+    }
+    /// Returns the Blake2b hash of the block header.
+    pub fn hash(&self) -> Blake2bHash {
+        match self {
+            BlockHeader::Macro(ref header) => header.hash(),
+            BlockHeader::Micro(ref header) => header.hash(),
         }
     }
 }
@@ -329,7 +426,7 @@ impl Hash for BlockHeader {}
 
 impl block_base::BlockHeader for BlockHeader {
     fn hash(&self) -> Blake2bHash {
-        BlockHeader::hash(self)
+        self.hash()
     }
 
     fn height(&self) -> u32 {
@@ -337,10 +434,7 @@ impl block_base::BlockHeader for BlockHeader {
     }
 
     fn timestamp(&self) -> u64 {
-        match self {
-            BlockHeader::Macro(header) => header.timestamp,
-            BlockHeader::Micro(header) => header.timestamp,
-        }
+        self.timestamp()
     }
 }
 
@@ -377,6 +471,7 @@ impl Deserialize for BlockHeader {
     }
 }
 
+/// Struct representing the justification of a block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BlockJustification {
     Micro(MicroJustification),
@@ -384,6 +479,7 @@ pub enum BlockJustification {
 }
 
 impl BlockJustification {
+    /// Returns the type of the block.
     pub fn ty(&self) -> BlockType {
         match self {
             BlockJustification::Macro(_) => BlockType::Macro,
@@ -425,28 +521,46 @@ impl Deserialize for BlockJustification {
     }
 }
 
+/// Struct representing the justification of a block.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum BlockExtrinsics {
-    Micro(MicroExtrinsics),
-    Macro(MacroExtrinsics),
+pub enum BlockBody {
+    Micro(MicroBody),
+    Macro(MacroBody),
 }
 
-impl BlockExtrinsics {
+impl BlockBody {
+    /// Returns the type of the block.
     pub fn ty(&self) -> BlockType {
         match self {
-            BlockExtrinsics::Macro(_) => BlockType::Macro,
-            BlockExtrinsics::Micro(_) => BlockType::Micro,
+            BlockBody::Macro(_) => BlockType::Macro,
+            BlockBody::Micro(_) => BlockType::Micro,
+        }
+    }
+
+    pub fn unwrap_micro(&self) -> &MicroBody {
+        if let BlockBody::Micro(body) = self {
+            body
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn unwrap_macro(&self) -> &MacroBody {
+        if let BlockBody::Macro(body) = self {
+            body
+        } else {
+            unreachable!()
         }
     }
 }
 
-impl Serialize for BlockExtrinsics {
+impl Serialize for BlockBody {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
         size += self.ty().serialize(writer)?;
         size += match self {
-            BlockExtrinsics::Macro(extrinsics) => extrinsics.serialize(writer)?,
-            BlockExtrinsics::Micro(extrinsics) => extrinsics.serialize(writer)?,
+            BlockBody::Macro(extrinsics) => extrinsics.serialize(writer)?,
+            BlockBody::Micro(extrinsics) => extrinsics.serialize(writer)?,
         };
         Ok(size)
     }
@@ -455,19 +569,19 @@ impl Serialize for BlockExtrinsics {
         let mut size = 0;
         size += self.ty().serialized_size();
         size += match self {
-            BlockExtrinsics::Macro(extrinsics) => extrinsics.serialized_size(),
-            BlockExtrinsics::Micro(extrinsics) => extrinsics.serialized_size(),
+            BlockBody::Macro(extrinsics) => extrinsics.serialized_size(),
+            BlockBody::Micro(extrinsics) => extrinsics.serialized_size(),
         };
         size
     }
 }
 
-impl Deserialize for BlockExtrinsics {
+impl Deserialize for BlockBody {
     fn deserialize<R: ReadBytesExt>(reader: &mut R) -> Result<Self, SerializingError> {
         let ty: BlockType = Deserialize::deserialize(reader)?;
         let extrinsics = match ty {
-            BlockType::Macro => BlockExtrinsics::Macro(Deserialize::deserialize(reader)?),
-            BlockType::Micro => BlockExtrinsics::Micro(Deserialize::deserialize(reader)?),
+            BlockType::Macro => BlockBody::Macro(Deserialize::deserialize(reader)?),
+            BlockType::Micro => BlockBody::Micro(Deserialize::deserialize(reader)?),
         };
         Ok(extrinsics)
     }
@@ -503,8 +617,8 @@ impl block_base::Block for Block {
 
     fn is_light(&self) -> bool {
         match self {
-            Block::Macro(block) => block.extrinsics.is_none(),
-            Block::Micro(block) => block.extrinsics.is_none(),
+            Block::Macro(block) => block.body.is_none(),
+            Block::Micro(block) => block.body.is_none(),
         }
     }
 }
@@ -514,7 +628,7 @@ bitflags! {
     pub struct BlockComponentFlags: u8 {
         const HEADER  = 0b0000_0001;
         const JUSTIFICATION = 0b0000_0010;
-        const EXTRINSICS = 0b0000_0100;
+        const BODY = 0b0000_0100;
     }
 }
 
@@ -522,7 +636,7 @@ bitflags! {
 pub struct BlockComponents {
     header: Option<BlockHeader>,
     justification: Option<BlockJustification>,
-    extrinsics: Option<BlockExtrinsics>,
+    body: Option<BlockBody>,
 }
 
 impl BlockComponents {
@@ -539,8 +653,8 @@ impl BlockComponents {
             None
         };
 
-        let extrinsics = if flags.contains(BlockComponentFlags::EXTRINSICS) {
-            block.extrinsics()
+        let body = if flags.contains(BlockComponentFlags::BODY) {
+            block.body()
         } else {
             None
         };
@@ -548,7 +662,7 @@ impl BlockComponents {
         BlockComponents {
             header,
             justification,
-            extrinsics,
+            body,
         }
     }
 }
@@ -562,11 +676,11 @@ impl TryFrom<BlockComponents> for Block {
                 Some(BlockHeader::Micro(micro_header)),
                 Some(BlockJustification::Micro(micro_justification)),
             ) => {
-                let extrinsics = value
-                    .extrinsics
-                    .map(|ext| {
-                        if let BlockExtrinsics::Micro(micro_ext) = ext {
-                            Ok(micro_ext)
+                let body = value
+                    .body
+                    .map(|body| {
+                        if let BlockBody::Micro(micro_body) = body {
+                            Ok(micro_body)
                         } else {
                             Err(())
                         }
@@ -575,8 +689,8 @@ impl TryFrom<BlockComponents> for Block {
 
                 Ok(Block::Micro(MicroBlock {
                     header: micro_header,
-                    justification: micro_justification,
-                    extrinsics,
+                    justification: Some(micro_justification),
+                    body,
                 }))
             }
             (Some(BlockHeader::Macro(macro_header)), macro_justification) => {
@@ -590,11 +704,11 @@ impl TryFrom<BlockComponents> for Block {
                     })
                     .transpose()?;
 
-                let extrinsics = value
-                    .extrinsics
-                    .map(|ext| {
-                        if let BlockExtrinsics::Macro(micro_ext) = ext {
-                            Ok(micro_ext)
+                let body = value
+                    .body
+                    .map(|body| {
+                        if let BlockBody::Macro(macro_body) = body {
+                            Ok(macro_body)
                         } else {
                             Err(())
                         }
@@ -604,7 +718,7 @@ impl TryFrom<BlockComponents> for Block {
                 Ok(Block::Macro(MacroBlock {
                     header: macro_header,
                     justification,
-                    extrinsics,
+                    body,
                 }))
             }
             _ => Err(()),

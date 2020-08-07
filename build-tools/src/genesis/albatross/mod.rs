@@ -10,7 +10,7 @@ use toml::de::Error as TomlError;
 use account::{Account, AccountError, AccountsList, BasicAccount, StakingContract};
 use accounts::Accounts;
 use beserial::{Serialize, SerializingError};
-use block_albatross::{Block, MacroBlock, MacroExtrinsics, MacroHeader};
+use block_albatross::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 use collections::bitset::BitSet;
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
@@ -198,10 +198,10 @@ impl GenesisBuilder {
         let slots = staking_contract.select_validators(&seed);
         debug!("Slots: {:#?}", slots);
 
-        // extrinsics
-        let extrinsics = MacroExtrinsics::from_slashed_set(BitSet::new(), BitSet::new());
-        let extrinsics_root = extrinsics.hash::<Blake2bHash>();
-        debug!("Extrinsics root: {}", &extrinsics_root);
+        // Body
+        let body = MacroBody::from_slashed_set(BitSet::new(), BitSet::new());
+        let body_root = body.hash::<Blake2bHash>();
+        debug!("Body root: {}", &body_root);
 
         // accounts
         let mut genesis_accounts: Vec<(Address, Account)> = Vec::new();
@@ -236,18 +236,16 @@ impl GenesisBuilder {
         // the header
         let header = MacroHeader {
             version: 1,
-            validators: Some(slots.validator_slots),
             block_number: 0,
             view_number: 0,
-            parent_macro_hash: [0u8; 32].into(),
-            parent_election_hash: [0u8; 32].into(),
-            seed,
-            parent_hash: [0u8; 32].into(),
-            state_root,
-            extrinsics_root,
-            transactions_root: [0u8; 32].into(),
             timestamp: u64::try_from(timestamp.timestamp_millis())
                 .map_err(|_| GenesisBuilderError::InvalidTimestamp(timestamp))?,
+            parent_hash: [0u8; 32].into(),
+            parent_election_hash: [0u8; 32].into(),
+            seed,
+            extra_data: vec![],
+            state_root,
+            body_root,
         };
 
         // genesis hash
@@ -257,7 +255,7 @@ impl GenesisBuilder {
             block: Block::Macro(MacroBlock {
                 header,
                 justification: None,
-                extrinsics: Some(extrinsics),
+                body: Some(body),
             }),
             hash: genesis_hash,
             accounts: genesis_accounts,
