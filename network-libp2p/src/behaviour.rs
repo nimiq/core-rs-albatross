@@ -63,7 +63,7 @@ impl NetworkBehaviour for NimiqBehaviour {
 
         let peer = self
             .peers
-            .remove(peer_id.as_ref())
+            .remove(peer_id)
             .expect("Unknown peer disconnected");
 
         self.events.push_back(NetworkEvent::PeerLeft(peer));
@@ -84,7 +84,7 @@ impl NetworkBehaviour for NimiqBehaviour {
 
         let peer = self
             .peers
-            .get(peer_id.as_ref())
+            .get(&peer_id)
             .expect("Message received from unknown peer");
         peer.dispatch_inbound_msg(msg);
     }
@@ -109,6 +109,7 @@ impl NetworkBehaviour for NimiqBehaviour {
         // Notify handlers for outbound messages.
         match ready!(self.peer_rx.poll_next_unpin(cx)) {
             Some(PeerAction::Message(peer_id, msg)) => {
+                println!("Received message action for {}", peer_id);
                 Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                     peer_id,
                     handler: NotifyHandler::Any,
@@ -116,6 +117,7 @@ impl NetworkBehaviour for NimiqBehaviour {
                 })
             }
             Some(PeerAction::Close(peer_id)) => {
+                println!("Received close action for {}", peer_id);
                 Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                     peer_id,
                     handler: NotifyHandler::All,
