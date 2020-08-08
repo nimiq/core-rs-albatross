@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::mem;
 use std::ops::Add;
 
@@ -6,6 +6,7 @@ use beserial::{Deserialize, Serialize};
 use bls::CompressedPublicKey as BlsPublicKey;
 use primitives::coin::Coin;
 use primitives::policy;
+use primitives::slot::SlashedSlot;
 use transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
 };
@@ -21,6 +22,7 @@ use crate::{
     Account, AccountError, AccountTransactionInteraction, AccountType, Inherent, InherentType,
     StakingContract,
 };
+use nimiq_collections::BitSet;
 
 pub mod staker;
 pub mod validator;
@@ -413,17 +415,20 @@ impl AccountInherentInteraction for StakingContract {
                 }
 
                 // Address doesn't exist in contract
-                let validator_key: BlsPublicKey =
-                    Deserialize::deserialize(&mut &inherent.data[..])?;
-                if !self.active_validators_by_key.contains_key(&validator_key)
-                    && !self.inactive_validators_by_key.contains_key(&validator_key)
+                let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;
+                if !self
+                    .active_validators_by_key
+                    .contains_key(slot.validator_key.compressed())
+                    && !self
+                        .inactive_validators_by_key
+                        .contains_key(slot.validator_key.compressed())
                 {
                     return Err(AccountError::InvalidInherent);
                 }
 
                 Ok(())
             }
-            InherentType::FinalizeEpoch => {
+            InherentType::FinalizeBatch | InherentType::FinalizeEpoch => {
                 // Invalid data length
                 if !inherent.data.is_empty() {
                     return Err(AccountError::InvalidInherent);
@@ -445,27 +450,84 @@ impl AccountInherentInteraction for StakingContract {
         match &inherent.ty {
             InherentType::Slash => {
                 // Simply add validator address to parking.
-                let validator_key: BlsPublicKey =
-                    Deserialize::deserialize(&mut &inherent.data[..])?;
+                let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;
                 // TODO: The inherent might have originated from a fork proof for the previous epoch.
                 // Right now, we don't care and start the parking period in the epoch the proof has been submitted.
-                let newly_slashed = self.current_epoch_parking.insert(validator_key);
-                let receipt = SlashReceipt { newly_slashed };
+                let newly_parked = self
+                    .current_epoch_parking
+                    .insert(slot.validator_key.compressed().clone());
+
+                // Fork proof from previous epoch should affect:
+                // - previous_lost_rewards
+                // - previous_disabled_slots (not needed, because it's redundant with the lost rewards)
+                // Fork proof from current epoch, but previous batch should affect:
+                // - previous_lost_rewards
+                // - current_disabled_slots
+                // All others:
+                // - current_lost_rewards
+                // - current_disabled_slots
+                let newly_disabled;
+                let newly_lost_rewards;
+                if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height) {
+                    newly_lost_rewards = !self.previous_lost_rewards.contains(slot.slot as usize);
+                    newly_disabled = false;
+                    self.previous_lost_rewards.insert(slot.slot as usize);
+                } else if policy::batch_at(slot.event_block) < policy::batch_at(block_height) {
+                    newly_lost_rewards = !self.previous_lost_rewards.contains(slot.slot as usize);
+                    self.previous_lost_rewards.insert(slot.slot as usize);
+                    newly_disabled = self
+                        .current_disabled_slots
+                        .entry(slot.validator_key.compressed().clone())
+                        .or_insert_with(BTreeSet::new)
+                        .insert(slot.slot);
+                } else {
+                    newly_lost_rewards = !self.current_lost_rewards.contains(slot.slot as usize);
+                    self.current_lost_rewards.insert(slot.slot as usize);
+                    newly_disabled = self
+                        .current_disabled_slots
+                        .entry(slot.validator_key.compressed().clone())
+                        .or_insert_with(BTreeSet::new)
+                        .insert(slot.slot);
+                }
+
+                let receipt = SlashReceipt {
+                    newly_parked,
+                    newly_disabled,
+                    newly_lost_rewards,
+                };
                 Ok(Some(receipt.serialize_to_vec()))
             }
-            InherentType::FinalizeEpoch => {
-                // Swap lists around.
-                let current_epoch = mem::replace(&mut self.current_epoch_parking, HashSet::new());
-                let old_epoch = mem::replace(&mut self.previous_epoch_parking, current_epoch);
+            InherentType::FinalizeBatch | InherentType::FinalizeEpoch => {
+                // Lost rewards.
+                let current_lost_rewards =
+                    mem::replace(&mut self.current_lost_rewards, BitSet::new());
+                let _old_lost_rewards =
+                    mem::replace(&mut self.previous_lost_rewards, current_lost_rewards);
 
-                // Remove all parked validators.
-                for validator_key in old_epoch {
-                    // We do not remove validators from the parking list if they send a retire transaction.
-                    // Instead, we simply skip these here.
-                    // This saves space in the receipts of retire transactions as they happen much more often
-                    // than stakers are added to the parking lists.
-                    if self.active_validators_by_key.contains_key(&validator_key) {
-                        self.retire_validator(validator_key, block_height)?;
+                // Parking sets and disabled slots are only swapped on epoch changes.
+                if inherent.ty == InherentType::FinalizeEpoch {
+                    // Swap lists around.
+                    let current_epoch =
+                        mem::replace(&mut self.current_epoch_parking, HashSet::new());
+                    let old_epoch = mem::replace(&mut self.previous_epoch_parking, current_epoch);
+
+                    // Disabled slots.
+                    // Optimization:
+                    // We actually only need the old slots for the first batch of the epoch.
+                    let current_disabled_slots =
+                        mem::replace(&mut self.current_disabled_slots, BTreeMap::new());
+                    let _old_disabled_slots =
+                        mem::replace(&mut self.previous_disabled_slots, current_disabled_slots);
+
+                    // Remove all parked validators.
+                    for validator_key in old_epoch {
+                        // We do not remove validators from the parking list if they send a retire transaction.
+                        // Instead, we simply skip these here.
+                        // This saves space in the receipts of retire transactions as they happen much more often
+                        // than stakers are added to the parking lists.
+                        if self.active_validators_by_key.contains_key(&validator_key) {
+                            self.retire_validator(validator_key, block_height)?;
+                        }
                     }
                 }
 
@@ -479,7 +541,7 @@ impl AccountInherentInteraction for StakingContract {
     fn revert_inherent(
         &mut self,
         inherent: &Inherent,
-        _block_height: u32,
+        block_height: u32,
         receipt: Option<&Vec<u8>>,
     ) -> Result<(), AccountError> {
         match &inherent.ty {
@@ -487,19 +549,58 @@ impl AccountInherentInteraction for StakingContract {
                 let receipt: SlashReceipt = Deserialize::deserialize_from_vec(
                     &receipt.ok_or(AccountError::InvalidReceipt)?,
                 )?;
-                let validator_key: BlsPublicKey =
-                    Deserialize::deserialize(&mut &inherent.data[..])?;
+                let slot: SlashedSlot = Deserialize::deserialize(&mut &inherent.data[..])?;
 
                 // Only remove if it was not already slashed.
                 // I kept this in two nested if's for clarity.
-                if receipt.newly_slashed {
-                    let has_been_removed = self.current_epoch_parking.remove(&validator_key);
+                if receipt.newly_parked {
+                    let has_been_removed = self
+                        .current_epoch_parking
+                        .remove(slot.validator_key.compressed());
                     if !has_been_removed {
                         return Err(AccountError::InvalidInherent);
                     }
                 }
+
+                // Fork proof from previous epoch should affect:
+                // - previous_lost_rewards
+                // - previous_disabled_slots (not needed, because it's redundant with the lost rewards)
+                // Fork proof from current epoch, but previous batch should affect:
+                // - previous_lost_rewards
+                // - current_disabled_slots
+                // All others:
+                // - current_lost_rewards
+                // - current_disabled_slots
+                if receipt.newly_disabled {
+                    if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height) {
+                        // Nothing to do.
+                    } else {
+                        let is_empty = {
+                            let entry = self
+                                .current_disabled_slots
+                                .get_mut(slot.validator_key.compressed())
+                                .unwrap();
+                            entry.remove(&slot.slot);
+                            entry.is_empty()
+                        };
+                        if is_empty {
+                            self.current_disabled_slots
+                                .remove(slot.validator_key.compressed());
+                        }
+                    }
+                }
+
+                if receipt.newly_lost_rewards {
+                    if policy::epoch_at(slot.event_block) < policy::epoch_at(block_height) {
+                        self.previous_lost_rewards.remove(slot.slot as usize);
+                    } else if policy::batch_at(slot.event_block) < policy::batch_at(block_height) {
+                        self.previous_lost_rewards.remove(slot.slot as usize);
+                    } else {
+                        self.current_lost_rewards.remove(slot.slot as usize);
+                    }
+                }
             }
-            InherentType::FinalizeEpoch => {
+            InherentType::FinalizeBatch => {
                 // We should not be able to revert finalized epochs!
                 return Err(AccountError::InvalidForTarget);
             }

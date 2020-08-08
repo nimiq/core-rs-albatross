@@ -812,7 +812,7 @@ fn it_rejects_invalid_finalize_epoch_inherents() {
 
     // Invalid inherent
     let mut inherent = Inherent {
-        ty: InherentType::FinalizeEpoch,
+        ty: InherentType::FinalizeBatch,
         target: Default::default(),
         value: Coin::from_u64_unchecked(1),
         data: Vec::new(),
@@ -876,7 +876,7 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
 
     // First finalize
     let finalize = Inherent {
-        ty: InherentType::FinalizeEpoch,
+        ty: InherentType::FinalizeBatch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1008,7 +1008,7 @@ fn it_can_apply_slashes_after_retire() {
 
     // Scenario 2: First finalize
     let finalize = Inherent {
-        ty: InherentType::FinalizeEpoch,
+        ty: InherentType::FinalizeBatch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1156,7 +1156,7 @@ fn it_can_apply_unpark_transactions() {
 
     // Build on previous contract state and finalize and slash
     let finalize = Inherent {
-        ty: InherentType::FinalizeEpoch,
+        ty: InherentType::FinalizeBatch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1234,7 +1234,7 @@ fn it_can_revert_unpark_transactions() {
     // Park, unpark and revert unpark in previous epoch
     let mut parked_in_previous = parked_in_current.clone();
     let finalize = Inherent {
-        ty: InherentType::FinalizeEpoch,
+        ty: InherentType::FinalizeBatch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1271,7 +1271,7 @@ fn it_can_revert_unpark_transactions() {
     // Park, unpark and revert unpark in both epochs
     let mut parked_in_both = parked_in_current;
     let finalize = Inherent {
-        ty: InherentType::FinalizeEpoch,
+        ty: InherentType::FinalizeBatch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1317,7 +1317,7 @@ fn it_will_never_revert_finalized_epoch_inherents() {
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
 
     let finalize = Inherent {
-        ty: InherentType::FinalizeEpoch,
+        ty: InherentType::FinalizeBatch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1364,7 +1364,7 @@ fn it_can_revert_slash_inherent() {
 
     // First finalize
     let finalize = Inherent {
-        ty: InherentType::FinalizeEpoch,
+        ty: InherentType::FinalizeBatch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],

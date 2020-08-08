@@ -30,7 +30,7 @@ use keys::Address;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
-use primitives::slot::{Slot, SlotBand, SlotIndex, Slots, ValidatorSlots};
+use primitives::slot::{SlashedSlot, Slot, SlotBand, SlotIndex, Slots, ValidatorSlots};
 use transaction::{Transaction as BlockchainTransaction, TransactionReceipt, TransactionsProof};
 use tree_primitives::accounts_proof::AccountsProof;
 use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
@@ -2048,7 +2048,7 @@ impl Blockchain {
         fork_proof: &ForkProof,
         txn_option: Option<&Transaction>,
     ) -> Inherent {
-        let (producer, _) = self
+        let (producer, slot) = self
             .get_slot_at(
                 fork_proof.header1.block_number,
                 fork_proof.header1.view_number,
@@ -2058,11 +2058,18 @@ impl Blockchain {
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
             .expect("No ValidatorRegistry");
+
+        let slot = SlashedSlot {
+            slot,
+            validator_key: producer.public_key().clone(),
+            event_block: fork_proof.header1.block_number,
+        };
+
         Inherent {
             ty: InherentType::Slash,
             target: validator_registry.clone(),
             value: Coin::ZERO,
-            data: producer.public_key().serialize_to_vec(),
+            data: slot.serialize_to_vec(),
         }
     }
 
@@ -2078,16 +2085,22 @@ impl Blockchain {
 
         (view_changes.first_view_number..view_changes.last_view_number)
             .map(|view_number| {
-                let (producer, _) = self
+                let (producer, slot) = self
                     .get_slot_at(view_changes.block_number, view_number, txn_option)
                     .unwrap();
                 debug!("Slash inherent: view change: {}", producer.public_key());
+
+                let slot = SlashedSlot {
+                    slot,
+                    validator_key: producer.public_key().clone(),
+                    event_block: view_changes.block_number,
+                };
 
                 Inherent {
                     ty: InherentType::Slash,
                     target: validator_registry.clone(),
                     value: Coin::ZERO,
-                    data: producer.public_key().serialize_to_vec(),
+                    data: slot.serialize_to_vec(),
                 }
             })
             .collect::<Vec<Inherent>>()
@@ -2105,11 +2118,18 @@ impl Blockchain {
                 let producer = slots
                     .get(SlotIndex::Slot(slot_number as u16))
                     .unwrap_or_else(|| panic!("Missing slot for slot number: {}", slot_number));
+
+                let slot = SlashedSlot {
+                    slot: slot_number as u16,
+                    validator_key: producer.public_key().clone(),
+                    event_block: 0,
+                };
+
                 Inherent {
                     ty: InherentType::Slash,
                     target: validator_registry.clone(),
                     value: Coin::ZERO,
-                    data: producer.public_key().serialize_to_vec(),
+                    data: slot.serialize_to_vec(),
                 }
             })
             .collect::<Vec<Inherent>>()
@@ -2288,7 +2308,7 @@ impl Blockchain {
             .expect("No ValidatorRegistry");
 
         inherents.push(Inherent {
-            ty: InherentType::FinalizeEpoch,
+            ty: InherentType::FinalizeBatch,
             target: validator_registry.clone(),
             value: Coin::ZERO,
             data: Vec::new(),

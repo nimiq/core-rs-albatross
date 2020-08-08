@@ -26,6 +26,7 @@ rand = "0.7"
 beserial = { path = "../../beserial", version = "0.1" }
 beserial_derive = { path = "../../beserial/beserial_derive", version = "0.1" }
 nimiq-bls = { path = "../../bls", version = "0.1" }
+nimiq-collections = { path = "../../collections", version = "0.1", features = ["bitset"] }
 nimiq-hash = { path = "../../hash", version = "0.1" }
 nimiq-keys = { path = "../../keys", version = "0.1" }
 nimiq-primitives = { path = "..", version = "0.1", features = ["coin", "policy", "validators"] }

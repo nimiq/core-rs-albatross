@@ -1,5 +1,5 @@
 use std::collections::btree_map::BTreeMap;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::hash::BuildHasher;
 use std::ops::Deref;
 
@@ -417,6 +417,56 @@ where
         let mut size = S::from_usize(self.len()).unwrap().serialized_size();
         for (k, v) in self {
             size += k.serialized_size();
+            size += v.serialized_size();
+        }
+        size
+    }
+}
+
+// BTreeSet
+
+impl<V> DeserializeWithLength for BTreeSet<V>
+where
+    V: Deserialize + Ord,
+{
+    fn deserialize_with_limit<D: Deserialize + num::ToPrimitive, R: ReadBytesExt>(
+        reader: &mut R,
+        limit: Option<usize>,
+    ) -> Result<Self, SerializingError> {
+        let len: D = Deserialize::deserialize(reader)?;
+        let len_u = len.to_usize().unwrap();
+
+        // If number of items is too large, abort.
+        if limit.map(|l| len_u > l).unwrap_or(false) {
+            return Err(SerializingError::LimitExceeded);
+        }
+
+        let mut v = BTreeSet::new();
+        for _ in 0..len_u {
+            v.insert(V::deserialize(reader)?);
+        }
+        Ok(v)
+    }
+}
+
+impl<V> SerializeWithLength for BTreeSet<V>
+where
+    V: Serialize + Ord,
+{
+    fn serialize<S: Serialize + num::FromPrimitive, W: WriteBytesExt>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, SerializingError> {
+        let mut size = S::from_usize(self.len()).unwrap().serialize(writer)?;
+        for v in self {
+            size += v.serialize(writer)?;
+        }
+        Ok(size)
+    }
+
+    fn serialized_size<S: Serialize + num::FromPrimitive>(&self) -> usize {
+        let mut size = S::from_usize(self.len()).unwrap().serialized_size();
+        for v in self {
             size += v.serialized_size();
         }
         size

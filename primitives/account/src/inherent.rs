@@ -7,6 +7,7 @@ use crate::AccountError;
 pub enum InherentType {
     Reward,
     Slash,
+    FinalizeBatch,
     FinalizeEpoch,
 }
 

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -12,10 +12,14 @@ use crate::staking_contract::actions::staker::InactiveStakeReceipt;
 use crate::staking_contract::{InactiveValidator, Validator};
 use crate::{Account, AccountError, StakingContract};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub(super) struct UnparkReceipt {
     current_epoch: bool,
     previous_epoch: bool,
+    #[beserial(len_type(u16))]
+    current_disabled_slots: Option<BTreeSet<u16>>,
+    #[beserial(len_type(u16))]
+    previous_disabled_slots: Option<BTreeSet<u16>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -193,12 +197,16 @@ impl StakingContract {
         // We need to check whether it is parked to prevent it from failing.
         let unpark_receipt = if self.current_epoch_parking.contains(validator_key)
             || self.previous_epoch_parking.contains(validator_key)
+            || self.current_disabled_slots.contains_key(validator_key)
+            || self.previous_disabled_slots.contains_key(validator_key)
         {
             self.unpark_validator(validator_key)?
         } else {
             UnparkReceipt {
                 current_epoch: false,
                 previous_epoch: false,
+                current_disabled_slots: None,
+                previous_disabled_slots: None,
             }
         };
 
@@ -312,7 +320,7 @@ impl StakingContract {
         self.retire_validator(validator_key, receipt.retire_time)
     }
 
-    /// Removes a validator from the parking lists.
+    /// Removes a validator from the parking lists and the disabled slots.
     pub(super) fn unpark_validator(
         &mut self,
         validator_key: &BlsPublicKey,
@@ -320,13 +328,22 @@ impl StakingContract {
         let current_epoch = self.current_epoch_parking.remove(validator_key);
         let previous_epoch = self.previous_epoch_parking.remove(validator_key);
 
-        if !current_epoch && !previous_epoch {
+        let current_disabled_slots = self.current_disabled_slots.remove(validator_key);
+        let previous_disabled_slots = self.previous_disabled_slots.remove(validator_key);
+
+        if !current_epoch
+            && !previous_epoch
+            && !current_disabled_slots.is_some()
+            && !previous_disabled_slots.is_some()
+        {
             return Err(AccountError::InvalidForRecipient);
         }
 
         Ok(UnparkReceipt {
             current_epoch,
             previous_epoch,
+            current_disabled_slots,
+            previous_disabled_slots,
         })
     }
 
@@ -342,6 +359,16 @@ impl StakingContract {
 
         if receipt.previous_epoch {
             self.previous_epoch_parking.insert(validator_key.clone());
+        }
+
+        if let Some(slots) = receipt.current_disabled_slots {
+            self.current_disabled_slots
+                .insert(validator_key.clone(), slots);
+        }
+
+        if let Some(slots) = receipt.previous_disabled_slots {
+            self.previous_disabled_slots
+                .insert(validator_key.clone(), slots);
         }
 
         Ok(())

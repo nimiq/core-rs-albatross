@@ -54,6 +54,16 @@ pub enum SlotIndex {
     Band(u16),
 }
 
+/// Identifies a slashed slot by the slot id.
+/// Contains the corresponding public key for reference.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlashedSlot {
+    pub slot: u16,
+    pub validator_key: LazyPublicKey,
+    /// The `event_block` identifies the block at which the slashable action occurred.
+    pub event_block: u32,
+}
+
 /// A slot that contains the corresponding validator information.
 ///
 /// # ToDo
