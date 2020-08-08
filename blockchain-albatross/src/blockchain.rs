@@ -2,9 +2,7 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::iter::{Chain, Filter, Flatten, Map};
 use std::sync::Arc;
-use std::vec::IntoIter;
 
 use parking_lot::{
     MappedRwLockReadGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard,
@@ -15,8 +13,8 @@ use account::{Account, Inherent, InherentType};
 use accounts::Accounts;
 use beserial::Serialize;
 use block::{
-    Block, BlockBody, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroBody,
-    MicroBlock, ViewChange, ViewChangeProof, ViewChanges,
+    Block, BlockError, BlockHeader, BlockType, ForkProof, MacroBlock, MacroBody, MicroBlock,
+    ViewChange, ViewChangeProof, ViewChanges,
 };
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -39,68 +37,13 @@ use utils::observer::{Listener, ListenerHandle, Notifier};
 use utils::time::OffsetTime;
 use vrf::{AliasMethod, VrfSeed, VrfUseCase};
 
+use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::reward::{block_reward_for_epoch, genesis_parameters};
 use crate::slots::{get_slot_at, ForkProofInfos, SlashedSet};
 use crate::transaction_cache::TransactionCache;
-
-pub type PushResult = blockchain_base::PushResult;
-pub type PushError = blockchain_base::PushError<BlockError>;
-pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
-
-pub enum OptionalCheck<T> {
-    Some(T),
-    None,
-    Skip,
-}
-
-impl<T> OptionalCheck<T> {
-    pub fn is_some(&self) -> bool {
-        if let OptionalCheck::Some(_) = self {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn is_none(&self) -> bool {
-        if let OptionalCheck::None = self {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn is_skip(&self) -> bool {
-        if let OptionalCheck::Skip = self {
-            true
-        } else {
-            false
-        }
-    }
-}
-
-impl<T> From<Option<T>> for OptionalCheck<T> {
-    fn from(opt: Option<T>) -> Self {
-        match opt {
-            Some(t) => OptionalCheck::Some(t),
-            None => OptionalCheck::None,
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-enum ChainOrdering {
-    Extend,
-    Better,
-    Inferior,
-    Unknown,
-}
-
-pub enum ForkEvent {
-    Detected(ForkProof),
-}
+use crate::{BlockchainEvent, ChainOrdering, ForkEvent, OptionalCheck, PushError, PushResult};
 
 pub struct Blockchain {
     pub(crate) env: Environment,
@@ -117,69 +60,6 @@ pub struct Blockchain {
 
     genesis_supply: Coin,
     genesis_timestamp: u64,
-}
-
-pub struct BlockchainState {
-    pub accounts: Accounts,
-    pub transaction_cache: TransactionCache,
-
-    pub(crate) main_chain: ChainInfo,
-    head_hash: Blake2bHash,
-
-    macro_info: ChainInfo,
-    macro_head_hash: Blake2bHash,
-
-    election_head: MacroBlock,
-    election_head_hash: Blake2bHash,
-
-    // TODO: Instead of Option, we could use a Cell here and use replace on it. That way we know
-    //       at compile-time that there is always a valid value in there.
-    current_slots: Option<Slots>,
-    previous_slots: Option<Slots>,
-}
-
-impl BlockchainState {
-    pub fn accounts(&self) -> &Accounts {
-        &self.accounts
-    }
-
-    pub fn transaction_cache(&self) -> &TransactionCache {
-        &self.transaction_cache
-    }
-
-    pub fn block_number(&self) -> u32 {
-        self.main_chain.head.block_number()
-    }
-
-    pub fn current_slots(&self) -> Option<&Slots> {
-        self.current_slots.as_ref()
-    }
-
-    pub fn last_slots(&self) -> Option<&Slots> {
-        self.previous_slots.as_ref()
-    }
-
-    pub fn current_validators(&self) -> Option<&ValidatorSlots> {
-        Some(&self.current_slots.as_ref()?.validator_slots)
-    }
-
-    pub fn last_validators(&self) -> Option<&ValidatorSlots> {
-        Some(&self.previous_slots.as_ref()?.validator_slots)
-    }
-
-    /// This includes fork proof slashes and view changes.
-    pub fn current_slashed_set(&self) -> BitSet {
-        self.main_chain.slashed_set.current_epoch()
-    }
-
-    /// This includes fork proof slashes and view changes.
-    pub fn last_slashed_set(&self) -> BitSet {
-        self.main_chain.slashed_set.prev_epoch_state.clone()
-    }
-
-    pub fn main_chain(&self) -> &ChainInfo {
-        &self.main_chain
-    }
 }
 
 impl Blockchain {
@@ -2611,20 +2491,20 @@ impl AbstractBlockchain for Blockchain {
             .get_chunk(prefix, size, txn_option)
     }
 
-    fn get_epoch_transactions(
-        &self,
-        epoch: u32,
-        txn_option: Option<&Transaction>,
-    ) -> Option<Vec<BlockchainTransaction>> {
-        Blockchain::get_epoch_transactions(self, epoch, txn_option)
-    }
-
     fn get_batch_transactions(
         &self,
         batch: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<Vec<BlockchainTransaction>> {
         Blockchain::get_batch_transactions(self, batch, txn_option)
+    }
+
+    fn get_epoch_transactions(
+        &self,
+        epoch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>> {
+        Blockchain::get_epoch_transactions(self, epoch, txn_option)
     }
 
     fn validator_registry_address(&self) -> Option<&Address> {
