@@ -5,9 +5,12 @@ use std::sync::Arc;
 use futures::channel::mpsc;
 use futures::task::{Context, Poll};
 use futures::{executor, future, ready, Future, SinkExt, StreamExt};
+use libp2p::core;
+use libp2p::core::transport::MemoryTransport;
 use libp2p::core::Multiaddr;
+use libp2p::identity::Keypair;
 use libp2p::swarm::SwarmBuilder;
-use libp2p::{PeerId, Swarm};
+use libp2p::{dns, mplex, secio, tcp, websocket, yamux, PeerId, Swarm, Transport};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::broadcast;
 
@@ -44,14 +47,13 @@ impl SwarmTask {
 
 impl SwarmTask {
     fn perform_action(&mut self, action: SwarmAction) {
-        println!("Performing swarm action: {:?}", action);
         match action {
             SwarmAction::Dial(peer_id) => Swarm::dial(&mut self.swarm, &peer_id)
-                .map_err(|err| println!("Failed to dial peer {}: {:?}", peer_id, err)),
+                .map_err(|err| warn!("Failed to dial peer {}: {:?}", peer_id, err)),
             SwarmAction::DialAddr(addr) => Swarm::dial_addr(&mut self.swarm, addr)
-                .map_err(|err| println!("Failed to dial addr: {:?}", err)),
+                .map_err(|err| warn!("Failed to dial addr: {:?}", err)),
         }
-        // Error handling?
+        // TODO Error handling?
         .unwrap_or(())
     }
 }
@@ -60,12 +62,7 @@ impl Future for SwarmTask {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        println!(
-            "SwarmTask.poll(): receiver_count={}",
-            self.event_tx.receiver_count()
-        );
-
-        // The network instance that spawn this task is subscribed to the events channel.
+        // The network instance that spawned this task is subscribed to the events channel.
         // If the receiver count drops to zero, the network has gone away and we stop this task.
         if self.event_tx.receiver_count() < 1 {
             return Poll::Ready(());
@@ -93,7 +90,6 @@ impl Future for SwarmTask {
             }
             None => {
                 // Swarm has terminated.
-                info!("Swarm terminated");
                 Poll::Ready(())
             }
         }
@@ -128,10 +124,49 @@ impl Network {
         }
     }
 
+    fn new_transport(
+        keypair: Keypair,
+    ) -> std::io::Result<
+        impl Transport<
+                Output = (
+                    PeerId,
+                    impl core::muxing::StreamMuxer<
+                            OutboundSubstream = impl Send,
+                            Substream = impl Send,
+                            Error = impl Into<std::io::Error>,
+                        > + Send
+                        + Sync,
+                ),
+                Error = impl std::error::Error + Send,
+                Listener = impl Send,
+                Dial = impl Send,
+                ListenerUpgrade = impl Send,
+            > + Clone,
+    > {
+        let transport = {
+            let tcp = tcp::TcpConfig::new().nodelay(true);
+            let transport = dns::DnsConfig::new(tcp)?;
+            let trans_clone = transport.clone();
+            let transport = transport.or_transport(websocket::WsConfig::new(trans_clone));
+            // XXX Memory transport for testing
+            transport.or_transport(MemoryTransport::default())
+        };
+
+        Ok(transport
+            .upgrade(core::upgrade::Version::V1)
+            .authenticate(secio::SecioConfig::new(keypair))
+            .multiplex(core::upgrade::SelectUpgrade::new(
+                yamux::Config::default(),
+                mplex::MplexConfig::new(),
+            ))
+            .map(|(peer, muxer), _| (peer, core::muxing::StreamMuxerBox::new(muxer)))
+            .timeout(std::time::Duration::from_secs(20)))
+    }
+
     fn new_swarm(listen_addr: Multiaddr) -> Swarm<NimiqBehaviour> {
         let keypair = libp2p::identity::Keypair::generate_ed25519();
         let local_peer_id = PeerId::from(keypair.public());
-        let transport = libp2p::build_tcp_ws_secio_mplex_yamux(keypair).unwrap();
+        let transport = Self::new_transport(keypair).unwrap();
         let behaviour = NimiqBehaviour::new();
 
         // TODO add proper config
@@ -204,18 +239,13 @@ impl NetworkInterface for Network {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::time::Duration;
-
-    use futures::task::{Context, Poll};
-    use futures::{executor, future, FutureExt, StreamExt};
-    use libp2p::core::Multiaddr;
-    use libp2p::{PeerId, Swarm};
-    use parking_lot::RwLock;
+    use futures::{future, StreamExt};
+    use libp2p::multiaddr::multiaddr;
+    use rand::{thread_rng, Rng};
 
     use beserial::{Deserialize, Serialize};
     use network_interface::message::Message;
-    use network_interface::network::{Network as NetworkInterface, NetworkEvent};
+    use network_interface::network::Network as NetworkInterface;
     use network_interface::peer::{CloseReason, Peer};
 
     use crate::network::Network;
@@ -224,19 +254,18 @@ mod tests {
     struct TestMessage {
         id: u32,
     }
+
     impl Message for TestMessage {
         const TYPE_ID: u64 = 42;
     }
 
-    #[tokio::test]
-    async fn test() {
-        let addr1 = "/ip4/127.0.0.1/tcp/10001".parse::<Multiaddr>().unwrap();
-        let addr2 = "/ip4/127.0.0.1/tcp/10002".parse::<Multiaddr>().unwrap();
+    async fn create_connected_networks() -> (Network, Network) {
+        let addr1 = multiaddr![Memory(thread_rng().gen::<u64>())];
+        let addr2 = multiaddr![Memory(thread_rng().gen::<u64>())];
 
-        let mut net1 = Network::new(addr1.clone());
-        let mut net2 = Network::new(addr2.clone());
+        let net1 = Network::new(addr1.clone());
+        let net2 = Network::new(addr2.clone());
 
-        // FIXME dial_addr only works from net2 to net1 but not the other way around... why?
         net2.dial_addr(addr1);
 
         let mut events1 = net1.subscribe_events();
@@ -244,20 +273,43 @@ mod tests {
 
         future::join(events1.next(), events2.next()).await;
 
+        (net1, net2)
+    }
+
+    #[tokio::test]
+    async fn two_networks_can_connect() {
+        let (net1, net2) = create_connected_networks().await;
         assert_eq!(net1.get_peers().len(), 1);
         assert_eq!(net2.get_peers().len(), 1);
 
         let peer2 = net1.get_peer(net2.local_peer_id()).unwrap();
         let peer1 = net2.get_peer(net1.local_peer_id()).unwrap();
+        assert_eq!(peer2.id(), net2.local_peer_id);
+        assert_eq!(peer1.id(), net1.local_peer_id);
+    }
 
-        let mut msg_stream = peer1.receive::<TestMessage>();
+    #[tokio::test]
+    async fn peers_can_talk_to_each_other() {
+        let (net1, net2) = create_connected_networks().await;
+
+        let peer2 = net1.get_peer(net2.local_peer_id()).unwrap();
+        let peer1 = net2.get_peer(net1.local_peer_id()).unwrap();
+
+        let mut msgs = peer1.receive::<TestMessage>();
         peer2.send(&TestMessage { id: 4711 }).await.unwrap();
-
-        let msg = msg_stream.next().await.unwrap();
+        let msg = msgs.next().await.unwrap();
         assert_eq!(msg.id, 4711);
+    }
 
+    #[tokio::test]
+    async fn connections_are_properly_closed() {
+        let (net1, net2) = create_connected_networks().await;
+
+        let peer2 = net1.get_peer(net2.local_peer_id()).unwrap();
         peer2.close(CloseReason::Other).await;
 
+        let mut events1 = net1.subscribe_events();
+        let mut events2 = net2.subscribe_events();
         future::join(events1.next(), events2.next()).await;
 
         assert_eq!(net1.get_peers().len(), 0);
