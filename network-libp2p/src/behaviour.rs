@@ -48,40 +48,27 @@ impl NetworkBehaviour for NimiqBehaviour {
     }
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
-        println!("Connected to {}", peer_id);
-
         let peer = Arc::new(Peer::new(peer_id.clone(), self.peer_tx.clone()));
         self.peers
             .insert(peer_id.clone(), Arc::clone(&peer))
             .map(|p| panic!("Duplicate peer {}", p.id));
-
         self.events.push_back(NetworkEvent::PeerJoined(peer));
     }
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        println!("Disconnected from {}", peer_id);
-
         let peer = self
             .peers
             .remove(peer_id)
             .expect("Unknown peer disconnected");
-
         self.events.push_back(NetworkEvent::PeerLeft(peer));
     }
 
     fn inject_event(
         &mut self,
         peer_id: PeerId,
-        connection: ConnectionId,
+        _connection: ConnectionId,
         msg: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
     ) {
-        println!(
-            "Message with len {} bytes received from peerId {} on connId {:?}",
-            msg.len(),
-            peer_id,
-            connection,
-        );
-
         let peer = self
             .peers
             .get(&peer_id)
@@ -99,17 +86,9 @@ impl NetworkBehaviour for NimiqBehaviour {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
         }
 
-        // Drive inbound message dispatch futures to completion.
-        // if let Some(dispatch) = self.dispatching.front_mut() {
-        //     if let Poll::Ready(_) = dispatch.poll_unpin(cx) {
-        //         self.dispatching.pop_front();
-        //     }
-        // }
-
         // Notify handlers for outbound messages.
         match ready!(self.peer_rx.poll_next_unpin(cx)) {
             Some(PeerAction::Message(peer_id, msg)) => {
-                println!("Received message action for {}", peer_id);
                 Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                     peer_id,
                     handler: NotifyHandler::Any,
@@ -117,7 +96,6 @@ impl NetworkBehaviour for NimiqBehaviour {
                 })
             }
             Some(PeerAction::Close(peer_id)) => {
-                println!("Received close action for {}", peer_id);
                 Poll::Ready(NetworkBehaviourAction::NotifyHandler {
                     peer_id,
                     handler: NotifyHandler::All,
