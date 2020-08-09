@@ -40,6 +40,7 @@ where
     type Future = BoxFuture<'static, Result<Self::Output, Self::Error>>;
 
     fn upgrade_inbound(self, socket: C, _info: Self::Info) -> Self::Future {
+        // TODO close socket?
         //socket.close().await?;
         message::read_message(socket).boxed()
     }
@@ -54,7 +55,6 @@ where
     type Future = BoxFuture<'static, Result<Self::Output, Self::Error>>;
 
     fn upgrade_outbound(self, mut socket: C, _info: Self::Info) -> Self::Future {
-        println!("upgrade_outbound");
         async move {
             if let Some(msg) = self.msg {
                 socket.write_all(&msg[..]).await?;

@@ -42,16 +42,12 @@ impl ProtocolsHandler for NimiqHandler {
     }
 
     fn inject_fully_negotiated_inbound(&mut self, msg: Vec<u8>) {
-        println!("Inbound msg: length={:?}", msg.len());
         self.inbound_msgs.push_back(msg);
     }
 
-    fn inject_fully_negotiated_outbound(&mut self, _: (), _info: Self::OutboundOpenInfo) {
-        println!("Outbound msg sent");
-    }
+    fn inject_fully_negotiated_outbound(&mut self, _: (), _info: Self::OutboundOpenInfo) {}
 
     fn inject_event(&mut self, action: NimiqHandlerAction) {
-        println!("Peer action: {:?}", action);
         match action {
             NimiqHandlerAction::Message(msg) => self.outbound_msgs.push_back(msg),
             NimiqHandlerAction::Close => self.closed = true,
@@ -63,7 +59,8 @@ impl ProtocolsHandler for NimiqHandler {
         _info: Self::OutboundOpenInfo,
         error: ProtocolsHandlerUpgrErr<Self::Error>,
     ) {
-        println!("Dial upgrade error: {:?}", error);
+        // TODO handle this
+        error!("Dial upgrade error: {:?}", error);
     }
 
     fn connection_keep_alive(&self) -> KeepAlive {
@@ -82,7 +79,6 @@ impl ProtocolsHandler for NimiqHandler {
         >,
     > {
         if self.closed {
-            println!("Closed connection");
             // FIXME Close error
             // TODO return None after closing?
             return Poll::Ready(ProtocolsHandlerEvent::Close(io::Error::from(

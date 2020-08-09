@@ -90,8 +90,9 @@ impl PeerInterface for Peer {
         rx
     }
 
-    async fn close(&self, ty: CloseReason) {
-        println!("Closing connection to {} (reason {:?})", self.id, ty);
+    async fn close(&self, _ty: CloseReason) {
+        // Close all channels.
+        self.channels.lock().clear();
 
         self.tx
             .lock()
