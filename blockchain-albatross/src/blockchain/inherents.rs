@@ -4,22 +4,22 @@ use beserial::Serialize;
 use block::{ForkProof, ViewChanges};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
-use collections::bitset::BitSet;
 use database::Transaction;
 use genesis::NetworkInfo;
 use keys::Address;
 use primitives::coin::Coin;
 use primitives::policy;
-use primitives::slot::{SlashedSlot, SlotBand, SlotIndex, Slots};
+use primitives::slot::{SlashedSlot, SlotBand};
 use vrf::{AliasMethod, VrfUseCase};
 
 use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
-use crate::reward::block_reward_for_epoch;
+use crate::reward::block_reward_for_batch;
 use crate::Blockchain;
 
-// complicated stuff
+/// Everything to do with inherents, functions that return inherents.
 impl Blockchain {
+    /// Expects verified proofs
     pub fn create_slash_inherents(
         &self,
         fork_proofs: &[ForkProof],
@@ -27,9 +27,11 @@ impl Blockchain {
         txn_option: Option<&Transaction>,
     ) -> Vec<Inherent> {
         let mut inherents = vec![];
+
         for fork_proof in fork_proofs {
             inherents.push(self.inherent_from_fork_proof(fork_proof, txn_option));
         }
+
         if let Some(view_changes) = view_changes {
             inherents.append(&mut self.inherents_from_view_changes(view_changes, txn_option));
         }
@@ -43,6 +45,10 @@ impl Blockchain {
         fork_proof: &ForkProof,
         txn_option: Option<&Transaction>,
     ) -> Inherent {
+        let validator_registry = NetworkInfo::from_network_id(self.network_id)
+            .validator_registry_address()
+            .expect("No ValidatorRegistry");
+
         let (producer, slot) = self
             .get_slot_at(
                 fork_proof.header1.block_number,
@@ -50,9 +56,6 @@ impl Blockchain {
                 txn_option,
             )
             .unwrap();
-        let validator_registry = NetworkInfo::from_network_id(self.network_id)
-            .validator_registry_address()
-            .expect("No ValidatorRegistry");
 
         let slot = SlashedSlot {
             slot,
@@ -83,6 +86,7 @@ impl Blockchain {
                 let (producer, slot) = self
                     .get_slot_at(view_changes.block_number, view_number, txn_option)
                     .unwrap();
+
                 debug!("Slash inherent: view change: {}", producer.public_key());
 
                 let slot = SlashedSlot {
@@ -101,47 +105,20 @@ impl Blockchain {
             .collect::<Vec<Inherent>>()
     }
 
-    /// Expects a *verified* proof!
-    pub fn inherents_from_slashed_set(&self, slashed_set: &BitSet, slots: &Slots) -> Vec<Inherent> {
-        let validator_registry = NetworkInfo::from_network_id(self.network_id)
-            .validator_registry_address()
-            .expect("No ValidatorRegistry");
-
-        slashed_set
-            .iter()
-            .map(|slot_number| {
-                let producer = slots
-                    .get(SlotIndex::Slot(slot_number as u16))
-                    .unwrap_or_else(|| panic!("Missing slot for slot number: {}", slot_number));
-
-                let slot = SlashedSlot {
-                    slot: slot_number as u16,
-                    validator_key: producer.public_key().clone(),
-                    event_block: 0,
-                };
-
-                Inherent {
-                    ty: InherentType::Slash,
-                    target: validator_registry.clone(),
-                    value: Coin::ZERO,
-                    data: slot.serialize_to_vec(),
-                }
-            })
-            .collect::<Vec<Inherent>>()
-    }
-    pub fn finalize_previous_epoch(
+    /// Calculates and distributes rewards. Updates StakingContract.
+    pub fn finalize_previous_batch(
         &self,
         state: &BlockchainState,
         chain_info: &ChainInfo,
     ) -> Vec<Inherent> {
         let prev_macro_info = &state.macro_info;
+
         let macro_header = &chain_info.head.unwrap_macro_ref().header;
 
-        // It might be that we don't have any micro blocks, thus we need to look at the next macro block.
-        let epoch = policy::epoch_at(macro_header.block_number) - 1;
+        let staking_contract = self.get_staking_contract();
 
-        // Special case for first epoch: Epoch 0 is finalized by definition.
-        if epoch == 0 {
+        // Special case for first batch: Batch 0 is finalized by definition.
+        if policy::batch_at(macro_header.block_number) - 1 == 0 {
             return vec![];
         }
 
@@ -150,20 +127,25 @@ impl Blockchain {
         let validator_slots = &state
             .previous_slots
             .as_ref()
-            .expect("Slots for last epoch are missing")
+            .expect("Slots for last batch are missing")
             .validator_slots;
 
-        // Slashed slots (including fork proofs)
-        let slashed_set = chain_info.slashed_set.prev_epoch_state.clone();
+        // Calculate the slashed set. As conjunction of the two sets.
+        let lost_rewards_set = staking_contract.previous_lost_rewards();
+        let disabled_set = staking_contract.previous_disabled_slots();
+        let slashed_set = lost_rewards_set & disabled_set;
 
-        // Total reward for the previous epoch
-        let block_reward = block_reward_for_epoch(
+        // Total reward for the previous batch
+        let block_reward = block_reward_for_batch(
             chain_info.head.unwrap_macro_ref(),
             prev_macro_info.head.unwrap_macro_ref(),
             self.genesis_supply,
             self.genesis_timestamp,
         );
+
+        // TODO: Shouldn't this be from the past macro block?
         let tx_fees = chain_info.cum_tx_fees;
+
         let reward_pot: Coin = block_reward + tx_fees;
 
         // Distribute reward between all slots and calculate the remainder
@@ -252,13 +234,13 @@ impl Blockchain {
 
         // Check that number of accepted inherents is equal to length of the map that gives us the
         // corresponding number of slots for that staker (which should be equal to the number of
-        // validator that will receive rewards).
+        // validators that will receive rewards).
         assert_eq!(
             inherents.len(),
             num_eligible_slots_for_accepted_inherent.len()
         );
 
-        // Get RNG from last block's seed and build lookup table based on number of eligible slots
+        // Get RNG from last block's seed and build lookup table based on number of eligible slots.
         let mut rng = macro_header.seed.rng(VrfUseCase::RewardDistribution, 0);
         let lookup = AliasMethod::new(num_eligible_slots_for_accepted_inherent);
 
@@ -277,7 +259,7 @@ impl Blockchain {
 
         inherents.push(inherent);
 
-        // Push finalize epoch inherent for automatically retiring inactive/malicious validators.
+        // Push FinalizeBatch inherent to update StakingContract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
             .expect("No ValidatorRegistry");
@@ -290,5 +272,20 @@ impl Blockchain {
         });
 
         inherents
+    }
+
+    /// Updates StakingContract.
+    pub fn finalize_previous_epoch(&self) -> Inherent {
+        // Create FinalizeEpoch inherent to update StakingContract.
+        let validator_registry = NetworkInfo::from_network_id(self.network_id)
+            .validator_registry_address()
+            .expect("No ValidatorRegistry");
+
+        Inherent {
+            ty: InherentType::FinalizeEpoch,
+            target: validator_registry.clone(),
+            value: Coin::ZERO,
+            data: Vec::new(),
+        }
     }
 }

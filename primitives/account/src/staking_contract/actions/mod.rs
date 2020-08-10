@@ -512,8 +512,7 @@ impl AccountInherentInteraction for StakingContract {
                     let old_epoch = mem::replace(&mut self.previous_epoch_parking, current_epoch);
 
                     // Disabled slots.
-                    // Optimization:
-                    // We actually only need the old slots for the first batch of the epoch.
+                    // Optimization: We actually only need the old slots for the first batch of the epoch.
                     let current_disabled_slots =
                         mem::replace(&mut self.current_disabled_slots, BTreeMap::new());
                     let _old_disabled_slots =

@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use parking_lot::{MappedRwLockReadGuard, RwLockReadGuard};
 
-use account::Account;
+use account::{Account, StakingContract};
 use block::{Block, BlockType, MacroBlock};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -344,6 +344,20 @@ impl Blockchain {
             .collect(); // BlockchainTransaction::hash does *not* work here.
 
         Some(merkle::compute_root_from_hashes::<Blake2bHash>(&hashes))
+    }
+
+    pub fn get_staking_contract(&self) -> StakingContract {
+        let validator_registry = NetworkInfo::from_network_id(self.network_id)
+            .validator_registry_address()
+            .expect("No ValidatorRegistry");
+
+        let account = self.state.read().accounts().get(validator_registry, None);
+
+        if let Account::Staking(x) = account {
+            x
+        } else {
+            unreachable!("Account type must be Staking.")
+        }
     }
 
     pub fn write_transaction(&self) -> WriteTransaction {

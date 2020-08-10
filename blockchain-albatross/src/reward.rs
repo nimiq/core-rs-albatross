@@ -22,22 +22,22 @@ pub fn genesis_parameters(genesis_block: &MacroBlock) -> (Coin, u64) {
     (supply, genesis_block.header.timestamp)
 }
 
-/// Compute the block reward for an epoch from the current macro block, the previous macro block,
+/// Compute the block reward for a batch from the current macro block, the previous macro block,
 /// and the genesis block.
 /// This does not include the reward from transaction fees.
-pub fn block_reward_for_epoch_with_genesis(
+pub fn block_reward_for_batch_with_genesis(
     current_block: &MacroBlock,
     previous_macro: &MacroBlock,
     genesis_block: &MacroBlock,
 ) -> Coin {
     let (supply, timestamp) = genesis_parameters(genesis_block);
-    block_reward_for_epoch(current_block, previous_macro, supply, timestamp)
+    block_reward_for_batch(current_block, previous_macro, supply, timestamp)
 }
 
-/// Compute the block reward for an epoch from the current macro block, the previous macro block,
+/// Compute the block reward for an batch from the current macro block, the previous macro block,
 /// and the genesis parameters.
 /// This does not include the reward from transaction fees.
-pub fn block_reward_for_epoch(
+pub fn block_reward_for_batch(
     current_block: &MacroBlock,
     previous_macro: &MacroBlock,
     genesis_supply: Coin,

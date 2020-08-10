@@ -276,7 +276,7 @@ impl BlockProducer {
             let chain_info =
                 ChainInfo::new(dummy_macro_block, prev_chain_info, &fork_proof_infos).unwrap();
             // For election blocks add reward and finalize epoch inherents.
-            inherents.append(&mut self.blockchain.finalize_previous_epoch(&state, &chain_info));
+            inherents.append(&mut self.blockchain.finalize_previous_batch(&state, &chain_info));
         }
 
         // Create the slash inherents for the view changes.

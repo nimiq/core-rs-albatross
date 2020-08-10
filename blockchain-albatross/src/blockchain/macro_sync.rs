@@ -226,15 +226,15 @@ impl Blockchain {
 
         // We cannot check the accounts hash yet.
         // Apply transactions and inherents to AccountsTree.
-        let slots = state
+        let _slots = state
             .previous_slots
             .as_ref()
             .expect("Slots for last epoch are missing");
-        let mut inherents = self.inherents_from_slashed_set(&slashed_set, slots);
+        let mut inherents = vec![];
 
         // election blocks finalize the previous epoch.
         if is_election_block {
-            inherents.append(&mut self.finalize_previous_epoch(&state, &chain_info));
+            inherents.append(&mut self.finalize_previous_batch(&state, &chain_info));
         }
 
         // Commit epoch to AccountsTree.

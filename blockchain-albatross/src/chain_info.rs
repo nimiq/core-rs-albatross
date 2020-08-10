@@ -16,6 +16,7 @@ pub struct ChainInfo {
     pub on_main_chain: bool,
     pub main_chain_successor: Option<Blake2bHash>,
     pub slashed_set: SlashedSet,
+    // Resets every batch
     pub cum_tx_fees: Coin,
 }
 
