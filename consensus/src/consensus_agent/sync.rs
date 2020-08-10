@@ -272,7 +272,7 @@ impl SyncProtocol<AlbatrossBlockchain> for MacroBlockSync {
     }
 
     fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
-        self.blockchain.get_macro_block_locators(max_count)
+        Vec::new()
     }
 
     fn request_blocks(&self, locators: Vec<Blake2bHash>, max_results: u16) {

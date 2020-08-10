@@ -254,9 +254,10 @@ pub fn election_block_of(epoch: u32) -> u32 {
     epoch * EPOCH_LENGTH
 }
 
-/// Returns the block number of the macro block of the given epoch (which is always the last block).
+/// Returns the block number of the macro block (checkpoint or election) of the given batch (which
+/// is always the last block).
 pub fn macro_block_of(batch: u32) -> u32 {
-    batch * EPOCH_LENGTH
+    batch * BATCH_LENGTH
 }
 
 /// First block in reward registry (first block of previous epoch).

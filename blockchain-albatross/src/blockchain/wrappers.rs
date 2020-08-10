@@ -17,10 +17,10 @@ use utils::merkle;
 use vrf::VrfSeed;
 
 use crate::blockchain_state::BlockchainState;
-use crate::slots::{get_slot_at, SlashedSet};
+use crate::slots::get_slot_at;
 use crate::Blockchain;
 
-// Simple stuff
+/// Wrapper functions
 impl Blockchain {
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {
         let guard = self.state.read();
@@ -116,15 +116,18 @@ impl Blockchain {
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
             .expect("No ValidatorRegistry");
+
         let staking_account = self
             .state
             .read()
             .accounts()
             .get(validator_registry, txn_option);
+
         if let Account::Staking(ref staking_contract) = staking_account {
             return staking_contract.select_validators(seed);
         }
-        panic!("Account at validator registry address is not the stacking contract!");
+
+        panic!("Account at validator registry address is not the staking contract!");
     }
 
     pub fn next_validators(&self, seed: &VrfSeed, txn: Option<&Transaction>) -> ValidatorSlots {
@@ -152,22 +155,19 @@ impl Blockchain {
         // was already updated by it, pushing this epoch's slots to `state.previous_slots` and deleting previous'
         // epoch's slots).
         let slots_owned;
-        let slots = if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) {
-            if policy::is_election_block_at(state.block_number()) {
-                state.previous_slots.as_ref().unwrap_or_else(|| {
-                    panic!(
-                        "Missing epoch's slots for block {}.{}",
-                        block_number, view_number
-                    )
-                })
-            } else {
-                state
-                    .current_slots
-                    .as_ref()
-                    .expect("Missing current epoch's slots")
-            }
-        } else if !policy::is_election_block_at(state.block_number())
-            && policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1
+        let slots = if policy::epoch_at(state.block_number()) == policy::epoch_at(block_number)
+            && !policy::is_election_block_at(state.block_number())
+        {
+            state.current_slots.as_ref().unwrap_or_else(|| {
+                panic!(
+                    "Missing epoch's slots for block {}.{}",
+                    block_number, view_number
+                )
+            })
+        } else if (policy::epoch_at(state.block_number()) == policy::epoch_at(block_number)
+            && policy::is_election_block_at(state.block_number()))
+            || (policy::epoch_at(state.block_number()) == policy::epoch_at(block_number) + 1
+                && !policy::is_election_block_at(state.block_number()))
         {
             state.previous_slots.as_ref().unwrap_or_else(|| {
                 panic!(
@@ -203,6 +203,7 @@ impl Blockchain {
         txn_option: Option<&Transaction>,
     ) -> (Slot, u16) {
         let block_number = self.block_number() + 1;
+
         self.get_slot_at(block_number, view_number, txn_option)
             .unwrap()
     }
@@ -230,7 +231,7 @@ impl Blockchain {
         if !for_batch {
             // It might be that we synced this epoch via macro block sync.
             // Therefore, we check this first.
-            let macro_block = policy::macro_block_of(batch_or_epoch_index);
+            let macro_block = policy::election_block_of(batch_or_epoch_index);
             if let Some(macro_block_info) =
                 self.chain_store
                     .get_chain_info_at(macro_block, false, txn_option)
@@ -278,6 +279,7 @@ impl Blockchain {
             Direction::Forward,
             txn_option,
         );
+
         // We need to make sure that we have all micro blocks.
         if blocks.len() as u32
             != if for_batch {
@@ -330,108 +332,18 @@ impl Blockchain {
         self.get_transactions(epoch, false, txn_option)
     }
 
-    fn get_macro_locators(&self, max_count: usize, election_blocks_only: bool) -> Vec<Blake2bHash> {
-        let mut locators: Vec<Blake2bHash> = Vec::with_capacity(max_count);
-        let mut hash = if election_blocks_only {
-            self.election_head_hash()
-        } else {
-            self.macro_head_hash()
-        };
-
-        // Push top ten hashes.
-        locators.push(hash.clone());
-        for _ in 0..10 {
-            let block = self.chain_store.get_block(&hash, false, None);
-            match block {
-                Some(Block::Macro(block)) => {
-                    hash = if election_blocks_only {
-                        block.header.parent_election_hash
-                    } else {
-                        block.header.parent_hash
-                    };
-                    locators.push(hash.clone());
-                }
-                Some(_) => unreachable!("macro head must be a macro block"),
-                None => break,
-            }
-        }
-
-        let mut step = 2;
-        let mut height = if election_blocks_only {
-            policy::last_election_block(self.block_number())
-                .saturating_sub((10 + step) * policy::EPOCH_LENGTH)
-        } else {
-            policy::last_macro_block(self.block_number())
-                .saturating_sub((10 + step) * policy::BATCH_LENGTH)
-        };
-
-        let mut opt_block = self.chain_store.get_block_at(height, false, None);
-        while let Some(block) = opt_block {
-            assert_eq!(block.ty(), BlockType::Macro);
-            locators.push(block.header().hash());
-
-            // Respect max count.
-            if locators.len() >= max_count {
-                break;
-            }
-
-            step *= 2;
-            height = if election_blocks_only {
-                height.saturating_sub(step * policy::EPOCH_LENGTH)
-            } else {
-                height.saturating_sub(step * policy::BATCH_LENGTH)
-            };
-            // 0 or underflow means we need to end the loop
-            if height == 0 {
-                break;
-            }
-
-            opt_block = self.chain_store.get_block_at(height, false, None);
-        }
-
-        // Push the genesis block hash.
-        let genesis_hash = NetworkInfo::from_network_id(self.network_id).genesis_hash();
-        if locators.is_empty() || locators.last().unwrap() != genesis_hash {
-            // Respect max count, make space for genesis hash if necessary
-            if locators.len() >= max_count {
-                locators.pop();
-            }
-            locators.push(genesis_hash.clone());
-        }
-
-        locators
-    }
-
-    pub fn get_macro_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
-        self.get_macro_locators(max_count, false)
-    }
-
-    pub fn get_election_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
-        self.get_macro_locators(max_count, true)
-    }
-
-    // TODO: Needs to be for the whole epoch!!!
     pub fn get_history_root(
         &self,
-        batch: u32,
+        epoch: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<Blake2bHash> {
         let hashes: Vec<Blake2bHash> = self
-            .get_batch_transactions(batch, txn_option)?
+            .get_epoch_transactions(epoch, txn_option)?
             .iter()
             .map(|tx| tx.hash())
             .collect(); // BlockchainTransaction::hash does *not* work here.
 
         Some(merkle::compute_root_from_hashes::<Blake2bHash>(&hashes))
-    }
-
-    /// Get slashed set at specific block number
-    /// Returns slash set before applying block with that block_number (TODO Tests)
-    pub fn slashed_set_at(&self, block_number: u32) -> Option<SlashedSet> {
-        let prev_info = self
-            .chain_store
-            .get_chain_info_at(block_number - 1, false, None)?;
-        Some(prev_info.slashed_set)
     }
 
     pub fn write_transaction(&self) -> WriteTransaction {
