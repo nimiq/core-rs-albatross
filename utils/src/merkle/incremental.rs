@@ -45,28 +45,50 @@ impl<H: HashOutput> IncrementalMerkleProofBuilder<H> {
     /// Returns the chunk index the hash is in.
     pub fn push(&mut self, hash: H) -> usize {
         // Add to the leaves.
-        let pos = self.tree[0].len();
         self.tree[0].push(hash);
+        self.update();
+
+        self.tree[0].len() / self.chunk_size
+    }
+
+    /// Removes the last element from the tree.
+    pub fn pop(&mut self) -> Option<H> {
+        let result = self.tree[0].pop()?;
+        self.update();
+
+        Some(result)
+    }
+
+    /// Updates the merkle tree assuming that an element has been added or removed.
+    fn update(&mut self) {
+        if self.tree[0].is_empty() {
+            return;
+        }
 
         // Iteratively build up the Merkle tree.
         let mut current_level = 0;
-        let mut current_pos = pos;
+        let mut current_pos = self.tree[0].len() - 1;
 
         // If current_pos is 0, this is the only element on the level and there's nothing to hash.
         while current_pos > 0 {
+            // If there are entries not required anymore, drop them.
+            if current_pos + 1 != self.tree[current_level].len() {
+                self.tree[current_level].pop();
+            }
+
+            // Borrow on level for convenience.
             let level = &self.tree[current_level];
-            let current_level_len = level.len();
 
             let hash;
-            // If the current level length is even, we can hash two elements together.
-            if current_level_len % 2 == 0 {
+            // If the current position is uneven, we can hash two elements together.
+            if current_pos % 2 == 1 {
                 hash = H::Builder::default()
-                    .chain(&level[current_level_len - 2])
-                    .chain(&level[current_level_len - 1])
+                    .chain(&level[current_pos - 1])
+                    .chain(&level[current_pos])
                     .finish();
             } else {
                 // Otherwise, we only have one element.
-                hash = level[current_level_len - 1].clone();
+                hash = level[current_pos].clone();
             }
 
             // Push hash to next level.
@@ -83,7 +105,10 @@ impl<H: HashOutput> IncrementalMerkleProofBuilder<H> {
             }
         }
 
-        self.tree[0].len() / self.chunk_size
+        // Remove top level if not needed anymore.
+        if current_level + 1 != self.tree.len() {
+            self.tree.pop();
+        }
     }
 
     pub fn root(&self) -> Option<&H> {

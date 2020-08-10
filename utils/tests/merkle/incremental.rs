@@ -349,6 +349,39 @@ fn it_correctly_computes_more_complex_proofs() {
 }
 
 #[test]
+fn it_can_compute_incremental_proofs() {
+    let values = vec!["1", "2", "3", "4"];
+    /*
+     *            h6
+     *         /      \
+     *      h4         h5
+     *     / \         / \
+     *   h0  h1      h2  h3
+     *   |    |      |    |
+     *  v0   v1     v2   v3
+     */
+    let actions = vec![1i32, 1, -1, 1, 1, 1, -1, -1, -1];
+
+    let mut builder = IncrementalMerkleProofBuilder::<Blake2bHash>::new(1).unwrap();
+    let mut num = 0;
+    for action in actions {
+        num = (num as i32 + action) as usize;
+
+        // For the small trees used here, the root for all our Merkle computations is the same.
+        // The two techniques only start to differ for larger trees.
+        let root = compute_root_from_content::<Blake2bHasher, &str>(&values[..num]);
+
+        if action > 0 {
+            builder.push_item(&values[num - 1]);
+        } else {
+            builder.pop();
+        }
+
+        assert_eq!(builder.root().unwrap(), &root);
+    }
+}
+
+#[test]
 fn it_discards_invalid_proofs() {
     let values = vec!["1", "2", "3", "4"];
     /*
