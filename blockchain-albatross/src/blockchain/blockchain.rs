@@ -24,6 +24,7 @@ use crate::reward::genesis_parameters;
 use crate::transaction_cache::TransactionCache;
 use crate::{BlockchainEvent, ForkEvent};
 
+/// The Blockchain struct
 pub struct Blockchain {
     pub(crate) env: Environment,
     pub network_id: NetworkId,
@@ -41,11 +42,13 @@ pub struct Blockchain {
     pub(crate) genesis_timestamp: u64,
 }
 
-// complicated stuff
+/// Initializing the Blockchain
 impl Blockchain {
     pub fn new(env: Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
         let chain_store = Arc::new(ChainStore::new(env.clone()));
+
         let time = Arc::new(OffsetTime::new());
+
         Ok(match chain_store.get_head(None) {
             Some(head_hash) => Blockchain::load(env, network_id, chain_store, time, head_hash)?,
             None => Blockchain::init(env, network_id, chain_store, time)?,
@@ -61,7 +64,9 @@ impl Blockchain {
     ) -> Result<Self, BlockchainError> {
         // Check that the correct genesis block is stored.
         let network_info = NetworkInfo::from_network_id(network_id);
+
         let genesis_info = chain_store.get_chain_info(network_info.genesis_hash(), false, None);
+
         if !genesis_info
             .as_ref()
             .map(|i| i.on_main_chain)
@@ -80,6 +85,7 @@ impl Blockchain {
 
         // Check that chain/accounts state is consistent.
         let accounts = Accounts::new(env.clone());
+
         if main_chain.head.state_root() != &accounts.hash(None) {
             return Err(BlockchainError::InconsistentState);
         }
@@ -92,10 +98,12 @@ impl Blockchain {
                 None,
             )
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
+
         let macro_head = match macro_chain_info.head {
             Block::Macro(ref macro_head) => macro_head,
             Block::Micro(_) => return Err(BlockchainError::InconsistentState),
         };
+
         let macro_head_hash = macro_head.hash();
 
         // Load election macro chain from store.
@@ -106,6 +114,7 @@ impl Blockchain {
                 None,
             )
             .ok_or(BlockchainError::FailedLoadingMainChain)?;
+
         let election_head = match election_chain_info.head {
             Block::Macro(macro_head) => macro_head,
             Block::Micro(_) => return Err(BlockchainError::InconsistentState),
@@ -114,20 +123,25 @@ impl Blockchain {
         if !election_head.is_election_block() {
             return Err(BlockchainError::InconsistentState);
         }
+
         let election_head_hash = election_head.hash();
 
         // Initialize TransactionCache.
         let mut transaction_cache = TransactionCache::new();
+
         let blocks = chain_store.get_blocks_backward(
             &head_hash,
             transaction_cache.missing_blocks() - 1,
             true,
             None,
         );
+
         for block in blocks.iter().rev() {
             transaction_cache.push_block(block);
         }
+
         transaction_cache.push_block(&main_chain.head);
+
         assert_eq!(
             transaction_cache.missing_blocks(),
             policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS
@@ -140,6 +154,7 @@ impl Blockchain {
         // Get last slots and validators
         let prev_block =
             chain_store.get_block(&election_head.header.parent_election_hash, true, None);
+
         let last_slots = match prev_block {
             Some(Block::Macro(prev_election_block)) => {
                 if prev_election_block.is_election_block() {
@@ -188,27 +203,33 @@ impl Blockchain {
     ) -> Result<Self, BlockchainError> {
         // Initialize chain & accounts with genesis block.
         let network_info = NetworkInfo::from_network_id(network_id);
+
         let genesis_block = network_info.genesis_block::<Block>();
+
         let genesis_macro_block = (match genesis_block {
             Block::Macro(ref macro_block) => Some(macro_block),
             _ => None,
         })
         .unwrap();
+
         let (genesis_supply, genesis_timestamp) = genesis_parameters(genesis_macro_block);
+
         let main_chain = ChainInfo::initial(genesis_block.clone());
+
         let head_hash = network_info.genesis_hash().clone();
 
         // Initialize accounts.
         let accounts = Accounts::new(env.clone());
-        let mut txn = WriteTransaction::new(&env);
-        accounts.init(&mut txn, network_info.genesis_accounts());
 
-        // Commit genesis block to accounts.
-        // XXX Don't distribute any reward for the genesis block, so there is nothing to commit.
+        let mut txn = WriteTransaction::new(&env);
+
+        accounts.init(&mut txn, network_info.genesis_accounts());
 
         // Store genesis block.
         chain_store.put_chain_info(&mut txn, &head_hash, &main_chain, true);
+
         chain_store.set_head(&mut txn, &head_hash);
+
         txn.commit();
 
         // Initialize empty TransactionCache.
@@ -216,6 +237,7 @@ impl Blockchain {
 
         // current slots and validators
         let current_slots = &genesis_macro_block.get_slots();
+
         let last_slots = Slots::default();
 
         Ok(Blockchain {

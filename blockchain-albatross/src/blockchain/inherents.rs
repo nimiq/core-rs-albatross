@@ -143,8 +143,7 @@ impl Blockchain {
             self.genesis_timestamp,
         );
 
-        // TODO: Shouldn't this be from the past macro block?
-        let tx_fees = chain_info.cum_tx_fees;
+        let tx_fees = prev_macro_info.cum_tx_fees;
 
         let reward_pot: Coin = block_reward + tx_fees;
 
