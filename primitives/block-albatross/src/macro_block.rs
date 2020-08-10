@@ -52,8 +52,7 @@ pub struct MacroHeader {
     /// The root of the Merkle tree of the blockchain state. It just acts as a commitment to the
     /// state.
     pub state_root: Blake2bHash,
-    /// The hash of the body. It just acts as a commitment to the body.
-    // TODO: Is it a Merkle tree or just a binary blob? Update the comment accordingly.
+    /// The root of the Merkle tree of the body. It just acts as a commitment to the body.
     pub body_root: Blake2bHash,
 }
 
@@ -75,15 +74,6 @@ pub struct MacroBody {
 }
 
 impl MacroBlock {
-    /// Function that performs some very basic checks on the block. Passing these tests does not
-    /// guarantee that the block is valid, but failing them guarantees that it is invalid.
-    pub fn verify(&self) -> Result<(), BlockError> {
-        if self.justification.is_none() {
-            return Err(BlockError::NoJustification);
-        }
-        Ok(())
-    }
-
     /// Returns the hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
@@ -100,7 +90,6 @@ impl MacroBlock {
     }
 }
 
-// CHECKME: Check for performance
 impl MacroBody {
     /// Creates the body for a Macro block given the slashed sets. Sets the validators and
     /// history_root fields to default values.

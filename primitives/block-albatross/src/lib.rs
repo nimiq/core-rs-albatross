@@ -85,6 +85,8 @@ pub enum BlockError {
     InvalidJustification,
     #[fail(display = "Contains an invalid slash inherent")]
     InvalidSlash,
+    #[fail(display = "Contains an invalid seed")]
+    InvalidSeed,
     #[fail(display = "Invalid view number")]
     InvalidViewNumber,
     #[fail(display = "Invalid transactions root")]

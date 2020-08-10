@@ -12,22 +12,21 @@ use primitives::policy;
 
 use crate::chain_info::ChainInfo;
 use crate::slots::ForkProofInfos;
-use crate::{
-    Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, OptionalCheck, PushError, PushResult,
-};
+use crate::{Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError, PushResult};
 
-// complicated stuff
+/// Everything needed to push a block into the chain.
 impl Blockchain {
     //
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
         // Only one push operation at a time.
         let _push_lock = self.push_lock.lock();
 
-        // XXX We might want to pass this as argument to this method
+        // TODO: We might want to pass this as argument to this method.
         let read_txn = ReadTransaction::new(&self.env);
 
         // Check if we already know this block.
         let hash: Blake2bHash = block.hash();
+
         if self
             .chain_store
             .get_chain_info(&hash, false, Some(&read_txn))
@@ -36,43 +35,16 @@ impl Blockchain {
             return Ok(PushResult::Known);
         }
 
-        // Check (sort of) intrinsic block invariants.
-        if let Err(e) = block.verify(self.network_id) {
-            warn!("Rejecting block - verification failed ({:?})", e);
-            return Err(PushError::InvalidBlock(e));
-        }
+        // Chain ordering
+        let prev_info = self
+            .chain_store
+            .get_chain_info(&block.parent_hash(), false, Some(&read_txn))
+            .unwrap();
 
-        let prev_info = if let Some(prev_info) =
-            self.chain_store
-                .get_chain_info(&block.parent_hash(), false, Some(&read_txn))
-        {
-            prev_info
-        } else {
-            warn!(
-                "Rejecting block - unknown predecessor (#{}, current #{})",
-                block.header().block_number(),
-                self.state.read().main_chain.head.block_number()
-            );
-            #[cfg(feature = "metrics")]
-            self.metrics.note_orphan_block();
-            return Err(PushError::Orphan);
-        };
-
-        // We have to be careful if the previous block is on a branch!
-        // In this case `get_slot_at` would result in wrong slots.
-        // Luckily, Albatross has the nice property that branches can only happen through
-        // view changes or forks.
-        // If it is a view change, we can always decide at the intersection which one is better.
-        // We never even try to push on inferior branches, so we need to check this early.
-        // Forks either maintain the same view numbers (and thus the same slots)
-        // or there is a difference in view numbers on the way and we can discard the inferior branch.
-        // This could potentially change later on, but as forks have the same slots,
-        // we can always identify the inferior branch.
-        // This is also the reason why fork proofs do not change the slashed set for validator selection.
-        // Here, we identify inferior branches early on and discard them.
         let chain_order = self.order_chains(&block, &prev_info, Some(&read_txn));
+
+        // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
         if chain_order == ChainOrdering::Inferior {
-            // If it is an inferior chain, we ignore it as it cannot become better at any point in time.
             info!(
                 "Ignoring block - inferior chain (#{}, {})",
                 block.block_number(),
@@ -81,58 +53,41 @@ impl Blockchain {
             return Ok(PushResult::Ignored);
         }
 
-        let view_change_proof = match block {
-            Block::Macro(_) => OptionalCheck::Skip,
-            Block::Micro(ref micro_block) => micro_block
-                .justification
-                .as_ref()
-                .expect("Missing body!")
-                .view_change_proof
-                .as_ref()
-                .into(),
-        };
+        // Check (sort of) intrinsic block invariants.
+        // TODO: Remove these checks, they should be in verify.rs
+        if let Err(e) = block.verify(self.network_id) {
+            warn!("Rejecting block - verification failed ({:?})", e);
+            return Err(PushError::InvalidBlock(e));
+        }
 
+        // Get the intended slot owner.
         let (slot, _) = self
             .get_slot_at(block.block_number(), block.view_number(), Some(&read_txn))
             .unwrap();
 
+        let intended_slot_owner = slot.public_key().uncompress_unchecked();
+
+        // Check the header.
+        if let Err(e) =
+            self.verify_block_header(&block.header(), &intended_slot_owner, Some(&read_txn))
         {
-            let intended_slot_owner = slot.public_key().uncompress_unchecked();
-            // This will also check that the type at this block number is correct and whether or not an election takes place
-            if let Err(e) = self.verify_block_header(
-                &block.header(),
-                view_change_proof,
-                &intended_slot_owner,
-                Some(&read_txn),
-            ) {
-                warn!("Rejecting block - Bad header / justification");
-                return Err(e);
-            }
+            warn!("Rejecting block - Bad header");
+            return Err(e);
+        }
+
+        // Check the justification.
+        if let Err(e) = self.verify_block_justification(
+            &block.header(),
+            &block.justification(),
+            &intended_slot_owner,
+            Some(&read_txn),
+        ) {
+            warn!("Rejecting block - Bad justification");
+            return Err(e);
         }
 
         if let Block::Micro(ref micro_block) = block {
-            let justification = match micro_block
-                .justification
-                .as_ref()
-                .expect("Missing justification!")
-                .signature
-                .uncompress()
-            {
-                Ok(justification) => justification,
-                Err(_) => {
-                    warn!("Rejecting block - bad justification");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                }
-            };
-
-            let intended_slot_owner = slot.public_key().uncompress_unchecked();
-            if !intended_slot_owner.verify(&micro_block.header, &justification) {
-                warn!("Rejecting block - invalid justification for intended slot owner");
-                debug!("Block hash: {}", micro_block.header.hash::<Blake2bHash>());
-                debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
-                return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-            }
-
+            // TODO: This entire thing is a fork detector. Should move into its own function.
             // Check if there are two blocks in the same slot and with the same height. Since we already
             // verified the validator for the current slot, this is enough to check for fork proofs.
             // Count the micro blocks after the last macro block.
@@ -175,67 +130,15 @@ impl Blockchain {
                     self.fork_notifier.read().notify(ForkEvent::Detected(proof));
                 }
             }
-
-            // Validate slash inherents
-            for fork_proof in &micro_block.body.as_ref().unwrap().fork_proofs {
-                // NOTE: if this returns None, that means that at least the previous block doesn't exist, so that fork proof is invalid anyway.
-                let (slot, _) = self
-                    .get_slot_at(
-                        fork_proof.header1.block_number,
-                        fork_proof.header1.view_number,
-                        Some(&read_txn),
-                    )
-                    .ok_or(PushError::InvalidSuccessor)?;
-
-                if fork_proof
-                    .verify(&slot.public_key().uncompress_unchecked())
-                    .is_err()
-                {
-                    warn!("Rejecting block - Bad fork proof: invalid owner signature");
-                    return Err(PushError::InvalidSuccessor);
-                }
-            }
         }
 
-        if let Block::Macro(ref macro_block) = block {
-            // Check Macro Justification
-            match macro_block.justification {
-                None => {
-                    warn!("Rejecting block - macro block without justification");
-                    return Err(PushError::InvalidBlock(BlockError::NoJustification));
-                }
-                Some(ref justification) => {
-                    if let Err(e) = justification.verify(
-                        macro_block.hash(),
-                        &self.current_validators(),
-                        policy::TWO_THIRD_SLOTS,
-                    ) {
-                        warn!(
-                            "Rejecting block - macro block with bad justification: {}",
-                            e
-                        );
-                        return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
-                    }
-                }
-            }
-
-            // The correct construction of the extrinsics is only checked after the block's inherents are applied.
-
-            // The macro body cannot be None.
-            if let Some(ref body) = macro_block.body {
-                let body_hash: Blake2bHash = body.hash();
-                if body_hash != macro_block.header.body_root {
-                    warn!("Rejecting block - Header body hash doesn't match real body hash");
-                    return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-                }
-            }
-        }
-
+        // TODO: Does this belong together with the rest of the fork proof code???
         let fork_proof_infos = ForkProofInfos::fetch(&block, &self.chain_store, Some(&read_txn))
             .map_err(|err| {
                 warn!("Rejecting block - slash commit failed: {:?}", err);
                 PushError::InvalidSuccessor
             })?;
+
         let chain_info = match ChainInfo::new(block, &prev_info, &fork_proof_infos) {
             Ok(info) => info,
             Err(err) => {
@@ -247,6 +150,7 @@ impl Blockchain {
         // Drop read transaction before calling other functions.
         drop(read_txn);
 
+        // More chain ordering.
         match chain_order {
             ChainOrdering::Extend => {
                 return self.extend(chain_info.head.hash(), chain_info, prev_info);
@@ -255,7 +159,7 @@ impl Blockchain {
                 return self.rebranch(chain_info.head.hash(), chain_info);
             }
             ChainOrdering::Inferior => unreachable!(),
-            ChainOrdering::Unknown => {} // Continue.
+            ChainOrdering::Unknown => {}
         }
 
         // Otherwise, we are creating/extending a fork. Store ChainInfo.

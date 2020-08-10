@@ -112,6 +112,9 @@ pub fn block_reward_at(block_height: u32) -> Coin {
 
 /* Albatross */
 
+/// The current version number of the protocol. Changing this always results in a hard fork.
+pub const VERSION: u16 = 1;
+
 /// The maximum drift, in milliseconds, that is allowed between any block's timestamp and the node's
 /// system time. We only care about drifting to the future.
 pub const TIMESTAMP_MAX_DRIFT: u64 = 600000;

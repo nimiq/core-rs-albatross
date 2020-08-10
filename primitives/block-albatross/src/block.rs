@@ -32,14 +32,11 @@ pub enum Block {
 }
 
 impl Block {
-    /// The version number of the block. Changing this always results in a hard fork.
-    pub const VERSION: u16 = 1;
-
     /// Function that performs some very basic checks on the block. Passing these tests does not
     /// guarantee that the block is valid, but failing them guarantees that it is invalid.
     pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
         match self {
-            Block::Macro(ref block) => block.verify(),
+            Block::Macro(ref block) => Ok(()),
             Block::Micro(ref block) => block.verify(network_id),
         }
     }
@@ -150,7 +147,7 @@ impl Block {
 
     /// Returns the header of the block.
     pub fn header(&self) -> BlockHeader {
-        // TODO Can we eliminate the clone()s here?
+        // TODO: Can we eliminate the clone()s here?
         match self {
             Block::Macro(ref block) => BlockHeader::Macro(block.header.clone()),
             Block::Micro(ref block) => BlockHeader::Micro(block.header.clone()),

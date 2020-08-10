@@ -14,7 +14,7 @@ use crate::chain_info::ChainInfo;
 use crate::slots::SlashedSet;
 use crate::{Blockchain, BlockchainEvent, PushError, PushResult};
 
-// complicated stuff
+// TODO: This needs to be redone after Pascal finishes the history root code.
 impl Blockchain {
     /// Pushes a macro block without requiring the micro blocks of the previous batch.
     pub fn push_isolated_macro_block(

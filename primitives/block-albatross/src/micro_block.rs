@@ -82,15 +82,12 @@ impl MicroBlock {
     /// Function that performs some very basic checks on the block. Passing these tests does not
     /// guarantee that the block is valid, but failing them guarantees that it is invalid.
     pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
+        // TODO: Move this to verify.rs
         if let Some(ref extrinsics) = self.body {
             extrinsics.verify(self.header.block_number, network_id)?;
 
             if self.header.body_root != extrinsics.hash() {
                 return Err(BlockError::BodyHashMismatch);
-            }
-
-            if self.justification.is_none() {
-                return Err(BlockError::NoJustification);
             }
         }
 
@@ -115,6 +112,7 @@ impl MicroHeader {
 
 impl MicroBody {
     /// Performs some validity tests on the body. It is not an exhaustive verification.
+    // TODO: Move this to verify.rs
     pub fn verify(&self, block_height: u32, network_id: NetworkId) -> Result<(), BlockError> {
         // Verify fork proofs.
         let mut previous_proof: Option<&ForkProof> = None;
