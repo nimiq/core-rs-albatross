@@ -93,6 +93,11 @@ impl MacroBlock {
     pub fn is_election_block(&self) -> bool {
         policy::is_election_block_at(self.header.block_number)
     }
+
+    /// Returns a copy of the validator slots.
+    pub fn get_slots(&self) -> Slots {
+        self.clone().try_into().unwrap()
+    }
 }
 
 // CHECKME: Check for performance

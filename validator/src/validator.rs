@@ -397,7 +397,8 @@ impl Validator {
     pub fn on_blockchain_extended(&self, hash: &Blake2bHash) {
         let block = self
             .blockchain
-            .get_block(hash, false, false)
+            .chain_store
+            .get_block(hash, false, None)
             .unwrap_or_else(|| {
                 panic!(
                     "We got the block hash ({}) from an event from the blockchain itself",
@@ -472,7 +473,7 @@ impl Validator {
                 // Since this is called from the blockchain event, the blockchain should still
                 // own the relevant push_lock.
                 (
-                    self.blockchain.height() + 1,
+                    self.blockchain.block_number() + 1,
                     self.blockchain.next_view_number(),
                     None,
                 )
@@ -483,7 +484,7 @@ impl Validator {
                 let _lock = self.blockchain.lock();
                 let mut state = self.state.write();
 
-                let next_block_number = self.blockchain.height() + 1;
+                let next_block_number = self.blockchain.block_number() + 1;
                 let current_seed = self.blockchain.head().seed().clone();
 
                 // If we have an active view change with this view number, clear it.
@@ -696,7 +697,7 @@ impl Validator {
 
         // The number of the block that timed out.
         let prev_seed = self.blockchain.head().seed().clone();
-        let block_number = self.blockchain.height() + 1;
+        let block_number = self.blockchain.block_number() + 1;
         let new_view_number = state.view_number + 1;
         let message = ViewChange {
             block_number,
@@ -737,7 +738,7 @@ impl Validator {
 
         // If we are not at the head of the chain, ignore this.
         // This may happen if a new block has been produced due to the async call.
-        if self.blockchain.height() + 1 != block_number {
+        if self.blockchain.block_number() + 1 != block_number {
             trace!("Validator was too slow producing the next block.");
             return;
         }
@@ -777,7 +778,7 @@ impl Validator {
 
         // If we are not at the head of the chain, ignore this.
         // This may happen if a new block has been produced due to the async call.
-        if self.blockchain.height() + 1 != block_number {
+        if self.blockchain.block_number() + 1 != block_number {
             trace!("Validator was too slow producing the next block.");
             return;
         }

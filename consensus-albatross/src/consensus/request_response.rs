@@ -35,7 +35,11 @@ impl<N: Network> Consensus<N> {
                 let network_info = NetworkInfo::from_network_id(blockchain.network_id());
                 let mut start_block_hash = network_info.genesis_hash().clone();
                 for locator in msg.locators.iter() {
-                    if blockchain.get_block(locator, false, false).is_some() {
+                    if blockchain
+                        .chain_store
+                        .get_block(locator, false, None)
+                        .is_some()
+                    {
                         // We found a block, ignore remaining block locator hashes.
                         start_block_hash = locator.clone();
                         break;
@@ -46,18 +50,22 @@ impl<N: Network> Consensus<N> {
                 // after the identified block on the main chain.
                 let blocks = match msg.filter {
                     RequestBlockHashesFilter::ElectionOnly => blockchain
+                        .chain_store
                         .get_election_blocks(
                             &start_block_hash,
                             msg.max_blocks as u32,
                             false,
                             Direction::Forward,
+                            false,
+                            None,
                         )
                         .unwrap(), // We made sure that start_block_hash is on our chain.
-                    RequestBlockHashesFilter::All => blockchain.get_blocks(
+                    RequestBlockHashesFilter::All => blockchain.chain_store.get_blocks(
                         &start_block_hash,
                         msg.max_blocks as u32,
                         false,
                         Direction::Forward,
+                        None,
                     ),
                 };
 
@@ -82,7 +90,9 @@ impl<N: Network> Consensus<N> {
                     peer.id()
                 );
 
-                if let Some(Block::Macro(block)) = blockchain.get_block(&msg.hash, false, true) {
+                if let Some(Block::Macro(block)) =
+                    blockchain.chain_store.get_block(&msg.hash, true, None)
+                {
                     let epoch = policy::epoch_at(block.header.block_number);
                     let response = if let Some(transactions) =
                         blockchain.get_epoch_transactions(epoch, None)

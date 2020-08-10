@@ -47,7 +47,7 @@ async fn peers_can_sync() {
 
         let block = sign_macro_block(&keypair, proposal, Some(extrinsics));
         assert_eq!(
-            blockchain1.push_block(Block::Macro(block)),
+            blockchain1.push(Block::Macro(block)),
             Ok(PushResult::Extended)
         );
     }
@@ -119,7 +119,13 @@ async fn peers_can_sync() {
     for i in 1..4 {
         consensus3
             .blockchain
-            .push(consensus1.blockchain.get_block_at(i, true).unwrap())
+            .push(
+                consensus1
+                    .blockchain
+                    .chain_store
+                    .get_block_at(i, true, None)
+                    .unwrap(),
+            )
             .unwrap();
     }
 

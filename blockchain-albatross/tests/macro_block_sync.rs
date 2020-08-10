@@ -54,7 +54,7 @@ fn produce_macro_blocks(num_macro: usize, producer: &BlockProducer, blockchain: 
 
         let block = sign_macro_block(proposal, extrinsics);
         assert_eq!(
-            blockchain.push_block(Block::Macro(block)),
+            blockchain.push(Block::Macro(block)),
             Ok(PushResult::Extended)
         );
     }
@@ -107,7 +107,8 @@ fn it_can_sync_macro_blocks() {
     produce_macro_blocks(2, &producer, &blockchain);
 
     let macro_blocks = blockchain
-        .get_macro_blocks(&genesis_hash, 10, true, Direction::Forward)
+        .chain_store
+        .get_macro_blocks(&genesis_hash, 10, true, Direction::Forward, false, None)
         .unwrap();
     assert_eq!(macro_blocks.len(), 2);
 

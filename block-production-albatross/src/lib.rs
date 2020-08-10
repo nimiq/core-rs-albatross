@@ -143,9 +143,9 @@ impl BlockProducer {
     pub fn next_macro_extrinsics(&self) -> MacroBody {
         let slashed_set = self
             .blockchain
-            .slashed_set_at(self.blockchain.height() + 1)
+            .slashed_set_at(self.blockchain.block_number() + 1)
             .expect("Missing previous block for block production")
-            .next_slashed_set(self.blockchain.height() + 1);
+            .next_slashed_set(self.blockchain.block_number() + 1);
 
         // TODO: Compute the history root and the validator list?
         MacroBody::from_slashed_set(
@@ -182,7 +182,11 @@ impl BlockProducer {
         self.blockchain
             .state()
             .accounts()
-            .collect_receipts(&transactions, &inherents, self.blockchain.height() + 1)
+            .collect_receipts(
+                &transactions,
+                &inherents,
+                self.blockchain.block_number() + 1,
+            )
             .expect("Failed to collect receipts during block production");
 
         // Sort the transactions.
@@ -204,7 +208,7 @@ impl BlockProducer {
         extrinsics: &MacroBody,
     ) -> MacroHeader {
         // Calculate the block number. It is simply the previous block number incremented by one.
-        let block_number = self.blockchain.height() + 1;
+        let block_number = self.blockchain.block_number() + 1;
 
         // Calculate the timestamp. It must be greater than or equal to the previous block
         // timestamp (i.e. time must not go back).
@@ -319,7 +323,7 @@ impl BlockProducer {
         view_changes: &Option<ViewChanges>,
     ) -> MicroHeader {
         // Calculate the block number. It is simply the previous block number incremented by one.
-        let block_number = self.blockchain.height() + 1;
+        let block_number = self.blockchain.block_number() + 1;
 
         // Calculate the timestamp. It must be greater than or equal to the previous block
         // timestamp (i.e. time must not go back).
@@ -490,7 +494,7 @@ pub mod test_utils {
 
             let block = sign_macro_block(&producer.validator_key, proposal, Some(extrinsics));
             assert_eq!(
-                blockchain.push_block(Block::Macro(block)),
+                blockchain.push(Block::Macro(block)),
                 Ok(PushResult::Extended)
             );
         }

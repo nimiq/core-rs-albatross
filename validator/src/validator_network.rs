@@ -613,7 +613,7 @@ impl ValidatorNetwork {
             Arc::clone(&self.validators),
         );
 
-        let chain_height = self.blockchain.height();
+        let chain_height = self.blockchain.block_number();
         let buffered = !is_macro_block_at(chain_height + 1);
 
         // Check validity if proposal not buffered

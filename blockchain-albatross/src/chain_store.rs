@@ -470,9 +470,9 @@ impl ChainStore {
         &self,
         start_block_hash: &Blake2bHash,
         count: u32,
-        election_blocks_only: bool,
         include_body: bool,
         direction: Direction,
+        election_blocks_only: bool,
         txn_option: Option<&Transaction>,
     ) -> Option<Vec<Block>> {
         match direction {

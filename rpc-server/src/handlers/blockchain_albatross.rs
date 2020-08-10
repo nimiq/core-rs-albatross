@@ -40,12 +40,12 @@ impl BlockchainAlbatrossHandler {
 
     /// Returns the current epoch number.
     pub(crate) fn epoch_number(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        Ok(policy::epoch_at(self.blockchain.height()).into())
+        Ok(policy::epoch_at(self.blockchain.block_number()).into())
     }
 
     /// Returns the current batch number.
     pub(crate) fn batch_number(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        Ok(policy::batch_at(self.blockchain.height()).into())
+        Ok(policy::batch_at(self.blockchain.block_number()).into())
     }
 
     /// Returns a block object for a block hash.
@@ -162,7 +162,8 @@ impl BlockchainAlbatrossHandler {
         } else {
             let block = self
                 .blockchain
-                .get_block_at(block_number, true)
+                .chain_store
+                .get_block_at(block_number, true, None)
                 .ok_or(object! {"message" => "Unknown block"})?;
             block.view_number()
         };
@@ -393,7 +394,7 @@ impl BlockchainAlbatrossHandler {
 
     fn block_to_obj(&self, block: &Block, include_transactions: bool) -> JsonValue {
         let hash = block.hash().to_hex();
-        let blockchain_height = self.blockchain.height();
+        let blockchain_height = self.blockchain.block_number();
 
         match block {
             Block::Macro(ref block) => {
@@ -403,11 +404,11 @@ impl BlockchainAlbatrossHandler {
                     .justification
                     .as_ref()
                     .map(|pbft_proof| {
-                        if let Some(Block::Macro(election_block)) = self.blockchain.get_block(
-                            &block.header.parent_election_hash,
-                            false,
-                            false,
-                        ) {
+                        if let Some(Block::Macro(election_block)) = self
+                            .blockchain
+                            .chain_store
+                            .get_block(&block.header.parent_election_hash, false, None)
+                        {
                             let validators = election_block
                                 .body
                                 .unwrap()
