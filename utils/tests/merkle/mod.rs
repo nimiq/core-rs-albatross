@@ -6,6 +6,7 @@ use nimiq_utils::merkle::{
 
 const VALUE: &'static str = "merkletree";
 
+pub mod incremental;
 pub mod partial;
 
 #[test]
