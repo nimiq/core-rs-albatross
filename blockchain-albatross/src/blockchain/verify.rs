@@ -1,13 +1,19 @@
 use parking_lot::MappedRwLockReadGuard;
 
-use block::{BlockError, BlockHeader, BlockJustification, BlockType, ViewChange};
+use crate::hash::{Blake2bHash, Hash};
+use block::{
+    BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, ViewChange,
+};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
+use blockchain_base::BlockchainError;
 use bls::PublicKey;
-use database::Transaction;
+use database::Transaction as DBtx;
 use primitives::policy;
+use transaction::Transaction;
 
 use crate::{Blockchain, PushError};
+use std::cmp::Ordering;
 
 /// Verifies blocks
 impl Blockchain {
@@ -15,7 +21,7 @@ impl Blockchain {
         &self,
         header: &BlockHeader,
         intended_slot_owner: &MappedRwLockReadGuard<PublicKey>,
-        txn_opt: Option<&Transaction>,
+        txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         // Check the version
         if header.version() != policy::VERSION {
@@ -90,10 +96,25 @@ impl Blockchain {
         header: &BlockHeader,
         justification_opt: &Option<BlockJustification>,
         intended_slot_owner: &MappedRwLockReadGuard<PublicKey>,
-        txn_opt: Option<&Transaction>,
+        txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
         if let None = justification_opt {
             return Err(PushError::InvalidBlock(BlockError::NoJustification));
+        }
+
+        if let Some(BlockJustification::Macro(justification)) = justification_opt {
+            // Verify PBFT proof.
+            if let Err(e) = justification.verify(
+                header.hash(),
+                &self.current_validators(),
+                policy::TWO_THIRD_SLOTS,
+            ) {
+                warn!(
+                    "Rejecting block - macro block with bad justification: {}",
+                    e
+                );
+                return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+            }
         }
 
         if let Some(BlockJustification::Micro(justification)) = justification_opt {
@@ -161,71 +182,125 @@ impl Blockchain {
             }
         }
 
-        if let Some(BlockJustification::Macro(justification)) = justification_opt {
-            // Verify PBFT proof.
-            if let Err(e) = justification.verify(
-                header.hash(),
-                &self.current_validators(),
-                policy::TWO_THIRD_SLOTS,
-            ) {
-                warn!(
-                    "Rejecting block - macro block with bad justification: {}",
-                    e
-                );
-                return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
+        Ok(())
+    }
+
+    // This is not checking stuff that happens after the state is updated.
+    pub fn verify_block_body(
+        &self,
+        header: &BlockHeader,
+        body_opt: &Option<BlockBody>,
+        txn_opt: Option<&DBtx>,
+    ) -> Result<(), PushError> {
+        if let None = body_opt {
+            return Err(PushError::InvalidBlock(BlockError::MissingBody));
+        }
+
+        if let Some(BlockBody::Macro(body)) = body_opt {
+            if &body.hash::<Blake2bHash>() != header.body_root() {
+                warn!("Rejecting block - Header body hash doesn't match real body hash");
+                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+            }
+
+            // In case of an election block make sure it contains validators
+            if policy::is_election_block_at(header.block_number()) && body.validators.is_none() {
+                return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+            }
+
+            let history_root = self
+                .get_history_root(policy::batch_at(header.block_number()), txn_opt)
+                .ok_or(PushError::BlockchainError(
+                    BlockchainError::FailedLoadingMainChain,
+                ))?;
+
+            if body.history_root != history_root {
+                warn!("Rejecting block - wrong history root");
+                return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
+            }
+        }
+
+        if let Some(BlockBody::Micro(body)) = body_opt {
+            if &body.hash::<Blake2bHash>() != header.body_root() {
+                warn!("Rejecting block - Header body hash doesn't match real body hash");
+                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
+            }
+
+            // Validate fork proofs
+            let mut previous_proof: Option<&ForkProof> = None;
+
+            for proof in &body.fork_proofs {
+                // Ensure proofs are ordered and unique.
+                if let Some(previous) = previous_proof {
+                    match previous.cmp(&proof) {
+                        Ordering::Equal => {
+                            return Err(PushError::InvalidBlock(BlockError::DuplicateForkProof));
+                        }
+                        Ordering::Greater => {
+                            return Err(PushError::InvalidBlock(BlockError::ForkProofsNotOrdered));
+                        }
+                        _ => (),
+                    }
+                }
+
+                // Check that the proof is within the reporting window.
+                if !proof.is_valid_at(header.block_number()) {
+                    return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
+                }
+
+                // Get intended slot owner for that block.
+                let (slot, _) = self
+                    .get_slot_at(
+                        proof.header1.block_number,
+                        proof.header1.view_number,
+                        txn_opt,
+                    )
+                    .ok_or(PushError::InvalidBlock(BlockError::InvalidForkProof))?;
+
+                // Verify fork proof.
+                if proof
+                    .verify(&slot.public_key().uncompress_unchecked())
+                    .is_err()
+                {
+                    warn!("Rejecting block - Bad fork proof: invalid owner signature");
+                    return Err(PushError::InvalidBlock(BlockError::InvalidForkProof));
+                }
+
+                previous_proof = Some(proof);
+            }
+
+            // Verify transactions.
+            let mut previous_tx: Option<&Transaction> = None;
+
+            for tx in &body.transactions {
+                // Ensure transactions are ordered and unique.
+                if let Some(previous) = previous_tx {
+                    match previous.cmp_block_order(tx) {
+                        Ordering::Equal => {
+                            return Err(PushError::InvalidBlock(BlockError::DuplicateTransaction));
+                        }
+                        Ordering::Greater => {
+                            return Err(PushError::InvalidBlock(
+                                BlockError::TransactionsNotOrdered,
+                            ));
+                        }
+                        _ => (),
+                    }
+                }
+
+                // Check that the transaction is within its validity window.
+                if !tx.is_valid_at(header.block_number()) {
+                    return Err(PushError::InvalidBlock(BlockError::ExpiredTransaction));
+                }
+
+                // Check intrinsic transaction invariants.
+                if let Err(e) = tx.verify(self.network_id) {
+                    return Err(PushError::InvalidBlock(BlockError::InvalidTransaction(e)));
+                }
+
+                previous_tx = Some(tx);
             }
         }
 
         Ok(())
     }
-
-    // TODO: Move this check to someplace else!
-    // // In case of an election block make sure it contains validators
-    // if policy::is_election_block_at(header.block_number)
-    //     && body.unwrap_macro().validators.is_none()
-    // {
-    //     return Err(PushError::InvalidSuccessor);
-    // }
-
-    // TODO: Move this check to someplace else!
-    // let history_root = self
-    //     .get_history_root(policy::batch_at(header.block_number), txn_opt)
-    //     .ok_or(PushError::BlockchainError(
-    //         BlockchainError::FailedLoadingMainChain,
-    //     ))?;
-    // if body.unwrap_macro().history_root != history_root {
-    //     warn!("Rejecting block - wrong history root");
-    //     return Err(PushError::InvalidBlock(BlockError::InvalidHistoryRoot));
-    // }
-
-    // TODO: Move this check to someplace else!
-    // // The macro body cannot be None.
-    // if let Some(ref body) = macro_block.body {
-    // let body_hash: Blake2bHash = body.hash();
-    // if body_hash != macro_block.header.body_root {
-    // warn!("Rejecting block - Header body hash doesn't match real body hash");
-    // return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-    //      }
-    // }
-
-    // // TODO: This should be moved to verify.rs
-    // // Validate fork proofs
-    // for fork_proof in &micro_block.body.as_ref().unwrap().fork_proofs {
-    // // NOTE: if this returns None, that means that at least the previous block doesn't
-    // // exist, so that fork proof is invalid anyway.
-    // let (slot, _) = self
-    // .get_slot_at(
-    // fork_proof.header1.block_number,
-    // fork_proof.header1.view_number,
-    // Some(&read_txn),
-    // )
-    // .ok_or(PushError::InvalidSuccessor)?;
-    //
-    // if fork_proof
-    // .verify(&slot.public_key().uncompress_unchecked())
-    // .is_err()
-    // {
-    // warn!("Rejecting block - Bad fork proof: invalid owner signature");
-    // return Err(PushError::InvalidSuccessor);
-    // }}
 }

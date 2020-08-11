@@ -1,16 +1,14 @@
-use std::cmp::Ordering;
 use std::fmt;
 
 use beserial::{Deserialize, Serialize};
 use bls::CompressedSignature;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
-use primitives::networks::NetworkId;
 use transaction::Transaction;
 use vrf::VrfSeed;
 
 use crate::fork_proof::ForkProof;
-use crate::{BlockError, ViewChangeProof};
+use crate::ViewChangeProof;
 
 /// The struct representing a Micro block.
 /// A Micro block, unlike a Macro block, doesn't contain any inherents (data that can be calculated
@@ -79,21 +77,6 @@ impl MicroBlock {
     /// The maximum allowed size, in bytes, for a micro block. Changing this requires a hard fork.
     pub const MAX_SIZE: usize = 100_000;
 
-    /// Function that performs some very basic checks on the block. Passing these tests does not
-    /// guarantee that the block is valid, but failing them guarantees that it is invalid.
-    pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
-        // TODO: Move this to verify.rs
-        if let Some(ref extrinsics) = self.body {
-            extrinsics.verify(self.header.block_number, network_id)?;
-
-            if self.header.body_root != extrinsics.hash() {
-                return Err(BlockError::BodyHashMismatch);
-            }
-        }
-
-        Ok(())
-    }
-
     /// Returns the hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         self.header.hash()
@@ -111,63 +94,6 @@ impl MicroHeader {
 }
 
 impl MicroBody {
-    /// Performs some validity tests on the body. It is not an exhaustive verification.
-    // TODO: Move this to verify.rs
-    pub fn verify(&self, block_height: u32, network_id: NetworkId) -> Result<(), BlockError> {
-        // Verify fork proofs.
-        let mut previous_proof: Option<&ForkProof> = None;
-        for proof in &self.fork_proofs {
-            // Ensure proofs are ordered and unique.
-            if let Some(previous) = previous_proof {
-                match previous.cmp(proof) {
-                    Ordering::Equal => {
-                        return Err(BlockError::DuplicateForkProof);
-                    }
-                    Ordering::Greater => {
-                        return Err(BlockError::ForkProofsNotOrdered);
-                    }
-                    _ => (),
-                }
-            }
-            previous_proof = Some(proof);
-
-            // Check that the proof is within the reporting window.
-            if !proof.is_valid_at(block_height) {
-                return Err(BlockError::InvalidForkProof);
-            }
-        }
-
-        // Verify transactions.
-        let mut previous_tx: Option<&Transaction> = None;
-        for tx in &self.transactions {
-            // Ensure transactions are ordered and unique.
-            if let Some(previous) = previous_tx {
-                match previous.cmp_block_order(tx) {
-                    Ordering::Equal => {
-                        return Err(BlockError::DuplicateTransaction);
-                    }
-                    Ordering::Greater => {
-                        return Err(BlockError::TransactionsNotOrdered);
-                    }
-                    _ => (),
-                }
-            }
-            previous_tx = Some(tx);
-
-            // Check that the transaction is within its validity window.
-            if !tx.is_valid_at(block_height) {
-                return Err(BlockError::ExpiredTransaction);
-            }
-
-            // Check intrinsic transaction invariants.
-            if let Err(e) = tx.verify(network_id) {
-                return Err(BlockError::InvalidTransaction(e));
-            }
-        }
-
-        Ok(())
-    }
-
     /// Returns the metadata size, in bytes, of the body for a Micro block. Basically, the
     /// size of everything in the body that isn't a transaction.
     pub fn get_metadata_size(num_fork_proofs: usize) -> usize {

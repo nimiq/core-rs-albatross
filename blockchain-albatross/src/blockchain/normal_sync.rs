@@ -53,13 +53,6 @@ impl Blockchain {
             return Ok(PushResult::Ignored);
         }
 
-        // Check (sort of) intrinsic block invariants.
-        // TODO: Remove these checks, they should be in verify.rs
-        if let Err(e) = block.verify(self.network_id) {
-            warn!("Rejecting block - verification failed ({:?})", e);
-            return Err(PushError::InvalidBlock(e));
-        }
-
         // Get the intended slot owner.
         let (slot, _) = self
             .get_slot_at(block.block_number(), block.view_number(), Some(&read_txn))

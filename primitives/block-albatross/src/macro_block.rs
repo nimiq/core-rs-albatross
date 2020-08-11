@@ -13,7 +13,6 @@ use vrf::VrfSeed;
 
 use crate::pbft::PbftProof;
 use crate::signed;
-use crate::BlockError;
 
 /// The struct representing a Macro block (can be either checkpoint or election).
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

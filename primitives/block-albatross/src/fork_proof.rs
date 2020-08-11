@@ -46,12 +46,12 @@ impl ForkProof {
     }
 
     pub fn is_valid_at(&self, block_number: u32) -> bool {
-        let given_epoch = policy::epoch_at(block_number);
-        let proof_epoch = policy::epoch_at(self.header1.block_number);
+        let given_batch = policy::batch_at(block_number);
+        let proof_batch = policy::batch_at(self.header1.block_number);
         self.header1.block_number == self.header2.block_number
             && self.header1.view_number == self.header2.view_number
             // XXX Should this be checked at a higher layer?
-            && (proof_epoch == given_epoch || proof_epoch + 1 == given_epoch)
+            && (proof_batch == given_batch || proof_batch + 1 == given_batch)
     }
 
     pub fn block_number(&self) -> u32 {

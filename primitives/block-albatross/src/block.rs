@@ -6,7 +6,7 @@ use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteByte
 use block_base;
 use hash::{Blake2bHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
-use primitives::{coin::Coin, networks::NetworkId};
+use primitives::coin::Coin;
 use transaction::Transaction;
 use vrf::VrfSeed;
 
@@ -32,15 +32,6 @@ pub enum Block {
 }
 
 impl Block {
-    /// Function that performs some very basic checks on the block. Passing these tests does not
-    /// guarantee that the block is valid, but failing them guarantees that it is invalid.
-    pub fn verify(&self, network_id: NetworkId) -> Result<(), BlockError> {
-        match self {
-            Block::Macro(ref block) => Ok(()),
-            Block::Micro(ref block) => block.verify(network_id),
-        }
-    }
-
     /// Returns the type of the block.
     pub fn ty(&self) -> BlockType {
         match self {
@@ -121,6 +112,14 @@ impl Block {
         match self {
             Block::Macro(ref block) => &block.header.state_root,
             Block::Micro(ref block) => &block.header.state_root,
+        }
+    }
+
+    /// Returns the body root of the block.
+    pub fn body_root(&self) -> &Blake2bHash {
+        match self {
+            Block::Macro(ref block) => &block.header.body_root,
+            Block::Micro(ref block) => &block.header.body_root,
         }
     }
 
@@ -394,6 +393,14 @@ impl BlockHeader {
         match self {
             BlockHeader::Macro(ref header) => &header.state_root,
             BlockHeader::Micro(ref header) => &header.state_root,
+        }
+    }
+
+    /// Returns the body root of the block.
+    pub fn body_root(&self) -> &Blake2bHash {
+        match self {
+            BlockHeader::Macro(ref header) => &header.body_root,
+            BlockHeader::Micro(ref header) => &header.body_root,
         }
     }
 

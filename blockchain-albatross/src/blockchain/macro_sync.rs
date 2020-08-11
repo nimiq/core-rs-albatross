@@ -57,12 +57,6 @@ impl Blockchain {
             return Err(PushError::Orphan);
         }
 
-        // Check (sort of) intrinsic block invariants.
-        if let Err(e) = block.verify(self.network_id) {
-            warn!("Rejecting block - verification failed ({:?})", e);
-            return Err(PushError::InvalidBlock(e));
-        }
-
         // Check if the block's immediate predecessor is part of the chain.
         let prev_info = self
             .chain_store

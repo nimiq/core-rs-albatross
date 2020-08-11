@@ -201,7 +201,7 @@ pub enum PushError<BE: BlockError> {
     #[fail(display = "Block is part of an invalid fork")]
     InvalidFork,
 
-    #[fail(display = "Failed to push block onto block chain: {}", _0)]
+    #[fail(display = "Failed to push block onto blockchain: {}", _0)]
     BlockchainError(#[cause] BlockchainError),
 }
 
