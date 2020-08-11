@@ -32,6 +32,7 @@ pub mod pool;
 pub mod signature_aggregation;
 pub mod slash;
 pub mod validator;
+pub mod validator2;
 pub mod validator_agent;
 pub mod validator_info;
 pub mod validator_network;
