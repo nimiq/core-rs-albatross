@@ -1,6 +1,6 @@
 use account::Inherent;
 use accounts::Accounts;
-use block::{Block, BlockError, MicroBlock, ViewChanges};
+use block::{Block, MicroBlock, ViewChanges};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
 use database::WriteTransaction;
@@ -14,9 +14,9 @@ impl Blockchain {
     pub(crate) fn commit_accounts(
         &self,
         state: &BlockchainState,
+        chain_info: &ChainInfo,
         first_view_number: u32,
         txn: &mut WriteTransaction,
-        chain_info: &ChainInfo,
     ) -> Result<(), PushError> {
         let block = &chain_info.head;
 
@@ -78,15 +78,6 @@ impl Blockchain {
             }
         }
 
-        // Verify accounts hash.
-        // TODO: Maybe move this to verify.rs?
-        let accounts_hash = accounts.hash(Some(&txn));
-        trace!("Block state root: {}", block.state_root());
-        trace!("Accounts hash:    {}", accounts_hash);
-        if block.state_root() != &accounts_hash {
-            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
-        }
-
         Ok(())
     }
 
@@ -97,7 +88,6 @@ impl Blockchain {
         micro_block: &MicroBlock,
         prev_view_number: u32,
     ) -> Result<(), PushError> {
-        // TODO: Maybe move this to verify.rs?
         assert_eq!(
             micro_block.header.state_root,
             accounts.hash(Some(&txn)),

@@ -60,6 +60,7 @@ pub struct MacroHeader {
 pub struct MacroBody {
     /// Contains all the information regarding the current validator set, i.e. their validator
     /// public key, their reward address and their assigned validator slots.
+    /// Is only Some when the macro block is an election block.
     pub validators: Option<ValidatorSlots>,
     /// A bitset representing which validator slots had their reward slashed when this block was
     /// produced. It is used later on for reward distribution.

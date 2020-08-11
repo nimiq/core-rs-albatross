@@ -3,11 +3,11 @@ use std::cmp::Ordering;
 
 use parking_lot::RwLockUpgradableReadGuard;
 
-use block::{Block, BlockError, BlockType, ForkProof, MacroBody};
+use block::{Block, BlockType, ForkProof};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
 use database::{ReadTransaction, Transaction, WriteTransaction};
-use hash::{Blake2bHash, Hash};
+use hash::Blake2bHash;
 use primitives::policy;
 
 use crate::chain_info::ChainInfo;
@@ -79,10 +79,18 @@ impl Blockchain {
             return Err(e);
         }
 
+        // Check the body.
+        if let Err(e) = self.verify_block_body(&block.header(), &block.body(), Some(&read_txn)) {
+            warn!("Rejecting block - Bad body");
+            return Err(e);
+        }
+
+        // Detect forks.
         if let Block::Micro(ref micro_block) = block {
-            // TODO: This entire thing is a fork detector. Should move into its own function.
             // Check if there are two blocks in the same slot and with the same height. Since we already
             // verified the validator for the current slot, this is enough to check for fork proofs.
+            // Note: We don't verify the justifications for the other blocks here, since they had to
+            // already be verified in order to be added to the blockchain.
             // Count the micro blocks after the last macro block.
             let mut micro_blocks: Vec<Block> =
                 self.chain_store
@@ -125,7 +133,6 @@ impl Blockchain {
             }
         }
 
-        // TODO: Does this belong together with the rest of the fork proof code???
         let fork_proof_infos = ForkProofInfos::fetch(&block, &self.chain_store, Some(&read_txn))
             .map_err(|err| {
                 warn!("Rejecting block - slash commit failed: {:?}", err);
@@ -162,7 +169,9 @@ impl Blockchain {
             chain_info.head.block_number(),
             chain_info.head.view_number()
         );
+
         let mut txn = WriteTransaction::new(&self.env);
+
         self.chain_store
             .put_chain_info(&mut txn, &chain_info.head.hash(), &chain_info, true);
         txn.commit();
@@ -177,10 +186,11 @@ impl Blockchain {
         mut prev_info: ChainInfo,
     ) -> Result<PushResult, PushError> {
         let mut txn = WriteTransaction::new(&self.env);
+
         let state = self.state.read();
 
         // Check transactions against TransactionCache to prevent replay.
-        // XXX This is technically unnecessary for macro blocks, but it doesn't hurt either.
+        // This is technically unnecessary for macro blocks, but it doesn't hurt either.
         if state.transaction_cache.contains_any(&chain_info.head) {
             warn!("Rejecting block - transaction already included");
             txn.abort();
@@ -190,9 +200,9 @@ impl Blockchain {
         // Commit block to AccountsTree.
         if let Err(e) = self.commit_accounts(
             &state,
+            &chain_info,
             prev_info.head.next_view_number(),
             &mut txn,
-            &chain_info,
         ) {
             warn!("Rejecting block - commit failed: {:?}", e);
             txn.abort();
@@ -201,41 +211,13 @@ impl Blockchain {
             return Err(e);
         }
 
-        drop(state);
-
-        // Only now can we check the macro body.
-        let mut is_election_block = false;
-        if let Block::Macro(ref mut macro_block) = &mut chain_info.head {
-            is_election_block = macro_block.is_election_block();
-
-            if is_election_block {
-                let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
-                if let Some(ref block_slots) =
-                    macro_block.body.as_ref().expect("Missing body!").validators
-                {
-                    if &slots.validator_slots != block_slots {
-                        warn!("Rejecting block - Validators don't match real validators");
-                        return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                    }
-                } else {
-                    warn!("Rejecting block - Validators missing");
-                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
-                }
-            }
-
-            // The final list of slashes from the previous epoch.
-            let slashed_set = chain_info.slashed_set.prev_epoch_state.clone();
-            // Macro blocks which do not have an election also need to keep track of the slashed set of the current
-            // epoch. Macro blocks with an election always have a current_slashed_set of None, as slashes are reset
-            // on election.
-            let current_slashed_set = chain_info.slashed_set.current_epoch();
-            let computed_extrinsics = MacroBody::from_slashed_set(slashed_set, current_slashed_set);
-            let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();
-            if computed_extrinsics_hash != macro_block.header.body_root {
-                warn!("Rejecting block - Extrinsics hash doesn't match real extrinsics hash");
-                return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
-            }
+        // Verify the state against the block.
+        if let Err(e) = self.verify_block_state(&state, &chain_info, Some(&txn)) {
+            warn!("Rejecting block - Bad state");
+            return Err(e);
         }
+
+        drop(state);
 
         chain_info.on_main_chain = true;
         prev_info.main_chain_successor = Some(chain_info.head.hash());
@@ -254,6 +236,8 @@ impl Blockchain {
         let mut state = self.state.write();
         state.transaction_cache.push_block(&chain_info.head);
 
+        let is_election_block = policy::is_election_block_at(self.block_number());
+
         if let Block::Macro(ref macro_block) = chain_info.head {
             state.macro_info = chain_info.clone();
             state.macro_head_hash = block_hash.clone();
@@ -262,11 +246,11 @@ impl Blockchain {
                 state.election_head = macro_block.clone();
                 state.election_head_hash = block_hash.clone();
 
-                let slots = state.current_slots.take().unwrap();
-                state.previous_slots.replace(slots);
+                let old_slots = state.current_slots.take().unwrap();
+                state.previous_slots.replace(old_slots);
 
-                let slot = macro_block.get_slots();
-                state.current_slots.replace(slot);
+                let new_slots = macro_block.get_slots();
+                state.current_slots.replace(new_slots);
             }
         }
 
@@ -308,7 +292,9 @@ impl Blockchain {
         let read_txn = ReadTransaction::new(&self.env);
 
         let mut fork_chain: Vec<(Blake2bHash, ChainInfo)> = vec![];
+
         let mut current: (Blake2bHash, ChainInfo) = (block_hash, chain_info);
+
         while !current.1.on_main_chain {
             // A fork can't contain a macro block. We already received that macro block, thus it must be on our
             // main chain.
@@ -319,12 +305,14 @@ impl Blockchain {
             );
 
             let prev_hash = current.1.head.parent_hash().clone();
+
             let prev_info = self
                 .chain_store
                 .get_chain_info(&prev_hash, true, Some(&read_txn))
                 .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
             fork_chain.push(current);
+
             current = (prev_hash, prev_info);
         }
 
@@ -344,7 +332,7 @@ impl Blockchain {
 
         let state = self.state.upgradable_read();
         cache_txn = state.transaction_cache.clone();
-        // XXX Get rid of the .clone() here.
+        // TODO: Get rid of the .clone() here.
         current = (state.head_hash.clone(), state.main_chain.clone());
 
         // Check if ancestor is in current epoch
@@ -356,11 +344,13 @@ impl Blockchain {
         while current.0 != ancestor.0 {
             match current.1.head {
                 Block::Macro(_) => {
-                    // Macro blocks are final, we can't revert across them. This should be checked before we start reverting
+                    // Macro blocks are final, we can't revert across them. This should be checked
+                    // before we start reverting.
                     panic!("Trying to rebranch across macro block");
                 }
                 Block::Micro(ref micro_block) => {
                     let prev_hash = micro_block.header.parent_hash.clone();
+
                     let prev_info = self.chain_store
                         .get_chain_info(&prev_hash, true, Some(&read_txn))
                         .expect("Corrupted store: Failed to find main chain predecessor while rebranching");
@@ -381,6 +371,7 @@ impl Blockchain {
                     );
 
                     revert_chain.push(current);
+
                     current = (prev_hash, prev_info);
                 }
             }
@@ -388,20 +379,24 @@ impl Blockchain {
 
         // Fetch missing blocks for TransactionCache.
         assert!(cache_txn.is_empty() || cache_txn.head_hash() == ancestor.0);
+
         let start_hash = if cache_txn.is_empty() {
             ancestor.1.main_chain_successor.unwrap()
         } else {
             cache_txn.tail_hash()
         };
+
         let blocks = self.chain_store.get_blocks_backward(
             &start_hash,
             cache_txn.missing_blocks(),
             true,
             Some(&read_txn),
         );
+
         for block in blocks.iter() {
             cache_txn.prepend_block(block)
         }
+
         assert_eq!(
             cache_txn.missing_blocks(),
             policy::TRANSACTION_VALIDITY_WINDOW_ALBATROSS
@@ -410,7 +405,9 @@ impl Blockchain {
 
         // Check each fork block against TransactionCache & commit to AccountsTree and SlashRegistry.
         let mut prev_view_number = ancestor.1.head.next_view_number();
+
         let mut fork_iter = fork_chain.iter().rev();
+
         while let Some(fork_block) = fork_iter.next() {
             match fork_block.1.head {
                 Block::Macro(_) => unreachable!(),
@@ -418,9 +415,9 @@ impl Blockchain {
                     let result = if !cache_txn.contains_any(&fork_block.1.head) {
                         self.commit_accounts(
                             &state,
+                            &fork_block.1,
                             prev_view_number,
                             &mut write_txn,
-                            &fork_block.1,
                         )
                     } else {
                         Err(PushError::DuplicateTransaction)
@@ -432,6 +429,7 @@ impl Blockchain {
 
                         // Delete invalid fork blocks from store.
                         let mut write_txn = WriteTransaction::new(&self.env);
+
                         for block in vec![fork_block].into_iter().chain(fork_iter) {
                             self.chain_store.remove_chain_info(
                                 &mut write_txn,
@@ -439,12 +437,14 @@ impl Blockchain {
                                 micro_block.header.block_number,
                             )
                         }
+
                         write_txn.commit();
 
                         return Err(PushError::InvalidFork);
                     }
 
                     cache_txn.push_block(&fork_block.1.head);
+
                     prev_view_number = fork_block.1.head.next_view_number();
                 }
             }
@@ -460,7 +460,9 @@ impl Blockchain {
         // Unset onMainChain flag / mainChainSuccessor on the current main chain up to (excluding) the common ancestor.
         for reverted_block in revert_chain.iter_mut() {
             reverted_block.1.on_main_chain = false;
+
             reverted_block.1.main_chain_successor = None;
+
             self.chain_store.put_chain_info(
                 &mut write_txn,
                 &reverted_block.0,
@@ -493,23 +495,32 @@ impl Blockchain {
 
         // Commit transaction & update head.
         self.chain_store.set_head(&mut write_txn, &fork_chain[0].0);
+
         state.transaction_cache = cache_txn;
+
         state.main_chain = fork_chain[0].1.clone();
+
         state.head_hash = fork_chain[0].0.clone();
+
         write_txn.commit();
 
         // Give up lock before notifying.
         drop(state);
 
         let mut reverted_blocks = Vec::with_capacity(revert_chain.len());
+
         for (hash, chain_info) in revert_chain.into_iter().rev() {
             reverted_blocks.push((hash, chain_info.head));
         }
+
         let mut adopted_blocks = Vec::with_capacity(fork_chain.len());
+
         for (hash, chain_info) in fork_chain.into_iter().rev() {
             adopted_blocks.push((hash, chain_info.head));
         }
+
         let event = BlockchainEvent::Rebranched(reverted_blocks, adopted_blocks);
+
         self.notifier.read().notify(event);
 
         Ok(PushResult::Rebranched)
@@ -523,6 +534,7 @@ impl Blockchain {
         txn_option: Option<&Transaction>,
     ) -> ChainOrdering {
         let mut chain_order = ChainOrdering::Unknown;
+
         if block.parent_hash() == &self.head_hash() {
             chain_order = ChainOrdering::Extend;
         } else {
@@ -535,9 +547,12 @@ impl Blockchain {
             // If there is a malicious fork, it might happen that the two view numbers before
             // the branch are the same. Then, we need to follow and compare.
             let mut view_numbers = vec![block.view_number()];
+
             let mut current: (Blake2bHash, ChainInfo) =
                 (block.hash(), ChainInfo::dummy(block.clone()));
+
             let mut prev: (Blake2bHash, ChainInfo) = (prev_info.head.hash(), prev_info.clone());
+
             while !prev.1.on_main_chain {
                 // Macro blocks are final
                 assert_eq!(
@@ -549,12 +564,14 @@ impl Blockchain {
                 view_numbers.push(prev.1.head.view_number());
 
                 let prev_hash = prev.1.head.parent_hash().clone();
+
                 let prev_info = self
                     .chain_store
                     .get_chain_info(&prev_hash, false, txn_option)
                     .expect("Corrupted store: Failed to find fork predecessor while rebranching");
 
                 current = prev;
+
                 prev = (prev_hash, prev_info);
             }
 
@@ -572,6 +589,7 @@ impl Blockchain {
             for h in current_height..=min_height {
                 // Take corresponding view number from branch.
                 let branch_view_number = view_numbers.pop().unwrap();
+
                 // And calculate equivalent on main chain.
                 let current_on_main_chain = self
                     .chain_store

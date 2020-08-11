@@ -2,7 +2,7 @@ use parking_lot::MappedRwLockReadGuard;
 
 use crate::hash::{Blake2bHash, Hash};
 use block::{
-    BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, ViewChange,
+    Block, BlockBody, BlockError, BlockHeader, BlockJustification, BlockType, ForkProof, ViewChange,
 };
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -12,6 +12,8 @@ use database::Transaction as DBtx;
 use primitives::policy;
 use transaction::Transaction;
 
+use crate::blockchain_state::BlockchainState;
+use crate::chain_info::ChainInfo;
 use crate::{Blockchain, PushError};
 use std::cmp::Ordering;
 
@@ -185,7 +187,7 @@ impl Blockchain {
         Ok(())
     }
 
-    // This is not checking stuff that happens after the state is updated.
+    // This does not check anything that depends on the state. Ex: If an account has enough funds.
     pub fn verify_block_body(
         &self,
         header: &BlockHeader,
@@ -298,6 +300,68 @@ impl Blockchain {
                 }
 
                 previous_tx = Some(tx);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn verify_block_state(
+        &self,
+        state: &BlockchainState,
+        chain_info: &ChainInfo,
+        txn_opt: Option<&DBtx>,
+    ) -> Result<(), PushError> {
+        let accounts = &state.accounts;
+
+        let block = &chain_info.head;
+
+        // Verify accounts hash.
+        let accounts_hash = accounts.hash(txn_opt);
+
+        trace!("Block state root: {}", block.state_root());
+
+        trace!("Accounts hash:    {}", accounts_hash);
+
+        if block.state_root() != &accounts_hash {
+            return Err(PushError::InvalidBlock(BlockError::AccountsHashMismatch));
+        }
+
+        // For macro blocks we have additional checks.
+        if let Block::Macro(macro_block) = block {
+            let staking_contract = self.get_staking_contract();
+
+            if staking_contract.previous_lost_rewards()
+                != macro_block.body.as_ref().unwrap().lost_reward_set
+            {
+                warn!("Rejecting block - Lost rewards set doesn't match real lost rewards set");
+                return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+            }
+
+            if staking_contract.previous_disabled_slots()
+                != macro_block.body.as_ref().unwrap().disabled_set
+            {
+                warn!("Rejecting block - Disabled set doesn't match real disabled set");
+                return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+            }
+
+            if macro_block.is_election_block() {
+                let real_validators = &self
+                    .next_slots(&macro_block.header.seed, txn_opt)
+                    .validator_slots;
+
+                let block_validators = macro_block
+                    .body
+                    .as_ref()
+                    .unwrap()
+                    .validators
+                    .as_ref()
+                    .unwrap();
+
+                if real_validators != block_validators {
+                    warn!("Rejecting block - Validators don't match real validators");
+                    return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
+                }
             }
         }
 
