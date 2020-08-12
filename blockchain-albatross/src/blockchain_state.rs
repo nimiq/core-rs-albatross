@@ -2,7 +2,6 @@ use accounts::Accounts;
 use block::MacroBlock;
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
-use collections::bitset::BitSet;
 use hash::Blake2bHash;
 use primitives::slot::{Slots, ValidatorSlots};
 
@@ -55,16 +54,6 @@ impl BlockchainState {
 
     pub fn last_validators(&self) -> Option<&ValidatorSlots> {
         Some(&self.previous_slots.as_ref()?.validator_slots)
-    }
-
-    /// This includes fork proof slashes and view changes.
-    pub fn current_slashed_set(&self) -> BitSet {
-        self.main_chain.slashed_set.current_epoch()
-    }
-
-    /// This includes fork proof slashes and view changes.
-    pub fn last_slashed_set(&self) -> BitSet {
-        self.main_chain.slashed_set.prev_epoch_state.clone()
     }
 
     pub fn main_chain(&self) -> &ChainInfo {

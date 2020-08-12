@@ -14,6 +14,7 @@ struct BlockDescriptor {
 impl<'a> From<&'a Block> for BlockDescriptor {
     fn from(block: &'a Block) -> Self {
         let transactions = block.transactions();
+
         let hashes = transactions
             .map(|txs| txs.iter().map(Hash::hash).collect())
             .unwrap_or_else(|| vec![]);
@@ -54,6 +55,7 @@ impl TransactionCache {
 
     pub fn contains_any(&self, block: &Block) -> bool {
         let transactions = block.transactions();
+
         if transactions.is_none() {
             return false;
         }
@@ -87,8 +89,10 @@ impl TransactionCache {
 
     pub fn revert_block(&mut self, block: &Block) {
         let descriptor = self.block_order.pop_back();
+
         if let Some(descriptor) = descriptor {
             assert_eq!(descriptor.hash, block.hash());
+
             for hash in &descriptor.transaction_hashes {
                 self.transaction_hashes.remove(hash);
             }
@@ -100,18 +104,22 @@ impl TransactionCache {
             self.block_order.is_empty()
                 || block.hash() == self.block_order.front().as_ref().unwrap().prev_hash
         );
+
         assert!(self.missing_blocks() > 0);
 
         let descriptor = BlockDescriptor::from(block);
+
         for hash in &descriptor.transaction_hashes {
             let is_new = self.transaction_hashes.insert(hash.clone());
             assert!(is_new);
         }
+
         self.block_order.push_front(descriptor);
     }
 
     fn shift_block(&mut self) {
         let descriptor_opt = self.block_order.pop_front();
+
         if let Some(descriptor) = descriptor_opt {
             for hash in &descriptor.transaction_hashes {
                 self.transaction_hashes.remove(hash);

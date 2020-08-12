@@ -272,9 +272,7 @@ impl BlockProducer {
                 body: None,
             });
             let prev_chain_info = state.main_chain();
-            let fork_proof_infos = ForkProofInfos::empty();
-            let chain_info =
-                ChainInfo::new(dummy_macro_block, prev_chain_info, &fork_proof_infos).unwrap();
+            let chain_info = ChainInfo::new(dummy_macro_block, prev_chain_info).unwrap();
             // For election blocks add reward and finalize epoch inherents.
             inherents.append(&mut self.blockchain.finalize_previous_batch(&state, &chain_info));
         }

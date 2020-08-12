@@ -11,7 +11,6 @@ use transaction::Transaction as BlockchainTransaction;
 use utils::merkle;
 
 use crate::chain_info::ChainInfo;
-use crate::slots::SlashedSet;
 use crate::{Blockchain, BlockchainEvent, PushError, PushResult};
 
 // TODO: This needs to be redone after Pascal finishes the history root code.
@@ -137,11 +136,6 @@ impl Blockchain {
         let chain_info = ChainInfo {
             on_main_chain: false,
             main_chain_successor: None,
-            slashed_set: SlashedSet {
-                view_change_epoch_state: macro_block.body.as_ref().unwrap().lost_reward_set.clone(),
-                fork_proof_epoch_state: Default::default(),
-                prev_epoch_state: macro_block.body.as_ref().unwrap().lost_reward_set.clone(),
-            },
             head: block,
             cum_tx_fees: transactions.iter().map(|tx| tx.fee).sum(),
         };

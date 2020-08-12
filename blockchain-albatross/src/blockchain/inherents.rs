@@ -49,13 +49,11 @@ impl Blockchain {
             .validator_registry_address()
             .expect("No ValidatorRegistry");
 
-        let (producer, slot) = self
-            .get_slot_at(
-                fork_proof.header1.block_number,
-                fork_proof.header1.view_number,
-                txn_option,
-            )
-            .unwrap();
+        let (producer, slot) = self.get_slot_owner_at(
+            fork_proof.header1.block_number,
+            fork_proof.header1.view_number,
+            txn_option,
+        );
 
         let slot = SlashedSlot {
             slot,
@@ -83,9 +81,8 @@ impl Blockchain {
 
         (view_changes.first_view_number..view_changes.last_view_number)
             .map(|view_number| {
-                let (producer, slot) = self
-                    .get_slot_at(view_changes.block_number, view_number, txn_option)
-                    .unwrap();
+                let (producer, slot) =
+                    self.get_slot_owner_at(view_changes.block_number, view_number, txn_option);
 
                 debug!("Slash inherent: view change: {}", producer.public_key());
 

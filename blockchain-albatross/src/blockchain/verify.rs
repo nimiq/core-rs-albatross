@@ -250,13 +250,11 @@ impl Blockchain {
                 }
 
                 // Get intended slot owner for that block.
-                let (slot, _) = self
-                    .get_slot_at(
-                        proof.header1.block_number,
-                        proof.header1.view_number,
-                        txn_opt,
-                    )
-                    .ok_or(PushError::InvalidBlock(BlockError::InvalidForkProof))?;
+                let (slot, _) = self.get_slot_owner_at(
+                    proof.header1.block_number,
+                    proof.header1.view_number,
+                    txn_opt,
+                );
 
                 // Verify fork proof.
                 if proof

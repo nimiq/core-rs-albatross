@@ -198,19 +198,23 @@ impl BlockchainAlbatrossHandler {
     /// }
     /// ```
     pub(crate) fn slot_state(&self, _params: &[JsonValue]) -> Result<JsonValue, JsonValue> {
-        let state = self.blockchain.state();
+        let staking_contract = self.blockchain.get_staking_contract();
 
-        let current_slashed_set = JsonValue::Array(
-            state
-                .current_slashed_set()
+        let current_slashed_set =
+            staking_contract.current_lost_rewards() & staking_contract.current_disabled_slots();
+
+        let previous_slashed_set =
+            staking_contract.previous_lost_rewards() & staking_contract.previous_disabled_slots();
+
+        let current_slashed_set_arr = JsonValue::Array(
+            current_slashed_set
                 .iter()
                 .map(|slot_number| JsonValue::Number(slot_number.into()))
                 .collect(),
         );
 
-        let last_slashed_set = JsonValue::Array(
-            state
-                .last_slashed_set()
+        let previous_slashed_set_arr = JsonValue::Array(
+            previous_slashed_set
                 .iter()
                 .map(|slot_number| JsonValue::Number(slot_number.into()))
                 .collect(),
@@ -218,8 +222,8 @@ impl BlockchainAlbatrossHandler {
 
         Ok(object! {
             "blockNumber" => state.block_number(),
-            "currentSlashedSlotNumbers" => current_slashed_set,
-            "lastSlashedSlotNumbers" => last_slashed_set,
+            "currentSlashedSlotNumbers" => current_slashed_set_arr,
+            "lastSlashedSlotNumbers" => previous_slashed_set_arr,
         })
     }
 

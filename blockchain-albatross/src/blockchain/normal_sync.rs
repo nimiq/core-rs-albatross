@@ -1,17 +1,13 @@
-use std::cmp;
-use std::cmp::Ordering;
-
 use parking_lot::RwLockUpgradableReadGuard;
 
 use block::{Block, BlockType, ForkProof};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
-use database::{ReadTransaction, Transaction, WriteTransaction};
+use database::{ReadTransaction, WriteTransaction};
 use hash::Blake2bHash;
 use primitives::policy;
 
 use crate::chain_info::ChainInfo;
-use crate::slots::ForkProofInfos;
 use crate::{Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError, PushResult};
 
 /// Everything needed to push a block into the chain.
@@ -54,9 +50,8 @@ impl Blockchain {
         }
 
         // Get the intended slot owner.
-        let (slot, _) = self
-            .get_slot_at(block.block_number(), block.view_number(), Some(&read_txn))
-            .unwrap();
+        let (slot, _) =
+            self.get_slot_owner_at(block.block_number(), block.view_number(), Some(&read_txn));
 
         let intended_slot_owner = slot.public_key().uncompress_unchecked();
 
@@ -133,13 +128,7 @@ impl Blockchain {
             }
         }
 
-        let fork_proof_infos = ForkProofInfos::fetch(&block, &self.chain_store, Some(&read_txn))
-            .map_err(|err| {
-                warn!("Rejecting block - slash commit failed: {:?}", err);
-                PushError::InvalidSuccessor
-            })?;
-
-        let chain_info = match ChainInfo::new(block, &prev_info, &fork_proof_infos) {
+        let chain_info = match ChainInfo::new(block, &prev_info) {
             Ok(info) => info,
             Err(err) => {
                 warn!("Rejecting block - slash commit failed: {:?}", err);
@@ -524,108 +513,5 @@ impl Blockchain {
         self.notifier.read().notify(event);
 
         Ok(PushResult::Rebranched)
-    }
-
-    /// Calculate chain ordering.
-    fn order_chains(
-        &self,
-        block: &Block,
-        prev_info: &ChainInfo,
-        txn_option: Option<&Transaction>,
-    ) -> ChainOrdering {
-        let mut chain_order = ChainOrdering::Unknown;
-
-        if block.parent_hash() == &self.head_hash() {
-            chain_order = ChainOrdering::Extend;
-        } else {
-            // To compare two blocks, we need to compare the view number at the intersection.
-            //   [2] - [2] - [3] - [4]
-            //      \- [3] - [3] - [3]
-            // The example above illustrates that you actually want to choose the lower chain,
-            // since its view change happened way earlier.
-            // Let's thus find the first block on the branch (not on the main chain).
-            // If there is a malicious fork, it might happen that the two view numbers before
-            // the branch are the same. Then, we need to follow and compare.
-            let mut view_numbers = vec![block.view_number()];
-
-            let mut current: (Blake2bHash, ChainInfo) =
-                (block.hash(), ChainInfo::dummy(block.clone()));
-
-            let mut prev: (Blake2bHash, ChainInfo) = (prev_info.head.hash(), prev_info.clone());
-
-            while !prev.1.on_main_chain {
-                // Macro blocks are final
-                assert_eq!(
-                    prev.1.head.ty(),
-                    BlockType::Micro,
-                    "Trying to rebranch across macro block"
-                );
-
-                view_numbers.push(prev.1.head.view_number());
-
-                let prev_hash = prev.1.head.parent_hash().clone();
-
-                let prev_info = self
-                    .chain_store
-                    .get_chain_info(&prev_hash, false, txn_option)
-                    .expect("Corrupted store: Failed to find fork predecessor while rebranching");
-
-                current = prev;
-
-                prev = (prev_hash, prev_info);
-            }
-
-            // Now follow the view numbers back until you find one that differs.
-            // Example:
-            // [0] - [0] - [1]  *correct chain*
-            //    \- [0] - [0]
-            // Otherwise take the longest:
-            // [0] - [0] - [1] - [0]  *correct chain*
-            //    \- [0] - [1]
-            let current_height = current.1.head.block_number();
-            let min_height = cmp::min(self.block_number(), block.block_number());
-
-            // Iterate over common block heights starting from right after the intersection.
-            for h in current_height..=min_height {
-                // Take corresponding view number from branch.
-                let branch_view_number = view_numbers.pop().unwrap();
-
-                // And calculate equivalent on main chain.
-                let current_on_main_chain = self
-                    .chain_store
-                    .get_block_at(h, false, txn_option)
-                    .expect("Corrupted store: Failed to find main chain equivalent of fork");
-
-                // Choose better one as early as possible.
-                match current_on_main_chain.view_number().cmp(&branch_view_number) {
-                    Ordering::Less => {
-                        chain_order = ChainOrdering::Better;
-                        break;
-                    }
-                    Ordering::Greater => {
-                        chain_order = ChainOrdering::Inferior;
-                        break;
-                    }
-                    Ordering::Equal => {} // Continue...
-                }
-            }
-
-            // If they were all equal, choose the longer one.
-            if chain_order == ChainOrdering::Unknown && self.block_number() < block.block_number() {
-                chain_order = ChainOrdering::Better;
-            }
-
-            info!(
-                "New block is on {:?} chain with fork at #{} (current #{}.{}, new block #{}.{})",
-                chain_order,
-                current_height - 1,
-                self.block_number(),
-                self.view_number(),
-                block.block_number(),
-                block.view_number()
-            );
-        }
-
-        chain_order
     }
 }

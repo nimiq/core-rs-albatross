@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate beserial_derive;
 #[macro_use]
 extern crate log;
@@ -19,28 +18,34 @@ extern crate nimiq_utils as utils;
 extern crate nimiq_vrf as vrf;
 
 use block::{Block, BlockError, ForkProof};
-pub use blockchain::Blockchain;
+pub use blockchain::*;
+use failure::Fail;
 
 pub mod blockchain;
 pub mod blockchain_state;
 pub mod chain_info;
 pub mod chain_store;
 pub mod reward;
-pub mod slots;
 pub mod transaction_cache;
 
 pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
 pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
 
-#[derive(Debug, Eq, PartialEq)]
-enum ChainOrdering {
-    Extend,
-    Better,
-    Inferior,
-    Unknown,
-}
-
 pub enum ForkEvent {
     Detected(ForkProof),
+}
+
+#[derive(Debug, Fail)]
+pub enum SlashPushError {
+    #[fail(display = "Redundant fork proofs in block")]
+    DuplicateForkProof,
+    #[fail(display = "Block contains fork proof targeting a slot that was already slashed")]
+    SlotAlreadySlashed,
+    #[fail(display = "Fork proof is from a wrong epoch")]
+    InvalidEpochTarget,
+    #[fail(display = "Fork proof infos don't match fork proofs")]
+    InvalidForkProofInfos,
+    #[fail(display = "Fork proof infos cannot be fetched (predecessor does not exist)")]
+    InvalidForkProofPredecessor,
 }

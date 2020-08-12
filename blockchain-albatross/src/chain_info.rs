@@ -8,14 +8,13 @@ use primitives::coin::Coin;
 use primitives::policy;
 use transaction::Transaction;
 
-use crate::slots::{apply_slashes, ForkProofInfos, SlashPushError, SlashedSet};
+use crate::SlashPushError;
 
 #[derive(Clone, Debug)]
 pub struct ChainInfo {
     pub head: Block,
     pub on_main_chain: bool,
     pub main_chain_successor: Option<Blake2bHash>,
-    pub slashed_set: SlashedSet,
     // Resets every batch
     pub cum_tx_fees: Coin,
 }
@@ -27,19 +26,14 @@ impl ChainInfo {
             head: block,
             on_main_chain: true,
             main_chain_successor: None,
-            slashed_set: Default::default(),
             cum_tx_fees: Default::default(),
         }
     }
 
     /// Creates a new ChainInfo for a block given its predecessor.
-    /// We need the ForkProofInfos to retrieve the slashed sets just before a fork proof.
-    pub fn new(
-        block: Block,
-        prev_info: &ChainInfo,
-        fork_proof_infos: &ForkProofInfos,
-    ) -> Result<Self, SlashPushError> {
+    pub fn new(block: Block, prev_info: &ChainInfo) -> Result<Self, SlashPushError> {
         assert_eq!(prev_info.head.block_number(), block.block_number() - 1);
+
         let cum_tx_fees = if policy::is_macro_block_at(prev_info.head.block_number()) {
             block.sum_transaction_fees()
         } else {
@@ -49,7 +43,6 @@ impl ChainInfo {
         Ok(ChainInfo {
             on_main_chain: false,
             main_chain_successor: None,
-            slashed_set: apply_slashes(&block, prev_info, fork_proof_infos)?,
             head: block,
             cum_tx_fees,
         })
@@ -61,19 +54,8 @@ impl ChainInfo {
             head: block,
             on_main_chain: false,
             main_chain_successor: None,
-            slashed_set: Default::default(),
             cum_tx_fees: Default::default(),
         }
-    }
-
-    /// Calculates the base for the next block's slashed set.
-    /// If the current block is an election block, the next slashed set needs to account for
-    /// the new epoch. Otherwise, it is simply the current slashed set.
-    ///
-    /// Note that this method does not yet add new slashes to the set!
-    pub fn next_slashed_set(&self) -> SlashedSet {
-        self.slashed_set
-            .next_slashed_set(self.head.block_number() + 1)
     }
 }
 
@@ -88,7 +70,7 @@ impl PartialEq for ChainInfo {
 impl Eq for ChainInfo {}
 
 // Do not serialize the block body.
-// XXX Move this into Block.serialize_xxx()?
+// TODO: Move this into Block.serialize_xxx()?
 impl Serialize for ChainInfo {
     fn serialize<W: WriteBytesExt>(&self, writer: &mut W) -> Result<usize, SerializingError> {
         let mut size = 0;
@@ -107,7 +89,6 @@ impl Serialize for ChainInfo {
         }
         size += Serialize::serialize(&self.on_main_chain, writer)?;
         size += Serialize::serialize(&self.main_chain_successor, writer)?;
-        size += Serialize::serialize(&self.slashed_set, writer)?;
         size += Serialize::serialize(&self.cum_tx_fees, writer)?;
         Ok(size)
     }
@@ -129,7 +110,6 @@ impl Serialize for ChainInfo {
         }
         size += Serialize::serialized_size(&self.on_main_chain);
         size += Serialize::serialized_size(&self.main_chain_successor);
-        size += Serialize::serialized_size(&self.slashed_set);
         size += Serialize::serialized_size(&self.cum_tx_fees);
         size
     }
@@ -144,14 +124,12 @@ impl Deserialize for ChainInfo {
         };
         let on_main_chain = Deserialize::deserialize(reader)?;
         let main_chain_successor = Deserialize::deserialize(reader)?;
-        let slashed_set = Deserialize::deserialize(reader)?;
         let cum_tx_fees = Deserialize::deserialize(reader)?;
 
         Ok(ChainInfo {
             head,
             on_main_chain,
             main_chain_successor,
-            slashed_set,
             cum_tx_fees,
         })
     }
