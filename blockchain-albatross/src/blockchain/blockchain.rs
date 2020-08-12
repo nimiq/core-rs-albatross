@@ -1,20 +1,25 @@
 use std::sync::Arc;
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{MappedRwLockReadGuard, Mutex, MutexGuard, RwLock};
 
+use account::Account;
 use accounts::Accounts;
 use block::Block;
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
-use blockchain_base::BlockchainError;
-use database::{Environment, WriteTransaction};
+use blockchain_base::{AbstractBlockchain, BlockchainError, Direction};
+use database::{Environment, ReadTransaction, Transaction, WriteTransaction};
 use genesis::NetworkInfo;
 use hash::Blake2bHash;
+use keys::Address;
 use primitives::coin::Coin;
 use primitives::networks::NetworkId;
 use primitives::policy;
 use primitives::slot::Slots;
-use utils::observer::Notifier;
+use transaction::{Transaction as BlockchainTransaction, TransactionReceipt, TransactionsProof};
+use tree_primitives::accounts_proof::AccountsProof;
+use tree_primitives::accounts_tree_chunk::AccountsTreeChunk;
+use utils::observer::{Listener, ListenerHandle, Notifier};
 use utils::time::OffsetTime;
 
 use crate::blockchain_state::BlockchainState;
@@ -22,7 +27,9 @@ use crate::chain_info::ChainInfo;
 use crate::chain_store::ChainStore;
 use crate::reward::genesis_parameters;
 use crate::transaction_cache::TransactionCache;
-use crate::{BlockchainEvent, ForkEvent};
+use crate::{BlockchainEvent, ForkEvent, PushError, PushResult};
+use std::cmp;
+use std::collections::HashSet;
 
 /// The Blockchain struct
 pub struct Blockchain {
@@ -76,7 +83,7 @@ impl Blockchain {
         }
 
         let (genesis_supply, genesis_timestamp) =
-            genesis_parameters(genesis_info.unwrap().head.unwrap_macro_ref());
+            genesis_parameters(&genesis_info.unwrap().head.unwrap_macro().header);
 
         // Load main chain from store.
         let main_chain = chain_store
@@ -212,7 +219,7 @@ impl Blockchain {
         })
         .unwrap();
 
-        let (genesis_supply, genesis_timestamp) = genesis_parameters(genesis_macro_block);
+        let (genesis_supply, genesis_timestamp) = genesis_parameters(&genesis_macro_block.header);
 
         let main_chain = ChainInfo::initial(genesis_block.clone());
 
@@ -266,5 +273,202 @@ impl Blockchain {
             genesis_supply,
             genesis_timestamp,
         })
+    }
+}
+
+// TODO: To remove this you need to handle Mempool crate (that requires this trait). That probably
+// requires separating the 1.0 stuff from the rest of the code.
+impl AbstractBlockchain for Blockchain {
+    type Block = Block;
+
+    fn new(
+        env: Environment,
+        network_id: NetworkId,
+        _time: Arc<OffsetTime>,
+    ) -> Result<Self, BlockchainError> {
+        Blockchain::new(env, network_id)
+    }
+
+    #[cfg(feature = "metrics")]
+    fn metrics(&self) -> &BlockchainMetrics {
+        &self.metrics
+    }
+
+    fn network_id(&self) -> NetworkId {
+        self.network_id
+    }
+
+    fn head_block(&self) -> MappedRwLockReadGuard<Self::Block> {
+        self.head()
+    }
+
+    fn head_hash(&self) -> Blake2bHash {
+        self.head_hash()
+    }
+
+    fn head_height(&self) -> u32 {
+        self.block_number()
+    }
+
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Self::Block> {
+        self.chain_store.get_block(hash, include_body, None)
+    }
+
+    fn get_block_at(&self, height: u32, include_body: bool) -> Option<Self::Block> {
+        self.chain_store.get_block_at(height, include_body, None)
+    }
+
+    fn get_block_locators(&self, max_count: usize) -> Vec<Blake2bHash> {
+        let mut locators: Vec<Blake2bHash> = Vec::with_capacity(max_count);
+        let mut hash = self.head_hash();
+
+        // Push top ten hashes.
+        locators.push(hash.clone());
+        for _ in 0..cmp::min(10, self.block_number()) {
+            let block = self.chain_store.get_block(&hash, false, None);
+            match block {
+                Some(block) => {
+                    hash = block.header().parent_hash().clone();
+                    locators.push(hash.clone());
+                }
+                None => break,
+            }
+        }
+
+        let mut step = 2;
+        let mut height = self.block_number().saturating_sub(10 + step);
+        let mut opt_block = self.chain_store.get_block_at(height, false, None);
+        while let Some(block) = opt_block {
+            locators.push(block.header().hash());
+
+            // Respect max count.
+            if locators.len() >= max_count {
+                break;
+            }
+
+            step *= 2;
+            height = match height.checked_sub(step) {
+                Some(0) => break, // 0 or underflow means we need to end the loop
+                Some(v) => v,
+                None => break,
+            };
+
+            opt_block = self.chain_store.get_block_at(height, false, None);
+        }
+
+        // Push the genesis block hash.
+        let genesis_hash = NetworkInfo::from_network_id(self.network_id).genesis_hash();
+        if locators.is_empty() || locators.last().unwrap() != genesis_hash {
+            // Respect max count, make space for genesis hash if necessary
+            if locators.len() >= max_count {
+                locators.pop();
+            }
+            locators.push(genesis_hash.clone());
+        }
+
+        locators
+    }
+
+    fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+    ) -> Vec<Self::Block> {
+        self.chain_store
+            .get_blocks(start_block_hash, count, include_body, direction, None)
+    }
+
+    fn push(&self, block: Self::Block) -> Result<PushResult, PushError> {
+        self.push(block)
+    }
+
+    fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
+        self.contains(hash, include_forks)
+    }
+
+    #[allow(unused_variables)]
+    fn get_accounts_proof(
+        &self,
+        block_hash: &Blake2bHash,
+        addresses: &[Address],
+    ) -> Option<AccountsProof<Account>> {
+        unimplemented!()
+    }
+
+    #[allow(unused_variables)]
+    fn get_transactions_proof(
+        &self,
+        block_hash: &Blake2bHash,
+        addresses: &HashSet<Address>,
+    ) -> Option<TransactionsProof> {
+        unimplemented!()
+    }
+
+    #[allow(unused_variables)]
+    fn get_transaction_receipts_by_address(
+        &self,
+        address: &Address,
+        sender_limit: usize,
+        recipient_limit: usize,
+    ) -> Vec<TransactionReceipt> {
+        unimplemented!()
+    }
+
+    fn register_listener<T: Listener<BlockchainEvent> + 'static>(
+        &self,
+        listener: T,
+    ) -> ListenerHandle {
+        self.notifier.write().register(listener)
+    }
+
+    fn lock(&self) -> MutexGuard<()> {
+        self.push_lock.lock()
+    }
+
+    fn get_account(&self, address: &Address) -> Account {
+        self.state.read().accounts.get(address, None)
+    }
+
+    fn contains_tx_in_validity_window(&self, tx_hash: &Blake2bHash) -> bool {
+        self.state.read().transaction_cache.contains(tx_hash)
+    }
+
+    #[allow(unused_variables)]
+    fn head_hash_from_store(&self, txn: &ReadTransaction) -> Option<Blake2bHash> {
+        unimplemented!()
+    }
+
+    fn get_accounts_chunk(
+        &self,
+        prefix: &str,
+        size: usize,
+        txn_option: Option<&Transaction>,
+    ) -> Option<AccountsTreeChunk<Account>> {
+        self.state
+            .read()
+            .accounts
+            .get_chunk(prefix, size, txn_option)
+    }
+
+    fn get_batch_transactions(
+        &self,
+        batch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>> {
+        Blockchain::get_batch_transactions(self, batch, txn_option)
+    }
+
+    fn get_epoch_transactions(
+        &self,
+        epoch: u32,
+        txn_option: Option<&Transaction>,
+    ) -> Option<Vec<BlockchainTransaction>> {
+        Blockchain::get_epoch_transactions(self, epoch, txn_option)
+    }
+
+    fn validator_registry_address(&self) -> Option<&Address> {
+        NetworkInfo::from_network_id(self.network_id).validator_registry_address()
     }
 }

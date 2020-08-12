@@ -222,7 +222,7 @@ impl Blockchain {
 
         // election blocks finalize the previous epoch.
         if is_election_block {
-            inherents.append(&mut self.finalize_previous_batch(&state, &chain_info));
+            inherents.append(&mut self.finalize_previous_batch(&state, &macro_block.header));
         }
 
         // Commit epoch to AccountsTree.
@@ -251,7 +251,7 @@ impl Blockchain {
                 if let Some(ref validators) =
                     macro_block.body.as_ref().expect("Missing body!").validators
                 {
-                    let slots = self.next_slots(&macro_block.header.seed, Some(&txn));
+                    let slots = self.next_slots(&macro_block.header.seed);
                     if &slots.validator_slots != validators {
                         warn!("Rejecting block - Validators don't match real validators");
                         return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
@@ -262,7 +262,8 @@ impl Blockchain {
                 }
             }
 
-            let computed_extrinsics = MacroBody::from_slashed_set(slashed_set, current_slashed_set);
+            let computed_extrinsics =
+                MacroBody::from_slashed_sets(slashed_set, current_slashed_set);
 
             // The extrinsics must exist for isolated macro blocks, so we can unwrap() here.
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();

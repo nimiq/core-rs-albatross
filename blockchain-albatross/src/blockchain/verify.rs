@@ -344,9 +344,7 @@ impl Blockchain {
             }
 
             if macro_block.is_election_block() {
-                let real_validators = &self
-                    .next_slots(&macro_block.header.seed, txn_opt)
-                    .validator_slots;
+                let real_validators = &self.next_slots(&macro_block.header.seed).validator_slots;
 
                 let block_validators = macro_block
                     .body

@@ -91,9 +91,19 @@ impl MacroBlock {
 }
 
 impl MacroBody {
+    /// Creates an empty body.
+    pub fn new() -> Self {
+        MacroBody {
+            validators: None,
+            lost_reward_set: BitSet::new(),
+            disabled_set: BitSet::new(),
+            history_root: Blake2bHash::default(),
+        }
+    }
+
     /// Creates the body for a Macro block given the slashed sets. Sets the validators and
     /// history_root fields to default values.
-    pub fn from_slashed_set(lost_reward_set: BitSet, disabled_set: BitSet) -> Self {
+    pub fn from_slashed_sets(lost_reward_set: BitSet, disabled_set: BitSet) -> Self {
         MacroBody {
             validators: None,
             lost_reward_set,

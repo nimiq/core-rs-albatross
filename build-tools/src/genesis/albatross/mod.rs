@@ -12,7 +12,6 @@ use accounts::Accounts;
 use beserial::{Serialize, SerializingError};
 use block_albatross::{Block, MacroBlock, MacroBody, MacroHeader};
 use bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
-use collections::bitset::BitSet;
 use database::volatile::{VolatileDatabaseError, VolatileEnvironment};
 use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
@@ -199,7 +198,7 @@ impl GenesisBuilder {
         debug!("Slots: {:#?}", slots);
 
         // Body
-        let body = MacroBody::from_slashed_set(BitSet::new(), BitSet::new());
+        let body = MacroBody::new();
         let body_root = body.hash::<Blake2bHash>();
         debug!("Body root: {}", &body_root);
 

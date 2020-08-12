@@ -15,13 +15,10 @@ use std::sync::Arc;
 use block::ForkProof;
 use block::MicroJustification;
 use block::{
-    Block, MacroBlock, MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, PbftProposal,
-    ViewChangeProof, ViewChanges,
+    MacroBody, MacroHeader, MicroBlock, MicroBody, MicroHeader, PbftProposal, ViewChangeProof,
+    ViewChanges,
 };
 use blockchain::blockchain::Blockchain;
-use blockchain::chain_info::ChainInfo;
-use blockchain::slots::ForkProofInfos;
-use blockchain_base::AbstractBlockchain;
 use bls::KeyPair;
 use database::WriteTransaction;
 use hash::{Blake2bHash, Hash};
@@ -61,40 +58,6 @@ impl BlockProducer {
         }
     }
 
-    /// Creates a proposal for the next macro block (checkpoint or election). It is just a proposal,
-    /// NOT a complete block. It still needs to go through the Tendermint protocol in order to be
-    /// finalized.
-    // Note: Needs to be called with the Blockchain lock held.
-    pub fn next_macro_block_proposal(
-        &self,
-        // The timestamp for the block proposal.
-        timestamp: u64,
-        // The view number for the block proposal.
-        view_number: u32,
-        // The view change proof. Only exists if one or more view changes happened for this block
-        // height.
-        view_change_proof: Option<ViewChangeProof>,
-        // Extra data for this block. It has no a priori use.
-        _extra_data: Vec<u8>,
-    ) -> (PbftProposal, MacroBody) {
-        // Creates the extrinsics for the block proposal.
-        let extrinsics = self.next_macro_extrinsics();
-
-        // Creates the header for the block proposal.
-        let mut txn = self.blockchain.write_transaction();
-        let header = self.next_macro_header(&mut txn, timestamp, view_number, &extrinsics);
-        txn.abort();
-
-        // Returns the block proposal.
-        (
-            PbftProposal {
-                header,
-                view_change: view_change_proof,
-            },
-            extrinsics,
-        )
-    }
-
     /// Creates the next micro block. By definition it is already finalized.
     // Note: Needs to be called with the Blockchain lock held.
     pub fn next_micro_block(
@@ -119,11 +82,12 @@ impl BlockProducer {
             view_number,
         );
 
-        // Creates the extrinsics for the block.
-        let extrinsics = self.next_micro_extrinsics(fork_proofs, &view_changes, extra_data);
+        // Creates the body for the block.
+        let body = self.next_micro_body(fork_proofs, &view_changes);
 
         // Creates the header for the block.
-        let header = self.next_micro_header(timestamp, view_number, &extrinsics, &view_changes);
+        let header =
+            self.next_micro_header(timestamp, view_number, extra_data, &body, &view_changes);
 
         // Signs the block header using the validator key.
         let signature = self.validator_key.sign(&header).compress();
@@ -131,7 +95,7 @@ impl BlockProducer {
         // Returns the micro block.
         MicroBlock {
             header,
-            body: Some(extrinsics),
+            body: Some(body),
             justification: Some(MicroJustification {
                 signature,
                 view_change_proof,
@@ -139,29 +103,13 @@ impl BlockProducer {
         }
     }
 
-    /// Creates the extrinsics for the next macro block.
-    pub fn next_macro_extrinsics(&self) -> MacroBody {
-        let slashed_set = self
-            .blockchain
-            .slashed_set_at(self.blockchain.block_number() + 1)
-            .expect("Missing previous block for block production")
-            .next_slashed_set(self.blockchain.block_number() + 1);
-
-        // TODO: Compute the history root and the validator list?
-        MacroBody::from_slashed_set(
-            slashed_set.prev_epoch_state.clone(),
-            slashed_set.current_epoch(),
-        )
-    }
-
-    /// Creates the extrinsics for the next micro block.
-    fn next_micro_extrinsics(
+    /// Creates the body for the next micro block.
+    fn next_micro_body(
         &self,
         fork_proofs: Vec<ForkProof>,
         view_changes: &Option<ViewChanges>,
-        extra_data: Vec<u8>,
     ) -> MicroBody {
-        // Calculate the maximum allowed size for the micro block extrinsics.
+        // Calculate the maximum allowed size for the micro block body.
         let max_size = MicroBlock::MAX_SIZE
             - MicroHeader::SIZE
             - MicroBody::get_metadata_size(fork_proofs.len());
@@ -192,124 +140,11 @@ impl BlockProducer {
         // Sort the transactions.
         transactions.sort_unstable_by(|a, b| a.cmp_block_order(b));
 
-        // Create and return the micro block extrinsics.
+        // Create and return the micro block body.
         MicroBody {
             fork_proofs,
             transactions,
         }
-    }
-
-    /// Creates the header for the next macro block (checkpoint or election).
-    pub fn next_macro_header(
-        &self,
-        txn: &mut WriteTransaction,
-        timestamp: u64,
-        view_number: u32,
-        extrinsics: &MacroBody,
-    ) -> MacroHeader {
-        // Calculate the block number. It is simply the previous block number incremented by one.
-        let block_number = self.blockchain.block_number() + 1;
-
-        // Calculate the timestamp. It must be greater than or equal to the previous block
-        // timestamp (i.e. time must not go back).
-        let timestamp = u64::max(timestamp, self.blockchain.head().timestamp());
-
-        // Get the hash of the latest block (it is by definition a micro block).
-        let parent_hash = self.blockchain.head_hash();
-
-        // Get the hash of the latest macro block (it is by definition a checkpoint macro block).
-        let parent_macro_hash = self.blockchain.macro_head_hash();
-
-        // Get the hash of the latest election macro block.
-        let parent_election_hash = self.blockchain.election_head_hash();
-
-        // Calculate the root of the extrinsics.
-        let extrinsics_root = extrinsics.hash();
-
-        // Calculate the seed for this block by signing the previous block seed with the validator
-        // key.
-        let seed = self
-            .blockchain
-            .head()
-            .seed()
-            .sign_next(&self.validator_key.secret_key);
-
-        // Create the header for the macro block without the state root and the transactions root.
-        // We need several fields of this header in order to calculate the transactions and the
-        // state. It is just simpler to pass the entire header.
-        let mut header = MacroHeader {
-            version: Block::VERSION,
-            block_number,
-            view_number,
-            parent_election_hash,
-            seed: seed.clone(),
-            parent_hash,
-            state_root: Blake2bHash::default(),
-            body_root: extrinsics_root,
-            timestamp,
-            // TODO: needs to have some data!
-            extra_data: vec![],
-        };
-
-        // Get and update the state.
-        let state = self.blockchain.state();
-
-        // Initialize the inherents vector.
-        let mut inherents: Vec<Inherent> = vec![];
-
-        // Calculate the new validators, if this is an election macro block.
-        if policy::is_election_block_at(block_number) {
-            // Get the new validator list.
-            let validators = self.blockchain.next_validators(&seed, Some(txn));
-
-            // TODO: This needs to be moved to the body!!!
-            // // Add it to the header.
-            // header.validators = validators.into();
-
-            let dummy_macro_block = Block::Macro(MacroBlock {
-                header: header.clone(),
-                justification: None,
-                body: None,
-            });
-            let prev_chain_info = state.main_chain();
-            let chain_info = ChainInfo::new(dummy_macro_block, prev_chain_info).unwrap();
-            // For election blocks add reward and finalize epoch inherents.
-            inherents.append(&mut self.blockchain.finalize_previous_batch(&state, &chain_info));
-        }
-
-        // Create the slash inherents for the view changes.
-        let view_changes = ViewChanges::new(
-            header.block_number,
-            self.blockchain.view_number(),
-            header.view_number,
-        );
-
-        inherents.append(&mut self.blockchain.create_slash_inherents(
-            &[],
-            &view_changes,
-            Some(txn),
-        ));
-
-        // Update the state again to distribute the rewards.
-        state
-            .accounts()
-            .commit(txn, &[], &inherents, block_number)
-            .expect("Failed to compute accounts hash during block production");
-
-        // Calculate the state root and add it to the header.
-        let state_root = state.accounts().hash(Some(txn));
-        header.state_root = state_root;
-
-        // TODO: This needs to be moved to the body!!!
-        // // Calculate the transactions root and add it to the header.
-        // let transactions_root = self
-        //     .blockchain
-        //     .get_history_root(policy::epoch_at(block_number), Some(txn))
-        //     .expect("Failed to compute transactions root, micro blocks missing");
-        // header.history_root = transactions_root;
-
-        // Return the finalized header.
-        header
     }
 
     /// Creates the header for the next micro block.
@@ -317,7 +152,8 @@ impl BlockProducer {
         &self,
         timestamp: u64,
         view_number: u32,
-        extrinsics: &MicroBody,
+        extra_data: Vec<u8>,
+        body: &MicroBody,
         view_changes: &Option<ViewChanges>,
     ) -> MicroHeader {
         // Calculate the block number. It is simply the previous block number incremented by one.
@@ -338,34 +174,184 @@ impl BlockProducer {
             .seed()
             .sign_next(&self.validator_key.secret_key);
 
-        // Calculate the root of the extrinsics.
-        let extrinsics_root = extrinsics.hash();
+        // Calculate the root of the body.
+        let body_root = body.hash();
 
         // Create the slash inherents for the view changes and the forks.
         let inherents =
             self.blockchain
-                .create_slash_inherents(&extrinsics.fork_proofs, view_changes, None);
+                .create_slash_inherents(&body.fork_proofs, view_changes, None);
 
-        // Calculate the state root.
+        // Update the state and calculate the state root.
         let state_root = self
             .blockchain
             .state()
             .accounts()
-            .hash_with(&extrinsics.transactions, &inherents, block_number)
+            .hash_with(&body.transactions, &inherents, block_number)
             .expect("Failed to compute accounts hash during block production");
 
         // Create and return the micro block header.
         MicroHeader {
-            version: Block::VERSION,
+            version: policy::VERSION,
             block_number,
             view_number,
-            parent_hash,
-            body_root: extrinsics_root,
-            state_root,
-            seed,
             timestamp,
-            // TODO: Add some data!
-            extra_data: vec![],
+            parent_hash,
+            seed,
+            extra_data,
+            state_root,
+            body_root,
+        }
+    }
+
+    /// Creates a proposal for the next macro block (checkpoint or election). It is just a proposal,
+    /// NOT a complete block. It still needs to go through the Tendermint protocol in order to be
+    /// finalized.
+    // Note: Needs to be called with the Blockchain lock held.
+    pub fn next_macro_block_proposal(
+        &self,
+        // The timestamp for the block proposal.
+        timestamp: u64,
+        // The view number for the block proposal.
+        view_number: u32,
+        // The view change proof. Only exists if one or more view changes happened for this block
+        // height.
+        view_change_proof: Option<ViewChangeProof>,
+        // Extra data for this block. It has no a priori use.
+        extra_data: Vec<u8>,
+    ) -> (PbftProposal, MacroBody) {
+        // Creates the header for the block proposal.
+        let mut txn = self.blockchain.write_transaction();
+
+        let mut header = self.next_macro_header(&mut txn, timestamp, view_number, extra_data);
+
+        txn.abort();
+
+        // Creates the body for the block proposal.
+        let body = self.next_macro_body();
+
+        // Add the root of the body to the header.
+        header.body_root = body.hash();
+
+        // Returns the block proposal.
+        (
+            PbftProposal {
+                header,
+                view_change: view_change_proof,
+            },
+            body,
+        )
+    }
+
+    /// Creates the header for the next macro block (checkpoint or election).
+    pub fn next_macro_header(
+        &self,
+        txn: &mut WriteTransaction,
+        timestamp: u64,
+        view_number: u32,
+        extra_data: Vec<u8>,
+    ) -> MacroHeader {
+        // Calculate the block number. It is simply the previous block number incremented by one.
+        let block_number = self.blockchain.block_number() + 1;
+
+        // Calculate the timestamp. It must be greater than or equal to the previous block
+        // timestamp (i.e. time must not go back).
+        let timestamp = u64::max(timestamp, self.blockchain.head().timestamp());
+
+        // Get the hash of the latest block (it is by definition a micro block).
+        let parent_hash = self.blockchain.head_hash();
+
+        // Get the hash of the latest election macro block.
+        let parent_election_hash = self.blockchain.election_head_hash();
+
+        // Calculate the seed for this block by signing the previous block seed with the validator
+        // key.
+        let seed = self
+            .blockchain
+            .head()
+            .seed()
+            .sign_next(&self.validator_key.secret_key);
+
+        // Create the header for the macro block without the state root and the transactions root.
+        // We need several fields of this header in order to calculate the transactions and the
+        // state. It is just simpler to pass the entire header.
+        let mut header = MacroHeader {
+            version: policy::VERSION,
+            block_number,
+            view_number,
+            timestamp,
+            parent_hash,
+            parent_election_hash,
+            seed: seed.clone(),
+            extra_data,
+            state_root: Blake2bHash::default(),
+            body_root: Blake2bHash::default(),
+        };
+
+        // Get the state.
+        let state = self.blockchain.state();
+
+        // Initialize the inherents vector.
+        let mut inherents: Vec<Inherent> = vec![];
+
+        // All macro blocks are the end of a batch, so finalize the batch.
+        inherents.append(&mut self.blockchain.finalize_previous_batch(&state, &header));
+
+        // If this is an election macro block, then it also is the end of an epoch. So finalize the
+        // epoch.
+        if policy::is_election_block_at(block_number) {
+            inherents.push(self.blockchain.finalize_previous_epoch());
+        }
+
+        // Update the state.
+        state
+            .accounts()
+            .commit(txn, &[], &inherents, block_number)
+            .expect("Failed to compute accounts hash during block production");
+
+        // Calculate the state root and add it to the header.
+        let state_root = state.accounts().hash(Some(txn));
+
+        header.state_root = state_root;
+
+        // Return the header.
+        header
+    }
+
+    /// Creates the body for the next macro block.
+    pub fn next_macro_body(&self) -> MacroBody {
+        let lost_reward_set = self
+            .blockchain
+            .get_staking_contract()
+            .previous_lost_rewards();
+
+        let disabled_set = self
+            .blockchain
+            .get_staking_contract()
+            .previous_disabled_slots();
+
+        let history_root = self
+            .blockchain
+            .get_history_root(policy::epoch_at(self.blockchain.block_number() + 1), None)
+            .expect("Failed to compute transactions root, micro blocks missing");
+
+        let validators = if policy::is_election_block_at(self.blockchain.block_number() + 1) {
+            Some(
+                self.blockchain
+                    .state()
+                    .current_validators()
+                    .unwrap()
+                    .clone(),
+            )
+        } else {
+            None
+        };
+
+        MacroBody {
+            validators,
+            lost_reward_set,
+            disabled_set,
+            history_root,
         }
     }
 }

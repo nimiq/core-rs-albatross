@@ -1,11 +1,9 @@
 use std::convert::TryInto;
 
-use account::Account;
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
 use collections::BitSet;
 use database::{ReadTransaction, Transaction};
-use genesis::NetworkInfo;
 use primitives::policy;
 use primitives::slot::{Slot, SlotIndex, Slots, ValidatorSlots};
 use vrf::{Rng, VrfSeed, VrfUseCase};
@@ -41,26 +39,12 @@ impl Blockchain {
         }
     }
 
-    pub fn next_slots(&self, seed: &VrfSeed, txn_option: Option<&Transaction>) -> Slots {
-        let validator_registry = NetworkInfo::from_network_id(self.network_id)
-            .validator_registry_address()
-            .expect("No ValidatorRegistry");
-
-        let staking_account = self
-            .state
-            .read()
-            .accounts()
-            .get(validator_registry, txn_option);
-
-        if let Account::Staking(ref staking_contract) = staking_account {
-            return staking_contract.select_validators(seed);
-        }
-
-        panic!("Account at validator registry address is not the staking contract!");
+    pub fn next_slots(&self, seed: &VrfSeed) -> Slots {
+        self.get_staking_contract().select_validators(seed)
     }
 
-    pub fn next_validators(&self, seed: &VrfSeed, txn: Option<&Transaction>) -> ValidatorSlots {
-        self.next_slots(seed, txn).into()
+    pub fn next_validators(&self, seed: &VrfSeed) -> ValidatorSlots {
+        self.next_slots(seed).into()
     }
 
     pub fn get_slot_owner_at(

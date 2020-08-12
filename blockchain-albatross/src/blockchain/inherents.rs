@@ -1,6 +1,7 @@
 use account::inherent::AccountInherentInteraction;
 use account::{Inherent, InherentType};
 use beserial::Serialize;
+use block::MacroHeader;
 use block::{ForkProof, ViewChanges};
 #[cfg(feature = "metrics")]
 use blockchain_base::chain_metrics::BlockchainMetrics;
@@ -13,7 +14,6 @@ use primitives::slot::{SlashedSlot, SlotBand};
 use vrf::{AliasMethod, VrfUseCase};
 
 use crate::blockchain_state::BlockchainState;
-use crate::chain_info::ChainInfo;
 use crate::reward::block_reward_for_batch;
 use crate::Blockchain;
 
@@ -106,11 +106,9 @@ impl Blockchain {
     pub fn finalize_previous_batch(
         &self,
         state: &BlockchainState,
-        chain_info: &ChainInfo,
+        macro_header: &MacroHeader,
     ) -> Vec<Inherent> {
         let prev_macro_info = &state.macro_info;
-
-        let macro_header = &chain_info.head.unwrap_macro_ref().header;
 
         let staking_contract = self.get_staking_contract();
 
@@ -134,8 +132,8 @@ impl Blockchain {
 
         // Total reward for the previous batch
         let block_reward = block_reward_for_batch(
-            chain_info.head.unwrap_macro_ref(),
-            prev_macro_info.head.unwrap_macro_ref(),
+            macro_header,
+            &prev_macro_info.head.unwrap_macro_ref().header,
             self.genesis_supply,
             self.genesis_timestamp,
         );

@@ -27,7 +27,10 @@ impl Blockchain {
                 let mut inherents: Vec<Inherent> = vec![];
 
                 // Every macro block is the end of a batch.
-                inherents.append(&mut self.finalize_previous_batch(state, chain_info));
+                inherents.append(
+                    &mut self
+                        .finalize_previous_batch(state, &chain_info.head.unwrap_macro_ref().header),
+                );
 
                 if macro_block.is_election_block() {
                     // On election the previous epoch needs to be finalized.

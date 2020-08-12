@@ -1,13 +1,13 @@
-use block::MacroBlock;
+use block::MacroHeader;
 use primitives::coin::Coin;
 use primitives::policy;
 use std::convert::TryInto;
 
 /// Parses the genesis supply and timestamp from the genesis block.
-pub fn genesis_parameters(genesis_block: &MacroBlock) -> (Coin, u64) {
-    assert_eq!(genesis_block.header.block_number, 0);
+pub fn genesis_parameters(genesis_block: &MacroHeader) -> (Coin, u64) {
+    assert_eq!(genesis_block.block_number, 0);
 
-    let extra_data = &genesis_block.header.extra_data;
+    let extra_data = &genesis_block.extra_data;
 
     let supply;
 
@@ -20,21 +20,21 @@ pub fn genesis_parameters(genesis_block: &MacroBlock) -> (Coin, u64) {
         supply = Coin::from_u64_unchecked(u64::from_be_bytes(bytes));
     }
 
-    (supply, genesis_block.header.timestamp)
+    (supply, genesis_block.timestamp)
 }
 
 /// Compute the block reward for an batch from the current macro block, the previous macro block,
 /// and the genesis parameters.
 /// This does not include the reward from transaction fees.
 pub fn block_reward_for_batch(
-    current_block: &MacroBlock,
-    previous_macro: &MacroBlock,
+    current_block: &MacroHeader,
+    previous_macro: &MacroHeader,
     genesis_supply: Coin,
     genesis_timestamp: u64,
 ) -> Coin {
-    let current_timestamp = current_block.header.timestamp;
+    let current_timestamp = current_block.timestamp;
 
-    let previous_timestamp = previous_macro.header.timestamp;
+    let previous_timestamp = previous_macro.timestamp;
 
     assert!(current_timestamp >= previous_timestamp);
     assert!(previous_timestamp >= genesis_timestamp);
@@ -53,9 +53,9 @@ pub fn block_reward_for_batch(
 /// and the genesis block.
 /// This does not include the reward from transaction fees.
 pub fn block_reward_for_batch_with_genesis(
-    current_block: &MacroBlock,
-    previous_macro: &MacroBlock,
-    genesis_block: &MacroBlock,
+    current_block: &MacroHeader,
+    previous_macro: &MacroHeader,
+    genesis_block: &MacroHeader,
 ) -> Coin {
     let (supply, timestamp) = genesis_parameters(genesis_block);
 
