@@ -238,7 +238,7 @@ impl Blockchain {
                 let old_slots = state.current_slots.take().unwrap();
                 state.previous_slots.replace(old_slots);
 
-                let new_slots = macro_block.get_slots();
+                let new_slots = macro_block.get_slots().unwrap();
                 state.current_slots.replace(new_slots);
             }
         }

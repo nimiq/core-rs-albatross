@@ -7,7 +7,7 @@ use nimiq_block_albatross::{
     SignedViewChange, ViewChange, ViewChangeProof, ViewChangeProofBuilder,
 };
 use nimiq_block_production_albatross::BlockProducer;
-use nimiq_blockchain_albatross::blockchain::{Blockchain, PushResult};
+use nimiq_blockchain_albatross::{Blockchain, PushResult};
 use nimiq_blockchain_base::{AbstractBlockchain, PushError};
 use nimiq_bls::lazy::LazyPublicKey;
 use nimiq_bls::{KeyPair, SecretKey};
@@ -47,7 +47,7 @@ fn it_can_produce_micro_blocks() {
     let fork_proof: ForkProof;
     {
         let header1 = block.header.clone();
-        let justification1 = block.justification.signature.clone();
+        let justification1 = block.justification.unwrap().signature.clone();
         let mut header2 = header1.clone();
         header2.timestamp += 1;
         let justification2 = keypair.sign(&header2).compress();
@@ -74,7 +74,7 @@ fn it_can_produce_micro_blocks() {
     assert_eq!(blockchain.block_number(), 2);
 
     // #2.1: Empty view-changed micro block (wrong prev_hash)
-    let view_change = sign_view_change(&keypair, VrfSeed::default(), 3, 1);
+    let view_change = sign_view_change(VrfSeed::default(), 3, 1);
     let block = producer.next_micro_block(
         blockchain.time.now() + 2000,
         1,
@@ -88,7 +88,7 @@ fn it_can_produce_micro_blocks() {
     );
 
     // #2.2: Empty view-changed micro block
-    let view_change = sign_view_change(&keypair, blockchain.head().seed().clone(), 3, 1);
+    let view_change = sign_view_change(blockchain.head().seed().clone(), 3, 1);
     let block = producer.next_micro_block(
         blockchain.time.now() + 2000,
         1,
@@ -214,7 +214,7 @@ fn it_can_produce_macro_blocks() {
         vec![],
     );
 
-    let block = sign_macro_block(&keypair, proposal, Some(extrinsics));
+    let block = sign_macro_block(proposal, Some(extrinsics));
     assert_eq!(
         blockchain.push(Block::Macro(block)),
         Ok(PushResult::Extended)
@@ -241,7 +241,7 @@ fn it_can_produce_election_blocks() {
             vec![0x42],
         );
 
-        let block = sign_macro_block(&keypair, proposal, Some(extrinsics));
+        let block = sign_macro_block(proposal, Some(extrinsics));
         assert_eq!(
             blockchain.push(Block::Macro(block)),
             Ok(PushResult::Extended)

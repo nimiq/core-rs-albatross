@@ -156,7 +156,7 @@ impl Blockchain {
         );
 
         // Current slots and validators
-        let current_slots = election_head.get_slots();
+        let current_slots = election_head.get_slots().unwrap();
 
         // Get last slots and validators
         let prev_block =
@@ -165,7 +165,7 @@ impl Blockchain {
         let last_slots = match prev_block {
             Some(Block::Macro(prev_election_block)) => {
                 if prev_election_block.is_election_block() {
-                    prev_election_block.get_slots()
+                    prev_election_block.get_slots().unwrap()
                 } else {
                     return Err(BlockchainError::InconsistentState);
                 }
@@ -243,7 +243,7 @@ impl Blockchain {
         let transaction_cache = TransactionCache::new();
 
         // current slots and validators
-        let current_slots = &genesis_macro_block.get_slots();
+        let current_slots = &genesis_macro_block.get_slots().unwrap();
 
         let last_slots = Slots::default();
 
