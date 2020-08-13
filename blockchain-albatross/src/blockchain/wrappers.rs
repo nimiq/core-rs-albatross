@@ -94,6 +94,40 @@ impl Blockchain {
         }
     }
 
+    fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block> {
+        self.chain_store.get_block(hash, include_body, None)
+    }
+
+    fn get_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+    ) -> Vec<Block> {
+        self.chain_store
+            .get_blocks(start_block_hash, count, include_body, direction, None)
+    }
+
+    /// Returns None if given start_block_hash is not a macro block.
+    pub fn get_macro_blocks(
+        &self,
+        start_block_hash: &Blake2bHash,
+        count: u32,
+        include_body: bool,
+        direction: Direction,
+        election_blocks_only: bool,
+    ) -> Option<Vec<Block>> {
+        self.chain_store.get_macro_blocks(
+            start_block_hash,
+            count,
+            include_body,
+            direction,
+            election_blocks_only,
+            None,
+        )
+    }
+
     // gets transactions for either an epoch or a batch.
     fn get_transactions(
         &self,

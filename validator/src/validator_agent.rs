@@ -243,7 +243,10 @@ impl ValidatorAgent {
         let block_number = fork_proof.block_number();
         let view_number = fork_proof.view_number();
 
-        if let Some((slot, _)) = self.blockchain.get_slot_at(block_number, view_number, None) {
+        if let (slot, _) = self
+            .blockchain
+            .get_slot_owner_at(block_number, view_number, None)
+        {
             if let Err(e) = fork_proof.verify(&slot.public_key().uncompress_unchecked()) {
                 debug!("[FORK-PROOF] Invalid signature in fork proof: {:?}", e);
                 return;

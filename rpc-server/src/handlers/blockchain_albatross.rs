@@ -169,10 +169,9 @@ impl BlockchainAlbatrossHandler {
         };
 
         // get slot and slot number
-        let (slot, slot_number) = self
-            .blockchain
-            .get_slot_at(block_number, view_number, None)
-            .ok_or(object! {"message" => "Block number out of range"})?;
+        let (slot, slot_number) =
+            self.blockchain
+                .get_slot_owner_at(block_number, view_number, None);
 
         Ok(Self::slot_to_obj(&slot, slot_number))
     }
@@ -221,7 +220,7 @@ impl BlockchainAlbatrossHandler {
         );
 
         Ok(object! {
-            "blockNumber" => state.block_number(),
+            "blockNumber" => self.blockchain.block_number(),
             "currentSlashedSlotNumbers" => current_slashed_set_arr,
             "lastSlashedSlotNumbers" => previous_slashed_set_arr,
         })
@@ -480,11 +479,13 @@ impl BlockchainAlbatrossHandler {
                 }
             }
             Block::Micro(ref block) => {
-                let producer = self
-                    .blockchain
-                    .get_slot_at(block.header.block_number, block.header.view_number, None)
-                    .map(|(slot, slot_number)| Self::slot_to_obj(&slot, slot_number))
-                    .unwrap_or(JsonValue::Null);
+                let (slot, slot_number) = self.blockchain.get_slot_owner_at(
+                    block.header.block_number,
+                    block.header.view_number,
+                    None,
+                );
+
+                let producer = Self::slot_to_obj(&slot, slot_number);
 
                 object! {
                     "type" => "micro",

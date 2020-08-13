@@ -361,8 +361,9 @@ pub mod test_utils {
     use super::*;
     use beserial::Deserialize;
     use block::{
-        PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder, SignedPbftCommitMessage,
-        SignedPbftPrepareMessage, SignedViewChange, ViewChange, ViewChangeProofBuilder,
+        Block, MacroBlock, PbftCommitMessage, PbftPrepareMessage, PbftProofBuilder,
+        SignedPbftCommitMessage, SignedPbftPrepareMessage, SignedViewChange, ViewChange,
+        ViewChangeProofBuilder,
     };
     use blockchain_base::PushResult;
     use bls::lazy::LazyPublicKey;
@@ -372,7 +373,7 @@ pub mod test_utils {
 
     // Fill epoch with micro blocks
     pub fn fill_micro_blocks(producer: &BlockProducer, blockchain: &Arc<Blockchain>) {
-        let init_height = blockchain.head_height();
+        let init_height = blockchain.block_number();
         let macro_block_number = policy::macro_block_after(init_height + 1);
         for i in (init_height + 1)..macro_block_number {
             let last_micro_block = producer.next_micro_block(
@@ -387,7 +388,7 @@ pub mod test_utils {
                 Ok(PushResult::Extended)
             );
         }
-        assert_eq!(blockchain.head_height(), macro_block_number - 1);
+        assert_eq!(blockchain.block_number(), macro_block_number - 1);
     }
 
     pub fn sign_macro_block(
@@ -468,7 +469,7 @@ pub mod test_utils {
         for _ in 0..num_macro {
             fill_micro_blocks(producer, blockchain);
 
-            let next_block_height = blockchain.head_height() + 1;
+            let next_block_height = blockchain.block_number() + 1;
             let (proposal, extrinsics) = producer.next_macro_block_proposal(
                 blockchain.time.now() + blockchain.block_number() as u64 * 1000,
                 0u32,

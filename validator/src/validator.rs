@@ -544,20 +544,8 @@ impl Validator {
 
         // Get slot for relevant block.
         let (slot, slot_number) =
-            match self
-                .blockchain
-                .get_slot_at(next_block_number, view_number, None)
-            {
-                Some(slot) => slot,
-                None => {
-                    // Perhaps a view change from way back?
-                    error!(
-                        "Got view change proof for a block at {}, but could not determine slot.",
-                        next_block_number
-                    );
-                    return;
-                }
-            };
+            self.blockchain
+                .get_slot_owner_at(next_block_number, view_number, None);
         trace!(
             "Next block producer: Slot #{}: {}",
             slot_number,

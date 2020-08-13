@@ -132,7 +132,7 @@ impl PbftState {
         let view_number = self.proposal.message.header.view_number;
 
         // Verify that the proposer is actually the slot owner
-        if let Some((slot, slot_number)) = chain.get_slot_at(block_number, view_number, None) {
+        if let (slot, slot_number) = chain.get_slot_owner_at(block_number, view_number, None) {
             let validator_id_opt = chain
                 .current_validators()
                 .get_band_number_by_slot_number(slot_number);
@@ -144,7 +144,6 @@ impl PbftState {
                 // TODO: We check the view change proof the second time here if previously buffered
                 let result = chain.verify_block_header(
                     &BlockHeader::Macro(self.proposal.message.header.clone()),
-                    self.proposal.message.view_change.as_ref().into(),
                     &public_key,
                     None, // TODO Would it make sense to pass a Read transaction?
                 );

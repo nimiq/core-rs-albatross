@@ -23,7 +23,7 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
-use blockchain_albatross::blockchain::BlockchainEvent;
+use blockchain_albatross::BlockchainEvent;
 use blockchain_base::AbstractBlockchain;
 use consensus::{AlbatrossConsensusProtocol, Consensus};
 use hash::{Blake2bHash, Hash};

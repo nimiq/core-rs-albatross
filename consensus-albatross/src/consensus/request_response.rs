@@ -50,22 +50,19 @@ impl<N: Network> Consensus<N> {
                 // after the identified block on the main chain.
                 let blocks = match msg.filter {
                     RequestBlockHashesFilter::ElectionOnly => blockchain
-                        .chain_store
-                        .get_election_blocks(
+                        .get_macro_blocks(
                             &start_block_hash,
                             msg.max_blocks as u32,
                             false,
                             Direction::Forward,
-                            false,
-                            None,
+                            true,
                         )
                         .unwrap(), // We made sure that start_block_hash is on our chain.
-                    RequestBlockHashesFilter::All => blockchain.chain_store.get_blocks(
+                    RequestBlockHashesFilter::All => blockchain.get_blocks(
                         &start_block_hash,
                         msg.max_blocks as u32,
                         false,
                         Direction::Forward,
-                        None,
                     ),
                 };
 
@@ -90,9 +87,7 @@ impl<N: Network> Consensus<N> {
                     peer.id()
                 );
 
-                if let Some(Block::Macro(block)) =
-                    blockchain.chain_store.get_block(&msg.hash, true, None)
-                {
+                if let Some(Block::Macro(block)) = blockchain.get_block(&msg.hash, true) {
                     let epoch = policy::epoch_at(block.header.block_number);
                     let response = if let Some(transactions) =
                         blockchain.get_epoch_transactions(epoch, None)
