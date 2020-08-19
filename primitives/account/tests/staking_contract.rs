@@ -9,10 +9,11 @@ use nimiq_bls::CompressedPublicKey as BlsPublicKey;
 use nimiq_bls::KeyPair as BlsKeyPair;
 use nimiq_bls::SecretKey as BlsSecretKey;
 use nimiq_bls::Signature as BlsSignature;
+use nimiq_bls::lazy::LazyPublicKey as LazyPublicKey;
 use nimiq_keys::{Address, KeyPair, PrivateKey};
 use nimiq_primitives::coin::Coin;
 use nimiq_primitives::networks::NetworkId;
-use nimiq_primitives::slot::{SlotCollection, SlotIndex};
+use nimiq_primitives::slot::{SlashedSlot, SlotCollection, SlotIndex};
 use nimiq_transaction::account::staking_contract::{
     IncomingStakingTransactionData, OutgoingStakingTransactionProof, SelfStakingTransactionData,
 };
@@ -775,14 +776,18 @@ fn it_rejects_invalid_slash_inherents() {
     let bls_pair = bls_key_pair();
     let key_pair = ed25519_key_pair();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
-    let validator_key = bls_pair.public_key.compress();
+    let slot = SlashedSlot {
+        slot: 0,
+        validator_key: LazyPublicKey::from(bls_pair.public_key),
+        event_block: 0,
+    };
 
     // Invalid inherent
     let mut inherent = Inherent {
         ty: InherentType::Slash,
         target: Default::default(),
         value: Coin::from_u64_unchecked(1),
-        data: validator_key.serialize_to_vec(),
+        data: slot.serialize_to_vec(),
     };
 
     // Invalid value.
@@ -851,16 +856,21 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
     let key_pair = ed25519_key_pair();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
     let validator_key = bls_pair.public_key.compress();
+    let slot = SlashedSlot {
+        slot: 0,
+        validator_key: LazyPublicKey::from(bls_pair.public_key),
+        event_block: 0,
+    };
 
     // Slash
     let slash = Inherent {
         ty: InherentType::Slash,
         target: Default::default(),
         value: Coin::ZERO,
-        data: validator_key.serialize_to_vec(),
+        data: slot.serialize_to_vec(),
     };
     assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1]))); // Receipt is boolean set to true.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(contract.inactive_validators_by_key.len(), 0);
@@ -870,7 +880,7 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
 
     // Second slash
     assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![0]))); // Receipt is boolean set to false.
+    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![0, 0, 0]))); // Receipt is boolean set to false.
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(contract.inactive_validators_by_key.len(), 0);
@@ -880,7 +890,7 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
 
     // First finalize
     let finalize = Inherent {
-        ty: InherentType::FinalizeBatch,
+        ty: InherentType::FinalizeEpoch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -897,7 +907,7 @@ fn it_can_apply_slash_and_finalize_epoch_inherent() {
 
     // Third slash
     assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1])));
+    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1])));
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
     assert_eq!(contract.active_validators_by_key.len(), 1);
     assert_eq!(contract.inactive_validators_by_key.len(), 0);
@@ -941,6 +951,11 @@ fn it_can_apply_slashes_after_retire() {
     let bls_pair = bls_key_pair();
     let validator_key = bls_pair.public_key.compress();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
+    let slot = SlashedSlot {
+        slot: 0,
+        validator_key: LazyPublicKey::from(bls_pair.public_key),
+        event_block: 0,
+    };
 
     // Check that transaction cannot have any value
     let mut tx_1 = make_signed_incoming_transaction(
@@ -989,10 +1004,10 @@ fn it_can_apply_slashes_after_retire() {
         ty: InherentType::Slash,
         target: Default::default(),
         value: Coin::ZERO,
-        data: validator_key.serialize_to_vec(),
+        data: slot.serialize_to_vec(),
     };
     assert_eq!(contract.check_inherent(&slash, 3), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 3), Ok(Some(vec![1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.commit_inherent(&slash, 3), Ok(Some(vec![1, 0, 1]))); // Receipt is boolean set to true.
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 0);
     assert_eq!(contract.active_validators_sorted.len(), 0);
@@ -1002,7 +1017,7 @@ fn it_can_apply_slashes_after_retire() {
     // Scenario 1: Revert slash
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_inherent(&slash, 3, Some(&vec![1])),
+        contract_copy.revert_inherent(&slash, 3, Some(&vec![1, 1, 1])),
         Ok(())
     );
     assert_eq!(contract_copy.current_epoch_parking.len(), 0);
@@ -1012,7 +1027,7 @@ fn it_can_apply_slashes_after_retire() {
 
     // Scenario 2: First finalize
     let finalize = Inherent {
-        ty: InherentType::FinalizeBatch,
+        ty: InherentType::FinalizeEpoch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1040,6 +1055,11 @@ fn it_can_apply_unpark_transactions() {
     let key_pair = ed25519_key_pair();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
     let validator_key = bls_pair.public_key.compress();
+    let slot = SlashedSlot {
+        slot: 0,
+        validator_key: LazyPublicKey::from(bls_pair.public_key),
+        event_block: 0,
+    };
 
     // Unpark with invalid value
     let unpark = make_signed_incoming_transaction(
@@ -1140,10 +1160,10 @@ fn it_can_apply_unpark_transactions() {
         ty: InherentType::Slash,
         target: Default::default(),
         value: Coin::ZERO,
-        data: validator_key.serialize_to_vec(),
+        data: slot.serialize_to_vec(),
     };
     assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1]))); // Receipt is boolean set to true.
 
     // Unpark
     let mut contract_copy = contract.clone();
@@ -1160,7 +1180,7 @@ fn it_can_apply_unpark_transactions() {
 
     // Build on previous contract state and finalize and slash
     let finalize = Inherent {
-        ty: InherentType::FinalizeBatch,
+        ty: InherentType::FinalizeEpoch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1168,7 +1188,7 @@ fn it_can_apply_unpark_transactions() {
     assert_eq!(contract.check_inherent(&finalize, 0), Ok(()));
     assert_eq!(contract.commit_inherent(&finalize, 0), Ok(None));
     assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1])));
+    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1])));
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
@@ -1190,6 +1210,11 @@ fn it_can_revert_unpark_transactions() {
     let key_pair = ed25519_key_pair();
     let contract = make_sample_contract(&key_pair, &bls_pair);
     let validator_key = bls_pair.public_key.compress();
+    let slot = SlashedSlot {
+        slot: 0,
+        validator_key: LazyPublicKey::from(bls_pair.public_key),
+        event_block: 0,
+    };
 
     let unpark = make_signed_incoming_transaction(
         IncomingStakingTransactionData::UnparkValidator {
@@ -1206,12 +1231,12 @@ fn it_can_revert_unpark_transactions() {
         ty: InherentType::Slash,
         target: Default::default(),
         value: Coin::ZERO,
-        data: validator_key.serialize_to_vec(),
+        data: slot.serialize_to_vec(),
     };
     assert_eq!(parked_in_current.check_inherent(&slash, 0), Ok(()));
     assert_eq!(
         parked_in_current.commit_inherent(&slash, 0),
-        Ok(Some(vec![1]))
+        Ok(Some(vec![1, 1, 1]))
     ); // Receipt is boolean set to true.
 
     // Unpark
@@ -1238,7 +1263,7 @@ fn it_can_revert_unpark_transactions() {
     // Park, unpark and revert unpark in previous epoch
     let mut parked_in_previous = parked_in_current.clone();
     let finalize = Inherent {
-        ty: InherentType::FinalizeBatch,
+        ty: InherentType::FinalizeEpoch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1275,7 +1300,7 @@ fn it_can_revert_unpark_transactions() {
     // Park, unpark and revert unpark in both epochs
     let mut parked_in_both = parked_in_current;
     let finalize = Inherent {
-        ty: InherentType::FinalizeBatch,
+        ty: InherentType::FinalizeEpoch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1283,7 +1308,7 @@ fn it_can_revert_unpark_transactions() {
     assert_eq!(parked_in_both.check_inherent(&finalize, 0), Ok(()));
     assert_eq!(parked_in_both.commit_inherent(&finalize, 0), Ok(None));
     assert_eq!(parked_in_both.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(parked_in_both.commit_inherent(&slash, 0), Ok(Some(vec![1])));
+    assert_eq!(parked_in_both.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1])));
     assert_eq!(parked_in_both.current_epoch_parking.len(), 1);
     assert!(parked_in_both
         .current_epoch_parking
@@ -1341,16 +1366,21 @@ fn it_can_revert_slash_inherent() {
     let key_pair = ed25519_key_pair();
     let mut contract = make_sample_contract(&key_pair, &bls_pair);
     let validator_key = bls_pair.public_key.compress();
+    let slot = SlashedSlot {
+        slot: 0,
+        validator_key: LazyPublicKey::from(bls_pair.public_key),
+        event_block: 0,
+    };
 
     // Slash
     let slash = Inherent {
         ty: InherentType::Slash,
         target: Default::default(),
         value: Coin::ZERO,
-        data: validator_key.serialize_to_vec(),
+        data: slot.serialize_to_vec(),
     };
     assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1]))); // Receipt is boolean set to true.
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 0);
     assert!(contract.current_epoch_parking.contains(&validator_key));
@@ -1359,7 +1389,7 @@ fn it_can_revert_slash_inherent() {
     // Revert slash
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_inherent(&slash, 0, Some(&vec![1])),
+        contract_copy.revert_inherent(&slash, 0, Some(&vec![1, 1, 1])),
         Ok(())
     );
     assert_eq!(contract_copy.current_epoch_parking.len(), 0);
@@ -1368,7 +1398,7 @@ fn it_can_revert_slash_inherent() {
 
     // First finalize
     let finalize = Inherent {
-        ty: InherentType::FinalizeBatch,
+        ty: InherentType::FinalizeEpoch,
         target: Default::default(),
         value: Coin::ZERO,
         data: vec![],
@@ -1383,7 +1413,7 @@ fn it_can_revert_slash_inherent() {
     // Revert slash after finalize is impossible
     let mut contract_copy = contract.clone();
     assert_eq!(
-        contract_copy.revert_inherent(&slash, 0, Some(&vec![1])),
+        contract_copy.revert_inherent(&slash, 0, Some(&vec![1, 1, 1])),
         Err(AccountError::InvalidInherent)
     );
 
@@ -1391,7 +1421,7 @@ fn it_can_revert_slash_inherent() {
     // This should *not* remove the slash
     // Slash 1
     assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1]))); // Receipt is boolean set to true.
+    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![1, 1, 1]))); // Receipt is boolean set to true.
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.current_epoch_parking.contains(&validator_key));
@@ -1400,7 +1430,7 @@ fn it_can_revert_slash_inherent() {
 
     // Slash 2
     assert_eq!(contract.check_inherent(&slash, 0), Ok(()));
-    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![0]))); // Receipt is boolean set to false.
+    assert_eq!(contract.commit_inherent(&slash, 0), Ok(Some(vec![0, 0, 0]))); // Receipt is boolean set to false.
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.current_epoch_parking.contains(&validator_key));
@@ -1408,7 +1438,7 @@ fn it_can_revert_slash_inherent() {
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
 
     // Revert second slash
-    assert_eq!(contract.revert_inherent(&slash, 0, Some(&vec![0])), Ok(()));
+    assert_eq!(contract.revert_inherent(&slash, 0, Some(&vec![0, 0, 0])), Ok(()));
     assert_eq!(contract.current_epoch_parking.len(), 1);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.current_epoch_parking.contains(&validator_key));
@@ -1416,7 +1446,7 @@ fn it_can_revert_slash_inherent() {
     assert_eq!(contract.balance, Coin::from_u64_unchecked(300_000_000));
 
     // Revert first slash
-    assert_eq!(contract.revert_inherent(&slash, 0, Some(&vec![1])), Ok(()));
+    assert_eq!(contract.revert_inherent(&slash, 0, Some(&vec![1, 1, 1])), Ok(()));
     assert_eq!(contract.current_epoch_parking.len(), 0);
     assert_eq!(contract.previous_epoch_parking.len(), 1);
     assert!(contract.previous_epoch_parking.contains(&validator_key));

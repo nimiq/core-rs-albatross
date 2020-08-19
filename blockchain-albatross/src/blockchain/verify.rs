@@ -128,13 +128,12 @@ impl Blockchain {
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
             }
 
-            if !intended_slot_owner.verify(header, &signature.unwrap()) {
+            if !intended_slot_owner.verify_hash(header.hash_blake2s(), &signature.unwrap()) {
                 warn!("Rejecting block - invalid signature for intended slot owner");
 
                 debug!("Block hash: {}", header.hash());
 
                 debug!("Intended slot owner: {:?}", intended_slot_owner.compress());
-
                 return Err(PushError::InvalidBlock(BlockError::InvalidJustification));
             }
 

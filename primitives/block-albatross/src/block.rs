@@ -4,7 +4,7 @@ use std::fmt;
 
 use beserial::{Deserialize, ReadBytesExt, Serialize, SerializingError, WriteBytesExt};
 use block_base;
-use hash::{Blake2bHash, Hash, SerializeContent};
+use hash::{Blake2bHash, Blake2sHash, Hash, SerializeContent};
 use hash_derive::SerializeContent;
 use primitives::coin::Coin;
 use transaction::Transaction;
@@ -418,6 +418,14 @@ impl BlockHeader {
     }
     /// Returns the Blake2b hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
+        match self {
+            BlockHeader::Macro(ref header) => header.hash(),
+            BlockHeader::Micro(ref header) => header.hash(),
+        }
+    }
+
+    /// Returns the Blake2s hash of the block header.
+    pub fn hash_blake2s(&self) -> Blake2sHash {
         match self {
             BlockHeader::Macro(ref header) => header.hash(),
             BlockHeader::Micro(ref header) => header.hash(),

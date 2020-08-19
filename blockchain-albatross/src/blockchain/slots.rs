@@ -114,7 +114,7 @@ impl Blockchain {
             .unwrap()
             .disabled_set;
 
-        let slot_number = self.get_slot_owner_number_at(block_number, view_number, disabled_slots);
+        let slot_number = self.get_slot_owner_number_at(block_number, view_number, disabled_slots, Some(&txn));
 
         let slot = validator_slots
             .get(SlotIndex::Slot(slot_number))
@@ -130,14 +130,14 @@ impl Blockchain {
         block_number: u32,
         view_number: u32,
         disabled_slots: BitSet,
+        txn_option: Option<&Transaction>,
     ) -> u16 {
         let seed = self
             .chain_store
-            .get_block_at(block_number - 1, false, None)
+            .get_block_at(block_number - 1, false, txn_option)
             .expect("Can't fetch block")
-            .unwrap_macro()
-            .header
-            .seed;
+            .seed()
+            .clone();
 
         // RNG for slot selection
         let mut rng = seed.rng(VrfUseCase::SlotSelection, view_number);

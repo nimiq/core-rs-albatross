@@ -410,7 +410,10 @@ impl AccountInherentInteraction for StakingContract {
         match inherent.ty {
             InherentType::Slash => {
                 // Invalid data length
-                if inherent.data.len() != BlsPublicKey::SIZE {
+                // FIXME: Check that data length matches the correct SlashedSlot struct size.
+                // Since SlashedSlot uses a LazyPublicKey, it has to be at least bigger than
+                // BlsPublicKey.
+                if inherent.data.len() < BlsPublicKey::SIZE {
                     return Err(AccountError::InvalidInherent);
                 }
 

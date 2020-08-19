@@ -196,7 +196,7 @@ impl Blockchain {
             } - 2
         {
             debug!(
-                "Exptected {} blocks, but get_blocks returned {}",
+                "Expected {} blocks, but get_blocks returned {}",
                 if for_batch {
                     policy::BATCH_LENGTH
                 } else {
@@ -241,11 +241,11 @@ impl Blockchain {
 
     pub fn get_history_root(
         &self,
-        epoch: u32,
+        batch: u32,
         txn_option: Option<&Transaction>,
     ) -> Option<Blake2bHash> {
         let hashes: Vec<Blake2bHash> = self
-            .get_epoch_transactions(epoch, txn_option)?
+            .get_batch_transactions(batch, txn_option)?
             .iter()
             .map(|tx| tx.hash())
             .collect(); // BlockchainTransaction::hash does *not* work here.

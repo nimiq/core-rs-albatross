@@ -118,12 +118,20 @@ impl Blockchain {
         }
 
         // Get validator slots
-        // NOTE: Field `previous_slots` is expected to be always set.
-        let validator_slots = &state
+        // NOTE: Fields `current_slots` and `previous_slots` are expected to always be set.
+        let validator_slots = if policy::first_batch_of_epoch(macro_header.block_number) {
+            &state
             .previous_slots
             .as_ref()
             .expect("Slots for last batch are missing")
-            .validator_slots;
+            .validator_slots
+        } else {
+            &state
+            .current_slots
+            .as_ref()
+            .expect("Slots for last batch are missing")
+            .validator_slots
+        };
 
         // Calculate the slashed set. As conjunction of the two sets.
         let lost_rewards_set = staking_contract.previous_lost_rewards();

@@ -273,6 +273,13 @@ pub fn first_block_of_registry(epoch: u32) -> u32 {
     }
 }
 
+/// Returns a boolean expressing if the batch at a given block number (height) is the first batch
+/// of the epoch.
+#[inline]
+pub fn first_batch_of_epoch(block_number: u32) -> bool {
+    epoch_index_at(block_number) < BATCH_LENGTH
+}
+
 /// This is the number of Lunas (1 NIM = 100,000 Lunas) created by second at the genesis of the
 /// Nimiq 2.0 chain. The velocity then decreases following the formula:
 /// Supply_velocity (t) = Initial_supply_velocity * e^(- Supply_decay * t)
@@ -449,5 +456,14 @@ mod tests {
         assert_eq!(first_block_of_batch(3), 65);
         assert_eq!(first_block_of_batch(4), 97);
         assert_eq!(first_block_of_batch(5), 129);
+    }
+
+    #[test]
+    fn it_correctly_computes_first_batch_of_epoch() {
+        assert_eq!(first_batch_of_epoch(1), true);
+        assert_eq!(first_batch_of_epoch(32), true);
+        assert_eq!(first_batch_of_epoch(33), false);
+        assert_eq!(first_batch_of_epoch(128), false);
+        assert_eq!(first_batch_of_epoch(129), true);
     }
 }

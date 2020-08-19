@@ -17,6 +17,7 @@ use database::WriteTransaction;
 use hash::{Blake2bHash, Blake2sHasher, Hash, Hasher};
 use keys::Address;
 use primitives::coin::Coin;
+use primitives::slot::{Slots};
 use vrf::VrfSeed;
 
 mod config;
@@ -198,7 +199,8 @@ impl GenesisBuilder {
         debug!("Slots: {:#?}", slots);
 
         // Body
-        let body = MacroBody::new();
+        let mut body = MacroBody::new();
+        body.validators = Some(slots.validator_slots);
         let body_root = body.hash::<Blake2bHash>();
         debug!("Body root: {}", &body_root);
 

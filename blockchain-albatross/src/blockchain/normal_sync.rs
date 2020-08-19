@@ -31,6 +31,14 @@ impl Blockchain {
             return Ok(PushResult::Known);
         }
 
+        if self
+            .chain_store
+            .get_chain_info(&block.parent_hash(), false, Some(&read_txn))
+            .is_none()
+        {
+            return Err(PushError::Orphan);
+        }
+
         // Chain ordering
         let prev_info = self
             .chain_store
@@ -221,11 +229,11 @@ impl Blockchain {
         );
         self.chain_store.set_head(&mut txn, &block_hash);
 
+        let is_election_block = policy::is_election_block_at(self.block_number() + 1);
+
         // Acquire write lock & commit changes.
         let mut state = self.state.write();
         state.transaction_cache.push_block(&chain_info.head);
-
-        let is_election_block = policy::is_election_block_at(self.block_number());
 
         if let Block::Macro(ref macro_block) = chain_info.head {
             state.macro_info = chain_info.clone();
