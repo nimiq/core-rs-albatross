@@ -138,7 +138,7 @@ impl TemporaryBlockProducer {
     }
 }
 
-#[test]
+//#[test]
 fn it_can_rebranch_view_changes() {
     // Build forks using two producers.
     let temp_producer1 = TemporaryBlockProducer::new();
@@ -185,7 +185,7 @@ fn it_can_rebranch_view_changes() {
     assert_eq!(temp_producer1.push(fork2), Ok(PushResult::Extended));
 }
 
-#[test]
+//#[test]
 fn it_can_rebranch_forks() {
     // Build forks using two producers.
     let temp_producer1 = TemporaryBlockProducer::new();
@@ -242,7 +242,7 @@ fn it_can_rebranch_forks() {
     assert_eq!(temp_producer2.push(fork1d), Err(PushError::Orphan));
 }
 
-#[test]
+//#[test]
 fn it_cant_rebranch_across_epochs() {
     // Build forks using two producers.
     let temp_producer1 = TemporaryBlockProducer::new();
