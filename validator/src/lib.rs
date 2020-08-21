@@ -26,6 +26,7 @@ extern crate nimiq_peer_address as peer_address;
 extern crate nimiq_primitives as primitives;
 extern crate nimiq_transaction_builder as transaction_builder;
 extern crate nimiq_utils as utils;
+extern crate nimiq_vrf as vrf;
 
 pub mod error;
 pub mod pool;

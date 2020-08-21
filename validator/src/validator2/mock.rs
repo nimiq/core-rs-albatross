@@ -4,10 +4,11 @@ use failure::_core::pin::Pin;
 use futures::channel::mpsc;
 use futures::task::{Context, Poll};
 use futures::{executor, Future, SinkExt, Stream};
-
-use block_albatross::MacroBlock;
-use blockchain_albatross::Blockchain;
 use parking_lot::Mutex;
+
+use block_albatross::{MacroBlock, SignedViewChange, ViewChangeProof};
+use blockchain_albatross::Blockchain;
+use primitives::slot::ValidatorSlots;
 use utils::observer::Notifier;
 
 pub struct Tendermint;
@@ -27,7 +28,7 @@ impl Future for Tendermint {
 pub struct ViewChangeHandel;
 impl ViewChangeHandel {
     pub fn new(
-        view_change: SignedViewChange,
+        signed_view_change: SignedViewChange,
         validator_id: u16,
         active_validator: ValidatorSlots,
     ) -> Self {

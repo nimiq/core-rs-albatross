@@ -21,7 +21,7 @@ use futures::task::{Context, Poll};
 use futures::{ready, Future, Stream, StreamExt};
 use tokio::sync::broadcast;
 
-use block_albatross::Block;
+use block_albatross::{Block, ViewChangeProof};
 use blockchain_base::BlockchainEvent;
 use consensus_albatross::{Consensus, ConsensusEvent};
 use network_interface::network::Network;
@@ -66,8 +66,9 @@ impl<TNetwork: Network> Validator<TNetwork> {
         wallet_key: Option<keys::KeyPair>,
     ) -> Self {
         let consensus_event_rx = consensus.subscribe_events();
-        let blockchain_event_rx =
-            crate::mock::notifier_to_stream(consensus.blockchain.notifier.write().borrow_mut());
+        let blockchain_event_rx = crate::validator2::mock::notifier_to_stream(
+            consensus.blockchain.notifier.write().borrow_mut(),
+        );
         let mut this = Self {
             consensus,
             signing_key,
@@ -136,7 +137,7 @@ impl<TNetwork: Network> Future for Validator<TNetwork> {
         // If we are an active validator, participate in block production.
         if self.is_active() {
             // Run micro or macro block production depending on next block type.
-            if self.consensus.blockchain.get_next_block_type()
+            //if self.consensus.blockchain.get_next_block_type()
         }
 
         Poll::Pending

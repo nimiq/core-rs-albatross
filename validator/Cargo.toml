@@ -46,6 +46,7 @@ nimiq-peer-address = { path = "../peer-address", version = "0.1" }
 nimiq-primitives = { path = "../primitives", version = "0.1" }
 nimiq-transaction-builder = { path = "../transaction-builder", version = "0.1" }
 nimiq-utils = { path = "../utils", version = "0.1", features = ["observer", "timers", "mutable-once", "throttled-queue", "rate-limit"] }
+nimiq-vrf = { path = "../vrf", version = "0.1" }
 
 [features]
 metrics = []
