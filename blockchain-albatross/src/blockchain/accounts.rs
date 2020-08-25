@@ -9,8 +9,9 @@ use crate::blockchain_state::BlockchainState;
 use crate::chain_info::ChainInfo;
 use crate::{Blockchain, PushError};
 
-/// Everything to do with accounts
+/// Implements methods to handle the accounts.
 impl Blockchain {
+    /// Updates the accounts given a block.
     pub(crate) fn commit_accounts(
         &self,
         state: &BlockchainState,
@@ -18,58 +19,66 @@ impl Blockchain {
         first_view_number: u32,
         txn: &mut WriteTransaction,
     ) -> Result<(), PushError> {
+        // Get the block from the chain info.
         let block = &chain_info.head;
 
+        // Get the accounts from the state.
         let accounts = &state.accounts;
 
+        // Check the type of the block.
         match block {
             Block::Macro(ref macro_block) => {
+                // Initialize a vector to store the inherents
                 let mut inherents: Vec<Inherent> = vec![];
 
-                // Every macro block is the end of a batch.
+                // Every macro block is the end of a batch, so we need to finalize the batch.
                 inherents.append(
                     &mut self
                         .finalize_previous_batch(state, &chain_info.head.unwrap_macro_ref().header),
                 );
 
+                // If this block is an election block, we also need to finalize the epoch.
                 if macro_block.is_election_block() {
-                    // On election the previous epoch needs to be finalized.
-                    // We can rely on `state` here, since we cannot revert macro blocks.
                     inherents.push(self.finalize_previous_epoch());
                 }
 
-                // Commit block to AccountsTree.
+                // Commit block to AccountsTree and create the receipts.
                 let receipts =
                     accounts.commit(txn, &[], &inherents, macro_block.header.block_number);
+
+                // Check if the receipts contain an error.
+                if let Err(e) = receipts {
+                    return Err(PushError::AccountsError(e));
+                }
 
                 // Macro blocks are final and receipts for the previous batch are no longer necessary
                 // as rebranching across this block is not possible.
                 self.chain_store.clear_receipts(txn);
-
-                if let Err(e) = receipts {
-                    return Err(PushError::AccountsError(e));
-                }
             }
             Block::Micro(ref micro_block) => {
-                let extrinsics = micro_block.body.as_ref().unwrap();
+                // Get the body of the block.
+                let body = micro_block.body.as_ref().unwrap();
 
+                // Get the view changes.
                 let view_changes = ViewChanges::new(
                     micro_block.header.block_number,
                     first_view_number,
                     micro_block.header.view_number,
                 );
 
+                // Create the inherents from any forks and view changes.
                 let inherents =
-                    self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes, Some(txn));
+                    self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
 
-                // Commit block to AccountsTree.
+                // Commit block to AccountsTree and create the receipts.
                 let receipts = accounts.commit(
                     txn,
-                    &extrinsics.transactions,
+                    &body.transactions,
                     &inherents,
                     micro_block.header.block_number,
                 );
 
+                // Check if the receipts contain an error.
                 if let Err(e) = receipts {
                     return Err(PushError::AccountsError(e));
                 }
@@ -84,6 +93,8 @@ impl Blockchain {
         Ok(())
     }
 
+    /// Reverts the accounts given a block. This only applies to micro blocks, since macro blocks
+    /// are final and can't be reverted.
     pub(crate) fn revert_accounts(
         &self,
         accounts: &Accounts,
@@ -97,25 +108,29 @@ impl Blockchain {
             "Failed to revert - inconsistent state"
         );
 
-        let extrinsics = micro_block.body.as_ref().unwrap();
+        // Get the body of the block.
+        let body = micro_block.body.as_ref().unwrap();
 
+        // Get the view changes.
         let view_changes = ViewChanges::new(
             micro_block.header.block_number,
             prev_view_number,
             micro_block.header.view_number,
         );
 
-        let inherents =
-            self.create_slash_inherents(&extrinsics.fork_proofs, &view_changes, Some(txn));
+        // Create the inherents from any forks and view changes.
+        let inherents = self.create_slash_inherents(&body.fork_proofs, &view_changes, Some(txn));
 
+        // Get the receipts for this block.
         let receipts = self
             .chain_store
             .get_receipts(micro_block.header.block_number, Some(txn))
             .expect("Failed to revert - missing receipts");
 
+        // Revert the block from AccountsTree.
         if let Err(e) = accounts.revert(
             txn,
-            &extrinsics.transactions,
+            &body.transactions,
             &inherents,
             micro_block.header.block_number,
             &receipts,

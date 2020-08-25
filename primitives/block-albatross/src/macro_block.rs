@@ -62,12 +62,12 @@ pub struct MacroBody {
     /// public key, their reward address and their assigned validator slots.
     /// Is only Some when the macro block is an election block.
     pub validators: Option<ValidatorSlots>,
-    /// A bitset representing which validator slots had their reward slashed when this block was
-    /// produced. It is used later on for reward distribution.
+    /// A bitset representing which validator slots had their reward slashed at the time when this
+    /// block was produced. It is used later on for reward distribution.
     pub lost_reward_set: BitSet,
     /// A bitset representing which validator slots were prohibited from producing micro blocks or
-    /// proposing macro blocks when this block was produced. It is used later on for reward
-    /// distribution.
+    /// proposing macro blocks at the time when this block was produced. It is used later on for
+    /// reward distribution.
     pub disabled_set: BitSet,
     /// A merkle root over all of the transactions that happened in the current epoch.
     pub history_root: Blake2bHash,
@@ -97,17 +97,6 @@ impl MacroBody {
             validators: None,
             lost_reward_set: BitSet::new(),
             disabled_set: BitSet::new(),
-            history_root: Blake2bHash::default(),
-        }
-    }
-
-    /// Creates the body for a Macro block given the slashed sets. Sets the validators and
-    /// history_root fields to default values.
-    pub fn from_slashed_sets(lost_reward_set: BitSet, disabled_set: BitSet) -> Self {
-        MacroBody {
-            validators: None,
-            lost_reward_set,
-            disabled_set,
             history_root: Blake2bHash::default(),
         }
     }

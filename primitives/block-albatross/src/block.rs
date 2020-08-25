@@ -56,8 +56,7 @@ impl Block {
         }
     }
 
-    /// Returns the view number of the block. Macro blocks do not have a view number so this
-    /// function outputs an Option.
+    /// Returns the view number of the block.
     pub fn view_number(&self) -> u32 {
         match self {
             Block::Macro(ref block) => block.header.view_number,
@@ -153,7 +152,8 @@ impl Block {
         }
     }
 
-    /// Returns the justification of the block.
+    /// Returns the justification of the block. If the block has no justification then it returns
+    /// None.
     pub fn justification(&self) -> Option<BlockJustification> {
         // TODO Can we eliminate the clone()s here?
         Some(match self {
@@ -166,6 +166,7 @@ impl Block {
         })
     }
 
+    /// Returns the body of the block. If the block has no body then it returns None.
     pub fn body(&self) -> Option<BlockBody> {
         // TODO Can we eliminate the clone()s here?
         Some(match self {
@@ -205,6 +206,7 @@ impl Block {
         }
     }
 
+    /// Unwraps the block and returns a reference to the underlying Macro block.
     pub fn unwrap_macro_ref(&self) -> &MacroBlock {
         if let Block::Macro(ref block) = self {
             block
@@ -213,6 +215,7 @@ impl Block {
         }
     }
 
+    /// Unwraps the block and returns a reference to the underlying Micro block.
     pub fn unwrap_micro_ref(&self) -> &MicroBlock {
         if let Block::Micro(ref block) = self {
             block
@@ -221,6 +224,7 @@ impl Block {
         }
     }
 
+    /// Unwraps the block and returns the underlying Macro block.
     pub fn unwrap_macro(self) -> MacroBlock {
         if let Block::Macro(block) = self {
             block
@@ -229,6 +233,7 @@ impl Block {
         }
     }
 
+    /// Unwraps the block and returns the underlying Micro block.
     pub fn unwrap_micro(self) -> MicroBlock {
         if let Block::Micro(block) = self {
             block
@@ -237,11 +242,12 @@ impl Block {
         }
     }
 
+    /// Unwraps the block and returns the underlying transactions. This only works with Micro blocks.
     pub fn unwrap_transactions(self) -> Vec<Transaction> {
         self.unwrap_micro().body.unwrap().transactions
     }
 
-    /// Returns true if the block is a micro block, false otherwise.
+    /// Returns true if the block is a Micro block, false otherwise.
     pub fn is_micro(&self) -> bool {
         if let Block::Micro(_) = self {
             true
@@ -250,7 +256,7 @@ impl Block {
         }
     }
 
-    /// Returns true if the block is a macro block, false otherwise.
+    /// Returns true if the block is a Macro block, false otherwise.
     pub fn is_macro(&self) -> bool {
         if let Block::Macro(_) = self {
             true
@@ -416,6 +422,7 @@ impl BlockHeader {
             BlockHeader::Micro(header) => header.view_number,
         }
     }
+
     /// Returns the Blake2b hash of the block header.
     pub fn hash(&self) -> Blake2bHash {
         match self {
@@ -533,7 +540,7 @@ impl Deserialize for BlockJustification {
     }
 }
 
-/// Struct representing the justification of a block.
+/// Struct representing the body of a block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BlockBody {
     Micro(MicroBody),
@@ -549,6 +556,7 @@ impl BlockBody {
         }
     }
 
+    /// Unwraps a block body and returns the underlying Micro body.
     pub fn unwrap_micro(&self) -> &MicroBody {
         if let BlockBody::Micro(body) = self {
             body
@@ -557,6 +565,7 @@ impl BlockBody {
         }
     }
 
+    /// Unwraps a block body and returns the underlying Macro body.
     pub fn unwrap_macro(&self) -> &MacroBody {
         if let BlockBody::Macro(body) = self {
             body

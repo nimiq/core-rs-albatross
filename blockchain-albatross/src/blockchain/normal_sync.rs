@@ -10,9 +10,9 @@ use primitives::policy;
 use crate::chain_info::ChainInfo;
 use crate::{Blockchain, BlockchainEvent, ChainOrdering, ForkEvent, PushError, PushResult};
 
-/// Everything needed to push a block into the chain.
+/// Implements methods to push blocks into the chain.
 impl Blockchain {
-    //
+    /// Pushes a block into the chain.
     pub fn push(&self, block: Block) -> Result<PushResult, PushError> {
         // Only one push operation at a time.
         let _push_lock = self.push_lock.lock();
@@ -176,6 +176,7 @@ impl Blockchain {
         Ok(PushResult::Forked)
     }
 
+    /// Extends the current main chain.
     fn extend(
         &self,
         block_hash: Blake2bHash,
@@ -271,6 +272,7 @@ impl Blockchain {
         Ok(PushResult::Extended)
     }
 
+    /// Rebranches the current main chain.
     fn rebranch(
         &self,
         block_hash: Blake2bHash,

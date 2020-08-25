@@ -10,12 +10,16 @@ use transaction::Transaction;
 
 use crate::SlashPushError;
 
+/// Struct that, for each block, keeps information relative to the chain the block is on.
 #[derive(Clone, Debug)]
 pub struct ChainInfo {
+    // This is the block.
     pub head: Block,
+    // A boolean stating if this block is in the main chain.
     pub on_main_chain: bool,
+    // The hash of next block in the chain.
     pub main_chain_successor: Option<Blake2bHash>,
-    // Resets every batch
+    // The sum of all transaction fees in this chain. It resets every batch.
     pub cum_tx_fees: Coin,
 }
 
@@ -48,7 +52,7 @@ impl ChainInfo {
         })
     }
 
-    /// Creates a new dummy ChainInfo for a block ignoring slashes and transaction fees.
+    /// Creates a new dummy ChainInfo for a block transaction fees.
     pub fn dummy(block: Block) -> Self {
         ChainInfo {
             head: block,

@@ -262,8 +262,12 @@ impl Blockchain {
                 }
             }
 
-            let computed_extrinsics =
-                MacroBody::from_slashed_sets(slashed_set, current_slashed_set);
+            let computed_extrinsics = MacroBody {
+                validators: None,
+                lost_reward_set: slashed_set,
+                disabled_set: current_slashed_set,
+                history_root: Default::default(),
+            };
 
             // The extrinsics must exist for isolated macro blocks, so we can unwrap() here.
             let computed_extrinsics_hash: Blake2bHash = computed_extrinsics.hash();

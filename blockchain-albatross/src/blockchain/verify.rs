@@ -17,8 +17,9 @@ use crate::chain_info::ChainInfo;
 use crate::{Blockchain, PushError};
 use std::cmp::Ordering;
 
-/// Verifies blocks
+/// Implements methods to verify the validity of blocks.
 impl Blockchain {
+    /// Verifies the header of a block.
     pub fn verify_block_header(
         &self,
         header: &BlockHeader,
@@ -93,6 +94,7 @@ impl Blockchain {
         Ok(())
     }
 
+    /// Verifies the justification of a block.
     pub fn verify_block_justification(
         &self,
         header: &BlockHeader,
@@ -100,12 +102,13 @@ impl Blockchain {
         intended_slot_owner: &MappedRwLockReadGuard<PublicKey>,
         txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
+        // Checks if the justification exists.
         if let None = justification_opt {
             return Err(PushError::InvalidBlock(BlockError::NoJustification));
         }
 
+        // If the block is a macro block, verify the PBFT proof.
         if let Some(BlockJustification::Macro(justification)) = justification_opt {
-            // Verify PBFT proof.
             if let Err(e) = justification.verify(
                 header.hash(),
                 &self.current_validators(),
@@ -119,8 +122,9 @@ impl Blockchain {
             }
         }
 
+        // If the block is a micro block, verify the signature and the view changes.
         if let Some(BlockJustification::Micro(justification)) = justification_opt {
-            // Verify signature
+            // Verify the signature on the justification.
             let signature = justification.signature.uncompress();
 
             if let Err(e) = signature {
@@ -186,24 +190,27 @@ impl Blockchain {
         Ok(())
     }
 
-    // This does not check anything that depends on the state. Ex: If an account has enough funds.
+    /// Verifies the body of a block. This does not check anything that depends on the state. Ex: If
+    /// an account has enough funds.
     pub fn verify_block_body(
         &self,
         header: &BlockHeader,
         body_opt: &Option<BlockBody>,
         txn_opt: Option<&DBtx>,
     ) -> Result<(), PushError> {
+        // Checks if the body exists.
         if let None = body_opt {
             return Err(PushError::InvalidBlock(BlockError::MissingBody));
         }
 
         if let Some(BlockBody::Macro(body)) = body_opt {
+            // Check the body root.
             if &body.hash::<Blake2bHash>() != header.body_root() {
                 warn!("Rejecting block - Header body hash doesn't match real body hash");
                 return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
             }
 
-            // In case of an election block make sure it contains validators
+            // In case of an election block make sure it contains validators.
             if policy::is_election_block_at(header.block_number()) && body.validators.is_none() {
                 return Err(PushError::InvalidBlock(BlockError::InvalidValidators));
             }
@@ -221,12 +228,13 @@ impl Blockchain {
         }
 
         if let Some(BlockBody::Micro(body)) = body_opt {
+            // Check the body root.
             if &body.hash::<Blake2bHash>() != header.body_root() {
                 warn!("Rejecting block - Header body hash doesn't match real body hash");
                 return Err(PushError::InvalidBlock(BlockError::BodyHashMismatch));
             }
 
-            // Validate fork proofs
+            // Validate the fork proofs.
             let mut previous_proof: Option<&ForkProof> = None;
 
             for proof in &body.fork_proofs {
@@ -303,6 +311,7 @@ impl Blockchain {
         Ok(())
     }
 
+    /// Verifies the state of a block.
     pub fn verify_block_state(
         &self,
         state: &BlockchainState,

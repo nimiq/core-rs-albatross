@@ -10,16 +10,23 @@ use hash::Blake2bHash;
 use crate::chain_info::ChainInfo;
 use crate::Blockchain;
 
+/// Enum describing all the possible ways of comparing one chain to the main chain.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ChainOrdering {
+    // This chain is an extension of the main chain.
     Extend,
+    // This chain is better than the main chain.
     Better,
+    // This chain is worse than the main chain.
     Inferior,
+    // The ordering of this chain is unknown.
     Unknown,
 }
 
-/// Calculate chain ordering.
+/// Implements method to calculate chain ordering.
 impl Blockchain {
+    /// Given a block and some chain, it returns the ordering of the new chain relative to the given
+    /// chain.
     pub(crate) fn order_chains(
         &self,
         block: &Block,

@@ -32,10 +32,12 @@ pub type PushResult = blockchain_base::PushResult;
 pub type PushError = blockchain_base::PushError<BlockError>;
 pub type BlockchainEvent = blockchain_base::BlockchainEvent<Block>;
 
+/// An enum used when a fork is detected.
 pub enum ForkEvent {
     Detected(ForkProof),
 }
 
+/// An enum representing different types of errors associated with slashing.
 #[derive(Debug, Fail)]
 pub enum SlashPushError {
     #[fail(display = "Redundant fork proofs in block")]

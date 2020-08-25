@@ -58,17 +58,17 @@ pub struct MicroJustification {
     /// The signature of the block producer.
     pub signature: CompressedSignature,
     /// The view change proof. It consists of the aggregated signatures to a single view change
-    /// message. It is an Option since no view change might occur for any given block.
+    /// message. It is an Option since a view change might not occur for any given block.
     pub view_change_proof: Option<ViewChangeProof>,
 }
 
-/// The struct representing the extrinsics for a Micro block.
+/// The struct representing the body of a Micro block.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, SerializeContent)]
 pub struct MicroBody {
-    /// A vector containing the fork proofs. It might be empty.
+    /// A vector containing the fork proofs for this block. It might be empty.
     #[beserial(len_type(u16))]
     pub fork_proofs: Vec<ForkProof>,
-    /// A vector containing the transactions. It might be empty.
+    /// A vector containing the transactions for this block. It might be empty.
     #[beserial(len_type(u16))]
     pub transactions: Vec<Transaction>,
 }
@@ -84,8 +84,8 @@ impl MicroBlock {
 }
 
 impl MicroHeader {
-    /// Returns the size, in bytes, of a Micro block header. Assuming the extra_data field is
-    /// completely filled.
+    /// Returns the size, in bytes, of a Micro block header. This represents the maximum possible
+    /// size since we assume that the extra_data field is completely filled.
     pub const SIZE: usize =
         /*version*/
         2 + /*block_number*/ 4 + /*view_number*/ 4 + /*timestamp*/ 8

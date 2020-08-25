@@ -23,12 +23,19 @@ use nimiq_collections::BitSet;
 pub mod actions;
 pub mod validator;
 
+/// Struct represent an inactive staker. An inactive staker is a staker that got its stake not
+/// eligible for slot selection. In other words, this staker can no longer receive slots.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct InactiveStake {
+    // The balance of the stake.
     pub balance: Coin,
+    // The block number when the stake became inactive.
     pub retire_time: u32,
 }
 
+/// A receipt for slash inherents. It shows whether a given slot or validator was newly disabled,
+/// lost rewards or parked by a specific slash inherent. This is necessary to be able to revert
+/// slash inherents.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
 struct SlashReceipt {
     newly_parked: bool,
@@ -36,30 +43,41 @@ struct SlashReceipt {
     newly_lost_rewards: bool,
 }
 
+/// The struct representing the staking contract. The staking contract is a special contract that
+/// handles many functions related to validators and staking.
 #[derive(Debug)]
 pub struct StakingContract {
+    // The total amount of coins staked.
     pub balance: Coin,
-    // Validators
+    // The active validators (i.e. are eligible to receive slots) sorted by public key.
     pub active_validators_sorted: BTreeSet<Arc<Validator>>,
+    // A hashmap of the active validators, indexed by the validator public key.
     pub active_validators_by_key: HashMap<BlsPublicKey, Arc<Validator>>,
-    pub inactive_validators_by_key: BTreeMap<BlsPublicKey, InactiveValidator>,
-
-    pub current_epoch_parking: HashSet<BlsPublicKey>,
-    pub previous_epoch_parking: HashSet<BlsPublicKey>,
-
-    // Lost reward sets
-    pub current_lost_rewards: BitSet,
-    pub previous_lost_rewards: BitSet,
-
-    // Disabled slots
-    pub current_disabled_slots: BTreeMap<BlsPublicKey, BTreeSet<u16>>,
-    pub previous_disabled_slots: BTreeMap<BlsPublicKey, BTreeSet<u16>>,
-
-    // Stake
+    // A hashmap of the inactive stakers (i.e. are NOT eligible to receive slots), indexed by the
+    // staker address.
     pub inactive_stake_by_address: HashMap<Address, InactiveStake>,
+    // A tree of the inactive validators , searchable by the validator public key.
+    pub inactive_validators_by_key: BTreeMap<BlsPublicKey, InactiveValidator>,
+    // The validators that were parked during the current epoch.
+    pub current_epoch_parking: HashSet<BlsPublicKey>,
+    // The validators that were parked during the previous epoch.
+    pub previous_epoch_parking: HashSet<BlsPublicKey>,
+    // The validator slots that lost rewards (i.e. are no longer eligible to receive rewards) during
+    // the current batch.
+    pub current_lost_rewards: BitSet,
+    // The validator slots that lost rewards (i.e. are no longer eligible to receive rewards) during
+    // the previous batch.
+    pub previous_lost_rewards: BitSet,
+    // The validator slots, searchable by the validator public key, that are disabled (i.e. are no
+    // longer eligible to produce blocks) currently.
+    pub current_disabled_slots: BTreeMap<BlsPublicKey, BTreeSet<u16>>,
+    // The validator slots, searchable by the validator public key, that were disabled (i.e. are no
+    // longer eligible to produce blocks) at the end of the previous batch.
+    pub previous_disabled_slots: BTreeMap<BlsPublicKey, BTreeSet<u16>>,
 }
 
 impl StakingContract {
+    /// Get a validator information given its public key.
     pub fn get_validator(&self, validator_key: &BlsPublicKey) -> Option<&Arc<Validator>> {
         self.active_validators_by_key
             .get(validator_key)
@@ -70,12 +88,15 @@ impl StakingContract {
             })
     }
 
+    /// Get the amount staked by a staker, given the public key of the corresponding validator and
+    /// the address of the staker. Returns None if the active validator or the staker does not exist.
     pub fn get_active_stake(
         &self,
         validator_key: &BlsPublicKey,
         staker_address: &Address,
     ) -> Option<Coin> {
         let validator = self.active_validators_by_key.get(validator_key)?;
+
         validator
             .active_stake_by_address
             .read()
@@ -125,10 +146,14 @@ impl StakingContract {
         }
     }
 
+    /// Given a seed, it randomly distributes the validator slots across all validators. It can be
+    /// used to select the validators for the next epoch.
     pub fn select_validators(&self, seed: &VrfSeed) -> Slots {
-        // TODO: Depending on the circumstances and parameters, it might be more efficient to store active stake in an unsorted Vec.
+        // TODO: Depending on the circumstances and parameters, it might be more efficient to store
+        // active stake in an unsorted Vec.
         // Then, we would not need to create the Vec here. But then, removal of stake is a O(n) operation.
-        // Assuming that validator selection happens less frequently than stake removal, the current implementation might be ok.
+        // Assuming that validator selection happens less frequently than stake removal, the current
+        // implementation might be ok.
         let mut potential_validators = Vec::with_capacity(self.active_validators_sorted.len());
         let mut weights: Vec<u64> = Vec::with_capacity(self.active_validators_sorted.len());
 
@@ -159,9 +184,11 @@ impl StakingContract {
         slots_builder.build()
     }
 
+    /// Get the signature from a transaction.
     fn get_self_signer(transaction: &Transaction) -> Result<Address, AccountError> {
         let signature_proof: SignatureProof =
             Deserialize::deserialize(&mut &transaction.proof[..])?;
+
         Ok(signature_proof.compute_signer())
     }
 
@@ -175,7 +202,7 @@ impl StakingContract {
         self.current_lost_rewards.clone()
     }
 
-    /// Returns a BitSet of slots that were marked as disabled in the previous batch.
+    /// Returns a BitSet of slots that were disabled at the end of the previous batch.
     pub fn previous_disabled_slots(&self) -> BitSet {
         let mut bitset = BitSet::new();
         for slots in self.previous_disabled_slots.values() {
@@ -186,7 +213,7 @@ impl StakingContract {
         bitset
     }
 
-    /// Returns a BitSet of slots that were marked as disabled in the current batch.
+    /// Returns a BitSet of slots that are disabled in the current batch.
     pub fn current_disabled_slots(&self) -> BitSet {
         let mut bitset = BitSet::new();
         for slots in self.current_disabled_slots.values() {
@@ -376,7 +403,7 @@ impl Deserialize for StakingContract {
 }
 
 // Not really useful traits for StakingContracts.
-// FIXME Assume a single staking contract for now, i.e. all staking contracts are equal.
+// TODO: Assume a single staking contract for now, i.e. all staking contracts are equal.
 impl PartialEq for StakingContract {
     fn eq(&self, _other: &StakingContract) -> bool {
         true

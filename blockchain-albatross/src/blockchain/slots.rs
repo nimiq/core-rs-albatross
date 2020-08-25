@@ -10,10 +10,12 @@ use vrf::{Rng, VrfSeed, VrfUseCase};
 
 use crate::Blockchain;
 
-/// Functions to do with slots and validators.
+/// Implements methods to handle slots and validators.
 impl Blockchain {
+    /// Gets the validator slots for a given epoch.
     pub fn get_slots_for_epoch(&self, epoch: u32) -> Option<Slots> {
         let state = self.state.read();
+
         let current_epoch = policy::epoch_at(state.main_chain.head.block_number());
 
         let slots = if epoch == current_epoch {
@@ -31,6 +33,7 @@ impl Blockchain {
         Some(slots)
     }
 
+    /// Gets the validators for a given epoch.
     pub fn get_validators_for_epoch(&self, epoch: u32) -> Option<ValidatorSlots> {
         if let Some(slots) = self.get_slots_for_epoch(epoch) {
             Some(slots.into())
@@ -39,14 +42,17 @@ impl Blockchain {
         }
     }
 
+    /// Calculates the next validator slots from a given seed.
     pub fn next_slots(&self, seed: &VrfSeed) -> Slots {
         self.get_staking_contract().select_validators(seed)
     }
 
+    /// Calculates the next validators from a given seed.
     pub fn next_validators(&self, seed: &VrfSeed) -> ValidatorSlots {
         self.next_slots(seed).into()
     }
 
+    /// Calculates the slot owner at a given block number and view number.
     pub fn get_slot_owner_at(
         &self,
         block_number: u32,
@@ -156,6 +162,7 @@ impl Blockchain {
         }
     }
 
+    /// Calculates the slot owner for the next block.
     pub fn get_slot_owner_for_next_block(
         &self,
         view_number: u32,

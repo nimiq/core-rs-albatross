@@ -8,29 +8,47 @@ use primitives::policy;
 
 use crate::MicroHeader;
 
+/// Struct representing a fork proof. A fork proof proves that a given validator created or
+/// continued a fork. For this it is enough to provide two different headers, with the same block
+/// number and view number, signed by the same validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ForkProof {
+    /// Header number 1.
     pub header1: MicroHeader,
+    /// Header number 2.
     pub header2: MicroHeader,
+    /// Justification for header number 1.
     pub justification1: CompressedSignature,
+    /// Justification for header number 2.
     pub justification2: CompressedSignature,
 }
 
 impl ForkProof {
+    /// The size of a single fork proof. This is the maximum possible size, since the Micro header
+    /// has a variable size (because of the extra data field) and here we assume that the header
+    /// has the maximum size.
     pub const SIZE: usize = 2 * MicroHeader::SIZE + 2 * CompressedSignature::SIZE;
 
+    /// Verify the validity of a fork proof.
     pub fn verify(&self, public_key: &PublicKey) -> Result<(), ForkProofError> {
-        // XXX Duplicate check
+        // Check that the headers are not equal.
+        if self.header1.hash() == self.header2.hash() {
+            return Err(ForkProofError::SameHeader);
+        }
+
+        // Check that the headers have different block numbers and view numbers.
         if self.header1.block_number != self.header2.block_number
             || self.header1.view_number != self.header2.view_number
         {
             return Err(ForkProofError::SlotMismatch);
         }
 
+        // Check that the justifications are valid.
         let justification1 = self
             .justification1
             .uncompress()
             .map_err(|_| ForkProofError::InvalidJustification)?;
+
         let justification2 = self
             .justification2
             .uncompress()
@@ -45,19 +63,22 @@ impl ForkProof {
         Ok(())
     }
 
+    /// Check if a fork proof is valid at a given block height. Fork proofs are only during the
+    /// batch when the fork was created and during batch immediately after.
     pub fn is_valid_at(&self, block_number: u32) -> bool {
         let given_batch = policy::batch_at(block_number);
+
         let proof_batch = policy::batch_at(self.header1.block_number);
-        self.header1.block_number == self.header2.block_number
-            && self.header1.view_number == self.header2.view_number
-            // XXX Should this be checked at a higher layer?
-            && (proof_batch == given_batch || proof_batch + 1 == given_batch)
+
+        proof_batch == given_batch || proof_batch + 1 == given_batch
     }
 
+    /// Returns the block number of a fork proof. This assumes that the fork proof is valid.
     pub fn block_number(&self) -> u32 {
         self.header1.block_number
     }
 
+    /// Returns the view number of a fork proof. This assumes that the fork proof is valid.
     pub fn view_number(&self) -> u32 {
         self.header1.view_number
     }
@@ -119,4 +140,5 @@ impl std::hash::Hash for ForkProof {
 pub enum ForkProofError {
     SlotMismatch,
     InvalidJustification,
+    SameHeader,
 }

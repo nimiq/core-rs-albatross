@@ -16,15 +16,25 @@ use primitives::coin::Coin;
 
 use crate::{Account, AccountError};
 
+/// Struct representing a validator in the staking contract. It also stores the addresses of all the
+/// stakers who delegated to this validator.
 #[derive(Debug)]
 pub struct Validator {
+    // The amount of coins held by this validator. It also includes the coins delegated to him by
+    // stakers.
     pub balance: Coin,
+    // The reward address of the validator.
     pub reward_address: Address,
+    // The validator key.
     pub validator_key: BlsPublicKey,
+    // A binary tree that stores the address and coins staked of all the stakers that delegated to
+    // this validator.
     pub active_stake_by_address: RwLock<BTreeMap<Address, Coin>>,
 }
 
 impl Validator {
+    /// Creates a new validator given a stake, a validator key and a reward address. It will be
+    /// created without any stakers delegated to it.
     pub fn new(
         initial_balance: Coin,
         reward_address: Address,
@@ -38,6 +48,7 @@ impl Validator {
         }
     }
 
+    /// Allows updating the reward address and/or the validator key of a specific validator.
     pub fn update_validator(
         &self,
         new_reward_address: Option<Address>,
@@ -52,6 +63,7 @@ impl Validator {
         }
     }
 
+    /// Updates the balance of a given validator.
     fn with_balance(&self, balance: Coin) -> Self {
         let active_stake_by_address = mem::take(self.active_stake_by_address.write().deref_mut());
         Validator {
@@ -62,6 +74,7 @@ impl Validator {
         }
     }
 
+    /// Adds a delegated stake to a given validator.
     pub fn add_stake(&self, staker_address: Address, stake: Coin) -> Result<Self, AccountError> {
         let new_balance = Account::balance_add(self.balance, stake)?;
         let validator = self.with_balance(new_balance);
@@ -75,6 +88,7 @@ impl Validator {
         Ok(validator)
     }
 
+    /// Removes a delegated stake from a given validator.
     pub fn sub_stake(
         &self,
         staker_address: &Address,
@@ -177,6 +191,8 @@ impl Clone for Validator {
     }
 }
 
+/// Struct represent an inactive validator. An inactive validator is a validator that got its stake
+/// not eligible for slot selection. In other words, this validator can no longer receive slots.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InactiveValidator {
     pub validator: Arc<Validator>,

@@ -17,9 +17,10 @@ use crate::blockchain_state::BlockchainState;
 use crate::reward::block_reward_for_batch;
 use crate::Blockchain;
 
-/// Everything to do with inherents, functions that return inherents.
+/// Implements methods that create inherents.
 impl Blockchain {
-    /// Expects verified proofs
+    /// Given fork proofs and view changes, it returns the respective slash inherents. It expects
+    /// verified fork proofs and view changes.
     pub fn create_slash_inherents(
         &self,
         fork_proofs: &[ForkProof],
@@ -39,28 +40,32 @@ impl Blockchain {
         inherents
     }
 
-    /// Expects a *verified* proof!
+    /// It creates a slash inherent from a fork proof. It expects a *verified* fork proof!
     pub fn inherent_from_fork_proof(
         &self,
         fork_proof: &ForkProof,
         txn_option: Option<&Transaction>,
     ) -> Inherent {
+        // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
             .expect("No ValidatorRegistry");
 
+        // Get the slot owner and slot number for this block number and view number.
         let (producer, slot) = self.get_slot_owner_at(
             fork_proof.header1.block_number,
             fork_proof.header1.view_number,
             txn_option,
         );
 
+        // Create the SlashedSlot struct.
         let slot = SlashedSlot {
             slot,
             validator_key: producer.public_key().clone(),
             event_block: fork_proof.header1.block_number,
         };
 
+        // Create the corresponding slash inherent.
         Inherent {
             ty: InherentType::Slash,
             target: validator_registry.clone(),
@@ -69,29 +74,34 @@ impl Blockchain {
         }
     }
 
-    /// Expects a *verified* proof!
+    /// It creates a slash inherent(s) from a view change(s). It expects a *verified* view change!
     pub fn inherents_from_view_changes(
         &self,
         view_changes: &ViewChanges,
         txn_option: Option<&Transaction>,
     ) -> Vec<Inherent> {
+        // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
             .expect("No ValidatorRegistry");
 
+        // Iterate over all the view changes.
         (view_changes.first_view_number..view_changes.last_view_number)
             .map(|view_number| {
+                // Get the slot owner and slot number for this block number and view number.
                 let (producer, slot) =
                     self.get_slot_owner_at(view_changes.block_number, view_number, txn_option);
 
                 debug!("Slash inherent: view change: {}", producer.public_key());
 
+                // Create the SlashedSlot struct.
                 let slot = SlashedSlot {
                     slot,
                     validator_key: producer.public_key().clone(),
                     event_block: view_changes.block_number,
                 };
 
+                // Create the corresponding slash inherent.
                 Inherent {
                     ty: InherentType::Slash,
                     target: validator_registry.clone(),
@@ -102,7 +112,8 @@ impl Blockchain {
             .collect::<Vec<Inherent>>()
     }
 
-    /// Calculates and distributes rewards. Updates StakingContract.
+    /// Creates the inherents to finalize a batch. The inherents are for reward distribution and
+    /// updating the StakingContract.
     pub fn finalize_previous_batch(
         &self,
         state: &BlockchainState,
@@ -276,13 +287,14 @@ impl Blockchain {
         inherents
     }
 
-    /// Updates StakingContract.
+    /// Creates the inherent to finalize an epoch. The inherent is for updating the StakingContract.
     pub fn finalize_previous_epoch(&self) -> Inherent {
-        // Create FinalizeEpoch inherent to update StakingContract.
+        // Get the address of the validator registry/staking contract.
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()
             .expect("No ValidatorRegistry");
 
+        // Create the FinalizeEpoch inherent.
         Inherent {
             ty: InherentType::FinalizeEpoch,
             target: validator_registry.clone(),

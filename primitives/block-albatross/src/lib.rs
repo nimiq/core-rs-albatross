@@ -41,6 +41,7 @@ pub use view_change::{
 
 use crate::transaction::TransactionError;
 
+/// Enum containing a variety of block error types.
 #[derive(Clone, PartialEq, Eq, Debug, Fail)]
 pub enum BlockError {
     #[fail(display = "Unsupported version")]
@@ -57,6 +58,8 @@ pub enum BlockError {
     NoJustification,
     #[fail(display = "Missing view change proof")]
     NoViewChangeProof,
+    #[fail(display = "Missing body")]
+    MissingBody,
 
     #[fail(display = "Invalid fork proof")]
     InvalidForkProof,
@@ -93,9 +96,6 @@ pub enum BlockError {
     InvalidHistoryRoot,
     #[fail(display = "Incorrect validators")]
     InvalidValidators,
-
-    #[fail(display = "Missing body")]
-    MissingBody,
 }
 
 impl block_base::BlockError for BlockError {}

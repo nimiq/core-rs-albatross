@@ -16,42 +16,52 @@ use utils::merkle;
 use crate::blockchain_state::BlockchainState;
 use crate::Blockchain;
 
-/// Wrapper functions
+/// Implements several wrapper functions.
 impl Blockchain {
+    /// Returns the head of the main chain.
     pub fn head(&self) -> MappedRwLockReadGuard<Block> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| &s.main_chain.head)
     }
 
+    /// Returns the last macro block.
     pub fn macro_head(&self) -> MappedRwLockReadGuard<MacroBlock> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| s.macro_info.head.unwrap_macro_ref())
     }
 
+    /// Returns the last election macro block.
     pub fn election_head(&self) -> MappedRwLockReadGuard<MacroBlock> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| &s.election_head)
     }
+
+    /// Returns the hash of the head of the main chain.
     pub fn head_hash(&self) -> Blake2bHash {
         self.state.read().head_hash.clone()
     }
 
+    /// Returns the hash of the last macro block.
     pub fn macro_head_hash(&self) -> Blake2bHash {
         self.state.read().macro_head_hash.clone()
     }
 
+    /// Returns the hash of the last election macro block.
     pub fn election_head_hash(&self) -> Blake2bHash {
         self.state.read().election_head_hash.clone()
     }
 
+    /// Returns the block number at the head of the main chain.
     pub fn block_number(&self) -> u32 {
         self.state.read_recursive().main_chain.head.block_number()
     }
 
+    /// Returns the view number at the head of the main chain.
     pub fn view_number(&self) -> u32 {
         self.state.read_recursive().main_chain.head.view_number()
     }
 
+    /// Returns the next view number at the head of the main chain.
     pub fn next_view_number(&self) -> u32 {
         self.state
             .read_recursive()
@@ -60,20 +70,24 @@ impl Blockchain {
             .next_view_number()
     }
 
+    /// Returns the current set of validators.
     pub fn current_validators(&self) -> MappedRwLockReadGuard<ValidatorSlots> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| s.current_validators().unwrap())
     }
 
+    /// Returns the set of validators of the previous epoch.
     pub fn last_validators(&self) -> MappedRwLockReadGuard<ValidatorSlots> {
         let guard = self.state.read();
         RwLockReadGuard::map(guard, |s| s.last_validators().unwrap())
     }
 
+    /// Returns the current state.
     pub fn state(&self) -> RwLockReadGuard<BlockchainState> {
         self.state.read()
     }
 
+    /// Checks if the blockchain contains a specific block, by its hash.
     pub fn contains(&self, hash: &Blake2bHash, include_forks: bool) -> bool {
         match self.chain_store.get_chain_info(hash, false, None) {
             Some(chain_info) => include_forks || chain_info.on_main_chain,
@@ -81,6 +95,7 @@ impl Blockchain {
         }
     }
 
+    /// Returns the block type of the next block.
     pub fn get_next_block_type(&self, last_number: Option<u32>) -> BlockType {
         let last_block_number = match last_number {
             None => self.head().block_number(),
@@ -94,10 +109,12 @@ impl Blockchain {
         }
     }
 
+    /// Fetches a given block, by its hash.
     fn get_block(&self, hash: &Blake2bHash, include_body: bool) -> Option<Block> {
         self.chain_store.get_block(hash, include_body, None)
     }
 
+    /// Fetches a given number of blocks, starting at a specific block (by its hash).
     fn get_blocks(
         &self,
         start_block_hash: &Blake2bHash,
@@ -109,6 +126,8 @@ impl Blockchain {
             .get_blocks(start_block_hash, count, include_body, direction, None)
     }
 
+    /// Fetches a given number of macro blocks, starting at a specific block (by its hash).
+    /// It can fetch only election macro blocks.
     /// Returns None if given start_block_hash is not a macro block.
     pub fn get_macro_blocks(
         &self,
@@ -128,7 +147,7 @@ impl Blockchain {
         )
     }
 
-    // gets transactions for either an epoch or a batch.
+    /// Returns a list of all transactions for either an epoch or a batch.
     fn get_transactions(
         &self,
         batch_or_epoch_index: u32,
@@ -223,6 +242,7 @@ impl Blockchain {
         Some(txs)
     }
 
+    /// Returns a list of all transactions for a given batch.
     pub fn get_batch_transactions(
         &self,
         batch: u32,
@@ -231,6 +251,7 @@ impl Blockchain {
         self.get_transactions(batch, true, txn_option)
     }
 
+    /// Returns a list of all transactions for a given epoch.
     pub fn get_epoch_transactions(
         &self,
         epoch: u32,
@@ -239,6 +260,7 @@ impl Blockchain {
         self.get_transactions(epoch, false, txn_option)
     }
 
+    /// Returns the history root for a given epoch.
     pub fn get_history_root(
         &self,
         batch: u32,
@@ -253,6 +275,7 @@ impl Blockchain {
         Some(merkle::compute_root_from_hashes::<Blake2bHash>(&hashes))
     }
 
+    /// Returns the current staking contract.
     pub fn get_staking_contract(&self) -> StakingContract {
         let validator_registry = NetworkInfo::from_network_id(self.network_id)
             .validator_registry_address()

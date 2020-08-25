@@ -7,22 +7,24 @@ use vrf::VrfSeed;
 
 use super::signed;
 
+/// The struct representing a view change. View changes happen when a given micro block is not
+/// produced in time by its intended producer. It allows the next slot owner to take over and
+/// produce the block. A proof is necessary but it exists as the ViewChangeProof struct.
 #[derive(
     Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize, SerializeContent, Hash,
 )]
 pub struct ViewChange {
     /// The number of the block for which the view change is constructed (i.e. the block number
-    /// the validator is at + 1, since it's for the next block)
+    /// the validator is at + 1, since it's for the next block).
     pub block_number: u32,
 
     /// The view number after the view_change (i.e. the current view number + 1, except if the view
-    /// change is for the first micro block of an epoch)
+    /// change is for the first micro block of an batch, in that case it is simply 1).
     pub new_view_number: u32,
 
-    /// The hash of the previous block.
-    /// This is needed to distinguish view changes on different branches.
-    /// We choose the seed so that the view change applies to all branches of a malicious fork,
-    /// but not to branching because of view changes.
+    /// The seed of the previous block. This is needed to distinguish view changes on different
+    /// branches. We chose the seed so that the view change applies to all branches of a malicious
+    /// fork, but not to branching because of view changes.
     pub prev_seed: VrfSeed,
 }
 
@@ -34,8 +36,10 @@ pub type SignedViewChange = signed::SignedMessage<ViewChange>;
 pub type ViewChangeProof = signed::AggregateProof<ViewChange>;
 pub type ViewChangeProofBuilder = signed::AggregateProofBuilder<ViewChange>;
 
+/// A struct that represents a series of consecutive view changes at the same block height.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ViewChanges {
+    /// The block number at which the view changes happened.
     pub block_number: u32,
     /// The first view number that was changed
     pub first_view_number: u32,

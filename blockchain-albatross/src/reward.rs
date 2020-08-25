@@ -3,7 +3,8 @@ use primitives::coin::Coin;
 use primitives::policy;
 use std::convert::TryInto;
 
-/// Parses the genesis supply and timestamp from the genesis block.
+/// Parses the genesis supply and timestamp from the genesis block. We require both values to
+/// calculate the block rewards.
 pub fn genesis_parameters(genesis_block: &MacroHeader) -> (Coin, u64) {
     assert_eq!(genesis_block.block_number, 0);
 
@@ -23,7 +24,7 @@ pub fn genesis_parameters(genesis_block: &MacroHeader) -> (Coin, u64) {
     (supply, genesis_block.timestamp)
 }
 
-/// Compute the block reward for an batch from the current macro block, the previous macro block,
+/// Compute the block reward for a batch from the current macro block, the previous macro block,
 /// and the genesis parameters.
 /// This does not include the reward from transaction fees.
 pub fn block_reward_for_batch(

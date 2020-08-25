@@ -31,26 +31,35 @@ use crate::{BlockchainEvent, ForkEvent, PushError, PushResult};
 use std::cmp;
 use std::collections::HashSet;
 
-/// The Blockchain struct
+/// The Blockchain struct. It stores all information of the blockchain. It is the main data
+/// structure in this crate.
 pub struct Blockchain {
+    // The environment of the blockchain.
     pub(crate) env: Environment,
+    // The network ID. It determines if this is the mainnet or one of the testnets.
     pub network_id: NetworkId,
+    // The OffsetTime struct. It allows us query the current time.
     pub time: Arc<OffsetTime>,
+    // The notifier processes events relative to the blockchain.
     pub notifier: RwLock<Notifier<'static, BlockchainEvent>>,
+    // The fork notifier processes fork events.
     pub fork_notifier: RwLock<Notifier<'static, ForkEvent>>,
+    // The chain store is a database containing all of the blocks.
     pub chain_store: Arc<ChainStore>,
+    // The current state of the blockchain.
     pub(crate) state: RwLock<BlockchainState>,
     pub(crate) push_lock: Mutex<()>,
-
     #[cfg(feature = "metrics")]
     pub(crate) metrics: BlockchainMetrics,
-
+    // The coin supply at the genesis block. This is needed to calculate the rewards.
     pub(crate) genesis_supply: Coin,
+    // The timestamp at the genesis block. This is needed to calculate the rewards.
     pub(crate) genesis_timestamp: u64,
 }
 
-/// Initializing the Blockchain
+/// Implements methods to start a Blockchain.
 impl Blockchain {
+    /// Creates a new blockchain from a given environment and network ID.
     pub fn new(env: Environment, network_id: NetworkId) -> Result<Self, BlockchainError> {
         let chain_store = Arc::new(ChainStore::new(env.clone()));
 
@@ -62,6 +71,7 @@ impl Blockchain {
         })
     }
 
+    /// Loads a blockchain from given inputs.
     fn load(
         env: Environment,
         network_id: NetworkId,
@@ -202,6 +212,7 @@ impl Blockchain {
         })
     }
 
+    /// Initializes a blockchain.
     fn init(
         env: Environment,
         network_id: NetworkId,
