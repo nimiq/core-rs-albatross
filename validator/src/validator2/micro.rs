@@ -1,6 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use futures::future::BoxFuture;
 use futures::task::{Context, Poll};
@@ -8,7 +8,11 @@ use futures::{ready, Future, FutureExt, Stream};
 use tokio::time;
 
 use block_albatross::{MicroBlock, SignedViewChange, ViewChange, ViewChangeProof};
+use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
+use blockchain_base::AbstractBlockchain;
+use mempool::Mempool;
+use utils::time::systemtime_to_timestamp;
 use vrf::VrfSeed;
 
 use crate::validator2::mock::ViewChangeHandel;
@@ -21,45 +25,52 @@ pub(crate) enum ProduceMicroBlockEvent {
 #[derive(Clone)]
 struct NextProduceMicroBlockEvent {
     blockchain: Arc<Blockchain>,
+    mempool: Arc<Mempool<Blockchain>>,
     signing_key: bls::KeyPair,
     validator_id: u16,
-    block_number: u32,
     view_number: u32,
-    prev_seed: VrfSeed,
+    view_change_proof: Option<ViewChangeProof>,
     view_change_delay: Duration,
-    last_view_change_proof: Option<ViewChangeProof>,
+    block_number: u32,
+    prev_seed: VrfSeed,
 }
 
 impl NextProduceMicroBlockEvent {
     fn new(
         blockchain: Arc<Blockchain>,
+        mempool: Arc<Mempool<Blockchain>>,
         signing_key: bls::KeyPair,
         validator_id: u16,
-        block_number: u32,
         view_number: u32,
-        prev_seed: VrfSeed,
+        view_change_proof: Option<ViewChangeProof>,
         view_change_delay: Duration,
     ) -> Self {
+        let (block_number, prev_seed) = {
+            let head = blockchain.head();
+            (head.block_number() + 1, head.seed().clone())
+        };
+
         Self {
             blockchain,
+            mempool,
             signing_key,
             validator_id,
-            block_number,
             view_number,
-            prev_seed,
+            view_change_proof,
             view_change_delay,
-            last_view_change_proof: None,
+            block_number,
+            prev_seed,
         }
     }
 
     async fn next(mut self) -> (ProduceMicroBlockEvent, NextProduceMicroBlockEvent) {
         let event = if self.is_our_turn() {
-            ProduceMicroBlockEvent::MicroBlock(self.propose_micro_block())
+            ProduceMicroBlockEvent::MicroBlock(self.produce_micro_block())
         } else {
             time::delay_for(self.view_change_delay).await;
             let (new_view_number, view_change_proof) = self.change_view().await;
             self.view_number = new_view_number;
-            self.last_view_change_proof = Some(view_change_proof.clone());
+            self.view_change_proof = Some(view_change_proof.clone());
             ProduceMicroBlockEvent::ViewChange(new_view_number, view_change_proof)
         };
         (event, self)
@@ -73,8 +84,21 @@ impl NextProduceMicroBlockEvent {
         &self.signing_key.public_key.compress() == slot.validator_slot.public_key().compressed()
     }
 
-    fn propose_micro_block(&self) -> MicroBlock {
-        unimplemented!()
+    fn produce_micro_block(&self) -> MicroBlock {
+        let producer = BlockProducer::new(
+            Arc::clone(&self.blockchain),
+            Arc::clone(&self.mempool),
+            self.signing_key.clone(),
+        );
+
+        let _lock = self.blockchain.lock();
+        producer.next_micro_block(
+            systemtime_to_timestamp(SystemTime::now()),
+            self.view_number,
+            self.view_change_proof.clone(),
+            vec![], // TODO
+            vec![], // TODO
+        )
     }
 
     fn change_view(&self) -> impl Future<Output = (u32, ViewChangeProof)> {
@@ -103,20 +127,20 @@ pub(crate) struct ProduceMicroBlock {
 impl ProduceMicroBlock {
     pub fn new(
         blockchain: Arc<Blockchain>,
+        mempool: Arc<Mempool<Blockchain>>,
         signing_key: bls::KeyPair,
         validator_id: u16,
-        block_number: u32,
         view_number: u32,
-        prev_seed: VrfSeed,
+        view_change_proof: Option<ViewChangeProof>,
         view_change_delay: Duration,
     ) -> Self {
         let next_event = NextProduceMicroBlockEvent::new(
             blockchain,
+            mempool,
             signing_key,
             validator_id,
-            block_number,
             view_number,
-            prev_seed,
+            view_change_proof,
             view_change_delay,
         )
         .next()
