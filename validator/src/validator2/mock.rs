@@ -46,6 +46,7 @@ impl Future for ViewChangeHandel {
 pub fn notifier_to_stream<E: Clone + Send + Sync + 'static>(
     notifier: &mut Notifier<E>,
 ) -> mpsc::UnboundedReceiver<E> {
+    // TODO how to deregister?
     let (tx, rx) = mpsc::unbounded_channel();
     notifier.register(move |event: &E| {
         tx.send(event.clone());

@@ -7,7 +7,7 @@ use futures::task::{Context, Poll};
 use futures::{ready, Future, FutureExt, Stream};
 use tokio::time;
 
-use block_albatross::{MicroBlock, SignedViewChange, ViewChange, ViewChangeProof};
+use block_albatross::{ForkProof, MicroBlock, SignedViewChange, ViewChange, ViewChangeProof};
 use block_production_albatross::BlockProducer;
 use blockchain_albatross::Blockchain;
 use blockchain_base::AbstractBlockchain;
@@ -28,6 +28,7 @@ struct NextProduceMicroBlockEvent {
     mempool: Arc<Mempool<Blockchain>>,
     signing_key: bls::KeyPair,
     validator_id: u16,
+    fork_proofs: Vec<ForkProof>,
     view_number: u32,
     view_change_proof: Option<ViewChangeProof>,
     view_change_delay: Duration,
@@ -41,6 +42,7 @@ impl NextProduceMicroBlockEvent {
         mempool: Arc<Mempool<Blockchain>>,
         signing_key: bls::KeyPair,
         validator_id: u16,
+        fork_proofs: Vec<ForkProof>,
         view_number: u32,
         view_change_proof: Option<ViewChangeProof>,
         view_change_delay: Duration,
@@ -55,6 +57,7 @@ impl NextProduceMicroBlockEvent {
             mempool,
             signing_key,
             validator_id,
+            fork_proofs,
             view_number,
             view_change_proof,
             view_change_delay,
@@ -92,11 +95,15 @@ impl NextProduceMicroBlockEvent {
         );
 
         let _lock = self.blockchain.lock();
-        producer.next_micro_block(
+        let timestamp = u64::max(
+            self.blockchain.head().header().timestamp(),
             systemtime_to_timestamp(SystemTime::now()),
+        );
+        producer.next_micro_block(
+            timestamp,
             self.view_number,
             self.view_change_proof.clone(),
-            vec![], // TODO
+            self.fork_proofs.clone(),
             vec![], // TODO
         )
     }
@@ -130,6 +137,7 @@ impl ProduceMicroBlock {
         mempool: Arc<Mempool<Blockchain>>,
         signing_key: bls::KeyPair,
         validator_id: u16,
+        fork_proofs: Vec<ForkProof>,
         view_number: u32,
         view_change_proof: Option<ViewChangeProof>,
         view_change_delay: Duration,
@@ -139,6 +147,7 @@ impl ProduceMicroBlock {
             mempool,
             signing_key,
             validator_id,
+            fork_proofs,
             view_number,
             view_change_proof,
             view_change_delay,
