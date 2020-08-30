@@ -2,11 +2,11 @@ use std::convert::TryFrom;
 
 use beserial::Serialize;
 use nimiq_account::{
-    Account, AccountTransactionInteraction, AccountType, BasicAccount, PrunedAccount,
+    Account, AccountTransactionInteraction, AccountType, BasicAccount, Inherent, InherentType,
+    PrunedAccount,
 };
 use nimiq_account::{Receipt, Receipts};
 use nimiq_accounts::Accounts;
-use nimiq_block::BlockBody;
 use nimiq_database::volatile::VolatileEnvironment;
 use nimiq_database::ReadTransaction;
 use nimiq_database::WriteTransaction;
@@ -19,188 +19,199 @@ use nimiq_transaction::{SignatureProof, Transaction};
 #[test]
 fn it_can_commit_and_revert_a_block_body() {
     let env = VolatileEnvironment::new(10).unwrap();
+
     let accounts = Accounts::new(env.clone());
-    let address_miner = Address::from([1u8; Address::SIZE]);
+
+    let address_validator = Address::from([1u8; Address::SIZE]);
+
     let address_recipient = Address::from([2u8; Address::SIZE]);
 
-    let mut body = BlockBody {
-        miner: address_miner.clone(),
-        extra_data: Vec::new(),
-        transactions: Vec::new(),
-        receipts: Receipts::default(),
+    let reward = Inherent {
+        ty: InherentType::Reward,
+        target: address_validator.clone(),
+        value: Coin::from_u64_unchecked(10000),
+        data: vec![],
     };
 
-    assert_eq!(accounts.get(&address_miner, None).balance(), Coin::ZERO);
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(1)],
-                1
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let receipts = Receipts::default();
+
+    assert_eq!(accounts.get(&address_validator, None).balance(), Coin::ZERO);
+
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .commit(&mut txn, &vec![], &vec![reward.clone()], 1)
+        .is_ok());
+
+    txn.commit();
 
     assert_eq!(
-        accounts.get(&address_miner, None).balance(),
-        policy::block_reward_at(1)
+        accounts.get(&address_validator, None).balance(),
+        Coin::from_u64_unchecked(10000)
     );
+
     let hash1 = accounts.hash(None);
 
     let tx = Transaction::new_basic(
-        address_miner.clone(),
+        address_validator.clone(),
         address_recipient.clone(),
-        Coin::try_from(10).unwrap(),
+        Coin::from_u64_unchecked(10),
         Coin::ZERO,
         1,
         NetworkId::Main,
     );
-    body.transactions = vec![tx];
+
+    let transactions = vec![tx];
 
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(2)],
-                2
-            )
-            .is_ok());
-        txn.commit();
-    }
+
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .commit(&mut txn, &transactions, &vec![reward.clone()], 2)
+        .is_ok());
+
+    txn.commit();
 
     assert_eq!(
         accounts.get(&address_recipient, None).balance(),
-        Coin::try_from(10).unwrap()
+        Coin::from_u64_unchecked(10)
     );
+
     assert_eq!(
-        accounts.get(&address_miner, None).balance(),
-        policy::block_reward_at(1) + policy::block_reward_at(2) - Coin::try_from(10).unwrap()
+        accounts.get(&address_validator, None).balance(),
+        Coin::from_u64_unchecked(10000 + 10000 - 10)
     );
+
     assert_ne!(hash1, accounts.hash(None));
 
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .revert(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(2)],
-                2,
-                &body.receipts
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .revert(&mut txn, &transactions, &vec![reward], 2, &receipts)
+        .is_ok());
+
+    txn.commit();
 
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+
     assert_eq!(
-        accounts.get(&address_miner, None).balance(),
-        policy::block_reward_at(1)
+        accounts.get(&address_validator, None).balance(),
+        Coin::from_u64_unchecked(10000)
     );
+
     assert_eq!(hash1, accounts.hash(None));
 }
 
 #[test]
-fn it_can_deal_with_multiple_transactions_per_sender() {}
-
-#[test]
-fn it_correctly_rewards_miners() {
+fn it_correctly_rewards_validators() {
     let env = VolatileEnvironment::new(10).unwrap();
+
     let accounts = Accounts::new(env.clone());
-    let address_miner1 = Address::from([1u8; Address::SIZE]);
-    let address_miner2 = Address::from([2u8; Address::SIZE]);
-    let address_recipient1 = Address::from([3u8; Address::SIZE]);
-    let address_recipient2 = Address::from([4u8; Address::SIZE]);
 
-    let mut body = BlockBody {
-        miner: address_miner1.clone(),
-        extra_data: Vec::new(),
-        transactions: Vec::new(),
-        receipts: Receipts::default(),
-    };
+    let address_validator_1 = Address::from([1u8; Address::SIZE]);
 
-    // address_miner1 mines first block.
-    assert_eq!(accounts.get(&address_miner1, None).balance(), Coin::ZERO);
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(1)],
-                1
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let address_validator_2 = Address::from([2u8; Address::SIZE]);
 
+    let address_recipient_1 = Address::from([3u8; Address::SIZE]);
+
+    let address_recipient_2 = Address::from([4u8; Address::SIZE]);
+
+    // Validator 1 mines first block.
     assert_eq!(
-        accounts.get(&address_miner1, None).balance(),
-        policy::block_reward_at(1)
+        accounts.get(&address_validator_1, None).balance(),
+        Coin::ZERO
     );
 
-    let value1 = Coin::try_from(5).unwrap();
-    let fee1 = Coin::try_from(3).unwrap();
-    let value2 = Coin::try_from(7).unwrap();
-    let fee2 = Coin::try_from(11).unwrap();
+    let reward = Inherent {
+        ty: InherentType::Reward,
+        target: address_validator_1.clone(),
+        value: Coin::from_u64_unchecked(10000),
+        data: vec![],
+    };
+
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts.commit(&mut txn, &vec![], &vec![reward], 1).is_ok());
+
+    txn.commit();
+
+    // Create transactions to Recipient 1 and Recipient 2.
+    assert_eq!(
+        accounts.get(&address_validator_1, None).balance(),
+        Coin::from_u64_unchecked(10000)
+    );
+
+    let value1 = Coin::from_u64_unchecked(5);
+
+    let fee1 = Coin::from_u64_unchecked(3);
+
+    let value2 = Coin::from_u64_unchecked(7);
+
+    let fee2 = Coin::from_u64_unchecked(11);
+
     let tx1 = Transaction::new_basic(
-        address_miner1.clone(),
-        address_recipient1.clone(),
+        address_validator_1.clone(),
+        address_recipient_1.clone(),
         value1,
         fee1,
         2,
         NetworkId::Main,
     );
+
     let tx2 = Transaction::new_basic(
-        address_miner1.clone(),
-        address_recipient2.clone(),
+        address_validator_1.clone(),
+        address_recipient_2.clone(),
         value2,
         fee2,
         2,
         NetworkId::Main,
     );
 
-    // address_miner2 mines second block.
-    body.miner = address_miner2.clone();
-    body.transactions = vec![tx1, tx2];
+    // Validator 2 mines second block.
+    assert_eq!(
+        accounts.get(&address_validator_2, None).balance(),
+        Coin::ZERO
+    );
 
-    assert_eq!(accounts.get(&address_miner2, None).balance(), Coin::ZERO);
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(2)],
-                2
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let reward = Inherent {
+        ty: InherentType::Reward,
+        target: address_validator_2.clone(),
+        value: Coin::from_u64_unchecked(10000) + fee1 + fee2,
+        data: vec![],
+    };
+
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .commit(&mut txn, &vec![tx1, tx2], &vec![reward], 2)
+        .is_ok());
+
+    txn.commit();
 
     assert_eq!(
-        accounts.get(&address_miner1, None).balance(),
-        policy::block_reward_at(1) - value1 - fee1 - value2 - fee2
+        accounts.get(&address_validator_1, None).balance(),
+        Coin::from_u64_unchecked(10000) - value1 - fee1 - value2 - fee2
     );
+
     assert_eq!(
-        accounts.get(&address_miner2, None).balance(),
-        policy::block_reward_at(2) + fee1 + fee2
+        accounts.get(&address_validator_2, None).balance(),
+        Coin::from_u64_unchecked(10000) + fee1 + fee2
     );
-    assert_eq!(accounts.get(&address_recipient1, None).balance(), value1);
-    assert_eq!(accounts.get(&address_recipient2, None).balance(), value2);
+
+    assert_eq!(accounts.get(&address_recipient_1, None).balance(), value1);
+
+    assert_eq!(accounts.get(&address_recipient_2, None).balance(), value2);
 }
 
 #[test]
 fn it_checks_for_sufficient_funds() {
     let env = VolatileEnvironment::new(10).unwrap();
+
     let accounts = Accounts::new(env.clone());
+
     let address_sender = Address::from([1u8; Address::SIZE]);
+
     let address_recipient = Address::from([2u8; Address::SIZE]);
 
     let mut tx = Transaction::new_basic(
@@ -212,171 +223,163 @@ fn it_checks_for_sufficient_funds() {
         NetworkId::Main,
     );
 
-    let mut body = BlockBody {
-        miner: address_sender.clone(),
-        extra_data: Vec::new(),
-        transactions: vec![tx.clone()],
-        receipts: Receipts::default(),
+    let reward = Inherent {
+        ty: InherentType::Reward,
+        target: address_sender.clone(),
+        value: Coin::from_u64_unchecked(10000),
+        data: vec![],
     };
 
     let hash1 = accounts.hash(None);
+
     assert_eq!(accounts.get(&address_sender, None).balance(), Coin::ZERO);
+
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
 
     // Fails as address_sender does not have any funds.
+    // Note: When the commit errors, we want to bracket the txn creation and the commit attempt.
+    // Otherwise when we try to commit again, the test will get stuck.
     {
         let mut txn = WriteTransaction::new(&env);
+
         assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(1)],
-                1
-            )
+            .commit(&mut txn, &vec![tx.clone()], &vec![reward.clone()], 1)
             .is_err());
     }
 
     assert_eq!(accounts.get(&address_sender, None).balance(), Coin::ZERO);
+
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+
     assert_eq!(hash1, accounts.hash(None));
 
     // Give address_sender one block reward.
-    body.transactions = Vec::new();
 
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(1)],
-                1
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .commit(&mut txn, &vec![], &vec![reward.clone()], 1)
+        .is_ok());
+
+    txn.commit();
 
     assert_eq!(
         accounts.get(&address_sender, None).balance(),
-        policy::block_reward_at(1)
+        Coin::from_u64_unchecked(10000)
     );
+
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+
     let hash2 = accounts.hash(None);
+
     assert_ne!(hash1, hash2);
 
     // Single transaction exceeding funds.
-    tx.value = policy::block_reward_at(1) + Coin::try_from(10).unwrap();
-    body.transactions = vec![tx.clone()];
+    tx.value = Coin::from_u64_unchecked(1000000);
 
     {
         let mut txn = WriteTransaction::new(&env);
+
         assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(2)],
-                2
-            )
+            .commit(&mut txn, &vec![tx.clone()], &vec![reward.clone()], 2)
             .is_err());
     }
 
     assert_eq!(
         accounts.get(&address_sender, None).balance(),
-        policy::block_reward_at(1)
+        Coin::from_u64_unchecked(10000)
     );
+
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+
     assert_eq!(hash2, accounts.hash(None));
 
     // Multiple transactions exceeding funds.
-    tx.value = Coin::try_from(u64::from(policy::block_reward_at(1)) / 2 + 10).unwrap();
+    tx.value = Coin::from_u64_unchecked(5010);
+
     let mut tx2 = tx.clone();
-    tx2.value = tx2.value + Coin::try_from(10).unwrap();
-    body.transactions = vec![tx, tx2];
+
+    tx2.value = tx2.value + Coin::from_u64_unchecked(10);
 
     {
         let mut txn = WriteTransaction::new(&env);
+
         assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(2)],
-                2
-            )
+            .commit(&mut txn, &vec![tx, tx2], &vec![reward.clone()], 2)
             .is_err());
     }
 
     assert_eq!(
         accounts.get(&address_sender, None).balance(),
-        policy::block_reward_at(1)
+        Coin::from_u64_unchecked(10000)
     );
+
     assert_eq!(accounts.get(&address_recipient, None).balance(), Coin::ZERO);
+
     assert_eq!(hash2, accounts.hash(None));
 }
 
 #[test]
-fn it_prevents_spending_of_funds_received_in_the_same_block() {}
-
-#[test]
 fn it_correctly_prunes_account() {
     let env = VolatileEnvironment::new(10).unwrap();
+
     let accounts = Accounts::new(env.clone());
+
     let key_pair = KeyPair::generate_default_csprng();
+
     let address = Address::from(&key_pair.public);
-    let mut body = BlockBody {
-        miner: address.clone(),
-        extra_data: Vec::new(),
-        transactions: Vec::new(),
-        receipts: Receipts::default(),
+
+    let reward = Inherent {
+        ty: InherentType::Reward,
+        target: address.clone(),
+        value: Coin::from_u64_unchecked(10000),
+        data: vec![],
     };
 
     // Give a block reward
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(1)],
-                1
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .commit(&mut txn, &vec![], &vec![reward.clone()], 1)
+        .is_ok());
+
+    txn.commit();
 
     // Create vesting contract
     let initial_hash = accounts.hash(None);
+
     let mut data: Vec<u8> = Vec::with_capacity(Address::SIZE + 4);
+
     address.serialize(&mut data).unwrap();
+
     1u32.serialize(&mut data).unwrap();
+
     let mut tx_create = Transaction::new_contract_creation(
         data,
         address.clone(),
         AccountType::Basic,
         AccountType::Vesting,
-        Coin::try_from(100).unwrap(),
-        Coin::try_from(0).unwrap(),
+        Coin::from_u64_unchecked(100),
+        Coin::from_u64_unchecked(0),
         1,
         NetworkId::Dummy,
     );
+
     tx_create.proof = SignatureProof::from(
         key_pair.public,
         key_pair.sign(&tx_create.serialize_content()),
     )
     .serialize_to_vec();
+
     let contract_address = tx_create.contract_creation_address();
-    body.transactions = vec![tx_create.clone()];
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(2)],
-                2
-            )
-            .is_ok());
-        txn.commit();
-    }
+
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .commit(&mut txn, &vec![tx_create.clone()], &vec![reward.clone()], 2)
+        .is_ok());
+
+    txn.commit();
 
     // Now prune it
     let mut tx_prune = Transaction::new_basic(
@@ -387,54 +390,58 @@ fn it_correctly_prunes_account() {
         2,
         NetworkId::Dummy,
     );
+
     tx_prune.sender_type = AccountType::Vesting;
+
     tx_prune.proof = SignatureProof::from(
         key_pair.public,
         key_pair.sign(&tx_prune.serialize_content()),
     )
     .serialize_to_vec();
-    body.transactions = vec![tx_prune.clone()];
+
     let mut pruned_account = accounts.get(&contract_address, None);
+
     pruned_account
         .commit_outgoing_transaction(&tx_prune, 2)
         .unwrap();
-    body.receipts.receipts = vec![Receipt::PrunedAccount(PrunedAccount {
-        address: contract_address.clone(),
-        account: pruned_account,
-    })];
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert_eq!(
-            accounts.commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(3)],
-                3
-            ),
-            Ok(body.receipts.clone())
-        );
-        txn.commit();
-    }
+
+    let receipts = Receipts {
+        receipts: vec![Receipt::PrunedAccount(PrunedAccount {
+            address: contract_address.clone(),
+            account: pruned_account,
+        })],
+    };
+
+    let mut txn = WriteTransaction::new(&env);
+
+    assert_eq!(
+        accounts.commit(&mut txn, &vec![tx_prune.clone()], &vec![reward.clone()], 3),
+        Ok(receipts.clone())
+    );
+
+    txn.commit();
 
     // Check that the account was pruned correctly
     let account_after_prune = accounts.get(&contract_address, None);
+
     assert_eq!(account_after_prune.account_type(), AccountType::Basic);
+
     assert_eq!(account_after_prune.balance(), Coin::try_from(0).unwrap());
 
     // Now revert pruning
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .revert(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(3)],
-                3,
-                &body.receipts
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .revert(
+            &mut txn,
+            &vec![tx_prune],
+            &vec![reward.clone()],
+            3,
+            &receipts
+        )
+        .is_ok());
+
+    txn.commit();
 
     // Check that the account was recovered correctly
     if let Account::Vesting(vesting_contract) = accounts.get(&contract_address, None) {
@@ -443,122 +450,140 @@ fn it_correctly_prunes_account() {
     }
 
     // Now revert account
-    body.receipts.receipts = Vec::new();
-    body.transactions = vec![tx_create.clone()];
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .revert(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(2)],
-                2,
-                &body.receipts
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .revert(
+            &mut txn,
+            &vec![tx_create.clone()],
+            &vec![reward.clone()],
+            2,
+            &Receipts::default()
+        )
+        .is_ok());
+
+    txn.commit();
 
     // Check that the account is really gone
     let account_after_prune = accounts.get(&contract_address, None);
+
     assert_eq!(account_after_prune.account_type(), AccountType::Basic);
+
     assert_eq!(account_after_prune.balance(), Coin::try_from(0).unwrap());
+
     assert_eq!(accounts.hash(None), initial_hash);
 }
 
 #[test]
 fn can_generate_accounts_proof() {
     let env = VolatileEnvironment::new(10).unwrap();
-    let accounts = Accounts::new(env.clone());
-    let address_miner1 = Address::from([1u8; Address::SIZE]);
-    let address_miner2 = Address::from([2u8; Address::SIZE]);
-    let address_recipient1 = Address::from([3u8; Address::SIZE]);
-    let address_recipient2 = Address::from([4u8; Address::SIZE]);
 
-    let mut body = BlockBody {
-        miner: address_miner1.clone(),
-        extra_data: Vec::new(),
-        transactions: Vec::new(),
-        receipts: Receipts::default(),
+    let accounts = Accounts::new(env.clone());
+
+    let address_validator_1 = Address::from([1u8; Address::SIZE]);
+
+    let address_validator_2 = Address::from([2u8; Address::SIZE]);
+
+    let address_recipient_1 = Address::from([3u8; Address::SIZE]);
+
+    let address_recipient_2 = Address::from([4u8; Address::SIZE]);
+
+    let reward = Inherent {
+        ty: InherentType::Reward,
+        target: address_validator_1.clone(),
+        value: Coin::from_u64_unchecked(10000),
+        data: vec![],
     };
 
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(1)],
-                1
-            )
-            .is_ok());
-        txn.commit();
-    }
-    let value1 = Coin::try_from(5).unwrap();
-    let fee1 = Coin::try_from(3).unwrap();
-    let value2 = Coin::try_from(7).unwrap();
-    let fee2 = Coin::try_from(11).unwrap();
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .commit(&mut txn, &vec![], &vec![reward.clone()], 1)
+        .is_ok());
+
+    txn.commit();
+
+    let value1 = Coin::from_u64_unchecked(5);
+
+    let fee1 = Coin::from_u64_unchecked(3);
+
+    let value2 = Coin::from_u64_unchecked(7);
+
+    let fee2 = Coin::from_u64_unchecked(11);
+
     let tx1 = Transaction::new_basic(
-        address_miner1.clone(),
-        address_recipient1.clone(),
+        address_validator_1.clone(),
+        address_recipient_1.clone(),
         value1,
         fee1,
         2,
         NetworkId::Main,
     );
+
     let tx2 = Transaction::new_basic(
-        address_miner1.clone(),
-        address_recipient2.clone(),
+        address_validator_1.clone(),
+        address_recipient_2.clone(),
         value2,
         fee2,
         2,
         NetworkId::Main,
     );
 
-    body.miner = address_miner2.clone();
-    body.transactions = vec![tx1, tx2];
+    let reward = Inherent {
+        ty: InherentType::Reward,
+        target: address_validator_2.clone(),
+        value: Coin::from_u64_unchecked(10000) + fee1 + fee2,
+        data: vec![],
+    };
 
-    {
-        let mut txn = WriteTransaction::new(&env);
-        assert!(accounts
-            .commit(
-                &mut txn,
-                &body.transactions,
-                &vec![body.get_reward_inherent(2)],
-                2
-            )
-            .is_ok());
-        txn.commit();
-    }
+    let mut txn = WriteTransaction::new(&env);
+
+    assert!(accounts
+        .commit(&mut txn, &vec![tx1, tx2], &vec![reward.clone()], 2)
+        .is_ok());
+
+    txn.commit();
 
     let mut read_accs_txn = ReadTransaction::new(&env);
-    let mut proof1 = accounts.get_accounts_proof(&mut read_accs_txn, &vec![address_miner1.clone()]);
+
+    let mut proof1 =
+        accounts.get_accounts_proof(&mut read_accs_txn, &vec![address_validator_1.clone()]);
+
     assert!(proof1.verify());
+
     assert_eq!(
         Account::Basic(BasicAccount {
-            balance: policy::block_reward_at(1) - value1 - fee1 - value2 - fee2
+            balance: Coin::from_u64_unchecked(10000) - value1 - fee1 - value2 - fee2
         }),
-        proof1.get_account(&address_miner1).unwrap()
+        proof1.get_account(&address_validator_1).unwrap()
     );
-    assert_eq!(None, proof1.get_account(&address_miner2));
-    assert_eq!(None, proof1.get_account(&address_recipient1));
-    assert_eq!(None, proof1.get_account(&address_recipient2));
+
+    assert_eq!(None, proof1.get_account(&address_validator_2));
+
+    assert_eq!(None, proof1.get_account(&address_recipient_1));
+
+    assert_eq!(None, proof1.get_account(&address_recipient_2));
 
     let mut proof2 = accounts.get_accounts_proof(
         &mut read_accs_txn,
-        &vec![address_recipient2.clone(), address_miner2.clone()],
+        &vec![address_recipient_2.clone(), address_validator_2.clone()],
     );
+
     assert!(proof2.verify());
+
     assert_eq!(
         Account::Basic(BasicAccount {
-            balance: policy::block_reward_at(2) + fee1 + fee2
+            balance: Coin::from_u64_unchecked(10000) + fee1 + fee2
         }),
-        proof2.get_account(&address_miner2).unwrap()
+        proof2.get_account(&address_validator_2).unwrap()
     );
-    assert_eq!(None, proof2.get_account(&address_miner1));
-    assert_eq!(None, proof2.get_account(&address_recipient1));
+
+    assert_eq!(None, proof2.get_account(&address_validator_1));
+
+    assert_eq!(None, proof2.get_account(&address_recipient_1));
+
     assert_eq!(
         Account::Basic(BasicAccount { balance: value2 }),
-        proof2.get_account(&address_recipient2).unwrap()
+        proof2.get_account(&address_recipient_2).unwrap()
     );
 }

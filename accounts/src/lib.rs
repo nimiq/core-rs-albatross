@@ -1,5 +1,4 @@
 extern crate nimiq_account as account;
-extern crate nimiq_block as block;
 extern crate nimiq_database as database;
 extern crate nimiq_hash as hash;
 extern crate nimiq_keys as keys;
