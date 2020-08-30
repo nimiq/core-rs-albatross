@@ -28,7 +28,6 @@ url = "1.7"
 beserial = { path = "../beserial", version = "0.1", features = ["net"] }
 beserial_derive = { path = "../beserial/beserial_derive", version = "0.1" }
 nimiq-account = { path = "../primitives/account", version = "0.1" }
-nimiq-block = { path = "../primitives/block", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-bls = { path = "../bls", version = "0.1" }
 nimiq-hash = { path = "../hash", version = "0.1" }

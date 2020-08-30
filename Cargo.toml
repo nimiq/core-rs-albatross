@@ -41,7 +41,6 @@ members = [
   "peer-address",
   "primitives",
   "primitives/account",
-  "primitives/block",
   "primitives/block-albatross",
   "primitives/block-base",
   "primitives/subscription",

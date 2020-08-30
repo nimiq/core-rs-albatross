@@ -27,7 +27,6 @@ tempdir = "0.3"
 
 beserial = { path = "../beserial", version = "0.1" }
 nimiq-account = { path = "../primitives/account", version = "0.1", optional = true }
-nimiq-block = { path = "../primitives/block", version = "0.1", optional = true }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1", optional = true }
 nimiq-hash = { path = "../hash", version = "0.1", optional = true }
 nimiq-keys = { path = "../keys", version = "0.1", optional = true }
@@ -36,9 +35,8 @@ nimiq-utils = { path = "../utils", version = "0.1", features = ["otp"], optional
 
 [features]
 # Compiles this package with all features needed for the nimiq client.
-full-nimiq = ["hash", "block", "block-albatross", "account", "keys", "otp"]
+full-nimiq = ["hash", "block-albatross", "account", "keys", "otp"]
 hash = ["nimiq-hash"]
-block = ["nimiq-block"]
 block-albatross = ["nimiq-block-albatross"]
 account = ["nimiq-tree-primitives", "nimiq-account"]
 keys = ["nimiq-keys"]
