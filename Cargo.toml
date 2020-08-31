@@ -8,7 +8,6 @@ members = [
   "accounts/tree-primitives",
   "beserial",
   "beserial/beserial_derive",
-  "blockchain",
   "blockchain-albatross",
   "blockchain-base",
   "block-production-albatross",

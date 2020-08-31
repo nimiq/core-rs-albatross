@@ -1,5 +1,5 @@
 use log::Level;
-use nimiq_build_tools::genesis::albatross::{GenesisBuilder, GenesisInfo};
+use nimiq_build_tools::genesis::{GenesisBuilder, GenesisInfo};
 use std::env;
 use std::process::exit;
 
