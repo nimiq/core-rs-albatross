@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 use log::Level;
 
 use nimiq_build_tools::genesis::albatross::GenesisBuilder;
-use nimiq_build_tools::genesis::powchain::PowChainGenesis;
 use nimiq_hash::Blake2bHash;
 use nimiq_keys::Address;
 
@@ -35,15 +34,6 @@ fn write_genesis_rs(
     );
     debug!("Writing genesis source code: {}", &genesis_rs);
     fs::write(directory.join("genesis.rs"), genesis_rs.as_bytes()).unwrap();
-}
-
-fn generate_powchain(name: &str, out_dir: &PathBuf, powchain: PowChainGenesis) {
-    let directory = out_dir.join(name);
-    fs::create_dir_all(&directory).unwrap();
-    let genesis_hash = powchain.generate_genesis_hash().unwrap();
-
-    powchain.write_to_files(&directory).unwrap();
-    write_genesis_rs(&directory, name, &genesis_hash, None);
 }
 
 fn generate_albatross(
@@ -103,9 +93,6 @@ fn main() {
         );
     }
 
-    generate_powchain("main-powchain", &out_dir, PowChainGenesis::main());
-    generate_powchain("test-powchain", &out_dir, PowChainGenesis::test());
-    generate_powchain("dev-powchain", &out_dir, PowChainGenesis::dev());
     generate_albatross("dev-albatross", &out_dir, &src_dir, devnet_override);
     generate_albatross("unit-albatross", &out_dir, &src_dir, None);
 }

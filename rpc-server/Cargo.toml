@@ -31,7 +31,6 @@ parking_lot = "0.9"
 nimiq-account = { path = "../primitives/account", version = "0.1" }
 nimiq-block-albatross = { path = "../primitives/block-albatross", version = "0.1" }
 nimiq-block-base = { path = "../primitives/block-base", version = "0.1" }
-nimiq-block-production = { path = "../block-production", version = "0.1" }
 nimiq-blockchain = { path = "../blockchain", version = "0.1", features = ["metrics"] }
 nimiq-blockchain-albatross = { path = "../blockchain-albatross", version = "0.1", features = ["metrics"] }
 nimiq-blockchain-base = { path = "../blockchain-base", version = "0.1" }

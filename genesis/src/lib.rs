@@ -5,7 +5,6 @@ extern crate bitflags;
 #[macro_use]
 extern crate nimiq_macros as macros;
 extern crate nimiq_account as account;
-extern crate nimiq_block as block;
 extern crate nimiq_block_albatross as block_albatross;
 extern crate nimiq_bls as bls;
 extern crate nimiq_hash as hash;

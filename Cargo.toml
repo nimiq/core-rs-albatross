@@ -11,7 +11,6 @@ members = [
   "blockchain",
   "blockchain-albatross",
   "blockchain-base",
-  "block-production",
   "block-production-albatross",
   "bls",
   "build-tools",
